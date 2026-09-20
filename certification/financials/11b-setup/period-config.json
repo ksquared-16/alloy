@@ -1,0 +1,113 @@
+{
+  "frequencies": {
+    "reachable": true,
+    "intro": "How often tuition recurs. A frequency is the rule; the billing periods it produces are derived from each assignment's accepted term and start date — you never author individual periods here. The accounting calendar is configured separately, under Accounting.",
+    "heads": [
+      "NAME",
+      "DESCRIPTION",
+      "RECURRENCE",
+      "ACTIVE",
+      "PLANS USING",
+      "MORE"
+    ],
+    "rows": [
+      {
+        "cells": [
+          "Semi-Annual",
+          "Semi-Annual",
+          "No recurring periods — nothing is billed on a schedule for this frequency",
+          "Active",
+          "0"
+        ],
+        "key": "semiannual",
+        "billable": "false"
+      },
+      {
+        "cells": [
+          "Weekly",
+          "—",
+          "Every 7 days from the agreement anchor",
+          "Active",
+          "1"
+        ],
+        "key": "weekly",
+        "billable": "true"
+      },
+      {
+        "cells": [
+          "Bi-weekly",
+          "—",
+          "Every 14 days from the agreement anchor",
+          "Active",
+          "0"
+        ],
+        "key": "biweekly",
+        "billable": "true"
+      },
+      {
+        "cells": [
+          "Monthly",
+          "—",
+          "Each calendar month",
+          "Active",
+          "6"
+        ],
+        "key": "monthly",
+        "billable": "true"
+      },
+      {
+        "cells": [
+          "Annual",
+          "—",
+          "Each year from the agreement anchor",
+          "Active",
+          "0"
+        ],
+        "key": "annual",
+        "billable": "true"
+      },
+      {
+        "cells": [
+          "Daily",
+          "—",
+          "Every day from the agreement anchor",
+          "Active",
+          "0"
+        ],
+        "key": "daily",
+        "billable": "true"
+      },
+      {
+        "cells": [
+          "Hourly",
+          "—",
+          "No recurring periods — nothing is billed on a schedule for this frequency",
+          "Active",
+          "0"
+        ],
+        "key": "hourly",
+        "billable": "false"
+      },
+      {
+        "cells": [
+          "Per Session",
+          "—",
+          "No recurring periods — nothing is billed on a schedule for this frequency",
+          "Active",
+          "0"
+        ],
+        "key": "per_session",
+        "billable": "false"
+      }
+    ]
+  },
+  "accounting": {
+    "panelPresent": true,
+    "text": "Accounting calendar / The periods posted financial activity is attributed to. Separate from the billing period a charge is billed in. / This organization has no accounting calendar. Financial activity cannot be attributed to an accounting period until one exists.",
+    "absent": true,
+    "summary": null,
+    "saysCurrent": false,
+    "saysOpenClosed": false,
+    "offersClose": false
+  }
+}

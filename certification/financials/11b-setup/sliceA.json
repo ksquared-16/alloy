@@ -1,0 +1,39 @@
+{
+  "before": {
+    "embedMarkers": 1,
+    "regionMarker": 1,
+    "selectIsSelect": "SELECT",
+    "options": [
+      "Select a plan to lock in…",
+      "Recommended — $185.00/weekly"
+    ],
+    "acceptedState": "accepted",
+    "acceptedText": "Accepted $185.00 / weekly · from 2026-09-01",
+    "frequency": "weekly",
+    "currentPeriod": "2026-09-15~2026-09-21",
+    "nextPeriod": "2026-09-22~2026-09-28",
+    "periodText": "Billing frequency weekly · current period Sep 15–21, 2026 · next Sep 22–28, 2026",
+    "review": false,
+    "overrideReasonShown": false
+  },
+  "responsive": {
+    "1280": {
+      "width": 658,
+      "overflowsViewport": false,
+      "clipped": false,
+      "heightPx": 164
+    },
+    "1440": {
+      "width": 658,
+      "overflowsViewport": false,
+      "clipped": false,
+      "heightPx": 164
+    },
+    "1680": {
+      "width": 658,
+      "overflowsViewport": false,
+      "clipped": false,
+      "heightPx": 164
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "mergeSha": "c1945a04a407974d0e4687f1db61f7b4c06c69e6",
+  "deployedSha": "c1945a04a407974d0e4687f1db61f7b4c06c69e6",
+  "info": {
+    "gitSha": "c1945a04a407974d0e4687f1db61f7b4c06c69e6",
+    "gitBranch": "staging",
+    "gitMessage": "Thread 11A — restore the approved Financials presentation and end the orphan payment band (#1070)\n\n* diag(financials): reproduce the three QA-stop regressions and name their causes\n\nREPRODUCED BEFORE ANY MUTATION, as the instruction requires. Evidence and\nprobes committed so the conclusions can be checked rather than believed.\n\nA — COMPACT. Reproduced verbatim: \"FINANCIALS / Responsibility -$55.13 /\nCurrent balance -$55.13 / Payment Add Details\". Measured at the DOM:\n\n    RENDERED_VARIANT          FinancialsCompactCard (SPARSE)\n    data-universal-card-density  compact\n    data-universal-card-span     1\n    zone heads                []          (approved anatomy absent)\n\nCause is VARIANT SELECTION, and it is configuration rather than code.\nPLACEMENT_VARIANTS.financials offers exactly two authorable variants:\n\n    \"Summary\"  density standard, 8 columns -> the RICH approved anatomy\n    \"Compact\"  density compact,  4 columns -> the sparse card\n\nThe surface is published on the variant NAMED \"Compact\". The trap is ",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-omaylnpxv-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_D5ucVFyzkTFW6CZutAsKpJVKZrcB",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "panel": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "tuitionCount": 1,
+    "financials": "FINANCIALS\n\nCURRENT PERIOD\n\nSeptember 2026\n\nCHARGES\n\nTuition\n$1,450.00\nFee\n$150.00\nConsumable fee\n$36.00\n\nDISCOUNTS & CREDITS\n\nCredit\n-$260.06\nAdjustment\n$146.71\nDiscount\n-$145.00\nNET OBLIGATION\n$37.87\nAdd\n\nDUE\n\n$607.00\n\nNothing past due\n\nBalance\n-$37.13\nPaid\n$75.00\nUnassigned\n$132.00\nAvailable\n$125",
+    "tuition": "TUITION\n\n2 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\n$1,450.00/monthly accepted, effective 2026-09-01\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custo"
+  },
+  "ws": [
+    "Overview",
+    "Accounts",
+    "Charges",
+    "Payments",
+    "Subsidy",
+    "Activity"
+  ],
+  "results": [
+    {
+      "id": "D1 deployed build is the merge commit",
+      "ok": true,
+      "observed": "c1945a04a on staging"
+    },
+    {
+      "id": "D2 the deployed QA session is live",
+      "ok": true,
+      "observed": "workspace rendered"
+    },
+    {
+      "id": "D3 Focus Panel Summary mounts",
+      "ok": true,
+      "observed": "business_process, financials, children, household, attendance, health_safety, assignment_tuition"
+    },
+    {
+      "id": "D4 Billing Preview mounts exactly once",
+      "ok": true,
+      "observed": "1 card(s)"
+    },
+    {
+      "id": "D5 Financials card renders its position",
+      "ok": true,
+      "observed": "FINANCIALS / CURRENT PERIOD / September 2026"
+    },
+    {
+      "id": "D6 Focus Panel Details opens",
+      "ok": true,
+      "observed": "6 stat labels"
+    },
+    {
+      "id": "D7 Financials Workspace Accounts reachable",
+      "ok": true,
+      "observed": "Overview · Accounts · Charges · Payments · Subsidy · Activity"
+    },
+    {
+      "id": "D8 recurring generation authority reachable",
+      "ok": true,
+      "observed": "200 · 5 to bill, 5 not due, 0 refused for weekly 2026-09"
+    },
+    {
+      "id": "D9 organization financial configuration reachable",
+      "ok": true,
+      "observed": "Tuition chapter with Billing Frequencies"
+    },
+    {
+      "id": "D10 Director QA reader recognises the deployed build",
+      "ok": true,
+      "observed": "200 · catalog 2026-09-19.1 · 46 scenarios"
+    }
+  ]
+}

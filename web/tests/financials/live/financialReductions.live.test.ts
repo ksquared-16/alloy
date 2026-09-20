@@ -1350,8 +1350,21 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             actorUserId: ACTOR,
         });
 
-        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        /*
+         * ── ASK THE GRAIN YOU WROTE ──────────────────────────────────────────────────────────
+         *
+         * These reads used to pass no member and still get a child-scoped arrangement back, which
+         * is the exact defect Financials 11B closed: an account-grain question answered with one
+         * child's arrangement, presented to the operator as the account's. The write above is
+         * child-scoped, so the read is too.
+         */
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         expect(arrangement, "the arrangement is readable").toBeTruthy();
+        /* And the rule itself: the household is NOT governed by one child's decision. */
+        expect(
+            await readAccountArrangement(supabase, { orgId: ORG, customerId }),
+            "a child-scoped arrangement is not the account's",
+        ).toBeNull();
         expect(arrangement!.shares.length, "it carries the party it was given").toBeGreaterThan(0);
         const share = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!;
         expect(share, "and that party is on it").toBeTruthy();
@@ -1391,7 +1404,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             actorUserId: ACTOR,
         });
 
-        const current = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const current = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         expect(current, "there is a current arrangement").toBeTruthy();
         const amounts = current!.shares.map((sh) => sh.amountCents);
         expect(amounts, "the later decision is the one in force").toContain(40_000);
@@ -1437,7 +1450,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             collectible: (await resolveFamilyCollectible(supabase, { orgId: ORG, chargeId: charge.id })),
         };
 
-        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
 
         await configureExpectedFunding(supabase, {
@@ -1453,7 +1466,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             actorUserId: ACTOR,
         });
 
-        const withFunding = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const withFunding = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         const funded = withFunding!.shares.find((sh) => sh.responsiblePartyId === party)!;
         expect(funded.expectedFunding.length, "the expectation is recorded on the share").toBeGreaterThan(0);
 
@@ -1485,7 +1498,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             shares: [{ responsiblePartyId: party, method: "fixed", amountCents: 100_000 }],
             actorUserId: ACTOR,
         });
-        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const arrangement = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         const shareId = arrangement!.shares.find((sh) => sh.responsiblePartyId === party)!.id;
 
         for (const [amount, key] of [[75_000, "a"], [70_000, "b"]] as const) {
@@ -1501,7 +1514,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             });
         }
 
-        const after = await readAccountArrangement(supabase, { orgId: ORG, customerId });
+        const after = await readAccountArrangement(supabase, { orgId: ORG, customerId, customerMemberId: kids[0]!.memberId });
         const share = after!.shares.find((sh) => sh.responsiblePartyId === party)!;
         const total = share.expectedFunding.reduce((n, f) => n + (f.expectedAmountCents ?? 0), 0);
         expect(total, "the correction replaces the expectation rather than stacking on it").toBe(70_000);

@@ -221,7 +221,7 @@ export default function FinancialsCard({
                          */}
                         {pastDue ? (
                             <p className="alloy-os-billing__age" data-financials-pastdue="true">
-                                {pastDue.amount} past due · {pastDue.age}
+                                {pastDue.amount} · {pastDue.age} past due
                             </p>
                         ) : (
                             <p className="alloy-os-billing__clear">Nothing past due</p>
@@ -301,14 +301,17 @@ export default function FinancialsCard({
                     {/*
                      * ── NAVIGATION IS NOT A COMMAND ───────────────────────────────────────────
                      *
-                     * Payment and Add mutate money and now sit with the stories they belong to.
+                     * Payment and Add mutate money and sit with the stories they belong to.
                      * Details does neither: it is the way through to the account. It keeps the same
-                     * link grammar as the other two — Bend Pine, arrow, no underline — because three
-                     * different treatments on one small card read as three unrelated systems, which
-                     * is what an underlined black link beside two filled buttons had become.
+                     * link grammar as the other two — Bend Pine, arrow, no underline — because
+                     * three different treatments on one small card read as three unrelated
+                     * systems.
                      *
-                     * It is placed at the card's lower-right edge rather than appended after the
-                     * other two, so its rank is legible from its position.
+                     * IT KEEPS ITS OWN ROW, BENEATH THE COMMANDS. It was briefly moved onto the
+                     * payment command's row to reclaim the height; Kelly's read of the mounted
+                     * result was that the commands should be a row above the navigation, so the
+                     * rank is legible from the separation rather than from a margin. The height
+                     * that mattered came from the scheduled-this-period footer, which stays gone.
                      */}
                     {onDetails ? (
                         <div className="alloy-os-billing__nav">
@@ -318,8 +321,6 @@ export default function FinancialsCard({
                         </div>
                     ) : null}
                 </div>
-
-                {pastDue ? <p className="alloy-os-billing__history">{evidence.historyLine}</p> : null}
             </UniversalCard>
         </div>
     );
@@ -395,6 +396,36 @@ function FinancialsAccountSummaryCard({
                                 value={pastDue ? pastDue.amount : "None"}
                                 tone={pastDue ? "due" : "ok"}
                             />
+                            {/*
+                             * ── AVAILABLE, ON THE SAME TERMS AS EVERYWHERE ELSE ────────────────
+                             *
+                             * Measured on the certified build: the Focus Panel Summary read
+                             * `Available $125.00` and Details read `AVAILABLE PREPAID $125.00`
+                             * while this strip — the account's ONE summary, in the dedicated
+                             * financial workspace — showed nothing. An operator working in Accounts
+                             * saw Due and Past due for a family whose money the organisation was
+                             * already holding, and chasing them is a real, avoidable error.
+                             *
+                             * The same figure from the same projection: no arithmetic here, no
+                             * second read, and `availablePrepaid` is already null unless the
+                             * authority says the money is genuinely AVAILABLE — pending, failed and
+                             * voided receipts are excluded upstream.
+                             *
+                             * SILENT AT ZERO, which is the ordinary account. A permanent
+                             * "Available $0.00" would be the noise the density doctrine forbids,
+                             * and it is never netted into Current balance: they answer two
+                             * different questions and the balance is the one the family owes.
+                             *
+                             * It is NOT a deposit. A held deposit is a Payments concept with its
+                             * own lifecycle; this is unapplied money the family has already sent.
+                             */}
+                            {period.availablePrepaid ? (
+                                <Stat
+                                    label="Available"
+                                    value={period.availablePrepaid}
+                                    testId="available-prepaid"
+                                />
+                            ) : null}
                         </div>
                     </div>
                     {/*

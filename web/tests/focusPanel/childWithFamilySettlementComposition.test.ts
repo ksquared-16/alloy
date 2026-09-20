@@ -34,7 +34,7 @@ const visible = (c: readonly { key: string; visibility: string }[]) =>
  * so "does the standalone child composition avoid family cards" cannot be asked about it by key.
  * The cards that are family-scoped in EVERY reading are the two below.
  */
-const FAMILY_SCOPED = ["household", "billing_preview"] as const;
+const FAMILY_SCOPED = ["household"] as const;
 
 describe("a standalone durable child stays sparse", () => {
     it("KEEPS its identity card — the configured child card, with nothing family-scoped beside it", () => {
@@ -75,13 +75,24 @@ describe("a child with family settlement keeps the enrollment context", () => {
         expect(visible(composition)).toContain("household");
     });
 
-    it("keeps Billing Preview family-scoped and de-prioritised, not child-owned", () => {
-        const billing = composition.find((e) => e.key === "billing_preview")!;
-        expect(billing.tier).toBe("context");
-        expect(billing.encodedDensity).toBe("compact");
-        // Current Work leads; billing closes the surface.
+    /*
+     * ── BILLING PREVIEW IS NOT HERE, AND THAT IS THE ASSERTION NOW ──────────────────────────
+     *
+     * This required the card to be present, context-tier, compact and below Current Work — the
+     * right shape while tuition had nowhere else to live. Financials 11B settled that tuition is
+     * part of an Assignment: the card is retired from normal composition and Assignment owns
+     * Accept, Override, the options, the accepted-term read-back, Billing Frequency, the periods,
+     * responsibility and the discount forecast.
+     *
+     * What this composition still owes the operator is the ACCOUNT, and that is what is asserted:
+     * Financials is present and leads the money row, where the retired card used to close it.
+     */
+    it("states the account rather than a second tuition card", () => {
+        expect(composition.find((e) => e.key === "billing_preview"), "retired from normal composition").toBeUndefined();
+        const financials = composition.find((e) => e.key === "financials")!;
+        expect(financials, "the account is what this surface owes").toBeTruthy();
         const rowOf = (k: string) => composition.find((e) => e.key === k)!.area!.rowStart;
-        expect(rowOf("billing_preview")).toBeGreaterThan(rowOf("current_work"));
+        expect(rowOf("financials")).toBeGreaterThan(rowOf("current_work"));
     });
 
     it("does NOT add a standalone child identity card", () => {
@@ -107,7 +118,7 @@ describe("a child with family settlement keeps the enrollment context", () => {
         expect(visible(composition)).toContain("children");
         expect([...visible(composition)].sort()).toEqual([
             "attendance",
-            "billing_preview",
+            /* `billing_preview` left this set when it retired from normal composition (11B). */
             "children",
             "current_work",
             "financials",

@@ -20,6 +20,7 @@
  * and the only honest thing to do is say both.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { pickGoverningArrangement } from "@/lib/financials/responsibility/arrangementSpecificity";
 
 export type ShareExpectedFunding = {
     id: string;
@@ -52,6 +53,8 @@ export type AccountArrangementShare = {
 
 export type AccountArrangement = {
     id: string;
+    /** Null for a household arrangement; the child's id for a child-scoped one. */
+    customerMemberId: string | null;
     effectiveStart: string | null;
     effectiveEnd: string | null;
     shares: AccountArrangementShare[];
@@ -65,25 +68,54 @@ export type AccountArrangement = {
  */
 export async function readAccountArrangement(
     supabase: SupabaseClient,
-    args: { orgId: string; customerId: string | null },
+    args: {
+        orgId: string;
+        customerId: string | null;
+        /*
+         * WHICH GRAIN IS BEING ASKED ABOUT.
+         *
+         * This read used to filter on `customer_id` and `state` alone and take the newest
+         * `effective_start` — so on a household holding a household arrangement AND a later
+         * child-scoped one it returned the CHILD's, and the caller presented it as the account's.
+         * Responsibility has two canonical grains; a reader that ignores the distinction answers a
+         * question nobody asked.
+         *
+         * Pass the child a charge is for to get the arrangement IN FORCE for that charge — most
+         * specific wins. Pass null (the default) to ask strictly about the household.
+         */
+        customerMemberId?: string | null;
+    },
 ): Promise<AccountArrangement | null> {
     if (!args.customerId) return null;
 
     const { data, error } = await supabase
         .from("financial_responsibility_arrangements")
-        .select("id, effective_start, effective_end")
+        .select("id, customer_member_id, effective_start, effective_end")
         .eq("org_id", args.orgId)
         .eq("customer_id", args.customerId)
         .eq("state", "active")
-        .order("effective_start", { ascending: false, nullsFirst: false })
-        .limit(1);
+        .order("effective_start", { ascending: false, nullsFirst: false });
     /*
      * FAIL CLOSED. "There is no arrangement" is a claim an operator acts on — it is the sentence
      * that invites them to create one — so it may only be made about a record that was read.
      */
     if (error) throw new Error(`responsibility arrangement could not be read (${error.message.trim()})`);
 
-    const row = ((data ?? []) as Array<{ id: string; effective_start: string | null; effective_end: string | null }>)[0];
+    /* Specificity is decided by the shared rule, never restated here. */
+    const row = pickGoverningArrangement(
+        ((data ?? []) as Array<{
+            id: string;
+            customer_member_id: string | null;
+            effective_start: string | null;
+            effective_end: string | null;
+        }>).map((r) => ({
+            id: String(r.id),
+            customerMemberId: r.customer_member_id != null ? String(r.customer_member_id) : null,
+            effectiveStart: r.effective_start,
+            effectiveEnd: r.effective_end,
+        })),
+        { customerMemberId: args.customerMemberId ?? null },
+    );
     if (!row) return null;
 
     const { data: shareRows, error: shareError } = await supabase
@@ -161,8 +193,10 @@ export async function readAccountArrangement(
 
     return {
         id: row.id,
-        effectiveStart: row.effective_start,
-        effectiveEnd: row.effective_end,
+        /* The grain the governing arrangement was authored at — the caller must not have to guess. */
+        customerMemberId: row.customerMemberId,
+        effectiveStart: row.effectiveStart,
+        effectiveEnd: row.effectiveEnd,
         shares: shares.map((s) => ({
             ...s,
             name: (s.responsiblePartyId && nameById.get(s.responsiblePartyId)) || "Responsible party",

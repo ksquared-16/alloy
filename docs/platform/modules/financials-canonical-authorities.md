@@ -150,6 +150,47 @@ that bills it.
 
 **Owner:** `lib/financials/billingPeriod.ts`.
 
+### 3.1.0 Two levels, and the string that joins them
+
+This document previously described the billing period as simply *derived*, which is true of the
+**instances** and wrong about the **rule**. There are two levels and a product that conflates them
+cannot be configured coherently.
+
+| Level | What it is | Where it lives | Who authors it |
+|---|---|---|---|
+| **Billing frequency** | the recurrence RULE — Weekly, Monthly, and whatever else an organisation authors | `billing_cadences` option set; surfaced by `TuitionBillingFrequenciesPanel` | **configured** by the organisation |
+| **Billing period** | the resulting commercial INTERVAL — `Sep 15–21`, `September 2026` | `lib/financials/billingPeriod.ts` | **derived**, never authored |
+
+The chain is:
+
+```
+configured billing frequency        Weekly
+  ↓ selected by
+accepted commercial term            $185 / week   (enrollment_pricing_terms.cadence_key)
+  ↓ anchored at
+agreement anchor                    the earliest accepted term's effective_start — Sep 1
+  ↓ derives
+billing period instances            Sep 1–7 · Sep 8–14 · Sep 15–21 · …
+```
+
+Nobody authors `Sep 15–21`. Asking an operator to do so would be asking them to maintain by hand
+what the anchor and the cadence already determine, and the first hand-entered period that
+disagreed with the tiling would be a period nobody signed.
+
+**The join is a string, and it is not validated.** `billingFrequencyItemKeyFromLabel` mints the
+cadence key from whatever label was typed, so an organisation can author `fortnightly`, attach it
+to a tuition plan and have an assignment accept a term on it. `billingPeriodFor` knows five
+cadences; `fortnightly` is not one. The money stays safe — `previewTuitionGeneration` and
+`generateTuitionCharges` both gate on `isPeriodBillableCadence` and refuse rather than invent an
+interval — but the configuration surface used to say nothing, so the operator met silence.
+
+`billingRecurrenceFor` closes that: the Billing Frequencies screen states the recurrence the
+**derivation authority** will actually produce for each configured frequency, and says plainly when
+it will produce none. It is a report of `billingPeriodFor`'s behaviour, not a second opinion about
+it, so configuration cannot drift from the periods the platform derives.
+
+### 3.1.1 Period identity
+
 A billing period is a **commercial interval**. Its identity carries its boundaries:
 
 | Cadence | Key | Label |
@@ -176,6 +217,100 @@ groups by calendar month and a ledger that silently regrouped would restate hist
 
 One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
 preview cannot show four weeks and then create five.
+
+### 3.0.9 Discounts, the Add target, and prepaid
+
+**DISCOUNT POLICY** — the organisation's commercial rule, authored in
+`/organization/financials` → Policies and owned by `commercial_policies`.
+
+**DISCOUNT FORECAST** — a read-only prediction for one commercial relationship.
+`forecastAssignmentReductions` asks the three readers the application path asks — `readPolicies`,
+`resolveHouseholdEligibility`, `resolveFinancialReductions` — over the ACCEPTED tuition for the
+current period, and writes nothing: no reduction application, no charge, no adjustment, no ledger
+row. It decides no eligibility of its own, because a forecast that reasoned independently would be
+a second opinion about money and the first disagreement with the ledger would be unattributable.
+
+The forecast asks about a **calendar month** even when the commercial period is weekly: reductions
+resolve per month, and the month it names is the one the application path will resolve the same
+charge under. That is what makes the two answers comparable.
+
+**DISCOUNT EXCEPTION** — *not* an enable/disable Boolean. `discount_enabled = false` would say "no
+discounts here" about every policy at once, for all time, with nobody's name on it, and would
+silently suppress any policy authored later. An exception names one policy, one commercial
+relationship, an effective window, an operator and a reason, and supersedes rather than mutating.
+It is scoped by `opportunity_customer_member_id` — the same through-line an accepted pricing term
+uses — so no second "assignment id" concept exists for discounts.
+
+**UNIFIED ADD TARGET** — one control answering "who receives this charge": Household explicitly, or
+one or more children, mutually exclusive. An empty selection is **never** Household; that ambiguity
+is why Household is a value rather than the absence of ticks, and Confirm is unavailable until a
+target is chosen. Category grain still governs what is offered.
+
+A SUBJECT IS A CHILD, not an agreement. A child with a closed enrolment beside a live one has one
+entry in the target, carrying the active agreement as its billable source.
+
+**PREPAID** — posted, unapplied money, available to allocate. It is a separate account position
+from Current Balance and is never netted into it; zero is silence, never `$0.00`. The same
+canonical projection feeds Focus Panel Summary, Focus Panel Details and Financials → Accounts.
+
+**PREPAID IS NOT A DEPOSIT.** No surface may label it one. Held money has a lifecycle — taken,
+held, forfeited, refunded, applied — that this platform does not model, and calling available
+prepaid a deposit would promise it. `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` belongs to Payments.
+
+### 3.1.3 The accounting period lifecycle
+
+**Owner:** `financial_accounting_calendars` + `financial_accounting_periods`;
+`lib/financials/accounting/accountingCalendarService.ts` is the only writer, reached through
+`POST /api/admin/financials/accounting-calendar` (`fin.write`).
+
+| act | who | what it does |
+|---|---|---|
+| Adopt | operator, `fin.write` | creates the org's single active calendar and materialises twelve calendar-month periods from `calendarMonthPeriods`, all open |
+| Close | operator, `fin.write` | sets `status`, `closed_at`, `closed_by` on one period. Nothing else. |
+| Reopen | — | **not supported in V1.** No authority exists and none is offered; a closed period shows no control. |
+
+**Closing is not a refusal.** This is the rule most likely to be "corrected" by someone who
+assumes otherwise, and doing so would let a closed month stop a nursery billing its families.
+`attribute_financial_journal_entry` decides every entry's period from `effective_on`:
+
+| situation | result |
+|---|---|
+| no active calendar | `period_attribution = 'no_calendar'` — a complete history carrying no period |
+| no period covers the date | refuse `accounting_period_unavailable` |
+| the covering period is **closed** | **defer** to the earliest later open period, stamping `accounting_period_deferred` and the date it came from |
+| closed and nothing later is open | refuse `accounting_period_closed` |
+
+> A CLOSED PERIOD DEFERS; IT DOES NOT REFUSE. Refusing would make a REPORTING boundary able to
+> block an OPERATIONAL act: a family could not be charged, or a cheque could not be recorded,
+> because the books were closed. Books close after the fact and money does not wait for them.
+
+**What close checks, and what it does not.** It checks the period exists and is open, and it
+warns when closing the last open period, because that is what turns the deferral into a refusal.
+It does **not** check reconciliation, posting review or draft work: no platform doctrine makes any
+of them a close blocker, and drafts are not journal entries — they carry no attribution at all, so
+an unposted charge cannot be "in" the period being closed.
+
+**History is stable.** `enforce_accounting_period_boundaries_frozen` refuses any change to
+`starts_on`, `ends_on`, `period_key` or `calendar_id` once entries are attributed — *"open a new
+period instead"*. `status` is deliberately outside that guard, which is what makes closing a
+period with history possible at all. Closing re-attributes nothing.
+
+### 3.1.2 Billing period is not accounting period
+
+Two configured period systems, two instance levels, and they are allowed to disagree:
+
+| | Configuration | Instance |
+|---|---|---|
+| **Commercial** | billing frequency (`billing_cadences`) | billing period — `Sep 29–Oct 5` |
+| **Accounting** | accounting calendar (`financial_accounting_calendars`, style `calendar_month` / `four_four_five` / `custom`) | accounting period (`financial_accounting_periods`) — `October 2026` |
+
+A weekly billing period of `Sep 29–Oct 5`, invoiced Sep 29, due Oct 9, paid Oct 3 and attributed to
+accounting period `October 2026` is an ordinary arrangement, not a contradiction. Deriving one from
+the other collapses two identities a 4/4/5 calendar exists to keep apart.
+
+Attribution is decided by the `attribute_financial_journal_entry` BEFORE INSERT trigger, never by a
+service — a rule the service owns is a rule a second writer can skip. A **draft** obligation has no
+accounting period yet and says so rather than displaying one it has not reached.
 
 ## 3.2 Invoice date and due date
 
@@ -236,6 +371,48 @@ layer. "Late fees are never discounted" is a belief many organisations hold and 
 tenant's own policy decides. `category_not_discountable` is reported separately from
 `category_not_covered`, because "this kind of charge cannot be discounted" and "your policy does not
 cover this" are different conversations with an operator.
+
+## 5.2 A policy that does not apply to one family — the commercial policy exception
+
+A configured discount that should not reach ONE family used to be inexpressible. Deleting the
+policy took it from everyone; never configuring it took it from the tenant. The third thing is an
+**exception**: a dated, reasoned statement that one configured policy does not apply to one
+commercial relationship.
+
+```
+commercial_policy_exceptions
+    org_id
+    policy_id                          the configured policy, by its own id
+    opportunity_customer_member_id     the commercial relationship — the same through-line
+                                       enrollment_pricing_terms is scoped to
+    customer_member_id                 read from the assignment, never from the caller
+    effective_start / effective_end    a window, inclusive at both ends
+    reason                             NOT NULL, and non-empty by CHECK
+    supersedes_exception_id / superseded_at
+```
+
+**What it is not.** Not a per-assignment `discount_enabled` boolean. A switch has no reason, so
+nobody can say why six months on; no dates, so it silently rewrites what was true last period; and
+it would make the assignment a second place commercial policy is decided, which is how a surface
+and a ledger come to disagree. The command refuses `amount_cents`, `percent`, `discount_enabled`,
+`enabled`, `customer_member_id` and `org_id` in its payload rather than ignoring them.
+
+**One authority, both consumers.** `commercialPolicyExceptionService` answers exactly one question
+— which policies this relationship is excluded from on a date — and hands the ids to
+`resolveFinancialReductions`, which was EXTENDED rather than forked. Both the Assignment forecast
+(`forecastAssignmentReductions`) and the application path (`applyFinancialReductions`) call the
+same service and the same resolver, so a forecast cannot promise a discount the ledger withholds.
+
+**The exclusion says so.** An excluded policy resolves to `excluded_by_exception`, never
+`no_policy_configured`. The distinction is operational: an operator told the second goes looking
+for configuration that exists and is correct.
+
+**History is never rewritten.** An exception governs eligibility over a window. A reduction already
+posted stays posted. Ending one sets `effective_end` and records who ended it; re-excepting
+supersedes by succession, so what was in force at a past date remains answerable.
+
+**Writers.** `billing.except_commercial_policy` and `billing.end_commercial_policy_exception`, both
+`fin.write`, both subject `opportunity_customer_member`. No surface writes the table.
 
 ## 6.1 The prepaid position — unapplied is not available
 
@@ -355,6 +532,18 @@ There **is** a recurring billing engine. Do not write a second scheduler or gene
 | → responsibility | `financial_responsibility_arrangements` (§7) |
 | → settlement | `childcarePaymentService` + `payment_allocations` (§6) |
 | → journal attribution | `financial_journal_entries` + `financialJournalService` (§3) |
+
+**THE ENGINE IS NOT A CLOCK.** Two things are routinely conflated and must not be:
+
+| | Status |
+|---|---|
+| **Recurring billing engine** — accepted terms, cadence, period, due/not-due, the amount, idempotency, and generation | **Implemented and certified.** An operator triggers it: `billing.generate_tuition`, behind a preview that is a promise about the run that follows it. |
+| **Automatic periodic billing execution** — the month turning over and the run happening with nobody present | **Not built, and deliberately not built here.** It depends on **Governed Scheduled Work V1** (§14). |
+
+Nothing in the product fires recurring tuition on a schedule today, and no copy may imply it does.
+Operator-triggered generation is the certified V1, and it is a complete capability rather than a
+stand-in: the operator names the billing frequency and the period, previews the run, and confirms
+it. What is missing is the wakeup, not the billing.
 
 **Generation does not re-price from the catalog.** The accepted term is the money. A generator
 pricing from today's catalog would bill a family a rate they never agreed to, and would let a
@@ -715,7 +904,16 @@ surface that needed its own writer would be a second financial authority wearing
 | **Focus Panel Details** | Deep account truth and charge-grain administration — the ledger, lenses, filters, responsibility, reductions, corrections | a second account workspace |
 | **Financials Workspace → Accounts** | The wider operational account workspace, across households | a second ledger, a second charge writer |
 | **/organization/financials** | Financial and commercial CONFIGURATION — tuition plans, billing frequencies, catalog, policies, accounting calendar, GL | transactional money |
-| **Assignment Tuition card** (`billing_preview`) | What this child's assignment costs, and the acceptance of recurring commercial terms | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+| **Assignment** (`scheduling`, child grain) | What this child's assignment costs and what was agreed — the recommendation and the other authored options, canonical Accept, governed Override, the persisted accepted-term read-back, review-not-reprice, Billing Frequency, the current and next Billing Period, responsibility, and the discount forecast with its exceptions | pricing. It renders Commercial Execution's answer and records a decision; it computes no amount |
+| **Assignment Tuition card** (`billing_preview`) — **RETIRED from normal composition, Financials 11B** | Nothing, by default. It remains in the library and a tenant may still place it | being re-added as the home of tuition. Tuition is part of an Assignment, not an independent operational concept |
+
+**Why Billing Preview retired.** It was placed when tuition had nowhere else to live. Assignment
+now owns every job it was placed for, and three of its four remaining jobs moved with the decision:
+the tied-set explanation, the no-match reason, and the rejected-with-reason diagnostics are all in
+Assignment's tuition section. The fourth — a household-wide pricing overview across every
+assignment at once — is the one capability lost, and it was a reading convenience rather than an
+operator act. Nothing underneath was deleted: `buildAssignmentTuitionView`, the pricing resolver,
+`enrollment.pricing.accept` / `.override` and the rejection semantics are unchanged.
 
 **Shared command authority.** Every financial mutation on every one of these surfaces goes through
 `FINANCIAL_TRANSACTION_ACTIONS` → one executor → `/api/admin/actions/execute`. The workspace
@@ -753,7 +951,44 @@ no card and protects every Focus Panel card, including ones added later.
 
 ---
 
-## 13. Deferred — Payments is the next program
+## 13. `BILLING_SCHEDULER_PLATFORM_PREREQUISITE` — Governed Scheduled Work V1
+
+Financials needs work to happen when nobody is looking. So do Payments and, in time, other
+domains. The platform prerequisite for all of them is one shared capability —
+**GOVERNED SCHEDULED WORK V1** — and its contract is generic:
+
+```
+CLOCK → DUE WORK → CLAIM / LEASE → REGISTERED DOMAIN HANDLER → EXECUTE
+      → RECORD OUTCOME → RETRY / RECOVER → CONVERGE
+```
+
+**The scheduler knows no economics.** It knows when to wake something and how to run it exactly
+once; it does not know what a billing period is, what a late fee costs, or whether a card may be
+charged.
+
+| Owner | Owns |
+|---|---|
+| **Financials** | what Billing work is due; Billing Period semantics; recurring generation; charge aging; late-fee economics; financial idempotency |
+| **Payments** | Autopay authorization; payer and method; collectible resolution; collection; payment recognition |
+| **Scheduled Work** | the clock; the wakeup; claim/lease; dispatch; execution mechanics; retry and recovery; outcome recording |
+
+### The three intended consumers
+
+| Handler | The scheduler's part | The domain's part |
+|---|---|---|
+| **Periodic billing** | wake the handler on the cadence | Financials determines what is due and runs canonical generation |
+| **Charge aging / late fees** | wake the handler | Financials determines age, policy, eligibility and consequence |
+| **Autopay** | wake the handler | Payments determines authorization, payer, method, collectible and collection |
+
+### Do not build
+
+**No billing cron, no autopay cron, no late-fee cron inside Financials**, and none inside Payments.
+A domain-specific scheduler is how two clocks, two lease models and two retry stories arrive — and
+the second one is always written under deadline. Converge on Governed Scheduled Work V1.
+
+---
+
+## 14. Deferred — Payments is the next program
 
 Payment method, autopay, provider, collection and deposit-lifecycle productization is the next major
 program. See **`docs/platform/modules/core-payments-contract.md`** for the boundary: what Payments

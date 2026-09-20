@@ -32,10 +32,14 @@ import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
  * Mappings are EDITABLE: choosing which account a category posts to is exactly the decision the
  * table exists to record, and the keys are code-owned so the operator picks an account, never a key.
  *
- * The calendar is READ-ONLY, deliberately. Closing a period is what makes a month final, no
- * governed close/reopen action exists yet, and writing one around the journal enforcement is the
- * shortcut that trigger was built to prevent. The panel says so rather than offering a control that
- * would either lie or bypass.
+ * The calendar was READ-ONLY while no write authority existed. Financials 11B built one, so the
+ * panel now adopts a calendar and closes a period — both through
+ * `POST /api/admin/financials/accounting-calendar` behind `fin.write`, never around the journal
+ * enforcement the attribution trigger owns.
+ *
+ * Closing is the only lifecycle act V1 has. There is no way to reopen a closed period, because no
+ * authority for it exists; a closed row shows an em dash where the control would be rather than a
+ * disabled button implying one is coming.
  */
 
 type GlAccount = { id: string; code: string; name: string; type: string; is_active: boolean };
@@ -211,6 +215,41 @@ function AccountingCalendarPanel() {
     const [today, setToday] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    /*
+     * ── THE LIFECYCLE HALF ────────────────────────────────────────────────────────────────────
+     *
+     * This panel was read-only and the write half did not exist anywhere, so an organisation
+     * could be told it had no accounting calendar and had no way to adopt one, and a period could
+     * be shown Open and never closed. Both acts go through registered actions; nothing here
+     * writes a table.
+     *
+     * Close previews first, because closing is what makes a month's figures final and the
+     * operator should see what stays attributed and where later entries will land before doing it.
+     */
+    const [busy, setBusy] = useState<string | null>(null);
+    const [closing, setClosing] = useState<{ id: string; name: string; summary: string; changes: string[] } | null>(null);
+    const [nonce, setNonce] = useState(0);
+    const [actionError, setActionError] = useState<string | null>(null);
+
+    /*
+     * The write half lives on the accounting-calendar route, not the action runtime: these acts
+     * are org-scoped and  resolves every invocation against a real record.
+     * See the route for why a registered action was removed rather than kept unreachable.
+     */
+    const callCalendar = useCallback(async (payload: Record<string, unknown>) => {
+        const res = await fetch("/api/admin/financials/accounting-calendar", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+            const e = json.error;
+            throw new Error(typeof e === "string" && e ? e : `Refused (${res.status}).`);
+        }
+        return json;
+    }, []);
 
     useEffect(() => {
         void (async () => {
@@ -235,7 +274,8 @@ function AccountingCalendarPanel() {
                 setLoading(false);
             }
         })();
-    }, []);
+        /* `nonce` is bumped after a governed act, so the panel re-reads persisted truth. */
+    }, [nonce]);
 
     const active = calendars.find((c) => c.is_active) ?? calendars[0] ?? null;
     const calendarPeriods = active ? periods.filter((p) => p.calendar_id === active.id) : [];
@@ -255,6 +295,16 @@ function AccountingCalendarPanel() {
                 </p>
             </header>
 
+            {/*
+              * THE ACTION ERROR RENDERS IN EVERY BRANCH. It was placed inside the has-a-calendar
+              * branch, so a failed Adopt — which can only happen when there is NO calendar — had
+              * nowhere to appear: the operator clicked, nothing changed, and nothing said why.
+              */}
+            {actionError ? (
+                <p className="mt-3 text-[12px] text-alloy-ember" role="alert" data-testid="accounting-action-error">
+                    {actionError}
+                </p>
+            ) : null}
             {error ? (
                 <p className="mt-3 text-[12px] text-alloy-ember" role="alert" data-testid="accounting-calendar-error">
                     {error}
@@ -267,10 +317,34 @@ function AccountingCalendarPanel() {
                  * to resolve against and posting is refused — a state an operator must be told
                  * plainly rather than shown as a blank list that looks like a working calendar.
                  */
-                <p className="mt-3 text-[12px] text-alloy-midnight/70" data-testid="accounting-calendar-absent">
-                    This organization has no accounting calendar. Financial activity cannot be attributed to an
-                    accounting period until one exists.
-                </p>
+                <div data-testid="accounting-calendar-absent">
+                    <p className="mt-3 text-[12px] text-alloy-midnight/70">
+                        This organization has no accounting calendar. Financial activity cannot be attributed to an
+                        accounting period until one exists.
+                    </p>
+                    <button
+                        type="button"
+                        disabled={busy !== null}
+                        data-testid="accounting-calendar-adopt"
+                        onClick={() => {
+                            void (async () => {
+                                setBusy("adopt");
+                                setActionError(null);
+                                try {
+                                    await callCalendar({ op: "adopt", start_year: Number((today || "").slice(0, 4)) || undefined });
+                                    setNonce((n) => n + 1);
+                                } catch (e) {
+                                    setActionError(e instanceof Error ? e.message : "The calendar could not be adopted.");
+                                } finally {
+                                    setBusy(null);
+                                }
+                            })();
+                        }}
+                        className="mt-2 rounded-md border border-alloy-bend-pine/35 px-2.5 py-1 text-[12px] font-semibold text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.06] disabled:opacity-45"
+                    >
+                        {busy === "adopt" ? "Adopting…" : "Adopt a calendar-month calendar"}
+                    </button>
+                </div>
             ) : (
                 <>
                     <dl className="mt-3 flex flex-wrap gap-x-10 gap-y-2" data-testid="accounting-calendar-summary">
@@ -283,6 +357,57 @@ function AccountingCalendarPanel() {
                             tone={current ? (current.status === "open" ? "ok" : "due") : "due"}
                         />
                     </dl>
+
+                    {/*
+                      * PREVIEW, THEN CONFIRM. Closing is what makes a month's figures final, so
+                      * the operator reads what the action itself says will happen — how many
+                      * entries stay attributed, and which period later ones defer into — before
+                      * confirming. The words are the action's, not this component's.
+                      */}
+                    {closing ? (
+                        <div className="mt-3 rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.04] p-3" data-testid="accounting-close-preview">
+                            <p className="text-[12px] font-semibold text-alloy-midnight">{closing.summary}</p>
+                            <ul className="mt-1 space-y-0.5">
+                                {closing.changes.map((c, i) => (
+                                    <li key={i} className="text-[11.5px] text-alloy-midnight/70">{c}</li>
+                                ))}
+                            </ul>
+                            <div className="mt-2 flex gap-2">
+                                <button
+                                    type="button"
+                                    disabled={busy !== null}
+                                    data-testid="accounting-close-confirm"
+                                    onClick={() => {
+                                        void (async () => {
+                                            setBusy(closing.id);
+                                            setActionError(null);
+                                            try {
+                                                await callCalendar({ op: "close", period_id: closing.id });
+                                                setClosing(null);
+                                                /* Committed truth is re-read; the row is not edited to look closed. */
+                                                setNonce((n) => n + 1);
+                                            } catch (e) {
+                                                setActionError(e instanceof Error ? e.message : "The period could not be closed.");
+                                            } finally {
+                                                setBusy(null);
+                                            }
+                                        })();
+                                    }}
+                                    className="rounded-md bg-alloy-bend-pine px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-45"
+                                >
+                                    {busy === closing.id ? "Closing…" : "Close period"}
+                                </button>
+                                <button
+                                    type="button"
+                                    data-testid="accounting-close-cancel"
+                                    onClick={() => setClosing(null)}
+                                    className="rounded-md border border-alloy-stone/30 px-2.5 py-1 text-[12px] font-semibold text-alloy-midnight/70"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    ) : null}
 
                     {calendarPeriods.length === 0 ? (
                         <p className="mt-3 text-[12px] text-alloy-midnight/70" data-testid="accounting-calendar-no-periods">
@@ -298,6 +423,8 @@ function AccountingCalendarPanel() {
                                         <th className="py-1.5 pr-3 font-semibold">Starts</th>
                                         <th className="py-1.5 pr-3 font-semibold">Ends</th>
                                         <th className="py-1.5 pr-3 font-semibold">Status</th>
+                                        {/* Close is the only lifecycle act V1 has; there is no reopen. */}
+                                        <th className="py-1.5 pr-3 font-semibold"><span className="sr-only">Close</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -333,6 +460,54 @@ function AccountingCalendarPanel() {
                                                 >
                                                     {p.status === "open" ? "Open" : "Closed"}
                                                 </span>
+                                            </td>
+                                            <td className="py-1.5 pr-3 text-right">
+                                                {p.status === "open" ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={busy !== null}
+                                                        data-testid={`accounting-period-close-${p.period_key}`}
+                                                        onClick={() => {
+                                                            void (async () => {
+                                                                setBusy(p.id);
+                                                                setActionError(null);
+                                                                try {
+                                                                    const json = await callCalendar({ op: "preview_close", period_id: p.id });
+                                                                    const pv = json.preview as {
+                                                                        label?: string | null; periodKey?: string; startsOn?: string; endsOn?: string;
+                                                                        status?: string; attributedEntries?: number;
+                                                                        defersTo?: { periodKey: string } | null;
+                                                                        blockers?: { message: string }[];
+                                                                    } | undefined;
+                                                                    const name = pv?.label ?? pv?.periodKey ?? periodName(p);
+                                                                    setClosing({
+                                                                        id: p.id,
+                                                                        name,
+                                                                        summary: (pv?.blockers?.length ?? 0) > 0 ? `Cannot close ${name}` : `Ready to close ${name}`,
+                                                                        changes: [
+                                                                            `${pv?.startsOn} to ${pv?.endsOn} · currently ${pv?.status}`,
+                                                                            `${pv?.attributedEntries ?? 0} posted ${(pv?.attributedEntries ?? 0) === 1 ? "entry stays" : "entries stay"} attributed here`,
+                                                                            pv?.defersTo
+                                                                                ? `Later entries effective in it will post to ${pv.defersTo.periodKey}`
+                                                                                : "No later open period — such entries would be refused",
+                                                                            ...(pv?.blockers ?? []).map((b) => b.message),
+                                                                        ],
+                                                                    });
+                                                                } catch (e) {
+                                                                    setActionError(e instanceof Error ? e.message : "The period could not be previewed.");
+                                                                } finally {
+                                                                    setBusy(null);
+                                                                }
+                                                            })();
+                                                        }}
+                                                        className="text-[11px] font-semibold text-alloy-bend-pine hover:underline disabled:opacity-45"
+                                                    >
+                                                        Close
+                                                    </button>
+                                                ) : (
+                                                    /* CLOSED IS TERMINAL IN V1: no reopen authority exists, so none is offered. */
+                                                    <span className="text-[11px] text-alloy-midnight/35">—</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}

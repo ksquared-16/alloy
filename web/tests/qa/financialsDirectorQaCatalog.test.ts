@@ -108,11 +108,37 @@ describe("the Director QA scenario catalog", () => {
             s.doThis.join(" "),
             "a database query must still be refused as evidence, in the scenario itself",
         ).toMatch(/database/i);
+        /*
+         * ── THE DOCTRINE MOVED, AND THIS IS WHAT REPLACED IT ─────────────────────────────────
+         *
+         * This lock previously required the scenario to RECORD that opening and closing a period
+         * had no governed action. That was the honest limit for as long as it was true. Financials
+         * 11B built the lifecycle half — `billing.adopt_accounting_calendar` and
+         * `billing.close_accounting_period`, both behind `fin.write` — so the old assertion now
+         * requires the catalog to tell a tester a falsehood.
+         *
+         * What the lock protects is unchanged: a walkthrough must WALK what exists and RECORD what
+         * does not, and must never accept a database query as evidence. So the honesty requirement
+         * moves to the limit that is still real — a closed period cannot be reopened — and the
+         * capability that now exists must actually be walked, preview included.
+         */
         expect(
             s.doThis.join(" "),
-            "and the missing lifecycle action must be recorded rather than worked around",
-        ).toMatch(/no control to open or close a period/i);
-        expect(s.dispositionReason, "the reason states which half is missing").toMatch(/governed action/i);
+            "the lifecycle that now exists must be walked, not described",
+        ).toMatch(/close the earliest open period/i);
+        expect(
+            s.doThis.join(" "),
+            "closing states what it will do before it does it",
+        ).toMatch(/preview/i);
+        expect(
+            s.doThis.join(" "),
+            "and the limit that is still real is recorded rather than worked around",
+        ).toMatch(/cannot be REOPENED/i);
+        expect(
+            s.doThis.join(" "),
+            "a closed period defers rather than refusing, and the tester is asked to see it",
+        ).toMatch(/defers/i);
+        expect(s.dispositionReason, "the reason names both halves and what is still missing").toMatch(/Reopening is NOT supported/i);
 
         /* The two periods must never collapse into one scenario or one disposition. */
         expect(scenarioByKey("billing_period")!.disposition).toBe("HUMAN_WALKTHROUGH");

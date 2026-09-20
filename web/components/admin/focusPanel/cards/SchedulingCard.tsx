@@ -1,6 +1,9 @@
 "use client";
 
-import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
+import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
 
@@ -176,6 +179,26 @@ type SchedSubject = {
     name: string;
     imageUrl: string | null;
     dobAge: string | null;
+};
+
+/**
+ * The domain's eligibility reasons, in operator words. A LABEL for a canonical reason, never a
+ * reason of its own: an unmapped code still renders, spelled out, rather than being hidden.
+ */
+const REDUCTION_REASON_LABEL: Record<string, string> = {
+    no_policy_configured: "No discount policies configured",
+    not_enough_siblings: "Not eligible — not enough enrolled siblings",
+    rank_not_covered: "Not eligible — this child's sibling rank is not covered",
+    not_an_employee_household: "Not eligible — not an employee household",
+    category_not_covered: "Not eligible — tuition is not covered by a policy",
+    category_not_discountable: "Not eligible — this charge category cannot be discounted",
+    no_accepted_gross: "No accepted tuition to forecast against",
+    /*
+     * Not "no discount" and not "off". Somebody decided this policy does not apply HERE, and the
+     * surface says so in those words so the operator goes looking for the decision, not for
+     * missing configuration.
+     */
+    excluded_by_exception: "Excluded for this assignment",
 };
 
 const WEEKDAYS = [
@@ -1472,7 +1495,13 @@ function BillingConsequence({
                     {tuitionSelect ? "Tuition" : "Recurring tuition"}
                 </span>
             </div>
-            {tuitionSelect ? <div data-assignment-tuition-embed="true">{tuitionSelect}</div> : null}
+            {/*
+              * ONE MARKER, ONE NODE. This wrapper carried `data-assignment-tuition-embed` as well
+              * as the <select> inside it, so a probe reaching for "the embed" got whichever the
+              * DOM offered first — a div — and `s.options` was undefined. The region is named for
+              * what it is; the control keeps the marker that identifies the control.
+              */}
+            {tuitionSelect ? <div data-assignment-tuition-region="true">{tuitionSelect}</div> : null}
             {family ? (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: T.forge }}>
                     <span>Family responsibility</span>
@@ -1687,33 +1716,234 @@ function ScheduleEditor({
     // enrollment process (no separate Generate Quote chrome).
     const [offeringId, setOfferingId] = useState(() => tuitionPlanIdFromTruth(truth, child.id));
     const [rateOptions, setRateOptions] = useState<Array<{ id: string; label: string }>>([]);
+    /*
+     * ── THE CANONICAL VIEW, NOT JUST ITS LABELS ───────────────────────────────────────────────
+     *
+     * The options were rendered from `assignments[]` and the rest of it thrown away. Accepting a
+     * term needs what that view already carries and nothing else can supply: the assignment's own
+     * `opportunityCustomerMemberId` (the action's subject) and the `resolutionKey` the operator
+     * was actually shown — the service refuses a commit whose resolution has moved on, and that
+     * refusal only works if the key travels with the choice.
+     *
+     * It also carries `accepted`, which is how the surface renders PERSISTED truth rather than
+     * the dropdown's own value.
+     */
+    const [pricingView, setPricingView] = useState<AssignmentTuitionView | null>(null);
+    /** Required by the override authority, and never defaulted to something plausible. */
+    const [overrideReason, setOverrideReason] = useState("");
+    /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
+    const [optionsExpanded, setOptionsExpanded] = useState(false);
+    /*
+     * ── WHAT DISCOUNTS ARE EXPECTED ON THIS RELATIONSHIP ──────────────────────────────────────
+     *
+     * A projection, not a decision: the route runs the SAME eligibility authority the application
+     * path runs, over the accepted tuition for the current period, and writes nothing. Loaded
+     * after the accepted term is known — an assignment with no agreed price has no gross to
+     * forecast against, and guessing one would answer a question nobody asked.
+     */
+    const [forecast, setForecast] = useState<{
+        grossCents: number; currencyCode: string; periodKey: string; totalCents: number; netCents: number;
+        outcomes: Array<Record<string, unknown>>;
+    } | null>(null);
+    /*
+     * ── WHAT SOMEBODY DECIDED DOES NOT APPLY HERE ─────────────────────────────────────────────
+     *
+     * Read beside the forecast, from the same route, in the same breath. An operator looking at a
+     * discount that is not applying needs the decision and its reason, or the surface has told
+     * them a policy is missing when in fact a person excluded it.
+     */
+    type AssignmentException = {
+        id: string; policyId: string; policyLabel: string; effectiveStart: string;
+        effectiveEnd: string | null; reason: string; appliesNow: boolean; superseded: boolean;
+    };
+    const [exceptions, setExceptions] = useState<AssignmentException[]>([]);
+    /** Bumped after an exception is authored, so the forecast is re-read rather than guessed at. */
+    const [forecastNonce, setForecastNonce] = useState(0);
+
+    useEffect(() => {
+        const ocm = pricingView?.opportunityCustomerMemberId;
+        if (!ocm || !pricingView?.accepted) { setForecast(null); setExceptions([]); return; }
+        let cancelled = false;
+        void fetch(`/api/admin/financials/reduction-forecast?opportunity_customer_member_id=${encodeURIComponent(ocm)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { forecast?: typeof forecast; exceptions?: AssignmentException[] } | null) => {
+                if (cancelled) return;
+                setForecast(b?.forecast ?? null);
+                setExceptions(b?.exceptions ?? []);
+            })
+            .catch(() => {
+                /* The section states the price without claiming anything about discounts. */
+                if (!cancelled) { setForecast(null); setExceptions([]); }
+            });
+        return () => { cancelled = true; };
+    }, [pricingView, forecastNonce]);
+
+    /*
+     * ── AUTHORING AN EXCEPTION ────────────────────────────────────────────────────────────────
+     *
+     * Deliberately not a toggle. The draft exists so the operator states a reason and sees what
+     * the decision will MEAN before it is recorded; there is no switch to flip, and no amount to
+     * type, because the consequence belongs to eligibility when an obligation is evaluated.
+     */
+    const [exceptionDraft, setExceptionDraft] = useState<{ policyId: string; policyLabel: string; reason: string } | null>(null);
+    const [exceptionBusy, setExceptionBusy] = useState(false);
+    const [exceptionError, setExceptionError] = useState<string | null>(null);
+
+    async function commitException(op: "create" | "end", payload: Record<string, unknown>): Promise<void> {
+        const ocm = pricingView?.opportunityCustomerMemberId;
+        if (!ocm) return;
+        setExceptionBusy(true);
+        setExceptionError(null);
+        try {
+            await executeAssignmentAction({
+                action_key: op === "create" ? "billing.except_commercial_policy" : "billing.end_commercial_policy_exception",
+                entity_type: "opportunity_customer_member",
+                entity_id: ocm,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                payload,
+            });
+            setExceptionDraft(null);
+            /* Re-read rather than patch local state: the forecast is the authority on the effect. */
+            setForecastNonce((n) => n + 1);
+        } catch (e) {
+            setExceptionError((e as Error).message);
+        } finally {
+            setExceptionBusy(false);
+        }
+    }
+
+    /** Derived from the persisted term, through the authority generation uses. */
+    const acceptedPeriods = useMemo(
+        () =>
+            pricingView?.accepted
+                ? acceptedTermBillingPeriods(
+                      {
+                          cadenceKey: pricingView.accepted.cadenceKey,
+                          effectiveStart: pricingView.accepted.effectiveStart,
+                          effectiveEnd: pricingView.accepted.effectiveEnd,
+                      },
+                      new Date().toISOString().slice(0, 10),
+                  )
+                : null,
+        [pricingView],
+    );
+    /*
+     * The recommendation is the default CHOICE, not a default price: the operator accepts it by
+     * saving, and the canonical action still decides. Only when nothing has been chosen — an
+     * existing accepted selection is never overwritten by a resolver answer.
+     */
+    useEffect(() => {
+        if (!pricingView?.recommended || offeringId.trim()) return;
+        setOfferingId(pricingView.recommended.sourceId);
+    }, [pricingView, offeringId]);
+
+    /** Everything applicable that is not the recommendation — the disclosure's whole content. */
+    const otherOptions = useMemo(() => {
+        if (!pricingView) return [];
+        const recId = pricingView.recommended?.sourceId ?? null;
+        return pricingView.applicable.filter((o) => o.sourceId !== recId);
+    }, [pricingView]);
+
+    /*
+     * Tuition can be settled on its own when there is something to settle: a selection that is
+     * not already the accepted term, or a term whose resolution has moved. Saving the schedule
+     * still settles it too — this is the path for an assignment that already exists.
+     */
+    const canSettleTuitionAlone =
+        child.kind === "child" &&
+        Boolean(pricingView) &&
+        Boolean(offeringId.trim()) &&
+        (pricingView?.acceptedIsStale === true || offeringId.trim() !== (pricingView?.accepted?.source?.id ?? ""));
+
+    /* An override is a selection that differs from the resolver's recommendation — never a price. */
+    const isOverridingSelection =
+        Boolean(offeringId.trim()) &&
+        pricingView?.recommended != null &&
+        offeringId.trim() !== pricingView.recommended.sourceId;
+    /** What the canonical write said. Never optimistic: absent until an action answered. */
+    const [tuitionOutcome, setTuitionOutcome] = useState<
+        { kind: "accepted" | "overridden"; label: string } | { kind: "needs_attention"; detail: string } | null
+    >(null);
+    /*
+     * ── RESPONSIBILITY, THE SAME AUTHORITY FINANCIALS USES ────────────────────────────────────
+     *
+     * Assignment is where a commercial relationship is set up, so it is where an operator expects
+     * to say who will owe for it. That must not become a second responsibility record: this mounts
+     * the SAME panel Financials Details mounts, over the same
+     * `billing.configure_responsibility` action, and the assignment stores nothing of its own.
+     *
+     * Assignment holds a child and no household id, so the scopes read resolves the household from
+     * the member — one place that knows how, not two.
+     */
+    const [responsibilityOpen, setResponsibilityOpen] = useState(false);
+    const [household, setHousehold] = useState<{
+        customerId: string | null;
+        members: { customerMemberId: string; label: string }[];
+    } | null>(null);
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    /*
+     * ── THE OPTIONS BELONG TO THIS ASSIGNMENT, NOT TO THE HOUSEHOLD ────────────────────────────
+     *
+     * MEASURED on the mounted product: editing Certa's assignment offered
+     *
+     *     Best match — Certa Certhouse: $185.00/weekly
+     *     Certb Certhouse: $1,450.00/monthly
+     *
+     * while Certa's own `applicable` list contained exactly ONE option. The list was built from
+     * `enrollments`, which is one row per assignment across the whole OPPORTUNITY, ranked so the
+     * matching child floated to the top — every sibling's price stayed selectable underneath, and
+     * the ranking was done by substring-matching the child's display name.
+     *
+     * Choosing the sibling's rate was worse than confusing. `POST /assignment-quote` resolves
+     * `view.applicable.find(o => o.sourceId === selected) ?? view.recommended`, so a rate that is
+     * not applicable to THIS assignment silently becomes the recommendation — the operator's
+     * explicit choice discarded without a word, on a control that sets a family's price.
+     *
+     * The canonical per-assignment view already answers this: `assignments[]` carries
+     * `customerMemberId`, the recommendation and every applicable option. Match the child exactly,
+     * and offer that assignment's options labelled by the OPTION rather than by a child's name —
+     * the operator is pricing one child and does not need to be told which one in every row.
+     *
+     * No fallback to the legacy shape. `FinancialConfigEnrollment` carries no member id, so the
+     * only way to guess is the name match that caused this; offering nothing is better than
+     * offering a price that belongs to somebody else.
+     */
     useEffect(() => {
         if (!opportunityId) return;
         let cancelled = false;
         loadFinancialConfig(opportunityId)
-            .catch(() => null)
             .then((payload) => {
-                if (cancelled || !payload?.enrollments?.length) return;
-                const childName = child.name.trim().toLowerCase();
-                const ranked = [...payload.enrollments].sort((a, b) => {
-                    const aHit =
-                        childName && a.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
-                    const bHit =
-                        childName && b.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
-                    return aHit - bHit;
-                });
-                const opts: Array<{ id: string; label: string }> = [];
-                for (const row of ranked) {
-                    if (!row.resolvedRate) continue;
-                    opts.push({
-                        id: row.resolvedRate.rateId,
-                        label: `${row.childLabel}: ${row.resolvedRate.rateLabel}`,
+                if (cancelled) return;
+                const view = (payload?.assignments ?? []).find((v) => v.customerMemberId === child.id);
+                if (!view) return;
+                setPricingView(view);
+                const recommendedId = view.recommended?.sourceId ?? null;
+                const opts = [...view.applicable]
+                    // The recommendation first; the rest keep the resolver's own order.
+                    .sort((a, b) =>
+                        (a.sourceId === recommendedId ? 0 : 1) - (b.sourceId === recommendedId ? 0 : 1),
+                    )
+                    .map((o) => {
+                        /*
+                         * The variant names the commitment ("Full time"), and an option can have
+                         * none — measured: the sole applicable option here carried an empty
+                         * `variantLabel`, which rendered "Recommended — : $185.00/weekly". The
+                         * money is the part that is always there, so the name qualifies it only
+                         * when there is a name.
+                         */
+                        const variant = (o.variantLabel ?? "").trim();
+                        const what = variant ? `${variant}: ${o.amountLabel}` : o.amountLabel;
+                        return {
+                            id: o.sourceId,
+                            label: o.sourceId === recommendedId ? `Recommended — ${what}` : what,
+                        };
                     });
-                }
                 if (opts.length) setRateOptions(opts);
             })
             .catch(() => {
@@ -1723,6 +1953,31 @@ function ScheduleEditor({
             cancelled = true;
         };
     }, [opportunityId, child.id]);
+
+    useEffect(() => {
+        /*
+         * OPENING IS NOT AUTHORING. This reads who the household is and what is already in force;
+         * nothing is written because a panel was opened. The operator confirms, or nothing changed.
+         */
+        if (!responsibilityOpen || household || child.kind !== "child") return;
+        let cancelled = false;
+        void fetch(
+            `/api/admin/financials/responsibility-scopes?customer_member_id=${encodeURIComponent(child.id)}`,
+            { credentials: "include" },
+        )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { customerId?: string | null; members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (cancelled || !b) return;
+                setHousehold({ customerId: b.customerId ?? null, members: b.members ?? [] });
+            })
+            .catch(() => {
+                /* The card says it could not look, rather than offering an empty household. */
+                if (!cancelled) setHousehold({ customerId: null, members: [] });
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [responsibilityOpen, household, child.kind, child.id]);
 
     /** Resolve site patterns once (preloaded if first-paint carried them). */
     const ensurePatterns = useCallback((): Promise<Pattern[]> => {
@@ -1814,6 +2069,184 @@ function ScheduleEditor({
         (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
         (!roomRequired || Boolean(roomId));
 
+    /**
+     * ── THE CANONICAL COMMERCIAL TERM ─────────────────────────────────────────────────────────
+     *
+     * This is what the snapshot below is NOT. `POST /assignment-quote` records an ESTIMATE on the
+     * process instance and drives workflow projection; it writes no `enrollment_pricing_terms`
+     * row and never did. What a family has agreed is an effective-dated term, and the only two
+     * writers of one are `enrollment.pricing.accept` and `.override`.
+     *
+     * So the Assignment surface asks the same registered action the AssignmentTuitionCard asks.
+     * There is no second writer, no assignment-owned price column, and no amount in this payload:
+     * the service re-reads the assignment from its owners and takes the money from the catalog.
+     * A browser-authored figure has nowhere to go here, deliberately.
+     *
+     * `resolutionKey` travels with the choice because the service refuses a commit whose
+     * resolution has moved since the operator looked — the whole point of which is lost if the
+     * caller sends a fresh one.
+     */
+    async function acceptAssignmentTuition(): Promise<
+        { ok: true; state: string; label: string } | { ok: false; detail: string }
+    > {
+        const view = pricingView;
+        const selected = offeringId.trim();
+        if (!view || !selected) return { ok: false, detail: "No tuition option was selected." };
+        const option = view.applicable.find((o) => o.sourceId === selected);
+        /*
+         * AN UNKNOWN SELECTION IS A REFUSAL, NOT A FALLBACK. The snapshot route resolves an
+         * unmatched id to the recommendation, which silently discards what the operator chose;
+         * the canonical path must never do that.
+         */
+        if (!option) return { ok: false, detail: "That tuition option no longer applies to this assignment." };
+        const isOverride = view.recommended != null && option.sourceId !== view.recommended.sourceId;
+
+        const res = await fetch("/api/admin/actions/execute", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action_key: isOverride ? "enrollment.pricing.override" : "enrollment.pricing.accept",
+                entity_type: "opportunity_customer_member",
+                entity_id: view.opportunityCustomerMemberId,
+                mode: "execute",
+                confirmation: { confirmed: true },
+                payload: {
+                    opportunity_customer_member_id: view.opportunityCustomerMemberId,
+                    resolution_key: view.resolutionKey,
+                    selected_source_id: option.sourceId,
+                    /*
+                     * NO CADENCE FILTER. `assignmentResolutionKey` hashes `cad:${facts.cadenceKey}`,
+                     * and the view this choice came from resolved with NO cadence constraint —
+                     * `facts.cadenceKey` was null. Sending the chosen option's cadence made the
+                     * service re-resolve against different facts, producing a different key, and
+                     * every accept and override answered `stale_resolution`: "This assignment has
+                     * changed since the tuition was resolved", about an assignment that had not
+                     * changed. The commit must re-resolve the way the view did, or the key it is
+                     * checking against is meaningless.
+                     *
+                     * The cadence is not lost: it comes from the selected option's own rate, which
+                     * is where the term takes it from anyway.
+                     */
+                    /* Override requires its own reason; the action refuses without one. */
+                    ...(isOverride ? { override_reason: overrideReason.trim() } : {}),
+                    /*
+                     * SUPERSEDE, WHEN THERE IS SOMETHING TO SUPERSEDE.
+                     *
+                     * A live term on the same effective date makes the service refuse with
+                     * `term_already_accepted` unless the caller says it means to replace it — and
+                     * that refusal is right: re-accepting the identical decision is idempotent,
+                     * but a DIFFERENT decision silently overwriting a standing agreement would
+                     * not be. Resolving a review is exactly the deliberate case, so the intent is
+                     * stated. The service supersedes by succession, closing the old term rather
+                     * than editing it, so history survives.
+                     */
+                    supersede: Boolean(view.accepted),
+                },
+            }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+            error?: unknown;
+            message?: unknown;
+            blockers?: Array<{ message?: string }>;
+            result?: { term?: { state?: string; amount_cents?: number; cadence_key?: string } };
+        };
+        if (!res.ok) {
+            /*
+             * THE REFUSAL HAS TO BE READABLE. `error` is a structured object on this runtime, so
+             * rendering it straight put "[object Object]" where the reason belonged — the
+             * operator was told tuition needed attention and not one word about why.
+             */
+            const say = (v: unknown): string | null => {
+                if (typeof v === "string" && v.trim()) return v.trim();
+                if (v && typeof v === "object") {
+                    const o = v as { message?: unknown; detail?: unknown; code?: unknown };
+                    return (
+                        (typeof o.message === "string" && o.message)
+                        || (typeof o.detail === "string" && o.detail)
+                        || (typeof o.code === "string" && o.code)
+                        || null
+                    );
+                }
+                return null;
+            };
+            const detail =
+                say(json.error)
+                ?? say(json.message)
+                ?? json.blockers?.map((b) => b.message).filter(Boolean).join("; ")
+                ?? `Refused (${res.status}).`;
+            return { ok: false, detail: detail || `Refused (${res.status}).` };
+        }
+        const term = json.result?.term;
+        return {
+            ok: true,
+            state: term?.state ?? (isOverride ? "overridden" : "accepted"),
+            label: term?.amount_cents != null ? `${(term.amount_cents / 100).toFixed(2)} ${term.cadence_key ?? ""}`.trim() : option.amountLabel,
+        };
+    }
+
+    /**
+     * ── TWO CANONICAL ACTS, REPORTED SEPARATELY ───────────────────────────────────────────────
+     *
+     * The assignment exists by the time this runs, and it stays existing. Tuition acceptance is
+     * its own act against its own authority and can refuse for reasons that say nothing about the
+     * schedule — a resolution that moved, an option withdrawn, a cadence the platform cannot
+     * bill. Rolling the assignment back to keep the pair atomic would destroy real work to
+     * preserve a tidiness the domain never claimed.
+     *
+     * So a failure here is REPORTED, not raised: the operator is told the assignment was created
+     * and tuition needs attention, and the missing step is the only thing to retry. Retrying
+     * converges through the service's own idempotency — a live term for the same assignment on
+     * the same effective date is recognised rather than duplicated — so no workflow-level
+     * idempotency authority is invented here.
+     */
+    async function settleTuition(): Promise<void> {
+        if (!offeringId.trim() || child.kind !== "child") return;
+        try {
+            const outcome = await acceptAssignmentTuition();
+            if (outcome.ok) {
+                setTuitionOutcome({
+                    kind: outcome.state === "overridden" ? "overridden" : "accepted",
+                    label: outcome.label,
+                });
+                /* Persisted truth is re-read; the dropdown's value is not the answer. */
+                await refreshPricingView();
+            } else {
+                setTuitionOutcome({ kind: "needs_attention", detail: outcome.detail });
+            }
+        } catch (e) {
+            setTuitionOutcome({
+                kind: "needs_attention",
+                detail: e instanceof Error ? e.message : "Tuition could not be accepted.",
+            });
+        }
+    }
+
+    /**
+     * Re-read the canonical view, so what is shown is what was persisted.
+     *
+     * ── THROUGH THE SEAM, NOT AROUND IT ──────────────────────────────────────────────────────
+     *
+     * This read its own `fetch` with `cache: "no-store"`, which got the freshness it needed by
+     * leaving the one-request-per-opportunity loader every other consumer shares. Two readers of
+     * one endpoint is how a panel comes to show two answers for the same family, and the extra
+     * request lands on every accept and override.
+     *
+     * Retiring the entry and loading through the loader gets the same freshness with one reader:
+     * the invalidation is exactly what a mutation is supposed to do to a cached configuration.
+     */
+    async function refreshPricingView(): Promise<void> {
+        if (!opportunityId) return;
+        try {
+            invalidateFinancialConfig(opportunityId);
+            const body = await loadFinancialConfig(opportunityId);
+            const view = ((body.assignments ?? []) as AssignmentTuitionView[]).find((v) => v.customerMemberId === child.id);
+            if (view) setPricingView(view);
+        } catch {
+            /* The card keeps the last canonical answer rather than inventing a fresher one. */
+        }
+    }
+
     async function persistAssignmentQuote(): Promise<void> {
         // Child enrichment, on a case. A tuition quote is a commercial fact about a family's
         // enrollment; a staff assignment produces none, and there is no opportunity to hang one on.
@@ -1863,6 +2296,7 @@ function ScheduleEditor({
                 await persistAssignmentQuote().catch(() => {
                     /* schedule write succeeded — quote is opportunistic on opportunity */
                 });
+                await settleTuition();
                 await onSaved();
                 return;
             }
@@ -1905,6 +2339,7 @@ function ScheduleEditor({
             await persistAssignmentQuote().catch(() => {
                 /* schedule write succeeded — quote is opportunistic on opportunity */
             });
+            await settleTuition();
             await onSaved();
         } catch (e) {
             setError((e as Error).message);
@@ -1961,9 +2396,90 @@ function ScheduleEditor({
                                 htmlFor={`assignment-tuition-embed-${child.id}`}
                                 style={{ fontSize: 11, fontWeight: 650, color: T.slate }}
                             >
-                                Tuition / quote amount
+                                Tuition — {child.name}
                             </label>
+                            {/*
+                              * ── RECOMMENDED FIRST; THE REST BEHIND A DISCLOSURE ─────────────
+                              *
+                              * The resolver names one option or declines to. When it names one,
+                              * that is what the operator sees and what saving accepts — the other
+                              * legitimate options are a click away rather than a list to read.
+                              * When it declines, there is no "Recommended" heading to manufacture:
+                              * equally-configured options are the operator's choice to settle, and
+                              * the tied set is named here rather than deferred to another card.
+                              *
+                              * The disclosure is absent when there is nothing behind it.
+                              */}
+                            {pricingView?.recommended && !optionsExpanded ? (
+                                <div data-assignment-tuition-recommended={pricingView.recommended.sourceId}
+                                     style={{ fontSize: 12, color: T.forge, fontWeight: 600 }}>
+                                    Recommended · {pricingView.recommended.amountLabel}
+                                </div>
+                            ) : null}
+                            {pricingView && pricingView.state === "ambiguous" ? (
+                                <div data-assignment-tuition-ambiguous="true" style={{ fontSize: 11, color: T.ember }}>
+                                    {pricingView.tied.length} configured options apply equally — choose one.
+                                    {pricingView.tied.length > 0 ? (
+                                        <span data-assignment-tuition-tied="true" style={{ display: "block", color: T.slate, fontWeight: 400 }}>
+                                            {pricingView.tied.map((o) => o.amountLabel).join(" · ")}
+                                        </span>
+                                    ) : null}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHY NOTHING APPLIES ──────────────────────────────────────────
+                              *
+                              * An assignment with no priceable option is the state an operator is
+                              * most likely to misread as a broken screen. The resolution already
+                              * carries its own reason, and this states it — a surface that renders
+                              * an empty option list and says nothing has told the operator that
+                              * tuition is missing, which is a different and wrong claim.
+                              */}
+                            {pricingView && pricingView.state === "no_match" ? (
+                                <div data-assignment-tuition-no-match={pricingView.noMatchReason ?? "unknown"}
+                                     style={{ fontSize: 11, color: T.ember }}>
+                                    No authored tuition applies to this assignment
+                                    {pricingView.noMatchReason ? ` — ${pricingView.noMatchReason.replace(/_/g, " ")}` : ""}.
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHAT WAS CONSIDERED AND REJECTED, AND WHY ────────────────────
+                              *
+                              * The diagnostic that used to live on the standalone card. It answers
+                              * the question an operator asks next — "there IS a rate for this
+                              * program, why isn't it here?" — with the resolution's own reason for
+                              * each option it set aside. Quiet and closed by default: it matters
+                              * when the answer is surprising, and not before.
+                              */}
+                            {pricingView && pricingView.rejected.length > 0 ? (
+                                <details data-assignment-tuition-rejected={String(pricingView.rejected.length)}
+                                         style={{ fontSize: 11, color: T.mid40 }}>
+                                    <summary style={{ cursor: "pointer" }}>
+                                        {pricingView.rejected.length} option{pricingView.rejected.length === 1 ? "" : "s"} did not apply
+                                    </summary>
+                                    <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                                        {pricingView.rejected.map((r) => (
+                                            <li key={r.sourceId} data-assignment-tuition-rejected-reason={r.reason}>
+                                                {r.detail || r.reason.replace(/_/g, " ")}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </details>
+                            ) : null}
+                            {pricingView?.recommended && !optionsExpanded && otherOptions.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setOptionsExpanded(true)}
+                                    data-assignment-tuition-expand="true"
+                                    style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}
+                                >
+                                    Expand options ({otherOptions.length} other)
+                                </button>
+                            ) : null}
                             <select
+                                hidden={Boolean(pricingView?.recommended) && !optionsExpanded}
                                 id={`assignment-tuition-embed-${child.id}`}
                                 value={offeringId}
                                 data-assignment-tuition-plan={child.id}
@@ -1980,17 +2496,336 @@ function ScheduleEditor({
                                     maxWidth: "100%",
                                 }}
                             >
-                                <option value="">Select best match to lock in…</option>
-                                {rateOptions.map((r, idx) => (
+                                <option value="">Select a plan to lock in…</option>
+                                {/*
+                                 * The label already says which option is the recommendation, because
+                                 * only the resolver knows — an index prefix asserted it from list
+                                 * position, which is true only while a recommendation exists.
+                                 */}
+                                {rateOptions.map((r) => (
                                     <option key={r.id} value={r.id}>
-                                        {idx === 0 ? `Best match — ${r.label}` : r.label}
+                                        {r.label}
                                     </option>
                                 ))}
                             </select>
                             <div style={{ fontSize: 10.5, color: T.mid40 }}>
-                                Best match uses room, program, and schedule. Select a plan to lock it
-                                onto the enrollment opportunity.
+                                The recommendation uses room, program, and schedule. Every option
+                                here applies to this assignment; selecting one locks it onto the
+                                enrollment opportunity.
                             </div>
+
+                            {/*
+                              * ── WHAT IS ACTUALLY AGREED, FROM THE PERSISTED TERM ────────────
+                              *
+                              * Not the dropdown's value, which is a selection and not an
+                              * agreement. This reads `accepted` off the canonical view, which is
+                              * the same row recurring generation bills from — so if the two ever
+                              * disagreed, this line would be the one that changed.
+                              */}
+                            {pricingView?.accepted ? (
+                                <div
+                                    style={{ fontSize: 11, color: T.slate, marginTop: 2 }}
+                                    data-assignment-accepted-term={pricingView.accepted.state}
+                                    data-assignment-accepted-cadence={pricingView.accepted.cadenceKey}
+                                >
+                                    <strong style={{ fontWeight: 650 }}>
+                                        {pricingView.accepted.state === "overridden" ? "Overridden" : "Accepted"}
+                                    </strong>{" "}
+                                    {(pricingView.accepted.amountCents / 100).toLocaleString(undefined, {
+                                        style: "currency",
+                                        currency: pricingView.accepted.currencyCode || "USD",
+                                    })}
+                                    {" / "}
+                                    {pricingView.accepted.cadenceKey}
+                                    {" · from "}
+                                    {pricingView.accepted.effectiveStart}
+                                    {pricingView.accepted.overrideReason ? ` · ${pricingView.accepted.overrideReason}` : ""}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── THE ASSIGNMENT SAYS WHICH PERIODS IT WILL BE BILLED IN ──────
+                              *
+                              * Derived, never stored and never configured: the accepted cadence
+                              * and the agreement anchor decide it, through the one authority that
+                              * decides it for generation too. No accepted term means no period —
+                              * an invented one would be a promise about money nobody has agreed.
+                              */}
+                            {acceptedPeriods ? (
+                                <div
+                                    style={{ fontSize: 11, color: T.mid40, marginTop: 2 }}
+                                    data-assignment-billing-frequency={pricingView?.accepted?.cadenceKey ?? ""}
+                                    data-assignment-billing-period={acceptedPeriods.current.key}
+                                    data-assignment-next-billing-period={acceptedPeriods.next.key}
+                                >
+                                    Billing frequency {pricingView?.accepted?.cadenceKey} · current period{" "}
+                                    {acceptedPeriods.current.label} · next {acceptedPeriods.next.label}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHAT IS EXPECTED TO REDUCE IT ───────────────────────────────
+                              *
+                              * Compact, and only about policies that have something to say for
+                              * THIS relationship: a configuration list would tell the operator
+                              * about discounts other families get. The reasons are the domain's
+                              * own — `not_enough_siblings`, `category_not_discountable` — because
+                              * a second vocabulary invented in the surface would disagree with
+                              * the ledger the first time the two were compared.
+                              *
+                              * Read-only. This writes no reduction and no charge; the ledger is
+                              * still where a discount becomes real.
+                              */}
+                            {forecast && (forecast.outcomes.length > 0 || exceptions.length > 0) ? (
+                                <div style={{ marginTop: 4 }} data-assignment-discount-forecast="true">
+                                    <div style={{ fontSize: 10, fontWeight: 650, letterSpacing: "0.04em", color: T.mid40 }}>
+                                        DISCOUNTS
+                                    </div>
+                                    {forecast.outcomes.map((o, i) => {
+                                        const kind = String(o.kind);
+                                        if (kind === "expected") {
+                                            const cents = Number(o.amountCents ?? 0);
+                                            const policyId = String(o.policyId ?? "");
+                                            const label = String(o.label ?? "Discount");
+                                            return (
+                                                <div key={i} style={{ fontSize: 11, color: T.slate, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}
+                                                     data-forecast-outcome="expected" data-forecast-policy={policyId}>
+                                                    <span>
+                                                        {label} ·{" "}
+                                                        {(Math.abs(cents) / 100).toLocaleString(undefined, {
+                                                            style: "currency",
+                                                            currency: forecast.currencyCode || "USD",
+                                                        })}{" "}
+                                                        expected to apply
+                                                    </span>
+                                                    {/*
+                                                      * THE EXCEPTIONAL ACTION, KEPT QUIET. It sits beside the
+                                                      * policy it acts on rather than in a picker, so the operator
+                                                      * never has to identify the policy a second time — and it is
+                                                      * a link, not a toggle, because excepting a family from
+                                                      * commercial policy is a decision someone makes, not a
+                                                      * setting this assignment owns.
+                                                      */}
+                                                    {policyId && !exceptionDraft ? (
+                                                        <button type="button" data-add-policy-exception={policyId}
+                                                                onClick={() => { setExceptionError(null); setExceptionDraft({ policyId, policyLabel: label, reason: "" }); }}
+                                                                style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
+                                                            Add exception
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        }
+                                        const reason = String(o.reason ?? "");
+                                        return (
+                                            <div key={i} style={{ fontSize: 11, color: T.mid40 }} data-forecast-outcome={kind}
+                                                 data-forecast-reason={reason}>
+                                                {REDUCTION_REASON_LABEL[reason] ?? reason.replace(/_/g, " ")}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/*
+                                      * ── WHAT IS EXCLUDED, AND WHY ───────────────────────────
+                                      *
+                                      * The decision is shown with the reason its author gave. An
+                                      * exception that has not started yet, or has ended, is still
+                                      * listed — as history, dated — because the question an
+                                      * operator asks here is "what did we agree", and hiding the
+                                      * ones not in force today answers a narrower one.
+                                      */}
+                                    {exceptions.filter((e) => !e.superseded).map((e) => (
+                                        <div key={e.id} style={{ fontSize: 11, color: e.appliesNow ? T.slate : T.mid40, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}
+                                             data-policy-exception={e.policyId} data-exception-applies={String(e.appliesNow)}>
+                                            <span>
+                                                {e.policyLabel} · {e.appliesNow ? "excluded for this assignment" : `excluded from ${e.effectiveStart}`}
+                                                {e.effectiveEnd ? ` until ${e.effectiveEnd}` : ""} — {e.reason}
+                                            </span>
+                                            {e.appliesNow ? (
+                                                <button type="button" data-end-policy-exception={e.id} disabled={exceptionBusy}
+                                                        onClick={() => void commitException("end", { exception_id: e.id })}
+                                                        style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
+                                                    End exception
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ))}
+
+                                    {/*
+                                      * ── THE DRAFT: SAY WHY, THEN SEE WHAT IT MEANS ──────────
+                                      *
+                                      * Reason first and required — the action refuses without one,
+                                      * so the surface must not pretend otherwise. What follows the
+                                      * reason is a statement about APPLICABILITY and deliberately
+                                      * quotes no figure: what the exclusion is worth is decided by
+                                      * eligibility when a real obligation is evaluated, and a
+                                      * number promised here is the one the operator would
+                                      * remember.
+                                      */}
+                                    {exceptionDraft ? (
+                                        <div style={{ marginTop: 6, padding: 8, background: T.stone, borderRadius: 6 }} data-policy-exception-draft={exceptionDraft.policyId}>
+                                            <div style={{ fontSize: 11, color: T.ink, fontWeight: 600 }}>
+                                                Exclude {exceptionDraft.policyLabel} from this assignment
+                                            </div>
+                                            <label style={{ display: "block", fontSize: 10, color: T.mid40, marginTop: 6 }} htmlFor="policy-exception-reason">
+                                                WHY (REQUIRED)
+                                            </label>
+                                            <input id="policy-exception-reason" data-policy-exception-reason="true" value={exceptionDraft.reason}
+                                                   onChange={(ev) => setExceptionDraft({ ...exceptionDraft, reason: ev.target.value })}
+                                                   placeholder="The decision, and who made it"
+                                                   style={{ width: "100%", fontSize: 11, padding: "4px 6px", border: `1px solid ${T.border}`, borderRadius: 4 }} />
+                                            <div style={{ fontSize: 11, color: T.slate, marginTop: 6 }} data-policy-exception-preview="true">
+                                                This policy will not apply to obligations for this assignment from today onward.
+                                                Anything already posted keeps the terms it was posted under.
+                                            </div>
+                                            {exceptionError ? (
+                                                <div style={{ fontSize: 11, color: T.ember, marginTop: 6 }} data-policy-exception-error="true">{exceptionError}</div>
+                                            ) : null}
+                                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                                <button type="button" data-policy-exception-confirm="true"
+                                                        disabled={exceptionBusy || exceptionDraft.reason.trim().length === 0}
+                                                        onClick={() => void commitException("create", {
+                                                            policy_id: exceptionDraft.policyId,
+                                                            reason: exceptionDraft.reason.trim(),
+                                                            effective_start: new Date().toISOString().slice(0, 10),
+                                                        })}
+                                                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: "none", background: T.forge, color: "#fff",
+                                                                 cursor: exceptionBusy || !exceptionDraft.reason.trim() ? "not-allowed" : "pointer",
+                                                                 opacity: exceptionBusy || !exceptionDraft.reason.trim() ? 0.5 : 1 }}>
+                                                    {exceptionBusy ? "Recording…" : "Record exception"}
+                                                </button>
+                                                <button type="button" data-policy-exception-cancel="true" disabled={exceptionBusy}
+                                                        onClick={() => { setExceptionDraft(null); setExceptionError(null); }}
+                                                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, border: `1px solid ${T.border}`, background: "#fff", color: T.slate, cursor: "pointer" }}>
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── THE STALE-TERM REVIEW STATE ─────────────────────────────────
+                              *
+                              * The accepted term records the resolution it was agreed under. When
+                              * the assignment has moved since, the surface says so and changes
+                              * nothing: repricing silently would replace a commercial agreement
+                              * with an inference. The operator accepts or overrides explicitly.
+                              */}
+                            {pricingView?.acceptedIsStale ? (
+                                <div style={{ fontSize: 11, color: T.ember, marginTop: 2 }} data-assignment-tuition-review="true">
+                                    Tuition needs review — this assignment has changed since the price was agreed.
+                                    Choose the recommendation, another option, or override.
+                                </div>
+                            ) : null}
+
+                            {/* The canonical write's own answer, success or refusal. */}
+                            {tuitionOutcome ? (
+                                <div
+                                    style={{ fontSize: 11, marginTop: 2, color: tuitionOutcome.kind === "needs_attention" ? T.ember : T.pine }}
+                                    data-assignment-tuition-outcome={tuitionOutcome.kind}
+                                >
+                                    {tuitionOutcome.kind === "needs_attention"
+                                        ? `Assignment saved · tuition needs attention — ${tuitionOutcome.detail}`
+                                        : `Tuition ${tuitionOutcome.kind} · ${tuitionOutcome.label}`}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── TUITION IS ITS OWN ACT, AND NEEDS ITS OWN COMMIT ────────────
+                              *
+                              * MEASURED: the only commit on this surface saves the SCHEDULE, and
+                              * it is disabled until a new schedule is complete — days, a start, a
+                              * room. So an assignment already saved, whose term had gone stale,
+                              * showed "Tuition needs review · choose the recommendation, another
+                              * option, or override" and offered no way to choose anything. The
+                              * review was an instruction the surface could not carry out.
+                              *
+                              * Pricing acceptance was already a separate canonical act from the
+                              * schedule write; this gives it the separate control that follows
+                              * from that. It settles tuition alone and touches no schedule field.
+                              */}
+                            {canSettleTuitionAlone ? (
+                                <button
+                                    type="button"
+                                    disabled={busy || (isOverridingSelection && !overrideReason.trim())}
+                                    onClick={() => void settleTuition()}
+                                    data-assignment-tuition-commit={isOverridingSelection ? "override" : "accept"}
+                                    style={{
+                                        all: "unset", marginTop: 4, cursor: busy ? "default" : "pointer",
+                                        fontSize: 11, fontWeight: 650, color: T.pine, width: "fit-content",
+                                        opacity: busy || (isOverridingSelection && !overrideReason.trim()) ? 0.45 : 1,
+                                    }}
+                                >
+                                    {isOverridingSelection ? "Override tuition" : "Accept tuition"}
+                                </button>
+                            ) : null}
+
+                            {/*
+                              * OVERRIDE IS GOVERNED SELECTION, NOT FREE-FORM MONEY. The reason is
+                              * required by the authority, so it is asked for here rather than
+                              * defaulted to something plausible — and only when the operator has
+                              * actually chosen something other than the recommendation.
+                              */}
+                            {isOverridingSelection ? (
+                                <label style={{ fontSize: 10.5, color: T.slate, marginTop: 2, display: "block" }}>
+                                    Why this rather than the recommendation
+                                    <input
+                                        value={overrideReason}
+                                        onChange={(e) => setOverrideReason(e.target.value)}
+                                        data-assignment-override-reason="true"
+                                        placeholder="Required to override"
+                                        style={{
+                                            marginTop: 2, padding: "5px 7px", fontSize: 12, width: "100%",
+                                            borderRadius: 6, border: `1px solid ${T.border}`, color: T.forge, background: "#fff",
+                                        }}
+                                    />
+                                </label>
+                            ) : null}
+
+                            {/*
+                              * ── WHO WILL OWE IT ─────────────────────────────────────────────
+                              *
+                              * Beneath the price, because the price is what responsibility is
+                              * about, and behind a quiet disclosure because most assignments do
+                              * not change it — the household arrangement already applies.
+                              *
+                              * It defaults to THIS CHILD, which is the scope an operator opening
+                              * an assignment means. It writes nothing until they confirm: the
+                              * panel previews and executes through the registered action, and an
+                              * assignment that is merely open has authored nothing.
+                              */}
+                            {child.kind === "child" ? (
+                                <div style={{ marginTop: 6 }} data-assignment-responsibility="section">
+                                    {!responsibilityOpen ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setResponsibilityOpen(true)}
+                                            data-assignment-responsibility="open"
+                                            style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine }}
+                                        >
+                                            Who owes this — set responsibility
+                                        </button>
+                                    ) : household?.customerId ? (
+                                        <FinancialsResponsibilityPanel
+                                            customerId={household.customerId}
+                                            customerMemberId={child.id}
+                                            subjectLabel={child.name}
+                                            parties={[]}
+                                            memberOptions={household.members}
+                                            defaultScopeMemberId={child.id}
+                                            hostedOpen
+                                            onHostedClose={() => setResponsibilityOpen(false)}
+                                            onCommitted={() => setResponsibilityOpen(false)}
+                                        />
+                                    ) : (
+                                        <span style={{ fontSize: 11, color: T.muted }} data-assignment-responsibility="pending">
+                                            {household ? "This child is not on a household account." : "Reading the household…"}
+                                        </span>
+                                    )}
+                                </div>
+                            ) : null}
                         </div>
                     ) : undefined
                 }

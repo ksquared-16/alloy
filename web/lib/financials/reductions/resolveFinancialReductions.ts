@@ -110,7 +110,17 @@ export type NotEligibleReason =
      * name this category — because the two are different conversations with an operator: one is
      * "your policy does not cover this", the other is "this kind of charge cannot be discounted".
      */
-    | "category_not_discountable";
+    | "category_not_discountable"
+    /**
+     * THE POLICY WOULD HAVE APPLIED, AND THIS COMMERCIAL RELATIONSHIP IS EXCLUDED FROM IT.
+     *
+     * Deliberately distinct from every other reason here. The others describe a family or a
+     * charge that the policy does not reach; this one describes a policy an operator has
+     * intentionally, attributably set aside for one relationship over an effective window.
+     * Collapsing it into `category_not_covered` would tell an operator their configuration is
+     * wrong when somebody on their team decided this on purpose and said why.
+     */
+    | "excluded_by_exception";
 
 export type RefusalReason =
     | "unreadable_basis"
@@ -276,8 +286,26 @@ export function resolveFinancialReductions(args: {
     gross: GrossObligation;
     policies: readonly ReductionPolicy[];
     facts: EligibilityFacts;
+    /**
+     * Policies this commercial relationship is excluded from, resolved by
+     * `commercialPolicyExceptionService` for the obligation's own date. Empty or omitted is the
+     * ordinary case.
+     *
+     * ── WHY HERE AND NOT A FILTER OUTSIDE ─────────────────────────────────────────────────────
+     *
+     * A caller could simply drop excluded policies before calling, and the arithmetic would be
+     * right — but the ANSWER would be wrong: the resolver would report `no_policy_configured`,
+     * telling an operator nothing is set up when in fact something is set up and deliberately
+     * excepted. The exclusion is an eligibility fact, so it is evaluated where eligibility is
+     * decided, and it produces its own reason.
+     *
+     * This is the SAME function the forecast and `applyFinancialReductions` both call, so a
+     * forecast cannot promise a discount the application path will withhold.
+     */
+    excludedPolicyIds?: readonly string[];
 }): ReductionDecision {
     const { gross, policies, facts } = args;
+    const excluded = new Set(args.excludedPolicyIds ?? []);
     if (gross.amountCents <= 0) {
         return { kind: "refused", reason: "negative_gross", detail: `gross ${gross.amountCents}`, policyId: null };
     }
@@ -295,17 +323,28 @@ export function resolveFinancialReductions(args: {
         const forKind = policies.filter((p) => p.kind === kind);
         if (forKind.length === 0) continue;
         sawAny = true;
-        if (forKind.length > 1) {
+        /*
+         * An excepted policy is SEEN and then set aside, which is why `sawAny` is already true:
+         * "there is a policy and you are excluded from it" and "there is no policy" are different
+         * answers and only one of them is about a decision somebody made.
+         */
+        if (forKind.every((p) => excluded.has(p.id))) {
+            firstSkip = firstSkip ?? "excluded_by_exception";
+            continue;
+        }
+        const contenders = forKind.filter((p) => !excluded.has(p.id));
+        if (contenders.length > 1) {
             return {
                 kind: "refused",
                 reason: "unreadable_basis",
-                detail: `${forKind.length} active ${kind} policies for one scope; the winner is not expressed`,
-                policyId: forKind[0]!.id,
+                detail: `${contenders.length} active ${kind} policies for one scope; the winner is not expressed`,
+                policyId: contenders[0]!.id,
             };
         }
-        const result = evaluateOne(forKind[0]!, gross, facts);
+        const eligibleOfKind = forKind.filter((p) => !excluded.has(p.id));
+        const result = evaluateOne(eligibleOfKind[0]!, gross, facts);
         if ("refuse" in result) {
-            return { kind: "refused", reason: result.refuse, detail: result.detail, policyId: forKind[0]!.id };
+            return { kind: "refused", reason: result.refuse, detail: result.detail, policyId: eligibleOfKind[0]!.id };
         }
         if ("skip" in result) {
             firstSkip = firstSkip ?? result.skip;

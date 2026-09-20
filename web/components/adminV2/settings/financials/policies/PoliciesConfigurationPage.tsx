@@ -130,6 +130,15 @@ export default function PoliciesConfigurationPage({
 
     const selected = policies.find((row) => row.id === selectedId) ?? null;
 
+    /* What the policy DOES, from the one helper that knows — the Rules tab reads the same call. */
+    const valueSummary = useMemo(
+        () =>
+            selected ?
+                commercialPolicyValueSummary(selected.policy_type as CommercialPolicyType, selected.value)
+            :   "",
+        [selected],
+    );
+
     const scopeLabel = useMemo(() => {
         if (!selected) return "—";
         if (selected.scope_type === "program" && selected.program_key) {
@@ -254,6 +263,29 @@ export default function PoliciesConfigurationPage({
                 </p>
             :   null}
 
+            {/*
+             * ── NAME THE SUBSECTION AN OPERATOR IS LOOKING FOR ────────────────────────────────
+             *
+             * This chapter holds two different authorities and only the second one said so. The
+             * commercial list was headed "Policies" — the chapter's own name — while the panel
+             * below it was explicitly "Financial execution policies", so an operator looking for
+             * DISCOUNTS saw a page about policies and nothing that used the word. The engine is
+             * exactly where it belongs and is reachable; the page simply never named it.
+             *
+             * The repair is a heading, in the same grammar the execution panel already uses, so
+             * the chapter reads as two clearly separated subsections. No route is added, no form
+             * is duplicated, and nothing moves — two places owning one policy would be a far worse
+             * answer to "it is hard to find" than a missing title.
+             */}
+            <div className="mb-3" data-testid="commercial-policies-heading">
+                <h2 className="text-sm font-semibold text-alloy-midnight">Discounts &amp; commercial policies</h2>
+                <p className="mt-1 max-w-xl text-sm text-alloy-midnight/55">
+                    Discounts, sibling and employee rules and waivers — what reduces a family&apos;s price, who
+                    qualifies, and from when. These modify commercial pricing; the execution policies below decide
+                    how billing runs.
+                </p>
+            </div>
+
             <ConfigurationShell testId="policies-configuration-shell">
                 {loading ?
                     <ConfigurationEmptyState testId="policies-loading" title="Loading Policies" description="Fetching policy rules." />
@@ -302,6 +334,12 @@ export default function PoliciesConfigurationPage({
                                                     {policyCategoryLabel(row.policy_type)} · {policyTypeLabel(row.policy_type)}
                                                 </span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
+                                                    {commercialPolicyValueSummary(
+                                                        row.policy_type as CommercialPolicyType,
+                                                        row.value,
+                                                    ) ?
+                                                        `${commercialPolicyValueSummary(row.policy_type as CommercialPolicyType, row.value)} · `
+                                                    :   ""}
                                                     {row.is_active ? "Active" : "Inactive"}
                                                     {row.effective_start && row.effective_start !== "2000-01-01"
                                                         ? ` · from ${row.effective_start}`
@@ -378,6 +416,27 @@ export default function PoliciesConfigurationPage({
                                                     ?.description ?? "Financial policy rule."}
                                             </p>
                                             <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+                                                {/*
+                                                 * ── THE HEADLINE FACT, ON THE PAGE THAT OPENS ────────────────────
+                                                 *
+                                                 * Selecting a policy opens `overview`, and overview stated Category,
+                                                 * Type, Status, Applied to, Locations and Effective — everything ABOUT
+                                                 * the discount except what it reduces and by how much. "10% off
+                                                 * everything" sat one tab away, so an operator could read the whole
+                                                 * front page of a discount and still not know its rate.
+                                                 *
+                                                 * Same authority as the Rules tab. No second formatter.
+                                                 */}
+                                                {valueSummary ?
+                                                    <div className="sm:col-span-2">
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            What it does
+                                                        </dt>
+                                                        <dd className="mt-0.5 font-medium" data-testid="policy-overview-rule">
+                                                            {valueSummary}
+                                                        </dd>
+                                                    </div>
+                                                :   null}
                                                 <div>
                                                     <dt className="text-[11px] font-medium text-alloy-midnight/40">Category</dt>
                                                     <dd className="mt-0.5">{policyCategoryLabel(selected.policy_type)}</dd>
