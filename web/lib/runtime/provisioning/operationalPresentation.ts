@@ -231,7 +231,19 @@ export async function resolveOperationalPresentation(args: {
     const { supabase, orgId, fallbackTitle } = args;
 
     // ── HEADER: the ONE applicability resolver selects the published variant. Never a fetch. ──
-    const records = args.headerLayoutRecords ?? await listWorkUnitHeaderLayoutRecords(supabase, orgId);
+    /*
+     * The read stays inside a fallback boundary. Extracting the derivation initially left this
+     * await bare, and a failing configuration store propagated out of the whole presentation —
+     * the regression suite caught it immediately ("configuration unavailability is NOT an
+     * operational error — the default composes"). U-P7 must never be why a Work Unit cannot commit.
+     */
+    const records = await (async () => {
+        try {
+            return args.headerLayoutRecords ?? (await listWorkUnitHeaderLayoutRecords(supabase, orgId));
+        } catch {
+            return null;
+        }
+    })();
     const { headerConfig, headerSource } = resolveWorkUnitHeaderConfigFromRecords(records, {
         businessProcessKey: args.businessProcessKey,
         workViewId: args.workViewId,
