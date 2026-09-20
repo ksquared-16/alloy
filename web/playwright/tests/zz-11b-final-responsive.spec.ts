@@ -35,8 +35,19 @@ test("final responsive pass", async ({ page }) => {
              * geometry rather than asserted from source — a class name cannot tell you whether two
              * elements share a line.
              */
-            const details = card.querySelector("a,[data-financials-details-link]") as HTMLElement | null;
-            const buttons = Array.from(card.querySelectorAll("button")).filter((b) => (b as HTMLElement).offsetParent !== null);
+            /*
+             * `CardLink testId="details"` and `FooterAction data-financials-nav="details"` are the
+             * two forms this control takes. An earlier probe looked for a bare <a> and found
+             * nothing, then reported the arrangement as unmeasured — which was honest, and fixed
+             * here rather than left as a gap.
+             */
+            const details = card.querySelector(
+                '[data-testid="details"],[data-financials-nav="details"],[data-testid="financials-details"]',
+            ) as HTMLElement | null;
+            /* The action buttons, excluding the Details control itself. */
+            const buttons = Array.from(card.querySelectorAll("button"))
+                .filter((b) => (b as HTMLElement).offsetParent !== null)
+                .filter((b) => b !== details);
             const lastButton = buttons[buttons.length - 1] as HTMLElement | undefined;
             return {
                 card: true,
