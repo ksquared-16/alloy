@@ -412,6 +412,13 @@ export type ProvisioningAnswer =
        * drawer settled, ~3.5s later, to learn what the answer already carried.
        */
       resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+      /**
+       * The configured Work View counts, resolved server-side so WU-03 needs no second round trip.
+       *
+       * Absent or `unavailable` means the client issues its canonical fallback request exactly as
+       * before — an absent seed is NOT an authoritative empty, and never a zero.
+       */
+      workViewTotalsSeed?: import("./workViewTotalsSeed").WorkViewTotalsSeed | null;
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
@@ -637,6 +644,28 @@ export type ProvisioningRequest = {
      * document, so the call site swallows.
      */
     onSubjectResolved?: (args: { subjectId: string; orgId: string; customerId: string | null }) => void;
+    /**
+     * THE CONFIGURED COUNT LOCATIONS, ANNOUNCED AS SOON AS THEY ARE AUTHORITATIVE.
+     *
+     * WU-03's lane counts are the product's completion owner, and today the browser asks for them
+     * in a SECOND round trip that cannot start until the document has finished. Everything that
+     * request needs to begin is known here, well before composition ends: the configuration-derived
+     * count locations, the department's work units, and the one department metadata layer that
+     * publishes their Work View configuration.
+     *
+     * Announced rather than awaited, for the same reason the subject is: the composer must not
+     * grow a dependency on counts, and the route must be free to start them beside composition.
+     * A listener is an optimisation and may never cost the document its answer, so the call site
+     * swallows.
+     */
+    onWorkViewCountTargetsResolved?: (args: {
+        orgId: string;
+        hostWorkUnitId: string;
+        departmentId: string;
+        departmentMetadata: unknown;
+        countTargets: ReadonlyArray<{ workViewId: string; hostWorkUnitId: string; baseQueueKey: string }>;
+        deptWorkUnits: ReadonlyArray<{ id: string; is_active?: boolean | null; department_id?: string | null }>;
+    }) => void;
     resolveHeaderKpis?: (args: {
         workUnitId: string;
         kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
@@ -1028,6 +1057,26 @@ export async function composeWorkUnitProvisioningAnswer(
               deptWorkUnits,
           })
         : SETTLEMENT_LOCATORS_UNAVAILABLE;
+    /*
+     * The earliest point at which every seed input is authoritative. Composition still has the
+     * children shell, the projection and the commit-critical reads ahead of it, so a listener that
+     * starts here overlaps most of what remains instead of queueing behind all of it.
+     */
+    if (settlement.status === "resolved" && wuRow.department_id) {
+        try {
+            req.onWorkViewCountTargetsResolved?.({
+                orgId: req.orgId,
+                hostWorkUnitId: workUnit.id,
+                departmentId: String(wuRow.department_id),
+                departmentMetadata: deptRow?.metadata ?? null,
+                countTargets: settlement.workViewCountTargets,
+                deptWorkUnits,
+            });
+        } catch {
+            // A listener is an optimisation. It may never cost the document its answer.
+        }
+    }
+
     // Rows + child membership follow the active lens's Settlement count host when it differs from the
     // surface slug. Shell identity (`workUnit`) stays the open unit so pill LENS switches do not remount.
     const populationWorkUnitId = resolveProvisioningPopulationWorkUnitId({
