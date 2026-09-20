@@ -266,9 +266,16 @@ export default function FinancialsCard({
                              * compact card's job here is only to stop the operator acting on an
                              * incomplete reading of the position.
                              */}
+                            {/*
+                              * NAMED, NOT JUST SHOWN. This read "Available", which is financially
+                              * correct and operationally invisible: an operator looking for prepaid
+                              * has nothing to match on. Details already says "Available prepaid";
+                              * the surfaces now say the same thing about the same figure. It is
+                              * NOT held money and NOT a deposit — both keep their own lines.
+                              */}
                             {period.availablePrepaid ? (
                                 <Line
-                                    label="Available"
+                                    label="Available prepaid"
                                     value={period.availablePrepaid}
                                     testId="available-prepaid"
                                 />
@@ -421,7 +428,7 @@ function FinancialsAccountSummaryCard({
                              */}
                             {period.availablePrepaid ? (
                                 <Stat
-                                    label="Available"
+                                    label="Available prepaid"
                                     value={period.availablePrepaid}
                                     testId="available-prepaid"
                                 />
