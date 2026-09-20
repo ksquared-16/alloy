@@ -1,4 +1,6 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
+-- RE-MEASURED 2026-09-20T12:30Z — waiting on foreign migration 20260921140000 (PR #1102).
+--
 --
 --
 -- A SECOND MEASUREMENT IN ONE RUN NEEDS A DIFFERENT QUESTION, AND THAT IS A
