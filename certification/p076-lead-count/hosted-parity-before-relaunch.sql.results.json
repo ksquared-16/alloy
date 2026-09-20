@@ -1,0 +1,173 @@
+{
+  "trusted_host_action_id": "tha_89fcc2236caacb",
+  "query_hash": "19fdf4e6554c2d41f5cc1b249cf198aa4423ac09c211021d7cb926169b76eaeb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T11:49:32.028Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_89fcc2236caacb",
+    "query_hash": "19fdf4e6554c2d41f5cc1b249cf198aa4423ac09c211021d7cb926169b76eaeb",
+    "authorization_id": "grnt_fc889b1acd1a4c82",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T11:49:33.516Z",
+    "question_ids": [
+      "lead_function",
+      "ledger_count",
+      "ledger_max",
+      "ledger_tail",
+      "positive_control",
+      "target_version"
+    ],
+    "questions": {
+      "lead_function": {
+        "question_id": "lead_function",
+        "row_count": null,
+        "rows": [
+          {
+            "exists": false
+          }
+        ]
+      },
+      "ledger_count": {
+        "question_id": "ledger_count",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 459
+          }
+        ]
+      },
+      "ledger_max": {
+        "question_id": "ledger_max",
+        "row_count": null,
+        "rows": [
+          {
+            "max_version": "20260921130000"
+          }
+        ]
+      },
+      "ledger_tail": {
+        "question_id": "ledger_tail",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260915090000"
+          },
+          {
+            "version": "20260915091000"
+          },
+          {
+            "version": "20260915120000"
+          },
+          {
+            "version": "20260915130000"
+          },
+          {
+            "version": "20260915140000"
+          },
+          {
+            "version": "20260915150000"
+          },
+          {
+            "version": "20260915160000"
+          },
+          {
+            "version": "20260915170000"
+          },
+          {
+            "version": "20260915180000"
+          },
+          {
+            "version": "20260915190000"
+          },
+          {
+            "version": "20260915200000"
+          },
+          {
+            "version": "20260915210000"
+          },
+          {
+            "version": "20260916020000"
+          },
+          {
+            "version": "20260916030000"
+          },
+          {
+            "version": "20260916040000"
+          },
+          {
+            "version": "20260916050000"
+          },
+          {
+            "version": "20260918120000"
+          },
+          {
+            "version": "20260918150000"
+          },
+          {
+            "version": "20260918160000"
+          },
+          {
+            "version": "20260919160000"
+          },
+          {
+            "version": "20260920120000"
+          },
+          {
+            "version": "20260921120000"
+          },
+          {
+            "version": "20260921130000"
+          }
+        ]
+      },
+      "positive_control": {
+        "question_id": "positive_control",
+        "row_count": null,
+        "rows": [
+          {
+            "public_persons_exists": true
+          }
+        ]
+      },
+      "target_version": {
+        "question_id": "target_version",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260919160000",
+            "present": true,
+            "role": "earlier_blocker_should_now_be_present"
+          },
+          {
+            "version": "20260920120000",
+            "present": true,
+            "role": "promoted_between_attempts"
+          },
+          {
+            "version": "20260920140000",
+            "present": false,
+            "role": "lead_count_candidate_old_number_must_be_absent"
+          },
+          {
+            "version": "20260921120000",
+            "present": true,
+            "role": "named_blocker"
+          },
+          {
+            "version": "20260921130000",
+            "present": true,
+            "role": "named_blocker"
+          }
+        ]
+      }
+    },
+    "row_count": 32
+  }
+}

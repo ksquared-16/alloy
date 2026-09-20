@@ -1,0 +1,72 @@
+{
+  "trusted_host_action_id": "tha_ffb21acf408d62",
+  "query_hash": "c078ee8cf3ffc18dabd293e05375488e5446777256590250b849698fc3423a9d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T02:27:43.015Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ffb21acf408d62",
+    "query_hash": "c078ee8cf3ffc18dabd293e05375488e5446777256590250b849698fc3423a9d",
+    "authorization_id": "grnt_8d86fb2a6acc4db8",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T02:27:44.879Z",
+    "question_ids": [
+      "l1_candidate_active_leads",
+      "l2_candidate_single_work_unit",
+      "l3_context_anchor_shape",
+      "l4_adversarial_shapes",
+      "l5_department_footprint"
+    ],
+    "questions": {
+      "l1_candidate_active_leads": {
+        "question_id": "l1_candidate_active_leads",
+        "row_count": null,
+        "rows": [
+          20
+        ]
+      },
+      "l2_candidate_single_work_unit": {
+        "question_id": "l2_candidate_single_work_unit",
+        "row_count": null,
+        "rows": [
+          20
+        ]
+      },
+      "l3_context_anchor_shape": {
+        "question_id": "l3_context_anchor_shape",
+        "row_count": null,
+        "rows": [
+          "anchor=dangling | n=315",
+          "anchor=null | n=6",
+          "anchor=ocm | n=4",
+          "anchor=opportunity | n=19"
+        ]
+      },
+      "l4_adversarial_shapes": {
+        "question_id": "l4_adversarial_shapes",
+        "row_count": null,
+        "rows": [
+          "shape=enrollment_pi_closed | n=4",
+          "shape=enrollment_pi_with_null_state | n=277",
+          "shape=inactive_subject_members | n=0",
+          "shape=members_with_multiple_enrollment_pi | n=33",
+          "shape=opportunities_with_multiple_ocm | n=2"
+        ]
+      },
+      "l5_department_footprint": {
+        "question_id": "l5_department_footprint",
+        "row_count": null,
+        "rows": [
+          "work_units_in_department=7"
+        ]
+      }
+    },
+    "row_count": 12
+  }
+}
