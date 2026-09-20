@@ -93,6 +93,14 @@ export type FocusPanelWorkModeFromAnswerInput = {
      * always supplies this field, so no child surface can reach the family default by omission.
      */
     subjectGrain?: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
+    /**
+     * The configured lifecycle rail, computed server-side by the canonical pure builder where the
+     * department configuration already lives. Empty when no process is configured — an unstaged
+     * context stays a real answer.
+     */
+    businessProcessStages?: ReadonlyArray<{ key: string; label: string; support?: readonly string[] }> | null;
+    /** The configured process name ("Enrollment"), not the generic card title. */
+    businessProcessName?: string | null;
 };
 
 /** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
@@ -133,8 +141,20 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             key: input.situation?.stageKey ?? null,
             label: input.situation?.stageLabel ?? input.statusLabel ?? null,
             stageKey: input.situation?.stageKey ?? null,
-            // No configured process rail on this producer — an unstaged context is a real answer.
-            stages: [],
+            /*
+             * THE CONFIGURED RAIL IS NOT A SETTLEMENT FACT.
+             *
+             * This was `stages: []` on the stated grounds that the rail arrives with the drawer.
+             * Measured on deployed staging, that deferral cost ~2,974ms: the card showed the
+             * generic "Business Process" with no timeline until settlement, and withholding the
+             * drawer left it permanently wrong rather than late.
+             *
+             * The rail is department CONFIGURATION run through a pure builder, so the composer —
+             * which already holds that configuration — answers it at commit. An unstaged context
+             * still yields an empty rail, which remains a real answer.
+             */
+            stages: input.businessProcessStages ? [...input.businessProcessStages] : [],
+            ...(input.businessProcessName ? { name: input.businessProcessName } : {}),
         },
         perspective: input.perspective
             ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }

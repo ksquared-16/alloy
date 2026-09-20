@@ -53,8 +53,16 @@ describe("(b) unknown is not zero", () => {
         const start = HOOK.indexOf("const loadWork");
         const load = HOOK.slice(start, HOOK.indexOf("useEffect(", start));
         expect(load).toContain("work: prev.work");
-        // The only place a number is written is from the authoritative response.
-        expect(load).toMatch(/work: countOpenWork\(json\.tasks\)/);
+        /*
+         * The only place a number is written is the listing decision, and that decision answers
+         * null for anything that did not answer. The load used to count `json.tasks` directly,
+         * which was truthful for a non-OK response but NOT for a successful one whose body carried
+         * no array — `readJson` returns {} on a parse failure, so that path produced a confident
+         * zero from a read that failed. The guard is now the thing this asserts.
+         */
+        expect(load).toMatch(/openWorkCountFromListing\(res\.ok, json\)/);
+        expect(load).toMatch(/counted === null/);
+        expect(load).not.toMatch(/work: countOpenWork\(/);
         expect(load).not.toMatch(/work:\s*0/);
     });
 });
@@ -74,7 +82,7 @@ describe("(a) one response commits once", () => {
     });
 
     it("the authoritative response writes work and loading together", () => {
-        expect(HOOK).toMatch(/setState\(\{ work: countOpenWork\(json\.tasks\), loading: false \}\)/);
+        expect(HOOK).toMatch(/setState\(\{ work: counted, loading: false \}\)/);
     });
 });
 

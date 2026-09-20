@@ -33,6 +33,8 @@
  * Identity alone is not operational: without current business state AND a truthful primary
  * action the answer does not claim `operational`.
  */
+import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     computeOperationalProjection,
@@ -391,6 +393,10 @@ export type ProvisioningAnswer =
           focusPanelOperationalProjection: FocusPanelOperationalProjection | null;
           /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
           subjectIdentityTruth: SubjectIdentityTruth | null;
+          /** Configured lifecycle rail, computed server-side by the canonical pure builder. */
+          businessProcessStages?: ReadonlyArray<{ key: string; label: string; support?: readonly string[] }>;
+          /** Configured process name ("Enrollment"), not the generic card title. */
+          businessProcessName?: string | null;
       /**
        * THE AUTHORITATIVE PARTICIPATION, resolved once on the server and carried to the browser.
        *
@@ -2012,6 +2018,68 @@ export async function composeWorkUnitProvisioningAnswer(
             | null
             | undefined
     );
+    /*
+     * WAVE-3 FIRST-ORDER TRUTH, CARRIED INSTEAD OF WAITED FOR.
+     *
+     * Measured on deployed staging: business_process, children and household all made their first
+     * CORRECT visible statement ~2,974ms after the first card wave, and only when the drawer
+     * arrived. Withholding the drawer left them permanently wrong rather than merely late —
+     * children read "—" for a site the row already named, and household showed a contact it could
+     * not act on. That is not enrichment arriving late; it is first-order truth owned by the wrong
+     * frame.
+     *
+     * Every value below was ALREADY READ by this composer. `workUnitProcessPopulation` selects
+     * `updated_at`, `location_id` and `primary_person_id` on the opportunity, and the row carries
+     * its resolved `_location_name`. Nothing here adds a query, a projection or a second owner:
+     * `resolveOpportunityLeadLocationFields` is the canonical location resolver the drawer itself
+     * uses, so the two frames cannot disagree about the site.
+     *
+     * The household record precedence matches `identityContactSource` directly above — a child
+     * surface reads the FAMILY row, because household truth is family-grain even when the subject
+     * is a participant.
+     */
+    const wave3Record = (familyEnrichedForChild
+        ?? (subjectRow as Record<string, unknown> | null)
+        ?? {}) as Record<string, unknown>;
+    const wave3LeadLocation = resolveOpportunityLeadLocationFields(wave3Record);
+    const wave3UpdatedAt = strOrNull(wave3Record.updated_at);
+    /*
+     * IDENTITY, NOT A PERMISSION VERDICT. The Household contact renders as plain text until it has
+     * an editable person id — `isEditableHouseholdPersonId` rejects empty and the "primary" /
+     * "secondary:" sentinels — so the missing id, not the missing authority, is what kept the
+     * affordance drawer-bound. `canMutate` is still evaluated at the request boundary from the
+     * operator's own roles and is NOT carried here.
+     */
+    const wave3PrimaryPersonId = strOrNull(wave3Record.primary_person_id);
+    /*
+     * THE LIFECYCLE RAIL, COMPUTED WHERE ITS CONFIGURATION ALREADY LIVES.
+     *
+     * `buildOpportunityWorkspaceLifecycleRail` is a PURE function — no I/O — and this composer
+     * already holds every input it needs: `deptRow.metadata` was read for the lens set, and the
+     * subject record is in hand. Its own contract states the split this relies on: "the stages are
+     * configuration, the annotations are truth."
+     *
+     * It is computed HERE, server-side, rather than plumbing `departmentMetadata` to the browser.
+     * The rail is the answer; the department's whole configuration document is not, and shipping
+     * it to the client to recompute the same value would be both larger and a second owner.
+     *
+     * `statusDefs: []` is deliberate. That argument exists only to resolve a status key to a stage
+     * for the rail's own `current_stage_key`, and the commit context already carries the record's
+     * stage as `situation.stageKey` — which is what the card's "current" marker reads. Passing an
+     * empty list therefore drops nothing the card uses and avoids a read for an answer we have.
+     */
+    const wave3Rail = buildOpportunityWorkspaceLifecycleRail({
+        departmentMetadata: deptRow?.metadata,
+        statusKey: null,
+        statusDefs: [],
+        record: wave3Record,
+        annotationLabels: {
+            locationLabel: wave3LeadLocation.locationLabel || null,
+            ownerLabel: null,
+        },
+    });
+    const wave3ProcessName = strOrNull((process as { name?: unknown } | null)?.name)
+        ?? strOrNull((process as { label?: unknown } | null)?.label);
     const primaryContactName = strOrNull(identityContactSource.display_name);
     const primaryContactPhone = strOrNull(identityContactSource.phone);
     const primaryContactEmail = strOrNull(identityContactSource.email);
@@ -2079,6 +2147,11 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
+        // Wave-3 first-order truth (see above): all already read, none newly queried.
+        ...(wave3LeadLocation.locationLabel ? { _location_label: wave3LeadLocation.locationLabel } : {}),
+        ...(wave3LeadLocation.locationId ? { _location_id: wave3LeadLocation.locationId } : {}),
+        ...(wave3UpdatedAt ? { updated_at: wave3UpdatedAt } : {}),
+        ...(wave3PrimaryPersonId ? { primary_person_id: wave3PrimaryPersonId } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
         // Context Mission metadata (family grain) — presentation may aggregate participant count;
         // never invents stage labels (keys only; labels come from stage records / runtime).
@@ -2236,6 +2309,13 @@ export async function composeWorkUnitProvisioningAnswer(
                 ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
                 : null,
             subjectIdentityTruth: subjectIdentityTruthWithChildren,
+            /*
+             * First-order lifecycle truth, carried so the Business Process card states
+             * "Enrollment" and its configured rail at commit instead of "Business Process" and an
+             * empty timeline until the drawer settles.
+             */
+            businessProcessStages: wave3Rail?.stages ?? [],
+            businessProcessName: wave3ProcessName,
             subjectGrain,
     });
 

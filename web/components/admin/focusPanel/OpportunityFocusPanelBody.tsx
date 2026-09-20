@@ -264,6 +264,10 @@ export default function OpportunityFocusPanelBody({
                 situation: commitCritical.situation,
                 primaryAction: commitCritical.primaryAction,
                 subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                // Configured lifecycle truth the composer already resolved — the rail and the
+                // process name, so the card states them at commit rather than after settlement.
+                businessProcessStages: commitCritical.businessProcessStages ?? null,
+                businessProcessName: commitCritical.businessProcessName ?? null,
                 /*
                  * The answer's own resolved participation. Without it the builder cannot admit
                  * Attendance, Health or Children at commit, and they wait for the drawer to name a
