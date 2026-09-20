@@ -168,3 +168,49 @@ The existing family can become it through governed product actions alone — acc
 policies, calendar and prepaid are already right. It needs: my exception rows retired, one
 responsibility arrangement created, and a clean discount state. **No reseed and no direct inserts
 are required.**
+
+---
+
+# CORRECTIONS AFTER THE REPAIR RUN
+
+## R1 — withdrawn (above). The chapters are navigable.
+
+## "Zero responsibility arrangements" — **also wrong, withdrawn**
+
+I read `vm.responsibility.shares` from the account view model. **That field does not exist** — the
+VM exposes `parties`. The arrangement itself lives behind
+`/api/admin/financials/responsibility-arrangement`, which reports one already on record:
+
+```
+id 30d94536 · household grain (customerMemberId null) · effective 2026-09-18 · open-ended
+share: Cert Certhouse · fixed · $18.00
+```
+
+Attempting to create another was correctly REFUSED by the product:
+`predecessor_starts_later — "An arrangement already in force starts on or after this date.
+Supersede it from a later date."` That refusal is the capability working, and it proves
+responsibility is live on this family. **No fixture setup was needed.**
+
+## R4 — the certification residue is now CLEANED
+
+Retired through the governed lifecycle only — no deletes, no SQL. History is intact; what changed
+is which row is in force.
+
+| assignment | before | after |
+|---|---|---|
+| `cf044308` | 7 rows, 1 applicable, residue visible | **expected −$14,500** (10% of $1,450), 0 applicable, **no residue** |
+| `79f8011d` | 13 rows, `excluded_by_exception` | **expected −$18.50** (10% of $185), 0 applicable, **no residue** |
+
+One row needed a different writer than I first used: the H/I probe had dated an exception into
+**October**, and a future-dated row cannot be ended — closing it at today would put its end before
+its start, which the service refuses as `dates_out_of_order`. Left alone it would have silently
+excluded Kelly's next-period discount. Superseding it with a closed past window retired it.
+
+## What actually remains
+
+1. **The published tenant layout still composes `billing_preview`**, so the household panel shows a
+   standalone card headed **TUITION · 2 of 2 agreed** that is not the Assignment surface. This is
+   the strongest remaining explanation for Kelly's report.
+2. **Prepaid is never named.** The Financials card shows `Available $125.00`; the word *prepaid*
+   appears nowhere.
+3. **The Policies tile does not say "Discounts"** — the chapter behind it does.
