@@ -86,6 +86,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment_method.add",
     "payment_method.set_default",
     "payment_method.revoke",
+    "payment.recognize",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -781,6 +782,33 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "Withdraws a stored instrument from FUTURE collection. Deletes nothing: payments already "
             + "made with it keep naming it. Any default status is removed and nothing is promoted in "
             + "its place, because a family's money must not silently move to a method nobody chose.",
+    }),
+    /*
+     * ── RECOGNITION IS THE COLLECTING AUTHORITY FINISHING ITS OWN WORK ──
+     *
+     * It carries `fin.write` rather than a key of its own because it decides nothing new: the money
+     * already moved, the organisation already authorised the collection, and this only completes
+     * Alloy's record of it.
+     */
+    def({
+        capabilityKey: "payment.recognize",
+        canonicalCommandKey: "payment.recognize",
+        operatorLabel: "Recognize payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.recognize",
+        implementationStatus: "production",
+        reason:
+            "Re-invokes the single canonical recognition boundary for a collection the provider "
+            + "already settled but Alloy never recorded. Verifies settlement against the PROVIDER "
+            + "rather than Alloy's cached state, and is idempotent: an attempt already recognised "
+            + "returns its existing receipt instead of minting a second one. It cannot create a "
+            + "payment directly, invent provider success, or rewrite amount, payer or responsibility.",
     }),
     def({
         capabilityKey: "payment.collect_card",

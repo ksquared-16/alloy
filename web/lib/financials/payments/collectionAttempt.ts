@@ -63,7 +63,9 @@ export type CollectionRefusalReason =
     | "method_not_usable"
     | "method_wrong_account"
     | "method_rail_mismatch"
-    | "method_unavailable_at_provider";
+    | "method_unavailable_at_provider"
+    /* W3 — the stored method's owner is not the payer this attempt claims. */
+    | "method_payer_mismatch";
 
 export type CreateCardCollectionResult =
     | {
@@ -368,6 +370,34 @@ export async function createCardCollection(
             };
         }
 
+        /*
+         * ── THE PAYER INVARIANT (W3) ─────────────────────────────────────────────────────────────
+         *
+         * A stored method is OWNED by a payer. If the caller also names a payer, the two must agree:
+         * charging Person B's card while recording Person A as the payer would put a receipt in the
+         * ledger that says money came from someone it did not come from, and no later correction can
+         * tell the two apart.
+         *
+         * Delegated use — B's card knowingly paying on A's behalf — is a real thing and the approved
+         * domain does not model it yet, so it is REFUSED rather than silently permitted.
+         *
+         * This does not touch responsibility. Person B may own the card, pay with it, and owe
+         * nothing; who owes is Thread 6's and is not written here.
+         */
+        if (
+            t(input.payerPersonId)
+            && storedMethod.payerEntityType === "person"
+            && storedMethod.payerEntityId !== t(input.payerPersonId)
+        ) {
+            return {
+                ok: false,
+                reason: "method_payer_mismatch",
+                message:
+                    "That payment method belongs to a different payer. Collect with a method the named payer owns, "
+                    + "or record the payment against its owner.",
+            };
+        }
+
         const materialized = await materializeMethodForMerchant(storedMethod, merchant.providerAccountRef);
         if (!materialized.ok) {
             return {
@@ -419,6 +449,12 @@ export async function createCardCollection(
             currency,
             requested_amount_cents: input.requestedAmountCents,
             intent_key: intentKey,
+            /*
+             * W3 PROVENANCE. Which stored instrument this attempt used — durable, and never nulled
+             * or repointed when the method is later revoked or replaced. The attempt names what
+             * actually happened.
+             */
+            payment_method_id: storedMethod?.id ?? null,
             processor_state: "initiated",
             created_by: input.actorUserId ?? null,
             updated_by: input.actorUserId ?? null,
@@ -520,6 +556,15 @@ export async function createCardCollection(
             ...(clonedMethodRef
                 ? { payment_method: clonedMethodRef, off_session: "true", confirm: "true" }
                 : {}),
+            /*
+             * W3 — ask for the provider's own expected settlement date in the SAME call.
+             *
+             * `balance_transaction.available_on` is Stripe's statement of when the net funds become
+             * available. It is the only date here that is the provider's rather than Alloy's guess,
+             * which is why the projection maps it and nothing else. A card charge normally has no
+             * meaningful one, and null is the correct answer there.
+             */
+            "expand[]": "latest_charge.balance_transaction",
             // Correlation only. Tenancy is resolved from the connected account through
             // payment_provider_merchants; metadata is never read as authority.
             "metadata[alloy_attempt_id]": attemptId,
@@ -542,6 +587,7 @@ export async function createCardCollection(
         client_secret?: string;
         status?: string;
         next_action?: { type?: string } | null;
+        latest_charge?: { balance_transaction?: { available_on?: number } | string | null } | string | null;
     };
     const providerTransactionId = String(intent.id ?? "");
     const clientSecret = String(intent.client_secret ?? "");
@@ -562,6 +608,8 @@ export async function createCardCollection(
             provider_transaction_id: providerTransactionId,
             processor_state: providerState,
             provider_action_type: providerActionType,
+            /* Projection only. Null when the provider offered no date — see the column comment. */
+            expected_settlement_on: expectedSettlementFromIntent(intent),
             processor_state_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             updated_by: input.actorUserId ?? null,
@@ -588,6 +636,30 @@ export async function createCardCollection(
  * emphatically not cash. Anything unrecognised also folds into `processing` rather than defaulting
  * to a terminal state — an unknown provider status must never be read as success.
  */
+/**
+ * THE PROVIDER'S OWN EXPECTED SETTLEMENT DATE, or null.
+ *
+ * Read from `latest_charge.balance_transaction.available_on`, which Stripe defines as the date the
+ * transaction's net funds become available. Returned as a DAY, because that is what an operator
+ * tells a family and what the column stores — a moment would imply a precision the rail does not
+ * have.
+ *
+ * Null whenever the provider did not supply one, which includes every card charge that settles
+ * immediately and any response where the charge was not expanded. **Null is a correct answer, not a
+ * missing one**, and nothing financial reads this either way.
+ */
+export function expectedSettlementFromIntent(intent: {
+    latest_charge?: { balance_transaction?: { available_on?: number } | string | null } | string | null;
+}): string | null {
+    const charge = intent.latest_charge;
+    if (!charge || typeof charge === "string") return null;
+    const bt = charge.balance_transaction;
+    if (!bt || typeof bt === "string") return null;
+    const availableOn = bt.available_on;
+    if (!Number.isFinite(availableOn) || Number(availableOn) <= 0) return null;
+    return new Date(Number(availableOn) * 1000).toISOString().slice(0, 10);
+}
+
 export function mapStripeStatus(status: string | undefined): string {
     switch (status) {
         case "requires_payment_method":

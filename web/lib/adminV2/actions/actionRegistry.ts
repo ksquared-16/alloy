@@ -49,6 +49,7 @@ import { financialSubsidyActions } from "@/lib/adminV2/actions/definitions/finan
 import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuitionGenerationActions";
 import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { paymentMethodActions } from "@/lib/adminV2/actions/definitions/paymentMethodActions";
+import { paymentRecognitionActions } from "@/lib/adminV2/actions/definitions/paymentRecognitionActions";
 import { providerInstallationActions } from "@/lib/adminV2/actions/definitions/providerInstallationActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
@@ -88,6 +89,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     // Payments W1: the act of becoming a merchant — connect, refresh, disconnect.
     ...providerInstallationActions,
     ...paymentMethodActions,
+    ...paymentRecognitionActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,
