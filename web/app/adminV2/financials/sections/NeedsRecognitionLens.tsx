@@ -52,23 +52,33 @@ function methodLabel(row: Row): string | null {
 
 export default function NeedsRecognitionLens({ scopeLabel }: { scopeLabel: string }) {
     const [rows, setRows] = useState<Row[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    /*
+     * TWO ERRORS, BECAUSE THEY HAVE DIFFERENT LIFETIMES.
+     *
+     * A read error is cleared by the next successful read. An ACTION error must survive it — the
+     * reload immediately after a refusal is what makes the row's reason current, and folding both
+     * into one state meant that reload wiped the refusal off the screen before anybody read it.
+     * The operator was left with an unchanged row and no explanation.
+     */
+    const [readError, setReadError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [note, setNote] = useState<string | null>(null);
+    const error = actionError ?? readError;
 
     const load = useCallback(async () => {
         try {
             const res = await fetch("/api/admin/financials/needs-recognition", { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; rows?: Row[]; error?: string };
             if (!res.ok || json.ok === false) {
-                setError(json.error || "The recognition queue could not be read.");
+                setReadError(json.error || "The recognition queue could not be read.");
                 setRows([]);
                 return;
             }
-            setError(null);
+            setReadError(null);
             setRows(json.rows ?? []);
         } catch (e) {
-            setError(e instanceof Error ? e.message : "The recognition queue could not be read.");
+            setReadError(e instanceof Error ? e.message : "The recognition queue could not be read.");
             setRows([]);
         }
     }, []);
@@ -80,12 +90,12 @@ export default function NeedsRecognitionLens({ scopeLabel }: { scopeLabel: strin
     const recognize = useCallback(
         async (attemptId: string) => {
             setBusy(attemptId);
-            setError(null);
+            setActionError(null);
             setNote(null);
             const out = await executeRecognizePayment(attemptId);
             if (!out.ok) {
                 /* The refusal stays on the row too; this is the immediate answer. */
-                setError(out.error);
+                setActionError(out.error);
             } else if (out.detail.recognized_now === false) {
                 setNote("That payment had already been recognized.");
             }
@@ -113,7 +123,15 @@ export default function NeedsRecognitionLens({ scopeLabel }: { scopeLabel: strin
                 </p>
             ) : null}
 
-            {rows.length === 0 ? (
+            {/*
+              * A FAILED READ IS NOT AN EMPTY QUEUE.
+              *
+              * Both states render zero rows, and only one of them means "there is nothing to do".
+              * Saying "all collected money is recorded" because a request failed tells an operator
+              * the books are clean at exactly the moment Alloy cannot see them — the same mistake
+              * the account card's own failed-read doctrine exists to prevent.
+              */}
+            {rows.length === 0 && !error ? (
                 <WorkspaceEmptyState
                     title="All collected money is recorded"
                     body={`Nothing is waiting to be recognized for ${scopeLabel.toLowerCase()}.`}
