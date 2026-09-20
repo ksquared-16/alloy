@@ -288,14 +288,25 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                   (el as HTMLElement).innerText.replace(/\s+/g, " ").trim().slice(0, 40),
               )
             : [];
-        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map((el) => {
-            const section = el.closest("[data-alloy-section-id]");
-            return (
-                section?.getAttribute("data-alloy-section-id") ||
-                section?.getAttribute("data-alloy-section-name") ||
-                "unidentified"
-            );
-        });
+        /*
+         * THE CARD'S OWN IDENTITY, NOT ITS CONTAINER'S.
+         *
+         * This asked each card for `closest("[data-alloy-section-id]")`, which is the enclosing
+         * WORK UNIT SECTION — and all seven cards sit inside WU-09. So the "ordered card set"
+         * recorded WU-09 seven times: a value that looks like a card set, changes when the section
+         * changes, and is identical for every possible configuration. It could not have detected a
+         * card being added, removed or reordered, which is the entire reason it exists.
+         *
+         * `data-universal-card-key` is the canonical per-card identity the product already emits
+         * (UniversalCard, FocusPanelCardRenderer and the individual card components all set it),
+         * so no new DOM identity is invented here.
+         */
+        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map(
+            (el) =>
+                el.getAttribute("data-universal-card-key") ||
+                el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") ||
+                "unidentified",
+        );
         return {
             // ORDERED, because reordering is a configuration change even when the set is identical.
             configuredKpiSlots: kpiLabels,
