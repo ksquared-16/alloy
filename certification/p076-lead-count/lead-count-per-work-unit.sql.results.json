@@ -1,0 +1,39 @@
+{
+  "trusted_host_action_id": "tha_760ea06b3a8536",
+  "query_hash": "472cabdbcc143edea4e969ea29190baf85ce302a4461fb3a41c741df2525a4f5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T02:30:13.035Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_760ea06b3a8536",
+    "query_hash": "472cabdbcc143edea4e969ea29190baf85ce302a4461fb3a41c741df2525a4f5",
+    "authorization_id": "grnt_db6d60587bed4f33",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T02:30:14.735Z",
+    "question_ids": [
+      "p1_per_work_unit_candidate"
+    ],
+    "questions": {
+      "p1_per_work_unit_candidate": {
+        "question_id": "p1_per_work_unit_candidate",
+        "row_count": null,
+        "rows": [
+          "work_unit=587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37 | name=New Leads | candidate_dept_expanded=20 | candidate_single_wu=20",
+          "work_unit=5c0d15fc-6545-411c-9a73-8df3df772f62 | name=Tours | candidate_dept_expanded=20 | candidate_single_wu=0",
+          "work_unit=99bc2a38-6d47-4abc-8ec6-88d7f31dd59b | name=Waitlist | candidate_dept_expanded=20 | candidate_single_wu=0",
+          "work_unit=a428520f-b6a1-4913-8209-2d45a9affcd9 | name=Follow Up | candidate_dept_expanded=20 | candidate_single_wu=0",
+          "work_unit=b4f6ca18-b0b6-4874-8a05-f4dfb260a6b9 | name=Decision | candidate_dept_expanded=20 | candidate_single_wu=0",
+          "work_unit=dd5b3a23-376b-4c9f-9236-ae555b44a1b3 | name=Enrolled | candidate_dept_expanded=20 | candidate_single_wu=0",
+          "work_unit=fa95ffe7-f9a6-4753-810d-be623980ed22 | name=Enrolling | candidate_dept_expanded=20 | candidate_single_wu=0"
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}
