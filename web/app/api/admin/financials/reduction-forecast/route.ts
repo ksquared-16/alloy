@@ -5,7 +5,7 @@ import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissi
 import { buildAssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import { forecastAssignmentReductions } from "@/lib/financials/reductions/forecastAssignmentReductions";
-import { exceptionAppliesOn, readExceptionHistory } from "@/lib/financials/reductions/commercialPolicyExceptionService";
+import { exceptionAppliesOn, exceptionIsLiveOn, readExceptionHistory } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
                 .map((p) => [p.id, (p.params?.label as string | undefined) ?? p.kind] as const),
         );
         const onDate = periodStartForExceptions;
+        const todayYmd = new Date().toISOString().slice(0, 10);
         const exceptions = history.map((e) => ({
             id: e.id,
             policyId: e.policyId,
@@ -113,8 +114,15 @@ export async function GET(request: NextRequest) {
             effectiveStart: e.effectiveStart,
             effectiveEnd: e.effectiveEnd,
             reason: e.reason,
-            /* In force FOR THE PERIOD THE FORECAST USED — not merely "not yet superseded". */
+            /*
+             * TWO QUESTIONS, TWO ANSWERS. `appliesNow` is about the PERIOD the forecast used;
+             * `isLiveNow` is about TODAY. An exception ended today whose window began on the 1st
+             * answers true to the first and false to the second, and a surface that offers "End
+             * exception" off the first offers to end something already ended.
+             */
             appliesNow: exceptionAppliesOn(e, onDate),
+            isLiveNow: exceptionIsLiveOn(e, todayYmd),
+            ended: Boolean(e.effectiveEnd && e.effectiveEnd < todayYmd),
             superseded: Boolean(e.supersededAt),
         }));
         return NextResponse.json({ ok: true, forecast, exceptions });

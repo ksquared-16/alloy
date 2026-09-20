@@ -59,13 +59,14 @@ test("D-K on the deployed build", async ({ page }) => {
     log(`SUBJECTS: ${JSON.stringify(subjects.map((s) => ({ id: s.id, gross: s.gross, exc: (s.exceptions ?? []).length })))}`);
     flush();
 
+    type Call = { u: string; i: { method: string; body: unknown } | null };
     const call = async (path: string, init?: { method: string; body: unknown }) =>
-        page.evaluate(async ({ u, i }) => {
+        page.evaluate(async ({ u, i }: Call) => {
             const r = await fetch(u, i
                 ? { method: i.method, credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(i.body) }
                 : { credentials: "include" });
-            return { status: r.status, body: await r.json().catch(() => null) };
-        }, { u: path, i: init ?? null } as never);
+            return { status: r.status, body: (await r.json().catch(() => null)) as unknown };
+        }, { u: path, i: init ?? null } as Call);
 
     const forecast = async () => call(`/api/admin/financials/reduction-forecast?opportunity_customer_member_id=${ocm}`);
     const act = async (action_key: string, payload: Record<string, unknown>) =>

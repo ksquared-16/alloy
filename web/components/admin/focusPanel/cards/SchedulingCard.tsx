@@ -1754,7 +1754,14 @@ function ScheduleEditor({
      */
     type AssignmentException = {
         id: string; policyId: string; policyLabel: string; effectiveStart: string;
-        effectiveEnd: string | null; reason: string; appliesNow: boolean; superseded: boolean;
+        effectiveEnd: string | null; reason: string;
+        /** Did this govern the PERIOD the forecast evaluated? A statement about that period. */
+        appliesNow: boolean;
+        /** Is this still the current record, and still endable, TODAY? A statement about now. */
+        isLiveNow: boolean;
+        /** Its window has closed. Still readable, still history, no longer a live decision. */
+        ended: boolean;
+        superseded: boolean;
     };
     const [exceptions, setExceptions] = useState<AssignmentException[]>([]);
     /** Bumped after an exception is authored, so the forecast is re-read rather than guessed at. */
@@ -2636,18 +2643,39 @@ function ScheduleEditor({
                                       */}
                                     {exceptions.filter((e) => !e.superseded).map((e) => (
                                         <div key={e.id} style={{ fontSize: 11, color: e.appliesNow ? T.slate : T.mid40, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "baseline" }}
-                                             data-policy-exception={e.policyId} data-exception-applies={String(e.appliesNow)}>
+                                             data-policy-exception={e.policyId}
+                                             data-exception-applies={String(e.appliesNow)}
+                                             data-exception-live={String(e.isLiveNow)}>
                                             <span>
-                                                {e.policyLabel} · {e.appliesNow ? "excluded for this assignment" : `excluded from ${e.effectiveStart}`}
-                                                {e.effectiveEnd ? ` until ${e.effectiveEnd}` : ""} — {e.reason}
+                                                {e.policyLabel} ·{" "}
+                                                {e.ended
+                                                    ? `ended ${e.effectiveEnd}`
+                                                    : e.appliesNow
+                                                      ? "excluded for this assignment"
+                                                      : `excluded from ${e.effectiveStart}`}
+                                                {!e.ended && e.effectiveEnd ? ` until ${e.effectiveEnd}` : ""} — {e.reason}
                                             </span>
-                                            {e.appliesNow ? (
+                                            {/*
+                                              * ── ENDABLE IS ABOUT NOW, NOT ABOUT THE PERIOD ───
+                                              *
+                                              * This asked `appliesNow`, which answers "did it
+                                              * govern the period the forecast evaluated". An
+                                              * exception ended today, whose window began on the
+                                              * 1st, answers yes to that and is not endable — so
+                                              * the card offered to end something already ended.
+                                              * The lifecycle question is `isLiveNow`, and the
+                                              * server answers it; nothing about it is computed
+                                              * here.
+                                              */}
+                                            {e.isLiveNow ? (
                                                 <button type="button" data-end-policy-exception={e.id} disabled={exceptionBusy}
                                                         onClick={() => void commitException("end", { exception_id: e.id })}
                                                         style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: T.blue, textDecoration: "underline", cursor: "pointer" }}>
                                                     End exception
                                                 </button>
-                                            ) : null}
+                                            ) : (
+                                                <span data-exception-ended="true" style={{ color: T.mid40 }}>Ended</span>
+                                            )}
                                         </div>
                                     ))}
 
