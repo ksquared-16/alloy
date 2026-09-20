@@ -1,0 +1,48 @@
+{
+  "stage": "done",
+  "beforeVersion": 163,
+  "afterVersion": 164,
+  "sectionsBefore": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "health_safety",
+    "attendance",
+    "scheduling",
+    "milestones",
+    "billing_preview"
+  ],
+  "sectionsAfter": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "health_safety",
+    "attendance",
+    "scheduling",
+    "milestones"
+  ],
+  "areasBefore": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "attendance",
+    "health_safety",
+    "billing_preview"
+  ],
+  "areasAfter": [
+    "business_process",
+    "financials",
+    "children",
+    "household",
+    "attendance",
+    "health_safety"
+  ],
+  "patchStatus": 200,
+  "publishStatus": 200,
+  "publishError": null,
+  "visibleSectionsWithoutPlacement": [],
+  "placementsWithoutSection": []
+}

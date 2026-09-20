@@ -252,9 +252,28 @@ describe("Entity → Fields VM (in-entity field experience)", () => {
 });
 
 describe("Entity → Status VM (status domain hosted in the entity)", () => {
-    it("maps every primary hub entity onto a registered status domain owner", () => {
+    /**
+     * CAPABILITY-AWARE, NOT UNIVERSAL. This used to assert that EVERY primary hub
+     * entity owns a status domain. That held only while every entity in the
+     * workspace happened to have one, and it encoded a platform assumption rather
+     * than a product rule: Employment's status is a CHECK-constrained enum on
+     * `employments` (pending_start | active | ending | ended | canceled), not
+     * tenant-authored `status_definitions`, so giving it a domain would create a
+     * second, editable Employment status truth beside the real one.
+     *
+     * So the rule is: an entity either owns a WELL-FORMED domain, or is listed
+     * here as deliberately status-free. Silence is not allowed — a new entity
+     * cannot drift out of status configuration unnoticed.
+     */
+    const ENTITIES_WITHOUT_CONFIGURABLE_STATUS = new Set<string>(["employment"]);
+
+    it("gives every primary hub entity either a well-formed status domain or an explicit exemption", () => {
         for (const entity of configurationPrimaryHubEntities()) {
             const domain = statusDomainForHubEntity(entity.hubKey);
+            if (ENTITIES_WITHOUT_CONFIGURABLE_STATUS.has(entity.hubKey)) {
+                expect(domain, `${entity.hubKey} is exempt and must not fabricate a domain`).toBeNull();
+                continue;
+            }
             expect(domain, `no status domain for ${entity.hubKey}`).not.toBeNull();
             expect(domain?.authoritativeTable).toBeTruthy();
             expect(domain?.authoritativeColumn).toBeTruthy();

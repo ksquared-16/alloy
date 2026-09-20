@@ -1,0 +1,39 @@
+{
+  "householdEntry": {
+    "renderedKeys": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition"
+    ],
+    "retiredCardByRenderedIdentity": true,
+    "retiredCardByRegistryKey": false,
+    "schedulingPresent": false,
+    "retiredCardTitle": "TUITION 2 of 2 agreed Certb Certhouse Program · preschool Attendance · full_time Schedule · — days a week Effective · 20"
+  },
+  "childPanel": {
+    "renderedKeys": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "assignment_tuition",
+      "scheduling"
+    ],
+    "retiredCardByRenderedIdentity": true,
+    "retiredCardByRegistryKey": false,
+    "schedulingPresent": true,
+    "retiredCardTitle": "TUITION 2 of 2 agreed Certb Certhouse Program · preschool Attendance · full_time Schedule · — days a week Effective · 20"
+  },
+  "publishedLayout": {
+    "status": 200,
+    "count": 0,
+    "mentionsBillingPreview": true,
+    "mentionsScheduling": true
+  }
+}
