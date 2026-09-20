@@ -146,6 +146,8 @@ export type ChargeDetail = {
      * the date it was effective on. Null for an ordinary posting, so the two are distinguishable.
      */
     accountingDeferredFrom: string | null;
+    /** Present when attribution could not be READ — which is not the same as not posted. */
+    accountingReadError: string | null;
     glAccount: { code: string; name: string | null } | null;
 
     /*
@@ -306,15 +308,35 @@ export async function resolveChargeDetail(
     let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
     /** The effective date whose own period was closed, when attribution was deferred. */
     let accountingDeferredFrom: string | null = null;
+    /** Why the attribution is unknown, when it is — never conflated with "not posted". */
+    let accountingReadError: string | null = null;
     try {
-        const { data: entry } = await supabase
+        /*
+         * ── THE JOURNAL HAS NO `charge_id` COLUMN ─────────────────────────────────────────────
+         *
+         * This filtered `.eq("charge_id", chargeId)` against a column that does not exist. The
+         * charge is identified by `source_type = 'charge'` and `source_id`; the id also travels in
+         * `metadata.charge_id` for entries whose SOURCE is something else, such as a payment
+         * application. PostgREST answers an unknown column with an error, the `try` below swallowed
+         * it, and so EVERY charge — posted or not — reported "Not posted to a period yet".
+         *
+         * Measured: charge 18e860f9, status `posted`, accountingPeriod null. The accounting period
+         * row on charge detail had never once displayed a period.
+         */
+        const { data: entry, error: entryError } = await supabase
             .from("financial_journal_entries")
             .select("accounting_period_id, effective_on, metadata")
             .eq("org_id", args.orgId)
-            .eq("charge_id", chargeId)
+            .eq("source_type", "charge")
+            .eq("source_id", chargeId)
             .not("accounting_period_id", "is", null)
             .limit(1)
             .maybeSingle();
+        /*
+         * A FAILED READ IS NOT "NOT POSTED". Those are different answers and only one of them is
+         * safe to show; the silence is what let a broken query look like an unposted charge.
+         */
+        if (entryError) throw new Error(`accounting attribution could not be read (${entryError.message.trim()})`);
         const journal = entry as {
             accounting_period_id?: unknown;
             effective_on?: unknown;
@@ -358,8 +380,16 @@ export async function resolveChargeDetail(
                 };
             }
         }
-    } catch {
+    } catch (e) {
+        /*
+         * TOLERANT, BUT NOT SILENT. A charge whose attribution cannot be read is still a charge an
+         * operator must be able to open, so this does not fail the whole detail — but the reason is
+         * carried out rather than discarded. A bare `catch {}` here is what let a query against a
+         * non-existent column read as "not posted" on every charge in the system.
+         */
         accountingPeriod = null;
+        accountingDeferredFrom = null;
+        accountingReadError = e instanceof Error ? e.message : "accounting attribution could not be read";
     }
 
     let glAccount: ChargeDetail["glAccount"] = null;
@@ -465,6 +495,7 @@ export async function resolveChargeDetail(
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,
         accountingDeferredFrom,
+        accountingReadError,
         glAccount,
         customerId,
         customerMemberId,

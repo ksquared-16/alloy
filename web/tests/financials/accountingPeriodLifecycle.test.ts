@@ -306,3 +306,37 @@ describe("the two periods are derived independently", () => {
         expect(block).not.toMatch(/placeInBillingPeriod|billingPeriodFor/);
     });
 });
+
+describe("the charge finds its own journal entry", () => {
+    const detail = src("lib/financials/workspace/resolveChargeDetail.ts");
+
+    it("queries the columns the journal actually has", () => {
+        /*
+         * THE DEFECT. This filtered `.eq("charge_id", chargeId)` and
+         * `financial_journal_entries` HAS NO `charge_id` COLUMN — the charge is identified by
+         * `source_type = 'charge'` and `source_id`. PostgREST answers an unknown column with an
+         * error, a bare `catch {}` swallowed it, and every charge in the system reported "Not
+         * posted to a period yet". Measured: charge 18e860f9, status `posted`,
+         * accountingPeriod null.
+         */
+        const block = detail.slice(detail.indexOf('.from("financial_journal_entries")'));
+        const query = block.slice(0, block.indexOf("maybeSingle()"));
+        expect(query).toContain('.eq("source_type", "charge")');
+        expect(query).toContain('.eq("source_id", chargeId)');
+        expect(query, "no column that does not exist").not.toContain('.eq("charge_id"');
+    });
+
+    it("the writer stamps that identity", () => {
+        const journal = src("lib/financials/financialJournalService.ts");
+        const fn = journal.slice(journal.indexOf("export function chargePostedEntry"));
+        expect(fn.slice(0, 900)).toContain('sourceType: "charge"');
+        expect(fn.slice(0, 900)).toContain("sourceId: params.chargeId");
+    });
+
+    it("a failed read is not reported as 'not posted'", () => {
+        expect(detail).toContain("accountingReadError");
+        expect(detail, "the error reaches the caller").toMatch(/accounting attribution could not be read/);
+        const block = detail.slice(detail.indexOf("let accountingPeriod"));
+        expect(block.slice(0, block.indexOf("let glAccount")), "no bare catch").not.toMatch(/\} catch \{\s*\n\s*accountingPeriod = null;/);
+    });
+});

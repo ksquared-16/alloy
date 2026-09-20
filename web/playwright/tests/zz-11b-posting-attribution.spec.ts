@@ -51,31 +51,59 @@ test("posting attribution and deferral", async ({ page }) => {
     await page.locator(`[data-financials-queue-row="${pick.chargeId}"]`).first().click({ force: true });
     await page.waitForTimeout(10_000);
 
+    /* The PRODUCT's own read-back, by its own test ids — not an API shape I guessed. */
     const readDetail = async (label: string) => {
-        const d = await page.evaluate(async (id) => {
-            const r = await fetch(`/api/admin/financials/charge?charge_id=${id}`, { credentials: "include", cache: "no-store" });
-            const b = r.ok ? await r.json() : { error: r.status };
-            const det = (b.detail ?? b) as Record<string, any>;
-            return {
-                status: det.status ?? null,
-                serviceDate: det.serviceDate ?? det.service_date ?? null,
-                billingPeriod: det.billingPeriod ?? det.billing_period ?? null,
-                invoiceDate: det.invoiceDate ?? det.billable_on ?? null,
-                dueDate: det.dueDate ?? det.due_date ?? null,
-                accountingPeriod: det.accountingPeriod ?? null,
-                grossCents: det.grossCents ?? det.amountCents ?? det.amount_cents ?? null,
-                subject: det.subjectLabel ?? det.childName ?? null,
-                reductions: det.reductions ?? null,
-                responsibility: det.responsibility ?? null,
-                payments: det.payments ?? null,
-                raw: JSON.stringify(det).slice(0, 900),
+        const d = await page.evaluate(() => {
+            const byTid = (tid: string) => {
+                const el = document.querySelector(`[data-testid="${tid}"]`) as HTMLElement | null;
+                return el ? el.innerText.replace(/\n+/g, " · ").trim() : null;
             };
-        }, pick.chargeId);
+            const body = document.body.innerText || "";
+            const grab = (label: string) => {
+                const i = body.indexOf(label);
+                return i < 0 ? null : body.slice(i, i + 90).replace(/\n+/g, " · ");
+            };
+            return {
+                billingPeriod: byTid("billing-period"),
+                invoiceDate: byTid("invoice-date"),
+                dueDate: byTid("due-date"),
+                accountingPeriod: byTid("accounting-period"),
+                deferredFrom: byTid("accounting-deferred-from"),
+                serviceDate: grab("Charge is for"),
+                responsibilityBlock: grab("RESPONSIBILITY ARRANGEMENT"),
+                statusText: grab("Draft") ?? grab("Posted"),
+                payments: grab("Payments"),
+                detailText: body.slice(body.indexOf("Posting"), body.indexOf("Posting") + 420).replace(/\n+/g, " · "),
+            };
+        });
         log(`\n--- ${label} ---\n${JSON.stringify(d, null, 1)}`);
         return d;
     };
 
     out.before = await readDetail("BEFORE (draft)");
     await page.screenshot({ path: `${OUT}/posting-before.png`, fullPage: true });
+
+    // ── §5 POST through the canonical authority, from the product's own control. ──
+    const posted: string[] = [];
+    page.on("request", (r) => {
+        if (r.method() === "POST" && r.url().includes("/actions/execute")) posted.push((r.postData() ?? "").slice(0, 220));
+    });
+    const postBtn = page.getByRole("button", { name: /^Post/ }).first();
+    log(`\npost control: ${await postBtn.count()}`);
+    if (await postBtn.count()) { await postBtn.click({ force: true }); await page.waitForTimeout(14_000); }
+    out.postRequests = posted;
+    log(`POSTED: ${JSON.stringify(posted)}`);
+
+    out.after = await readDetail("AFTER (posted)");
+    await page.screenshot({ path: `${OUT}/posting-after.png`, fullPage: true });
+
+    out.nonMutation = {
+        billingPeriodUnchanged: out.before && out.after ? (out.before as Record<string, unknown>).billingPeriod === (out.after as Record<string, unknown>).billingPeriod : null,
+        invoiceDateUnchanged: out.before && out.after ? (out.before as Record<string, unknown>).invoiceDate === (out.after as Record<string, unknown>).invoiceDate : null,
+        dueDateUnchanged: out.before && out.after ? (out.before as Record<string, unknown>).dueDate === (out.after as Record<string, unknown>).dueDate : null,
+        serviceDateUnchanged: out.before && out.after ? (out.before as Record<string, unknown>).serviceDate === (out.after as Record<string, unknown>).serviceDate : null,
+        responsibilityUnchanged: out.before && out.after ? (out.before as Record<string, unknown>).responsibilityBlock === (out.after as Record<string, unknown>).responsibilityBlock : null,
+    };
+    log(`\nNON-MUTATION: ${JSON.stringify(out.nonMutation, null, 1)}`);
     writeFileSync(`${OUT}/posting-attribution.json`, JSON.stringify(out, null, 2));
 });
