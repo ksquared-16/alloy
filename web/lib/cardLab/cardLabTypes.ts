@@ -386,6 +386,17 @@ export type FinancialsPeriod = {
      * prepaid` is two figures and never one `-$200`.
      */
     availablePrepaid: string | null;
+    /**
+     * Money received and RESTRICTED — a held deposit (Payments V1 · W4).
+     *
+     * A separate figure from `availablePrepaid` and never merged into it: one is money an operator
+     * may spend on an obligation now, the other is money the organisation is holding and may not.
+     * Combining them would offer a family's deposit for allocation.
+     *
+     * Like prepaid it is `null` when there is none, so zero stays silent, and like prepaid it is NOT
+     * subtracted from `currentBalance` — a family that owes $500 with $500 held still owes $500.
+     */
+    heldFunds: string | null;
     dueLabel: string;
 };
 

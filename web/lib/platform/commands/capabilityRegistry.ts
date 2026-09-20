@@ -87,6 +87,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment_method.set_default",
     "payment_method.revoke",
     "payment.recognize",
+    "deposit.hold",
+    "deposit.release",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -809,6 +811,51 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "rather than Alloy's cached state, and is idempotent: an attempt already recognised "
             + "returns its existing receipt instead of minting a second one. It cannot create a "
             + "payment directly, invent provider success, or rewrite amount, payer or responsibility.",
+    }),
+    /*
+     * ── HELD DEPOSITS — `fin.adjust`, because they decide what may be SPENT, not what is OWED ──
+     *
+     * Holding moves no money and changes no balance. What it changes is whether an operator may
+     * settle an obligation with a particular receipt, which is the authority `fin.adjust` exists to
+     * separate from ordinary billing. There is deliberately no `fin.deposit`.
+     */
+    def({
+        capabilityKey: "deposit.hold",
+        canonicalCommandKey: "deposit.hold",
+        operatorLabel: "Hold funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.hold",
+        implementationStatus: "production",
+        reason:
+            "Restricts part of an existing canonical Payment so it is not offered as available "
+            + "prepaid money. Creates no receipt, allocation, journal entry or obligation delta, and "
+            + "does not move Current Balance. The refundable terms are SNAPSHOT at creation, so a "
+            + "later policy change cannot retroactively alter what the family was told.",
+    }),
+    def({
+        capabilityKey: "deposit.release",
+        canonicalCommandKey: "deposit.release",
+        operatorLabel: "Release funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.release",
+        implementationStatus: "production",
+        reason:
+            "Stops restricting held money so it becomes ordinary available prepaid money. It is not "
+            + "a refund, not an application and not a change to responsibility. The hold is an "
+            + "immutable lot: a partial release appends a disposition and what was originally held "
+            + "remains on the record.",
     }),
     def({
         capabilityKey: "payment.collect_card",

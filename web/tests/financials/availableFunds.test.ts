@@ -83,14 +83,54 @@ describe("unapplied is not the same word as available", () => {
     });
 
     /*
-     * Held deposits are a real concept and are deliberately NOT invented. Saying "0, and we cannot
-     * measure this" is honest; silently classifying every deposit as spendable would let an operator
-     * spend a refundable deposit by accident.
+     * THIS EXPECTATION FLIPPED IN W4, AND THAT IS THE POINT.
+     *
+     * It used to assert `heldSupported: false` — "0, and we cannot measure this" — which was the
+     * honest answer while nothing marked a receipt as held. W4 shipped `payment_holds`, so a zero is
+     * now a MEASUREMENT. What has not changed is the thing the old note protected: held money is
+     * never silently counted as spendable.
      */
-    it("reports held money as unsupported rather than as zero held", () => {
+    it("reports held money as measured, not as an absent capability", () => {
         const p = resolveAccountPrepaidPosition([pay({})]);
         expect(p.heldCents).toBe(0);
-        expect(p.heldSupported, "the zero is an absent capability, not a measurement").toBe(false);
+        expect(p.heldSupported, "the zero is now a measurement").toBe(true);
+    });
+
+    it("carves held money out of available, and reports it separately", () => {
+        const p = resolveAccountPrepaidPosition([pay({ paymentId: "pay-h", unappliedCents: 50_000 })], { "pay-h": 30_000 });
+        expect(p.heldCents).toBe(30_000);
+        expect(p.availableCents, "available = unapplied − held").toBe(20_000);
+        /* The receipt's own remainder is unchanged — a hold restricts money, it does not spend it. */
+        expect(p.positions[0]!.unappliedCents).toBe(50_000);
+        expect(p.positions[0]!.heldCents).toBe(30_000);
+    });
+
+    it("classifies a fully held receipt as held rather than available", () => {
+        const p = resolveAccountPrepaidPosition([pay({ paymentId: "pay-f", unappliedCents: 50_000 })], { "pay-f": 50_000 });
+        expect(p.positions[0]!.availability).toBe("held");
+        expect(p.availableCents).toBe(0);
+        expect(p.heldCents).toBe(50_000);
+    });
+
+    /*
+     * A HOLD ON PENDING MONEY DOES NOT MAKE THE REST OF IT SPENDABLE. The receipt has not arrived;
+     * holding part of it changes nothing about the other part.
+     */
+    it("never promotes a pending receipt to available by holding part of it", () => {
+        const p = resolveAccountPrepaidPosition(
+            [pay({ paymentId: "pay-p", unappliedCents: 40_000, status: "pending" })],
+            { "pay-p": 10_000 },
+        );
+        expect(p.availableCents).toBe(0);
+        expect(p.pendingCents).toBe(30_000);
+        expect(p.heldCents).toBe(10_000);
+    });
+
+    /* Defensive floor: if the two authorities ever disagreed, never publish negative available money. */
+    it("never reports negative available money if a hold exceeds the remainder", () => {
+        const p = resolveAccountPrepaidPosition([pay({ paymentId: "pay-x", unappliedCents: 10_000 })], { "pay-x": 99_000 });
+        expect(p.availableCents).toBe(0);
+        expect(p.heldCents).toBe(10_000);
     });
 
     /* The payer travels with the money. Prepaid funds do not become the household's anonymously. */

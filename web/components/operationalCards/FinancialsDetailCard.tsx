@@ -385,6 +385,21 @@ export default function FinancialsDetailCard({
                         />
                     ) : null}
                     {/*
+                      * HELD DEPOSIT — money received and restricted (W4).
+                      *
+                      * Toned neutral rather than `ok` or as a problem: held money is neither good
+                      * news nor an exception to resolve, it is a position. And it is beside
+                      * Available prepaid rather than inside it, because an operator may spend one
+                      * and not the other.
+                      */}
+                    {period.heldFunds ? (
+                        <Stat
+                            label="Held deposit"
+                            value={period.heldFunds}
+                            testId="held-funds"
+                        />
+                    ) : null}
+                    {/*
                      * "None" claimed an absence nothing could support. Payment setup has no producer
                      * yet, so the honest value is that it has not been recorded — and it is not
                      * toned as a problem, because an unknown is not a fault.

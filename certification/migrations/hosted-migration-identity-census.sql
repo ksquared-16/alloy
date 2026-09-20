@@ -1,4 +1,9 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
+-- RE-MEASURED 2026-09-20T12:5xZ AFTER the W3 merge (1e7c1745d). The previous reading was taken
+-- while staging was still 7e87fd71e, so hosted parity reported PASS against a tree that did not yet
+-- contain 20260922120000 — stale evidence refusing an apply, the mirror of stale evidence refusing
+-- a merge.
+--
 --
 --
 -- A SECOND MEASUREMENT IN ONE RUN NEEDS A DIFFERENT QUESTION, AND THAT IS A

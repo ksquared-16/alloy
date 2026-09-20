@@ -75,9 +75,23 @@ describe("THE GATE — pending money never reaches the available figure", () => 
         expect(pos.positions, "no zero-valued position is manufactured").toHaveLength(0);
     });
 
-    /* Held funds remain unsupported, and that is declared rather than approximated. */
-    it("still declares held funds unsupported", () => {
+    /*
+     * HELD FUNDS BECAME SUPPORTED IN W4. This case previously locked the DECLARATION that they were
+     * not — which was the honest answer while nothing marked a receipt as held. `payment_holds` is
+     * that mark, so the declaration is now `true` and a zero is a measurement.
+     *
+     * The doctrine underneath is unchanged and is what the second assertion protects: held money is
+     * never counted as available.
+     */
+    it("declares held funds supported, and still never counts them as available", () => {
         const pos = resolveAccountPrepaidPosition([payment()]);
-        expect((pos as unknown as { heldSupported?: boolean }).heldSupported).toBe(false);
+        expect((pos as unknown as { heldSupported?: boolean }).heldSupported).toBe(true);
+
+        const withHold = resolveAccountPrepaidPosition(
+            [payment({ paymentId: "p-held", status: "posted", unappliedCents: 40_000 })],
+            { "p-held": 15_000 },
+        );
+        expect(withHold.heldCents).toBe(15_000);
+        expect(withHold.availableCents, "held money is carved out, not added in").toBe(25_000);
     });
 });

@@ -31,17 +31,21 @@
  *   AVAILABLE        posted, inbound, not refunded, not allocated. The only bucket that may be
  *                    offered as prepaid funds.
  *
- * ── DEPOSIT-RESTRICTED MONEY, AND WHY IT IS ABSENT ───────────────────────────────────────────
+ * ── DEPOSIT-RESTRICTED MONEY (Payments V1 · W4) ──────────────────────────────────────────────
  *
- * A held deposit — money received under a policy that says it may not be spent against ordinary
- * obligations until some event — is a REAL product concept and is deliberately NOT invented here.
- * The `deposit` financial policy already carries `amount_cents` and `refundable`, but nothing marks
- * an individual receipt as held, so the platform cannot currently tell a held deposit from ordinary
- * prepaid money. Reporting `heldCents: 0` with `heldSupported: false` says that plainly rather than
- * silently classifying every deposit as spendable — which is the failure that would matter, because
- * it would let an operator spend a refundable deposit by accident.
+ * This section used to explain why held money was ABSENT: the `deposit` policy carried terms, but
+ * nothing marked an individual receipt as held, so the platform could not tell a held deposit from
+ * ordinary prepaid money and reported `heldCents: 0, heldSupported: false` rather than silently
+ * calling every deposit spendable.
  *
- * The distinction, when it ships, is POLICY METADATA OVER THE SAME MONEY — not a second store.
+ * W4 shipped the missing fact, and it is what that note predicted — POLICY METADATA OVER THE SAME
+ * MONEY, not a second store. `payment_holds` restricts part of a canonical receipt:
+ *
+ *     available = unapplied − held
+ *
+ * So `heldSupported` is now true, and a zero here is a MEASUREMENT. Held money is reported beside
+ * available money and never inside it: offering a refundable deposit as spendable prepaid is exactly
+ * the accident the old note existed to prevent, and the only change is that Alloy can now tell.
  */
 
 import type { PaymentView } from "@/lib/financials/paymentApplicationView";
@@ -54,6 +58,8 @@ export type FundPosition = {
     availability: FundAvailability;
     /** The receipt's unapplied remainder, as the canonical reader reports it. */
     unappliedCents: number;
+    /** How much of that remainder is restricted by a held deposit (W4). */
+    heldCents: number;
     payerCustomerId: string | null;
     payerLabel: string | null;
     receivedAt: string | null;
@@ -65,8 +71,9 @@ export type AccountPrepaidPosition = {
     /** Received but not yet canonical money. Reported, never offered. */
     pendingCents: number;
     /**
-     * Money restricted by deposit policy. Always 0 today.
-     * `heldSupported` says whether that zero is a measurement or the absence of a capability.
+     * Money restricted by a held deposit. Reported beside available money, never inside it.
+     * `heldSupported` says whether a zero is a measurement or the absence of a capability; since W4
+     * it is a measurement.
      */
     heldCents: number;
     heldSupported: boolean;
@@ -93,10 +100,22 @@ export function fundAvailabilityOf(payment: Pick<PaymentView, "status" | "unappl
  * a position, and listing it as a zero would invite a surface to render "prepaid: $0.00" beside
  * every settled receipt an account ever had.
  */
-export function resolveAccountPrepaidPosition(payments: readonly PaymentView[]): AccountPrepaidPosition {
+export function resolveAccountPrepaidPosition(
+    payments: readonly PaymentView[],
+    /**
+     * How much of each receipt is currently held, by payment id (Payments V1 · W4).
+     *
+     * Passed in rather than read here, because this module sums what canonical authorities report
+     * and computes no money of its own — the same reason it consumes `unappliedCents` instead of
+     * recomputing it. Omitted entirely by callers that predate W4, which then behave exactly as
+     * before.
+     */
+    heldByPayment: Readonly<Record<string, number>> = {},
+): AccountPrepaidPosition {
     const positions: FundPosition[] = [];
     let availableCents = 0;
     let pendingCents = 0;
+    let heldCents = 0;
 
     for (const p of payments) {
         /*
@@ -105,24 +124,45 @@ export function resolveAccountPrepaidPosition(payments: readonly PaymentView[]):
          * would quietly net one receipt's error against another's good money.
          */
         if (p.unappliedCents <= 0) continue;
-        const availability = fundAvailabilityOf(p);
+
+        /*
+         * HELD MONEY IS NOT AVAILABLE MONEY, and it is not pending either — it has arrived. It is
+         * carved out of this receipt's unapplied remainder and reported separately.
+         *
+         * Bounded by the remainder as a defensive floor: the database already refuses a hold that
+         * exceeds it, so a larger figure here would mean the two disagree, and the safe direction is
+         * to hold no more than exists rather than to publish a negative available balance.
+         */
+        const held = Math.max(0, Math.min(heldByPayment[p.paymentId] ?? 0, p.unappliedCents));
+        const spendable = p.unappliedCents - held;
+        const availability: FundAvailability = held >= p.unappliedCents && held > 0
+            ? "held"
+            : fundAvailabilityOf(p);
+
         positions.push({
             paymentId: p.paymentId,
             availability,
             unappliedCents: p.unappliedCents,
+            heldCents: held,
             payerCustomerId: p.payerCustomerId,
             payerLabel: p.payerLabel,
             receivedAt: p.receivedAt,
         });
-        if (availability === "available") availableCents += p.unappliedCents;
-        else if (availability === "pending") pendingCents += p.unappliedCents;
+
+        heldCents += held;
+        /*
+         * Only POSTED money can be offered. A pending receipt's unheld remainder is still pending —
+         * holding part of money that has not arrived does not make the rest of it spendable.
+         */
+        if (fundAvailabilityOf(p) === "available") availableCents += spendable;
+        else pendingCents += spendable;
     }
 
     return {
         availableCents,
         pendingCents,
-        heldCents: 0,
-        heldSupported: false,
+        heldCents,
+        heldSupported: true,
         positions: positions.sort((a, b) => (a.receivedAt ?? "").localeCompare(b.receivedAt ?? "")),
         currency: payments[0]?.currency ?? "USD",
     };

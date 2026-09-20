@@ -287,6 +287,21 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              */
             availablePrepaid:
                 (vm.prepaid?.availableCents ?? 0) > 0 ? money(vm.prepaid!.availableCents, currency) : null,
+            /*
+             * HELD MONEY IS ITS OWN FIGURE (Payments V1 · W4), and never merged into the one above.
+             *
+             * "$200 available prepaid" and "$500 held" are different facts about a family: the first
+             * is money an operator may spend on an obligation right now, the second is money the
+             * organisation is holding and may not. One combined number would offer the deposit.
+             *
+             * It is also NOT netted into Current Balance — a family that owes $500 and has $500 held
+             * still owes $500. Zero stays silent, like every other metric in this strip, and
+             * `heldSupported` guards the difference between "nothing held" and "cannot tell".
+             */
+            heldFunds:
+                vm.prepaid?.heldSupported && (vm.prepaid?.heldCents ?? 0) > 0
+                    ? money(vm.prepaid!.heldCents, currency)
+                    : null,
             dueLabel,
         },
         pastDue,
@@ -644,6 +659,7 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
             currentBalance: dash,
             dueNow: dash,
             availablePrepaid: null,
+            heldFunds: null,
             dueLabel: "",
         },
         /*

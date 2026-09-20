@@ -36,6 +36,7 @@ import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveF
 import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import { heldCentsFor, readHoldsForPayments, type HeldDeposit } from "@/lib/financials/prepaid/heldDeposits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
@@ -476,6 +477,10 @@ export type FinancialsCardVM = {
      * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
      * zero measurement, and claiming it would let an operator spend a refundable deposit believing
      * none was held.
+     *
+     * Since W4 the authority reports `true`, so a zero IS a measurement. The false branch remains
+     * because the empty VM below still uses it: a card that has not read yet has not measured
+     * anything, and that is the same claim.
      */
     prepaid: {
         availableCents: number;
@@ -483,6 +488,14 @@ export type FinancialsCardVM = {
         heldCents: number;
         heldSupported: boolean;
     };
+    /**
+     * The held deposits behind `prepaid.heldCents` (Payments V1 · W4).
+     *
+     * Summary needs only the total; DETAILS owns administration and needs the lots — what was
+     * originally held, what became of it, under which terms, and since when. Empty until a hold
+     * exists, which is why Summary can render from the total alone.
+     */
+    heldDeposits: HeldDeposit[];
     collectible: {
         outstandingCents: number;
         expectedSubsidyCents: number;
@@ -543,6 +556,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
         prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
+        heldDeposits: [],
         collectible: {
             outstandingCents: 0,
             expectedSubsidyCents: 0,
@@ -1700,7 +1714,28 @@ async function buildFinancialsCardVMInner(
              * itself would be a second answer to "what may this family spend", and it would get the
              * PENDING case wrong — which is the one that can offer money that never arrives.
              */
-            vm.prepaid = resolveAccountPrepaidPosition(views);
+            /*
+             * HELD MONEY (Payments V1 · W4), read here and passed IN.
+             *
+             * `availableFunds` sums what canonical authorities report and computes no money of its
+             * own, so it is told how much of each receipt is restricted rather than reading it. A
+             * failed holds read leaves the map empty, which reports held money as zero — the
+             * conservative direction is arguable either way, and this one is chosen because the
+             * alternative is refusing to show a family's prepaid position at all because a
+             * restriction could not be counted. The holds themselves travel to Details separately.
+             */
+            const holds = await readHoldsForPayments(supabase, {
+                orgId: args.orgId,
+                paymentIds: views.map((v) => v.paymentId),
+            });
+            const heldByPayment: Record<string, number> = {};
+            for (const v of views) {
+                const held = heldCentsFor(v.paymentId, holds);
+                if (held > 0) heldByPayment[v.paymentId] = held;
+            }
+            vm.prepaid = resolveAccountPrepaidPosition(views, heldByPayment);
+            /* Details owns held-money administration and needs the lots, not just the total. */
+            vm.heldDeposits = holds.filter((h) => h.remainingCents > 0 || h.dispositions.length > 0);
         }
     } catch (e) {
         /*
