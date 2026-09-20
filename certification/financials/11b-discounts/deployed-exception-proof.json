@@ -1,0 +1,43 @@
+{
+  "build": "6c1b84fdc",
+  "base": "https://staging.workwithalloy.com",
+  "shellUrl": "https://staging.workwithalloy.com/workspace/work-unit/enrolled-children",
+  "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+  "D_deployedRuntimeReadsTheTable": {
+    "status": 200,
+    "exceptionsKeyPresent": true,
+    "error": null,
+    "holds": true
+  },
+  "E_forecastBefore": {
+    "present": true,
+    "outcomes": [
+      {
+        "kind": "expected",
+        "reason": null,
+        "policy": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "text": "discount · $18.50 expected to applyAdd exception"
+      }
+    ],
+    "exceptionsRendered": [],
+    "addOffered": true,
+    "apiForecast": {
+      "grossCents": 145000,
+      "currencyCode": "USD",
+      "periodKey": "2026-09",
+      "categoryKey": "tuition",
+      "outcomes": [
+        {
+          "kind": "expected",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "discount",
+          "amountCents": -14500,
+          "explanation": "discount · 10% of $1450.00"
+        }
+      ],
+      "totalCents": -14500,
+      "netCents": 130500
+    }
+  }
+}

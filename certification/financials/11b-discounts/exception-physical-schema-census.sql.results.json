@@ -1,0 +1,105 @@
+{
+  "trusted_host_action_id": "tha_68b5246d3c7cc7",
+  "query_hash": "b51e1d94f54fd4f0ab3737df28dac8589f096f0ec75577ef060a395d69722216",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T19:26:42.364Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_68b5246d3c7cc7",
+    "query_hash": "b51e1d94f54fd4f0ab3737df28dac8589f096f0ec75577ef060a395d69722216",
+    "authorization_id": "grnt_ac85e051b65d4f50",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T19:26:43.685Z",
+    "question_ids": [
+      "columns_present",
+      "fk_policy_restricts_delete",
+      "fk_relationship_cascades",
+      "live_row_unique_index_is_partial",
+      "migration_in_ledger",
+      "org_id_not_null",
+      "org_parity_trigger_enabled",
+      "reason_non_empty_check",
+      "reason_not_null",
+      "table_exists"
+    ],
+    "questions": {
+      "columns_present": {
+        "question_id": "columns_present",
+        "row_count": null,
+        "rows": [
+          "id, org_id, policy_id, opportunity_customer_member_id, customer_member_id, effective_start, effective_end, supersedes_exception_id, superseded_at, reason, created_by, created_at, ended_by, ended_at"
+        ]
+      },
+      "fk_policy_restricts_delete": {
+        "question_id": "fk_policy_restricts_delete",
+        "row_count": null,
+        "rows": [
+          "commercial_policy_exceptions_policy_id_fkey confdeltype=r"
+        ]
+      },
+      "fk_relationship_cascades": {
+        "question_id": "fk_relationship_cascades",
+        "row_count": null,
+        "rows": [
+          "commercial_policy_exceptions_opportunity_customer_member_i_fkey confdeltype=c"
+        ]
+      },
+      "live_row_unique_index_is_partial": {
+        "question_id": "live_row_unique_index_is_partial",
+        "row_count": null,
+        "rows": [
+          "CREATE UNIQUE INDEX ux_commercial_policy_exceptions_live ON public.commercial_policy_exceptions USING btree (org_id, policy_id, opportunity_customer_member_id, effective_start) WHERE (superseded_at IS NULL)"
+        ]
+      },
+      "migration_in_ledger": {
+        "question_id": "migration_in_ledger",
+        "row_count": null,
+        "rows": [
+          20260924120000
+        ]
+      },
+      "org_id_not_null": {
+        "question_id": "org_id_not_null",
+        "row_count": null,
+        "rows": [
+          "is_nullable=NO"
+        ]
+      },
+      "org_parity_trigger_enabled": {
+        "question_id": "org_parity_trigger_enabled",
+        "row_count": null,
+        "rows": [
+          "trg_enforce_commercial_policy_exception_org_parity (O)"
+        ]
+      },
+      "reason_non_empty_check": {
+        "question_id": "reason_non_empty_check",
+        "row_count": null,
+        "rows": [
+          "CHECK ((length(btrim(reason)) > 0))"
+        ]
+      },
+      "reason_not_null": {
+        "question_id": "reason_not_null",
+        "row_count": null,
+        "rows": [
+          "is_nullable=NO"
+        ]
+      },
+      "table_exists": {
+        "question_id": "table_exists",
+        "row_count": null,
+        "rows": [
+          "commercial_policy_exceptions"
+        ]
+      }
+    },
+    "row_count": 10
+  }
+}

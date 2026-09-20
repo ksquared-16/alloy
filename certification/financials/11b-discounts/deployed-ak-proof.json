@@ -1,0 +1,209 @@
+{
+  "build": "6c1b84fdc",
+  "base": "https://staging.workwithalloy.com",
+  "assignmentsOnPanel": [
+    {
+      "id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "status": 200,
+      "gross": 145000,
+      "outcomes": [
+        {
+          "kind": "expected",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "discount",
+          "amountCents": -14500,
+          "explanation": "discount · 10% of $1450.00"
+        }
+      ],
+      "exceptions": []
+    },
+    {
+      "id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "status": 200,
+      "gross": 18500,
+      "outcomes": [
+        {
+          "kind": "expected",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "discount",
+          "amountCents": -1850,
+          "explanation": "discount · 10% of $185.00"
+        }
+      ],
+      "exceptions": [
+        {
+          "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "discount",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "11B promotion proof — board waived this policy for this family",
+          "appliesNow": false,
+          "superseded": false
+        }
+      ]
+    }
+  ],
+  "subject": "79f8011d-a236-4054-bee7-af10f1dbc632",
+  "precondition": {
+    "liveEndedAtStart": 1,
+    "forecast": {
+      "grossCents": 18500,
+      "currencyCode": "USD",
+      "periodKey": "2026-09",
+      "categoryKey": "tuition",
+      "outcomes": [
+        {
+          "kind": "expected",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "discount",
+          "amountCents": -1850,
+          "explanation": "discount · 10% of $185.00"
+        }
+      ],
+      "totalCents": -1850,
+      "netCents": 16650
+    }
+  },
+  "D": {
+    "status": 200,
+    "exceptionsKeyPresent": true,
+    "error": null
+  },
+  "E": {
+    "periodKey": "2026-09",
+    "outcomes": [
+      {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -1850,
+        "explanation": "discount · 10% of $185.00"
+      }
+    ],
+    "expectedPolicyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+    "expectedCents": -1850
+  },
+  "F": {
+    "offered": true,
+    "draftOpened": true,
+    "confirmDisabledWithoutReason": true,
+    "preview": "This policy will not apply to obligations for this assignment from today onward. Anything already posted keeps the terms it was posted under.",
+    "previewQuotesNoFigure": true,
+    "confirmEnabledWithReason": true,
+    "errorShown": "duplicate key value violates unique constraint \"ux_commercial_policy_exceptions_live\""
+  },
+  "readBack": [
+    {
+      "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+      "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "policyLabel": "discount",
+      "effectiveStart": "2026-09-20",
+      "effectiveEnd": "2026-09-20",
+      "reason": "11B promotion proof — board waived this policy for this family",
+      "appliesNow": false,
+      "superseded": false
+    }
+  ],
+  "effectiveDating": [
+    {
+      "start": "2026-09-20",
+      "end": "2026-09-20",
+      "appliesNow": false,
+      "superseded": false,
+      "reason": "11B promotion proof — board waived this policy for this family"
+    }
+  ],
+  "G_authorAtPeriodStart": {
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  "G": {
+    "outcomes": [
+      {
+        "kind": "not_expected",
+        "reason": "excluded_by_exception"
+      }
+    ],
+    "reason": "excluded_by_exception",
+    "exceptions": [
+      {
+        "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyLabel": "discount",
+        "effectiveStart": "2026-09-20",
+        "effectiveEnd": "2026-09-20",
+        "reason": "11B promotion proof — board waived this policy for this family",
+        "appliesNow": false,
+        "superseded": true
+      },
+      {
+        "id": "34c519db-2c0a-471a-810a-7442bc6164d6",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyLabel": "discount",
+        "effectiveStart": "2026-09-01",
+        "effectiveEnd": null,
+        "reason": "11B promotion proof — excluded for the whole period",
+        "appliesNow": true,
+        "superseded": false
+      }
+    ]
+  },
+  "G_ui": {
+    "outcomes": [
+      {
+        "kind": "not_expected",
+        "reason": "excluded_by_exception",
+        "text": "Excluded for this assignment"
+      }
+    ],
+    "exceptions": [
+      {
+        "appliesNow": "true",
+        "text": "discount · excluded for this assignment — 11B promotion proof — excluded for the whole periodEnd exception"
+      }
+    ]
+  },
+  "H": {
+    "forecastTotalCents": 0,
+    "netEqualsGross": true
+  },
+  "K": {
+    "endedCount": 1,
+    "forecastAfterEnd": [
+      {
+        "kind": "not_expected",
+        "reason": "excluded_by_exception"
+      }
+    ],
+    "eligibilityRestored": false,
+    "historySurvives": true,
+    "history": [
+      {
+        "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyLabel": "discount",
+        "effectiveStart": "2026-09-20",
+        "effectiveEnd": "2026-09-20",
+        "reason": "11B promotion proof — board waived this policy for this family",
+        "appliesNow": false,
+        "superseded": true
+      },
+      {
+        "id": "34c519db-2c0a-471a-810a-7442bc6164d6",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyLabel": "discount",
+        "effectiveStart": "2026-09-01",
+        "effectiveEnd": "2026-09-20",
+        "reason": "11B promotion proof — excluded for the whole period",
+        "appliesNow": true,
+        "superseded": false
+      }
+    ]
+  }
+}

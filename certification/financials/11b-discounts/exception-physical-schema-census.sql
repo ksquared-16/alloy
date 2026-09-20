@@ -10,6 +10,10 @@
 --      the org-parity trigger is attached and fires
 --      policy_id restricts deletion; opportunity_customer_member_id cascades
 --
+-- Note the ::text casts on tgenabled and confdeltype. Both are Postgres "char" (not char(1)),
+-- and `text || "char"` is ambiguous — the first run of this census failed with
+-- `operator is not unique: text || "char"`. The cast is required, not cosmetic.
+--
 -- An all-empty answer is two different answers — the table is genuinely absent, or the census ran
 -- against the wrong database. The first row settles that before anything else is read.
 select
@@ -59,7 +63,7 @@ union all
 select
     'org_parity_trigger_enabled',
     bool_or(tgenabled <> 'D'),
-    coalesce(string_agg(tgname || ' (' || tgenabled || ')', ' | '), '(none)')
+    coalesce(string_agg(tgname || ' (' || tgenabled::text || ')', ' | '), '(none)')
 from pg_trigger t
 join pg_class rel on rel.oid = t.tgrelid
 join pg_namespace nsp on nsp.oid = rel.relnamespace
@@ -72,7 +76,7 @@ union all
 select
     'fk_policy_restricts_delete',
     bool_or(con.confdeltype in ('r', 'a')),
-    coalesce(string_agg(con.conname || ' confdeltype=' || con.confdeltype, ' | '), '(none)')
+    coalesce(string_agg(con.conname || ' confdeltype=' || con.confdeltype::text, ' | '), '(none)')
 from pg_constraint con
 join pg_class rel on rel.oid = con.conrelid
 join pg_namespace nsp on nsp.oid = rel.relnamespace
@@ -84,7 +88,7 @@ union all
 select
     'fk_relationship_cascades',
     bool_or(con.confdeltype = 'c'),
-    coalesce(string_agg(con.conname || ' confdeltype=' || con.confdeltype, ' | '), '(none)')
+    coalesce(string_agg(con.conname || ' confdeltype=' || con.confdeltype::text, ' | '), '(none)')
 from pg_constraint con
 join pg_class rel on rel.oid = con.conrelid
 join pg_namespace nsp on nsp.oid = rel.relnamespace
