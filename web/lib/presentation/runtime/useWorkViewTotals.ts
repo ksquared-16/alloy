@@ -33,6 +33,8 @@ import {
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
+import { matchWorkViewTotalsSeed } from "./matchWorkViewTotalsSeed";
+import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeed";
 import {
     applyWorkViewTotalsFetchResult,
     buildWorkViewPopulationKey,
@@ -112,8 +114,35 @@ export function useWorkViewTotalsState(args: {
      * seeds the display AND skips the fan-out; a stale cache seeds then revalidates (SWR).
      */
     cacheContext?: WorkUnitViewModelCacheContext | null;
+    /**
+     * THE DOCUMENT SEED — the configured Work View counts already resolved server-side.
+     *
+     * WU-03's counts are the product's completion owner: measured deployed, this hook's request
+     * starts ~57ms AFTER the document lands, costs ~1.6s, and WU-03 paints ~11ms later. The
+     * document now computes the same counts from truth it already holds, so a MATCHING seed means
+     * this hook issues no request at all.
+     *
+     * It is consumed only at mount, through the same one-shot path the session cache already uses,
+     * which is what makes "a stale seed may never overwrite a fresher live answer" structural
+     * rather than a rule to remember: any later scope change refetches, and nothing re-reads the
+     * seed afterwards.
+     */
+    documentSeed?: WorkViewTotalsSeed | null;
+    /** Org identity the seed must match. */
+    seedOrgId?: string | null;
+    /** Surface work unit the seed must match. */
+    seedHostWorkUnitId?: string | null;
 }): WorkViewTotalsState {
-    const { targets, selectedSiteId, enabled = true, refreshToken, cacheContext } = args;
+    const {
+        targets,
+        selectedSiteId,
+        enabled = true,
+        refreshToken,
+        cacheContext,
+        documentSeed,
+        seedOrgId,
+        seedHostWorkUnitId,
+    } = args;
 
     const targetsKey = useMemo(
         () =>
@@ -145,9 +174,32 @@ export function useWorkViewTotalsState(args: {
     const totalsSeedRef = useRef<{ totals: Map<string, number | null>; fresh: boolean } | null | undefined>(
         undefined,
     );
+    /**
+     * The document seed outranks the session cache: it was computed for THIS request, by the
+     * server, from authoritative truth, whereas the cache is a previous navigation's answer. It is
+     * only used when its identity matches exactly — org, host work unit, site scope and the
+     * configured view signature — and a rejection simply falls through to the existing behaviour.
+     */
+    const seedMatchRef = useRef<ReturnType<typeof matchWorkViewTotalsSeed> | null>(null);
     if (totalsSeedRef.current === undefined) {
-        const read = cacheContext ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey }) : null;
-        totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+        const match = matchWorkViewTotalsSeed({
+            seed: documentSeed,
+            orgId: seedOrgId,
+            hostWorkUnitId: seedHostWorkUnitId,
+            selectedSiteId,
+            viewIds: parsedTargets.map((t) => t.viewId),
+        });
+        seedMatchRef.current = match;
+        if (match.ok) {
+            // `fresh` here means "authoritative for this navigation", which is exactly what makes
+            // the fan-out unnecessary — the same one-shot skip the fresh cache path uses.
+            totalsSeedRef.current = { totals: match.totals, fresh: true };
+        } else {
+            const read = cacheContext
+                ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey })
+                : null;
+            totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+        }
     }
     // A fresh seed also skips the count fan-out on this navigation (no duplicate requests).
     const skipFreshFetchRef = useRef(totalsSeedRef.current?.fresh === true);
