@@ -49,9 +49,28 @@ export function effectiveUnitRole(
     return storedRole ?? DEFAULT_UNIT_ROLE;
 }
 
-/** A unit a child may be PLACED into. Placement is committed group membership. */
-export function isPlaceableUnitRole(role: CanonicalUnitRole | null): boolean {
+/**
+ * Is this unit an operational group — the classroom/cohort itself?
+ *
+ * The neutral predicate. Several domains need this same question with different
+ * reasons: placement asks because committed membership belongs to a group, and
+ * scheduling asks because a schedule assignment and a ratio roster are group
+ * facts. They agree on the answer and would otherwise each spell the comparison
+ * themselves, which is how a fifth reading of `unit_role` gets born.
+ */
+export function isOperationalGroupRole(role: CanonicalUnitRole | null): boolean {
     return role === "operational_group";
+}
+
+/**
+ * A unit a child may be PLACED into. Placement is committed group membership.
+ *
+ * Kept as its own name because the REASON is placement-specific even though the
+ * test is not; broadening this one to cover scheduling would make its contract
+ * read false at every placement call site.
+ */
+export function isPlaceableUnitRole(role: CanonicalUnitRole | null): boolean {
+    return isOperationalGroupRole(role);
 }
 
 /** A unit attendance may name. Any unit at the site qualifies — including a shared space. */
@@ -160,4 +179,44 @@ export const CHILDCARE_LOCATION_TYPES: readonly CanonicalLocationType[] = ["site
 /** True when a location type participates in the childcare operational domain. */
 export function isChildcareLocationType(type: CanonicalLocationType): boolean {
     return type === "site" || type === "unit";
+}
+
+/**
+ * Fold a raw `locations.location_type` into the canonical union.
+ *
+ * The DB CHECK guarantees one of three values; anything absent or unrecognised
+ * reads as the column default `address`, which keeps a malformed row OUT of the
+ * childcare domain rather than admitting it as a site or a unit.
+ */
+export function canonicalLocationTypeFromStorage(value: unknown): CanonicalLocationType {
+    if (value === "site" || value === "unit" || value === "address") return value;
+    return "address";
+}
+
+/**
+ * The effective role a stored `locations` row carries — the ONE place storage is
+ * folded into the role vocabulary.
+ *
+ * A stored NULL on a unit is not missing data: it is a legacy classroom, which is
+ * exactly what `operational_group` means, so it resolves rather than reading as
+ * unknown. An unrecognised stored value resolves the same way instead of being
+ * trusted — a role nothing in the vocabulary names cannot be honoured, and the
+ * legacy default is the only safe reading.
+ *
+ * Non-units have no role at all, so a site or an address answers null and can
+ * never be mistaken for a role-bearing unit.
+ *
+ * Read paths call this rather than spelling the NULL-compatibility rule
+ * themselves; that is what keeps `unit_role` from acquiring a second meaning at
+ * the edge of the system.
+ */
+export function canonicalUnitRoleFromStorage(
+    rawType: unknown,
+    rawRole: unknown
+): CanonicalUnitRole | null {
+    if (canonicalLocationTypeFromStorage(rawType) !== "unit") return null;
+    if (rawRole === "physical_space" || rawRole === "operational_group" || rawRole === "shared_space") {
+        return rawRole;
+    }
+    return DEFAULT_UNIT_ROLE;
 }

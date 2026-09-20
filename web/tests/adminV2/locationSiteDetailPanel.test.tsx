@@ -28,7 +28,7 @@ async function renderPanel(onSave: (id: string, body: Record<string, unknown>) =
     root = createRoot(container);
     await act(async () => {
         root!.render(
-            <LocationSiteDetailPanel site={site} capacitySummary={12} canMutate onSave={onSave} />,
+            <LocationSiteDetailPanel site={site} capacityCoverage={{ total: 2, confirmed: 2, needsReview: 0, unset: 0 }} canMutate onSave={onSave} />,
         );
     });
     return container;

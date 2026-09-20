@@ -4,13 +4,14 @@ import {
     ConfigWorkspaceCard,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import type { LocationWorkspaceModel, LocationWorkspaceTab } from "@/lib/locations/locationWorkspaceModel";
+import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
 
 export type LocationOperatingSnapshot = {
     scheduleName: string | null;
     hoursLabel: string | null;
     programNames: string[];
     activeRoomCount: number;
-    configuredCapacity: number | null;
+    capacityCoverage: { total: number; confirmed: number; needsReview: number; unset: number };
 };
 
 /**
@@ -97,7 +98,7 @@ export function LocationOverviewSurface({
                             Capacity
                         </p>
                         <p className="mt-1.5 text-lg font-semibold tracking-tight text-alloy-midnight">
-                            {model.configuredCapacity == null ? "Not set" : model.configuredCapacity}
+                            {formatCapacityCoverage(model.capacityCoverage)}
                         </p>
                     </button>
                 </ConfigWorkspaceCard>

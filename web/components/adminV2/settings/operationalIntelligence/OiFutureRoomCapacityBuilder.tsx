@@ -16,6 +16,7 @@ import {
     type CapacityRecipeCopy,
 } from "@/lib/adminV2/settings/operationalIntelligence/oiCapacityRecipeCopy";
 import type { OrgCalcProductTypeId } from "@/lib/organizationCalculations/productCatalog";
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 
@@ -62,14 +63,7 @@ export default function OiFutureRoomCapacityBuilder({ busy = false, onClose, onC
             };
             if (!res.ok) return;
             const locs = json.locations ?? [];
-            const byId = new Map(locs.map((l) => [l.id, l]));
-            const opts = locs
-                .filter((l) => String(l.location_type ?? "").toLowerCase() === "unit")
-                .map((l) => ({
-                    id: l.id,
-                    label: String(l.label ?? "").trim() || "Untitled room",
-                    siteLabel: String(byId.get(l.parent_location_id ?? "")?.label ?? "").trim() || "Site",
-                }));
+            const opts = buildRoomPickerOptions(locs);
             setRooms(opts);
             if (opts[0]) setRoomId(opts[0].id);
         })();
