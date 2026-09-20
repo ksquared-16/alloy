@@ -127,6 +127,16 @@ export function useWorkViewTotalsState(args: {
      * rather than a rule to remember: any later scope change refetches, and nothing re-reads the
      * seed afterwards.
      */
+    /**
+     * WHICH RUNTIME MOUNTED THIS HOOK.
+     *
+     * A minified production stack names React's commit internals and nothing else, so the
+     * previous attempt to identify the fetching instance from `new Error().stack` returned
+     * `ih`/`uf`/`uc` and no component. The call site is the only thing that reliably knows who it
+     * is, so it says so. An instance reporting "unlabelled" is a caller nobody has accounted for,
+     * which is itself the finding.
+     */
+    ownerLabel?: string;
     documentSeed?: WorkViewTotalsSeed | null;
     /** Org identity the seed must match. */
     seedOrgId?: string | null;
@@ -142,6 +152,7 @@ export function useWorkViewTotalsState(args: {
         documentSeed,
         seedOrgId,
         seedHostWorkUnitId,
+        ownerLabel = "unlabelled",
     } = args;
 
     const targetsKey = useMemo(
@@ -226,6 +237,7 @@ export function useWorkViewTotalsState(args: {
             if (!Array.isArray(w.__alloyWorkViewSeed)) w.__alloyWorkViewSeed = [];
             w.__alloyWorkViewSeed.push({
                 instance: instanceIdRef.current,
+                owner: ownerLabel,
                 phase: "match",
                 targetCount: parsedTargets.length,
                 ok: match.ok,
@@ -311,16 +323,7 @@ export function useWorkViewTotalsState(args: {
                     instance: instanceIdRef.current,
                     phase: "fetch",
                     decision,
-                    /*
-                     * THE OWNER, NAMED RATHER THAN NARROWED.
-                     *
-                     * Two rounds of elimination have proved the matcher correct and located an
-                     * unwired instance, but not which component mounts it: the DOM shows no
-                     * workspace surface, PresentationRuntime returns null for work-unit, and the
-                     * request fires at ~5.6s in isolation. Each further inference costs a deploy.
-                     * A stack at the decision point names the mounting component outright.
-                     */
-                    stack: (new Error().stack || "").split("\n").slice(1, 9).join(" | ").slice(0, 900),
+                    owner: ownerLabel,
                     scopeKey,
                     targetCount: parsedTargets.length,
                     seedPresent: !!documentSeed,

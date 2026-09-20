@@ -175,6 +175,7 @@ export function useWorkUnitSettlement(
             : null;
     }, [settleable]);
     const totalsState = useWorkViewTotalsState({
+        ownerLabel: "work-unit-settlement",
         targets,
         selectedSiteId: siteId,
         enabled: targets.length > 0,
