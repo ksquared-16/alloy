@@ -23,6 +23,12 @@ import { makeWorkUnitHeaderKpiResolver } from "@/lib/runtime/provisioning/workUn
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
 import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
+import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
+import {
+    resolveWorkViewTotalsSeed,
+    type WorkViewTotalsSeed,
+} from "@/lib/runtime/provisioning/workViewTotalsSeed";
 import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import { resolveSoleEnrollmentParticipantForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
@@ -142,6 +148,29 @@ export async function composeProvisioningAnswerForRoute(input: {
      * invocation, and no duration can tell a reuse apart from a second run that happened to be
      * quick. Diagnostics only, behind the same flag, never load-bearing.
      */
+    /*
+     * THE WU-03 COUNT SEED, STARTED FROM THE COMPOSER'S ANNOUNCEMENT.
+     *
+     * Same shape as the producer overlap above and for the same reason: everything the counts need
+     * is authoritative well before composition finishes, and the browser's second round trip
+     * cannot begin until the document has ENDED. Starting here overlaps the remainder of
+     * composition instead of queueing behind all of it.
+     *
+     * The route owns this rather than the composer because the scope constraints and the viewer
+     * timezone come from the route GATE, which the composer deliberately does not receive.
+     */
+    const seedRef: { run: Promise<WorkViewTotalsSeed | null> | null } = { run: null };
+    const seedDiag = {
+        announce_offset_ms: null as number | null,
+        seed_ms: null as number | null,
+        seed_end_offset_ms: null as number | null,
+        compose_end_offset_ms: null as number | null,
+        overlap_ms: null as number | null,
+        join_wait_ms: null as number | null,
+        outcome: "no_announcement",
+        groups: null as number | null,
+        totals: null as number | null,
+    };
     const overlapDiag = {
         announce_offset_ms: null as number | null,
         participant_ms: null as number | null,
@@ -158,6 +187,50 @@ export async function composeProvisioningAnswerForRoute(input: {
     };
 
     const answer = await composeWorkUnitProvisioningAnswer({
+        onWorkViewCountTargetsResolved: (targets) => {
+            if (seedRef.run) return;
+            const tSeed = mark();
+            seedDiag.announce_offset_ms = timing ? Math.round(tSeed - tInner) : null;
+            seedDiag.groups = new Set(
+                targets.countTargets.map((t) => `${t.hostWorkUnitId}::${t.baseQueueKey}`),
+            ).size;
+            seedRef.run = (async (): Promise<WorkViewTotalsSeed> => {
+                /*
+                 * Scope and timezone come from THIS request's gate, resolved here and nowhere
+                 * else. They are the only two facts the seed needs that the composer does not
+                 * already hold, and they are request-time by construction — no verdict is cached,
+                 * persisted, or carried to another request.
+                 */
+                const [scopeBundle, viewerDisplayTimeZone] = await Promise.all([
+                    resolveQueueRecordScopeConstraints(supabase, gate.orgId, gate.dim, null),
+                    fetchEffectiveUserDisplayTimezoneCached(supabase, {
+                        orgId: gate.orgId,
+                        userId: gate.userId,
+                    }),
+                ]);
+                const seed = await resolveWorkViewTotalsSeed({
+                    supabase,
+                    orgId: targets.orgId,
+                    hostWorkUnitId: targets.hostWorkUnitId,
+                    countTargets: targets.countTargets,
+                    deptWorkUnits: targets.deptWorkUnits,
+                    departmentMetadata: targets.departmentMetadata,
+                    departmentId: targets.departmentId,
+                    recordScopeConstraints: scopeBundle.recordScopeConstraints,
+                    recordScopeImpossible: scopeBundle.recordScopeImpossible,
+                    viewerDisplayTimeZone,
+                });
+                if (timing) {
+                    const end = performance.now();
+                    seedDiag.seed_ms = Math.round(end - tSeed);
+                    seedDiag.seed_end_offset_ms = Math.round(end - tInner);
+                }
+                return seed;
+            })().catch(() => {
+                seedDiag.outcome = "seed_failed";
+                return null;
+            });
+        },
         onSubjectResolved: ({ subjectId, orgId, customerId }) => {
             if (earlyRef.run || !subjectId) return;
             /*
@@ -417,6 +490,50 @@ export async function composeProvisioningAnswerForRoute(input: {
         }
     }
 
+    /*
+     * ── THE SEED JOIN, AND THE DOCUMENT WAIT IT COSTS ──
+     *
+     * The seed has been running beside the rest of composition and the card producers. Whatever
+     * remains is ADDED DOCUMENT WAIT, and it is measured as exactly that rather than folded into
+     * page_total unattributed: the point of this change is to remove a ~1.6s post-document round
+     * trip, not to relocate it where it is harder to see.
+     *
+     * There is no grace and no timeout here. A timeout would discard work already paid for and
+     * send the browser to fetch the same answer again; a grace would be the latency-hiding this
+     * slice exists to avoid. The honest cost is published as `join_wait_ms` and read directly off
+     * the deployed samples.
+     */
+    const tSeedJoin = mark();
+    const seed = seedRef.run ? await seedRef.run : null;
+    if (timing) {
+        seedDiag.join_wait_ms = Math.round(performance.now() - tSeedJoin);
+        seedDiag.compose_end_offset_ms = Math.round(innerComposeMs);
+        if (seedDiag.announce_offset_ms != null && seedDiag.seed_end_offset_ms != null) {
+            // The part of the seed that ran while composition was still running.
+            seedDiag.overlap_ms = Math.max(
+                0,
+                Math.round(
+                    Math.min(seedDiag.seed_end_offset_ms, innerComposeMs) - seedDiag.announce_offset_ms,
+                ),
+            );
+        }
+    }
+    if (seed && seed.status === "resolved") {
+        answer.workViewTotalsSeed = seed;
+        seedDiag.outcome = "resolved";
+        seedDiag.totals = seed.totals.length;
+    } else if (seed) {
+        // UNAVAILABLE IS NOT AN EMPTY ANSWER. The field carries the unresolved shape, which has no
+        // totals at all, so a client cannot mistake it for authoritative zeros.
+        answer.workViewTotalsSeed = seed;
+        seedDiag.outcome = seed.reason;
+    } else if (seedRef.run) {
+        answer.workViewTotalsSeed = null;
+        if (seedDiag.outcome === "no_announcement") seedDiag.outcome = "seed_failed";
+    } else {
+        answer.workViewTotalsSeed = null;
+    }
+
     if (cardProducersMs == null) {
         // The producers genuinely did not run, so no overlap branch was ever reachable. Reporting
         // "no_announcement" here would name a missing announcement that was never due.
@@ -447,6 +564,17 @@ export async function composeProvisioningAnswerForRoute(input: {
                     document_actor_ms: Math.round(documentActorMs),
                     inner_compose_ms: Math.round(innerComposeMs),
                     card_producers_ms: cardProducersMs == null ? null : Math.round(cardProducersMs),
+                    work_view_totals_seed: {
+                        announce_offset_ms: seedDiag.announce_offset_ms,
+                        seed_ms: seedDiag.seed_ms,
+                        seed_end_offset_ms: seedDiag.seed_end_offset_ms,
+                        compose_end_offset_ms: seedDiag.compose_end_offset_ms,
+                        overlap_ms: seedDiag.overlap_ms,
+                        join_wait_ms: seedDiag.join_wait_ms,
+                        outcome: seedDiag.outcome,
+                        groups: seedDiag.groups,
+                        totals: seedDiag.totals,
+                    },
                     overlap: {
                         announce_offset_ms: overlapDiag.announce_offset_ms,
                         participant_ms: overlapDiag.participant_ms,

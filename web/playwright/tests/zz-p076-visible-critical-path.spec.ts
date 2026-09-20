@@ -90,6 +90,26 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
                 serverTiming: h["server-timing"] ?? null,
                 requestedTargetCount: targets.length,
                 requestedViewIds: targets.map((t) => String(t.workViewId ?? "")),
+                /*
+                 * THE GROUP KEY, not just the view id.
+                 *
+                 * The route groups by (workUnitId, queueKey) and memoizes access + department
+                 * metadata BY workUnitId. So five groups over ONE work unit resolve access once
+                 * and await it five times, while five groups over five work units resolve it five
+                 * times. `qvt_access` accumulates awaits and cannot tell those apart — only the
+                 * distinct work-unit count can, and it decides whether there is any duplication
+                 * inside this request at all.
+                 */
+                requestedTargets: targets.map((t) => ({
+                    w: String(t.workUnitId ?? ""),
+                    q: String(t.queueKey ?? ""),
+                    v: String(t.workViewId ?? ""),
+                })),
+                distinctWorkUnitIds: [...new Set(targets.map((t) => String(t.workUnitId ?? "")))],
+                distinctQueueKeys: [...new Set(targets.map((t) => String(t.queueKey ?? "")))],
+                distinctGroupKeys: [
+                    ...new Set(targets.map((t) => String(t.workUnitId ?? "") + "::" + String(t.queueKey ?? ""))),
+                ],
                 selectedSiteId: (requested as { selectedSiteId?: unknown })?.selectedSiteId ?? null,
             };
             void r

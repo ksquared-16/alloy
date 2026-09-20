@@ -121,7 +121,14 @@ describe("the process population", () => {
 });
 
 describe("the totals route counts over the population, not the lane", () => {
-    const ROUTE = readFileSync(join(process.cwd(), "app/api/admin/queue-view-totals/route.ts"), "utf8");
+    /*
+     * RE-ANCHORED: the totals route delegates group evaluation to the canonical evaluator, which is
+     * where the population-versus-lane decision now lives. The invariant is unchanged; only its
+     * file moved. Reading both keeps a route that quietly grew its own population read in scope.
+     */
+    const ROUTE =
+        readFileSync(join(process.cwd(), "lib/queues/evaluateWorkViewTotalsForGroup.ts"), "utf8") +
+        readFileSync(join(process.cwd(), "app/api/admin/queue-view-totals/route.ts"), "utf8");
 
     it("uses the process population where a Business Process governs the work unit", () => {
         expect(ROUTE).toContain("loadWorkUnitProcessPopulation");

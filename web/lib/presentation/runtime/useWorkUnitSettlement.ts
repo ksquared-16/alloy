@@ -154,11 +154,34 @@ export function useWorkUnitSettlement(
             baseQueueKey: t.baseQueueKey,
         }));
     }, [locators]);
+    /*
+     * The Work View counts, resolved by the document during its own composition — the same shape
+     * the header KPI seed above already uses, and for the same reason.
+     *
+     * These counts are the product's completion owner. Measured deployed, this hook's request
+     * starts ~57ms AFTER the document lands, costs ~1.6s, and WU-03's final authoritative mutation
+     * follows ~11ms later, so FIRST_ORDER_VISIBLE_COMPLETE is essentially when that second trip
+     * returns. A matching seed removes the trip entirely.
+     *
+     * The seed states the identity it was resolved for and is ignored unless all of it matches —
+     * org, host work unit, site scope and the configured view signature. An unfiltered seed must
+     * never answer for a site-filtered operator, and absent or `unavailable` falls through to the
+     * canonical fetch exactly as before.
+     */
+    const workViewTotalsSeed = useMemo(() => {
+        // `settleable` is a union; the seed rides on the answer, so read it defensively.
+        return settleable && "workViewTotalsSeed" in settleable
+            ? (settleable.workViewTotalsSeed ?? null)
+            : null;
+    }, [settleable]);
     const totalsState = useWorkViewTotalsState({
         targets,
         selectedSiteId: siteId,
         enabled: targets.length > 0,
         refreshToken: options?.refreshToken,
+        documentSeed: workViewTotalsSeed,
+        seedOrgId: settleable?.orgId ?? null,
+        seedHostWorkUnitId: workUnitId,
     });
 
     // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.
