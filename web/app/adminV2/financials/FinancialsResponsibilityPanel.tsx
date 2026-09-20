@@ -232,6 +232,7 @@ export default function FinancialsResponsibilityPanel({
     arrangement,
     parties,
     memberOptions,
+    defaultScopeMemberId,
     hostedOpen,
     onHostedClose,
     onCommitted,
@@ -270,6 +271,12 @@ export default function FinancialsResponsibilityPanel({
      * question and lists Household plus these members.
      */
     memberOptions?: { customerMemberId: string; label: string }[];
+    /*
+     * The scope this host means by default. Assignment already has a child in hand and means that
+     * child; Financials Details is administering the account and means the household. Neither is
+     * a write — the operator still confirms — and neither is an absence: the value is stated.
+     */
+    defaultScopeMemberId?: string | null;
     /** Opened by an external control — the Manage responsibility gear — instead of its own button. */
     hostedOpen?: boolean;
     onHostedClose?: () => void;
@@ -318,7 +325,7 @@ export default function FinancialsResponsibilityPanel({
      * class this product removed from Add Charge.
      */
     const administering = (memberOptions?.length ?? 0) > 0;
-    const [scopeMemberId, setScopeMemberId] = useState<string>(HOUSEHOLD_SCOPE);
+    const [scopeMemberId, setScopeMemberId] = useState<string>(defaultScopeMemberId ?? HOUSEHOLD_SCOPE);
     const [scopeArrangement, setScopeArrangement] = useState<ScopeArrangement | null>(null);
     const [scopeLoading, setScopeLoading] = useState(false);
     /** The grain actually being written: account administration reads it from the member choice. */

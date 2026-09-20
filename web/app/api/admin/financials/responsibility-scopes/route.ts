@@ -29,10 +29,37 @@ export async function GET(request: NextRequest) {
             { status: 403 },
         );
     }
-    const customerId = (request.nextUrl.searchParams.get("customer_id") ?? "").trim();
-    if (!customerId) return NextResponse.json({ error: "customer_id is required" }, { status: 400 });
+    /*
+     * EITHER WAY IN. Financials Details holds the household and asks with `customer_id`.
+     * Assignment holds a CHILD and no household id at all — so rather than teaching the assignment
+     * surface to resolve households (a second place that would have to be right about it), the
+     * child is accepted here and `customer_members` answers, which is the same column
+     * `resolveBillableSourceHouseholdId` trusts for exactly this reason.
+     */
+    const params = request.nextUrl.searchParams;
+    let customerId = (params.get("customer_id") ?? "").trim();
+    const viaMemberId = (params.get("customer_member_id") ?? "").trim();
+    if (!customerId && !viaMemberId) {
+        return NextResponse.json({ error: "customer_id or customer_member_id is required" }, { status: 400 });
+    }
     try {
-        return NextResponse.json({ members: await readHouseholdScopes(supabase, { orgId: ctx.orgId, customerId }) });
+        if (!customerId) {
+            const { data, error } = await supabase
+                .from("customer_members")
+                .select("customer_id")
+                .eq("org_id", ctx.orgId)
+                .eq("id", viaMemberId)
+                .maybeSingle();
+            if (error) throw new Error(`household could not be resolved (${error.message.trim()})`);
+            customerId = ((data as { customer_id?: string | null } | null)?.customer_id ?? "").trim();
+            /* A child with no household is not an error — it is a family this cannot arrange for. */
+            if (!customerId) return NextResponse.json({ customerId: null, members: [] });
+        }
+        return NextResponse.json({
+            /* Returned so the caller that asked by child can address the household it belongs to. */
+            customerId,
+            members: await readHouseholdScopes(supabase, { orgId: ctx.orgId, customerId }),
+        });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
 
@@ -1687,6 +1688,22 @@ function ScheduleEditor({
     // enrollment process (no separate Generate Quote chrome).
     const [offeringId, setOfferingId] = useState(() => tuitionPlanIdFromTruth(truth, child.id));
     const [rateOptions, setRateOptions] = useState<Array<{ id: string; label: string }>>([]);
+    /*
+     * ── RESPONSIBILITY, THE SAME AUTHORITY FINANCIALS USES ────────────────────────────────────
+     *
+     * Assignment is where a commercial relationship is set up, so it is where an operator expects
+     * to say who will owe for it. That must not become a second responsibility record: this mounts
+     * the SAME panel Financials Details mounts, over the same
+     * `billing.configure_responsibility` action, and the assignment stores nothing of its own.
+     *
+     * Assignment holds a child and no household id, so the scopes read resolves the household from
+     * the member — one place that knows how, not two.
+     */
+    const [responsibilityOpen, setResponsibilityOpen] = useState(false);
+    const [household, setHousehold] = useState<{
+        customerId: string | null;
+        members: { customerMemberId: string; label: string }[];
+    } | null>(null);
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -1756,6 +1773,31 @@ function ScheduleEditor({
             cancelled = true;
         };
     }, [opportunityId, child.id]);
+
+    useEffect(() => {
+        /*
+         * OPENING IS NOT AUTHORING. This reads who the household is and what is already in force;
+         * nothing is written because a panel was opened. The operator confirms, or nothing changed.
+         */
+        if (!responsibilityOpen || household || child.kind !== "child") return;
+        let cancelled = false;
+        void fetch(
+            `/api/admin/financials/responsibility-scopes?customer_member_id=${encodeURIComponent(child.id)}`,
+            { credentials: "include" },
+        )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { customerId?: string | null; members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (cancelled || !b) return;
+                setHousehold({ customerId: b.customerId ?? null, members: b.members ?? [] });
+            })
+            .catch(() => {
+                /* The card says it could not look, rather than offering an empty household. */
+                if (!cancelled) setHousehold({ customerId: null, members: [] });
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [responsibilityOpen, household, child.kind, child.id]);
 
     /** Resolve site patterns once (preloaded if first-paint carried them). */
     const ensurePatterns = useCallback((): Promise<Pattern[]> => {
@@ -2030,6 +2072,49 @@ function ScheduleEditor({
                                 here applies to this assignment; selecting one locks it onto the
                                 enrollment opportunity.
                             </div>
+
+                            {/*
+                              * ── WHO WILL OWE IT ─────────────────────────────────────────────
+                              *
+                              * Beneath the price, because the price is what responsibility is
+                              * about, and behind a quiet disclosure because most assignments do
+                              * not change it — the household arrangement already applies.
+                              *
+                              * It defaults to THIS CHILD, which is the scope an operator opening
+                              * an assignment means. It writes nothing until they confirm: the
+                              * panel previews and executes through the registered action, and an
+                              * assignment that is merely open has authored nothing.
+                              */}
+                            {child.kind === "child" ? (
+                                <div style={{ marginTop: 6 }} data-assignment-responsibility="section">
+                                    {!responsibilityOpen ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setResponsibilityOpen(true)}
+                                            data-assignment-responsibility="open"
+                                            style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine }}
+                                        >
+                                            Who owes this — set responsibility
+                                        </button>
+                                    ) : household?.customerId ? (
+                                        <FinancialsResponsibilityPanel
+                                            customerId={household.customerId}
+                                            customerMemberId={child.id}
+                                            subjectLabel={child.name}
+                                            parties={[]}
+                                            memberOptions={household.members}
+                                            defaultScopeMemberId={child.id}
+                                            hostedOpen
+                                            onHostedClose={() => setResponsibilityOpen(false)}
+                                            onCommitted={() => setResponsibilityOpen(false)}
+                                        />
+                                    ) : (
+                                        <span style={{ fontSize: 11, color: T.muted }} data-assignment-responsibility="pending">
+                                            {household ? "This child is not on a household account." : "Reading the household…"}
+                                        </span>
+                                    )}
+                                </div>
+                            ) : null}
                         </div>
                     ) : undefined
                 }

@@ -191,3 +191,45 @@ describe("one writer, three intents", () => {
         expect(panel, "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED").not.toMatch(/percent_basis_points|"percentage"|"remainder"/);
     });
 });
+
+describe("Assignment uses the same authority, and authors nothing by opening", () => {
+    const card = src("components/admin/focusPanel/cards/SchedulingCard.tsx");
+
+    it("mounts the same panel Financials Details mounts", () => {
+        expect(card).toContain('import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel"');
+        expect(card, "no assignment-owned responsibility record").not.toMatch(
+            /financial_responsibility_|assignment_responsibility/,
+        );
+    });
+
+    it("writes nothing because a panel opened", () => {
+        const section = card.slice(card.indexOf('data-assignment-responsibility="section"'));
+        const opened = section.slice(0, section.indexOf("</div>"));
+        expect(opened, "opening is a read").not.toMatch(/mode: "execute"|configure_responsibility/);
+        /* The household read is the only thing an open performs. */
+        expect(card).toContain("responsibility-scopes?customer_member_id=");
+    });
+
+    it("defaults to this child, explicitly", () => {
+        expect(card).toContain("defaultScopeMemberId={child.id}");
+        const panel = src(PANEL);
+        expect(panel).toContain("useState<string>(defaultScopeMemberId ?? HOUSEHOLD_SCOPE)");
+    });
+
+    it("still offers Household as an alternative", () => {
+        expect(card).toContain("memberOptions={household.members}");
+    });
+
+    it("resolves the household in one place, not two", () => {
+        /*
+         * Assignment holds a child and no household id. Teaching the assignment surface to resolve
+         * households would be a second place that has to be right about it, so the scopes route
+         * accepts the member and answers from `customer_members` — the column
+         * `resolveBillableSourceHouseholdId` already trusts for exactly this.
+         */
+        expect(card, "the card does not query households itself").not.toMatch(/from\("customer_members"\)/);
+        const route = src("app/api/admin/financials/responsibility-scopes/route.ts");
+        expect(route).toContain("customer_member_id");
+        expect(route).toContain('from("customer_members")');
+    });
+});
