@@ -36,25 +36,25 @@
   "commitKind": "override",
   "commitEnabled": true,
   "outcomeUi": {
-    "outcome": "needs_attention",
-    "outcomeText": "Assignment saved · tuition needs attention — This assignment has changed since the tuition was resolved. Resolve it again before accepting, so the price matches the assignment as it now stands."
+    "outcome": "overridden",
+    "outcomeText": "Tuition overridden · $185.00/weekly"
   },
   "actions": [
     "{\"action_key\":\"enrollment.pricing.override\",\"entity_type\":\"opportunity_customer_member\",\"entity_id\":\"79f8011d-a236-4054-bee7-af10f1dbc632\",\"mode\":\"execute\",\"confirmation\":{\"confirmed\":true},\"payload\":{\"opportunity_customer_member_id\":\"79f8011d-a236-4054-bee7-af10f1dbc632\",\"resolution_key\":\"9ae3fec2\""
   ],
   "after": {
     "term": {
-      "id": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+      "id": "5e4c3bfe-38c4-4164-a651-27f2b0106148",
       "amount": 18500,
       "cadence": "weekly",
-      "state": "accepted",
+      "state": "overridden",
       "effective": "2026-09-01",
       "source": "5532489d-eed3-4080-9477-f47a94fde1c6",
-      "recommendedSource": "5532489d-eed3-4080-9477-f47a94fde1c6",
-      "reason": null,
-      "resolutionKey": "2f92ec30"
+      "recommendedSource": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+      "reason": "Family kept the organisation rate agreed at enrolment.",
+      "resolutionKey": "9ae3fec2"
     },
-    "stale": true,
+    "stale": false,
     "resolverKey": "9ae3fec2",
     "recommended": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
     "recommendedAmount": 19500,
