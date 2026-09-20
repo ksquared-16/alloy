@@ -291,7 +291,8 @@ describe("no second architecture", () => {
         expect(at).toBeGreaterThan(-1);
         // The call's value must be bound, not discarded.
         expect(HOOK.slice(Math.max(0, at - 40), at)).toMatch(/const\s+match\s*=\s*$/);
-        const block = HOOK.slice(at, at + 900);
+        // Widened: the published rejection diagnostic now sits between the call and the branches.
+        const block = HOOK.slice(at, at + 2600);
         // ...and that binding must be what decides whether the seed is used.
         expect(block).toMatch(/if\s*\(\s*match\.ok\s*\)/);
         expect(block).toContain("totals: match.totals");
@@ -329,7 +330,8 @@ describe("no second architecture", () => {
         // Rejection must not disable fetching; it must behave exactly as before the seed existed.
         const at = HOOK.indexOf("matchWorkViewTotalsSeed(");
         expect(at).toBeGreaterThan(-1);
-        const block = HOOK.slice(at, at + 900);
+        // Widened: the published rejection diagnostic now sits between the call and the branches.
+        const block = HOOK.slice(at, at + 2600);
         expect(block).toContain("peekWorkUnitSurfaceTotalsCache");
     });
 });

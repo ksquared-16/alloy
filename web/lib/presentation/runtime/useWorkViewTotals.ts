@@ -204,6 +204,33 @@ export function useWorkViewTotalsState(args: {
             viewIds: parsedTargets.map((t) => t.viewId),
         });
         seedMatchRef.current = match;
+        /*
+         * WHY THE SEED WAS OR WAS NOT USED — published for the deployed probe.
+         *
+         * Two deploys have now shown the seed resolving server-side, reaching the browser intact,
+         * and the client fetching anyway. The first repair (defer until targets exist) was a
+         * reasoned guess and did not bind it. Guessing a second time would be worse than the
+         * defect: the rejection already knows its own reason, so it is published rather than
+         * re-derived from the outside.
+         *
+         * Diagnostic only — read by the probe, never by the product, and it carries no counts.
+         */
+        try {
+            (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed = {
+                ok: match.ok,
+                reason: match.ok ? null : match.reason,
+                clientViewIds: parsedTargets.map((t) => t.viewId),
+                clientOrgId: seedOrgId ?? null,
+                clientHostWorkUnitId: seedHostWorkUnitId ?? null,
+                clientSelectedSiteId: selectedSiteId ?? null,
+                seedPresent: !!documentSeed,
+                seedStatus: documentSeed?.status ?? null,
+                seedIdentity:
+                    documentSeed && documentSeed.status === "resolved" ? documentSeed.identity : null,
+            };
+        } catch {
+            /* a diagnostic may never cost the surface its counts */
+        }
         if (match.ok) {
             // `fresh` here means "authoritative for this navigation", which is exactly what makes
             // the fan-out unnecessary — the same one-shot skip the fresh cache path uses.
