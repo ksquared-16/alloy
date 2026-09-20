@@ -32,10 +32,14 @@ import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
  * Mappings are EDITABLE: choosing which account a category posts to is exactly the decision the
  * table exists to record, and the keys are code-owned so the operator picks an account, never a key.
  *
- * The calendar is READ-ONLY, deliberately. Closing a period is what makes a month final, no
- * governed close/reopen action exists yet, and writing one around the journal enforcement is the
- * shortcut that trigger was built to prevent. The panel says so rather than offering a control that
- * would either lie or bypass.
+ * The calendar was READ-ONLY while no write authority existed. Financials 11B built one, so the
+ * panel now adopts a calendar and closes a period — both through
+ * `POST /api/admin/financials/accounting-calendar` behind `fin.write`, never around the journal
+ * enforcement the attribution trigger owns.
+ *
+ * Closing is the only lifecycle act V1 has. There is no way to reopen a closed period, because no
+ * authority for it exists; a closed row shows an em dash where the control would be rather than a
+ * disabled button implying one is coming.
  */
 
 type GlAccount = { id: string; code: string; name: string; type: string; is_active: boolean };

@@ -811,24 +811,45 @@ describe("F17 · the accounting period has a surface", () => {
         expect(panel, "a tenant with no calendar is told so, not shown an empty table")
             .toContain("accounting-calendar-absent");
         /*
-         * NO CLOSE BUTTON, and the panel says why. Closing a period is what makes a month final,
-         * it has no governed action, and a control here would either bypass the journal enforcement
-         * or pretend. The limit is stated rather than quietly absent.
+         * ── SUPERSEDED DOCTRINE, REWRITTEN TO THE NEW FACT ────────────────────────────────────
+         *
+         * This asserted there was NO close control and that the route was read-only, and it was
+         * right when written: closing had no authority anywhere, so a button here would have
+         * bypassed the journal enforcement or pretended, and the panel said so through
+         * `accounting-period-lifecycle-note`.
+         *
+         * Financials 11B built that authority. `POST /api/admin/financials/accounting-calendar`
+         * adopts a calendar and closes a period behind `fin.write`, previewing first, and the
+         * panel offers both. The old assertions now forbid the product, so they are replaced by
+         * what must be true INSTEAD — not deleted, and not loosened to pass.
+         *
+         * (I introduced the close control in the accounting slice and did not run this suite,
+         * so this red arrived one run late.)
          */
-        expect(panel).toContain("accounting-period-lifecycle-note");
+        expect(panel, "adoption is offered where absence is reported").toContain("accounting-calendar-adopt");
+        expect(panel, "and a period can be closed").toContain("accounting-period-close-");
+        expect(panel, "behind a preview").toContain("accounting-close-preview");
         /*
-         * Scoped to the CALENDAR panel: the GL mapping panel in the same file legitimately writes,
-         * and an assertion over the whole file would have been read as "this file never writes",
-         * which is neither true nor the claim being made.
+         * Stripped: three comments in this file say there is no reopen, and a naive match fails
+         * on the documentation of the very fact it is checking — the fourth lock in this thread
+         * to catch a comment instead of a statement.
          */
+        expect(
+            panel.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, ""),
+            "no reopen control: no authority exists",
+        ).not.toMatch(/reopen/i);
+
         const calendarPanel = panel.slice(panel.indexOf("function AccountingCalendarPanel"));
-        expect(calendarPanel, "nothing in the calendar panel writes a period").not.toMatch(
-            /method:\s*"(POST|PATCH|PUT|DELETE)"/,
+        expect(calendarPanel, "the browser still writes no table directly").not.toMatch(
+            /from\("financial_accounting_(periods|calendars)"\)/,
+        );
+        expect(calendarPanel, "it goes through the governed route").toContain(
+            "/api/admin/financials/accounting-calendar",
         );
 
         const route = read("app/api/admin/financials/accounting-calendar/route.ts");
-        expect(route, "read-only, and gated like every Financials read").toContain("assertFinancialsReadAllowed");
-        expect(route).not.toMatch(/export async function (POST|PUT|PATCH|DELETE)/);
+        expect(route, "the read is gated like every Financials read").toContain("assertFinancialsReadAllowed");
+        expect(route, "and the write like every Financials mutation").toContain("assertFinancialsWriteAllowed");
     });
 
     it("puts both periods and the GL account on the transaction's own detail", () => {
