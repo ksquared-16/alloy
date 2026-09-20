@@ -1,0 +1,90 @@
+{
+  "period": "2026-10",
+  "setup": {
+    "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+    "excluded": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+    "control": "79f8011d-a236-4054-bee7-af10f1dbc632",
+    "exclusionWriteOk": true
+  },
+  "generate": {
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48": {
+      "period_key": "2026-10",
+      "cadence_key": "monthly",
+      "service_period": {
+        "start": "2026-10-01",
+        "end": "2026-10-31"
+      },
+      "generated": 0,
+      "unchanged": 1,
+      "alreadyPosted": 0,
+      "notDue": 0,
+      "refused": 0,
+      "errors": 0,
+      "refused_outcomes": [],
+      "error_outcomes": []
+    },
+    "79f8011d-a236-4054-bee7-af10f1dbc632": {
+      "period_key": "2026-10",
+      "cadence_key": "monthly",
+      "service_period": {
+        "start": "2026-10-01",
+        "end": "2026-10-31"
+      },
+      "generated": 0,
+      "unchanged": 0,
+      "alreadyPosted": 0,
+      "notDue": 1,
+      "refused": 0,
+      "errors": 0,
+      "refused_outcomes": [],
+      "error_outcomes": []
+    }
+  },
+  "writerReportControlRun": {
+    "period_key": "2026-10",
+    "service_period": {
+      "start": "2026-10-01",
+      "end": "2026-10-31"
+    },
+    "applied": 0,
+    "unchanged": 0,
+    "alreadyPosted": 0,
+    "notEligible": 1,
+    "refused": 0,
+    "refused_outcomes": []
+  },
+  "H": {
+    "writerReport": {
+      "period_key": "2026-10",
+      "service_period": {
+        "start": "2026-10-01",
+        "end": "2026-10-31"
+      },
+      "applied": 0,
+      "unchanged": 0,
+      "alreadyPosted": 0,
+      "notEligible": 1,
+      "refused": 0,
+      "refused_outcomes": []
+    },
+    "obligationsEvaluated": 1,
+    "newRowCount": 0,
+    "newRows": []
+  },
+  "I": {
+    "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+    "excludedOutcome": {
+      "kind": "expected",
+      "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "policyKind": "discount",
+      "label": "discount",
+      "amountCents": -14500,
+      "explanation": "discount · 10% of $1450.00"
+    },
+    "controlOutcome": {
+      "kind": "not_expected",
+      "reason": "excluded_by_exception"
+    },
+    "rowsForPolicy": []
+  }
+}
