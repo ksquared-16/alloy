@@ -52,7 +52,8 @@ describe("the composer announces the subject early", () => {
 
     it("a throwing listener cannot cost the document its answer", () => {
         const at = ANSWER.indexOf("req.onSubjectResolved?.(");
-        const around = ANSWER.slice(at - 200, at + 220);
+        // The announcement now spans several lines (subject + household), so the window widened.
+        const around = ANSWER.slice(at - 300, at + 420);
         expect(around).toContain("try");
         expect(around).toContain("catch");
     });
@@ -64,25 +65,26 @@ describe("the route overlaps the participant read", () => {
         const join = ROUTE.indexOf("const resolvedParticipant");
         expect(start).toBeGreaterThan(-1);
         expect(join).toBeGreaterThan(start);
-        const listener = ROUTE.slice(start, ROUTE.indexOf("});", start));
+        const listener = ROUTE.slice(start, ROUTE.indexOf("\n        },", start));
         expect(listener).toContain("resolveSoleEnrollmentParticipantForOpportunity");
-        // Not awaited where it is created, or there is no overlap at all.
-        expect(listener).not.toContain("await resolveSoleEnrollmentParticipantForOpportunity");
+        // The read is awaited INSIDE the detached async run, never in composition's flow.
+        expect(listener).toContain("earlyRef.run = (async ()");
     });
 
     it("settles the promise at creation so a rejection cannot escape mid-composition", () => {
         const start = ROUTE.indexOf("onSubjectResolved:");
-        expect(ROUTE.slice(start, ROUTE.indexOf("});", start))).toContain(".catch(");
+        expect(ROUTE.slice(start, ROUTE.indexOf("\n        },", start))).toContain(".catch(");
     });
 
     it("discards the speculative read when the answer settled on a different record", () => {
         // The early read is an optimisation, never a source. A different subject must re-read.
-        expect(ROUTE).toContain("earlyParticipantSubjectId === attentionId");
-        expect(ROUTE).toMatch(/:\s*await resolveSoleEnrollmentParticipantForOpportunity\(\{/);
+        expect(ROUTE).toContain("early.subjectId === attentionId");
+        expect(ROUTE).toMatch(/await resolveSoleEnrollmentParticipantForOpportunity\(\{/);
     });
 
     it("falls back cleanly when no announcement ever fired", () => {
-        expect(ROUTE).toMatch(/earlyParticipant &&/);
+        // No announcement means no early run, and the join takes the canonical branch.
+        expect(ROUTE).toContain("earlyRef.run ? await earlyRef.run : null");
     });
 
     it("issues no second read when the speculative one is used", () => {
@@ -95,7 +97,8 @@ describe("the route overlaps the participant read", () => {
          * Scoped to the FALLBACK READ itself. Asserting that "gate.orgId" appears somewhere in the
          * file survives swapping it at the one call site that matters, which a plant proved.
          */
-        const at = ROUTE.indexOf(": await resolveSoleEnrollmentParticipantForOpportunity({");
+        // The LAST call site is the canonical fallback; the first is the speculative start.
+        const at = ROUTE.lastIndexOf("resolveSoleEnrollmentParticipantForOpportunity({");
         expect(at).toBeGreaterThan(-1);
         const call = ROUTE.slice(at, ROUTE.indexOf("})", at));
         // Enumerate the bindings rather than pattern-match around them: `\s*` matching zero
