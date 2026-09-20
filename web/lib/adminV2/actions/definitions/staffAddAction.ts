@@ -187,6 +187,7 @@ export const staffAddAction: RegisteredAction = {
                 employmentType: t(payload.employment_type) || null,
                 primaryLocationId: t(payload.primary_location_id) || null,
                 externalEmployeeId: t(payload.external_employee_id) || null,
+                badgeNumber: t(payload.badge_number) || null,
                 configuredFacts:
                     payload.configured_facts && typeof payload.configured_facts === "object"
                         ? (payload.configured_facts as Record<string, unknown>)

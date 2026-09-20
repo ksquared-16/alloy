@@ -180,8 +180,22 @@ export function useWorkViewTotalsState(args: {
      * only used when its identity matches exactly — org, host work unit, site scope and the
      * configured view signature — and a rejection simply falls through to the existing behaviour.
      */
+    const seededAdoptRef = useRef(false);
     const seedMatchRef = useRef<ReturnType<typeof matchWorkViewTotalsSeed> | null>(null);
-    if (totalsSeedRef.current === undefined) {
+    /*
+     * THE SEED IS MATCHED WHEN THE QUESTION EXISTS, NOT AT THE FIRST RENDER.
+     *
+     * Deployed measurement caught this: the seed reached the browser with a correct identity and
+     * the client fetched anyway. `targets` are derived from the committed snapshot's Settlement
+     * locators, so on the FIRST render they are empty — the signature compared "" against seven
+     * configured views, rejected, and the one-shot ref was already spent. The seed was structurally
+     * unusable, and every unit gate passed because each one supplies targets up front.
+     *
+     * So the match is deferred until `targetsKey` is non-empty. It is still one-shot: once decided,
+     * `seedMatchRef` is set and this never runs again, which is what keeps a stale seed from
+     * overwriting a fresher live answer.
+     */
+    if (totalsSeedRef.current === undefined && targetsKey) {
         const match = matchWorkViewTotalsSeed({
             seed: documentSeed,
             orgId: seedOrgId,
@@ -190,6 +204,33 @@ export function useWorkViewTotalsState(args: {
             viewIds: parsedTargets.map((t) => t.viewId),
         });
         seedMatchRef.current = match;
+        /*
+         * WHY THE SEED WAS OR WAS NOT USED — published for the deployed probe.
+         *
+         * Two deploys have now shown the seed resolving server-side, reaching the browser intact,
+         * and the client fetching anyway. The first repair (defer until targets exist) was a
+         * reasoned guess and did not bind it. Guessing a second time would be worse than the
+         * defect: the rejection already knows its own reason, so it is published rather than
+         * re-derived from the outside.
+         *
+         * Diagnostic only — read by the probe, never by the product, and it carries no counts.
+         */
+        try {
+            (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed = {
+                ok: match.ok,
+                reason: match.ok ? null : match.reason,
+                clientViewIds: parsedTargets.map((t) => t.viewId),
+                clientOrgId: seedOrgId ?? null,
+                clientHostWorkUnitId: seedHostWorkUnitId ?? null,
+                clientSelectedSiteId: selectedSiteId ?? null,
+                seedPresent: !!documentSeed,
+                seedStatus: documentSeed?.status ?? null,
+                seedIdentity:
+                    documentSeed && documentSeed.status === "resolved" ? documentSeed.identity : null,
+            };
+        } catch {
+            /* a diagnostic may never cost the surface its counts */
+        }
         if (match.ok) {
             // `fresh` here means "authoritative for this navigation", which is exactly what makes
             // the fan-out unnecessary — the same one-shot skip the fresh cache path uses.
@@ -202,12 +243,34 @@ export function useWorkViewTotalsState(args: {
         }
     }
     // A fresh seed also skips the count fan-out on this navigation (no duplicate requests).
-    const skipFreshFetchRef = useRef(totalsSeedRef.current?.fresh === true);
+    /*
+     * Set when the seed decision is actually made, which may be a later render than the first.
+     * Initialising from the first render would read `undefined` and lose the skip entirely.
+     */
+    const skipFreshFetchRef = useRef(false);
+    const seedAppliedRef = useRef(false);
+    if (!seedAppliedRef.current && totalsSeedRef.current !== undefined) {
+        seedAppliedRef.current = true;
+        skipFreshFetchRef.current = totalsSeedRef.current?.fresh === true;
+    }
 
     const [resolved, setResolved] = useState<{
         scopeKey: string;
         totals: Map<string, number | null>;
     } | null>(() => (totalsSeedRef.current ? { scopeKey, totals: totalsSeedRef.current.totals } : null));
+    /*
+     * When the decision was deferred, the state initialiser above already ran with nothing. Adopt
+     * the seeded totals on the render that resolved them — guarded by scopeKey so this cannot
+     * clobber a live answer that has already arrived for the same scope.
+     */
+    if (
+        seededAdoptRef.current === false &&
+        totalsSeedRef.current &&
+        (resolved === null || resolved.scopeKey !== scopeKey)
+    ) {
+        seededAdoptRef.current = true;
+        setResolved({ scopeKey, totals: totalsSeedRef.current.totals });
+    }
 
     // Population identity change: prune retention for removed/changed canonical locations.
     useEffect(() => {

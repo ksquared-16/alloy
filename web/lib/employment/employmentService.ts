@@ -43,6 +43,24 @@ function requireId(value: unknown, field: string): string {
 
 /** Postgres raised one of our trigger invariants — surface it as a conflict, not a 500. */
 function rethrowDbError(message: string): never {
+    // An identifier collision is an ordinary operator situation, not a database
+    // fault, and the operator must never be shown "duplicate key value violates
+    // unique constraint employments_org_badge_number_unique". Each index is
+    // translated into the sentence an operator can act on, and the comparison is
+    // named because the colliding value often does not LOOK identical — the
+    // index compares trimmed and case-folded, so "A-100" and " a-100 " collide.
+    if (/employments_org_employee_number_unique/i.test(message)) {
+        throw new EmploymentServiceError(
+            "conflict",
+            "That Employee Number is already used by another employment in this organization. Numbers are compared ignoring capitalization and surrounding spaces."
+        );
+    }
+    if (/employments_org_badge_number_unique/i.test(message)) {
+        throw new EmploymentServiceError(
+            "conflict",
+            "That Badge Number is already used by another employment in this organization. Badge numbers are compared ignoring capitalization and surrounding spaces."
+        );
+    }
     const invariant =
         /Overlapping open employment|must belong to the employing organization|archived person|must be a site|same organization and person/i.test(
             message
@@ -207,6 +225,7 @@ export type CreateEmploymentInput = {
     employmentType?: string | null;
     primaryLocationId?: string | null;
     externalEmployeeId?: string | null;
+    badgeNumber?: string | null;
     supersedesEmploymentId?: string | null;
     metadata?: Record<string, unknown>;
     sourceKey?: string;
@@ -267,6 +286,7 @@ export async function createEmployment(
             position_id: trimOrNull(input.positionId),
             primary_location_id: trimOrNull(input.primaryLocationId),
             external_employee_id: trimOrNull(input.externalEmployeeId),
+            badge_number: trimOrNull(input.badgeNumber),
             start_date: input.startDate,
             end_date: endDate,
             supersedes_employment_id: trimOrNull(input.supersedesEmploymentId),
@@ -288,6 +308,7 @@ export type UpdateEmploymentInput = {
     employmentType?: string | null;
     primaryLocationId?: string | null;
     externalEmployeeId?: string | null;
+    badgeNumber?: string | null;
     startDate?: string;
     actorUserId?: string | null;
     todayYmd: string;
@@ -319,6 +340,9 @@ export async function updateEmployment(
     }
     if (input.externalEmployeeId !== undefined) {
         patch.external_employee_id = trimOrNull(input.externalEmployeeId);
+    }
+    if (input.badgeNumber !== undefined) {
+        patch.badge_number = trimOrNull(input.badgeNumber);
     }
     if (input.employmentType !== undefined) {
         const t = trimOrNull(input.employmentType);

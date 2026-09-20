@@ -31,6 +31,10 @@ export type StaffDirectoryEntry = {
      */
     positionKey: string | null;
     positionLabel: string | null;
+    /** Operator label: Employee Number. Physical column is external_employee_id. */
+    employeeNumber: string | null;
+    /** Operator label: Badge Number. Scannable, never a credential. */
+    badgeNumber: string | null;
     employmentType: string | null;
     primaryLocationId: string | null;
     primaryLocationLabel: string | null;
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
     const { data: employmentData, error } = await supabase
         .from("employments")
         .select(
-            "id, person_id, employment_status, employment_type, position_id, primary_location_id, start_date, end_date"
+            "id, person_id, employment_status, employment_type, position_id, primary_location_id, external_employee_id, badge_number, start_date, end_date"
         )
         .eq("org_id", ctx.orgId)
         .order("start_date", { ascending: false });
@@ -71,6 +75,8 @@ export async function GET(request: NextRequest) {
         id: string;
         person_id: string;
         employment_status: string;
+        external_employee_id: string | null;
+        badge_number: string | null;
         employment_type: string | null;
         position_id: string | null;
         primary_location_id: string | null;
@@ -158,6 +164,8 @@ export async function GET(request: NextRequest) {
             email: person?.email ?? null,
             positionKey: r.position_id ? (positionById.get(r.position_id)?.key ?? null) : null,
             positionLabel: r.position_id ? (positionById.get(r.position_id)?.label ?? null) : null,
+            employeeNumber: r.external_employee_id,
+            badgeNumber: r.badge_number,
             employmentType: r.employment_type,
             primaryLocationId: r.primary_location_id,
             primaryLocationLabel: r.primary_location_id

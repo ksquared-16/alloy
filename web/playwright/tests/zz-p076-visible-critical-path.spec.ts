@@ -422,6 +422,34 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         return { diag: w.__alloyFocusChain ?? null, chainMarks };
     });
 
+    /*
+     * DID THE SEED REACH THE BROWSER AT ALL?
+     *
+     * The server reports `outcome: resolved`, yet the client still issued its fallback request.
+     * That has two very different causes — the field never crossed into the payload, or it
+     * crossed and the identity match rejected it — and they need opposite repairs. Searching the
+     * serialized document for the key separates them before any theory is formed.
+     */
+    /*
+     * The client's OWN verdict on the seed, with both sides of every compared field. Two deploys
+     * have shown the seed present and the client fetching anyway; this names the mismatch instead
+     * of inviting a third guess.
+     */
+    const seedMatchDiagnostic = await page.evaluate(() => {
+        return (window as unknown as { __alloyWorkViewSeed?: unknown }).__alloyWorkViewSeed ?? null;
+    });
+
+    const seedReachedClient = await page.evaluate(() => {
+        const html = document.documentElement.innerHTML;
+        const idx = html.indexOf("workViewTotalsSeed");
+        return {
+            present: idx >= 0,
+            // A short window around the key shows the identity it shipped with, if any.
+            excerpt: idx >= 0 ? html.slice(idx, idx + 420) : null,
+            mentionsSignature: html.includes("configuredViewSignature"),
+        };
+    });
+
     const marks = await page.evaluate(() => {
         const el = document.getElementById("__alloy_route_timing");
         try { return el ? JSON.parse(el.textContent || "null") : null; } catch { return null; }
@@ -484,6 +512,18 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         marks,
         dataProbe,
         regions,
+        /*
+         * THE ACCEPTANCE FACT FOR THE WU-03 SEED.
+         *
+         * A matching seed means the browser issues NO queue-view-totals request at all, so the
+         * proof is a COUNT of requests, not the shape of a response — with a bound seed there is
+         * no response to inspect. Counted from the request log rather than the response listener
+         * for exactly that reason.
+         */
+        queueViewTotalsRequestCount: requests.filter((r) => /\/api\/admin\/queue-view-totals/.test(r.url))
+            .length,
+        seedReachedClient,
+        seedMatchDiagnostic,
         correctness,
         /*
          * A sample is valid only if the surface it measured was the real, authenticated,
