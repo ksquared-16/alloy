@@ -1,0 +1,160 @@
+{
+  "cardAfterSave": {
+    "stillOpen": false,
+    "text": null,
+    "detailStillOpen": true
+  },
+  "nonMutation": {
+    "childAttributionUnchanged": true,
+    "chargeAmountsUnchanged": true,
+    "chargeStatusesUnchanged": true,
+    "paymentsUnchanged": true,
+    "postedAllocationUnchanged": true
+  },
+  "before": {
+    "Household": {
+      "requestedScope": {
+        "grain": "household"
+      },
+      "arrangement": {
+        "id": "30d94536-691b-465a-933d-288b5249301c",
+        "customerMemberId": null,
+        "effectiveStart": "2026-09-18",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "e6f5c92c-d3ae-4e59-9c24-da6c40d3251c",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 1800,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": true
+    },
+    "Certa Certhouse": {
+      "requestedScope": {
+        "grain": "child",
+        "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888"
+      },
+      "arrangement": {
+        "id": "fd525086-f5f6-4ea3-bc72-bff0b6087a7f",
+        "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "effectiveStart": "2026-09-19",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "db218db0-6e38-4e0a-9f95-f0d0da566639",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 2500,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": true
+    },
+    "Certb Certhouse": {
+      "requestedScope": {
+        "grain": "child",
+        "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d"
+      },
+      "arrangement": {
+        "id": "30d94536-691b-465a-933d-288b5249301c",
+        "customerMemberId": null,
+        "effectiveStart": "2026-09-18",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "e6f5c92c-d3ae-4e59-9c24-da6c40d3251c",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 1800,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": false
+    }
+  },
+  "after": {
+    "Household": {
+      "requestedScope": {
+        "grain": "household"
+      },
+      "arrangement": {
+        "id": "30d94536-691b-465a-933d-288b5249301c",
+        "customerMemberId": null,
+        "effectiveStart": "2026-09-18",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "e6f5c92c-d3ae-4e59-9c24-da6c40d3251c",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 1800,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": true
+    },
+    "Certa Certhouse": {
+      "requestedScope": {
+        "grain": "child",
+        "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888"
+      },
+      "arrangement": {
+        "id": "fbe49182-2a41-4bbc-bac3-6bddc52842d2",
+        "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "effectiveStart": "2026-09-20",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "bb4aa5ca-d2e0-4c14-97dd-8903725a6a1b",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 3300,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": true
+    },
+    "Certb Certhouse": {
+      "requestedScope": {
+        "grain": "child",
+        "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d"
+      },
+      "arrangement": {
+        "id": "30d94536-691b-465a-933d-288b5249301c",
+        "customerMemberId": null,
+        "effectiveStart": "2026-09-18",
+        "effectiveEnd": null,
+        "shares": [
+          {
+            "id": "e6f5c92c-d3ae-4e59-9c24-da6c40d3251c",
+            "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amountCents": 1800,
+            "percentBasisPoints": null,
+            "name": "Cert Certhouse",
+            "expectedFunding": []
+          }
+        ]
+      },
+      "authoredAtRequestedScope": false
+    }
+  }
+}
