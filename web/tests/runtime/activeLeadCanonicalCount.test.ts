@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const codeOf = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const METRICS = codeOf(read("lib/metrics/resolvers/enrollmentParticipantMetrics.ts"));
-const MIGRATION = read("../supabase/migrations/20260920040000_active_lead_participation_count.sql");
+const MIGRATION = read("../supabase/migrations/20260920140000_active_lead_participation_count.sql");
 /*
  * Negative assertions must read SQL, not prose. The migration's own commentary explains why it is
  * not SECURITY DEFINER and why COUNT(DISTINCT …) would be the wrong grain — and those explanations
