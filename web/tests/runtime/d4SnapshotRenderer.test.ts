@@ -18,8 +18,20 @@ const presentation = {
         identityIcon: "user-plus",
         identityAccent: null,
         kpiSlots: [
-            { slot: 1, label: "Needs attention", icon: "users", accent: null, sourceKey: "ctx.wu.attention" },
-            { slot: 2, label: "Lead count", icon: "chart", accent: null, sourceKey: "ctx.wu.leads" },
+            /*
+             * REAL REGISTRY KEYS, because reservation is only meaningful for a metric something
+             * can actually answer. These slots previously published `ctx.wu.attention` and
+             * `ctx.wu.leads`, which belong to the workspace KPI strip's namespace and not to the
+             * OIP registry this header resolves against — `resolveKpisForWorkUnit` has no consumer
+             * on this path, and both key derivations (`workUnitHeaderKpiKeysFromSlots` for the
+             * server seed, `kpiKeySig` for the client) filter to known OIP keys before requesting.
+             * So the old fixture described a configuration whose slots nothing could ever fill, and
+             * asserted that reserving them forever was correct. Reservation is the contract for an
+             * ANSWERABLE key; an unanswerable one settles unavailable, which
+             * `headerKpiConfigurationDriven` gates directly.
+             */
+            { slot: 1, label: "Needs attention", icon: "users", accent: null, sourceKey: "ops.needs_attention_count" },
+            { slot: 2, label: "Lead count", icon: "chart", accent: null, sourceKey: "enrollment.active_leads" },
         ],
     },
     queue: {
