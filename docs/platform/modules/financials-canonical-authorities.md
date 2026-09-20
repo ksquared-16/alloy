@@ -218,6 +218,44 @@ groups by calendar month and a ledger that silently regrouped would restate hist
 One tiling, called twice: `assignmentBillingPeriods` is shared by generation **and preview**, so a
 preview cannot show four weeks and then create five.
 
+### 3.1.3 The accounting period lifecycle
+
+**Owner:** `financial_accounting_calendars` + `financial_accounting_periods`;
+`lib/financials/accounting/accountingCalendarService.ts` is the only writer, reached through
+`POST /api/admin/financials/accounting-calendar` (`fin.write`).
+
+| act | who | what it does |
+|---|---|---|
+| Adopt | operator, `fin.write` | creates the org's single active calendar and materialises twelve calendar-month periods from `calendarMonthPeriods`, all open |
+| Close | operator, `fin.write` | sets `status`, `closed_at`, `closed_by` on one period. Nothing else. |
+| Reopen | — | **not supported in V1.** No authority exists and none is offered; a closed period shows no control. |
+
+**Closing is not a refusal.** This is the rule most likely to be "corrected" by someone who
+assumes otherwise, and doing so would let a closed month stop a nursery billing its families.
+`attribute_financial_journal_entry` decides every entry's period from `effective_on`:
+
+| situation | result |
+|---|---|
+| no active calendar | `period_attribution = 'no_calendar'` — a complete history carrying no period |
+| no period covers the date | refuse `accounting_period_unavailable` |
+| the covering period is **closed** | **defer** to the earliest later open period, stamping `accounting_period_deferred` and the date it came from |
+| closed and nothing later is open | refuse `accounting_period_closed` |
+
+> A CLOSED PERIOD DEFERS; IT DOES NOT REFUSE. Refusing would make a REPORTING boundary able to
+> block an OPERATIONAL act: a family could not be charged, or a cheque could not be recorded,
+> because the books were closed. Books close after the fact and money does not wait for them.
+
+**What close checks, and what it does not.** It checks the period exists and is open, and it
+warns when closing the last open period, because that is what turns the deferral into a refusal.
+It does **not** check reconciliation, posting review or draft work: no platform doctrine makes any
+of them a close blocker, and drafts are not journal entries — they carry no attribution at all, so
+an unposted charge cannot be "in" the period being closed.
+
+**History is stable.** `enforce_accounting_period_boundaries_frozen` refuses any change to
+`starts_on`, `ends_on`, `period_key` or `calendar_id` once entries are attributed — *"open a new
+period instead"*. `status` is deliberately outside that guard, which is what makes closing a
+period with history possible at all. Closing re-attributes nothing.
+
 ### 3.1.2 Billing period is not accounting period
 
 Two configured period systems, two instance levels, and they are allowed to disagree:
