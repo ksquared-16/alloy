@@ -49,6 +49,8 @@ export type AddStaffInput = {
     employmentType?: string | null;
     primaryLocationId?: string | null;
     externalEmployeeId?: string | null;
+    /** Operator label: Badge Number. Scannable identifier, never a credential. */
+    badgeNumber?: string | null;
     /** Configured (tenant/vertical) staff facts, keyed by field_key. */
     configuredFacts?: Record<string, unknown>;
 
@@ -177,6 +179,7 @@ export async function addStaff(
         employmentType: input.employmentType ?? null,
         primaryLocationId: input.primaryLocationId ?? null,
         externalEmployeeId: input.externalEmployeeId ?? null,
+        badgeNumber: input.badgeNumber ?? null,
         sourceKey: "staff_add",
         actorUserId: input.actorUserId ?? null,
         todayYmd: input.todayYmd,
