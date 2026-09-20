@@ -276,10 +276,25 @@ describe("no second architecture", () => {
     });
 
     it("the client consults the seed before falling back, and only once", () => {
-        expect(HOOK).toContain("matchWorkViewTotalsSeed(");
+        /*
+         * STRENGTHENED after a planted defect stayed green.
+         *
+         * The plant kept the call and discarded its result
+         * (`({ ok: false } as const) && matchWorkViewTotalsSeed(...)`), which a `toContain` on the
+         * call text cannot see. A gate that only proves a function is MENTIONED does not prove it
+         * DECIDES anything, so this now pins the result to the branch that seeds.
+         */
+        const at = HOOK.indexOf("matchWorkViewTotalsSeed({");
+        expect(at).toBeGreaterThan(-1);
+        // The call's value must be bound, not discarded.
+        expect(HOOK.slice(Math.max(0, at - 40), at)).toMatch(/const\s+match\s*=\s*$/);
+        const block = HOOK.slice(at, at + 900);
+        // ...and that binding must be what decides whether the seed is used.
+        expect(block).toMatch(/if\s*\(\s*match\.ok\s*\)/);
+        expect(block).toContain("totals: match.totals");
         // The one-shot skip is what makes a matching seed cost ZERO requests.
         expect(HOOK).toContain("skipFreshFetchRef");
-        expect(HOOK).toMatch(/fresh:\s*true/);
+        expect(block).toMatch(/fresh:\s*true/);
     });
 
     it("a rejected seed falls through to the existing canonical path", () => {
