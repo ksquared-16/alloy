@@ -10,19 +10,21 @@ alone.
 |---|---|
 | Final Financials candidate | `0a565cf79` (`agent/financials-11a-regression-repair`) |
 | Reconciled against staging | `d1b8f1319` — Payments V1 W1–W4 |
-| Merge SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` (PR 1111) |
-| Deployed SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` — `/api/build-info` on staging.workwithalloy.com, branch `staging`, nodeEnv production |
+| 11B merge SHA | `6c1b84fdc814a1cc1e62797a690c9ef6ceb4f1d5` (PR 1111) |
+| Repair merge SHA | `e29c223a8014e8dfccc5a013179fefcd793b9368` (PR 1113 — exception lifecycle) |
+| Final deployed SHA | `e29c223a8014e8dfccc5a013179fefcd793b9368` — `/api/build-info` on staging.workwithalloy.com, branch `staging`, nodeEnv production, deployment `dpl_AiNurCNXYJ3aUdYXd5fKwGs8fRkX` |
 | QA catalog version | `2026-09-20.3` — 44 `HUMAN_WALKTHROUGH` scenarios |
 | Deployed database | `ikaxilmwmrmbagoidedu` (`alloy_deployed_primary`, fingerprint `b15dad2c6d030ed4`) |
-| Human QA PASS | **ZERO.** Engineering certification only, and INCOMPLETE — see below. |
+| Human QA PASS | **ZERO.** Engineering certification only. |
 
-## Status: 11B is NOT closed
+## Status: 11B is CLOSED — engineering certification
 
-The candidate is merged and deployed and the exception schema is physically proved on the deployed
-database. **Three defects found by the A–K gate remain open**, all in the exception's end/re-author
-path, and they are why `FINANCIALS_11B_PRODUCTIZATION_COMPLETE_DEPLOYED_CERTIFIED` was withheld.
-See `AK-RESULT.md`. Nothing below depends on them — the authority, the identity chain and the
-doctrine Payments inherits are all proved — but Payments should not read 11B as finished.
+All eleven A–K gates PASS on the deployed build; see `AK-RESULT.md`. Three exception-lifecycle
+defects and one stale accounting-panel claim were found by the gate and repaired before closure.
+
+**This is ENGINEERING certification. Human QA has not happened and the catalog stands at PASS
+ZERO** — that acceptance is Kelly's, over the integrated Financials V1 product, which includes
+Payments.
 
 ## What Payments inherits — and must not reimplement
 
@@ -43,6 +45,13 @@ Two invariants that must not break:
    it tells an operator a family owes less than they do.
 
 ## The doctrine Payments will be measured against
+
+**AVAILABLE PREPAID IS NOT HELD MONEY, AND NEITHER IS A DEPOSIT.** Three distinct things, and
+Payments W4 made the middle one real. Available prepaid is unapplied money the account may spend
+on anything. Held money is received and deliberately NOT available — `payment_holds` is that mark,
+and the deployed card proves the separation: Available `$125.00` beside Balance `$1,412.87`, two
+figures, never netted. A deposit is the third: money taken for a PURPOSE, with a release condition
+and a refund path.
 
 **PREPAID IS NOT A DEPOSIT.** Prepaid is unapplied money on the account: received, canonically
 available, applicable to any obligation. A deposit is money taken for a PURPOSE and held against
