@@ -641,6 +641,12 @@ export default function LocationsConfigurationPage({
                     insideOptions={eligibleInsideOptions(roomRows, selectedSite.id, {
                         excludeLocationId: selectedRoom?.id ?? null,
                     })}
+                    capacityRules={capacityRules}
+                    todayYmd={new Date().toISOString().slice(0, 10)}
+                    onCapacityChanged={async () => {
+                        await refreshCapacityRules();
+                        await refresh({ force: true });
+                    }}
                     programOptions={programOptionsForSite(selectedSite.id)}
                     schedulePatterns={selectedSchedules}
                     canMutate={canMutate}

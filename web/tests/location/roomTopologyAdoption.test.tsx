@@ -140,6 +140,9 @@ async function renderPanel(roomId: string, canMutate = true) {
                 topologyRows={rows}
                 siteId={SITE}
                 insideOptions={eligibleInsideOptions(rows, SITE, { excludeLocationId: roomId })}
+                capacityRules={[]}
+                todayYmd="2026-09-19"
+                onCapacityChanged={() => {}}
                 programOptions={[]}
                 schedulePatterns={[]}
                 canMutate={canMutate}

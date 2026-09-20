@@ -28,6 +28,9 @@ import {
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
+import RoomCapacitySection from "@/components/adminV2/settings/locations/RoomCapacitySection";
+import { resolveRoomCapacityStanding } from "@/lib/locations/capacityAdoptionState";
+import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
 import {
     presentRoomTopology,
     roomRailTopologySegments,
@@ -52,6 +55,9 @@ export default function LocationRoomDetailPanel({
     topologyRows,
     siteId,
     insideOptions,
+    capacityRules,
+    todayYmd,
+    onCapacityChanged,
     programOptions,
     schedulePatterns,
     canMutate,
@@ -70,6 +76,10 @@ export default function LocationRoomDetailPanel({
     siteId: string | null;
     /** Physical rooms this room may be moved inside — the SAME provider create uses. */
     insideOptions: InsideOption[];
+    /** Canonical capacity rules, for capacity standing and the canonical display. */
+    capacityRules: readonly ChildcareCapacityRuleRow[];
+    todayYmd: string;
+    onCapacityChanged: () => Promise<void> | void;
     programOptions: LocationProgramCategoryRow[];
     schedulePatterns: SchedulePatternRow[];
     canMutate: boolean;
@@ -134,6 +144,11 @@ export default function LocationRoomDetailPanel({
     // this panel: the server can safely refuse an unsafe change, but adopting an
     // existing location is its own product slice.
     const topology = room ? presentRoomTopology(room, topologyRows) : null;
+    // Once canonical capacity exists, the untyped field stops being current truth.
+    // Two ordinary editors maintaining Canonical = 12 and Legacy = 14 is exactly
+    // the ambiguity this convergence removes.
+    const capacityStanding = room ? resolveRoomCapacityStanding(room, capacityRules) : null;
+    const canEditLegacyCapacity = (capacityStanding?.canonicalRules.length ?? 0) === 0;
 
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
@@ -257,18 +272,23 @@ export default function LocationRoomDetailPanel({
                             </label>
                         :   null}
 
-                        <label className="block max-w-36 space-y-1">
-                            <span className="config-typo-field-label">Capacity</span>
-                            <input
-                                type="number"
-                                min={0}
-                                value={capacity}
-                                disabled={!canMutate}
-                                onChange={(e) => setCapacity(e.target.value)}
-                                className="config-runtime-input"
-                                data-testid="locations-room-capacity"
-                            />
-                        </label>
+                        {canEditLegacyCapacity ?
+                            <label className="block max-w-36 space-y-1">
+                                <span className="config-typo-field-label">Capacity</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    value={capacity}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setCapacity(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-room-capacity"
+                                />
+                            </label>
+                        :   <p className="config-typo-sublabel" data-testid="locations-room-capacity-canonical-owned">
+                                Capacity for this room is set in Operational Rules.
+                            </p>
+                        }
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -435,11 +455,6 @@ export default function LocationRoomDetailPanel({
                             [{ key: "inside", label: "Inside", value: topology!.containingSpaceLabel }]
                         :   []),
                         {
-                            key: "capacity",
-                            label: "Capacity",
-                            value: capacity.trim() || "Not set",
-                        },
-                        {
                             key: "programs",
                             label: "Programs",
                             value: programLabels.length > 0 ? programLabels.join(", ") : "None",
@@ -473,6 +488,16 @@ export default function LocationRoomDetailPanel({
                         </div>
                     ))}
                 </div>
+
+                <RoomCapacitySection
+                    room={room}
+                    siteId={siteId}
+                    capacityRules={capacityRules}
+                    todayYmd={todayYmd}
+                    canMutate={canMutate}
+                    onAdopted={onCapacityChanged}
+                    onSaveRoom={onSave}
+                />
 
                 <RoomOrganizationCalculationPanel roomId={room.id} />
             </div>

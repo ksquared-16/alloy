@@ -45,6 +45,9 @@ async function renderDetail(room: LocationHierarchyRow, canMutate = true) {
                 topologyRows={ROWS}
                 siteId="site"
                 insideOptions={eligibleInsideOptions(ROWS, "site", { excludeLocationId: room.id })}
+                capacityRules={[]}
+                todayYmd="2026-09-19"
+                onCapacityChanged={() => {}}
                 programOptions={[]}
                 schedulePatterns={[]}
                 canMutate={canMutate}
@@ -102,7 +105,10 @@ describe("9-11. detail shows Type, Site and — when it applies — Inside", () 
 
     it("keeps the existing operational cards alongside the topology ones", async () => {
         await renderDetail(TOD1);
-        for (const key of ["capacity", "programs", "schedule", "status"]) {
+        // "capacity" is no longer a metric card: capacity moved to its own section,
+        // because an untyped number beside typed canonical kinds read as a fourth,
+        // competing capacity.
+        for (const key of ["programs", "schedule", "status"]) {
             expect(metric(key)).not.toBeNull();
         }
     });
@@ -175,6 +181,9 @@ describe("12, 16. topology is read-only here", () => {
                     topologyRows={ROWS}
                     siteId="site"
                     insideOptions={eligibleInsideOptions(ROWS, "site", { excludeLocationId: TOD1.id })}
+                    capacityRules={[]}
+                    todayYmd="2026-09-19"
+                    onCapacityChanged={() => {}}
                     programOptions={[]}
                     schedulePatterns={[]}
                     canMutate
