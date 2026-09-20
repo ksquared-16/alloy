@@ -28,6 +28,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import { resolvePayerCandidates } from "@/lib/financials/payments/paymentSubjectModel";
 import {
     beginAddPaymentMethod,
     completeAddPaymentMethod,
@@ -102,6 +103,30 @@ async function accountInOrg(supabase: SupabaseClient, orgId: string, customerId:
     return !error && Boolean(data);
 }
 
+/**
+ * WHOSE METHOD THIS WILL BE, when the surface did not say.
+ *
+ * A stored method is owned by a PAYER, and the Details panel names an account rather than a person —
+ * so without this the act would refuse for want of a field no operator was ever asked for.
+ *
+ * The default is the household's PRIMARY CONTACT: a relationship, not a responsibility. It is
+ * deliberately NOT the responsible party, because defaulting the payer to whoever owes is exactly
+ * the collapse `PayerCandidate.alsoResponsible` exists to warn about — a grandparent's card must not
+ * silently record a parent as the payer, and using someone's card never moves what they owe.
+ *
+ * A caller that DOES name a payer wins; this only fills a gap.
+ */
+async function resolveDefaultPayer(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerId: string,
+): Promise<string> {
+    const { candidates } = await resolvePayerCandidates(supabase, { orgId, customerId });
+    if (!candidates.length) return "";
+    const primary = candidates.find((c) => c.isPrimaryContact) ?? candidates[0];
+    return t(primary?.personId);
+}
+
 const addPaymentMethod: RegisteredAction = {
     actionKey: PAYMENT_METHOD_ADD_ACTION_KEY,
     defaultLabel: "Add payment method",
@@ -145,12 +170,12 @@ const addPaymentMethod: RegisteredAction = {
                     blockers: [{ code: "invalid_rail", message: "Choose a card or a bank account.", field: "rail" }],
                 };
             }
-            if (!t(src.payer_entity_id)) {
-                return {
-                    ok: false,
-                    blockers: [{ code: "missing_payer", message: "A payer is required.", field: "payer_entity_id" }],
-                };
-            }
+            /*
+             * A payer is NOT required from the caller. The Details panel names an account, not a
+             * person, and the server resolves the account's primary contact when none is given —
+             * see `resolveDefaultPayer`. Requiring it here would refuse the mounted flow for want of
+             * a field nobody is asked for.
+             */
         } else if (!t(src.setup_ref)) {
             return {
                 ok: false,
@@ -200,12 +225,24 @@ const addPaymentMethod: RegisteredAction = {
         try {
             const stage = t(payload?.stage) || "begin";
 
+            const namedPayer = t(payload?.payer_entity_id);
+            const payerEntityId = namedPayer || (await resolveDefaultPayer(db, ctx.orgId, customerId));
+            if (!payerEntityId) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: 409,
+                    error: "This account has nobody who can be recorded as the payer, so a payment method cannot be attached to it.",
+                    blockers: [{ code: "no_payer", message: "No payer could be resolved for this account." }],
+                };
+            }
+
             if (stage === "begin") {
                 const begun = await beginAddPaymentMethod(db, {
                     orgId: ctx.orgId,
                     customerId,
                     payerEntityType: t(payload?.payer_entity_type) || "person",
-                    payerEntityId: t(payload?.payer_entity_id),
+                    payerEntityId,
                     rail: t(payload?.rail) === "ach" ? "ach" : "card",
                     payerEmail: t(payload?.payer_email) || null,
                     payerName: t(payload?.payer_name) || null,
@@ -244,7 +281,7 @@ const addPaymentMethod: RegisteredAction = {
                 orgId: ctx.orgId,
                 customerId,
                 payerEntityType: t(payload?.payer_entity_type) || "person",
-                payerEntityId: t(payload?.payer_entity_id),
+                payerEntityId,
                 rail: t(payload?.rail) === "ach" ? "ach" : "card",
                 setupRef: t(payload?.setup_ref),
                 providerCustomerRef: t(payload?.provider_customer_ref),

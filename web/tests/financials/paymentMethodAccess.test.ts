@@ -176,6 +176,37 @@ describe("payment method administration requires fin.write", () => {
         expect(mine.error).not.toMatch(/not in this organization/i);
     });
 
+    /**
+     * A PAYER IS NOT DEMANDED FROM THE BROWSER, AND IS NOT INVENTED EITHER.
+     *
+     * The Details panel names an account, not a person, so the payload gate must not require a payer
+     * — an earlier draft did, and the mounted flow would have refused for want of a field nobody is
+     * asked for. The server resolves the account's primary contact instead, and when it can resolve
+     * NOBODY it refuses rather than attaching a method to an unnamed owner.
+     */
+    it("accepts an add with no payer named", () => {
+        const validated = action(PAYMENT_METHOD_ADD_ACTION_KEY).validatePayload?.({
+            customer_id: CUSTOMER,
+            rail: "card",
+        } as never);
+        expect(validated?.ok).toBe(true);
+    });
+
+    it("refuses when no payer can be resolved for the account, rather than guessing one", async () => {
+        const supabase = supabaseWith(["fin.read", "fin.write"]);
+        const executed = await action(PAYMENT_METHOD_ADD_ACTION_KEY).execute({
+            supabase,
+            ctx,
+            invocation,
+            /* This mock models no household membership, so there is nobody to resolve. */
+            payload: { customer_id: CUSTOMER, rail: "card" },
+        } as never);
+        expect(executed.ok).toBe(false);
+        if (executed.ok) return;
+        expect(executed.status).toBe(409);
+        expect(executed.error).toMatch(/nobody who can be recorded as the payer/i);
+    });
+
     /** The payload gate: a rail nobody supports never reaches the provider. */
     it("refuses a rail that is neither a card nor a bank account", () => {
         const validated = action(PAYMENT_METHOD_ADD_ACTION_KEY).validatePayload?.({
