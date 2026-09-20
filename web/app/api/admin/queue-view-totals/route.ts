@@ -62,7 +62,33 @@ function parseTargets(body: unknown): { targets: TotalTarget[]; selectedSiteId: 
 
 export async function POST(request: NextRequest) {
     const t0 = Date.now();
+    /*
+     * PHASE CLOCKS — because this endpoint's single `total` is now the product's completion owner.
+     *
+     * Measured deployed it costs ~1,934ms and WU-03's final authoritative mutation lands ~11ms after
+     * it returns, so this number IS FIRST_ORDER_VISIBLE_COMPLETE. One total cannot say which phase
+     * owns it, and the candidates need opposite repairs: a population read the document composer has
+     * already performed, two database enrichments the composer gets free from maintained facts, and
+     * a per-child-lens membership projection that fans out with configuration.
+     *
+     * Phases inside the concurrent per-group map ACCUMULATE across groups, so they are sums of
+     * concurrent work and DO NOT add up to the wall. That is stated rather than hidden: attributing
+     * a wall to a sum of overlapping spans is the mistake this programme has already made twice.
+     */
+    const span = {
+        qvt_gate: 0,
+        qvt_scope: 0,
+        qvt_access: 0,
+        qvt_child_counts: 0,
+        qvt_population: 0,
+        qvt_epp: 0,
+        qvt_tours: 0,
+        qvt_aggregate: 0,
+    };
+    const counts = { groups: 0, views: 0, child_views: 0, lane_views: 0, unknown_views: 0 };
+    const tGate = Date.now();
     const gate = await loadAdminRouteGate();
+    span.qvt_gate = Date.now() - tGate;
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
     const dim = gate.dim;
 
@@ -73,10 +99,12 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const tScope = Date.now();
     const [scopeBundle, viewerDisplayTimeZone] = await Promise.all([
         resolveQueueRecordScopeConstraints(supabase, gate.orgId, dim, parsed.selectedSiteId),
         fetchEffectiveUserDisplayTimezoneCached(supabase, { orgId: gate.orgId, userId: gate.userId }),
     ]);
+    span.qvt_scope = Date.now() - tScope;
     const { recordScopeImpossible, recordScopeConstraints } = scopeBundle;
 
     // Request-scoped memoization: each distinct work unit resolves access + department metadata ONCE.
@@ -127,6 +155,7 @@ export async function POST(request: NextRequest) {
 
     type TotalOut = { workUnitId: string; queueKey: string; workViewId: string; count: number | null; known: boolean };
 
+    counts.groups = groups.size;
     const perGroup = await mapWithConcurrencyLimit([...groups.values()], 4, async (group): Promise<TotalOut[]> => {
         const unknownAll = (): TotalOut[] =>
             [...group.viewIds].map((workViewId) => ({
@@ -137,8 +166,10 @@ export async function POST(request: NextRequest) {
                 known: false,
             }));
         try {
+            const tAccess = Date.now();
             if (!(await workUnitAccessible(group.workUnitId))) return unknownAll();
             const metadata = await deptMetadata(group.workUnitId);
+            span.qvt_access += Date.now() - tAccess;
             const savedViews = savedWorkViewsFromDepartmentMetadata(metadata);
             const requestedViews = savedViews.filter((v) => group.viewIds.has(v.id));
 
@@ -170,6 +201,11 @@ export async function POST(request: NextRequest) {
                 }
             }
 
+            counts.views += requestedViews.length;
+            counts.child_views += childViews.length;
+            counts.lane_views += laneViews.length;
+            counts.unknown_views += unknownViews.length;
+
             const unknownTotals = new Map<string, TotalOut>();
             for (const view of unknownViews) {
                 unknownTotals.set(view.id, {
@@ -193,6 +229,7 @@ export async function POST(request: NextRequest) {
              * results, same per-view failure semantics — just not one at a time.
              */
             const childTotals = new Map<string, TotalOut>();
+            const tChild = Date.now();
             const childCounted = await Promise.all(
                 childViews.map(async (view) => {
                     const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
@@ -212,6 +249,7 @@ export async function POST(request: NextRequest) {
                     }
                 }),
             );
+            span.qvt_child_counts += Date.now() - tChild;
             for (const { id, total } of childCounted) childTotals.set(id, total);
 
             // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
@@ -246,6 +284,7 @@ export async function POST(request: NextRequest) {
             // Work units with no Business Process (no stages) keep the lane path untouched.
             let totals: Record<string, { count: number; known: boolean }>;
             if (stages.length > 0) {
+                const tPop = Date.now();
                 const population = await loadWorkUnitProcessPopulation({
                     supabase,
                     orgId: gate.orgId,
@@ -253,7 +292,9 @@ export async function POST(request: NextRequest) {
                     scope: recordScopeConstraints,
                     scopeImpossible: recordScopeImpossible,
                 });
+                span.qvt_population += Date.now() - tPop;
                 // EPP before Work View totals — same keys as D1 provisioning rows.
+                const tEpp = Date.now();
                 const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
                     supabase,
                     orgId: gate.orgId,
@@ -261,12 +302,16 @@ export async function POST(request: NextRequest) {
                     allowedLocationIds: recordScopeConstraints?.locationIds ?? null,
                     logLabel: "queue-view-totals",
                 });
+                span.qvt_epp += Date.now() - tEpp;
+                const tTours = Date.now();
                 const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
                     supabase,
                     orgId: gate.orgId,
                     rows: baseWithEpp,
                     logLabel: "queue-view-totals",
                 });
+                span.qvt_tours += Date.now() - tTours;
+                const tAgg = Date.now();
                 totals = aggregateWorkViewTotals({
                     baseRows: baseWithTourFacts,
                     workViews: laneViews,
@@ -275,6 +320,7 @@ export async function POST(request: NextRequest) {
                     exactLaneTotal: population.truncated ? null : population.rows.length,
                     baseTruncated: population.truncated,
                 });
+                span.qvt_aggregate += Date.now() - tAgg;
             } else {
                 // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
                 // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
@@ -325,6 +371,13 @@ export async function POST(request: NextRequest) {
     const totals = perGroup.flat();
     return NextResponse.json(
         { generatedAt: new Date().toISOString(), totals },
-        { headers: { "Server-Timing": buildQueueRowsServerTimingHeader({ metrics: { total: Date.now() - t0 } }) } },
+        {
+            headers: {
+                "Server-Timing": buildQueueRowsServerTimingHeader({
+                    metrics: { ...span, total: Date.now() - t0 },
+                    counts,
+                }),
+            },
+        },
     );
 }
