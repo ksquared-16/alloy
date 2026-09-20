@@ -150,6 +150,36 @@ describe("child location provenance", () => {
     });
 });
 
+describe("J — the fixture is the captured production shape, and stays that way", () => {
+    /*
+     * THE GATE THAT WAS MISSING.
+     *
+     * The previous repair passed every code plant and still failed in production, because every
+     * plant varied the CODE and none varied the FIXTURE. The suite could not tell it was
+     * reasoning about a payload the product never emits. These assertions pin the captured shape
+     * itself, so reverting to the synthetic absent-key variant fails loudly.
+     */
+    it("carries location_id as an OWN property whose value is null", () => {
+        // Present-and-null is the whole point: it is why key presence could not mean "answered".
+        expect(Object.prototype.hasOwnProperty.call(REAL_COMMIT_CHILD, "location_id")).toBe(true);
+        expect(REAL_COMMIT_CHILD.location_id).toBeNull();
+        expect(Object.prototype.hasOwnProperty.call(REAL_COMMIT_CHILD, "location_label")).toBe(true);
+        expect(REAL_COMMIT_CHILD.location_label).toBeNull();
+    });
+
+    it("carries the OCM provenance markers the deployed answer emits", () => {
+        expect(REAL_COMMIT_CHILD._participation_source).toBe("ocm");
+        expect(REAL_COMMIT_CHILD._operational_facts_source).toBe("ocm");
+        expect(REAL_COMMIT_CHILD.ocm_id).toBeTruthy();
+    });
+
+    it("carries no scheduling projection — commit genuinely cannot classify provenance", () => {
+        // If a future payload DOES answer provenance at commit, this fails and the contract is
+        // revisited deliberately rather than the badge quietly reappearing.
+        expect("_scheduling_projection" in REAL_COMMIT_CHILD).toBe(false);
+    });
+});
+
 describe("F — the repair introduces no read", () => {
     it("the evidence builder stays a pure projection", () => {
         // It takes a context and returns a model; a read here would put I/O inside render.
