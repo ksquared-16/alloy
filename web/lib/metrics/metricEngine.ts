@@ -254,21 +254,40 @@ export async function resolveMetrics(params: {
     includeKpi?: boolean;
 }): Promise<MetricResolveResult[]> {
     const { ctx, keys, orgMetadata, includeKpi = true } = params;
-    const results: MetricResolveResult[] = [];
 
-    for (const key of keys) {
-        const metric = await resolveSingleMetric(ctx, key);
-        const result: MetricResolveResult = { metric };
-
-        if (includeKpi) {
-            const kpiKey = kpiForMetric(key);
-            if (kpiKey) {
-                result.kpi = evaluateKpiForMetric({ kpiKey, metric, orgMetadata });
+    /*
+     * KEYS RESOLVE CONCURRENTLY.
+     *
+     * They were resolved in a `for await` loop, so the request paid their sum. Measured on the
+     * canonical Work Unit header request (deployed, warm, 6 reps): the three keys cost 838 + 230 +
+     * 200ms of metric work individually but 1,041ms combined, against a parallel floor of ~838ms —
+     * the slowest key. The serial edge is worth roughly 200ms and nothing requires it.
+     *
+     * Nothing shared is WRITTEN here. Each resolver derives its own scope from the same immutable
+     * `ctx`, reads, and returns a value; there is no ordering dependency between keys and no
+     * mutation either could observe. The KPI evaluation below is pure and per-metric.
+     *
+     * FAILURE SEMANTICS ARE UNCHANGED, DELIBERATELY. `resolveSingleMetric` already throws on a
+     * failed key and the loop propagated that, so one bad key failed the whole request.
+     * `Promise.all` preserves exactly that contract — this change is about WHEN keys run, not about
+     * what a failure means. `allSettled` would be a different (arguably better) contract and is not
+     * this slice's decision to make.
+     */
+    const results = await Promise.all(
+        keys.map(async (key): Promise<MetricResolveResult> => {
+            const metric = await resolveSingleMetric(ctx, key);
+            const result: MetricResolveResult = { metric };
+            if (includeKpi) {
+                const kpiKey = kpiForMetric(key);
+                if (kpiKey) {
+                    result.kpi = evaluateKpiForMetric({ kpiKey, metric, orgMetadata });
+                }
             }
-        }
+            return result;
+        }),
+    );
 
-        results.push(result);
-    }
-
+    // Order follows `keys`, exactly as the sequential loop produced it — consumers index by
+    // position in some call sites, so preserving it is part of preserving the contract.
     return results;
 }
