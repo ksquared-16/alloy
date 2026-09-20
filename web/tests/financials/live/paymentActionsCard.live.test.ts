@@ -29,7 +29,7 @@ import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 
-import { resolveAuthorizedActor, restoreMerchantReadiness } from "./certEnvironment";
+import { resolveAuthorizedActor, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -160,8 +160,7 @@ describeLive("Slice H — the Financials payment actions, live", () => {
     beforeAll(async () => {
         const client = supabase!;
         await clearAll(client);
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         /* The PROVIDER's answer, remembered, so anything this suite borrows can be put back to it. */
         providerReadiness = readinessFromStripeAccount(acct as { charges_enabled?: boolean });

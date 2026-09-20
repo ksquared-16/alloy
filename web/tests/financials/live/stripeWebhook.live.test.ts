@@ -24,6 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
+import { governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -137,10 +138,7 @@ describeLive("Slice E — the webhook boundary, live", () => {
         await client.from("payment_collection_attempts").delete().eq("org_id", ORG);
         await client.from("payment_provider_merchants").delete().eq("org_id", ORG);
 
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", {
-            headers: { Authorization: `Bearer ${secret}` },
-        });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").insert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
