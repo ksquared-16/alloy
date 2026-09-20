@@ -15,39 +15,60 @@ premature, and the reasons are below.
 The database is shared, so the DATA findings below apply to both. The code path is not the
 certified artifact, and no A–K claim was made against it.
 
-## 1. Four root causes
+## 1. Root causes — **R1 withdrawn, see below**
 
-### R1 — `/organization/financials` is a dead end · **B, severe**
+### R1 — WITHDRAWN. The chapters ARE navigable. **My audit was wrong.**
 
-The landing page prints all seven chapter names — Tuition, Catalog, Policies, Payments,
-Accounting, Simulator, Funding — as **inert `<H3>` headings**:
+I reported that `/organization/financials` had "no door" and called it the highest-value defect.
+That is false, and it was the wrong call on my part.
+
+Each chapter tile carries an enabled button whose accessible name is **"Open Tuition"**,
+**"Open Catalog"**, **"Open Policies"**, **"Open Payments"**, **"Open Accounting"**,
+**"Open Simulator"**, **"Open Funding"**. Pressing them works:
+
+| pressed | lands on | what is there |
+|---|---|---|
+| Open Policies | `?chapter=policies` | heading **"Discounts & commercial policies"** |
+| Open Tuition | `?chapter=tuition` | **Tuition Plans**; billing frequency named |
+| Open Accounting | `?chapter=accounting` | **Accounting calendar** panel, **11 Close controls** |
+
+**Why I got it wrong.** My probe looked for a clickable *ancestor* of each chapter heading and for
+`<a href>` elements containing `?chapter=`. The control is neither: it is a sibling `<button>` with
+an `onClick`, one level outside the heading's ancestor chain. Both measurements were accurate and
+the inference drawn from them was not. A second probe then searched for a control named exactly
+"Policies", which never matches "Open Policies".
+
+Sections 4–7 of the repair instruction are premised on this defect. **They should not be
+executed** — there is nothing broken to repair, and changing working navigation on a false premise
+would be the larger error.
+
+What survives from this finding is much smaller and is a naming question, not a navigation one:
+the tile is called **Policies**, and an operator hunting for the word *Discounts* has to open it to
+discover that the chapter heading inside says "Discounts & commercial policies".
+
+### R2 — Kelly's entry point shows a TUITION card that is not the Assignment · **real**
+
+Measured with the correct rendered identity this time. On BOTH the household entry point and the
+child panel:
 
 ```
-clickableAncestor: null      cursor: "auto"
-links containing "?chapter=" : 0   (of 19 links on the page)
+retiredCardByRenderedIdentity : true      ← the retired card IS composed
+retiredCardByRegistryKey      : false     ← the old selector, still useless
+schedulingPresent (entry)     : false
+schedulingPresent (child)     : true
 ```
 
-There is no visible way to open any chapter. The only access is typing `?chapter=accounting` into
-the address bar. **This alone accounts for three of Kelly's five complaints**: discount
-configuration (Policies), Billing Frequency configuration (Tuition) and Accounting Period
-administration (Accounting). The engines, forms and data all exist and are correct — the product
-simply offers no door.
+The retired card renders as **"TUITION · 2 of 2 agreed · Certb Certhouse · Program preschool …"**.
 
-Every prior probe of mine reached these chapters by URL, which is precisely what §2 of this audit
-forbids, and precisely why the gap survived certification.
+So the household panel offers a card headed **TUITION** which is *not* the Assignment surface. The
+Assignment card — which owns Billing Frequency, both Billing Periods, the discount forecast, Add
+exception and "Who owes this — set responsibility" — is `scheduling`, and it appears only after
+opening a child.
 
-### R2 — Kelly's entry point does not compose the Assignment card · **B**
-
-At `/workspace/work-unit/enrolled-children` the panel composes:
-
-```
-business_process · financials · children · household · attendance · health_safety · assignment_tuition
-```
-
-`scheduling` — the Assignment card that owns Billing Frequency, both Billing Periods, the discount
-forecast, Add exception and "Who owes this — set responsibility" — is **absent**. It appears only
-after clicking a child row in the Children card. An operator who stays on the household panel sees
-none of it, which is exactly what Kelly reported.
+**This is the most likely explanation of Kelly's report.** He found a Tuition card at the top
+level, it carried none of those things, and he reasonably concluded they were missing. The
+published tenant layout still composes `billing_preview`, so retiring it from the code default
+never moved this tenant.
 
 ### R3 — the retirement never took effect, and my certification said it did · **E, mine**
 
