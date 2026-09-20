@@ -1,0 +1,45 @@
+{
+  "trusted_host_action_id": "tha_9fa9ebe874009a",
+  "query_hash": "b29404be2c2d3e1d75f70bff60a5d20ccafd19354da2cfb62f4505a736ea0abe",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T11:37:39.754Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9fa9ebe874009a",
+    "query_hash": "b29404be2c2d3e1d75f70bff60a5d20ccafd19354da2cfb62f4505a736ea0abe",
+    "authorization_id": "grnt_8d38cca013ba44dd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T11:37:41.251Z",
+    "question_ids": [
+      "w2_post_deploy"
+    ],
+    "questions": {
+      "w2_post_deploy": {
+        "question_id": "w2_post_deploy",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_methods_exists": true,
+            "customer_payment_methods_gone": true,
+            "canonical_columns": 27,
+            "default_index": true,
+            "provider_ref_index": true,
+            "immutability_trigger": 1,
+            "atomic_default_fn": true,
+            "rls_enabled": true,
+            "rows_stored": 0,
+            "ledger_has_create": 1,
+            "ledger_has_drop": 1
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
