@@ -83,6 +83,9 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "provider.connect",
     "provider.refresh_readiness",
     "provider.disconnect",
+    "payment_method.add",
+    "payment_method.set_default",
+    "payment_method.revoke",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -714,6 +717,70 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "provider's account, which belongs to the organisation, and not the payments, attempts "
             + "or provider evidence already recorded. Historical rows keep naming the account that "
             + "actually collected them.",
+    }),
+    /*
+     * ── PAYMENT METHOD ADMINISTRATION — `fin.write`, and deliberately not `fin.provider` ──
+     *
+     * The provider capabilities above decide WHERE an organisation's money settles. These three
+     * decide which instrument one family pays with, once that is already chosen. That is ordinary
+     * front-desk work, so they carry the key `ops` already holds.
+     */
+    def({
+        capabilityKey: "payment_method.add",
+        canonicalCommandKey: "payment_method.add",
+        operatorLabel: "Add payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.add",
+        implementationStatus: "production",
+        reason:
+            "Opens the provider's own secure collection for a card or bank account, then persists a "
+            + "canonical reference read back from the provider on the server. Nothing is stored "
+            + "until an instrument actually exists, and a bank account awaiting verification is "
+            + "recorded as pending rather than offered as usable. Alloy never receives a card "
+            + "number, a CVC, or an account and routing number.",
+    }),
+    def({
+        capabilityKey: "payment_method.set_default",
+        canonicalCommandKey: "payment_method.set_default",
+        operatorLabel: "Set as default",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.set_default",
+        implementationStatus: "production",
+        reason:
+            "Moves the default within one account and one rail, atomically in the database, so the "
+            + "account is never briefly left with two defaults or none. Card and bank defaults are "
+            + "independent, and a method that cannot be used cannot be made the default.",
+    }),
+    def({
+        capabilityKey: "payment_method.revoke",
+        canonicalCommandKey: "payment_method.revoke",
+        operatorLabel: "Remove payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The action says "destructive"; the capability says how hard the confirmation is.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "payment_method.revoke",
+        implementationStatus: "production",
+        reason:
+            "Withdraws a stored instrument from FUTURE collection. Deletes nothing: payments already "
+            + "made with it keep naming it. Any default status is removed and nothing is promoted in "
+            + "its place, because a family's money must not silently move to a method nobody chose.",
     }),
     def({
         capabilityKey: "payment.collect_card",
