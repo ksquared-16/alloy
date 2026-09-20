@@ -181,6 +181,20 @@ type SchedSubject = {
     dobAge: string | null;
 };
 
+/**
+ * The domain's eligibility reasons, in operator words. A LABEL for a canonical reason, never a
+ * reason of its own: an unmapped code still renders, spelled out, rather than being hidden.
+ */
+const REDUCTION_REASON_LABEL: Record<string, string> = {
+    no_policy_configured: "No discount policies configured",
+    not_enough_siblings: "Not eligible — not enough enrolled siblings",
+    rank_not_covered: "Not eligible — this child's sibling rank is not covered",
+    not_an_employee_household: "Not eligible — not an employee household",
+    category_not_covered: "Not eligible — tuition is not covered by a policy",
+    category_not_discountable: "Not eligible — this charge category cannot be discounted",
+    no_accepted_gross: "No accepted tuition to forecast against",
+};
+
 const WEEKDAYS = [
     { i: 1, l: "M" },
     { i: 2, l: "T" },
@@ -1713,6 +1727,34 @@ function ScheduleEditor({
     const [overrideReason, setOverrideReason] = useState("");
     /** The disclosure. Closed by default: the recommendation is the answer most of the time. */
     const [optionsExpanded, setOptionsExpanded] = useState(false);
+    /*
+     * ── WHAT DISCOUNTS ARE EXPECTED ON THIS RELATIONSHIP ──────────────────────────────────────
+     *
+     * A projection, not a decision: the route runs the SAME eligibility authority the application
+     * path runs, over the accepted tuition for the current period, and writes nothing. Loaded
+     * after the accepted term is known — an assignment with no agreed price has no gross to
+     * forecast against, and guessing one would answer a question nobody asked.
+     */
+    const [forecast, setForecast] = useState<{
+        grossCents: number; currencyCode: string; periodKey: string; totalCents: number; netCents: number;
+        outcomes: Array<Record<string, unknown>>;
+    } | null>(null);
+
+    useEffect(() => {
+        const ocm = pricingView?.opportunityCustomerMemberId;
+        if (!ocm || !pricingView?.accepted) { setForecast(null); return; }
+        let cancelled = false;
+        void fetch(`/api/admin/financials/reduction-forecast?opportunity_customer_member_id=${encodeURIComponent(ocm)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { forecast?: typeof forecast } | null) => { if (!cancelled) setForecast(b?.forecast ?? null); })
+            .catch(() => {
+                /* The section states the price without claiming anything about discounts. */
+                if (!cancelled) setForecast(null);
+            });
+        return () => { cancelled = true; };
+    }, [pricingView]);
 
     /** Derived from the persisted term, through the authority generation uses. */
     const acceptedPeriods = useMemo(
@@ -2404,6 +2446,51 @@ function ScheduleEditor({
                                 >
                                     Billing frequency {pricingView?.accepted?.cadenceKey} · current period{" "}
                                     {acceptedPeriods.current.label} · next {acceptedPeriods.next.label}
+                                </div>
+                            ) : null}
+
+                            {/*
+                              * ── WHAT IS EXPECTED TO REDUCE IT ───────────────────────────────
+                              *
+                              * Compact, and only about policies that have something to say for
+                              * THIS relationship: a configuration list would tell the operator
+                              * about discounts other families get. The reasons are the domain's
+                              * own — `not_enough_siblings`, `category_not_discountable` — because
+                              * a second vocabulary invented in the surface would disagree with
+                              * the ledger the first time the two were compared.
+                              *
+                              * Read-only. This writes no reduction and no charge; the ledger is
+                              * still where a discount becomes real.
+                              */}
+                            {forecast && forecast.outcomes.length > 0 ? (
+                                <div style={{ marginTop: 4 }} data-assignment-discount-forecast="true">
+                                    <div style={{ fontSize: 10, fontWeight: 650, letterSpacing: "0.04em", color: T.mid40 }}>
+                                        DISCOUNTS
+                                    </div>
+                                    {forecast.outcomes.map((o, i) => {
+                                        const kind = String(o.kind);
+                                        if (kind === "expected") {
+                                            const cents = Number(o.amountCents ?? 0);
+                                            return (
+                                                <div key={i} style={{ fontSize: 11, color: T.slate }} data-forecast-outcome="expected"
+                                                     data-forecast-policy={String(o.policyId ?? "")}>
+                                                    {String(o.label ?? "Discount")} ·{" "}
+                                                    {(Math.abs(cents) / 100).toLocaleString(undefined, {
+                                                        style: "currency",
+                                                        currency: forecast.currencyCode || "USD",
+                                                    })}{" "}
+                                                    expected to apply
+                                                </div>
+                                            );
+                                        }
+                                        const reason = String(o.reason ?? "");
+                                        return (
+                                            <div key={i} style={{ fontSize: 11, color: T.mid40 }} data-forecast-outcome={kind}
+                                                 data-forecast-reason={reason}>
+                                                {REDUCTION_REASON_LABEL[reason] ?? reason.replace(/_/g, " ")}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : null}
 
