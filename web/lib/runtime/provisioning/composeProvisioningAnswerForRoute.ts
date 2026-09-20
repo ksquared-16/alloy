@@ -104,7 +104,69 @@ export async function composeProvisioningAnswerForRoute(input: {
     const documentActorMs = timing ? performance.now() - tActor : 0;
 
     const tInner = mark();
+    /*
+     * THE PARTICIPANT READ, STARTED WHEN THE SUBJECT IS KNOWN RATHER THAN WHEN THE ANSWER IS DONE.
+     *
+     * This route has exactly three serial awaits — route identity ~170ms, composition ~742ms, card
+     * producers ~858ms — and measured on deployed d1b8f1319 they sum to the 2,022ms document wall.
+     * The producers' participant read needs only the SUBJECT, which composition resolves before it
+     * runs the ~616ms children shell, so queueing that read behind the finished answer spent real
+     * wall clock waiting for facts it did not need.
+     *
+     * The composer announces the subject; this starts the read and joins it below. If the
+     * announcement never fires the join falls back to the original inline read, so behaviour is
+     * unchanged on any path that does not reach a subject.
+     */
+    type EarlyProducerRun = {
+        subjectId: string;
+        financialSubjectId: string | null;
+        participant: Awaited<ReturnType<typeof resolveSoleEnrollmentParticipantForOpportunity>>;
+        cards: Awaited<ReturnType<typeof projectFocusPanelCardProducers>>;
+    };
+    /*
+     * Held in a ref, not a bare `let`: the assignment happens inside the composer's callback, which
+     * control-flow analysis cannot see, so a plain binding narrows to `null` at the join.
+     */
+    const earlyRef: { run: Promise<EarlyProducerRun | null> | null } = { run: null };
+
     const answer = await composeWorkUnitProvisioningAnswer({
+        onSubjectResolved: ({ subjectId, orgId, customerId }) => {
+            if (earlyRef.run || !subjectId) return;
+            /*
+             * Participant, then producers — the whole prerequisite chain, started as soon as the
+             * subject and household are known instead of after the answer exists. Settled here so
+             * an unhandled rejection can never escape while composition is still assembling; the
+             * join treats null as "no speculation" and falls back canonically.
+             */
+            earlyRef.run = (async (): Promise<EarlyProducerRun> => {
+                const participant = await resolveSoleEnrollmentParticipantForOpportunity({
+                    supabase,
+                    orgId,
+                    opportunityId: subjectId,
+                });
+                const cards = await projectFocusPanelCardProducers({
+                    supabase,
+                    orgId,
+                    access: gate.access,
+                    /*
+                     * The producers' declared input is already this narrowed shape — not a full
+                     * OperationalContext — so nothing partial is being fabricated to fit it.
+                     */
+                    /*
+                     * The same shape the settled frame builds from a resolved participant: the id
+                     * the producers key on, and a display name the resolver does not carry. Stated
+                     * explicitly rather than passed through, so the two paths cannot drift.
+                     */
+                    context: {
+                        participantScope: participant
+                            ? { customerMemberId: participant.customerMemberId, displayName: null }
+                            : null,
+                    },
+                    financialSubjectId: customerId,
+                });
+                return { subjectId, financialSubjectId: customerId, participant, cards };
+            })().catch(() => null);
+        },
         supabase,
         orgId: gate.orgId,
         currentUserId: gate.userId ?? null,
@@ -173,19 +235,36 @@ export async function composeProvisioningAnswerForRoute(input: {
          * One read, through the existing owner, scoped to this org and this opportunity. It
          * refuses to guess: two enrolled children resolve to nothing rather than to the first.
          */
-        const resolvedParticipant =
-            answer.recordOfAttention?.id
-                ? await resolveSoleEnrollmentParticipantForOpportunity({
-                      supabase,
-                      orgId: gate.orgId,
-                      opportunityId: String(answer.recordOfAttention.id),
-                  })
-                : null;
+        const attentionId = answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null;
+        /*
+         * JOIN — AND THE SPECULATION IS VERIFIED, NEVER ASSUMED.
+         *
+         * The early run was keyed to the subject and household the composer announced before the
+         * children shell. Two things can still change underneath it: the answer can settle on a
+         * different record, and on a CHILD-GRAIN surface the household id can fall back to
+         * `childComposition.family.customerId`, which resolves later than the subject row.
+         *
+         * Both are checked against the composed truth below. Any mismatch discards the whole
+         * speculative run — participant AND producer cards together, never half of it — and the
+         * canonical path runs for the real identities. An early answer for one customer must never
+         * describe another.
+         */
+        const early = earlyRef.run ? await earlyRef.run : null;
+        const earlySubjectMatches = !!early && !!attentionId && early.subjectId === attentionId;
         /*
          * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
          * the same identity to decide that Attendance, Health and Children are mountable at all.
          * Without it the answer ships their CONTENT and the client still reserves their cells.
          */
+        const resolvedParticipant = earlySubjectMatches
+            ? early!.participant
+            : attentionId
+              ? await resolveSoleEnrollmentParticipantForOpportunity({
+                    supabase,
+                    orgId: gate.orgId,
+                    opportunityId: attentionId,
+                })
+              : null;
         answer.resolvedParticipant = resolvedParticipant;
         const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
@@ -210,29 +289,33 @@ export async function composeProvisioningAnswerForRoute(input: {
                     subjectGrain: answer.subjectGrain,
                     resolvedParticipant,
         });
+        /*
+         * The canonical household answer, from the composed truth. This is the value the early run
+         * gambled on; comparing them is what makes the gamble safe on child grain, where
+         * `householdCustomerId` can fall back to the family row after the subject row is read.
+         */
+        const canonicalFinancialSubjectId = (() => {
+            // Same promise as the settled frame: a malformed truth costs Financials, not the answer.
+            try {
+                return resolveFinancialSubjectId(commitContext);
+            } catch {
+                return null;
+            }
+        })();
+        const earlyRunUsable =
+            earlySubjectMatches && early!.financialSubjectId === canonicalFinancialSubjectId;
         answer.focusPanelOperationalProjection = {
             ...answer.focusPanelOperationalProjection,
-            cards: await projectFocusPanelCardProducers({
-                supabase,
-                orgId: gate.orgId,
-                // The route's OWN resolved authority — same canonical bundle as the endpoint.
-                access: gate.access,
-                context: commitContext,
-                /*
-                 * The commit frame states it from its own context, exactly as the producers used to
-                 * derive it internally. Same function, same key precedence — the settled frame now
-                 * states it too, from the composer's truth, so neither frame derives it privately.
-                 */
-                financialSubjectId: (() => {
-                    // Same promise as the settled frame: a malformed truth costs Financials, not
-                    // the commit answer.
-                    try {
-                        return resolveFinancialSubjectId(commitContext);
-                    } catch {
-                        return null;
-                    }
-                })(),
-            }),
+            cards: earlyRunUsable
+                ? early!.cards
+                : await projectFocusPanelCardProducers({
+                      supabase,
+                      orgId: gate.orgId,
+                      // The route's OWN resolved authority — same canonical bundle as the endpoint.
+                      access: gate.access,
+                      context: commitContext,
+                      financialSubjectId: canonicalFinancialSubjectId,
+                  }),
         };
         cardProducersMs = timing ? performance.now() - tProducers : 0;
     }

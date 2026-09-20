@@ -620,6 +620,23 @@ export type ProvisioningRequest = {
      * `next/headers` and this module is in a client-reachable graph. Absent (any non-route caller)
      * simply means the client resolves them as before.
      */
+    /**
+     * EARLY SUBJECT NOTIFICATION — the route starts its own subject-scoped reads sooner.
+     *
+     * `composeProvisioningAnswerForRoute` has exactly three serial awaits: route identity (~170ms),
+     * this composition (~742ms), then the card producers (~858ms). Measured on deployed d1b8f1319
+     * those sum to the 2,022ms document wall, and nothing the operator can read crosses the wire
+     * until the last of them finishes — even though the response itself opens at ~32ms.
+     *
+     * The producers' own participant read only needs the SUBJECT, which is resolved here, before
+     * the ~616ms children shell runs. Announcing it lets the route overlap that read with the rest
+     * of composition instead of queueing it behind the whole answer.
+     *
+     * Announcement only: no value is returned into composition, so the answer cannot come to depend
+     * on route-side work and the two cannot deadlock. A throwing listener must never fail the
+     * document, so the call site swallows.
+     */
+    onSubjectResolved?: (args: { subjectId: string; orgId: string; customerId: string | null }) => void;
     resolveHeaderKpis?: (args: {
         workUnitId: string;
         kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
@@ -1723,6 +1740,39 @@ export async function composeWorkUnitProvisioningAnswer(
                         return null;
                     })
               : Promise.resolve(null);
+
+    /*
+     * SUBJECT AND HOUSEHOLD ANNOUNCED HERE — everything the card producers actually need.
+     *
+     * Measured on deployed d1b8f1319 the route runs three awaits in series: route identity ~170ms,
+     * this composition ~742ms, then the card producers ~858ms. Nothing the operator can read
+     * crosses the wire until the last finishes, even though the response opens at ~32ms.
+     *
+     * The producers do NOT need the composed answer. Their input type is already a narrowed Pick
+     * carrying `participantScope` alone, and `financialSubjectId` is passed as a scalar — both
+     * shaped that way so the drawer route could start them before its view model existed. The only
+     * reason this route waits is that it happens to build them from the finished answer.
+     *
+     * Announcing the subject AND the household customer id here — after the subject row resolves
+     * and before the ~616ms children shell — gives the route both halves of that contract.
+     *
+     * `customerId` is the FIRST key of HOUSEHOLD_IDENTITY_TRUTH_KEYS ("customer.id"), so it is the
+     * same answer `resolveFinancialSubjectIdFromTruth` will reach. It is announced as a candidate,
+     * never as the decision: on a child surface the final value can fall back to the family row,
+     * so the route re-checks it against the composed truth before using anything derived from it.
+     */
+    if (chosen.entityId) {
+        try {
+            req.onSubjectResolved?.({
+                subjectId: String(chosen.entityId),
+                orgId: req.orgId,
+                customerId:
+                    strOrNull((subjectRow as Record<string, unknown> | null)?.customer_id) ?? null,
+            });
+        } catch {
+            // A listener is an optimisation. It may never cost the document its answer.
+        }
+    }
 
     /*
      * THE AUTHORITATIVE CHILDREN ANSWER — started here, awaited at the commit boundary.
