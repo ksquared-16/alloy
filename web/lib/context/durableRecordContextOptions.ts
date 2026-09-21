@@ -106,6 +106,12 @@ const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = [
      * whether she works here.
      */
     "qualifications",
+    /*
+     * Availability belongs here for the same reason: a canonical card ABOUT THE
+     * RECORD, not a commitment about someone's week. What the organization decided
+     * she WILL work is a schedule, and that is a different authority.
+     */
+    "availability",
 ];
 
 export type DurableRecordContextOption = {

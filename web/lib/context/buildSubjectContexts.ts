@@ -266,6 +266,38 @@ export function buildSubjectQualificationsContext(
 }
 
 /**
+ * When this staff member can work, as a context.
+ *
+ * Gated on EMPLOYMENT, not on having a pattern. "No availability pattern set" is an
+ * answer an operator opens the record to act on, and hiding the context until a
+ * pattern exists would make the empty state unreachable exactly when it matters.
+ *
+ * No detail is derived here: the resolved answer depends on the organisation's day
+ * and is computed server-side by the card's own read. A summary computed in the
+ * context would be a second resolver, and stale the morning an exception applied.
+ */
+export function buildSubjectAvailabilityContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "availability",
+        key: "availability",
+        label: "Availability",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
  * The record's own information, as a context.
  *
  * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──
