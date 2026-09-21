@@ -30,8 +30,11 @@ Assignment, and an Assignment belongs to a child.
 
 ### 2 · A child's Assignment — tuition, billing and discounts
 
-From the **Children** card, open a child. Their panel adds an **Assignments** card, which is where
-the commercial setup lives:
+From the **Children** card, open a child by clicking the **arrow control on their row** — the one
+reading `custom →` or `full_time →` beside the name. Measured on the deployed build:
+**clicking the child's name itself does nothing** (no navigation, no panel). Use the row arrow.
+
+Their panel adds an **Assignments** card, which is where the commercial setup lives:
 
 - the tuition options and the accepted price
 - **Billing frequency**, with the **current** and **next** billing period spelled out
@@ -69,3 +72,17 @@ Each tile has an **Open …** button.
 
 Engineering readiness only. **Human QA is 0 of 44** — nothing in the catalog has been marked
 passed, and this run did not walk it for you.
+
+
+## Verified on the deployed build
+
+Merge `5f6065aa7b5479bdb48c8883fd25f0310c9bbf99`, deployed as `gitSha`
+`5f6065aa7b5479bdb48c8883fd25f0310c9bbf99`, branch `staging`, `nodeEnv` `production`, Supabase
+`ikaxilmwmrmbagoidedu`. Published tenant layout v164.
+
+Figures you should see on this family: Balance **$1,412.87**, Available prepaid **$125.00**,
+Certa **$185.00/weekly** accepted with **$18.50** expected to apply, Certb **$1,450.00/monthly**
+with **$145.00** expected to apply. Responsibility is a household arrangement, Cert Certhouse,
+**$18.00**, from **Sep 18, 2026**, open-ended.
+
+Full evidence: `certification/financials/11b-deployed-qa/DEPLOYED-HUMAN-QA.md`.

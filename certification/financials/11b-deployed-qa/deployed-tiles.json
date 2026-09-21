@@ -1,0 +1,51 @@
+[
+  {
+    "testid": "financials-landing-tile-tuition",
+    "text": "Tuition Tuition Plans, enrollment commitments, organization pricing, and location overrides. Organization tuition defaults Location overrides and inheritance Cadence-based rates and day-band pricing Open Tuition",
+    "openControl": "Open Tuition",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  },
+  {
+    "testid": "financials-landing-tile-catalog",
+    "text": "Catalog Fees, optional services, and other chargeable offerings outside recurring tuition. Fees, add-ons, and deposits Commercial products for Programs Categories and location/program scoping Open Catalog",
+    "openControl": "Open Catalog",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  },
+  {
+    "testid": "financials-landing-tile-policies",
+    "text": "Policies How operational events affect financial execution. Discount and deposit rules Commercial policy eligibility Organization-scoped policy authoring Open Policies",
+    "openControl": "Open Policies",
+    "controlTag": "BUTTON",
+    "namesDiscount": true
+  },
+  {
+    "testid": "financials-landing-tile-payments",
+    "text": "Payments Connect a payment provider so this organization can accept card and bank payments. Connect a payment provider Card and bank payment readiness Provider status and disconnection Open Payments",
+    "openControl": "Open Payments",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  },
+  {
+    "testid": "financials-landing-tile-accounting",
+    "text": "Accounting GL Codes, revenue mappings, and where tuition and fees post. Revenue categories GL account relationships Mapping review for commercial charges Open Accounting",
+    "openControl": "Open Accounting",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  },
+  {
+    "testid": "financials-landing-tile-simulator",
+    "text": "Simulator Preview how commercial execution resolves for a Program and schedule. Preview commercial execution Program · offering · schedule · cadence Utility workspace — not a config collection Open Simulator",
+    "openControl": "Open Simulator",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  },
+  {
+    "testid": "financials-landing-tile-funding",
+    "text": "Funding Who pays remains owned by Processing — this chapter documents the boundary. Payment responsibility boundary Owned by Processing — not Financials config Documents who-pays separation from price Open Funding",
+    "openControl": "Open Funding",
+    "controlTag": "BUTTON",
+    "namesDiscount": false
+  }
+]

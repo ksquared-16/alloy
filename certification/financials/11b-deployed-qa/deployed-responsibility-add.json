@@ -1,0 +1,58 @@
+{
+  "financialsNav": {
+    "present": true
+  },
+  "accountsTab": {
+    "present": true,
+    "tag": "BUTTON"
+  },
+  "accounts": {
+    "rows": 11,
+    "lenses": [
+      "all",
+      "charges",
+      "credits",
+      "funding",
+      "payments"
+    ],
+    "manageResponsibilityGear": true,
+    "addControl": 0,
+    "prepaidNamedOnAccounts": true
+  },
+  "accountRow": {
+    "present": true
+  },
+  "account": {
+    "scopedToCard": true,
+    "responsibleParty": false,
+    "gear": false,
+    "scope": null,
+    "members": [],
+    "availablePrepaid": null,
+    "text": "Certhouse Family $2,218.82 58 charges · account-wide fees $2,219 collectible Outstanding"
+  },
+  "gearPresent": true,
+  "arrangement": {
+    "grainHousehold": true,
+    "party": "Cert Certhouse",
+    "fixed": null,
+    "amount": "$18.00",
+    "effective": "Sep 18, 2026",
+    "openEnded": true,
+    "scopeAttr": "household",
+    "members": [
+      "Applies to Household — the whole account Certa Certhouse Certb Certhouse Household responsibility. Cert Certhouse $18.00 · from Sep 18, 2026 · saving supersedes it"
+    ],
+    "text": "Financials All sites · operational Site All sites ▾ Close Work Studio Overview Accounts Charges Payments Subsidy Activity Filters Certhouse Family $2,218.82 58 charges · account-wide fees $2,219 collectible Outstanding Kurzman Family $75.00 3 charges · account-wide fees $75 collectible Outstanding Alvarez Household (demo) $0.00 Open · nothing billed No financial activity Brennan Household (demo) $0.00 Open · nothing billed No financial activity Certfree Family $0.00 Open · nothing billed No financial activity Certopp Family $0.00 Open · nothing billed No financial activity Chen Household (demo) $0.00 Open · nothing billed No financial activity Disposable0913 Family $0.00 Open · nothing billed No financial activity Okafor Household (demo) $0.00 Open · nothing billed No financial activity Specq0913 Family $0.00 Open · nothing billed No financial activity Tourb0913 Family $0.00 Open · nothing billed No financial activity FINANCIALS CURRENT BALANCE $2,023.87 DUE $1,912.00 PAST DUE $1,525.00 AVAILABLE PREPAID $125.00 Payment Add All79 Charges23 Credits & adjustments56 Funding0 Payments2 Everyone ▾ All periods ▾ Anyone responsible ▾ Manage responsibility Who contractually owes this account, from a date. Changing it does not change who has already paid. Applies to Household — the whole account Certa Certhouse Certb Certhouse Household responsibility. Cert Certhouse $18.00 · from Sep 1"
+  },
+  "addControl": {
+    "count": 0,
+    "present": false
+  },
+  "add": {
+    "targets": [],
+    "children": [],
+    "eachChildOnce": false,
+    "householdExplicit": false
+  }
+}
