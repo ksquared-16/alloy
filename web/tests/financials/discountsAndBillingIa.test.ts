@@ -234,3 +234,63 @@ describe("the family Discount position renders canonical truth and computes none
         expect(host).toMatch(/discountAdmin=\{[\s\S]{0,700}await load\(\)/);
     });
 });
+
+describe("one policy identity across every surface", () => {
+    /*
+     * A policy is the same policy because its ID is the same, never because two screens render the
+     * same words. Display text is a label an operator can change; matching on it would silently
+     * pair unrelated policies and, worse, would look right on the QA fixture where only one
+     * discount exists.
+     */
+    const SURFACES: [string, string][] = [
+        ["family position", "app/adminV2/financials/FinancialsDiscountPanel.tsx"],
+        ["family read", "app/api/admin/financials/family-discount-position/route.ts"],
+        ["assignment", "components/admin/focusPanel/cards/SchedulingCard.tsx"],
+        ["ledger provenance", "lib/financials/reductions/reductionProvenance.ts"],
+    ];
+
+    it.each(SURFACES)("%s carries the policy id", (_name, rel) => {
+        expect(code(rel)).toMatch(/policyId|commercialPolicyId/);
+    });
+
+    it("the exception is scoped by policy id, not by label", () => {
+        const panel = code("app/adminV2/financials/FinancialsDiscountPanel.tsx");
+        expect(panel).toContain("commercial_policy_id: args.policyId");
+        /* Never keyed by the rendered name. */
+        expect(panel).not.toMatch(/commercial_policy_(id|label):\s*\w*[Ll]abel/);
+    });
+
+    it("no surface pairs policies by matching display text", () => {
+        for (const [, rel] of SURFACES) {
+            const s = code(rel);
+            expect(s, `${rel} must not compare labels to identify a policy`)
+                .not.toMatch(/policyLabel\s*===\s*\w*[Ll]abel|label\s*===\s*policy/);
+        }
+    });
+
+    it("the family position groups by id, and the label is only carried along", () => {
+        const route = code("app/api/admin/financials/family-discount-position/route.ts");
+        expect(route).toContain("byPolicy.get(outcome.policyId)");
+        expect(route).toContain("byPolicy.set(outcome.policyId");
+    });
+});
+
+describe("no automatic-execution claim outruns the scheduler", () => {
+    it("no Financials surface promises automatic billing", () => {
+        /*
+         * MEASURED on this candidate: no billing handler is wired to Governed Scheduled Work, and
+         * no Financials surface claims automatic execution. The distinction the product must keep
+         * is Recurring Billing Engine (configured recurrence, executed on request) from Automatic
+         * Periodic Billing Execution (a scheduler firing it), and today only the first is true.
+         */
+        const surfaces = [
+            "components/adminV2/settings/financials/tuitionPlans/TuitionBillingFrequenciesPanel.tsx",
+            "app/adminV2/financials/FinancialsDiscountPanel.tsx",
+            "lib/financials/tuitionPlans/billingPeriodPreview.ts",
+        ];
+        for (const rel of surfaces) {
+            expect(src(rel), `${rel} must not claim automatic execution`)
+                .not.toMatch(/automatically bill|bills automatically|runs automatically|next automatic|scheduled billing/i);
+        }
+    });
+});
