@@ -214,3 +214,91 @@ shape as the prepaid extraction already done in this programme (`readAccountPrep
 which is why that one was available to A′ and this one is not.
 
 **Revised Part 8 roll-up: A 15 · B 0 · C 6 · D 4.**
+
+---
+
+# PART 14 — THE 25 FIELDS, MAPPED INTO THE GENERIC CAPABILITY MODEL
+
+Every field implemented in the prior slice survives. None was rewritten; each became a registered
+capability with the same canonical owner and the same state contract it already had. What changed
+is WHO SELECTS IT: the composer used to name it in a `switch (cardKey)`, and configuration now
+names it by semantic key.
+
+`configuration reference` is how a surface selects the capability: a `FocusPanelCardField.refKey`
+with `placement: "collapsed"`, or — when a card configures no first-order fields — the card's own
+`firstOrderFields` declaration in the Focus Panel card registry.
+
+| semantic key | canonical provider | prerequisites | auth | state contract |
+|---|---|---|---|---|
+| `household.label` | `workUnitProcessPopulation` | population | none | known · known_empty · unknown (no subject) |
+| `household.updated_at` | `workUnitProcessPopulation` | population | none | known · unknown |
+| `person.primary_contact_name` | `enrichOpportunityQueueProjection` | population, crm_projection | none | known · known_empty · unknown |
+| `person.primary_contact_line` | `enrichOpportunityQueueProjection` | population, crm_projection | none | known · known_empty · unknown |
+| `record.location_label` | `enrichOpportunityQueueProjection` | population, crm_projection | none | known · known_empty · unknown |
+| `children.count` | `focusPanelCollectionPresentation` | population, children_projection | none | known · unavailable · unknown |
+| `children.enrolling_count` | `deriveOpportunityFocusPanelCards` | population, children_projection | none | known · unavailable · unknown |
+| `process.name` | `buildOpportunityWorkspaceLifecycleRail` | process_config | none | known · known_empty (no process) · unavailable |
+| `process.stage_count` | `buildOpportunityWorkspaceLifecycleRail` | process_config | none | known · known_empty · unavailable |
+| `process.current_stage_key` | `workUnitProcessPopulation` | population | none | known · known_empty · unknown |
+| `process.current_stage_label` | `buildOpportunityWorkspaceLifecycleRail` | population, process_config | none | known · unknown (unplaced stage) · unavailable |
+| `process.stage_position` | `buildOpportunityWorkspaceLifecycleRail` | population, process_config | none | known · unknown · unavailable |
+| `process.stage_entered_at` | `workUnitProcessPopulation` | population | none | known · known_empty · unknown |
+| `attendance.state` | `buildAttendanceCardVM` | attendance_fold | none | known · unavailable |
+| `attendance.date` | `buildAttendanceCardVM` | attendance_fold | none | known · unavailable |
+| `attendance.expected_room_label` | `buildAttendanceCardVM` | attendance_fold | none | known · known_empty · unavailable |
+| `attendance.unavailable_reason` | `buildAttendanceCardVM` | attendance_fold | none | known · known_empty (IS recordable) · unavailable |
+| `health.profile_fact_count` | `loadCustomerMemberProfileFields` | health_profile | health_view | known · unavailable · forbidden |
+| `health.requirements_satisfied` | `buildHealthSafetyCardVM` | health_supplements | health_view | known · unavailable · forbidden |
+| `health.requirements_total` | `buildHealthSafetyCardVM` | health_supplements | health_view | known · unavailable · forbidden |
+| `health.emergency_contact_count` | `buildHealthSafetyCardVM` | health_supplements | health_view | known · unavailable · forbidden |
+| `financials.prepaid_available_cents` | `readAccountPrepaidPosition` | prepaid_position | financials_read | known · unavailable · forbidden |
+| `financials.prepaid_pending_cents` | `readAccountPrepaidPosition` | prepaid_position | financials_read | known · unavailable · forbidden |
+| `financials.prepaid_held_cents` | `readAccountPrepaidPosition` | prepaid_position | financials_read | known · unavailable · forbidden |
+
+**25 capabilities · 24 distinct semantic keys.** `children.count` is selected by two cards
+(Household and Children) and read ONCE — which is the dedupe property stated rather than assumed.
+
+**How much of the prior slice survived:** every projector body. The `if (cardKey === …)` blocks
+became capability `project` functions with their reasoning intact, the two defect repairs
+(`attendance.state` rather than the undeclared `todayLabel`; a child count that counts children)
+carried over unchanged, and the readers were untouched. What was deleted is the dispatch
+structure, not the semantics.
+
+**Prerequisite names no longer collide with card keys.** They were `crm`, `children`,
+`attendance`, `prepaid` — three of which are also card keys. That was not cosmetic: the gate
+proving the composer names no card key could not distinguish `"children"` the read from
+`"children"` the card, so the property was unprovable and the gate reported a violation that was
+not one. They are now `crm_projection`, `children_projection`, `attendance_fold`,
+`prepaid_position`.
+
+---
+
+# THE FINAL FOUR — UNBLOCKED BY EXTRACTION, NOT BY A SECOND OWNER
+
+The four financials ledger fields were class **D** because the account-scoped charges read had no
+canonical owner. It has one now: `lib/financials/account/accountChargeLedger.ts`, extracted out of
+the private `buildFinancialsCardVMInner` so **legacy Financials and A′ call the same
+implementation**. The card's row mapper now consumes `deriveAccountChargeLedgerRows` for period,
+category, lifecycle and due date, and layers presentation on top; `reconcileRows` and `pastDueFor`
+were re-typed to the narrow `AccountChargeLedgerRow` contract, which `FinancialsLedgerRow`
+structurally satisfies, so the card passes its richer rows unchanged.
+
+| semantic key | canonical provider | prerequisites | auth | state contract |
+|---|---|---|---|---|
+| `financials.billing_period_key` | `billingPeriodForDate` via `readAccountLedgerPosition` | account_ledger | financials_read | known · unavailable · forbidden |
+| `financials.responsibility_cents` | `reconcileRows` over `accountChargeLedger` rows | account_ledger | financials_read | known · known_zero · unavailable · forbidden |
+| `financials.balance_cents` | `reconcileRows` | account_ledger | financials_read | known · known_zero · unavailable · forbidden |
+| `financials.past_due_cents` | `pastDueFor` | account_ledger | financials_read | known · known_zero (nothing overdue is a REAL zero) · unavailable · forbidden |
+
+**Enrollment coverage: 29/29.** Query count 20 → 24: the `account_ledger` prerequisite costs four
+(agreements · paged charges · batched applications · batched payment statuses).
+
+**A partial financial read is not money.** `readAccountLedgerPosition` requires BOTH the charge
+ledger and its applications; either failing makes the whole position UNAVAILABLE. A ledger without
+its applications yields a balance equal to the full responsibility — a confident, specific, wrong
+number telling a family they owe what they have already paid.
+
+**Part 7's hard test passed:** `compileFirstOrderPlan.ts` was not edited to add these four, and
+the composer gained no `cardKey ===` and no `process ===`. What it gained is one prerequisite
+name, one query-cost entry, one subject-availability clause and one `maybe(...)` — all data, none
+of it about Financials.

@@ -8,48 +8,51 @@ import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOp
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 import { loadAcknowledgedOccurrenceKeys } from "@/lib/queues/operatorStageMembershipAck";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
-import { buildChildrenCardModel, buildHouseholdCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
-import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
+import { readAccountLedgerPosition } from "@/lib/runtime/firstOrder/readAccountLedgerPosition";
 import {
-    forbidden, known, knownEmpty, unavailable, unknown,
+    compileFirstOrderPlan, type FirstOrderPlan, type FirstOrderSurfaceConfiguration,
+} from "@/lib/runtime/firstOrder/compileFirstOrderPlan";
+import type {
+    FirstOrderPrerequisiteKey, FirstOrderProjectionContext, FirstOrderScalar,
+    FirstOrderUnsupportedCapability,
+} from "@/lib/runtime/firstOrder/firstOrderCapability";
+import {
+    forbidden, known, unavailable, unknown,
     type FirstOrderCardSummary, type FirstOrderConfigurationIdentity, type FirstOrderField,
     type FirstOrderQueueRow, type FirstOrderWorkUnitProjection,
 } from "@/lib/runtime/firstOrder/firstOrderWorkUnitProjection";
 
 /**
- * THE STAGE-1 COMPOSER (P0-7.6 · A′).
+ * THE STAGE-1 RUNTIME (P0-7.6 · A′) — a CONFIGURATION COMPILER, not a projection for six cards.
  *
- * Produces the FirstOrderWorkUnitProjection by executing the MEASURED A′ read DAG directly against
- * canonical owners. SHADOW ONLY: nothing renders from this, the existing Work Unit answer remains
- * authoritative, and this composer is not a fallback for it.
+ * It executes a PLAN:
  *
- * WHAT IT DELIBERATELY DOES NOT CALL, because calling any of them would restore the coupling the
- * architecture exists to remove: the full Work Unit composer, drawer view models, the full
- * Financials VM, the payment-views prepaid path, and the legacy three-hop Health profile chain.
+ *   configuration → semantic keys → registered capabilities → deduplicated prerequisites
+ *                 → concurrent execution → projection → configuration-owned geometry.
  *
- * CONFIGURATION DRIVES EXECUTION. Resolvers run for CONFIGURED cards only — an absent card costs
- * nothing, because its resolver is never reached. Today's six-card set is a specimen, not the
- * architecture, so membership arrives as configuration and is never written down here.
+ * SHADOW ONLY: nothing renders from this and it is not a fallback for the existing answer.
  *
- * THE DAG'S SHAPE IS MEASURED, NOT CONVENIENT. Independent work starts together; only genuinely
- * dependent work waits. Writing this sequentially would be easier and would silently cost the
- * ~170ms of margin the product model has left, so the independent phase is one `Promise.all` and
- * the dependent phase is another.
+ * ── WHAT THIS FILE IS NOT ALLOWED TO CONTAIN, AND WHY ──
  *
- * READ TIME AND ASSEMBLY TIME ARE REPORTED SEPARATELY. The product model's remaining headroom is
- * small enough that hiding assembly inside a single total would conceal exactly the term that
+ * No card key. No semantic key. No field list. No `switch (cardKey)`. It iterates the plan the
+ * compiler produced and asks each capability for its own value. The previous version branched
+ * per card and populated named facts by hand: card membership was configurable while FIELD
+ * membership was not, so moving one field between two cards, or giving Billing a different
+ * surface, meant editing this file. That is the difference between a configurable surface and a
+ * configuration compiler, and it is the whole point of the refactor.
+ *
+ * Gates enforce this by reading the source: no semantic-key literal, no card-key membership list,
+ * no `"collapsed"` literal (the Stage-1/Stage-2 line belongs to configuration).
+ *
+ * ── WHAT IT STILL OWNS ──
+ *
+ * Dependency execution. The compiler says WHICH reads are needed and which wait on which; this
+ * runs them with the measured concurrency, and reports read time and assembly time separately
+ * because the remaining product margin is small enough that one total would hide the term that
  * decides cutover.
  */
-
-export type FirstOrderConfiguration = {
-    /** Configured card keys IN ORDER, from the published Focus Panel doc. */
-    readonly cardKeys: readonly string[];
-    readonly kpiKeys: readonly string[];
-    readonly workViewIds: readonly string[];
-    readonly siteScopeId: string | null;
-};
 
 export type FirstOrderComposeInput = {
     supabase: SupabaseClient;
@@ -60,18 +63,21 @@ export type FirstOrderComposeInput = {
     customerMemberId: string | null;
     /** The focused subject's household, for money. */
     householdId: string | null;
-    configuration: FirstOrderConfiguration;
+    /** The COMPILED surface: cards in order, each with its first-order semantic keys in order. */
+    configuration: FirstOrderSurfaceConfiguration;
     /** Request-time decisions, resolved by the caller's gate. Never decided here. */
     authority: { financialsRead: boolean; healthView: boolean };
 };
 
 export type FirstOrderComposeTiming = {
+    /** Compiling configuration into a plan. Measured on its own — never hidden inside assembly. */
+    planMs: number;
     readDagMs: number;
     assemblyMs: number;
     totalMs: number;
     /** Offsets from compose start, so concurrency is visible rather than inferred. */
     spans: Array<{ name: string; at: number; end: number }>;
-    /** Resolvers that actually ran. An unconfigured card must not appear here. */
+    /** Prerequisites that actually ran. An unselected prerequisite must not appear here. */
     executedResolvers: string[];
     queryCount: number;
 };
@@ -79,13 +85,35 @@ export type FirstOrderComposeTiming = {
 export type FirstOrderComposeResult = {
     projection: FirstOrderWorkUnitProjection;
     timing: FirstOrderComposeTiming;
+    plan: FirstOrderPlan;
 };
+
+/**
+ * A configured capability nobody implements is a COMPILE FAILURE, surfaced as a throw.
+ *
+ * Not a silent omission, not zero, not empty, and not UNKNOWN. UNKNOWN is the platform saying it
+ * tried and could not answer; here nothing tried, because the fact has no implementation. The two
+ * are indistinguishable on a surface and must not be indistinguishable in the runtime.
+ */
+export class FirstOrderUnsupportedCapabilityError extends Error {
+    readonly unsupported: readonly FirstOrderUnsupportedCapability[];
+    constructor(unsupported: readonly FirstOrderUnsupportedCapability[]) {
+        super(`first-order configuration names ${unsupported.length} unsupported capability/capabilities: `
+            + unsupported.map((u) => `${u.cardKey}/${u.semanticKey}`).join(", "));
+        this.name = "FirstOrderUnsupportedCapabilityError";
+        this.unsupported = unsupported;
+    }
+}
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-/** Money as an operator-facing scalar, in cents, carrying its own state. */
-const centsField = (v: number | null | undefined): FirstOrderField<number> =>
-    typeof v === "number" ? known(v) : unknown<number>();
+/** Query cost per prerequisite. Stated once, so the census is derived from the plan. */
+const PREREQUISITE_QUERY_COST: Readonly<Record<FirstOrderPrerequisiteKey, number>> = {
+    population: 1, crm_projection: 2, children_projection: 2, personal_seen: 1,
+    attendance_fold: 2, health_profile: 2, health_supplements: 2, process_config: 1, prepaid_position: 7,
+    // agreements · paged charges · batched applications · batched payment statuses
+    account_ledger: 4,
+};
 
 export async function composeFirstOrderWorkUnitProjection(
     input: FirstOrderComposeInput,
@@ -97,54 +125,94 @@ export async function composeFirstOrderWorkUnitProjection(
     const executedResolvers: string[] = [];
     let queryCount = 0;
 
-    const configured = (cardKey: string) => cfg.cardKeys.includes(cardKey);
-    const run = async <T,>(name: string, queries: number, fn: () => Promise<T>): Promise<T | null> => {
+    // ── COMPILE ────────────────────────────────────────────────────────────────────────────────
+    const plan = compileFirstOrderPlan(cfg);
+    if (!plan.ok) throw new FirstOrderUnsupportedCapabilityError(plan.unsupported);
+
+    /*
+     * AUTHORIZATION IS EVALUATED HERE, AT REQUEST TIME — AND IT PRUNES THE PLAN.
+     *
+     * A capability declares a REQUIREMENT; the caller's gate supplies the verdict. Fields the
+     * caller may not see are answered FORBIDDEN, and — because they are removed before the
+     * prerequisite set is computed — the reads that would only have served them never execute. A
+     * refused caller costs zero queries for refused data, which is both the honest cost and the
+     * safer one.
+     *
+     * No verdict is written back into the plan. A compiled plan is configuration; a permission is
+     * not, and storing one would make a cached authorization out of a cached layout.
+     */
+    const authorized = (requirement: string): boolean =>
+        requirement === "none"
+        || (requirement === "financials_read" && input.authority.financialsRead)
+        || (requirement === "health_view" && input.authority.healthView);
+
+    const runnable = plan.fields.filter((f) => authorized(f.capability.authorization));
+    const needed = new Set<FirstOrderPrerequisiteKey>(["population", "personal_seen"]);
+    for (const f of runnable) for (const p of f.capability.prerequisites) needed.add(p);
+    if (needed.has("crm_projection") || needed.has("children_projection") || needed.has("personal_seen")) needed.add("population");
+
+    /*
+     * A PREREQUISITE ALSO NEEDS ITS SUBJECT. `attendance` and the health reads are child-grain;
+     * `prepaid` is household-grain. With no such subject in the request the read cannot be issued
+     * at all — so it is dropped from the executable set rather than called with an empty id, and
+     * its capabilities report UNAVAILABLE. Issuing it anyway would spend a round trip to learn
+     * something the request already knew.
+     */
+    const hasChild = Boolean(input.customerMemberId);
+    const hasHousehold = Boolean(input.householdId);
+    const executable = new Set<FirstOrderPrerequisiteKey>(
+        [...needed].filter((p) => {
+            if (p === "attendance_fold" || p === "health_profile" || p === "health_supplements") return hasChild;
+            if (p === "prepaid_position" || p === "account_ledger") return hasHousehold;
+            return true;
+        }),
+    );
+    const planMs = at();
+
+    // ── EXECUTE ────────────────────────────────────────────────────────────────────────────────
+    const run = async <T,>(name: FirstOrderPrerequisiteKey, fn: () => Promise<T>): Promise<T | null> => {
         executedResolvers.push(name);
-        queryCount += queries;
+        queryCount += PREREQUISITE_QUERY_COST[name];
         const a = at();
         try {
             const v = await fn();
             spans.push({ name, at: a, end: at() });
             return v;
         } catch {
-            // A resolver that throws yields UNAVAILABLE downstream; it never yields an empty value.
+            // A prerequisite that throws yields UNAVAILABLE downstream; never an empty value.
             spans.push({ name, at: a, end: at() });
             return null;
         }
     };
+    const maybe = <T,>(key: FirstOrderPrerequisiteKey, fn: () => Promise<T>): Promise<T | null> =>
+        (executable.has(key) ? run(key, fn) : Promise.resolve(null));
 
     /*
-     * PHASE 2 CHAINS OFF POPULATION ALONE, NOT OFF ALL OF PHASE 1.
+     * THE REPAIRED DAG, NOW DRIVEN BY THE PLAN.
      *
-     * The first version awaited the whole phase-1 `Promise.all` before starting the
-     * population-dependent work. Shadow measurement showed the cost: population finished at 127 ms
-     * but CRM, children and personal_seen did not start until 328 ms, because they were waiting on
-     * `prepaid` — a resolver none of them consume. Children then bound the DAG at 576 ms instead of
-     * ~375 ms. Two hundred milliseconds spent on a dependency that does not exist, out of a product
-     * budget with ~170 ms of margin.
+     * Phase 2 chains off the POPULATION ALONE. The first composer awaited the whole of phase 1
+     * before starting population-dependent work: population finished at 127ms while CRM, children
+     * and personal_seen did not start until 328ms, waiting on `prepaid` — which none of them
+     * consume — and children bound the DAG at 576ms instead of ~375ms. Two hundred milliseconds
+     * on a dependency that does not exist, out of a budget with ~170ms of margin.
      *
-     * The gate I had written asserted that phase-1 resolvers share a start offset. They did. It
-     * tested the property I was thinking about rather than the one that mattered, and only the
-     * measured offsets caught it — which is the argument for measuring concurrency instead of
-     * reading it off the source.
+     * The edge now also exists as DATA (`PREREQUISITE_DEPENDENCIES`), so a capability added later
+     * cannot reintroduce the defect by naming the wrong phase.
      */
-    // ── PHASE 1 — everything that depends on nothing but the request. ───────────────────────────
-    const populationPromise = run("population", 1, () =>
-        loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId }));
+    const populationPromise = executable.has("population")
+        ? run("population", () => loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId }))
+        : Promise.resolve(null);
 
-    // ── PHASE 2 — starts the moment the population lands, independently of the rest of phase 1. ──
     const dependentPromise = populationPromise.then(async (pop) => {
         const depRows = ((pop?.rows ?? []) as Array<Record<string, unknown>>);
         if (!depRows.length) return { crm: null, children: null, seen: null, rows: depRows };
         const [c, ch, sn] = await Promise.all([
-            run("crm", 2, () => enrichOpportunityRowsWithCrmProjection(supabase, orgId,
+            maybe("crm_projection", () => enrichOpportunityRowsWithCrmProjection(supabase, orgId,
                 depRows.map((r) => ({ id: str(r.id), primary_person_id: (r.primary_person_id ?? null) as string | null,
                     location_id: (r.location_id ?? null) as string | null })))),
-            configured("children")
-                ? run("children", 2, () => enrichOpportunityRowsWithChildrenForCompactQueue(supabase, orgId,
-                    depRows.map((r) => ({ id: str(r.id), customer_id: (r.customer_id ?? null) as string | null, metadata: r.metadata }))))
-                : Promise.resolve(null),
-            run("personal_seen", 1, () => loadAcknowledgedOccurrenceKeys({
+            maybe("children_projection", () => enrichOpportunityRowsWithChildrenForCompactQueue(supabase, orgId,
+                depRows.map((r) => ({ id: str(r.id), customer_id: (r.customer_id ?? null) as string | null, metadata: r.metadata })))),
+            maybe("personal_seen", () => loadAcknowledgedOccurrenceKeys({
                 supabase, orgId, userId: input.viewerId,
                 occurrenceKeys: depRows.map((r) => `${str(r.id)}:${str(r.stage_key)}:${str(r.stage_entered_at)}`),
             })),
@@ -152,50 +220,31 @@ export async function composeFirstOrderWorkUnitProjection(
         return { crm: c, children: ch, seen: sn, rows: depRows };
     });
 
-    /*
-     * THE THREE FIRST-ORDER SUPPLEMENTS ALSO BELONG IN PHASE 1.
-     *
-     * None of them consumes the population: the process configuration is addressed by work unit,
-     * and both health supplements by the focused child. Chaining them behind anything would buy
-     * serialization for nothing, which is the defect this DAG was already repaired for once.
-     *
-     * Each is gated on its own card being CONFIGURED, so an unconfigured Health & Safety card
-     * costs zero queries rather than running and being discarded.
-     */
-    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, dependent] =
+    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, accountLedger, dependent] =
         await Promise.all([
-        populationPromise,
-        configured("attendance") && input.customerMemberId
-            ? run("attendance", 2, () => buildAttendanceCardVM(supabase, {
-                  orgId, customerMemberId: input.customerMemberId!, recentDays: 5,
-              }))
-            : Promise.resolve(null),
-        configured("health_safety") && input.authority.healthView && input.customerMemberId
-            ? run("health_profile", 2, () =>
-                  loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!]))
-            : Promise.resolve(null),
-        configured("health_safety") && input.authority.healthView && input.customerMemberId
-            ? run("health_supplements", 2, () =>
-                  readHealthFirstOrderSupplements({ supabase, orgId, customerMemberId: input.customerMemberId! }))
-            : Promise.resolve(null),
-        configured("business_process")
-            ? run("process_config", 1, () =>
-                  readWorkUnitProcessConfiguration({ supabase, orgId, workUnitId }))
-            : Promise.resolve(null),
-        configured("financials") && input.householdId
-            ? run("prepaid", 7, () => readAccountPrepaidPosition(supabase, {
-                  orgId, householdId: input.householdId!, authorized: input.authority.financialsRead,
-              }))
-            : Promise.resolve(null),
-        dependentPromise,
-    ]);
+            populationPromise,
+            maybe("attendance_fold", () => buildAttendanceCardVM(supabase, {
+                orgId, customerMemberId: input.customerMemberId!, recentDays: 5,
+            })),
+            maybe("health_profile", () =>
+                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!])),
+            maybe("health_supplements", () =>
+                readHealthFirstOrderSupplements({ supabase, orgId, customerMemberId: input.customerMemberId! })),
+            maybe("process_config", () => readWorkUnitProcessConfiguration({ supabase, orgId, workUnitId })),
+            maybe("prepaid_position", () => readAccountPrepaidPosition(supabase, {
+                orgId, householdId: input.householdId!, authorized: input.authority.financialsRead,
+            })),
+            maybe("account_ledger", () => readAccountLedgerPosition(supabase, {
+                orgId, customerId: input.householdId, customerMemberId: input.customerMemberId,
+            })),
+            dependentPromise,
+        ]);
 
     const rows = dependent.rows;
     const { crm, children, seen } = dependent;
-
     const readDagMs = at();
 
-    // ── ASSEMBLY — pure, measured separately because it consumes the remaining margin. ──────────
+    // ── ASSEMBLE ───────────────────────────────────────────────────────────────────────────────
     const aStart = at();
 
     const queueRows: FirstOrderQueueRow[] = rows.map((r) => {
@@ -212,33 +261,16 @@ export async function composeFirstOrderWorkUnitProjection(
     });
 
     /*
-     * ── THE FOCUSED SUBJECT'S RECORD ──────────────────────────────────────────────────────────
-     *
-     * Household, Children and Business Process all answer about ONE record, not about the
-     * population. That record is the one whose account the request already named: `householdId`
-     * is the same identity `opportunities.customer_id` carries, and it is the identity the money
-     * reader is already scoped by, so resolving the row this way cannot disagree with Financials
-     * about whose family is on screen.
-     *
-     * NO FALLBACK TO `rows[0]`. A request with no household, or a population that does not contain
-     * it, yields NO subject record — and every fact those three cards state is then UNKNOWN. The
-     * tempting alternative is to answer about whichever record came back first, which would render
-     * a confident household label belonging to a different family.
+     * THE FOCUSED SUBJECT'S RECORD. Resolved by the identity the request already named, which is
+     * the same identity the money reader is scoped by — so Household and Financials cannot
+     * disagree about whose family is on screen. NO FALLBACK TO `rows[0]`: a household not present
+     * in the population yields NO subject, and the capabilities say UNKNOWN. Answering about
+     * whichever record came back first would render a confident label belonging to another family.
      */
     const subjectRow: Record<string, unknown> | null = input.householdId
         ? (rows.find((r) => str(r.customer_id) === input.householdId) ?? null)
         : null;
     const subjectId = subjectRow ? str(subjectRow.id) : "";
-
-    /*
-     * The enriched record the canonical card owners read.
-     *
-     * `buildHouseholdCardModel` and `buildChildrenCardModel` are the Focus Panel's own pure card
-     * owners and they read a single flat truth record: the opportunity row plus its CRM and
-     * children enrichment. A′ already produces all three, so assembling them here is a projection
-     * and not a fourth source. Spread order matters — enrichment is layered ON the row, never
-     * under it, so an enriched contact never loses to a raw column.
-     */
     const subjectTruth: Record<string, unknown> | null = subjectRow
         ? {
               ...subjectRow,
@@ -248,13 +280,10 @@ export async function composeFirstOrderWorkUnitProjection(
         : null;
 
     /*
-     * THE LIFECYCLE RAIL, FROM THE OWNER THAT ALREADY DECIDES IT.
-     *
-     * `statusDefs: []` and `statusKey: null` are the canonical answer composer's own arguments
-     * (`workUnitProvisioningAnswer.ts`): that pair exists only to turn a status key into a stage
-     * for the rail's `current_stage_key`, and the record's own `stage_key` — which A′ holds on the
-     * population row — is what the card's current marker reads. Passing them would buy an answer
-     * already in hand at the cost of a read.
+     * The lifecycle rail, from the owner that already decides it. `statusDefs: []` and
+     * `statusKey: null` are the canonical answer composer's own arguments: that pair exists only
+     * to turn a status key into a stage, and the record's own `stage_key` — already on the
+     * population row — is what the current marker reads.
      */
     const rail = processConfig
         ? buildOpportunityWorkspaceLifecycleRail({
@@ -263,186 +292,70 @@ export async function composeFirstOrderWorkUnitProjection(
               statusDefs: [],
               record: subjectTruth,
               annotationLabels: {
-                  locationLabel: subjectTruth
-                      ? ((subjectTruth._location_label as string | null | undefined) ?? null)
-                      : null,
+                  locationLabel: subjectTruth ? ((subjectTruth._location_label as string | null) ?? null) : null,
                   ownerLabel: null,
               },
           })
         : null;
 
-    const cards: Record<string, FirstOrderCardSummary> = {};
-    for (const cardKey of cfg.cardKeys) {
-        const facts: Record<string, FirstOrderField<string | number>> = {};
-        let insight: FirstOrderField<string> = unknown<string>();
+    const ctx: FirstOrderProjectionContext = {
+        subjectTruth,
+        subjectRow,
+        customerMemberId: input.customerMemberId,
+        householdId: input.householdId,
+        attendance,
+        healthProfile,
+        healthSupplements,
+        prepaid,
+        accountLedger,
+        rail,
+        processConfigRead: executable.has("process_config") ? processConfig !== null : undefined,
+        childrenRead: executable.has("children_projection") ? children !== null : undefined,
+    };
 
-        if (cardKey === "financials") {
-            if (!input.authority.financialsRead) {
-                insight = forbidden<string>();
-                facts.availableCents = forbidden<number>();
-            } else if (!prepaid) {
-                facts.availableCents = unavailable<number>("prepaid reader failed");
-            } else if (prepaid.outcome.state === "ok") {
-                facts.availableCents = known(prepaid.outcome.position.availableCents);
-                facts.pendingCents = known(prepaid.outcome.position.pendingCents);
-                facts.heldCents = known(prepaid.outcome.position.heldCents);
-                insight = knownEmpty<string>();
-            } else if (prepaid.outcome.state === "forbidden") {
-                facts.availableCents = forbidden<number>();
-            } else {
-                facts.availableCents = unavailable<number>(prepaid.outcome.reason);
-            }
-        } else if (cardKey === "attendance") {
-            /*
-             * `state` IS THE ANSWER. The first version of this read `todayLabel`, a property
-             * `AttendanceCardVM` does not have: the cast made it typecheck, `?? ""` made it
-             * `known("")`, and a SUCCESSFUL attendance read therefore published a known-empty
-             * string. A false KNOWN is worse than an honest UNKNOWN, and it was produced here by
-             * naming a field the owner never declared.
-             */
-            if (!attendance) {
-                facts.state = unavailable<string>("attendance unavailable");
-            } else {
-                facts.state = known(attendance.state);
-                facts.date = known(attendance.date);
-                facts.expectedRoomLabel = attendance.expected.roomLabel
-                    ? known(attendance.expected.roomLabel)
-                    : knownEmpty<string>();
-                /*
-                 * WHY NO RECORD IS RECORDABLE — projected from the owner, with no second
-                 * attendance read. `unavailableReason` is null when attendance IS recordable, and
-                 * that is a real answer (`known_empty`), not an absent one.
-                 */
-                facts.unavailableReason = attendance.unavailableReason
-                    ? known(attendance.unavailableReason)
-                    : knownEmpty<string>();
-                insight = known(attendance.state);
-            }
-        } else if (cardKey === "health_safety") {
-            facts.profileFactCount = healthProfile
-                ? known(Object.keys(healthProfile.get(input.customerMemberId ?? "") ?? {}).length)
-                : unavailable<number>("health profile unavailable");
-            if (!input.authority.healthView) {
-                // A refusal is NOT an empty health card. Empty reads as "no allergies".
-                facts.profileFactCount = forbidden<number>();
-                facts.requirementsSatisfied = forbidden<number>();
-                facts.emergencyContactCount = forbidden<number>();
-                insight = forbidden<string>();
-            } else if (healthSupplements) {
-                facts.requirementsSatisfied = known(healthSupplements.requirementsSatisfied);
-                facts.requirementsTotal = known(healthSupplements.requirementsTotal);
-                facts.emergencyContactCount = known(healthSupplements.emergencyContactCount);
-            } else {
-                facts.requirementsSatisfied = unavailable<number>("health supplements unavailable");
-                facts.requirementsTotal = unavailable<number>("health supplements unavailable");
-                facts.emergencyContactCount = unavailable<number>("health supplements unavailable");
-            }
-        } else if (cardKey === "children") {
-            /*
-             * THE COUNT IS OF CHILDREN, NOT OF ENRICHED ROWS. This read `children.size` — the size
-             * of the enrichment MAP, which is one entry per opportunity. On a population of
-             * fourteen families it reported fourteen children for a family with two.
-             *
-             * The count now comes from the canonical normalizer the Children card itself uses, so
-             * "what is a child of this record" has one answer.
-             */
-            if (!children) {
-                facts.childCount = unavailable<number>("children unavailable");
-            } else if (!subjectTruth) {
-                facts.childCount = unknown<number>();
-            } else {
-                const { rows: childRows } = normalizeFocusPanelChildrenRowsFromTruth(subjectTruth);
-                const model = buildChildrenCardModel(subjectTruth);
-                facts.childCount = known(childRows.length);
-                facts.enrollingCount = known(
-                    childRows.filter((r) => r.outcome_status_key !== "declined").length,
-                );
-                insight = model.insight ? known(model.insight) : knownEmpty<string>();
-            }
-        } else if (cardKey === "household") {
-            if (!subjectTruth) {
-                // No resolved subject is UNKNOWN, never an empty household.
-                facts.label = unknown<string>();
-                facts.updatedAt = unknown<string>();
-                facts.primaryContactName = unknown<string>();
-            } else {
-                const label = str(subjectTruth.name) || str(subjectTruth.title);
-                const model = buildHouseholdCardModel(subjectTruth, label);
-                facts.label = label ? known(label) : knownEmpty<string>();
-                facts.updatedAt = str(subjectTruth.updated_at)
-                    ? known(str(subjectTruth.updated_at))
-                    : unknown<string>();
-                const contact = str(subjectTruth._primary_contact_name);
-                facts.primaryContactName = contact ? known(contact) : knownEmpty<string>();
-                const line = str(subjectTruth._primary_contact_line);
-                facts.primaryContactLine = line ? known(line) : knownEmpty<string>();
-                const loc = str(subjectTruth._location_label);
-                facts.locationLabel = loc ? known(loc) : knownEmpty<string>();
-                facts.childCount = children
-                    ? known(normalizeFocusPanelChildrenRowsFromTruth(subjectTruth).rows.length)
-                    : unavailable<number>("children unavailable");
-                insight = model.insight ? known(model.insight) : knownEmpty<string>();
-            }
-        } else if (cardKey === "business_process") {
-            if (!processConfig) {
-                const reason = "process configuration unavailable";
-                facts.processName = unavailable<string>(reason);
-                facts.stageCount = unavailable<number>(reason);
-                facts.currentStageLabel = unavailable<string>(reason);
-                facts.stagePosition = unavailable<number>(reason);
-                insight = unavailable<string>(reason);
-            } else if (!rail) {
-                /*
-                 * The builder returns null when the department declares no active process, or one
-                 * with fewer than two stages. That is a CONFIGURED ABSENCE — a real answer about
-                 * this tenant — so it is `known_empty`, not `unavailable`.
-                 */
-                facts.processName = knownEmpty<string>();
-                facts.stageCount = knownEmpty<number>();
-                facts.currentStageLabel = knownEmpty<string>();
-                facts.stagePosition = knownEmpty<number>();
-                insight = knownEmpty<string>();
-            } else {
-                facts.processName = rail.process_name ? known(rail.process_name) : knownEmpty<string>();
-                facts.stageCount = known(rail.stages.length);
-                /*
-                 * THE MARKER COMES FROM THE RECORD, NOT FROM THE WORK UNIT. A work unit answers
-                 * "which lens did I open?" and cannot answer "which stage is this record in?" —
-                 * the rail's own contract makes that point at length. With no subject record there
-                 * is no position, and saying so is the honest answer.
-                 */
-                const stageKey = subjectRow ? str(subjectRow.stage_key) : "";
-                const index = stageKey ? rail.stages.findIndex((st) => st.key === stageKey) : -1;
-                if (!subjectRow) {
-                    facts.currentStageKey = unknown<string>();
-                    facts.currentStageLabel = unknown<string>();
-                    facts.stagePosition = unknown<number>();
-                    facts.stageEnteredAt = unknown<string>();
-                } else {
-                    facts.currentStageKey = stageKey ? known(stageKey) : knownEmpty<string>();
-                    // A stage the rail does not declare is UNKNOWN to the rail, not stage zero.
-                    facts.currentStageLabel = index >= 0 ? known(rail.stages[index].label) : unknown<string>();
-                    facts.stagePosition = index >= 0 ? known(index + 1) : unknown<number>();
-                    const entered = str(subjectRow.stage_entered_at);
-                    facts.stageEnteredAt = entered ? known(entered) : knownEmpty<string>();
-                }
-                insight = rail.process_name ? known(rail.process_name) : knownEmpty<string>();
-            }
-        }
-        cards[cardKey] = { cardKey, insight, facts };
+    /*
+     * PROJECTION — one loop over the plan. No card is named, no field is named.
+     *
+     * Card identity and field order come from the plan, which came from configuration. A card
+     * with no configured first-order fields still appears, with an empty fact set: it is a
+     * configured card whose collapsed face says nothing, which is a real answer and a reserved
+     * region, not an absent card.
+     */
+    const cards: Record<string, FirstOrderCardSummary> = {};
+    for (const card of cfg.cards) {
+        cards[card.cardKey] = { cardKey: card.cardKey, insight: unknown<string>(), facts: {} };
+    }
+    for (const field of plan.fields) {
+        const summary = cards[field.cardKey];
+        if (!summary) continue;
+        const value: FirstOrderField<FirstOrderScalar> = authorized(field.capability.authorization)
+            ? field.capability.project(ctx)
+            // A refusal is a REFUSAL, never an empty region: empty reads as "no allergies".
+            : forbidden<FirstOrderScalar>();
+        (summary.facts as Record<string, FirstOrderField<string | number>>)[field.semanticKey] = value;
     }
 
+    const cardFields: Record<string, readonly string[]> = {};
+    for (const card of cfg.cards) cardFields[card.cardKey] = card.semanticKeys;
+    const cardOrder = cfg.cards.map((c) => c.cardKey);
+
     const identity: FirstOrderConfigurationIdentity = {
-        cardKeys: cfg.cardKeys, kpiKeys: cfg.kpiKeys, workViewIds: cfg.workViewIds, siteScopeId: cfg.siteScopeId,
+        cardKeys: cardOrder, cardFields, kpiKeys: cfg.kpiKeys,
+        workViewIds: cfg.workViewIds, siteScopeId: cfg.siteScopeId,
     };
 
     const projection: FirstOrderWorkUnitProjection = {
         workUnitId,
         subjectId: input.customerMemberId ? known(input.customerMemberId) : unknown<string>(),
         configurationIdentity: identity,
-        geometry: { cardOrder: cfg.cardKeys, kpiSlotCount: cfg.kpiKeys.length, workViewCount: cfg.workViewIds.length },
+        // GEOMETRY IS CONFIGURATION'S, not the plan's execution outcome: the slots exist whether or
+        // not a provider resolved, so a slow read changes a value and never a layout.
+        geometry: {
+            cardOrder, cardFieldSlots: cardFields,
+            kpiSlotCount: cfg.kpiKeys.length, workViewCount: cfg.workViewIds.length,
+        },
         queueRows: population ? known(queueRows) : unavailable<readonly FirstOrderQueueRow[]>("population unavailable"),
-        // Not yet resolved by this composer; declared UNKNOWN rather than defaulted to zero, which
+        // Not yet resolved by this runtime; declared UNKNOWN rather than defaulted to zero, which
         // is the only state Stage 2 is permitted to replace.
         kpiValues: Object.fromEntries(cfg.kpiKeys.map((k) => [k, unknown<number>()])),
         workViewTotals: Object.fromEntries(cfg.workViewIds.map((k) => [k, unknown<number>()])),
@@ -450,6 +363,9 @@ export async function composeFirstOrderWorkUnitProjection(
     };
 
     const assemblyMs = at() - aStart;
-    void crm;
-    return { projection, timing: { readDagMs, assemblyMs, totalMs: at(), spans, executedResolvers, queryCount } };
+    return {
+        projection,
+        timing: { planMs, readDagMs, assemblyMs, totalMs: at(), spans, executedResolvers, queryCount },
+        plan,
+    };
 }

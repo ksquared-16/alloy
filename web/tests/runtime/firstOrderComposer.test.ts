@@ -79,6 +79,17 @@ vi.mock("@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQ
     ["o2", { _inquiry_children: [{ id: "ch9", customer_member_id: "cm9", display_name: "Zed Q" }] }],
     ["o3", { _inquiry_children: [] }],
 ])) }));
+vi.mock("@/lib/runtime/firstOrder/readAccountLedgerPosition", () => ({
+    readAccountLedgerPosition: vi.fn(async () => ({
+        state: "ok", periodKey: "2026-09",
+        reconciliation: {
+            grossCents: 120000, discountsCents: -20000, fundingCents: 0, adjustmentsCents: 0,
+            responsibilityCents: 100000, paymentsCents: 40000, balanceCents: 60000,
+            scheduledCents: 0, draftCents: 0,
+        },
+        pastDue: { amountCents: 25000, oldestDueDate: "2026-08-01", agingDays: 51 },
+    })),
+}));
 vi.mock("@/lib/queues/operatorStageMembershipAck", () => ({ loadAcknowledgedOccurrenceKeys: vi.fn(async () => new Set<string>()) }));
 
 import { composeFirstOrderWorkUnitProjection } from "@/lib/runtime/firstOrder/composeFirstOrderWorkUnitProjection";
@@ -86,6 +97,7 @@ import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendan
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
+import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
 import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
@@ -95,11 +107,18 @@ const SRC = readFileSync(resolve(process.cwd(), "lib/runtime/firstOrder/composeF
 const DECLARATIONS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
 const SIX = ["business_process", "financials", "children", "household", "attendance", "health_safety"];
+
+/** Today's Enrollment surface, resolved the way the product resolves it. */
+const surface = (over: Partial<Parameters<typeof resolveFirstOrderSurfaceConfiguration>[0]> = {}) =>
+    resolveFirstOrderSurfaceConfiguration({
+        cardKeys: SIX, kpiKeys: ["a", "b", "c"], workViewIds: ["v1", "v2"], siteScopeId: null, ...over,
+    });
+
 const base = (over: Record<string, unknown> = {}) => ({
     supabase: {} as never,
     orgId: "org-1", workUnitId: "wu-1", viewerId: "u1",
     customerMemberId: "m1", householdId: "h1",
-    configuration: { cardKeys: SIX, kpiKeys: ["a", "b", "c"], workViewIds: ["v1", "v2"], siteScopeId: null },
+    configuration: surface(),
     authority: { financialsRead: true, healthView: true },
     ...over,
 });
@@ -107,7 +126,9 @@ const base = (over: Record<string, unknown> = {}) => ({
 describe("configuration drives execution", () => {
     it("runs the configured six-card set", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.timing.executedResolvers).toEqual(expect.arrayContaining(["population", "attendance", "health_profile", "prepaid", "children"]));
+        expect(r.timing.executedResolvers).toEqual(expect.arrayContaining([
+            "population", "attendance_fold", "health_profile", "prepaid_position", "children_projection",
+        ]));
         expect(Object.keys(r.projection.cards).sort()).toEqual([...SIX].sort());
     });
 
@@ -116,14 +137,21 @@ describe("configuration drives execution", () => {
         vi.mocked(buildAttendanceCardVM).mockClear();
         vi.mocked(loadCustomerMemberProfileFieldsByMemberId).mockClear();
         vi.mocked(enrichOpportunityRowsWithChildrenForCompactQueue).mockClear();
+        /*
+         * `business_process` alone. Household is no longer a valid control here: it declares
+         * `children.count`, so the children read IS one of its prerequisites, and asserting it
+         * must not run would be asserting the compiler is broken.
+         */
         const r = await composeFirstOrderWorkUnitProjection(base({
-            configuration: { cardKeys: ["business_process", "household"], kpiKeys: [], workViewIds: [], siteScopeId: null },
+            configuration: surface({ cardKeys: ["business_process"], kpiKeys: [], workViewIds: [] }),
         }) as never);
         expect(readAccountPrepaidPosition).not.toHaveBeenCalled();
         expect(buildAttendanceCardVM).not.toHaveBeenCalled();
         expect(loadCustomerMemberProfileFieldsByMemberId).not.toHaveBeenCalled();
         expect(enrichOpportunityRowsWithChildrenForCompactQueue).not.toHaveBeenCalled();
-        expect(r.timing.executedResolvers).not.toEqual(expect.arrayContaining(["prepaid", "attendance", "health_profile", "children"]));
+        for (const resolver of ["prepaid_position", "attendance_fold", "health_profile", "children_projection"]) {
+            expect(r.timing.executedResolvers).not.toContain(resolver);
+        }
     });
 
     it("card membership comes from configuration, never from a list in the source", () => {
@@ -137,15 +165,16 @@ describe("configuration drives execution", () => {
          */
         expect(DECLARATIONS).not.toMatch(/cardKeys\s*=\s*\[/);
         expect(DECLARATIONS).not.toMatch(/\[\s*"business_process"\s*,/);
-        expect(DECLARATIONS).toContain("cfg.cardKeys");
-        // Membership is iterated from configuration, so an added card needs no code change here.
-        expect(DECLARATIONS).toMatch(/for \(const cardKey of cfg\.cardKeys\)/);
+        // Membership AND field membership are iterated from the compiled configuration, so
+        // adding a card or moving a field needs no code change here.
+        expect(DECLARATIONS).toMatch(/for \(const card of cfg\.cards\)/);
+        expect(DECLARATIONS).toMatch(/for \(const field of plan\.fields\)/);
     });
 
     it("reordering configuration reorders geometry and identity together", async () => {
         const rev = [...SIX].reverse();
         const r = await composeFirstOrderWorkUnitProjection(base({
-            configuration: { cardKeys: rev, kpiKeys: [], workViewIds: [], siteScopeId: null },
+            configuration: surface({ cardKeys: rev, kpiKeys: [], workViewIds: [] }),
         }) as never);
         expect(r.projection.geometry.cardOrder).toEqual(rev);
         expect(r.projection.configurationIdentity.cardKeys).toEqual(rev);
@@ -155,7 +184,7 @@ describe("configuration drives execution", () => {
 describe("state semantics are never collapsed", () => {
     it("FORBIDDEN financials is forbidden, not empty and not zero", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base({ authority: { financialsRead: false, healthView: true } }) as never);
-        expect(r.projection.cards.financials.facts.availableCents.state).toBe("forbidden");
+        expect(r.projection.cards.financials.facts["financials.prepaid_available_cents"].state).toBe("forbidden");
         expect(JSON.stringify(r.projection.cards.financials)).not.toContain('"value":0');
     });
 
@@ -165,13 +194,13 @@ describe("state semantics are never collapsed", () => {
             diagnostics: { queryCount: 7, agreementCount: 0, paymentCount: 2 },
         } as never);
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.projection.cards.financials.facts.availableCents.state).toBe("unavailable");
+        expect(r.projection.cards.financials.facts["financials.prepaid_available_cents"].state).toBe("unavailable");
     });
 
     it("a THROWN resolver is unavailable, never an empty value", async () => {
         vi.mocked(buildAttendanceCardVM).mockRejectedValueOnce(new Error("down"));
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.projection.cards.attendance.facts.state.state).toBe("unavailable");
+        expect(r.projection.cards.attendance.facts["attendance.state"].state).toBe("unavailable");
     });
 
     it("a FAILED HEALTH read is unavailable, not a count of zero", async () => {
@@ -184,7 +213,7 @@ describe("state semantics are never collapsed", () => {
          */
         vi.mocked(loadCustomerMemberProfileFieldsByMemberId).mockRejectedValueOnce(new Error("down"));
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.projection.cards.health_safety.facts.profileFactCount.state).toBe("unavailable");
+        expect(r.projection.cards.health_safety.facts["health.profile_fact_count"].state).toBe("unavailable");
         expect(JSON.stringify(r.projection.cards.health_safety)).not.toContain('"value":0');
     });
 
@@ -194,7 +223,7 @@ describe("state semantics are never collapsed", () => {
             diagnostics: { queryCount: 7, agreementCount: 0, paymentCount: 0 },
         } as never);
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const f = r.projection.cards.financials.facts.availableCents;
+        const f = r.projection.cards.financials.facts["financials.prepaid_available_cents"];
         expect(f.state).toBe("known");
         if (f.state === "known") expect(f.value).toBe(0);
     });
@@ -228,7 +257,7 @@ describe("state semantics are never collapsed", () => {
 describe("the DAG is not accidentally serialized", () => {
     it("phase 1 resolvers start together", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const p1 = r.timing.spans.filter((s) => ["population", "attendance", "health_profile", "prepaid"].includes(s.name));
+        const p1 = r.timing.spans.filter((s) => ["population", "attendance_fold", "health_profile", "prepaid_position"].includes(s.name));
         expect(p1.length).toBeGreaterThan(1);
         // Independent work sharing a start offset is the property; sequential writing would show
         // each one beginning where the previous ended.
@@ -257,8 +286,8 @@ describe("the DAG is not accidentally serialized", () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
         const span = (n: string) => r.timing.spans.find((s) => s.name === n);
         const pop = span("population")!;
-        const crm = span("crm")!;
-        const prepaid = span("prepaid")!;
+        const crm = span("crm_projection")!;
+        const prepaid = span("prepaid_position")!;
         expect(prepaid.end).toBeGreaterThan(pop.end);
         // The dependent phase must begin at the population's end, NOT at the slow sibling's.
         expect(crm.at, "phase 2 started late — it is waiting on more than population")
@@ -328,12 +357,29 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
      * projection can be perfectly honest about six facts and still be unshippable.
      */
     const CONTRACTED: Record<string, string[]> = {
-        business_process: ["processName", "stageCount", "currentStageKey", "currentStageLabel", "stagePosition", "stageEnteredAt"],
-        financials: ["availableCents", "pendingCents", "heldCents"],
-        children: ["childCount", "enrollingCount"],
-        household: ["label", "updatedAt", "primaryContactName", "primaryContactLine", "locationLabel", "childCount"],
-        attendance: ["state", "date", "expectedRoomLabel", "unavailableReason"],
-        health_safety: ["profileFactCount", "requirementsSatisfied", "requirementsTotal", "emergencyContactCount"],
+        business_process: [
+            "process.name", "process.stage_count", "process.current_stage_key",
+            "process.current_stage_label", "process.stage_position", "process.stage_entered_at",
+        ],
+        financials: [
+            "financials.prepaid_available_cents", "financials.prepaid_pending_cents",
+            "financials.prepaid_held_cents", "financials.billing_period_key",
+            "financials.responsibility_cents", "financials.balance_cents",
+            "financials.past_due_cents",
+        ],
+        children: ["children.count", "children.enrolling_count"],
+        household: [
+            "household.label", "household.updated_at", "person.primary_contact_name",
+            "person.primary_contact_line", "record.location_label", "children.count",
+        ],
+        attendance: [
+            "attendance.state", "attendance.date", "attendance.expected_room_label",
+            "attendance.unavailable_reason",
+        ],
+        health_safety: [
+            "health.profile_fact_count", "health.requirements_satisfied",
+            "health.requirements_total", "health.emergency_contact_count",
+        ],
     };
 
     it("every ledger-contracted field is present on its card", async () => {
@@ -369,7 +415,7 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
          * EMPTY was worse, because it is the one state the surface is entitled to trust.
          */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const st = r.projection.cards.attendance.facts.state;
+        const st = r.projection.cards.attendance.facts["attendance.state"];
         expect(st.state).toBe("known");
         if (st.state === "known") expect(st.value).toBe("not_arrived");
         expect(JSON.stringify(r.projection.cards.attendance)).not.toContain('"value":""');
@@ -377,7 +423,7 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
 
     it("attendance's recordability reason is KNOWN EMPTY when attendance IS recordable", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.projection.cards.attendance.facts.unavailableReason.state).toBe("known_empty");
+        expect(r.projection.cards.attendance.facts["attendance.unavailable_reason"].state).toBe("known_empty");
     });
 
     it("attendance states WHY no record is recordable, from the same read", async () => {
@@ -391,7 +437,7 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
         } as never);
         const before = vi.mocked(buildAttendanceCardVM).mock.calls.length;
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const f = r.projection.cards.attendance.facts.unavailableReason;
+        const f = r.projection.cards.attendance.facts["attendance.unavailable_reason"];
         expect(f.state).toBe("known");
         if (f.state === "known") expect(f.value).toContain("no attendable enrolment");
         // PROJECTED, not re-read: one attendance call, not two.
@@ -408,20 +454,20 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
          * fixture in which the two answers must differ.
          */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const f = r.projection.cards.children.facts.childCount;
+        const f = r.projection.cards.children.facts["children.count"];
         expect(f.state).toBe("known");
         if (f.state === "known") expect(f.value).toBe(2);
-        const e = r.projection.cards.children.facts.enrollingCount;
+        const e = r.projection.cards.children.facts["children.enrolling_count"];
         if (e.state === "known") expect(e.value, "a declined child is not enrolling").toBe(1);
     });
 
     it("household facts come from the subject's own record and enrichment", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
         const f = r.projection.cards.household.facts;
-        expect(f.label.state === "known" && f.label.value).toBe("Row One");
-        expect(f.primaryContactName.state === "known" && f.primaryContactName.value).toBe("Cara L");
-        expect(f.locationLabel.state === "known" && f.locationLabel.value).toBe("North Campus");
-        expect(f.updatedAt.state === "known" && f.updatedAt.value).toBe("2026-09-10T00:00:00Z");
+        expect(f["household.label"].state === "known" && f["household.label"].value).toBe("Row One");
+        expect(f["person.primary_contact_name"].state === "known" && f["person.primary_contact_name"].value).toBe("Cara L");
+        expect(f["record.location_label"].state === "known" && f["record.location_label"].value).toBe("North Campus");
+        expect(f["household.updated_at"].state === "known" && f["household.updated_at"].value).toBe("2026-09-10T00:00:00Z");
     });
 
     it("NO RESOLVED SUBJECT IS UNKNOWN, never an empty household", async () => {
@@ -431,19 +477,19 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
          * wrong answer, not a missing one.
          */
         const r = await composeFirstOrderWorkUnitProjection(base({ householdId: "not-in-population" }) as never);
-        expect(r.projection.cards.household.facts.label.state).toBe("unknown");
-        expect(r.projection.cards.children.facts.childCount.state).toBe("unknown");
-        expect(r.projection.cards.business_process.facts.currentStageKey.state).toBe("unknown");
+        expect(r.projection.cards.household.facts["household.label"].state).toBe("unknown");
+        expect(r.projection.cards.children.facts["children.count"].state).toBe("unknown");
+        expect(r.projection.cards.business_process.facts["process.current_stage_key"].state).toBe("unknown");
         expect(JSON.stringify(r.projection.cards.household)).not.toContain("Row One");
     });
 
     it("business process states the rail's stages and the RECORD's position", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
         const f = r.projection.cards.business_process.facts;
-        expect(f.processName.state === "known" && f.processName.value).toBe("Enrollment");
-        expect(f.stageCount.state === "known" && f.stageCount.value).toBe(3);
-        expect(f.currentStageLabel.state === "known" && f.currentStageLabel.value).toBe("Lead");
-        expect(f.stagePosition.state === "known" && f.stagePosition.value).toBe(1);
+        expect(f["process.name"].state === "known" && f["process.name"].value).toBe("Enrollment");
+        expect(f["process.stage_count"].state === "known" && f["process.stage_count"].value).toBe(3);
+        expect(f["process.current_stage_label"].state === "known" && f["process.current_stage_label"].value).toBe("Lead");
+        expect(f["process.stage_position"].state === "known" && f["process.stage_position"].value).toBe(1);
     });
 
     it("A STAGE THE RAIL DOES NOT DECLARE IS UNKNOWN, not position one", async () => {
@@ -454,37 +500,37 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
         const f = r.projection.cards.business_process.facts;
         // The record says `lead`; the rail declares no such stage. That is unresolved, not first.
-        expect(f.stagePosition.state).toBe("unknown");
-        expect(f.currentStageLabel.state).toBe("unknown");
+        expect(f["process.stage_position"].state).toBe("unknown");
+        expect(f["process.current_stage_label"].state).toBe("unknown");
         // The key itself is still KNOWN — the record does have a stage; the rail cannot place it.
-        expect(f.currentStageKey.state).toBe("known");
+        expect(f["process.current_stage_key"].state).toBe("known");
     });
 
     it("A CONFIGURED ABSENCE OF PROCESS IS KNOWN EMPTY; a FAILED read is unavailable", async () => {
         vi.mocked(buildOpportunityWorkspaceLifecycleRail).mockReturnValueOnce(null);
         const empty = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(empty.projection.cards.business_process.facts.stageCount.state).toBe("known_empty");
+        expect(empty.projection.cards.business_process.facts["process.stage_count"].state).toBe("known_empty");
 
         vi.mocked(readWorkUnitProcessConfiguration).mockRejectedValueOnce(new Error("down"));
         const failed = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(failed.projection.cards.business_process.facts.stageCount.state).toBe("unavailable");
+        expect(failed.projection.cards.business_process.facts["process.stage_count"].state).toBe("unavailable");
         expect(JSON.stringify(failed.projection.cards.business_process)).not.toContain('"value":0');
     });
 
     it("health requirements and contacts are FORBIDDEN under refusal, never empty", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base({ authority: { financialsRead: true, healthView: false } }) as never);
         const f = r.projection.cards.health_safety.facts;
-        expect(f.requirementsSatisfied.state).toBe("forbidden");
-        expect(f.emergencyContactCount.state).toBe("forbidden");
-        expect(f.profileFactCount.state).toBe("forbidden");
+        expect(f["health.requirements_satisfied"].state).toBe("forbidden");
+        expect(f["health.emergency_contact_count"].state).toBe("forbidden");
+        expect(f["health.profile_fact_count"].state).toBe("forbidden");
         expect(JSON.stringify(r.projection.cards.health_safety)).not.toContain('"value":0');
     });
 
     it("A FAILED health supplement read is unavailable, not zero requirements satisfied", async () => {
         vi.mocked(readHealthFirstOrderSupplements).mockRejectedValueOnce(new Error("down"));
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.projection.cards.health_safety.facts.requirementsSatisfied.state).toBe("unavailable");
-        expect(r.projection.cards.health_safety.facts.emergencyContactCount.state).toBe("unavailable");
+        expect(r.projection.cards.health_safety.facts["health.requirements_satisfied"].state).toBe("unavailable");
+        expect(r.projection.cards.health_safety.facts["health.emergency_contact_count"].state).toBe("unavailable");
         expect(JSON.stringify(r.projection.cards.health_safety)).not.toContain('"value":0');
     });
 
@@ -493,7 +539,7 @@ describe("FIELD COVERAGE — every contracted first-order field is produced", ()
             requirementsSatisfied: 0, requirementsTotal: 4, emergencyContactCount: 0,
         });
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        const f = r.projection.cards.health_safety.facts.requirementsSatisfied;
+        const f = r.projection.cards.health_safety.facts["health.requirements_satisfied"];
         expect(f.state).toBe("known");
         if (f.state === "known") expect(f.value).toBe(0);
     });
@@ -503,7 +549,7 @@ describe("the new reads obey configuration and cost nothing when unconfigured", 
     it("an unconfigured business_process card never reads process configuration", async () => {
         vi.mocked(readWorkUnitProcessConfiguration).mockClear();
         const r = await composeFirstOrderWorkUnitProjection(base({
-            configuration: { cardKeys: ["household"], kpiKeys: [], workViewIds: [], siteScopeId: null },
+            configuration: surface({ cardKeys: ["household"], kpiKeys: [], workViewIds: [] }),
         }) as never);
         expect(readWorkUnitProcessConfiguration).not.toHaveBeenCalled();
         expect(r.timing.executedResolvers).not.toContain("process_config");
@@ -512,7 +558,7 @@ describe("the new reads obey configuration and cost nothing when unconfigured", 
     it("an unconfigured health card never reads documents or relationships", async () => {
         vi.mocked(readHealthFirstOrderSupplements).mockClear();
         const r = await composeFirstOrderWorkUnitProjection(base({
-            configuration: { cardKeys: ["household"], kpiKeys: [], workViewIds: [], siteScopeId: null },
+            configuration: surface({ cardKeys: ["household"], kpiKeys: [], workViewIds: [] }),
         }) as never);
         expect(readHealthFirstOrderSupplements).not.toHaveBeenCalled();
         expect(r.timing.executedResolvers).not.toContain("health_supplements");
@@ -544,10 +590,11 @@ describe("the new reads obey configuration and cost nothing when unconfigured", 
 
     it("the query count rises by exactly the ledger's stated budget", async () => {
         /*
-         * 17 before this slice. The ledger contracts three additions: process configuration (1),
-         * health documents + relationships (2). A silent fourth read is the thing this catches.
+         * 17 → 20 with process configuration (1) and the two health supplements (2); 20 → 24 with
+         * the account ledger (agreements · paged charges · batched applications · batched payment
+         * statuses). A silent extra read is the thing this catches.
          */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.timing.queryCount).toBe(20);
+        expect(r.timing.queryCount).toBe(24);
     });
 });

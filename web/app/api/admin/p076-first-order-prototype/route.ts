@@ -13,6 +13,7 @@ import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccount
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
 import { composeFirstOrderWorkUnitProjection } from "@/lib/runtime/firstOrder/composeFirstOrderWorkUnitProjection";
+import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
@@ -450,12 +451,18 @@ export async function GET(req: NextRequest) {
             const r = await composeFirstOrderWorkUnitProjection({
                 supabase, orgId, workUnitId, viewerId: access.userId,
                 customerMemberId: memberId, householdId: customerId,
-                configuration: {
+                /*
+                 * The published surface is RESOLVED, not asserted. `resolveFirstOrderSurfaceConfiguration`
+                 * reads each card's configured collapsed fields and falls back to the card's own
+                 * registry declaration — so this diagnostic exercises the same compile path the
+                 * product would, rather than a card list with the fields implied.
+                 */
+                configuration: resolveFirstOrderSurfaceConfiguration({
                     cardKeys: shadowCards,
                     kpiKeys: Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
                     workViewIds: Array.from({ length: views }, (_, i) => `view_${i}`),
                     siteScopeId: null,
-                },
+                }),
                 // Request-time decisions, resolved by this route's own gate. The composer never
                 // decides authorization itself.
                 authority: { financialsRead: true, healthView: true },
