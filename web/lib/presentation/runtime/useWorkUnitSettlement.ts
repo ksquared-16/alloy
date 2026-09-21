@@ -42,6 +42,12 @@ import {
     workViewTotalKey,
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
+import {
+    announceWorkViewTotalsOwner,
+    buildPublishedWorkViewTotalsSeed,
+    clearWorkViewTotalsPublication,
+    publishWorkViewTotals,
+} from "./workViewTotalsPublication";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { isKnownOipMetricKey } from "@/lib/metrics/registry";
@@ -174,6 +180,22 @@ export function useWorkUnitSettlement(
             ? (settleable.workViewTotalsSeed ?? null)
             : null;
     }, [settleable]);
+    /*
+     * CLAIM OWNERSHIP OF THIS ROUTE'S COUNTS IN RENDER PHASE, BEFORE ANY EFFECT RUNS.
+     *
+     * The persistent nav needs the same counts and must not ask for them again. It cannot read
+     * them out of the provisioning cache — that entry is consume-once and THIS surface has always
+     * already consumed it by the time the nav (which sits behind Suspense) commits. Measured
+     * deployed: the nav's peek hit 0 of 6.
+     *
+     * The same ordering is what makes this announcement work. Because this owner reliably commits
+     * first, declaring "an owner is here and will publish" during RENDER guarantees the nav sees
+     * it, so the nav can wait for a real answer instead of falling back — and, on a route with no
+     * owner at all, sees nothing and falls back immediately. No timeout, and no pending state that
+     * can strand the badges.
+     */
+    announceWorkViewTotalsOwner();
+
     const totalsState = useWorkViewTotalsState({
         ownerLabel: "work-unit-settlement",
         targets,
@@ -184,6 +206,48 @@ export function useWorkUnitSettlement(
         seedOrgId: settleable?.orgId ?? null,
         seedHostWorkUnitId: workUnitId,
     });
+
+    const settlementOrgId = settleable?.orgId ?? null;
+    /*
+     * PUBLISH WHAT THIS OWNER RESOLVED — from whichever path produced it.
+     *
+     * Publishing only the document seed would leave the nav to fetch whenever the seed did not
+     * match, which is two logical fallback owners for one question. Publishing the RESOLVED totals
+     * means the canonical evaluator's single fetch, when it happens, IS the one canonical
+     * fallback, and the nav still issues nothing.
+     *
+     * Shaped as the existing `WorkViewTotalsSeed` so the nav validates it through the EXISTING
+     * matcher: no new semantics, no predicate re-implementation, and no authorization verdict
+     * travelling with the counts. `known: false` carries UNKNOWN across intact — a missing count
+     * must never arrive as a confident zero.
+     */
+    useEffect(() => {
+        if (!totalsState.settled) return;
+        if (targets.length === 0 || !settlementOrgId || !workUnitId) {
+            publishWorkViewTotals({
+                seed: null,
+                orgId: settlementOrgId,
+                hostWorkUnitId: workUnitId ?? null,
+            });
+            return;
+        }
+        publishWorkViewTotals({
+            seed: buildPublishedWorkViewTotalsSeed({
+                targets,
+                totals: totalsState.totals,
+                keyOf: workViewTotalKey,
+                orgId: settlementOrgId,
+                hostWorkUnitId: workUnitId,
+                selectedSiteId: siteId ?? null,
+            }),
+            orgId: settlementOrgId,
+            hostWorkUnitId: workUnitId,
+        });
+    }, [totalsState.settled, totalsState.totals, targets, settlementOrgId, workUnitId, siteId]);
+
+    // Leaving the route drops the claim, so an observer that runs before the next owner announces
+    // sees no owner and falls back rather than reusing this work unit's counts.
+    useEffect(() => clearWorkViewTotalsPublication, []);
 
     // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.
     const viewCounts = useMemo<Map<string, number | null>>(() => {
