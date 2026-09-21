@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
 import { Settings2 } from "lucide-react";
 
 import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
@@ -64,33 +65,17 @@ function money(cents: number, currency: string): string {
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
 }
 
-/**
- * The canonical reasons, said the way an operator reads them.
+/*
+ * The reason vocabulary is `reductionReasonLabel`, shared with Assignment so the same canonical
+ * reason reads the same way at both grains. This surface deliberately keeps no sentences of its
+ * own: when it did, "Excluded — an exception applies to this relationship" and Assignment's
+ * "Excluded for this assignment" were two spellings of one fact, and an operator moving between
+ * them could not tell whether they were reading one thing or two.
  *
- * ── THE DISTINCTION THIS EXISTS FOR ───────────────────────────────────────────────────────────
- *
- * "No policy configured" and "a policy exists and this relationship is excluded from it" are
- * different facts with different remedies, and collapsing them is the defect: an operator told the
- * first goes to Organization configuration to create something that is already there. The
- * exception reason keeps its own sentence, and never becomes absence.
+ * THE DISTINCTION THE VOCABULARY CARRIES: excluded_by_exception is a DECISION somebody made, not
+ * absence of configuration. An operator told "no policy configured" goes to Organization to create
+ * something that is already there.
  */
-function reasonSentence(reason: string): string {
-    switch (reason) {
-        case "excluded_by_exception":
-            return "Excluded — an exception applies to this relationship";
-        case "no_policy":
-        case "no_policies":
-            return "No discount policy is configured for this";
-        case "not_eligible":
-            return "The policy is configured, and this relationship does not meet it";
-        case "category_not_covered":
-            return "The policy does not cover this charge category";
-        case "outside_effective_window":
-            return "The policy is configured, and its effective window does not include this period";
-        default:
-            return reason;
-    }
-}
 
 export default function FinancialsDiscountPanel({
     customerId,
@@ -292,7 +277,7 @@ export default function FinancialsDiscountPanel({
                                                 </p>
                                                 {excepted ? (
                                                     <p className="text-[11px] text-alloy-ember" data-financials-discount-exception={excepted.id}>
-                                                        {reasonSentence("excluded_by_exception")}
+                                                        {reductionReasonLabel("excluded_by_exception")}
                                                         {excepted.reason ? ` — ${excepted.reason}` : ""}
                                                         {excepted.effectiveStart ? ` · from ${excepted.effectiveStart}` : ""}
                                                         {" "}
@@ -366,7 +351,7 @@ export default function FinancialsDiscountPanel({
                             <div className="mt-2 border-t border-alloy-stone/10 pt-2">
                                 {(position?.notExpected ?? []).map((n, i) => (
                                     <p key={`${n.opportunityCustomerMemberId}-${i}`} className="text-[11px] text-alloy-midnight/55" data-financials-discount-not-expected={n.reason}>
-                                        {childLabelFor?.(n.opportunityCustomerMemberId, null) ?? HOUSEHOLD_LABEL} · {reasonSentence(n.reason)}
+                                        {childLabelFor?.(n.opportunityCustomerMemberId, null) ?? HOUSEHOLD_LABEL} · {reductionReasonLabel(n.reason)}
                                     </p>
                                 ))}
                             </div>

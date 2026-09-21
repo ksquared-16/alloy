@@ -207,8 +207,16 @@ describe("the family Discount position renders canonical truth and computes none
          */
         const panel = code(PANEL);
         expect(panel).toContain("excluded_by_exception");
-        expect(panel).toMatch(/Excluded — an exception applies/);
-        expect(panel).toMatch(/No discount policy is configured/);
+        /*
+         * The sentences live in the SHARED vocabulary now, not in this surface. When each surface
+         * kept its own, "Excluded — an exception applies to this relationship" and Assignment's
+         * "Excluded for this assignment" were two spellings of one fact. The rule is asserted
+         * where the words are.
+         */
+        const vocab = code("lib/financials/reductions/reductionReasonLabels.ts");
+        expect(vocab).toMatch(/excluded_by_exception: "Excluded/);
+        expect(vocab).toMatch(/no_policy_configured: "No discount policies configured"/);
+        expect(panel, "and this surface keeps no private vocabulary").not.toMatch(/function reasonSentence/);
     });
 
     it("the depth card owns its own Escape and returns focus to the gear", () => {
@@ -446,5 +454,33 @@ describe("one recurring model, three stages", () => {
         }
         /* And the accounting authority stays its own concept. */
         expect(code("lib/financials/accountingPeriod.ts")).not.toContain("billingRecurrenceFor");
+    });
+});
+
+
+describe("family and Assignment speak one discount vocabulary", () => {
+    const VOCAB = "lib/financials/reductions/reductionReasonLabels.ts";
+    it("both surfaces read the same map", () => {
+        for (const rel of [
+            "app/adminV2/financials/FinancialsDiscountPanel.tsx",
+            "components/admin/focusPanel/cards/SchedulingCard.tsx",
+        ]) {
+            expect(code(rel), `${rel} uses the shared vocabulary`).toContain("reductionReasonLabels");
+        }
+    });
+
+    it("neither keeps a private reason map", () => {
+        for (const rel of [
+            "app/adminV2/financials/FinancialsDiscountPanel.tsx",
+            "components/admin/focusPanel/cards/SchedulingCard.tsx",
+        ]) {
+            const s = code(rel);
+            expect(s, `${rel} must not redefine the reasons`)
+                .not.toMatch(/const \w*REASON\w*: Record<string, string> = \{/);
+        }
+    });
+
+    it("an unmapped reason is spelled out rather than hidden", () => {
+        expect(code(VOCAB)).toContain('reason.replace(/_/g, " ")');
     });
 });

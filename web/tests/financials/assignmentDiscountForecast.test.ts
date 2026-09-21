@@ -98,20 +98,28 @@ describe("the gross is the accepted term, not a recommendation", () => {
 describe("the reasons are the domain's", () => {
     it("renders canonical reason codes, not an invented vocabulary", () => {
         const card = src(CARD);
-        /* Every key is a `NotEligibleReason` the resolver actually returns. */
+        /*
+         * The vocabulary moved into `reductionReasonLabels`, shared with the family Discount
+         * surface so one canonical reason reads the same way at both grains. The rule is
+         * unchanged — every label is for a reason the RESOLVER actually returns, never an
+         * invented one — and is asserted where the words now live, plus the card consuming them.
+         */
         const resolver = src("lib/financials/reductions/resolveFinancialReductions.ts");
+        const vocab = src("lib/financials/reductions/reductionReasonLabels.ts");
         for (const reason of [
             "no_policy_configured", "not_enough_siblings", "rank_not_covered",
             "not_an_employee_household", "category_not_covered", "category_not_discountable",
         ]) {
             expect(resolver, `${reason} is a domain reason`).toContain(`"${reason}"`);
-            expect(card, `${reason} has an operator label`).toContain(reason);
+            expect(vocab, `${reason} has an operator label`).toContain(reason);
         }
+        expect(card, "and the card reads that vocabulary").toContain("reductionReasonLabels");
     });
 
     it("an unmapped reason is still shown, not hidden", () => {
-        const card = src(CARD);
-        expect(card).toContain('REDUCTION_REASON_LABEL[reason] ?? reason.replace(/_/g, " ")');
+        expect(src("lib/financials/reductions/reductionReasonLabels.ts"))
+            .toContain('reason.replace(/_/g, " ")');
+        expect(src(CARD)).toContain("REDUCTION_REASON_LABEL[reason]");
     });
 
     it("the surface carries the outcome and its reason for measurement", () => {
