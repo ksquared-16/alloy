@@ -525,9 +525,19 @@ describe("one policy identity has one operator-facing name", () => {
          * policy wore two names: "Sibling discount (QA specimen)" in configuration and "discount"
          * on the family's own finances.
          */
+        /*
+         * SCOPED TO `readPolicies`. Asserted against the whole file this did NOT bind: the module
+         * holds eleven `select(` calls and the regex happily matched `label` in a different one,
+         * so removing it from the policy projection left every test green. A verified plant caught
+         * it. Presence-style assertions over a whole file are the weakest kind of lock, and this
+         * is the third one this slice.
+         */
         const projection = code(PROJECTION);
-        expect(projection, "label is selected from the table").toMatch(/select\([^)]*\blabel\b/);
-        expect(projection, "and carried on the projection").toContain("label: nstr(r.label)");
+        const at = projection.indexOf("export async function readPolicies");
+        expect(at, "readPolicies exists").toBeGreaterThan(-1);
+        const body = projection.slice(at, projection.indexOf("\nexport ", at + 10));
+        expect(body, "label is selected by THIS projection").toMatch(/select\([^)]*\blabel\b/);
+        expect(body, "and carried on the projection").toContain("label: nstr(r.label)");
         expect(code(DEF), "the type admits it").toMatch(/label: string \| null/);
     });
 
