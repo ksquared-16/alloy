@@ -181,14 +181,28 @@ export async function setRecurringAvailability(
     const dayBefore = new Date(`${input.effectiveStart}T00:00:00Z`);
     dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
     const priorEnd = dayBefore.toISOString().slice(0, 10);
+    /*
+     * END-DATE EVERY PATTERN THAT WOULD STILL BE IN FORCE, not only the open ones.
+     *
+     * This asked for `effective_end IS NULL`, which silently did nothing once a
+     * FUTURE pattern had been authored: setting the future one end-dates the
+     * current one, and the current one then no longer matched. An operator who
+     * then asked to close availability from a date got no error and no change —
+     * the pattern kept applying. Found by mounted certification, where a week that
+     * had been closed still resolved `recurring`.
+     *
+     * The honest predicate is "starts before the new pattern AND has not already
+     * finished before it", which covers both the open-ended case and a pattern
+     * whose end lies on or after the new start.
+     */
     const { error: closeErr } = await supabase
         .from("staff_availability_windows")
         .update({ effective_end: priorEnd, updated_by: trim(input.actorUserId) || null, updated_at: new Date().toISOString() })
         .eq("org_id", orgId)
         .eq("employment_id", employmentId)
         .eq("is_active", true)
-        .is("effective_end", null)
-        .lt("effective_start", input.effectiveStart);
+        .lt("effective_start", input.effectiveStart)
+        .or(`effective_end.is.null,effective_end.gte.${input.effectiveStart}`);
     if (closeErr) throw new StaffAvailabilityError("db_error", closeErr.message);
 
     if (rows.length === 0) return { superseded_to: priorEnd, windows: [] };
