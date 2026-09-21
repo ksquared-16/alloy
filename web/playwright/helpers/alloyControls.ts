@@ -77,12 +77,22 @@ export async function alloyOptions(page: Page, testId: string): Promise<AlloyOpt
     const options = await alloyControl(page, testId)
         .locator("[role=option]")
         .evaluateAll((nodes) =>
-            nodes.map((n) => ({
-                label: (n as HTMLElement).innerText.replace(/\s+/g, " ").trim(),
-                value: n.getAttribute("data-option-value"),
-                selected: n.getAttribute("aria-selected") === "true",
-                disabled: n.getAttribute("aria-disabled") === "true",
-            })),
+            nodes.map((n) => {
+                /*
+                 * THE LABEL IS THE PRODUCT'S WORDS, NOT ITS STATE. The multi variant renders a
+                 * checkmark gutter beside the label, so `innerText` on the row yields
+                 * "✓ Certb Certhouse" — and a caller matching on that string is matching on
+                 * whether the option happened to be selected already. Selection is reported
+                 * separately, in `selected`, which is the honest place for it.
+                 */
+                const labelNode = n.querySelector(".alloy-select__option-label");
+                return {
+                    label: ((labelNode ?? n) as HTMLElement).innerText.replace(/\s+/g, " ").trim(),
+                    value: n.getAttribute("data-option-value"),
+                    selected: n.getAttribute("aria-selected") === "true",
+                    disabled: n.getAttribute("aria-disabled") === "true",
+                };
+            }),
         );
     await closeAlloy(page, testId);
     return options;
@@ -179,4 +189,18 @@ export async function pickAlloyByValue(page: Page, testId: string, value: string
  */
 export async function alloyOptionLabels(page: Page, testId: string): Promise<string[]> {
     return (await alloyOptions(page, testId)).map((o) => o.label);
+}
+
+/**
+ * Toggle a multi-select option by its IDENTITY, leaving the list open.
+ *
+ * Preferred over the label form wherever the caller knows the value: a label can carry state
+ * decoration, can be a money string that changes between runs, and is the operator's sentence
+ * rather than the option's identity.
+ */
+export async function toggleAlloyMultiByValue(page: Page, testId: string, value: string): Promise<void> {
+    await openAlloy(page, testId);
+    const option = alloyControl(page, testId).locator(`[role=option][data-option-value="${value}"]`);
+    await expect(option, `${testId} offers value ${value}`).toHaveCount(1);
+    await option.click({ timeout: 15_000 });
 }

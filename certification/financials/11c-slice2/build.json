@@ -1,0 +1,10 @@
+{
+  "gitSha": "9675a76be43bee92ed817b84d77aa2a8bb79f87a",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1158 from ksquared-16/agent/financials-11c-slice2\n\nFinancials 11C slice 2 — one select grammar, and Details can change who owes",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-2lgvpqgkn-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_Et3s6EQuwuKs5n3tKWMx5JH4dKmS",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+}

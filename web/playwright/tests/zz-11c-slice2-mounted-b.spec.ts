@@ -26,11 +26,22 @@ async function openDetails(page: import("@playwright/test").Page) {
     await page.goto(ENTRY, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(13_000);
     expect(page.url()).not.toContain("/login");
-    const details = page.locator("[data-financials-open-details]").first();
-    if (await details.count()) {
-        await details.click({ timeout: 20_000 });
-        await page.waitForTimeout(11_000);
-    }
+    /*
+     * The door is the card's own "Details →" button. `[data-financials-open-details]` does NOT
+     * exist on the deployed build — an earlier pass used it, silently stayed on the entry card,
+     * and reported the Details controls as absent. A probe that cannot open the surface it is
+     * measuring must fail, not report zeros, so this asserts the door before going through it.
+     */
+    const details = page.locator("[data-financials-card='true']")
+        .getByRole("button", { name: /^Details/ })
+        .first();
+    await expect(details, "the Financials card offers a Details door").toHaveCount(1);
+    await details.click({ timeout: 20_000 });
+    await page.waitForTimeout(12_000);
+    await expect(
+        page.locator("[data-financials-payment-methods], [data-testid='financials-filter-responsible-party']").first(),
+        "Details actually opened — measured by a control only Details has",
+    ).toHaveCount(1, { timeout: 30_000 });
 }
 
 /** What the surface looks like before a depth panel opens, for the §29 return-to-state check. */

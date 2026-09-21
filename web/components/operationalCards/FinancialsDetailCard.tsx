@@ -5,7 +5,7 @@ import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsRe
 import { Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -288,6 +288,15 @@ export default function FinancialsDetailCard({
      * card holds no copy of it, so there is nothing here to drift from the committed truth.
      */
     const [manageResponsibilityOpen, setManageResponsibilityOpen] = useState(false);
+    /*
+     * The control that opened the card, so focus can return to it. Without this, dismissing the
+     * card drops focus to <body> and a keyboard operator restarts from the top of the page.
+     */
+    const manageResponsibilityGearRef = useRef<HTMLButtonElement | null>(null);
+    const closeResponsibility = useCallback(() => {
+        setManageResponsibilityOpen(false);
+        manageResponsibilityGearRef.current?.focus();
+    }, []);
     const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
         { customerMemberId: string; label: string }[]
     >([]);
@@ -585,6 +594,7 @@ export default function FinancialsDetailCard({
                         {lens !== "payments" && responsibilityAdmin ? (
                             <button
                                 type="button"
+                                ref={manageResponsibilityGearRef}
                                 onClick={() => setManageResponsibilityOpen(true)}
                                 aria-label="Manage responsibility"
                                 title="Manage responsibility — who contractually owes, from a date"
@@ -853,6 +863,25 @@ export default function FinancialsDetailCard({
                   * the operator still confirms the scope before anything is written.
                   */}
                 {responsibilityAdmin ? (
+                    /*
+                     * ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT — the containment Accounts has
+                     * carried since 24ffad5bb, now here too. The workspace behind this listens for
+                     * Escape, so a depth card that does not answer FIRST hands its own dismissal to
+                     * its host: measured on the deployed build, one Escape closed the card AND the
+                     * whole Details surface, and the operator lost the account, the lens, the
+                     * filters and their place in the ledger. The card is the innermost open thing,
+                     * so it answers and stops there — and focus goes back to the gear that opened
+                     * it rather than to <body>.
+                     */
+                    <div
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            closeResponsibility();
+                        }}
+                    >
                     <FinancialsResponsibilityPanel
                         customerId={responsibilityAdmin.customerId}
                         customerMemberId={null}
@@ -861,13 +890,14 @@ export default function FinancialsDetailCard({
                         memberOptions={responsibilityScopeMembers}
                         defaultScopeMemberId={null}
                         hostedOpen={manageResponsibilityOpen}
-                        onHostedClose={() => setManageResponsibilityOpen(false)}
+                        onHostedClose={closeResponsibility}
                         onCommitted={async () => {
                             /* Committed truth is re-read; the card does not report its own success. */
                             await responsibilityAdmin.onCommitted();
-                            setManageResponsibilityOpen(false);
+                            closeResponsibility();
                         }}
                     />
+                    </div>
                 ) : null}
 
                 {paymentMethodsAccount?.customerId ? (
