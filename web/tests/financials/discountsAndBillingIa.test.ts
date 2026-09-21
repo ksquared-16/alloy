@@ -385,3 +385,66 @@ describe("billing authoring states what the name decides", () => {
         expect(panel).not.toMatch(/weekly[\s\S]{0,40}7 days|monthly[\s\S]{0,40}calendar month/i);
     });
 });
+
+describe("one recurring model, three stages", () => {
+    /*
+     * CONFIGURE defines recurrence, ACCEPT binds a cadence to a relationship, EXECUTE asks which
+     * periods to process. These are three views of ONE model, and the defect they exist to prevent
+     * is three implementations of it — a configuration screen describing weekly in prose, an
+     * Assignment adding seven days itself, and generation carrying its own cadence map. They would
+     * agree on the fixture and diverge on a leap year, a mid-period start, or a cadence nobody
+     * tested.
+     */
+    const AUTHORITY = "lib/financials/billingPeriod.ts";
+    const CONFIGURE = "lib/financials/tuitionPlans/billingPeriodPreview.ts";
+    const CONFIGURE_UI = "components/adminV2/settings/financials/tuitionPlans/TuitionBillingFrequenciesPanel.tsx";
+    const ACCEPT = "components/admin/focusPanel/cards/SchedulingCard.tsx";
+    const EXECUTE = "lib/financials/tuitionGeneration/generateTuitionCharges.ts";
+    const EXECUTE_PREVIEW = "lib/financials/tuitionGeneration/previewTuitionGeneration.ts";
+
+    it("every stage derives from the same authority", () => {
+        expect(code(CONFIGURE)).toContain("billingPeriodFor");
+        expect(code(ACCEPT)).toContain("acceptedTermBillingPeriods");
+        expect(code(EXECUTE)).toContain("billingPeriodsBetween");
+        /* And that authority derives Current/Next through the same function the preview uses. */
+        const authority = code(AUTHORITY);
+        expect(authority).toMatch(/acceptedTermBillingPeriods[\s\S]{0,900}billingPeriodFor\(cadence, anchor/);
+    });
+
+    it("every stage refuses an underivable cadence through the same gate", () => {
+        for (const rel of [CONFIGURE, EXECUTE, EXECUTE_PREVIEW, "lib/financials/billingPeriod.ts"]) {
+            expect(code(rel), `${rel} asks the billability authority`).toContain("isPeriodBillableCadence");
+        }
+    });
+
+    it("no stage carries a second cadence map", () => {
+        for (const rel of [CONFIGURE, CONFIGURE_UI, ACCEPT, EXECUTE]) {
+            const s = code(rel);
+            expect(s, `${rel} must not restate cadence strides`).not.toMatch(
+                /weekly["']?\s*:\s*7|biweekly["']?\s*:\s*14|monthly["']?\s*:\s*30/,
+            );
+        }
+    });
+
+    it("Assignment performs no local period arithmetic", () => {
+        const accept = code(ACCEPT);
+        expect(accept).not.toMatch(/setDate\(|getTime\(\)\s*[+-]|\* 24 \* 60 \* 60|addDays\(/);
+    });
+
+    it("the cadence identity flows, rather than being matched by name", () => {
+        /* Configuration's itemKey IS the cadence key the other stages consume. */
+        expect(code(CONFIGURE_UI)).toContain("cadenceKey: row.itemKey");
+        expect(code(EXECUTE)).toMatch(/const cadenceKey = \(args\.cadenceKey/);
+        expect(code(ACCEPT), "Assignment passes the accepted term's own cadence")
+            .toMatch(/cadenceKey/);
+    });
+
+    it("Billing Period never becomes Accounting Period", () => {
+        for (const rel of [CONFIGURE, CONFIGURE_UI]) {
+            expect(code(rel), `${rel} must not relabel the commercial period as accounting`)
+                .not.toMatch(/accounting[_ ]?period/i);
+        }
+        /* And the accounting authority stays its own concept. */
+        expect(code("lib/financials/accountingPeriod.ts")).not.toContain("billingRecurrenceFor");
+    });
+});
