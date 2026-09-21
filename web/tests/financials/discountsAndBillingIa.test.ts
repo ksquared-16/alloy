@@ -152,3 +152,85 @@ describe("one primary action treatment across configuration", () => {
         expect(designed).toMatch(/read_only[\s\S]{0,120}sky-/);
     });
 });
+
+describe("the family Discount position renders canonical truth and computes none of it", () => {
+    const PANEL = "app/adminV2/financials/FinancialsDiscountPanel.tsx";
+    const DETAIL = "components/operationalCards/FinancialsDetailCard.tsx";
+    const HOST = "components/admin/focusPanel/cards/FinancialsCard.tsx";
+
+    it("reads the canonical family position and nothing else", () => {
+        const panel = code(PANEL);
+        expect(panel).toContain("/api/admin/financials/family-discount-position");
+        /* One read. It does not also ask the assignment route and reconcile two answers. */
+        expect(panel).not.toContain("reduction-forecast");
+    });
+
+    it("performs no percentage arithmetic of its own", () => {
+        /*
+         * THE DEFECT THIS FORBIDS: rendering "10% of $1,450" by multiplying in the component. That
+         * figure would be blind to exceptions, effective windows and category scoping, and would
+         * disagree with the applied ledger the moment any changed.
+         */
+        const panel = code(PANEL);
+        expect(panel).not.toMatch(/percent|basisPoints|\*\s*0?\.\d|\/\s*100\s*\)?\s*\*/);
+        /* Dividing by 100 to render cents as currency is formatting, and is the only such use. */
+        expect((panel.match(/\/ 100/g) ?? []).length).toBeLessThanOrEqual(1);
+    });
+
+    it("carries the forecast's own expected amount", () => {
+        expect(code(PANEL)).toContain("s.expectedCents");
+    });
+
+    it("uses the certified exception actions, and supplies no economics to them", () => {
+        const panel = code(PANEL);
+        expect(panel).toContain("billing.except_commercial_policy");
+        expect(panel).toContain("billing.end_commercial_policy_exception");
+        /* A reason and an identity. Never an amount, a rate, or a boolean. */
+        expect(panel).not.toMatch(/discount_enabled|amount_cents|percent:/);
+    });
+
+    it("requires a reason before an exception can be confirmed", () => {
+        /* An exception carries provenance or it is not one. */
+        expect(code(PANEL)).toMatch(/disabled=\{busy \|\| draft\.reason\.trim\(\)\.length === 0\}/);
+    });
+
+    it("exception is not a toggle", () => {
+        const panel = code(PANEL);
+        expect(panel).not.toMatch(/type="checkbox"|role="switch"|<Toggle|onToggleDiscount/);
+    });
+
+    it("excluded never becomes absent", () => {
+        /*
+         * "No policy configured" and "a policy exists and this relationship is excluded" have
+         * different remedies. An operator told the first goes to configuration to create something
+         * that is already there.
+         */
+        const panel = code(PANEL);
+        expect(panel).toContain("excluded_by_exception");
+        expect(panel).toMatch(/Excluded — an exception applies/);
+        expect(panel).toMatch(/No discount policy is configured/);
+    });
+
+    it("the depth card owns its own Escape and returns focus to the gear", () => {
+        const panel = code(PANEL);
+        expect(panel).toContain('data-financials-manage-discounts="depth-card"');
+        expect(panel).toMatch(/e\.key !== "Escape"/);
+        expect(panel).toContain("stopPropagation");
+        expect(panel).toMatch(/gearRef\.current\?\.focus\(\)/);
+    });
+
+    it("sits in the administration region, not on the transaction row", () => {
+        const detail = code(DETAIL);
+        const discounts = detail.indexOf('data-financials-discounts="detail"');
+        const methods = detail.indexOf('data-financials-payment-methods="detail"');
+        expect(discounts).toBeGreaterThan(-1);
+        /* Beside payer administration, below the command row — never inside it. */
+        expect(methods).toBeGreaterThan(discounts);
+        expect(detail).not.toMatch(/ActionRow[\s\S]{0,200}FinancialsDiscountPanel/);
+    });
+
+    it("the host supplies the canonical re-read, not optimistic state", () => {
+        const host = code(HOST);
+        expect(host).toMatch(/discountAdmin=\{[\s\S]{0,700}await load\(\)/);
+    });
+});

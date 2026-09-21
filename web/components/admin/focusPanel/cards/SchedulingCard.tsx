@@ -1,6 +1,7 @@
 "use client";
 
 import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
@@ -226,27 +227,13 @@ async function schedApi(path: string, init?: RequestInit): Promise<any> {
     return body;
 }
 
-async function executeAssignmentAction(body: Record<string, unknown>): Promise<void> {
-    const { operatorFacingAssignmentError } = await import(
-        "@/lib/operationalAssignments/operatorAssignmentErrors"
-    );
-    const res = await fetch("/api/admin/actions/execute", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || json?.ok === false) {
-        const err = json?.error;
-        const message =
-            typeof err === "string"
-                ? err
-                : err && typeof err === "object" && typeof err.message === "string"
-                  ? err.message
-                  : `Action failed (${res.status})`;
-        throw new Error(operatorFacingAssignmentError(message));
-    }
-}
+/*
+ * The governed-action transport now lives in `executeFinancialsAction`, so the family Discount
+ * surface invokes the SAME certified exception actions through the same error handling rather
+ * than carrying a second copy of it. The local name is kept so every call site below reads
+ * unchanged — this moved the implementation, not the behaviour.
+ */
+const executeAssignmentAction = executeFinancialsAction;
 
 /**
  * After an assignment mutation, push the reloaded child projection into Focus Panel
