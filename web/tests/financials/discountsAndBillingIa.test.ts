@@ -510,3 +510,48 @@ describe("the family position states a basis where the basis belongs", () => {
             .not.toMatch(/\{p\.label\}[\s\S]{0,120}p\.explanation/);
     });
 });
+
+describe("one policy identity has one operator-facing name", () => {
+    const PROJECTION = "lib/commercial/execution/export/readCommercialConfig.ts";
+    const FORECAST = "lib/financials/reductions/forecastAssignmentReductions.ts";
+    const READER = "lib/financials/reductions/readAssignmentDiscountPosition.ts";
+    const DEF = "lib/commercial/execution/commercialExport.ts";
+
+    it("the canonical projection carries the configured name", () => {
+        /*
+         * D3, ROOT CAUSE — classification A, READ PROJECTION OMISSION. `commercial_policies.label`
+         * is where an operator's name for a policy lives. The Organization API selected it; this
+         * projection did not, so every consumer downstream fell back to the policy KIND and one
+         * policy wore two names: "Sibling discount (QA specimen)" in configuration and "discount"
+         * on the family's own finances.
+         */
+        const projection = code(PROJECTION);
+        expect(projection, "label is selected from the table").toMatch(/select\([^)]*\blabel\b/);
+        expect(projection, "and carried on the projection").toContain("label: nstr(r.label)");
+        expect(code(DEF), "the type admits it").toMatch(/label: string \| null/);
+    });
+
+    it("every consumer prefers the configured name over the kind", () => {
+        /*
+         * The kind is a LAST resort, not the usual answer. A consumer that reaches for it while a
+         * configured name exists is the defect, wherever it sits.
+         */
+        for (const rel of [FORECAST, READER]) {
+            expect(code(rel), `${rel} prefers the configured name`).toMatch(
+                /p\.label \?\?[\s\S]{0,80}\?\? p\.kind/,
+            );
+        }
+    });
+
+    it("no consumer performs a second policy lookup or a display-text join", () => {
+        /*
+         * The architecture is: configured identity -> canonical projection -> forecast outcome
+         * carries identity AND name -> family and Assignment consume it. A component that fetched
+         * the policy again to learn its name would be a second read of the same fact.
+         */
+        const panel = code("app/adminV2/financials/FinancialsDiscountPanel.tsx");
+        expect(panel).not.toContain("commercial/policies");
+        expect(panel, "the name arrives with the outcome").toContain("p.label");
+        expect(panel, "and is never matched as text").not.toMatch(/label\s*===\s*["'`]/);
+    });
+});

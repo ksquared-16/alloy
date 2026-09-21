@@ -255,7 +255,7 @@ export async function readRevenueCategories(ctx: ExportReadContext): Promise<Rev
 export async function readPolicies(ctx: ExportReadContext): Promise<CommercialPolicyDef[]> {
     const { data, error } = await ctx.supabase
         .from("commercial_policies")
-        .select("id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, value, effective_start, effective_end, is_active")
+        .select("id, scope_type, location_id, program_key, offering_id, variant_id, policy_type, label, value, effective_start, effective_end, is_active")
         .eq("org_id", ctx.orgId);
     // Table may not exist yet (migration pending) — treat as no policies, not a hard failure.
     if (error) return [];
@@ -278,6 +278,8 @@ export async function readPolicies(ctx: ExportReadContext): Promise<CommercialPo
                 variantId: nstr(r.variant_id),
             },
             effective: { start: nstr(r.effective_start), end: nstr(r.effective_end) },
+            /* The configured operator-facing name. Selecting it is the whole of the D3 repair. */
+            label: nstr(r.label),
             params: obj(r.value),
             isActive: r.is_active !== false,
         });
