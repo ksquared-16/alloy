@@ -171,6 +171,19 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * (when and where are they scheduled), and is deliberately NOT folded in here.
      */
     { key: "staff", title: "Staff", grains: ["person"] },
+    /*
+     * QUALIFICATIONS — "what does this Staff member hold, what needs attention, and what is
+     * required of them?"
+     *
+     * Person grain only, and not because employment is person-owned: because there is no other
+     * grain where the question is even askable. A case panel composes employment for a linked
+     * contact as DISPLAY, and a credential's expiry is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. The canvas-elevation concern is for cards that
+     * own the operating day; a qualification is a durable fact with dates, and elevating it would
+     * put a credential on the same plane as attendance.
+     */
+    { key: "staff_qualifications", title: "Qualifications", grains: ["person"] },
     { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".

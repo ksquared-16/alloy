@@ -180,6 +180,27 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         encodedSpan: 1,
         encodedDensity: "standard",
     },
+    {
+        /*
+         * The second person-grain card, and the first one earned under the rule above: it declares
+         * the `person` grain in the registry because it has canonical Person truth (qualifications
+         * hang off employment, which is person-owned), AND it belongs on the default surface
+         * because an expiring credential is not something an operator should have to go looking
+         * for.
+         *
+         * It is NOT a sparse-panel exception. On a person who has never been employed it renders
+         * nothing at all — there is no employment to hang a qualification from — so it cannot
+         * become the empty shell the note above warns about.
+         */
+        key: "staff_qualifications",
+        tier: "reference",
+        visibility: "visible",
+        // Beside Staff, not below it: the two are read together, and the six remaining columns are
+        // exactly what the left band leaves.
+        area: { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
 ];
 
 /**

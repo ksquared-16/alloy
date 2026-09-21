@@ -27,6 +27,10 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     children: "collection",
     employment: "profile",
     staff: "profile",
+    // A collection, not a profile: the answer is a LIST whose length varies — the qualifications
+    // held and the requirements that apply. A profile archetype would present a fixed set of
+    // labelled fields, which is the wrong shape for a list that is often empty and sometimes long.
+    staff_qualifications: "collection",
     attendance: "timeline",
     financials: "summary",
     health_safety: "status",

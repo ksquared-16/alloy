@@ -257,8 +257,17 @@ describe("card applicability is declared per card, not switched centrally", () =
      * The assertion is updated rather than loosened. An exact list is what makes an accidental
      * widening visible, and this test earned its keep by failing the moment the grain changed.
      */
-    it("the person grain selects Employment and Assignments out of the whole catalog", () => {
-        expect(cardKeysForGrain("person")).toEqual(["staff", "scheduling"]);
+    it("the person grain selects Staff, Qualifications and Assignments out of the whole catalog", () => {
+        /*
+         * `staff_qualifications` is the third, and it arrived the same way `scheduling` did — by
+         * DECLARATION, not by a central switch. The list stays exact for the reason above: an
+         * accidental widening is only visible against an exact list.
+         *
+         * Order matters here because it is registry order, and registry order is the order a
+         * composer reads. Qualifications is declared immediately after Staff because the two are
+         * read together.
+         */
+        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
         // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
@@ -271,9 +280,10 @@ describe("card applicability is declared per card, not switched centrally", () =
         // is the point: the ONLY cards outside the case grain are ones explicitly declared elsewhere.
         const caseKeys = cardKeysForGrain("opportunity");
         const excluded = FOCUS_PANEL_CARDS.map((c) => c.key).filter((k) => !caseKeys.includes(k));
-        // `staff` joins it: a person-grain card is legitimately not case-grain. The invariant the
-        // test guards is unchanged — no card that WAS case-grain silently stopped being one.
-        expect(excluded).toEqual(["staff", "child_identity"]);
+        // `staff` and `staff_qualifications` join it: a person-grain card is legitimately not
+        // case-grain. The invariant the test guards is unchanged — no card that WAS case-grain
+        // silently stopped being one.
+        expect(excluded).toEqual(["staff", "staff_qualifications", "child_identity"]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -299,10 +309,22 @@ describe("card applicability is declared per card, not switched centrally", () =
 });
 
 describe("default composition varies by grain", () => {
-    it("person composes exactly one card, and it is Staff", () => {
+    it("person composes Staff and Qualifications, side by side and both visible", () => {
+        /*
+         * This asserted exactly one card for as long as Employment was the only canonical Person
+         * truth. Qualifications is the second, and it had to be earned TWICE to appear here — once
+         * by declaring the `person` grain in the registry, once by being placed on this surface.
+         * Either alone is inert, which is the friction the composition module documents.
+         */
         const composition = focusPanelDefaultCompositionForGrain("person");
-        expect(composition.map((e) => e.key)).toEqual(["staff"]);
-        expect(composition[0]!.visibility).toBe("visible");
+        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications"]);
+        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible"]);
+        // Side by side, not stacked: two six-column areas on the same row. A qualification that
+        // expires is not something an operator should have to scroll to.
+        expect(composition.map((e) => e.area)).toEqual([
+            { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+            { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        ]);
     });
 
     it("child composes its own identity card, never the case composition", () => {
