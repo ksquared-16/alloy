@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
-import { AlloyMultiSelect } from "@/components/workspace/AlloySelect";
+import { AlloyMultiSelect, AlloySelect } from "@/components/workspace/AlloySelect";
 
 /**
  * HOUSEHOLD IS A VALUE, NOT AN ABSENCE.
@@ -164,19 +164,15 @@ export default function AddChargeCommand({
                 can be long, and the operator sees labels, never keys. */}
             <Field label="Charge type" required>
                 {controls ? (
-                    <select
-                        className="alloy-os-addcharge__select"
-                        data-addcharge-template
+                    <AlloySelect
+                        testId="addcharge-template"
+                        aria-label="Charge type"
+                        allowEmpty={false}
                         value={controls.selectedTemplateId ?? ""}
-                        onChange={(e) => controls.onSelectTemplate(e.target.value)}
-                    >
-                        {templates.map((opt) => (
-                            // LABELS, never internal keys. The catalog owns the wording.
-                            <option key={opt.key} value={opt.key}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
+                        /* LABELS, never internal keys. The catalog owns the wording. */
+                        options={templates.map((opt) => ({ value: opt.key, label: opt.label }))}
+                        onChange={(next) => controls.onSelectTemplate(next)}
+                    />
                 ) : (
                     <span className="alloy-os-addcharge__select">
                         {t.label}
@@ -295,18 +291,24 @@ export default function AddChargeCommand({
             ) : (
                 <Field label="Applies to" required={t.requiresSubject}>
                     {controls && controls.subjects.length > 1 ? (
-                        <select
-                            className="alloy-os-addcharge__select"
-                            data-addcharge-subject
+                        <div data-addcharge-subject>
+                            {/*
+                              * The hook stays on the wrapper. `data-addcharge-subject` is how the
+                              * certification specs identify the LEGACY single-subject path — the
+                              * one offered when the unified target is not — and converting the
+                              * control's presentation is not a reason to retire an identifier
+                              * other surfaces still ask by name. The control inside is canonical;
+                              * the contract is unchanged.
+                              */}
+                        <AlloySelect
+                            testId="addcharge-subject"
+                            aria-label="Applies to"
+                            allowEmpty={false}
                             value={controls.selectedSubjectId ?? ""}
-                            onChange={(e) => controls.onSelectSubject(e.target.value)}
-                        >
-                            {controls.subjects.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                    {s.label}
-                                </option>
-                            ))}
-                        </select>
+                            options={controls.subjects.map((sub) => ({ value: sub.id, label: sub.label }))}
+                            onChange={(next) => controls.onSelectSubject(next)}
+                        />
+                        </div>
                     ) : (
                         <Value>{specimen.subject}</Value>
                     )}
