@@ -12,6 +12,7 @@
  * Every money assertion is read back from the canonical account read, never recomputed here.
  */
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { alloyOptions, pickAlloyByValue } from "../helpers/alloyControls";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
 const ROUTE = "/workspace/work-unit/new-work-view-6?work_view_id=new_work_view_6";
@@ -266,16 +267,16 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         await expect(target).toBeVisible();
         // The chooser is filled by a fetch the panel fires as it opens, so wait for it to answer.
         await expect
-            .poll(() => target.locator("option").count(), { timeout: 30_000 })
+            .poll(async () => (await alloyOptions(page, "payment-move-target")).length, { timeout: 30_000 })
             .toBeGreaterThan(1);
-        const options = await target.locator("option").allTextContents();
+        const options = (await alloyOptions(page, "payment-move-target")).map((o) => o.label);
         expect(options.join(" | "), "the target charge is offered").toContain(TARGET_LABEL);
         expect(options.join(" | "), "and never as a stored key").not.toMatch(/[a-z]+_[a-z]+/);
         // The chooser must not offer the charge the money is already on.
         expect(options.filter((o) => o.includes(SOURCE_LABEL)).length, "the source is not a destination").toBe(0);
 
         const confirm = control(page, "payment-move-confirm");
-        await target.selectOption(targetId);
+        await pickAlloyByValue(page, "payment-move-target", targetId);
         await expect(confirm, "Confirm stays disabled until the action has previewed").toBeDisabled();
 
         await control(page, "payment-move-reason").fill("Applied to the wrong charge");
@@ -347,21 +348,20 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         const target = control(page, "payment-move-target");
         const confirm = control(page, "payment-move-confirm");
         const preview = control(page, "payment-move-preview");
-        const options = target.locator("option");
-        const first = await options.nth(1).getAttribute("value");
+        const destinations = (await alloyOptions(page, "payment-move-target")).filter((o) => o.value);
+        const first = destinations[0]?.value ?? null;
         expect(first, "the chooser must offer at least one destination").toBeTruthy();
 
-        await target.selectOption(first!);
+        await pickAlloyByValue(page, "payment-move-target", first!);
         await control(page, "payment-move-reason").fill("first reason");
         await control(page, "payment-move-preview-button").click();
         await expect(preview).toBeVisible({ timeout: 60_000 });
         await expect(confirm).toBeEnabled();
 
         // A. a different destination is a different question.
-        const count = await options.count();
-        if (count > 2) {
-            const second = await options.nth(2).getAttribute("value");
-            await target.selectOption(second!);
+        if (destinations.length > 1) {
+            const second = destinations[1]!.value;
+            await pickAlloyByValue(page, "payment-move-target", second!);
             await expect(preview, "changing the destination clears the preview").toBeHidden();
             await expect(confirm, "and Confirm goes back to disabled").toBeDisabled();
             await control(page, "payment-move-preview-button").click();
@@ -406,8 +406,8 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         await expect(control(page, "payment-move-reason")).toHaveCount(0);
 
         const target = control(page, "payment-move-target");
-        const value = await target.locator("option").nth(1).getAttribute("value");
-        await target.selectOption(value!);
+        const value = (await alloyOptions(page, "payment-move-target")).find((o) => o.value)?.value ?? null;
+        await pickAlloyByValue(page, "payment-move-target", value!);
         const confirm = control(page, "payment-move-confirm");
         await expect(confirm, "no preview is required to apply free money").toBeEnabled();
         await confirm.click();
@@ -443,8 +443,10 @@ test.describe("Slice 6 — moving a payment, mounted", () => {
         await expect(panel(page)).toBeVisible();
 
         const target = control(page, "payment-move-target");
-        await expect.poll(() => target.locator("option").count(), { timeout: 30_000 }).toBeGreaterThan(1);
-        await target.selectOption(doomed.chargeId);
+        await expect
+            .poll(async () => (await alloyOptions(page, "payment-move-target")).length, { timeout: 30_000 })
+            .toBeGreaterThan(1);
+        await pickAlloyByValue(page, "payment-move-target", doomed.chargeId);
         await control(page, "payment-move-reason").fill("certification: destination settles mid-decision");
         await control(page, "payment-move-preview-button").click();
         await expect(control(page, "payment-move-preview")).toBeVisible({ timeout: 60_000 });
