@@ -45,6 +45,13 @@ export type WakeResult = {
     terminallyFailed: number;
     unregisteredHandler: number;
     occurrences: { id: string; handlerKey: string; outcome: string }[];
+    /**
+     * Database time of the moment this wake was recorded, or null if recording
+     * failed. Null is reported rather than thrown: a broken liveness instrument
+     * must not stop real scheduled work, but it must not be silent either, or a
+     * dead clock and a dead recorder look identical to whoever is asking.
+     */
+    clockRecordedAt: string | null;
 };
 
 const LEASE_SECONDS = 300;
@@ -225,6 +232,31 @@ async function finalize(
     return data ? "applied" : "lost_lease";
 }
 
+/**
+ * Record that a wake happened, whether or not it had anything to do.
+ *
+ * An environment with no schedules yet absorbs a wake silently, so without this
+ * there is no way to tell a clock that is running from one that never fires — the
+ * exact question a newly deployed scheduler needs answered.
+ *
+ * The timestamp and the increment both come from the database: the caller's clock
+ * is the thing under observation, and two overlapping wakes must not lose a tick.
+ */
+async function recordWake(supabase: SupabaseClient, result: WakeResult): Promise<string | null> {
+    const { data, error } = await supabase.rpc("record_scheduled_work_wake", {
+        p_worker_id: result.workerId,
+        p_summary: {
+            claimed: result.claimed,
+            completed: result.completed,
+            retry_scheduled: result.retryScheduled,
+            terminally_failed: result.terminallyFailed,
+            unregistered_handler: result.unregisteredHandler,
+        },
+    });
+    if (error) return null;
+    return typeof data === "string" ? data : null;
+}
+
 export async function runScheduledWorkWake(
     supabase: SupabaseClient,
     options: { now?: Date; maxOccurrences?: number; workerId?: string } = {},
@@ -233,84 +265,96 @@ export async function runScheduledWorkWake(
     const workerId = options.workerId ?? `worker-${randomUUID().slice(0, 8)}`;
     const budget = options.maxOccurrences ?? 25;
 
-    await materializeDueOccurrences(supabase, now);
-
     const result: WakeResult = {
         workerId, claimed: 0, completed: 0, retryScheduled: 0,
         terminallyFailed: 0, unregisteredHandler: 0, occurrences: [],
+        clockRecordedAt: null,
     };
 
-    for (let i = 0; i < budget; i += 1) {
-        const claimToken = randomUUID();
-        const occ = await claimOne(supabase, now, workerId, claimToken);
-        if (!occ) break;
-        result.claimed += 1;
-        const attemptNumber = (occ.attempt_count ?? 0) + 1;
+    try {
+        // Inside the try so that a scheduler broken HERE still records its arrival.
+        // Materializing is the first thing a wake does, so a fault in it would
+        // otherwise leave no trace at all, and a broken runtime would read to an
+        // operator exactly like a clock that never fired.
+        await materializeDueOccurrences(supabase, now);
 
-        const { data: attempt } = await supabase
-            .from("scheduled_work_attempts")
-            .insert({
-                occurrence_id: occ.id, org_id: occ.org_id, handler_key: occ.handler_key,
-                attempt_number: attemptNumber, worker_id: workerId, claim_token: claimToken,
-            })
-            .select("id")
-            .maybeSingle();
+        for (let i = 0; i < budget; i += 1) {
+            const claimToken = randomUUID();
+            const occ = await claimOne(supabase, now, workerId, claimToken);
+            if (!occ) break;
+            result.claimed += 1;
+            const attemptNumber = (occ.attempt_count ?? 0) + 1;
 
-        let outcome: ScheduledWorkOutcome;
-        const handler = resolveScheduledWorkHandler(occ.handler_key);
-        if (!handler) {
-            // A row naming code that does not exist cannot run. Terminal, and loud.
-            result.unregisteredHandler += 1;
-            outcome = { kind: "terminal_failure", reason: `no registered handler: ${occ.handler_key}` };
-        } else {
-            try {
-                outcome = await handler({
-                    scheduledWorkId: occ.scheduled_work_id,
-                    occurrenceId: occ.id,
-                    orgId: occ.org_id,
-                    handlerKey: occ.handler_key,
-                    dueAt: occ.due_at,
-                    attemptNumber,
-                    workerId,
-                    domainRef: occ.domain_ref ?? {},
-                });
-            } catch (err) {
-                // A throwing handler fails ITS occurrence. The loop continues, so one
-                // poisoned schedule cannot stop unrelated due work.
-                outcome = {
-                    kind: "retryable_failure",
-                    reason: err instanceof Error ? err.message.slice(0, 300) : "handler threw",
-                };
-            }
-        }
-
-        const applied = await finalize(supabase, occ, claimToken, attemptNumber, outcome, now);
-        if (attempt?.id) {
-            await supabase
+            const { data: attempt } = await supabase
                 .from("scheduled_work_attempts")
-                .update({
-                    finished_at: new Date().toISOString(),
-                    outcome: outcome.kind,
-                    diagnostic: { ...(outcome.diagnostic ?? {}), lease: applied, reason: outcome.reason ?? null },
+                .insert({
+                    occurrence_id: occ.id, org_id: occ.org_id, handler_key: occ.handler_key,
+                    attempt_number: attemptNumber, worker_id: workerId, claim_token: claimToken,
                 })
-                .eq("id", attempt.id);
-        }
+                .select("id")
+                .maybeSingle();
 
-        // A domain that computes its own cadence tells us here.
-        if (outcome.kind === "completed" && outcome.nextDueAt !== undefined) {
-            await supabase
-                .from("scheduled_work")
-                .update({ next_due_at: outcome.nextDueAt, updated_at: new Date().toISOString() })
-                .eq("id", occ.scheduled_work_id);
-        }
+            let outcome: ScheduledWorkOutcome;
+            const handler = resolveScheduledWorkHandler(occ.handler_key);
+            if (!handler) {
+                // A row naming code that does not exist cannot run. Terminal, and loud.
+                result.unregisteredHandler += 1;
+                outcome = { kind: "terminal_failure", reason: `no registered handler: ${occ.handler_key}` };
+            } else {
+                try {
+                    outcome = await handler({
+                        scheduledWorkId: occ.scheduled_work_id,
+                        occurrenceId: occ.id,
+                        orgId: occ.org_id,
+                        handlerKey: occ.handler_key,
+                        dueAt: occ.due_at,
+                        attemptNumber,
+                        workerId,
+                        domainRef: occ.domain_ref ?? {},
+                    });
+                } catch (err) {
+                    // A throwing handler fails ITS occurrence. The loop continues, so one
+                    // poisoned schedule cannot stop unrelated due work.
+                    outcome = {
+                        kind: "retryable_failure",
+                        reason: err instanceof Error ? err.message.slice(0, 300) : "handler threw",
+                    };
+                }
+            }
 
-        if (applied === "applied") {
-            if (outcome.kind === "completed") result.completed += 1;
-            else if (outcome.kind === "retryable_failure" && attemptNumber < SCHEDULED_WORK_MAX_ATTEMPTS) {
-                result.retryScheduled += 1;
-            } else result.terminallyFailed += 1;
+            const applied = await finalize(supabase, occ, claimToken, attemptNumber, outcome, now);
+            if (attempt?.id) {
+                await supabase
+                    .from("scheduled_work_attempts")
+                    .update({
+                        finished_at: new Date().toISOString(),
+                        outcome: outcome.kind,
+                        diagnostic: { ...(outcome.diagnostic ?? {}), lease: applied, reason: outcome.reason ?? null },
+                    })
+                    .eq("id", attempt.id);
+            }
+
+            // A domain that computes its own cadence tells us here.
+            if (outcome.kind === "completed" && outcome.nextDueAt !== undefined) {
+                await supabase
+                    .from("scheduled_work")
+                    .update({ next_due_at: outcome.nextDueAt, updated_at: new Date().toISOString() })
+                    .eq("id", occ.scheduled_work_id);
+            }
+
+            if (applied === "applied") {
+                if (outcome.kind === "completed") result.completed += 1;
+                else if (outcome.kind === "retryable_failure" && attemptNumber < SCHEDULED_WORK_MAX_ATTEMPTS) {
+                    result.retryScheduled += 1;
+                } else result.terminallyFailed += 1;
+            }
+            result.occurrences.push({ id: occ.id, handlerKey: occ.handler_key, outcome: outcome.kind });
         }
-        result.occurrences.push({ id: occ.id, handlerKey: occ.handler_key, outcome: outcome.kind });
+    } finally {
+        // In `finally` deliberately. The question the clock answers is "did the
+        // external clock REACH this runtime", and a wake that arrived and then
+        // failed is a different diagnosis from one that never arrived at all.
+        result.clockRecordedAt = await recordWake(supabase, result);
     }
 
     return result;
