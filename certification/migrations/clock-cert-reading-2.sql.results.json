@@ -1,0 +1,56 @@
+{
+  "trusted_host_action_id": "tha_0c687338a1c585",
+  "query_hash": "6295d3bbe6610c3c54cc521ce8be27784d8b73dce6b8897cb51cd06f6ace796f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T19:23:16.061Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0c687338a1c585",
+    "query_hash": "6295d3bbe6610c3c54cc521ce8be27784d8b73dce6b8897cb51cd06f6ace796f",
+    "authorization_id": "grnt_619758beeda24346",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T19:23:17.324Z",
+    "question_ids": [
+      "tick2"
+    ],
+    "questions": {
+      "tick2": {
+        "question_id": "tick2",
+        "row_count": null,
+        "rows": [
+          {
+            "credential_in_vault": true,
+            "cron_active": true,
+            "cron_cmd_has_literal_bearer": false,
+            "cron_cmd_reads_vault": true,
+            "cron_runs_recorded": 0,
+            "cron_last_run_status": null,
+            "cron_last_run_at": null,
+            "cron_last_return": null,
+            "wake_count": 0,
+            "last_wake_at": null,
+            "last_worker_id": null,
+            "last_summary": null,
+            "probe_schedule_active": true,
+            "probe_next_due_at": "2026-09-21 18:49:51.302284+00",
+            "probe_occurrences": 0,
+            "probe_occ_statuses": [],
+            "probe_attempts": 0,
+            "probe_attempt_outcomes": [],
+            "probe_diagnostic": null,
+            "net_queue_grants_app_roles": 0,
+            "vault_grants_app_roles": 0,
+            "observed_at": "2026-09-21 19:23:17.192561+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

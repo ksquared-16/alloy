@@ -29,7 +29,7 @@ import {
     personIsEmployedOnFromRows,
     type EmploymentCoverageRow,
 } from "@/lib/employment/employmentCoverage";
-import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
+import { resolveAssignmentTimes, uniformDailyInterval } from "@/lib/assignmentTime/resolveAssignmentTime";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 
 /** One employed person scheduled to work — the minimum a roster needs to place them. */
@@ -195,15 +195,29 @@ export async function buildStaffSupply(
         }[]).map((p) => [p.id, personDisplayName(p)])
     );
 
+    // Patterns now supply RECURRENCE ONLY. Hours come from the Assignment's own
+    // intervals below; a pattern default can no longer decide a person's day.
     const patternById = new Map(
         ((patternsRes.data ?? []) as { id: string; weekdays: number[] | null; metadata: unknown }[]).map((p) => [
             p.id,
-            {
-                weekdays: Array.isArray(p.weekdays) ? p.weekdays : [],
-                hours: readPatternDefaultHours((p.metadata ?? null) as Record<string, unknown> | null),
-            },
+            { weekdays: Array.isArray(p.weekdays) ? p.weekdays : [] },
         ])
     );
+
+    // One batched read for the whole site-window. Recurrence falls back to the
+    // pattern so an assignment without intervals cannot silently become every-day
+    // supply; hours never fall back.
+    const patternWeekdaysByAssignment = new Map<string, number[]>(
+        rows.map((row) => [
+            row.id,
+            (row.schedule_pattern_id ? patternById.get(row.schedule_pattern_id)?.weekdays : []) ?? [],
+        ])
+    );
+    const assignmentTimes = await resolveAssignmentTimes(supabase, {
+        orgId,
+        assignmentIds: rows.map((r) => r.id),
+        patternWeekdaysByAssignment,
+    });
 
     const roomLabelById = new Map(
         ((roomsRes.data ?? []) as { id: string; label: string | null }[]).map((r) => [r.id, r.label ?? null])
@@ -235,8 +249,11 @@ export async function buildStaffSupply(
     // not retroactively relabel history.
     const members: ScheduledStaffMember[] = rows.map((row) => {
         const personId = String(row.subject_person_id);
-        const pattern = row.schedule_pattern_id ? patternById.get(row.schedule_pattern_id) : null;
+        const assignmentTime = assignmentTimes.get(row.id) ?? null;
         const employment = employmentOn(personId, row.start_date);
+        // Null when hours are unknown, when the day is split, or when the week is not
+        // uniform — each a real shape a single label would misstate.
+        const uniform = assignmentTime ? uniformDailyInterval(assignmentTime) : null;
         return {
             assignmentId: row.id,
             personId,
@@ -248,10 +265,8 @@ export async function buildStaffSupply(
             siteLocationId: String(row.site_location_id ?? siteLocationId),
             roomLocationId: row.room_location_id,
             roomName: row.room_location_id ? (roomLabelById.get(row.room_location_id) ?? null) : null,
-            weekdays: pattern?.weekdays ?? [],
-            timeLabel: pattern?.hours
-                ? formatCompactScheduleHours(pattern.hours.arrive, pattern.hours.depart)
-                : null,
+            weekdays: assignmentTime?.weekdays ?? [],
+            timeLabel: uniform ? formatCompactScheduleHours(uniform.startTime, uniform.endTime) : null,
             effectiveFrom: row.start_date,
             effectiveTo: row.end_date,
             isPrimary: row.is_primary === true,

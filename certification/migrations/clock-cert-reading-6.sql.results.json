@@ -1,0 +1,78 @@
+{
+  "trusted_host_action_id": "tha_12ecf5867b0c19",
+  "query_hash": "bece3ecf0c4f0ab0b818876d63394cd12075717b33ae060a3596d693875371a3",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T19:40:43.271Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_12ecf5867b0c19",
+    "query_hash": "bece3ecf0c4f0ab0b818876d63394cd12075717b33ae060a3596d693875371a3",
+    "authorization_id": "grnt_63e83ef3c8314974",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T19:40:44.922Z",
+    "question_ids": [
+      "tick6"
+    ],
+    "questions": {
+      "tick6": {
+        "question_id": "tick6",
+        "row_count": null,
+        "rows": [
+          {
+            "credential_in_vault": true,
+            "cron_active": true,
+            "cron_cmd_has_literal_bearer": false,
+            "cron_cmd_reads_vault": true,
+            "cron_runs_recorded": 4,
+            "cron_last_run_status": "succeeded",
+            "cron_last_run_at": "2026-09-21 19:40:00.074045+00",
+            "cron_last_return": "1 row",
+            "wake_count": 4,
+            "last_wake_at": "2026-09-21 19:40:04.560099+00",
+            "last_worker_id": "worker-5734686e",
+            "last_summary": {
+              "claimed": 0,
+              "completed": 0,
+              "retry_scheduled": 0,
+              "terminally_failed": 0,
+              "unregistered_handler": 0
+            },
+            "probe_schedule_active": true,
+            "probe_next_due_at": null,
+            "probe_occurrences": 1,
+            "probe_occ_statuses": [
+              "completed"
+            ],
+            "probe_attempts": 1,
+            "probe_attempt_outcomes": [
+              "completed"
+            ],
+            "probe_diagnostic": {
+              "lease": "applied",
+              "domain": "periodic_billing",
+              "org_id": null,
+              "reason": "periodic_billing evaluated; no mutation in V1",
+              "attempt": 1,
+              "mutation": "not_productized_v1",
+              "evaluated_for": "2026-09-21T18:49:51.302284+00:00",
+              "domain_ref_keys": [
+                "mutating",
+                "purpose"
+              ]
+            },
+            "net_queue_grants_app_roles": 0,
+            "vault_grants_app_roles": 0,
+            "observed_at": "2026-09-21 19:40:44.798152+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
