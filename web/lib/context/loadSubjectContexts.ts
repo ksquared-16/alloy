@@ -37,6 +37,7 @@ import {
     buildSubjectHouseholdContext,
     buildSubjectIdentityContext,
     buildSubjectProcessContexts,
+    buildSubjectCompensationContext,
     buildSubjectScheduleContext,
     type SubjectProcessRow,
     type SubjectScheduleRow,
@@ -54,6 +55,12 @@ import {
 const LIVE_SCHEDULE_STATUSES = ["planned", "active", "ending"];
 
 export type LoadSubjectContextsInput = {
+    /**
+     * Whether THIS CALLER may see compensation. Resolved from `ctx.permissionKeys`
+     * by the route; defaulted to false here so a caller that forgets it discloses
+     * nothing rather than everything.
+     */
+    canReadCompensation?: boolean;
     supabase: SupabaseClient;
     orgId: string;
     dimensions: AdminAccessScopeDimensions;
@@ -182,6 +189,12 @@ export async function loadSubjectContexts(
     // so all four agree about whether this person is staff.
     const readinessContext = buildSubjectReadinessContext(employment, subjectId);
     if (readinessContext) contexts.push(readinessContext);
+    // Absent unless the caller holds the capability. Defaults to false, so a caller
+    // that forgets to pass it sees no compensation rather than all of it.
+    const compensationContext = buildSubjectCompensationContext(
+        employment, subjectId, input.canReadCompensation === true,
+    );
+    if (compensationContext) contexts.push(compensationContext);
 
     /*
      * THE RECORD ITSELF, AND ITS FAMILY.

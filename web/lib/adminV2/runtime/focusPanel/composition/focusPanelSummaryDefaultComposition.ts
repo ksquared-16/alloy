@@ -231,6 +231,28 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         encodedSpan: 2,
         encodedDensity: "standard",
     },
+    {
+        /*
+         * COMPENSATION reads LAST, and the order is the argument.
+         *
+         * It is the most sensitive card in the family and the least often the reason
+         * an operator opened the record — somebody checking a badge number or a
+         * credential should not scroll past a salary to reach it. Placed after the
+         * verdict rather than beside the identity, so pay is something you go to
+         * rather than something you land on.
+         *
+         * It is also the only card here that may not render at all: the context is
+         * withheld from a caller without `staff.compensation.read`, and the card
+         * returns null on a 403. A placed card that renders nothing leaves no gap —
+         * the grid closes over it, exactly as it does for a person with no employment.
+         */
+        key: "staff_compensation",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 3 },
+        encodedSpan: 2,
+        encodedDensity: "standard",
+    },
 ];
 
 /**

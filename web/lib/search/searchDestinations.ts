@@ -416,6 +416,13 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
     // Readiness resolves no destination: it is a verdict about a record, not a
     // queue position, and the record itself is where an operator acts.
     readiness: () => null,
+    /*
+     * Never a search destination. Search results are composed for whoever is
+     * searching, and this map has no view of the caller's capabilities — so a
+     * compensation destination here would be reachable by a principal the context
+     * layer deliberately withheld it from. Null keeps the one gate in one place.
+     */
+    compensation: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {

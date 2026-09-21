@@ -194,6 +194,7 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * advance. Same word, different subject and different inputs.
      */
     "staff_readiness",
+    "staff_compensation",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",

@@ -36,6 +36,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     staff_availability: "collection",
     // The same archetype as the case-grain readiness answer, so the two look alike.
     staff_readiness: "status",
+    staff_compensation: "status",
     attendance: "timeline",
     financials: "summary",
     health_safety: "status",

@@ -229,6 +229,35 @@ export function derivePersonReadinessCard(
     };
 }
 
+/**
+ * COMPENSATION — what this employment is paid.
+ *
+ * Visible when there is an employment, like its siblings. Whether the OPERATOR may
+ * see it is not decided here: the context layer withholds the compensation context
+ * from a caller without the capability, and the card itself renders nothing on a
+ * 403. Deciding visibility in three places would be three places to get it wrong;
+ * this one answers only "does this person have an employment to be paid for".
+ */
+export function derivePersonCompensationCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_compensation";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Compensation",
+        insight: employment ? "Reading compensation…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
 export type DerivePersonFocusPanelCardsInput = {
     employment: OperationalEmploymentSignal | null;
 };
@@ -263,6 +292,12 @@ export function derivePersonFocusPanelCards(
     // Readiness is derived FROM the three above; it is still gated by the registry.
     if (cardAppliesToGrain("staff_readiness", "person")) {
         cards.set("staff_readiness", derivePersonReadinessCard(input.employment));
+    }
+    // AFTER readiness, matching registry order: the family census reads this map's
+    // insertion sequence, and a producer that emitted cards in a different order
+    // than the registry declares would make the two disagree about the family.
+    if (cardAppliesToGrain("staff_compensation", "person")) {
+        cards.set("staff_compensation", derivePersonCompensationCard(input.employment));
     }
     return cards;
 }
