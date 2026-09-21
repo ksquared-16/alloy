@@ -33,6 +33,7 @@ import {
 import { DEFAULT_CARD_GRAINS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { focusPanelWorkModeModelFromDurablePerson } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
+import { derivePersonQualificationsCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import {
     personEmploymentSignal,
     type DurablePersonSubject,
@@ -301,10 +302,65 @@ describe("card applicability is declared per card, not switched centrally", () =
             subject: staffSubject(),
             canMutate: true,
         });
-        expect([...model.cardModels.keys()]).toEqual(["staff"]);
+        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications"]);
         // No empty shell pretending applicability.
         expect(model.cardReadiness.has("current_work")).toBe(false);
         expect(model.cardReadiness.has("household")).toBe(false);
+    });
+
+    /*
+     * DECLARED AND PLACED IS NOT COMPOSED — the defect this locks, found on deployed staging.
+     *
+     * `staff_qualifications` was declared for the `person` grain, placed on the person composition,
+     * and given a renderer branch. All three were green, and the card still never appeared: the
+     * DERIVATION had no branch for it, so no model was ever built and the panel rendered as though
+     * the card had never been added.
+     *
+     * The assertion above asserted `["staff"]`, passed, and was reporting exactly this the whole
+     * time. So the lock is stated in its own words here: every card the person composition places
+     * must actually come out of the derivation.
+     */
+    it("every card the person composition places is actually derived into a model", () => {
+        const model = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+        });
+        const derived = new Set(model.cardModels.keys());
+        for (const entry of focusPanelDefaultCompositionForGrain("person")) {
+            expect(
+                derived.has(entry.key),
+                `${entry.key} is placed on the person surface and declared for the grain, but no `
+                    + "model is derived for it — the panel will render nothing.",
+            ).toBe(true);
+        }
+    });
+
+    it("the qualifications model is a shell, and is not visible without an employment", () => {
+        // It carries no facts on purpose: standing is derived server-side against the org day, and
+        // a count baked in here would be wrong the moment a credential expired overnight.
+        const withJob = derivePersonQualificationsCard({
+            primary: {
+                personId: "p1",
+                personLabel: "A Person",
+                employment: {
+                    is_staff: true,
+                    current: { id: "emp-1" } as never,
+                    periods: [],
+                    configured_facts: [],
+                    never_employed: false,
+                },
+            },
+            people: [],
+            hasEmployment: true,
+        } as never);
+        expect(withJob.key).toBe("staff_qualifications");
+        expect(withJob.visible).toBe(true);
+        expect(withJob.title).toBe("Qualifications");
+
+        // Never employed: not visible, and phrased as a fact rather than a pending read.
+        const never = derivePersonQualificationsCard(null);
+        expect(never.visible).toBe(false);
     });
 });
 
