@@ -6,6 +6,9 @@
  * times and dates are real, that two windows on one day cannot overlap, and that
  * changing a pattern SUPERSEDES the old one rather than erasing it.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -28,6 +31,7 @@ function fakeDb(opts: { employmentFound?: boolean } = {}) {
         select() { return api; },
         eq() { return api; },
         is() { return api; },
+        or() { return api; },
         lt() { return api; },
         order() { return api; },
         update(payload: unknown) { calls.push({ table: current, op: "update", payload }); return api; },
@@ -120,6 +124,27 @@ describe("setting the recurring pattern", () => {
         // 2026-10-01 begins, so what came before ends 2026-09-30 — inclusive, so the
         // old pattern still covers its last day.
         expect(closed!.payload.effective_end).toBe("2026-09-30");
+    });
+
+    it("end-dates a pattern that is already end-dated but still in force", async () => {
+        /*
+         * The defect mounted certification found. Once a FUTURE pattern is authored,
+         * the current one carries an `effective_end`, and a predicate of
+         * `effective_end IS NULL` stopped matching it — so "close availability from
+         * this date" silently did nothing and the week kept applying.
+         *
+         * The filter must cover both shapes, which is what `.or(...)` is asserting.
+         */
+        const db = fakeDb();
+        await setRecurringAvailability(db, { ...base, windows: [] });
+        const calls = (db as unknown as { calls: { op: string; table: string }[] }).calls;
+        expect(calls.some((c) => c.op === "update" && c.table === "staff_availability_windows")).toBe(true);
+        const src = readFileSync(
+            join(__dirname, "../../lib/staffAvailability/staffAvailabilityService.ts"), "utf8");
+        // Read the predicate, because a stubbed builder cannot prove which rows a
+        // real query would have matched.
+        expect(src).toContain("effective_end.is.null,effective_end.gte.");
+        expect(src).not.toMatch(/\.is\("effective_end", null\)/);
     });
 
     it("an empty week is allowed and closes the pattern without inserting rows", async () => {
