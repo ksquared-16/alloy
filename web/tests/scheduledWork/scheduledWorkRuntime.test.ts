@@ -489,7 +489,8 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
             .in("occurrence_id", occIds);
         const rows = (data ?? []) as { handler_key: string; diagnostic: Record<string, unknown> | null }[];
 
-        const stubKeys = CONSUMERS.filter((c) => !c.productized).map((c) => c.key);
+        /* `as const` narrows these to literals, and the rows carry a plain string. */
+        const stubKeys: string[] = CONSUMERS.filter((c) => !c.productized).map((c) => c.key);
         const stubDiags = rows.filter((r) => stubKeys.includes(r.handler_key)).map((r) => r.diagnostic?.mutation);
         expect(stubDiags.length).toBeGreaterThanOrEqual(2);
         expect(new Set(stubDiags)).toEqual(new Set(["not_productized_v1"]));
