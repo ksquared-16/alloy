@@ -239,3 +239,106 @@ participant projection was the one reader that never asked.
 - **One question cannot be expressed.** *"Does your child have any allergies? If so, please list."*
   is a yes/no carrying its own detail, and the Form model has no single-destination primitive for
   that. Recorded in `ADMISSIONS-V9-INTERACTION-SEMANTICS.md`.
+
+
+---
+
+# V0.5 CERTIFIED DOCTRINE — 21 September 2026
+
+Everything below was browser-certified on a clean specimen with realistic values and **zero**
+accelerator values. It supersedes the v8/v9 measurements above where they differ.
+
+## The packet
+
+**Admissions v11** — **80 questions, 59 required.** 12 yes/no, 4 conditional pairs, 27 paragraphs,
+1 signature, 6 optional narratives.
+
+## Optional-narrative doctrine — the resolution of the yes/no-with-detail seam
+
+Six health questions expect *"none"* from most families and a description from the few it applies
+to: complications at birth, allergies, serious illness, regular medications, toileting needs,
+naptime needs.
+
+They are **one authored narrative destination with two conversational choices**:
+
+```
+Does your child have any allergies? If so, please list.
+
+        [ No known allergies ]        [ Yes — I'll tell you ]
+```
+
+**Absence writes nothing.** Choosing the truthful absence records a participant DECISION through the
+existing decline owner. No `"None"`, `"N/A"` or `"na"` reaches the destination — because a parent
+forced to type "na" has put a false value into a document they will later sign. Certified: 0
+synthetic values across the whole answer record, not merely the fields driven.
+
+**Detail is retained verbatim** in that same single destination.
+
+**No new Form primitive was required.** Optionality is the existing construct that expresses this,
+and the tuned affordance — "No known allergies" rather than a generic label — already existed and
+was simply unreachable while these fields were required.
+
+## What the family sees
+
+Named people, never slot numbers, the moment identity is known:
+
+```
+Lennon's details                    6 answers →
+Daniel Kurzman · Guardian           5 answers →
+Kelly Kurzman · Guardian            2 answers →
+Marisol Vega · Emergency contact    4 answers →
+Tomas Rivera · Emergency contact    4 answers →
+Lennon · Emergency & pickup         2 answers →
+Dr. Amelia Chen · Physician         2 answers →
+Lennon · Health & development      28 answers →
+
+Review all answers →
+```
+
+- **The row is the control** and the count is the affordance. One `<button>` per row, hover tint,
+  focus outline measured `solid`, Tab-reachable, Enter activates. "Review" survives as the accessible
+  name only.
+- **Per-group review and edit**, opening that person or topic and nothing else. Reviewing is local
+  state: the conversation's current question is byte-identical before and after — asserted on every
+  certified edit.
+- **Identity updates live.** Editing the physician's name to "Dr. Amelia Chen, MD" retitled the row
+  immediately.
+- **Every row leads with its subject.** A child topic is never presented as though it were a person.
+- **Concise navigation labels** — "Health & development", "Emergency & pickup". The authored section
+  name is unchanged everywhere the document is the subject; a heading the table does not recognise
+  keeps its own words.
+- **Relationship labels are read, never assumed.** A guardian slot says "Guardian" unless the
+  relationship authority says the person is the primary contact. On the certified specimen no
+  `person_child_relationships` row exists yet, so "Kelly Kurzman · Guardian" is the truthful label.
+
+## Text contrast
+
+Every participant-facing prose token measures **≥ 4.84 : 1** against the painted background,
+alpha-composited (WCAG AA for small text is 4.5). Body text stays heavier, so the secondary layer
+is still visibly secondary.
+
+An earlier pass at this looked darker and was not enough: measured, the section eyebrow was 2.71:1
+and the summary labels 3.58:1. The first measurement was itself wrong — Tailwind v4 computes to
+`oklab(L a b / alpha)` and reading those as RGB reported 20.99:1 for everything.
+
+## The participant presentation for V0.5
+
+**Conversation is the sole participant presentation.** The link opens as a conversation and a
+conventional Form is never painted for a journey that has one — certified from cold navigation,
+hard reload, and a throttled load, sampling every animation frame: first Form control paint
+**NEVER**, in all three.
+
+**A Form-view switch is rejected for V0.5**, from measurement rather than preference:
+
+```
+Conversation live state   form_packet_sessions.shared_values
+Form draft live state     form_submissions.payload
+```
+
+Neither presentation sees the other's edits before submit; convergence happens only at submit
+through `advancePacketSessionAfterSubmit`. The certified specimen carried 68 conversational answers
+in `shared_values` while its Form draft held 2 — and those 2 were prefill. Offering a switch over
+two stores would show a family their answers had vanished.
+
+**Dual presentation is a future platform capability**, and it is specific: one live participant
+store, or a Form draft that reads through `shared_values` on load. It is not a presentation toggle.

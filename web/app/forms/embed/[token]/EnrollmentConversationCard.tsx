@@ -187,7 +187,7 @@ function ConversationTopic({
     return (
         <div className="mb-3" data-participant-topic={cluster.title ?? "topic"}>
             {showTitle && cluster.title ? (
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/60">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/70">
                     {cluster.title}
                 </p>
             ) : null}
@@ -205,7 +205,7 @@ function ConversationTopic({
                 </ul>
             ) : null}
             {upcoming.length > 0 ? (
-                <p className="text-[12px] leading-snug text-alloy-midnight/50" data-participant-topic-upcoming={upcoming.length}>
+                <p className="text-[12px] leading-snug text-alloy-midnight/65" data-participant-topic-upcoming={upcoming.length}>
                     {upcoming.length === 1 ? "Then: " : `Then ${upcoming.length} more: `}
                     {upcoming.map((q) => q.question.replace(/\?$/, "")).join(" · ")}
                 </p>
@@ -465,7 +465,7 @@ function StructuredFactEditor({
                     type="button"
                     onClick={onCancel}
                     disabled={busy}
-                    className="text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                    className="text-[13px] text-alloy-midnight/65 underline underline-offset-2 disabled:opacity-50"
                 >
                     Cancel
                 </button>
@@ -522,7 +522,7 @@ function NewPartyForm({
                 >
                     Save
                 </button>
-                <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-alloy-midnight/50 underline underline-offset-2">
+                <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-alloy-midnight/65 underline underline-offset-2">
                     Cancel
                 </button>
             </div>
@@ -663,7 +663,7 @@ function CollectedAnswers({
                     className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
                     data-participant-collected-fact={fact.ref}
                 >
-                    <dt className="text-[12px] text-alloy-midnight/55">{fact.label}</dt>
+                    <dt className="text-[12px] text-alloy-midnight/65">{fact.label}</dt>
                     <span aria-hidden className="text-alloy-midnight/15">·</span>
                     {editingRef === fact.ref ? (
                         <dd className="w-full">
@@ -688,7 +688,7 @@ function CollectedAnswers({
                                 type="button"
                                 onClick={() => onEdit(fact.ref)}
                                 disabled={busy}
-                                className="text-[12px] text-alloy-midnight/55 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                className="text-[12px] text-alloy-midnight/65 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
                             >
                                 Edit
                             </button>
@@ -701,7 +701,7 @@ function CollectedAnswers({
 
     return (
         <section className="px-0.5" data-participant-collected={collected.length}>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/45">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/65">
                 What you told us
             </p>
 
@@ -709,7 +709,7 @@ function CollectedAnswers({
                 <div className="mt-1.5 space-y-3" data-participant-collected-state={openAll ? "all" : "chapter"}>
                     {shownChapters.map((chapter) => (
                         <div key={chapter.key} data-participant-collected-chapter={chapter.key}>
-                            <p className="text-[11px] font-medium text-alloy-midnight/60">{chapter.title}</p>
+                            <p className="text-[11px] font-medium text-alloy-midnight/70">{chapter.title}</p>
                             {factRows(chapter)}
                         </div>
                     ))}
@@ -743,12 +743,12 @@ function CollectedAnswers({
                                 aria-label={`Review ${chapter.title} — ${chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}`}
                                 className="group -mx-1 flex w-[calc(100%+0.5rem)] flex-wrap items-baseline gap-x-2 rounded-md px-1 py-1 text-left transition hover:bg-alloy-stone/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine"
                             >
-                                <span className="min-w-0 flex-1 text-[12px] text-alloy-midnight/55 group-hover:text-alloy-midnight/80">
+                                <span className="min-w-0 flex-1 text-[12px] text-alloy-midnight/65 group-hover:text-alloy-midnight/90">
                                     {chapter.title}
                                 </span>
                                 <span className="text-[13px] text-alloy-midnight/70 group-hover:text-alloy-bend-pine">
                                     {chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}
-                                    <span aria-hidden className="ml-1 text-alloy-midnight/55 group-hover:text-alloy-bend-pine">
+                                    <span aria-hidden className="ml-1 text-alloy-midnight/65 group-hover:text-alloy-bend-pine">
                                         →
                                     </span>
                                 </span>
@@ -765,7 +765,7 @@ function CollectedAnswers({
                     else { setOpenAll(true); setOpenChapter(null); }
                 }}
                 data-participant-collected-toggle={expanded ? "collapse" : "review-all"}
-                className="mt-1.5 text-[12px] text-alloy-midnight/55 underline underline-offset-2 hover:text-alloy-bend-pine"
+                className="mt-1.5 text-[12px] text-alloy-midnight/65 underline underline-offset-2 hover:text-alloy-bend-pine"
             >
                 {expanded ? "Back to the summary" : "Review all answers →"}
             </button>
@@ -825,7 +825,7 @@ function KnownGroup({ group }: { group: ParticipantObjectiveWire["known"][number
             <dl className="mt-1.5 space-y-1">
                 {rows.map((fact) => (
                     <div key={fact.label + fact.value} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-known-fact={fact.label}>
-                        <dt className="text-[12px] text-alloy-midnight/55">{fact.label}</dt>
+                        <dt className="text-[12px] text-alloy-midnight/65">{fact.label}</dt>
                         <span aria-hidden className="text-alloy-midnight/20">·</span>
                         <dd className="text-[13px] text-alloy-midnight/60">{fact.value}</dd>
                     </div>
@@ -870,7 +870,7 @@ function ConversationTransition({ group }: { group: ParticipantObjectiveWire["ne
     if (!group) return null;
     return (
         <p
-            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/60"
+            className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/70"
             data-participant-group-transition={group.key}
         >
             {group.title}
@@ -921,7 +921,7 @@ function SettledGroup({
             <dl className="mt-1.5 space-y-1">
                 {rows.map((fact) => (
                     <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-settled-fact={fact.ref}>
-                        <dt className="text-[12px] text-alloy-midnight/55">{fact.label}</dt>
+                        <dt className="text-[12px] text-alloy-midnight/65">{fact.label}</dt>
                         <span aria-hidden className="text-alloy-midnight/20">·</span>
                         {editingRef === fact.ref ? (
                             <dd className="w-full">
@@ -946,7 +946,7 @@ function SettledGroup({
                                     type="button"
                                     onClick={() => onEdit(fact.ref)}
                                     disabled={busy}
-                                    className="text-[12px] text-alloy-midnight/55 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                    className="text-[12px] text-alloy-midnight/65 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
                                 >
                                     Edit
                                 </button>
@@ -959,12 +959,12 @@ function SettledGroup({
                 <button
                     type="button"
                     onClick={() => setOpen(true)}
-                    className="mt-1.5 text-[12px] text-alloy-midnight/55 underline underline-offset-2"
+                    className="mt-1.5 text-[12px] text-alloy-midnight/65 underline underline-offset-2"
                 >
                     Show {hidden} more
                 </button>
             ) : null}
-            <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40">
+            <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/60">
                 Confirmed
             </p>
         </section>
@@ -1332,7 +1332,7 @@ export function EnrollmentConversationCard({
                                     >
                                         <span className="text-[15px] font-medium text-alloy-midnight">{candidate.name}</span>
                                         {candidate.detail ? (
-                                            <span className="text-[13px] text-alloy-midnight/45">{candidate.detail}</span>
+                                            <span className="text-[13px] text-alloy-midnight/65">{candidate.detail}</span>
                                         ) : null}
                                     </button>
                                 ))}
@@ -1355,7 +1355,7 @@ export function EnrollmentConversationCard({
                                            path as adding one, and at 375px it was a 20px-high text
                                            link — below any thumb target. The look is unchanged; only
                                            the tappable area grows. */
-                                        className="mt-1 flex min-h-[44px] items-center self-start text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                                        className="mt-1 flex min-h-[44px] items-center self-start text-[13px] text-alloy-midnight/65 underline underline-offset-2 disabled:opacity-50"
                                     >
                                         No, continue
                                     </button>
