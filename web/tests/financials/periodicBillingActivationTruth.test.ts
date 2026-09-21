@@ -87,8 +87,15 @@ describe("the operator surface cannot claim what is not true", () => {
     const panel = code("components/adminV2/settings/financials/tuitionPlans/TuitionBillingFrequenciesPanel.tsx");
 
     it("the automatic claim is rendered only when the tenant's schedule is active", () => {
-        // The positive sentence must sit on the true branch of the state, never unconditionally.
-        expect(panel).toMatch(/automatic\.active[\s\S]{0,120}?billed automatically/);
+        /*
+         * BOUND TO THE SENTENCE'S OWN CONDITION. A proximity match passed while the claim itself
+         * was made unconditional, because the className ternary a few lines above still mentioned
+         * `automatic.active` and sat inside the window. The condition that decides which sentence
+         * renders is the thing under test, so it is matched immediately before the sentence.
+         */
+        expect(panel).toMatch(/\{automatic\.active\s*\?\s*\n?\s*"Recurring tuition is billed automatically/);
+        expect(panel, "the negative sentence is the other branch of that same condition")
+            .toMatch(/:\s*\n?\s*"Recurring tuition is NOT billed automatically/);
         expect(panel).toMatch(/data-periodic-billing-active=\{automatic\.active \? "true" : "false"\}/);
     });
 
