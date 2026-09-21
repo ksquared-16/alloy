@@ -40,6 +40,11 @@ import {
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContext";
 import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
+import {
+    loadAcknowledgedOccurrenceKeys,
+    occurrenceKeyForAck,
+    personalSeenFromOccurrence,
+} from "@/lib/queues/operatorStageMembershipAck";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 /** The columns the enrichment + context builders read. D1's row select must carry these. */
@@ -63,6 +68,12 @@ export async function enrichOperationalProjectionRows(args: {
     /** The bounded page — NOT the base row set. */
     rows: readonly EnrichableProjectionRow[];
     queue: PartialQueueRowContextQueueMeta;
+    /**
+     * The operator this answer is FOR. Personal seen/unseen is per-operator, so without it the
+     * answer cannot state it and the rows carry no `personal_seen` — the client then hydrates it
+     * exactly as it always has. Absent is a degrade, never a claim.
+     */
+    currentUserId?: string | null;
 }): Promise<Record<string, unknown>[]> {
     const rows = args.rows as unknown as Record<string, unknown>[];
     if (!rows.length) return [];
@@ -118,6 +129,81 @@ export async function enrichOperationalProjectionRows(args: {
     });
 
     const withContext = attachPartialQueueRowContextToRows(merged, args.queue);
+
+    /*
+     * PERSONAL SEEN, RESOLVED HERE INSTEAD OF IN A SECOND ROUND TRIP.
+     *
+     * Measured on the canonical six-card baseline (n=11, SHA 786a96eb1): WU-05 owned completion in
+     * 11 of 11, and its completion-setting mutation was the REMOVAL of an unread dot —
+     * `aria-label "Not yet opened by you" -> null` — driven by a post-mount
+     * GET /api/admin/queues/stage-membership-ack. That round trip measured 592ms (P50) and was the
+     * dominant interval between the document landing and first-order finality.
+     *
+     * The document already asserts a value for this: with `personal_seen` absent, `resolveRowUnseen`
+     * returns TRUE for every row ("treat as unseen until ack"). For rows the operator HAS opened
+     * that assertion is FALSE, and the fetch exists to correct it. So this is not a duplicated
+     * read — it is a false early claim plus a correction. Answering here removes both.
+     *
+     * NO SECOND OWNER: the acknowledged set comes from `loadAcknowledgedOccurrenceKeys` and the
+     * per-row verdict from `personalSeenFromOccurrence` — the same canonical pair the endpoint
+     * uses. The occurrence key is built by `occurrenceKeyForAck`, the same builder the client and
+     * the POST path use, so a key composed here and a key composed there cannot diverge.
+     *
+     * The key already binds org, operator, subject, stage and stage-entry time, so a verdict cannot
+     * be carried across navigations or re-used after a subject re-enters a stage: a new occurrence
+     * is a different key and reads as unseen again.
+     *
+     * ONE query for the whole page, and it is the already-bounded page (<= 100 rows).
+     */
+    const viewerId = args.currentUserId?.trim() || null;
+    if (viewerId) {
+        const keyByRowId = new Map<string, string>();
+        for (const row of withContext) {
+            const ctx = queueRowContextOf(row);
+            const stageKey = ctx?.operational_state?.stage_key?.trim();
+            const enteredAt = ctx?.operational_state?.entered_at?.trim();
+            const subjectType = ctx?.row_subject?.subject_type;
+            const subjectId = ctx?.row_subject?.subject_id;
+            if (!stageKey || !enteredAt || !subjectType || !subjectId) continue;
+            keyByRowId.set(
+                String(row.id),
+                occurrenceKeyForAck({
+                    orgId: args.orgId,
+                    userId: viewerId,
+                    subjectType,
+                    subjectId,
+                    stageKey,
+                    stageEnteredAtIso: enteredAt,
+                }),
+            );
+        }
+        if (keyByRowId.size) {
+            try {
+                const acknowledged = await loadAcknowledgedOccurrenceKeys({
+                    supabase: args.supabase,
+                    orgId: args.orgId,
+                    userId: viewerId,
+                    occurrenceKeys: [...keyByRowId.values()],
+                });
+                for (const row of withContext) {
+                    const ctx = queueRowContextOf(row);
+                    const key = keyByRowId.get(String(row.id));
+                    if (!ctx || !key) continue;
+                    ctx.personal_seen = personalSeenFromOccurrence({
+                        occurrenceKey: key,
+                        acknowledgedKeys: acknowledged,
+                    });
+                }
+            } catch {
+                /*
+                 * UNAVAILABLE IS NOT ACKNOWLEDGED. A failed read leaves `personal_seen` ABSENT, so
+                 * the client keeps its existing behaviour and hydrates over the network. Writing a
+                 * verdict here would turn "we could not find out" into "you have seen this" and
+                 * silently clear a dot the operator still needs.
+                 */
+            }
+        }
+    }
 
     // BOUNDED PAYLOAD. The full QueueRowContext is heavy — attaching it raw took the answer from
     // 19KB to 101KB (5.2x) for a 100-row page. `projectQueuePreviewRowContexts` is the canonical
