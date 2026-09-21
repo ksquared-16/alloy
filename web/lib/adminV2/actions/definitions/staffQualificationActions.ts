@@ -39,20 +39,44 @@ function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
 
-/** One translation of service failures into operator-safe results. */
+/**
+ * One translation of service failures into operator-safe results.
+ *
+ * The SHAPE is the contract — `{ ok, correlationId, status, error }` with `error` a STRING. An
+ * earlier version returned `{ actionKey, error: { code, message } }` and cast it through
+ * `as unknown as ActionResult`. It typechecked, registered, and every execution came back 500
+ * INTERNAL, because the runtime validates the result it is handed. The cast is gone: if this shape
+ * drifts again the compiler says so instead of production doing.
+ */
 function failureResult(actionKey: string, correlationId: string, err: unknown): ActionResult {
     const known = err instanceof StaffQualificationError;
+    const code = known ? (err as StaffQualificationError).code : "internal_error";
+    const status =
+        code === "not_found" ? 404 : code === "conflict" ? 409 : code === "invalid_input" ? 422 : 500;
     return {
         ok: false,
-        actionKey,
         correlationId,
-        error: {
-            code: known ? (err as StaffQualificationError).code : "internal_error",
-            message: known
-                ? (err as StaffQualificationError).message
-                : "That qualification change could not be completed.",
-        },
-    } as unknown as ActionResult;
+        status,
+        error: known
+            ? (err as StaffQualificationError).message
+            : "That qualification change could not be completed.",
+        blockers: [{ code, message: known ? (err as StaffQualificationError).message : "Unexpected error" }],
+    };
+}
+
+/** The success envelope the runtime validates, built once so the three commands cannot disagree. */
+function okResult(
+    actionKey: string,
+    correlationId: string,
+    entityId: string,
+    affectedId: string | null,
+    detail: Record<string, unknown>,
+): ActionResult {
+    return {
+        ok: true,
+        correlationId,
+        result: { actionKey, entityType: "person", entityId, affectedId, detail },
+    };
 }
 
 const baseShape = {
@@ -131,7 +155,9 @@ export const staffQualificationRecordAction: RegisteredAction = {
                 supersedesQualificationId: t(payload.supersedes_qualification_id) || null,
                 actorUserId: ctx.userId ?? null,
             });
-            return { ok: true, actionKey: QUALIFICATION_RECORD_ACTION_KEY, correlationId, data: { qualification: row } } as unknown as ActionResult;
+            return okResult(QUALIFICATION_RECORD_ACTION_KEY, correlationId, t(payload.employment_id), row.id, {
+                qualification: row,
+            });
         } catch (err) {
             return failureResult(QUALIFICATION_RECORD_ACTION_KEY, correlationId, err);
         }
@@ -173,7 +199,9 @@ export const staffQualificationVerifyAction: RegisteredAction = {
         try {
             const state = (t(payload.verification_state) || "verified") as "verified" | "rejected";
             const row = await verifyQualification(supabase, ctx.orgId, t(payload.qualification_id), state, ctx.userId ?? null);
-            return { ok: true, actionKey: QUALIFICATION_VERIFY_ACTION_KEY, correlationId, data: { qualification: row } } as unknown as ActionResult;
+            return okResult(QUALIFICATION_VERIFY_ACTION_KEY, correlationId, t(payload.qualification_id), row.id, {
+                qualification: row,
+            });
         } catch (err) {
             return failureResult(QUALIFICATION_VERIFY_ACTION_KEY, correlationId, err);
         }
@@ -219,7 +247,13 @@ export const staffQualificationAttachEvidenceAction: RegisteredAction = {
                 t(payload.form_submission_id) || null,
                 ctx.userId ?? null,
             );
-            return { ok: true, actionKey: QUALIFICATION_ATTACH_EVIDENCE_ACTION_KEY, correlationId, data: {} } as unknown as ActionResult;
+            return okResult(
+                QUALIFICATION_ATTACH_EVIDENCE_ACTION_KEY,
+                correlationId,
+                t(payload.qualification_id),
+                t(payload.document_id),
+                { qualification_id: t(payload.qualification_id), document_id: t(payload.document_id) },
+            );
         } catch (err) {
             return failureResult(QUALIFICATION_ATTACH_EVIDENCE_ACTION_KEY, correlationId, err);
         }
