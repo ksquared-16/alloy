@@ -100,6 +100,8 @@ export type FirstOrderComposeResult = {
     projection: FirstOrderWorkUnitProjection;
     timing: FirstOrderComposeTiming;
     plan: FirstOrderPlan;
+    /** Diagnostic decomposition of the Work View evaluator, when it ran. Never product state. */
+    workViewDiagnostics?: unknown;
 };
 
 /**
@@ -459,5 +461,8 @@ export async function composeFirstOrderWorkUnitProjection(
         projection,
         timing: { planMs, readDagMs, assemblyMs, totalMs: at(), spans, executedResolvers, queryCount },
         plan,
+        workViewDiagnostics: workViewTotalsRead && workViewTotalsRead.status === "ok"
+            ? workViewTotalsRead.diagnostics
+            : null,
     };
 }
