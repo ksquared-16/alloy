@@ -50,9 +50,18 @@ export type PrepaidReaderDiagnostics = {
     paymentCount: number;
 };
 
+/**
+ * Per-phase timing, for the measurement gate that decides whether this acquisition shape fits the
+ * first-order budget. Optional and inert when absent: the product path pays nothing for it, and
+ * offsets are recorded rather than durations so concurrency is visible instead of inferred.
+ */
+export type PrepaidReaderPhase = { name: string; at: number; end: number };
+
 export type PrepaidReaderResult = {
     outcome: PrepaidPositionOutcome;
     diagnostics: PrepaidReaderDiagnostics;
+    /** Present only when the caller asked for timing. */
+    phases?: PrepaidReaderPhase[];
 };
 
 const t = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
@@ -63,27 +72,39 @@ const t = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
  */
 export async function readAccountPrepaidPosition(
     supabase: SupabaseClient,
-    args: { orgId: string; householdId: string; authorized: boolean },
+    args: { orgId: string; householdId: string; authorized: boolean; measure?: boolean },
 ): Promise<PrepaidReaderResult> {
     const orgId = t(args.orgId);
     const householdId = t(args.householdId);
     const diagnostics: PrepaidReaderDiagnostics = { queryCount: 0, agreementCount: 0, paymentCount: 0 };
+    const t0 = args.measure ? performance.now() : 0;
+    const phases: PrepaidReaderPhase[] | undefined = args.measure ? [] : undefined;
+    const at = () => (args.measure ? Math.round(performance.now() - t0) : 0);
+    const phase = async <T,>(name: string, run: () => Promise<T>): Promise<T> => {
+        if (!phases) return run();
+        const a = at();
+        const v = await run();
+        phases.push({ name, at: a, end: at() });
+        return v;
+    };
+    const done = (outcome: PrepaidPositionOutcome): PrepaidReaderResult =>
+        phases ? { outcome, diagnostics, phases } : { outcome, diagnostics };
 
-    if (!args.authorized) return { outcome: { state: "forbidden" }, diagnostics };
+    if (!args.authorized) return done({ state: "forbidden" });
     if (!orgId || !householdId) {
         // An unidentified account is not an empty one.
-        return { outcome: { state: "unavailable", reason: "missing org or household identity" }, diagnostics };
+        return done({ state: "unavailable", reason: "missing org or household identity" });
     }
 
     // ── HOP 1 — the household's children, so agreements naming only a child are reachable. ───────
     diagnostics.queryCount += 1;
-    const membersRes = await supabase
+    const membersRes = await phase("members", () => Promise.resolve(supabase
         .from("customer_members")
         .select("id")
         .eq("org_id", orgId)
-        .eq("customer_id", householdId);
+        .eq("customer_id", householdId)));
     if (membersRes.error) {
-        return { outcome: { state: "unavailable", reason: "household members unreadable" }, diagnostics };
+        return done({ state: "unavailable", reason: "household members unreadable" });
     }
     const memberIds = ((membersRes.data ?? []) as Array<{ id?: unknown }>).map((m) => t(m.id)).filter(Boolean);
 
@@ -92,13 +113,13 @@ export async function readAccountPrepaidPosition(
     const agreementFilter = memberIds.length
         ? `customer_id.eq.${householdId},customer_member_id.in.(${memberIds.join(",")})`
         : `customer_id.eq.${householdId}`;
-    const agreementsRes = await supabase
+    const agreementsRes = await phase("agreements", () => Promise.resolve(supabase
         .from("child_enrollment_agreements")
         .select("id")
         .eq("org_id", orgId)
-        .or(agreementFilter);
+        .or(agreementFilter)));
     if (agreementsRes.error) {
-        return { outcome: { state: "unavailable", reason: "enrolment agreements unreadable" }, diagnostics };
+        return done({ state: "unavailable", reason: "enrolment agreements unreadable" });
     }
     const agreementIds = ((agreementsRes.data ?? []) as Array<{ id?: unknown }>).map((a) => t(a.id)).filter(Boolean);
     diagnostics.agreementCount = agreementIds.length;
@@ -109,7 +130,7 @@ export async function readAccountPrepaidPosition(
         ? `and(billable_source_type.eq.customer,billable_source_id.eq.${householdId}),`
           + `and(billable_source_type.eq.enrollment_agreement,billable_source_id.in.(${agreementIds.join(",")}))`
         : `and(billable_source_type.eq.customer,billable_source_id.eq.${householdId})`;
-    const paymentsRes = await supabase
+    const paymentsRes = await phase("payments", () => Promise.resolve(supabase
         .from("payments")
         .select("id, amount_cents, status")
         .eq("org_id", orgId)
@@ -117,9 +138,9 @@ export async function readAccountPrepaidPosition(
         // Refund rows are not receipts; they are read separately as reductions of one.
         .is("refunds_payment_id", null)
         .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-        .or(sourceFilter);
+        .or(sourceFilter)));
     if (paymentsRes.error) {
-        return { outcome: { state: "unavailable", reason: "payments unreadable" }, diagnostics };
+        return done({ state: "unavailable", reason: "payments unreadable" });
     }
     const payments: PrepaidPaymentRow[] = ((paymentsRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
         id: t(p.id),
@@ -131,37 +152,34 @@ export async function readAccountPrepaidPosition(
     const ok = <T,>(value: T): ReadOutcome<T> => ({ state: "ok", value });
     if (!payments.length) {
         // A household with no receipts is KNOWN-EMPTY, which is a real answer and not a failure.
-        return {
-            outcome: resolvePrepaidPositionOutcome({
-                payments: ok<readonly PrepaidPaymentRow[]>([]),
-                allocations: ok<Readonly<Record<string, number>>>({}),
-                refunds: ok<Readonly<Record<string, number>>>({}),
-                holds: ok<Readonly<Record<string, number>>>({}),
-            }),
-            diagnostics,
-        };
+        return done(resolvePrepaidPositionOutcome({
+            payments: ok<readonly PrepaidPaymentRow[]>([]),
+            allocations: ok<Readonly<Record<string, number>>>({}),
+            refunds: ok<Readonly<Record<string, number>>>({}),
+            holds: ok<Readonly<Record<string, number>>>({}),
+        }));
     }
     const paymentIds = payments.map((p) => p.id);
 
     // ── HOP 4 — allocations, refunds and holds together. Batched, never per payment. ─────────────
     diagnostics.queryCount += 3; // holds costs a further disposition read inside the canonical reader
     const [allocRes, refundRes, holds] = await Promise.all([
-        supabase
+        phase("allocations", () => Promise.resolve(supabase
             .from("payment_allocations")
             .select("payment_id, allocated_amount_cents")
             .eq("org_id", orgId)
             .eq("status", "active")
-            .in("payment_id", paymentIds),
-        supabase
+            .in("payment_id", paymentIds))),
+        phase("refunds", () => Promise.resolve(supabase
             .from("payments")
             .select("refunds_payment_id, amount_cents")
             .eq("org_id", orgId)
             .neq("status", "voided")
-            .in("refunds_payment_id", paymentIds),
-        readHoldsForPayments(supabase, { orgId, paymentIds }).then(
+            .in("refunds_payment_id", paymentIds))),
+        phase("holds", () => readHoldsForPayments(supabase, { orgId, paymentIds }).then(
             (h) => ({ ok: true as const, holds: h }),
             () => ({ ok: false as const, holds: [] }),
-        ),
+        )),
     ]);
     diagnostics.queryCount += 1; // the dispositions read inside readHoldsForPayments
 
@@ -175,8 +193,7 @@ export async function readAccountPrepaidPosition(
         return out;
     };
 
-    return {
-        outcome: resolvePrepaidPositionOutcome({
+    return done(resolvePrepaidPositionOutcome({
             payments: ok<readonly PrepaidPaymentRow[]>(payments),
             allocations: allocRes.error
                 ? { state: "unavailable", reason: "allocations unreadable" }
@@ -187,7 +204,5 @@ export async function readAccountPrepaidPosition(
             holds: holds.ok
                 ? ok(Object.fromEntries(paymentIds.map((id) => [id, heldCentsFor(id, holds.holds)])))
                 : { state: "unavailable", reason: "holds unreadable" },
-        }),
-        diagnostics,
-    };
+    }));
 }

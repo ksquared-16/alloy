@@ -9,6 +9,8 @@ import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOp
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 import { loadAcknowledgedOccurrenceKeys } from "@/lib/queues/operatorStageMembershipAck";
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
+import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
+import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 
 /**
  * P0-7.6 — FIRST-ORDER READ-DAG PROTOTYPE. DIAGNOSTIC ONLY, NOT A PRODUCT SURFACE.
@@ -293,8 +295,96 @@ export async function GET(req: NextRequest) {
         void byName;
     }
 
+    /*
+     * THE PREPAID READER MEASUREMENT GATE.
+     *
+     * The reader's cost was DERIVED from a hop constant, never measured, and the account this
+     * lane's specimen points at has no receipts at all — so it exercises the 3-hop short circuit
+     * and says nothing about the 5-hop path an account with money takes. Deriving a budget from
+     * the empty case would be the same error as the retracted diagnostic timings.
+     *
+     * `discover_money=1` finds a money-bearing household READ-ONLY, by reading existing receipts
+     * and resolving their billable source back to a household. Nothing is written: manufacturing
+     * coverage by mutating staging financial data is forbidden, and would be wrong anyway.
+     */
+    const measurePrepaid = req.nextUrl.searchParams.get("discover_money") === "1";
+    let prepaid: Record<string, unknown> | null = null;
+    if (measurePrepaid) {
+        // Find households that actually hold childcare receipts.
+        const recent = await supabase
+            .from("payments")
+            .select("id, billable_source_type, billable_source_id")
+            .eq("org_id", orgId)
+            .eq("direction", "inbound")
+            .is("refunds_payment_id", null)
+            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+            .limit(50);
+
+        const bySource = new Map<string, { type: string; id: string }>();
+        for (const r of ((recent.data ?? []) as Array<Record<string, unknown>>)) {
+            const type = String(r.billable_source_type ?? "");
+            const id = String(r.billable_source_id ?? "");
+            if (type && id) bySource.set(`${type}:${id}`, { type, id });
+        }
+        // Resolve each distinct source to its household, so agreement-sourced receipts are
+        // represented and not only the direct-customer ones.
+        const households = new Set<string>();
+        for (const { type, id } of [...bySource.values()].slice(0, 12)) {
+            if (type === "customer") { households.add(id); continue; }
+            const ag = await supabase
+                .from("child_enrollment_agreements")
+                .select("customer_id, customer_member_id")
+                .eq("org_id", orgId).eq("id", id).maybeSingle();
+            const row = (ag.data ?? null) as { customer_id?: string | null; customer_member_id?: string | null } | null;
+            if (row?.customer_id) { households.add(String(row.customer_id)); continue; }
+            if (row?.customer_member_id) {
+                const m = await supabase.from("customer_members").select("customer_id")
+                    .eq("org_id", orgId).eq("id", String(row.customer_member_id)).maybeSingle();
+                const cid = (m.data as { customer_id?: string | null } | null)?.customer_id;
+                if (cid) households.add(String(cid));
+            }
+        }
+
+        const measured: Array<Record<string, unknown>> = [];
+        for (const hh of [...households].slice(0, 5)) {
+            const started = performance.now();
+            const r = await readAccountPrepaidPosition(supabase, {
+                orgId, householdId: hh, authorized: true, measure: true,
+            });
+            measured.push({
+                household: hh,
+                wallMs: Math.round(performance.now() - started),
+                queryCount: r.diagnostics.queryCount,
+                agreementCount: r.diagnostics.agreementCount,
+                paymentCount: r.diagnostics.paymentCount,
+                outcomeState: r.outcome.state,
+                position: r.outcome.state === "ok" ? r.outcome.position : null,
+                phases: r.phases ?? [],
+            });
+        }
+        // The zero-receipt case, for the short-circuit comparison.
+        const zeroStart = performance.now();
+        const zero = await readAccountPrepaidPosition(supabase, {
+            orgId, householdId: customerId ?? "", authorized: true, measure: true,
+        });
+        prepaid = {
+            candidateSources: bySource.size,
+            householdsFound: households.size,
+            measured,
+            zeroReceipt: {
+                wallMs: Math.round(performance.now() - zeroStart),
+                queryCount: zero.diagnostics.queryCount,
+                paymentCount: zero.diagnostics.paymentCount,
+                outcomeState: zero.outcome.state,
+                phases: zero.phases ?? [],
+            },
+            note: "READ-ONLY discovery. No financial data is written. A measured sample with paymentCount 0 exercises the 3-hop short circuit and must not be read as the money path.",
+        };
+    }
+
     return NextResponse.json({
         ok: true,
+        prepaid,
         dag,
         parity,
         orgId_present: Boolean(orgId),
