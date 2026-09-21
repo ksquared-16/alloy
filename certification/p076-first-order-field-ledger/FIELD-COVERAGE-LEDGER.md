@@ -190,3 +190,27 @@ nothing; the read does. `charges` sits at hop 3 of a chain whose first two hops
 measured DAG at 375ms. Adding to the binding branch is the only change in this programme whose cost
 cannot be predicted from the existing measurements, so it is stated here as class C with an
 unmeasured budget rather than implemented on an assumption that it is free.
+
+## CORRECTION to the financials rows above: they are class D, not class C
+
+The ledger's financials rows were written as class C — an additional canonical read with a budget
+to measure. That was only half checked. Searching for the owner of the read itself:
+
+- `reconcileRows` and `pastDueFor` are pure and exported. The arithmetic has an owner.
+- The account-scoped **charges ledger read** does not. `from("charges")` appears in twelve
+  modules; none is an account-scoped reader. The only exported reader naming charges is
+  `readChargeBalance`, which is per-charge. The account's ledger is assembled inside
+  `buildFinancialsCardVMInner` — private, ~600 lines, and part of the full Financials VM that this
+  composer is gated against calling, because that VM is the coupling A′ exists to remove.
+
+So the constraint is not budget. There is **no narrow canonical owner to read from**, which is
+Part 8's class **D — CONTRACT_OWNER_UNRESOLVED**, and D blocks the field. Implementing these four
+would mean writing a second account-ledger reader and calling it canonical, which is exactly the
+"derive something equivalent" the dispatch forbids.
+
+Unblocking them is a slice of its own: extract the account-scoped charges read out of
+`buildFinancialsCardVMInner` into a named reader that both the card VM and A′ consume — the same
+shape as the prepaid extraction already done in this programme (`readAccountPrepaidPosition`),
+which is why that one was available to A′ and this one is not.
+
+**Revised Part 8 roll-up: A 15 · B 0 · C 6 · D 4.**
