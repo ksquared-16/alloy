@@ -131,6 +131,49 @@ function buildPersonEmploymentPresentation(
     };
 }
 
+/**
+ * THE QUALIFICATIONS CARD MODEL — a content-free shell.
+ *
+ * Unlike the Staff card, this one carries no facts: the component addresses its own read from the
+ * employment id in the operational context and resolves standing against the ORGANISATION's day,
+ * server-side. Deriving any of that here would be a second resolver for one answer, and a stored
+ * count would be wrong the moment a credential expired overnight.
+ *
+ * `visible: false` when the person has never worked here, matching the Staff card: a qualification
+ * hangs off an employment, so with no employment there is nothing for the card to be about. The
+ * readiness contract turns that into `not_applicable`, which keeps the configured cell and renders
+ * its muted treatment rather than asserting an absence.
+ *
+ * ── WHY THIS EXISTS AT ALL ──
+ *
+ * Declaring the card for the `person` grain and placing it on the person composition was not
+ * enough. This module is a THIRD gate: it builds models only for keys it has a branch for, so a
+ * card that is declared and placed but not derived composes nothing and the panel renders it as if
+ * it had never been added. That is exactly what shipped, and mounted QA on deployed staging is what
+ * caught it.
+ */
+export function derivePersonQualificationsCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_qualifications";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Qualifications",
+        // The component replaces this the moment its own read resolves. It is phrased as a pending
+        // state rather than an answer, because an absent read is not "nothing held".
+        insight: employment ? "Reading qualifications…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
 export type DerivePersonFocusPanelCardsInput = {
     employment: OperationalEmploymentSignal | null;
 };
@@ -150,6 +193,12 @@ export function derivePersonFocusPanelCards(
     }
     if (cardAppliesToGrain("employment", "person")) {
         cards.set("employment", derivePersonEmploymentCard(input.employment));
+    }
+    // Qualifications is a separate question on a separate clock, so it is a separate model rather
+    // than a section inside Staff. The registry is still the gate — this only phrases a key it
+    // already declares for `person`.
+    if (cardAppliesToGrain("staff_qualifications", "person")) {
+        cards.set("staff_qualifications", derivePersonQualificationsCard(input.employment));
     }
     return cards;
 }
