@@ -107,17 +107,28 @@ describe("the concurrent implementation keeps its contracts", () => {
         return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
     })();
 
-    it("ALL THREE READS START BEFORE ANY IS AWAITED", () => {
-        // The defect this whole change exists to remove: an await between two starts re-serialises
-        // them and every timing gate would still pass.
+    it("NO AWAIT SEPARATES THE THREE STARTS", () => {
+        /*
+         * The defect this whole change exists to remove, and the gate has to be stated as an
+         * ABSENCE. An earlier version checked only that the three starts preceded the first
+         * `await crmP`; two planted defects -- awaiting children before the acknowledgement read
+         * starts, and awaiting the acknowledgement read before CRM -- both passed it, because an
+         * await inserted BETWEEN the starts still leaves the starts in order.
+         *
+         * The real invariant is that the window from the first start to the last contains no
+         * suspension point at all. Any await in there re-serialises the reads while every timing
+         * span and every ordering check still looks correct.
+         */
         const crmStart = SRC.indexOf("const crmP =");
         const childrenStart = SRC.indexOf("const childrenP =");
         const seenStart = SRC.indexOf("const seenP:");
-        const firstAwait = SRC.indexOf("await crmP");
         expect(crmStart).toBeGreaterThan(-1);
         expect(childrenStart).toBeGreaterThan(crmStart);
         expect(seenStart).toBeGreaterThan(childrenStart);
-        expect(firstAwait).toBeGreaterThan(seenStart);
+        const lastStartEnd = SRC.indexOf("enrich_personal_seen_keys");
+        expect(lastStartEnd).toBeGreaterThan(seenStart);
+        const window = SRC.slice(crmStart, lastStartEnd);
+        expect(window).not.toMatch(/\bawait\b/);
     });
 
     it("FAILURE ISOLATION SURVIVES — no Promise.all over the three reads", () => {
