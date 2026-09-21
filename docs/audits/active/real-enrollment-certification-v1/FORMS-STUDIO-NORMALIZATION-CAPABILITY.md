@@ -96,3 +96,47 @@ Six Health & Safety, four Consent. Their status is **TEMPORARILY_FORM_ONLY_PENDI
 — Enrollment may collect them to complete enrollment, they remain packet evidence, and they must not
 become Enrollment canonical truth or be labelled as intentionally permanent Form-only facts. Forms
 Studio needs to say that in product language, not as "D-H5". **Not yet implemented.**
+
+
+---
+
+# Capability states — 21 September 2026
+
+Four states, deliberately kept apart. An earlier version of this document collapsed them, which is
+how "supported but not exposed" came to describe both a capability needing a menu entry and one
+needing a model.
+
+| capability | model | admin UI | product round-trip | note |
+|---|---|---|---|---|
+| canonical binding | **complete** | **complete** | **certified** | The UI already existed — *Store answer in → Record / Field* — and my earlier report was wrong to say it was only auto-applied from a stage library |
+| conditional visibility | **complete** | **complete** | **certified** | *When to ask → Always / Only if — …* |
+| option-set vocabulary | **complete** | **complete** | **certified** | *Answers come from → This form's own list / an organization vocabulary* |
+| derived values | **complete** | **complete** | **certified** | *Who provides the answer → The family answers it / Alloy calculates it* |
+| multiselect | **complete** | **complete** | certified by schema | in the question menu |
+| repeated person | missing | missing | — | not started |
+| structured address | missing | missing | — | owner exists (person, per role); Form field type missing |
+| pending-canonical-owner status | n/a | missing | — | the ten held destinations have no product surface |
+| explicit absence/detail | missing | missing | — | proposed shape: `absence: { offered, label? }` |
+| configuration-supplied value | missing | missing | — | owner exists (Financials charge templates); bridge missing |
+
+**"Certified" here means:** authored through the same `updateField` path the inspector calls, accepted
+by `validateFormSchema`, and — for the condition — agreed with by the runtime's own
+`evaluateFieldVisibility`. It does **not** yet mean a human has clicked through the Studio; that is
+the next step, and the walkthrough is in the run summary.
+
+## What the inspector now asks
+
+```
+Store answer in          Record: Child / Parent / Enrollment / Household / Form field only
+                         Field:  <from the stage-derived library>
+
+Answers come from        This form's own list  |  <the organization's vocabularies>
+
+When to ask              Always  |  Only if — <another question>  …is answered <value>
+
+Who provides the answer  The family answers it  |  Alloy calculates it — <derivation>
+                         Date of birth: <a date question>   Age as of: <a date question>
+```
+
+No raw JSON, no `option_set_key`, no `field_source` in the primary path — the existing
+*Technical reference* disclosure still shows the underlying keys for anyone who wants them.

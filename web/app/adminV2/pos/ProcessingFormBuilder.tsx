@@ -192,6 +192,11 @@ export default function ProcessingFormBuilder({
     const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
     const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
     const [fieldLibrary, setFieldLibrary] = useState<ProcessingLibraryGroupOffer[] | null>(null);
+    /*
+     * The organization's own vocabularies, so a closed question can join a list the tenant already
+     * maintains instead of growing a private copy. Read once; nothing in the builder names one.
+     */
+    const [optionSets, setOptionSets] = useState<Array<{ set_key: string; label: string; item_count?: number }> | null>(null);
 
     const [inspectorSection, setInspectorSection] = useState<string>(hasPublishedVersion ? "distribution" : "form");
 
@@ -250,6 +255,23 @@ export default function ProcessingFormBuilder({
     // Stage-derived field library. Comes from the lifecycle-coverage payload so the picker offers
     // the same vocabulary `/process → requirements` can require — including org custom fields.
     // A failure leaves it null and the panel falls back to the curated list rather than emptying.
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch("/api/admin/option-sets", { credentials: "include" });
+                if (!res.ok) return;
+                const body = (await res.json()) as { data?: Array<{ set_key: string; label: string; item_count?: number }> } | Array<{ set_key: string; label: string; item_count?: number }>;
+                const rows = Array.isArray(body) ? body : (body.data ?? []);
+                if (!cancelled) setOptionSets(rows);
+            } catch {
+                /* A form is still fully authorable without the vocabulary list; the selector simply
+                   offers "This form's own list" alone. */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -706,6 +728,7 @@ export default function ProcessingFormBuilder({
                                 editable={editable}
                                 mutate={mutate}
                                 fieldLibrary={fieldLibrary}
+                                optionSets={optionSets}
                                 onRemove={() => {
                                     mutate((s) => removeField(s, selectedField.id));
                                     setSelectedFieldId(null);
