@@ -275,3 +275,59 @@ describe("nothing is hidden and nothing is inferred", () => {
         expect(outcome.oldestOutstandingPeriod).toBe("2026-03");
     });
 });
+
+describe("the deployed fixture, evaluated against the doctrine", () => {
+    /**
+     * THE ACTIVATION PICTURE, from MEASURED inputs.
+     *
+     * The per-assignment census on deployed staging (certification/financials/periodic-billing/
+     * per-assignment-census.json) measured, for the September span: Certa 5 unconverged weekly
+     * periods at $185.00, Certb 1 unconverged monthly period at $1,450.00, and nothing at all in
+     * July or August. Both terms are effective 2026-09-01.
+     *
+     * The span preview enumerates every period that OVERLAPS September, including ones that have
+     * not started. Automation only ever considers periods that have begun, which is the difference
+     * between "what would a run for September create" and "what is due today" — so the question
+     * this answers is what the doctrine does with those inputs on 2026-09-21.
+     */
+    const SEPT_TERM = { effective_start: "2026-09-01" };
+
+    it("Certb — one monthly period due, which is ordinary automation", async () => {
+        const { outcome, calls } = await evaluate({
+            charges: [], todayYmd: "2026-09-21",
+            terms: [term({ ...SEPT_TERM, cadence_key: "monthly", amount_cents: 145_000 })],
+        });
+        expect(outcome.outstandingPeriods).toBe(1);
+        expect(outcome.kind).toBe("normal_period_processed");
+        expect(calls.map((c) => c.periodKey)).toEqual(["2026-09"]);
+    });
+
+    it("Certa — three weekly periods have begun, which is over the bound and bills nothing", async () => {
+        /*
+         * Five weekly periods overlap September; three of them had started by the 21st
+         * (Sep 1-7, 8-14, 15-21). Three exceeds two, so automation refuses ALL of them and the
+         * operator converges them — which is the bound doing precisely the job it was set for, on
+         * the very first tenant, rather than a rule that never fires.
+         */
+        const { outcome, calls } = await evaluate({
+            charges: [], todayYmd: "2026-09-21",
+            terms: [term({ ...SEPT_TERM, cadence_key: "weekly", amount_cents: 18_500 })],
+        });
+        expect(outcome.outstandingPeriods).toBe(3);
+        expect(outcome.kind).toBe("catch_up_requires_operator");
+        expect(outcome.mutated).toBe(false);
+        expect(calls).toEqual([]);
+        expect(outcome.oldestOutstandingPeriod).toBe("2026-09-01~2026-09-07");
+        expect(outcome.newestOutstandingPeriod).toBe("2026-09-15~2026-09-21");
+    });
+
+    it("and a period that has not begun is never counted as due", async () => {
+        const { outcome } = await evaluate({
+            charges: [], todayYmd: "2026-09-21",
+            terms: [term({ ...SEPT_TERM, cadence_key: "weekly", amount_cents: 18_500 })],
+        });
+        // Sep 22-28 and Sep 29-Oct 5 overlap the span the preview enumerates; neither is due.
+        expect(outcome.newestOutstandingPeriod).not.toContain("2026-09-22");
+        expect(outcome.outstandingPeriods).toBeLessThan(5);
+    });
+});
