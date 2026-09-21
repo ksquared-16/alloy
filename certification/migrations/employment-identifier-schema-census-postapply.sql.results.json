@@ -1,0 +1,89 @@
+{
+  "trusted_host_action_id": "tha_5df53a2ea334f1",
+  "query_hash": "1a0f0c88b361f1daf64e58d075400588cb5ca062ffa7c99f9d2a7a1bde04bde5",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T21:51:03.127Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5df53a2ea334f1",
+    "query_hash": "1a0f0c88b361f1daf64e58d075400588cb5ca062ffa7c99f9d2a7a1bde04bde5",
+    "authorization_id": "grnt_9c6985d4d6af4287",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T21:51:05.116Z",
+    "question_ids": [
+      "col_badge_number",
+      "ck_badge_not_blank",
+      "idx_employee_number_unique",
+      "idx_badge_number_unique",
+      "idx_employee_number_is_unique_partial",
+      "idx_badge_number_is_unique_partial",
+      "ledger_has_20260925120000",
+      "employments_total"
+    ],
+    "questions": {
+      "col_badge_number": {
+        "question_id": "col_badge_number",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_badge_not_blank": {
+        "question_id": "ck_badge_not_blank",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_employee_number_unique": {
+        "question_id": "idx_employee_number_unique",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_badge_number_unique": {
+        "question_id": "idx_badge_number_unique",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_employee_number_is_unique_partial": {
+        "question_id": "idx_employee_number_is_unique_partial",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_badge_number_is_unique_partial": {
+        "question_id": "idx_badge_number_is_unique_partial",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ledger_has_20260925120000": {
+        "question_id": "ledger_has_20260925120000",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "employments_total": {
+        "question_id": "employments_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

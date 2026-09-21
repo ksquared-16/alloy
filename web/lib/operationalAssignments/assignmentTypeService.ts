@@ -98,6 +98,23 @@ export async function createOrgAssignmentType(
 ): Promise<AssignmentTypeAdminRecord> {
     const label = input.label.trim();
     if (!label) throw new OperationalEnrollmentServiceError("invalid_input", "Name is required");
+
+    /*
+     * `none` MEANS "INTENTIONALLY NOT STAFFING", SO IT CANNOT BE REACHED BY OMISSION.
+     *
+     * This defaulted silently until now, which is exactly how `recurring_service`
+     * — the type carrying every Staff assignment in staging — came to be `none`
+     * while the runtime counted its work as supply anyway. Once staffing reads the
+     * field, that same omission stops being cosmetic and starts deleting supply.
+     */
+    const subjectTypes = input.subjectTypes?.length ? input.subjectTypes : ["child"];
+    if (subjectTypes.includes("staff") && input.staffingParticipation == null) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_input",
+            "Choose whether this category contributes Staff supply. A staffing choice cannot be left unset.",
+        );
+    }
+
     const key = slugAssignmentTypeKey(label);
     const { data, error } = await supabase
         .from("operational_assignment_types")
@@ -109,7 +126,7 @@ export async function createOrgAssignmentType(
             // Runtime default by label (not a migration edit) — see
             // `ASSIGNMENT_CATEGORY_DEFAULT_TONE_BY_LABEL` for why label, not key.
             visual_tone: input.visualTone ?? defaultVisualToneForAssignmentTypeLabel(label) ?? "neutral",
-            subject_types: input.subjectTypes?.length ? input.subjectTypes : ["child"],
+            subject_types: subjectTypes,
             billing_participation: input.billingParticipation ?? "none",
             attendance_participation: input.attendanceParticipation ?? "expected",
             staffing_participation: input.staffingParticipation ?? "none",
@@ -133,7 +150,7 @@ export async function updateOrgAssignmentType(
     if (!label) throw new OperationalEnrollmentServiceError("invalid_input", "Name is required");
     const { data: existing, error: loadErr } = await supabase
         .from("operational_assignment_types")
-        .select("default_behavior")
+        .select("default_behavior, staffing_participation")
         .eq("org_id", orgId)
         .eq("id", typeId)
         .maybeSingle();
@@ -145,6 +162,18 @@ export async function updateOrgAssignmentType(
     );
     const mergedBehavior = { ...priorBehavior, ...input.behavior };
 
+    /*
+     * AN UNRELATED EDIT MUST NOT RESET STAFFING PARTICIPATION.
+     *
+     * This coalesced an omitted value to `none`, so renaming a category or changing
+     * its icon silently reclassified it. After the runtime cutover that is not a
+     * cosmetic bug: it removes a whole Assignment Type's Staff from supply, and the
+     * operator's next clue is a roster that quietly reads short.
+     */
+    const priorParticipation =
+        (existing as { staffing_participation?: string | null }).staffing_participation ?? "none";
+    const nextParticipation = input.staffingParticipation ?? priorParticipation;
+
     const { data, error } = await supabase
         .from("operational_assignment_types")
         .update({
@@ -154,7 +183,7 @@ export async function updateOrgAssignmentType(
             subject_types: input.subjectTypes?.length ? input.subjectTypes : ["child"],
             billing_participation: input.billingParticipation ?? "none",
             attendance_participation: input.attendanceParticipation ?? "expected",
-            staffing_participation: input.staffingParticipation ?? "none",
+            staffing_participation: nextParticipation,
             sort_order: input.sortOrder ?? 100,
             default_behavior: behaviorPayload(mergedBehavior),
         })
