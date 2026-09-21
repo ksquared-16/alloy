@@ -1,0 +1,112 @@
+{
+  "tiles": [
+    {
+      "heading": "Tuition",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Tuition"
+    },
+    {
+      "heading": "Catalog",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Catalog"
+    },
+    {
+      "heading": "Policies",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Policies"
+    },
+    {
+      "heading": "Payments",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Payments"
+    },
+    {
+      "heading": "Accounting",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Accounting"
+    },
+    {
+      "heading": "Simulator",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Simulator"
+    },
+    {
+      "heading": "Funding",
+      "openControl": null,
+      "tag": null,
+      "namesDiscount": false,
+      "summary": "Funding"
+    }
+  ],
+  "tuition": {
+    "controlPresent": true,
+    "urlAfter": "https://staging.workwithalloy.com/organization/financials?chapter=tuition",
+    "usedQueryString": false,
+    "heading": "Financials",
+    "body": "STAGING — NOT PRODUCTION ⌘K QS Organization financials Financials Tuition Plans, enrollment commitments, organization pricing, and location overrides. Tuition Catalog Policies Payments Accounting Simulator Funding Plans Enrollment Commitments Billing Frequencies + New Tuition Plan Tuition Plans 7 Plans · Active Search Tuition Plans Status Active Archived All Infant Active Infant · Full Time Monthly · $525–$1,850 Part Time Active Infant · Part Time Semi-Annual · Needs GL · No prices Preschool Active Preschool · Full Time Monthly · $425–$1,550 After School Active School Age · Full Time Monthly · $175–$650 Before & After Active School Age · Custom Monthly · $250–$900 Before School Active School Age · Before School Monthly · $125–$450 Full Day Active Toddler · Full Time Monthly · $475–$1,700 Tuition Plans Select a Tuition Plan from the list, or create a new one. New Tuition Plan Financial Setup · foundations configured Financial setup GL Codes Billing Frequencies Enrollment Commitments 1 Tuition Plan need accounting assignments. Review GL Codes → BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy."
+  },
+  "tuitionProof": {
+    "tuitionPlans": true,
+    "billingFrequencies": true,
+    "frequencyWords": [
+      "Monthly",
+      "Monthly",
+      "Monthly",
+      "Monthly",
+      "Monthly",
+      "Monthly"
+    ]
+  },
+  "policies": {
+    "controlPresent": true,
+    "urlAfter": "https://staging.workwithalloy.com/organization/financials?chapter=policies",
+    "usedQueryString": false,
+    "heading": "Financials",
+    "body": "STAGING — NOT PRODUCTION ⌘K QS Organization financials Financials How operational events affect financial execution. Tuition Catalog Policies Payments Accounting Simulator Funding Policies are named rules that modify commercial pricing and billing behavior. Commercial products reference them — they do not embed duplicated logic. Prefer names like “Registration Fee Waiver,” not “Registration Fee Policy.” New Policy Discounts & commercial policies Discounts, sibling and employee rules and waivers — what reduces a family's price, who qualifies, and from when. These modify commercial pricing; the execution policies below decide how billing runs. Policies 1 policies Sibling discount (QA specimen) Pricing · Discount 10% off everything · Active · from 2026-01-01 Select a policy Discount, deposit, and billing rules configured for your organization. Financial execution policies How this organisation runs billing: proration, billing cadence, when payment is due, posting review and deposits. These are resolved by charge generation and the charge lifecycle — distinct from the commercial discount rules above. Financial Policies How should the organization handle money rules — proration, fees, refunds, deposits? New policy Read-only Policies are scoped, effective-dated configuration. They are consumed later by resolution and posting, but configuring a policy does not post money. Resolved (org default) What resolves at org scope today. A more specific Location / Service / Rate Plan policy overrides it. Proration no policy — fallback Billing cadence no policy — fallback Grace period no policy — fallback Posting review no policy — fallback Vacation credit no policy — fallback Due date Due: Days after the invoice date · Offset: 10 days (Org default) Due date · Org default Current Sep 19, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days Superseded Sep 18, 2026 → ongoing Due: On the invoice date · Offset: 0 days Superseded Aug 1, 2026 → ongoing Due: Days after the invoice date · Offset: 10 days Create future version Retire BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Explain this configuration Summarize the active state and working changes Review configuration attention Identify setup, publication, or assignment issues Review unpublished changes Explain what remains private to Organization / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy."
+  },
+  "policiesProof": {
+    "destinationHeading": true,
+    "policyVisible": true,
+    "discountWord": true
+  },
+  "accounting": {
+    "controlPresent": true,
+    "urlAfter": "https://staging.workwithalloy.com/organization/financials?chapter=accounting",
+    "usedQueryString": false,
+    "heading": "Financials",
+    "body": "STAGING — NOT PRODUCTION ⌘K QS Organization financials Financials GL Codes, revenue mappings, and where tuition and fees post. Tuition Catalog Policies Payments Accounting Simulator Funding Account Types are labels on GL Codes (Revenue, Expense, Asset, Liability, Equity) — not a separate create flow. Commercial products reference GL Codes. New GL Code GL Codes Grouped by Account Type · 10 codes REVENUE 4000 Tuition Revenue Active · Used by 6 4010 Registration Fees Active · Used by 2 4020 Activity Fees Active · Used by 1 4030 Supply Fees Active · Used by 1 4040 Late Pickup Fees Active 4050 NSF / Returned Payments Active 4070 Subsidy Revenue Active 4080 Meal Program Revenue Active 4090 Other Income Active EXPENSE 4060 Discounts & Credits Active Select a GL Code Choose an account from the list to review mapping and usage. Where each charge category posts Charge categories are fixed by the platform. Choose the GL account each one posts to. All categories mapped Tuition tuition_revenue 4000 · Tuition Revenue ▾ Deposit deposit_liability 4090 · Other Income ▾ Consumable fee consumable_revenue 4030 · Supply Fees ▾ Late pickup late_fee_revenue 4040 · Late Pickup Fees ▾ One-time charge other_revenue 4090 · Other Income ▾ Discount discount_contra_revenue 4060 · Discounts & Credits ▾ Credit credit_liability 4060 · Discounts & Credits ▾ Adjustment adjustment_revenue 4060 · Discounts & Credits ▾ Fee fee_revenue 4010 · Registration Fees ▾ Subsidy offset subsidy_offset_revenue 4070 · Subsidy Revenue ▾ Accounting calendar The periods posted financial activity is attributed to. Separate from the billing period a charge is billed in. CALENDAR Fiscal 2026 SHAPE Calendar month STATUS Active CURRENT PERIOD September 2026 PERIOD STARTS ENDS STATUS CLOSE December 2026 Dec 1, 2026 Dec 31, 2026 Open Close November 2026 Nov 1, 2026 Nov 30, 2026 Open Close October 2026 Oct 1, 2026 Oct 31, 2026 Open Close September 2026Current Sep 1, 2026 Sep 30, 2026 Closed — August 2026 Aug 1, 2026 Aug 31, 2026 Open Close July 2026 Jul 1, 2026 Jul 31, 2026 Open Close June 2026 Jun 1, 2026 Jun 30, 2026 Open Close May 2026 May 1, 2026 May 31, 2026 Open Close April 2026 Apr 1, 2026 Apr 30, 2026 Open Close March 2026 Mar 1, 2026 Mar 31, 2026 Open Close February 2026 Feb 1, 2026 Feb 28, 2026 Open Close January 2026 Jan 1, 2026 Jan 31, 2026 Open Close Closing a period is final — reopening one is not an action in Alloy. Posting into a closed period is already refused, and a period that has posted activity cannot have its dates changed. BOS Operational Intelligence Reset Pin Close Attention · No urgent is"
+  },
+  "accountingProof": {
+    "calendarPanel": true,
+    "fiscal2026": true,
+    "calendarMonth": true,
+    "currentPeriod": true,
+    "periodStates": [
+      "CURRENT",
+      "Open",
+      "Open",
+      "Open",
+      "Closed",
+      "Open",
+      "Open",
+      "Open",
+      "Open",
+      "Open"
+    ],
+    "closeControls": 12,
+    "finalityCopy": true,
+    "reopenCopy": true
+  }
+}

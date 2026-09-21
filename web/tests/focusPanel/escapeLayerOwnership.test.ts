@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     hasInnerDismissibleLayer,
+    FINANCIALS_DEPTH_CARD_SELECTOR,
     INLINE_EDIT_SELECTOR,
     TRANSIENT_POPUP_SELECTOR,
 } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -80,5 +81,43 @@ describe("the grid's capture-phase handler consults the predicate before consumi
 
     it("still registers in the capture phase, which is what beats the drawer", () => {
         expect(src).toContain('window.addEventListener("keydown", onKey, true)');
+    });
+});
+
+describe("a Financials depth card owns Escape while it holds focus", () => {
+    /*
+     * MEASURED on deployed 33e8a90d9, AFTER the host guard had already shipped: one Escape closed
+     * the Manage responsibility card AND the whole Details surface, focus to <body>. The host's
+     * guard is a React BUBBLE handler on the app root; the grid's is CAPTURE on `window`, the
+     * earliest listener in the document, so the grid acted first every time. The fix is to declare
+     * the layer here — the one place that owns the yield condition — not to add a third listener.
+     */
+    /** Focus sitting inside (or on) an element matching `sel`, in this file's stand-in shape. */
+    const focusedWithin = (sel: string) => ({ closest: (q: string) => (q === sel ? {} : null) });
+
+    it("yields while the responsibility card holds focus", () => {
+        expect(hasInnerDismissibleLayer(docWith(null, focusedWithin(FINANCIALS_DEPTH_CARD_SELECTOR)))).toBe(true);
+    });
+
+    it("still yields when focus is on a control inside the card", () => {
+        /* `closest` is what the predicate asks, so a focused descendant answers the same way. */
+        expect(hasInnerDismissibleLayer(docWith(null, focusedWithin(FINANCIALS_DEPTH_CARD_SELECTOR)))).toBe(true);
+    });
+
+    it("does NOT yield for a card that is open but unfocused", () => {
+        /*
+         * The card dismisses from its own onKeyDown, which cannot run without focus. Yielding to a
+         * layer that will not act would leave Escape doing nothing at all — worse than the defect.
+         */
+        expect(hasInnerDismissibleLayer(docWith(null, null))).toBe(false);
+    });
+
+    it("does not yield for the gear that opens it", () => {
+        expect(hasInnerDismissibleLayer(docWith(null, focusedWithin('[data-financials-manage-responsibility="gear"]')))).toBe(false);
+    });
+
+    it("the inline editor and the transient popup rules are untouched", () => {
+        expect(hasInnerDismissibleLayer(docWith(TRANSIENT_POPUP_SELECTOR))).toBe(true);
+        expect(hasInnerDismissibleLayer(docWith(null, focusedWithin(INLINE_EDIT_SELECTOR)))).toBe(true);
     });
 });

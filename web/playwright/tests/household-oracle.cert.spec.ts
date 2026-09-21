@@ -20,6 +20,7 @@
  * tautology — which is the whole point of an oracle.
  */
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { alloyOptions, pickAlloyByValue } from "../helpers/alloyControls";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
 const LANE = "/workspace/work-unit/enrolled-children";
@@ -181,15 +182,18 @@ test.describe("representative household — convergence", () => {
 
         const source = control(page, "adjustment-source-charge");
         await expect(source, "the panel asks which obligation this is about").toBeVisible();
-        await expect.poll(() => source.locator("option").count(), { timeout: 30_000 }).toBeGreaterThan(1);
+        await expect
+            .poll(async () => (await alloyOptions(page, "adjustment-source-charge")).length, { timeout: 30_000 })
+            .toBeGreaterThan(1);
 
         /*
          * An obligation that still owes something. The panel also offers charges already settled —
          * crediting one is a real correction, but it cannot lower an outstanding of zero, and this
          * checkpoint is about money moving in both authorities.
          */
-        const offered = await source.locator("option").evaluateAll((els) =>
-            els.map((e) => (e as HTMLOptionElement).value).filter(Boolean));
+        const offered = (await alloyOptions(page, "adjustment-source-charge"))
+            .map((o) => o.value)
+            .filter((v): v is string => Boolean(v));
         const owing = (await account(page.request)).rows ?? [];
         const known = outstandingByCharge(await position(page.request));
         /*
@@ -205,7 +209,8 @@ test.describe("representative household — convergence", () => {
             reducedChargeId,
             "the household needs an obligation both authorities know and that still owes something",
         ).not.toBe("");
-        await source.selectOption(reducedChargeId);
+        /* Canonical Alloy listbox: choose the obligation by its identity, as the operator's click does. */
+        await pickAlloyByValue(page, "adjustment-source-charge", reducedChargeId);
 
         await control(page, "adjustment-amount").fill(AMOUNT);
         await control(page, "adjustment-reason").fill("Oracle: goodwill against this obligation");

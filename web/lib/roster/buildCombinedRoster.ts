@@ -44,6 +44,10 @@ import {
     type SubjectActualState,
 } from "@/lib/roster/dailyOperatingState";
 import { summarizeStaffPresenceByDay } from "@/lib/staffPresence/staffPresenceFold";
+import {
+    composeStaffReadinessSignals,
+    type StaffReadinessSignal,
+} from "@/lib/staffReadiness/staffReadinessSignals";
 import { listStaffPresenceForSiteDate } from "@/lib/staffPresence/staffPresenceService";
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
@@ -128,6 +132,20 @@ export type RosterStaffSubject = ScheduledStaffMember & {
     subjectType: "staff";
     /** Expected vs actual. A schedule is never proof of physical presence. */
     actual: SubjectActualState;
+    /**
+     * ADVISORY readiness, from the Slice 5 projection via the Slice 6 batch composer.
+     *
+     * A FOURTH fact, deliberately separate from the three beside it: assigned is the
+     * plan, actual is what happened, and this is whether the paperwork behind the
+     * person is in order. Collapsing any of them into a single status is the thing
+     * Operations must not do — a present, assigned staff member with a lapsed CPR is
+     * all three at once, and an operator needs to see that rather than one verdict
+     * standing in for it.
+     *
+     * Null means "not evaluated", never "fine". It cannot block anything: the signal
+     * is composed at `record_view`, so every gap it carries is non-blocking.
+     */
+    readiness: StaffReadinessSignal | null;
 };
 
 /** Staff physically present who were not on the schedule for this room·date. */
@@ -137,6 +155,8 @@ export type UnscheduledStaffPresence = {
     displayName: string;
     employmentId: string;
     actual: SubjectActualState;
+    /** Advisory only, as on every other staff row. Null means not evaluated. */
+    readiness: StaffReadinessSignal | null;
 };
 
 export type RosterCell = {
@@ -550,6 +570,10 @@ export async function buildCombinedRoster(
         const staff: RosterStaffSubject[] = (supplyCell?.scheduledStaff ?? []).map((s) => ({
             ...s,
             subjectType: "staff" as const,
+            // Filled below, once the whole site-day is evaluated in one pass. Null
+            // here states "not evaluated yet", which is the truthful default: a row
+            // that defaulted to a clean signal would assert readiness it never asked about.
+            readiness: null as StaffReadinessSignal | null,
             actual: staffActualFromDayState(staffDayByPerson.get(s.personId)),
         }));
 
@@ -576,6 +600,7 @@ export async function buildCombinedRoster(
                 displayName: staffNameById.get(d.personId) ?? "Staff member",
                 employmentId: d.employmentId,
                 actual: staffActualFromDayState(d),
+                readiness: null as StaffReadinessSignal | null,
             }));
 
         const actualChildrenPresent = countsPresent(children.map((c) => c.actual));
@@ -613,6 +638,37 @@ export async function buildCombinedRoster(
 
     cells.sort((a, b) => a.roomName.localeCompare(b.roomName));
 
+    /*
+     * ONE readiness evaluation for the whole site·day.
+     *
+     * Composed here rather than per row: the Slice 6 batch composer fetches a fixed
+     * handful of reads for any number of employments, and asking the single-employment
+     * question once per staff member would be six queries each on a surface an
+     * operator reloads all morning.
+     *
+     * It is the SAME evaluation the Readiness card performs — same evaluator, same
+     * `record_view` trigger — so Operations and the Focus Panel cannot come to
+     * disagree about whether Jane's CPR has lapsed.
+     */
+    const rosterEmploymentIds = [
+        ...new Set(
+            [
+                ...staffSupply.members.map((m) => m.employmentId),
+                ...[...staffDayByPerson.values()].map((d) => d?.employmentId ?? null),
+            ].filter((v): v is string => Boolean(v)),
+        ),
+    ];
+    const readinessByEmployment = rosterEmploymentIds.length > 0
+        ? await composeStaffReadinessSignals(supabase, orgId, rosterEmploymentIds, date)
+        : new Map<string, StaffReadinessSignal>();
+    const readinessFor = (employmentId: string | null | undefined): StaffReadinessSignal | null =>
+        (employmentId ? readinessByEmployment.get(employmentId) ?? null : null);
+
+    for (const cell of cells) {
+        for (const member of cell.staff) member.readiness = readinessFor(member.employmentId);
+        for (const extra of cell.unscheduledStaffPresent ?? []) extra.readiness = readinessFor(extra.employmentId);
+    }
+
     const anyUnknownDemand = cells.some((c) => c.requiredStaff == null);
     const totals = {
         expectedChildren: cells.reduce((n, c) => n + c.expectedChildCount, 0),
@@ -642,6 +698,10 @@ export async function buildCombinedRoster(
                 ...m,
                 subjectType: "staff" as const,
                 actual: staffActualFromDayState(staffDayByPerson.get(m.personId)),
+                // The shape most easily forgotten: a Center Director or a float has no
+                // room, and a signal that reached only roomed staff would be silently
+                // blind to exactly the people Slice 7 worked to keep visible.
+                readiness: readinessFor(m.employmentId),
             })),
     };
 }

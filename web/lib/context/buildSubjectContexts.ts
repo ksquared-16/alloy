@@ -175,7 +175,17 @@ export function buildSubjectScheduleContext(
     return {
         kind: "schedule",
         key: "schedule",
-        label: "Schedule",
+        /*
+         * ASSIGNMENT, not Schedule.
+         *
+         * The card this chip opens has been titled "Assignments" since the registry
+         * gave it a title, and the two names described one thing. Staff & Workforce V2
+         * settles the noun: Assignment is the durable operating plan, and a future
+         * scheduling experience is a different, later idea that must not borrow this
+         * word first. The KIND stays `schedule` because it keys stored layouts and
+         * URLs — the operator-facing label is what had to converge.
+         */
+        label: "Assignment",
         detail: schedule.pattern_label,
         secondary: locationLabel,
         // The site the commitment is AT. Every canonical scheduling read is site-scoped, and this
@@ -221,6 +231,138 @@ export function buildSubjectEmploymentContext(
         destination_work_view_id: null,
         stage_key: null,
         state: current?.status ?? null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * The credentials this staff member holds, as a context.
+ *
+ * ── WHY IT IS GATED ON EMPLOYMENT, NOT ON HOLDING ANYTHING ──
+ *
+ * The option is offered whenever the person is staff, INCLUDING when they hold nothing. "No
+ * qualifications recorded" is an answer an operator needs — often the one they opened the record
+ * for — and hiding the context until a credential exists would make the empty state unreachable
+ * precisely when it matters.
+ *
+ * It is NOT offered to a person who has never worked here: a qualification hangs off an
+ * employment, so there is nothing for the context to be about. That mirrors the Employment context
+ * above and the card's own visibility rule, so the three agree rather than each deciding.
+ *
+ * No detail line is derived here. Standing depends on the organisation's calendar day and is
+ * resolved server-side by the card; computing a summary here would be a second resolver for one
+ * answer, and it would be stale the morning a credential expired.
+ */
+export function buildSubjectQualificationsContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "qualifications",
+        key: "qualifications",
+        label: "Qualifications",
+        detail: null,
+        secondary: null,
+        // The person owns the record their credentials hang off, exactly as with employment.
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * When this staff member can work, as a context.
+ *
+ * Gated on EMPLOYMENT, not on having a pattern. "No availability pattern set" is an
+ * answer an operator opens the record to act on, and hiding the context until a
+ * pattern exists would make the empty state unreachable exactly when it matters.
+ *
+ * No detail is derived here: the resolved answer depends on the organisation's day
+ * and is computed server-side by the card's own read. A summary computed in the
+ * context would be a second resolver, and stale the morning an exception applied.
+ */
+export function buildSubjectAvailabilityContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "availability",
+        key: "availability",
+        label: "Availability",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * Whether this staff member is ready, as a context.
+ *
+ * Gated on EMPLOYMENT like its siblings. No detail is derived here: the verdict
+ * depends on the organisation's day and is computed by the card's own server-side
+ * read, so a summary in the context would be a second readiness answer.
+ */
+export function buildSubjectReadinessContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "readiness",
+        key: "readiness",
+        label: "Readiness",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
+ * Compensation, as a context — offered only to a caller who may see it.
+ *
+ * `canRead` is not a convenience flag: the durable-record route resolves it from
+ * `ctx.permissionKeys`, and passing `false` must produce NOTHING rather than a
+ * placeholder. No detail is carried either, for the same reason the readiness
+ * context carries none — a rate in the chip line would leak the very fact the
+ * capability exists to withhold.
+ */
+export function buildSubjectCompensationContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+    canRead: boolean,
+): SubjectContext | null {
+    if (!canRead) return null;
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "compensation",
+        key: "compensation",
+        label: "Compensation",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
         operational_memberships: null,
     };
 }

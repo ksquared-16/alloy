@@ -38,6 +38,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
@@ -230,23 +231,21 @@ export default function FinancialsBulkCharge({
 
             <label className="mt-2 flex items-center gap-2">
                 <span className="shrink-0 text-xs text-alloy-midnight/60">Billing frequency</span>
-                <select
+                <AlloySelect
+                    testId="financials-bulk-cadence"
+                    aria-label="Cadence"
+                    density="compact"
+                    allowEmpty={false}
+                    className="min-w-0 flex-1"
                     value={cadenceKey}
-                    onChange={(e) => {
-                        setCadenceKey(e.target.value);
+                    options={CADENCES.map((c) => ({ value: c.key, label: c.label }))}
+                    onChange={(next) => {
+                        setCadenceKey(next);
                         /* The preview described a different operation. It is not an answer to this one. */
                         setPreview(null);
                         setResult(null);
                     }}
-                    data-financials-bulk-cadence="true"
-                    className="min-w-0 flex-1 rounded-md border border-alloy-stone/25 px-2 py-1 text-xs text-alloy-midnight"
-                >
-                    {CADENCES.map((c) => (
-                        <option key={c.key} value={c.key}>
-                            {c.label}
-                        </option>
-                    ))}
-                </select>
+                />
             </label>
 
             <label className="mt-2 flex items-center gap-2">

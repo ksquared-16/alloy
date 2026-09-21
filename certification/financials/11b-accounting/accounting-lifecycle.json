@@ -1,0 +1,102 @@
+{
+  "before": {
+    "absent": true,
+    "adoptOffered": true,
+    "summary": null,
+    "rowCount": 0,
+    "current": null,
+    "firstThree": [],
+    "error": null,
+    "panelPresent": true
+  },
+  "loadMs": 16088,
+  "afterAdopt": {
+    "absent": false,
+    "adoptOffered": false,
+    "summary": "CALENDAR · Fiscal 2026 · SHAPE · Calendar month · STATUS · Active · CURRENT PERIOD · September 2026",
+    "rowCount": 12,
+    "current": {
+      "key": "FY2026-P09",
+      "status": "open",
+      "current": "true",
+      "text": "September 2026Current\tSep 1, 2026\tSep 30, 2026\tOpen\tClose"
+    },
+    "firstThree": [
+      {
+        "key": "FY2026-P12",
+        "status": "open",
+        "current": "false",
+        "text": "December 2026\tDec 1, 2026\tDec 31, 2026\tOpen\tClose"
+      },
+      {
+        "key": "FY2026-P11",
+        "status": "open",
+        "current": "false",
+        "text": "November 2026\tNov 1, 2026\tNov 30, 2026\tOpen\tClose"
+      },
+      {
+        "key": "FY2026-P10",
+        "status": "open",
+        "current": "false",
+        "text": "October 2026\tOct 1, 2026\tOct 31, 2026\tOpen\tClose"
+      }
+    ],
+    "error": null,
+    "panelPresent": true
+  },
+  "preview": "Ready to close September 2026 / 2026-09-01 to 2026-09-30 · currently open / 0 posted entries stay attributed here / Later entries effective in it will post to FY2026-P10 / Close period / Cancel",
+  "afterClose": {
+    "absent": false,
+    "adoptOffered": false,
+    "summary": "CALENDAR · Fiscal 2026 · SHAPE · Calendar month · STATUS · Active · CURRENT PERIOD · September 2026",
+    "rowCount": 12,
+    "current": {
+      "key": "FY2026-P09",
+      "status": "closed",
+      "current": "true",
+      "text": "September 2026Current\tSep 1, 2026\tSep 30, 2026\tClosed\t—"
+    },
+    "firstThree": [
+      {
+        "key": "FY2026-P12",
+        "status": "open",
+        "current": "false",
+        "text": "December 2026\tDec 1, 2026\tDec 31, 2026\tOpen\tClose"
+      },
+      {
+        "key": "FY2026-P11",
+        "status": "open",
+        "current": "false",
+        "text": "November 2026\tNov 1, 2026\tNov 30, 2026\tOpen\tClose"
+      },
+      {
+        "key": "FY2026-P10",
+        "status": "open",
+        "current": "false",
+        "text": "October 2026\tOct 1, 2026\tOct 31, 2026\tOpen\tClose"
+      }
+    ],
+    "error": null,
+    "panelPresent": true
+  },
+  "responsive": {
+    "1280": {
+      "width": 1145,
+      "overflows": false,
+      "panelClipped": false,
+      "tableScrolls": false
+    },
+    "1440": {
+      "width": 1305,
+      "overflows": false,
+      "panelClipped": false,
+      "tableScrolls": false
+    },
+    "1680": {
+      "width": 1545,
+      "overflows": false,
+      "panelClipped": false,
+      "tableScrolls": false
+    }
+  }
+}

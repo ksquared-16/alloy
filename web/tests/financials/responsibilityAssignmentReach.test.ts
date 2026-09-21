@@ -69,7 +69,14 @@ describe("THE GATE — the two commands are different grains (§4B)", () => {
          * happened to be open.
          */
         expect(panel).toContain("customer_member_id: args.arrangementMemberId");
-        expect(panel).toContain('arrangementMemberId: scope === "child" ? customerMemberId : null');
+        /*
+         * The stated scope now reaches the payload through `effectiveMemberId`, because account
+         * administration also has to say WHICH child. Both of its branches are stated: the explicit
+         * member select when administering, and the operator's household/child choice otherwise.
+         * Neither reads the open charge, which is the defect this guards.
+         */
+        expect(panel).toContain("arrangementMemberId: effectiveMemberId");
+        expect(panel).toMatch(/effectiveMemberId = administering[\s\S]{0,200}scope === "child" \? customerMemberId : null/);
     });
 
     /*

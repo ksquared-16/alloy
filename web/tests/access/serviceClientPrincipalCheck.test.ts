@@ -110,7 +110,17 @@ describe("W-4 · the check is not vacuous", () => {
     it("did not buy that credit by widening the exception ledger", () => {
         // The kiosk must not have cost the ratchet anything: it resolves, so it is
         // not exempted, and the reviewed-exception ceiling is untouched.
-        expect(report.ratchet.max_subject_unresolved).toBe(23);
+        /*
+         * 23 -> 24 on 2026-09-21, and the edit is the point: this line exists so
+         * that widening the ceiling cannot happen quietly inside an allow-list
+         * commit. The one addition is Governed Scheduled Work's wake, which
+         * resolves no principal BY CONSTRUCTION - its caller is the hosting
+         * platform's clock and the work it claims spans organizations, so there is
+         * no operator subject to resolve. It is admitted on a machine secret and
+         * bounded by the code-owned handler registry. Nothing else moved, and the
+         * transitive-only ceiling is untouched.
+         */
+        expect(report.ratchet.max_subject_unresolved).toBe(24);
         expect(report.violations).toEqual([]);
         // And the kiosk routes resolve WITHOUT reaching a human session, which is
         // the distinction the W-40 cross-check depends on staying visible.

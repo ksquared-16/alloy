@@ -78,6 +78,52 @@ export function isPeriodBillableCadence(cadence: string): cadence is BillingCade
         || cadence === "monthly" || cadence === "annual";
 }
 
+/**
+ * ── WHAT A CONFIGURED BILLING FREQUENCY ACTUALLY RECURS AS ─────────────────────────────────────
+ *
+ * There are two levels and they are joined by a string. LEVEL 1 is CONFIGURATION: an organisation
+ * authors billing frequencies in the `billing_cadences` option set, and the authoring surface mints
+ * the key from whatever label was typed. LEVEL 2 is DERIVATION: this module turns an accepted term's
+ * cadence key plus the agreement anchor into actual period INSTANCES — and it only knows the five
+ * cadences above.
+ *
+ * Nothing validates the join. An organisation can author "Fortnightly", attach it to a tuition
+ * plan, have an assignment accept a term on it, and then get silence: no billing period on the
+ * assignment, and a generation run that correctly refuses — `isPeriodBillableCadence` is false — but
+ * says so only in a run outcome nobody was watching. The money is safe; the configuration surface
+ * was the thing that never mentioned it.
+ *
+ * This states, from the derivation authority itself, what the configured frequency will produce.
+ * It invents no cadence and decides no policy: it reports what `billingPeriodFor` already does, so
+ * the configuration screen cannot drift from the periods the platform actually derives.
+ */
+export type BillingRecurrence = {
+    /** True when this cadence has an interval the platform can derive periods for. */
+    billable: boolean;
+    /** How it recurs, in operator words — or why it produces no periods. */
+    recurrence: string;
+};
+
+export function billingRecurrenceFor(cadenceKey: string): BillingRecurrence {
+    const cadence = (cadenceKey ?? "").trim();
+    if (!isPeriodBillableCadence(cadence)) {
+        return {
+            billable: false,
+            recurrence: "No recurring periods — nothing is billed on a schedule for this frequency",
+        };
+    }
+    if (cadence === "monthly") return { billable: true, recurrence: "Each calendar month" };
+    if (cadence === "annual") return { billable: true, recurrence: "Each year from the agreement anchor" };
+    const stride = CADENCE_STRIDE_DAYS[cadence] ?? 7;
+    return {
+        billable: true,
+        recurrence:
+            stride === 1 ?
+                "Every day from the agreement anchor"
+            :   `Every ${stride} days from the agreement anchor`,
+    };
+}
+
 export type BillingPeriod = {
     key: BillingPeriodKey;
     /** Inclusive first day, `YYYY-MM-DD`. */
@@ -306,6 +352,47 @@ export function billingPeriodLabel(key: string | null | undefined): string {
     if (!raw) return raw;
     // Both forms, and an unrecognised key comes back unchanged through `billingPeriodFromKey`.
     return billingPeriodFromKey(raw).label;
+}
+
+/**
+ * THE PERIOD AN ASSIGNMENT IS IN, AND THE ONE AFTER IT — a READ, for a surface to state.
+ *
+ * ── WHY THIS LIVES HERE ──────────────────────────────────────────────────────────────────────
+ *
+ * A billing period is DERIVED: accepted term + cadence + the agreement anchor. The Assignment
+ * Tuition card owns the accepted cadence and could not say which period the assignment was in,
+ * which left three operator questions unanswered on the one surface that should know them. The
+ * answer is a read presentation, and the calculation belongs beside the other period functions —
+ * a component that worked out its own boundaries would be a second period model.
+ *
+ * ── WHAT IT REFUSES ──────────────────────────────────────────────────────────────────────────
+ *
+ * No accepted term, no cadence with an interval, or a term that has already ended → `null`. A
+ * surface must not fabricate a period for an assignment that has no commercial cadence, and a
+ * usage-priced cadence has no interval to state.
+ *
+ * This is NOT the accounting period. That is attributed at write time against the accounting
+ * calendar and is a different question with a different owner.
+ */
+export function acceptedTermBillingPeriods(
+    term: { cadenceKey?: string | null; effectiveStart?: string | null; effectiveEnd?: string | null } | null | undefined,
+    todayYmd: string,
+): { current: BillingPeriod; next: BillingPeriod } | null {
+    const cadence = (term?.cadenceKey ?? "").trim();
+    const anchor = (term?.effectiveStart ?? "").trim();
+    if (!term || !anchor || !isPeriodBillableCadence(cadence)) return null;
+
+    /*
+     * BEFORE IT BEGINS, THE FIRST PERIOD IS THE ANSWER. A term accepted for next month should say
+     * which period it starts in rather than describing a period it does not cover.
+     */
+    const from = todayYmd < anchor ? anchor : todayYmd;
+    const end = (term.effectiveEnd ?? "").trim();
+    if (end && end < from) return null;
+
+    const current = billingPeriodFor(cadence, anchor, from);
+    const next = billingPeriodFor(cadence, anchor, addDaysYmd(current.end, 1));
+    return { current, next };
 }
 
 /** The period a given day falls in. */

@@ -1,0 +1,25 @@
+{
+  "isAlloy": true,
+  "isMulti": true,
+  "offered": [
+    "Household",
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "startedFrom": [],
+  "bothChildren": [
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "afterHousehold": [
+    "Household"
+  ],
+  "afterChild": [
+    "Certa Certhouse"
+  ],
+  "afterEmpty": [],
+  "emptyTriggerText": "Choose who receives this charge",
+  "secondarySiblingField": 0,
+  "templateIsAlloy": true,
+  "nativeSelects": 0
+}

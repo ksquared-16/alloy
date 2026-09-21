@@ -30,6 +30,10 @@ export const CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES = [
     "opportunity",
     "location",
     "person_child_relationship",
+    // Staff / Employment. The backend has accepted employment field definitions
+    // and values since the employment field registry landed; this entry is what
+    // lets an administrator actually author one.
+    "employment",
 ] as const;
 
 /** Unfinished operational entities — hidden from operator configuration paths (not deleted). */
@@ -67,6 +71,7 @@ export const CHILDCARE_FIELD_ENTITY_SINGULAR_LABELS: Readonly<Record<string, str
     inquiry_child: "Child",
     location: "Location / Site",
     person_child_relationship: "Person ↔ Child Relationship",
+    employment: "Staff / Employment",
     vendor: "Provider",
     schedule: "Schedule",
 };

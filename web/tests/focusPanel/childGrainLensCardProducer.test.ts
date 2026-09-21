@@ -214,7 +214,13 @@ describe("the grain guard is not weakened", () => {
         const person = focusPanelDefaultCompositionForGrain("person").map((e) => e.key);
         const child = focusPanelDefaultCompositionForGrain("child").map((e) => e.key);
         const family = focusPanelDefaultCompositionForGrain("opportunity").map((e) => e.key);
-        for (const familyOnly of ["household", "children", "billing_preview"]) {
+        /*
+         * `billing_preview` was the third member of this set and is retired from normal
+         * composition (Financials 11B) — a card in no composition cannot demonstrate that a
+         * person does not inherit the family's. The guard is unchanged; its witnesses are the
+         * two cards that still compose.
+         */
+        for (const familyOnly of ["household", "children"]) {
             expect(family).toContain(familyOnly);
             expect(person).not.toContain(familyOnly);
         }

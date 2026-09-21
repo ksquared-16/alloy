@@ -36,7 +36,28 @@ export const ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS: readonly FocusPanelCardKey[] 
     "household",
     "children",
     "scheduling",
-    "billing_preview",
+    /*
+     * ── BILLING PREVIEW IS RETIRED FROM NORMAL COMPOSITION (Financials 11B) ───────────────────
+     *
+     * Not deleted — moved to the library, where a tenant that wants it can still place it. What
+     * changed is the product's answer to "is tuition an independent operational concept?" It is
+     * not: tuition is part of an Assignment, and Assignment now owns every job this card was
+     * placed for — canonical Accept, governed Override, the recommendation and the other authored
+     * options, the persisted accepted-term read-back, review-not-reprice, Billing Frequency, the
+     * current and next Billing Period, responsibility, and the discount forecast and its
+     * exceptions.
+     *
+     * Its four remaining jobs were the reason to keep it, and three now live where the decision is
+     * made: the tied-set explanation, the no-match reason, and the rejected-with-reason
+     * diagnostics are all in Assignment's tuition section. The fourth — a household-wide pricing
+     * overview across every assignment at once — is the one capability genuinely lost, and it was
+     * a reading convenience rather than an operator act: the Children card lists the children, and
+     * pricing is decided one assignment at a time on each.
+     *
+     * NOTHING UNDERNEATH IS REMOVED. `buildAssignmentTuitionView`, the pricing resolver,
+     * `enrollment.pricing.accept` / `.override` and the rejection semantics are all unchanged and
+     * all still consumed — by Assignment, and by the card itself if a tenant places it.
+     */
     "employment",
     // The operating day. It renders against the SCOPED participant and stays quiet when none is
     // selected, so it earns a full row rather than competing with the family-level cards above.

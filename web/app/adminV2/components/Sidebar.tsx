@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import {
     ChevronDown,
@@ -27,6 +27,11 @@ import {
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { warmOperatorWorkUnitNavEntry } from "@/lib/admin/warmOperatorWorkUnitNavEntry";
+import {
+    getWorkViewTotalsPublication,
+    getWorkViewTotalsPublicationServerSnapshot,
+    subscribeWorkViewTotalsPublication,
+} from "@/lib/presentation/runtime/workViewTotalsPublication";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { requestWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
@@ -50,6 +55,15 @@ import SidebarConfigurationModeNav from "@/app/adminV2/components/SidebarConfigu
 import { readInboxUnreadCountCache } from "@/lib/adminV2/inboxNavUnreadCache";
 import { readOperationalTasksNavCountsCache } from "@/lib/adminV2/operationalTasksNavCountsCache";
 import { composeShellNavigationSurfaceViewModel } from "@/lib/adminV2/runtime/surface/shellNavigationSurfaceViewModel";
+
+/*
+ * A stable identity so a miss re-renders nothing: React bails out when the state reference is
+ * unchanged, and this nav re-peeks on every route change.
+ */
+
+/** Stable empty list: a new array each render would re-key the totals hook every time. */
+const EMPTY_TARGETS: WorkViewTotalTarget[] = [];
+
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const ORGANIZATION_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
@@ -150,10 +164,62 @@ function SidebarNav({
     // Canonical Work View counts — the SAME source the Workspace tile list and Work Unit pill
     // strip resolve from (`useWorkViewTotals`: the view's `work_view_id` evaluated at its
     // canonical location — host work unit + base lane). Left-nav count == tile count == pill
-    // count for the same view by construction. Fetches DEDUPE via `dedupeAdminFetch`, so calling
-    // the hook here does not double-fetch what the WS/WU surfaces already request.
+    // count for the same view by construction.
+    //
+    // This once read "Fetches DEDUPE via `dedupeAdminFetch`, so calling the hook here does not
+    // double-fetch what the WS/WU surfaces already request." That is NO LONGER TRUE and the note
+    // below records what replaced it: dedupe only ever hid this call behind someone else's
+    // request, and it stopped hiding it the moment that request went away.
 
+    /*
+     * THE COUNTS THE WORK UNIT OWNER ALREADY RESOLVED — OBSERVED, NEVER RE-ASKED.
+     *
+     * This nav asks the same question the Work Unit surface asks. The comment above records the
+     * assumption that once made that free: "Fetches DEDUPE via `dedupeAdminFetch`". That held only
+     * while the surface issued a request; the WU-03 document seed retired it and this nav became
+     * the sole requester — ~1.5s of server work per navigation, issued ~5.6s in, well after
+     * first-order finality.
+     *
+     * A PREVIOUS REPAIR TRIED TO PEEK THE PROVISIONING CACHE AND FAILED IN PRODUCTION (0 hits in
+     * 6 deployed samples). That entry is consume-once and the route surface — which commits before
+     * this nav, because the nav is behind Suspense — has always already consumed it. That approach
+     * is retired; do not reintroduce it.
+     *
+     * So the OWNER publishes and this nav observes. The ordering that broke the peek is what makes
+     * this correct:
+     *
+     *   absent  — no owner announced for this route, so no answer is coming: fall back NOW.
+     *   pending — an owner announced during ITS render, which precedes this nav's effects: WAIT.
+     *   settled — the owner's terminal answer (a null seed still means fall back, never zero).
+     *
+     * That three-state signal is why there is no timeout here and no state that can leave the
+     * badges pending forever.
+     *
+     * This nav is NOT the semantic owner: it evaluates nothing, and re-validates what it receives
+     * through the existing matcher, whose site-scope and configured-view-signature checks are
+     * derived from this nav's OWN state and are therefore genuinely independent of the publisher.
+     */
+    const publication = useSyncExternalStore(
+        subscribeWorkViewTotalsPublication,
+        getWorkViewTotalsPublication,
+        getWorkViewTotalsPublicationServerSnapshot,
+    );
+    const publicationSettled = publication.phase !== "pending";
+    const published = publication.phase === "settled" ? publication : null;
+
+    /*
+     * Targets are WITHHELD while an owner is still pending, and that ordering is half the repair.
+     *
+     * The totals hook decides ONCE whether a seed answers its question, on the first render where
+     * targets exist. Publishing targets before the owner's answer arrives would spend that single
+     * decision on "no_seed" and fetch anyway — the seed would be present, correct, and
+     * structurally unusable. A deployed measurement caught exactly that on the surface instance.
+     *
+     * Waiting is bounded by the signal, not by a clock: `absent` resolves immediately on routes
+     * with no owner, and a `settled` answer with a null seed falls through to the canonical fetch.
+     */
     const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
+        if (!publicationSettled) return EMPTY_TARGETS;
         const seen = new Set<string>();
         const out: WorkViewTotalTarget[] = [];
         for (const card of lifecycleCards) {
@@ -169,12 +235,17 @@ function SidebarNav({
             }
         }
         return out;
-    }, [lifecycleCards]);
+    }, [lifecycleCards, publicationSettled]);
+
 
     const workViewTotals = useWorkViewTotals({
+        ownerLabel: "sidebar",
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: lifecycleCards.length > 0,
+        documentSeed: published?.seed ?? null,
+        seedOrgId: published?.orgId ?? null,
+        seedHostWorkUnitId: published?.hostWorkUnitId ?? null,
     });
 
     // ShellNavigationSurfaceViewModel — the persistent left nav is mounted ABOVE the route (in

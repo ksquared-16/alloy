@@ -1,0 +1,48 @@
+{
+  "entry": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "standaloneTuitionByRenderedIdentity": false,
+    "prepaidNamed": true
+  },
+  "childAffordance": {
+    "present": true,
+    "accessibleName": "custom→"
+  },
+  "childPanel": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety",
+      "scheduling"
+    ],
+    "standaloneTuitionByRenderedIdentity": false,
+    "prepaidNamed": true
+  },
+  "assignment": {
+    "assignmentCardPresent": true,
+    "tuition": true,
+    "acceptedAmount": "$195.00/weekly",
+    "billingFrequency": "Billing frequency weekly · current period Sep 15–21, 2026 · ",
+    "currentAndNextPeriod": true,
+    "responsibility": true,
+    "discounts": true,
+    "discountText": "DISCOUNTS discount · $18.50 expected to apply Add exception discount · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkt",
+    "diagnostics": true,
+    "residue": false
+  },
+  "policiesTile": {
+    "present": true,
+    "text": "Policies How operational events affect financial execution. Discount and deposit rules Commercial policy eligibility Organization-scoped policy authoring Open Policies",
+    "namesDiscountBeforeOpening": true
+  }
+}

@@ -107,7 +107,13 @@ function pastDueFor(
     return {
         amount: money(pastDue.amountCents, currency),
         oldest: oldest ?? "—",
-        age: `${pastDue.agingDays} ${pastDue.agingDays === 1 ? "day" : "days"} past due`,
+        /*
+         * THE DURATION, NOT THE VERDICT. This baked "past due" into a field called `age`, and the
+         * only surface that renders it already says "past due" itself — so the compact card read
+         * "$75.00 past due · 1 day past due", which is the same judgement twice and overran a
+         * nowrap line into an ellipsis. The phrase is said once, by the sentence that owns it.
+         */
+        age: `${pastDue.agingDays} ${pastDue.agingDays === 1 ? "day" : "days"}`,
         note: null,
     };
 }
@@ -323,17 +329,6 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             autopayHealthy: false,
             nextChargeLabel: null,
         },
-        /*
-         * ONE quiet line of context. When nothing is past due the specimen prints it under
-         * "Nothing past due", so it has to say something true about the account rather than repeat
-         * the balance already shown two inches away.
-         */
-        historyLine:
-            reconciliation.scheduledCents > 0 ?
-                `${money(reconciliation.scheduledCents, currency)} scheduled this period`
-            : reconciliation.paymentsCents > 0 ?
-                `Payments received · ${money(reconciliation.paymentsCents, currency)}`
-            :   `No payments recorded this period`,
         upcoming: [],
         /*
          * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
@@ -670,7 +665,6 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         ledger: [],
         payers: [],
         payment: { autopayLabel: null, autopayHealthy: false, nextChargeLabel: null },
-        historyLine: "",
         upcoming: [],
         payments: [],
         adjustments: [],

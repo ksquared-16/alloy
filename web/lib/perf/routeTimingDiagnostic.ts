@@ -106,6 +106,78 @@ export type RouteTimingMarks = {
         /** Null when the answer was not operational, so the producers step genuinely did not run. */
         card_producers_ms: number | null;
         /**
+         * THE PRODUCER-OVERLAP SPANS (P0-7.6 / Slice 12F).
+         *
+         * `inner_compose_ms` and `card_producers_ms` describe two ADJACENT blocks, which was the
+         * whole truth while the producers ran after composition. They now run BESIDE it, so
+         * `card_producers_ms` is only the residual join and the producers' real start and duration
+         * have no other observer. Without these, a shrunken join block reads as "the producers got
+         * faster" when nothing about them changed except when they were started.
+         *
+         * `overlap_ms` + `tail_ms` reconstruct the producer wall. `producer_invocations` is the
+         * acceptance gate, because the matching path must run the producers EXACTLY ONCE and no
+         * duration can tell a reuse apart from a fast second run.
+         */
+        /**
+         * THE WU-03 COUNT SEED (P0-7.6).
+         *
+         * The counts are the product's completion owner: measured deployed, WU-03's final
+         * authoritative mutation lands ~11ms after the browser's separate queue-view-totals
+         * request returns. The seed computes them inside the document instead, started from the
+         * composer's announcement so it overlaps the rest of composition.
+         *
+         * `join_wait_ms` is the honest price: whatever the document waited AFTER its own work
+         * finished. It is published separately from `page_total` precisely so relocating the
+         * latency cannot be mistaken for removing it.
+         */
+        work_view_totals_seed?: {
+            /** Compose start → the composer announced the configured count locations. */
+            announce_offset_ms: number | null;
+            /** The seed's own duration. */
+            seed_ms: number | null;
+            /** Compose start → seed settled. */
+            seed_end_offset_ms: number | null;
+            /** Compose start → composition settled. */
+            compose_end_offset_ms: number | null;
+            /** The part of the seed that ran while composition was still running. */
+            overlap_ms: number | null;
+            /** ADDED DOCUMENT WAIT: what was left after everything else finished. */
+            join_wait_ms: number | null;
+            /** resolved | seed_failed | no_announcement | a specific unavailable reason. */
+            outcome: string;
+            /** Distinct (work unit, queue key) lanes the seed evaluated. */
+            groups: number | null;
+            /** Count rows produced. Null when the seed did not resolve — never 0 for unavailable. */
+            totals: number | null;
+        };
+        overlap?: {
+            /** Compose start → the composer's subject announcement. */
+            announce_offset_ms: number | null;
+            /** The speculative participant read. */
+            participant_ms: number | null;
+            /** The speculative producer run. */
+            producers_ms: number | null;
+            /** Announcement → speculative run settled. */
+            early_total_ms: number | null;
+            /** Compose start → speculative run settled. */
+            early_end_offset_ms: number | null;
+            /** Compose start → composition settled (the same quantity as `inner_compose_ms`). */
+            compose_end_offset_ms: number | null;
+            /** The part of the speculative run that ran while composition was still running. */
+            overlap_ms: number | null;
+            /** What was left of the speculative run after composition finished. Clamped at 0. */
+            tail_ms: number | null;
+            /**
+             * Which branch the join took: `used`, `subject_mismatch`, `customer_mismatch`,
+             * `early_failed`, `no_announcement` or `not_operational`. Each implies a different
+             * repair, so they are never collapsed into a single "not used".
+             */
+            outcome: string;
+            /** MUST be 1 on the matching path. 2 means the early and canonical runs both executed. */
+            producer_invocations: number;
+            participant_reads: number;
+        };
+        /**
          * INSIDE the card producers, which Slice 12D measured as the dominant wait (median 2,791 ms).
          *
          * These run CONCURRENTLY under `Promise.allSettled`, so they DO NOT SUM — `card_producers_ms`
@@ -119,6 +191,14 @@ export type RouteTimingMarks = {
             attendance_ms: number | null;
             health_ms: number | null;
             financials_build_ms: number | null;
+            /**
+             * Start/end of each producer, from the COMPOSE origin (see `producerClock`).
+             *
+             * This is what makes the residual tail attributable: the owner is the producer whose
+             * `end` is latest, and the tail it owns is `end - compose_end_offset_ms`. Durations
+             * cannot answer that, because a late start and a long run look identical in a duration.
+             */
+            offsets?: Partial<Record<ProducerSpanName, { at: number; end: number }>>;
         };
         /**
          * INSIDE `financials_build_ms`, which Slice 12D measured deployed as the producer long pole
@@ -134,6 +214,13 @@ export type RouteTimingMarks = {
          * loop made, which is the difference between "one slow read" and "N reads" — two facts that
          * need entirely different repairs and that a single duration cannot tell apart.
          */
+        /** The four concurrent Health reads. They DO NOT SUM; `health_ms` is about the slowest. */
+        health?: {
+            health_facts_ms: number | null;
+            health_profile_ms: number | null;
+            health_documents_ms: number | null;
+            health_contacts_ms: number | null;
+        };
         financials?: {
             agreements_ms: number | null;
             members_ms: number | null;
@@ -215,12 +302,27 @@ type ProducerSpanName = "financials_gate_ms" | "attendance_ms" | "health_ms" | "
  * Inert when the flag is off: `time()` then returns the caller's promise untouched, adding no clock
  * read and no allocation to the product path.
  */
-export function producerClock(): {
+export function producerClock(originMs?: number): {
     time: <T>(name: ProducerSpanName, run: () => Promise<T>) => Promise<T>;
     spans: () => Partial<Record<ProducerSpanName, number>>;
+    offsets: () => Partial<Record<ProducerSpanName, { at: number; end: number }>>;
 } {
     const enabled = routeTimingEnabled();
     const out: Partial<Record<ProducerSpanName, number>> = {};
+    const off: Partial<Record<ProducerSpanName, { at: number; end: number }>> = {};
+    /*
+     * THE ORIGIN IS THE COMPOSE'S, NOT THE CLOCK'S (P0-7.6 — producer-tail ownership).
+     *
+     * Durations alone cannot say who owns the residual tail: three producers that each took 200 ms
+     * are indistinguishable from one that started 200 ms late, and only the one still running at
+     * composition end is on the critical path. Offsets are therefore measured from the SAME origin
+     * the overlap block uses (`tInner`), so `end` is directly comparable to `compose_end_offset_ms`
+     * and `early_end_offset_ms` without reconciling two clocks.
+     *
+     * Falls back to clock creation when no origin is passed, which keeps the spans self-consistent
+     * but NOT comparable across blocks — callers that need attribution must pass the origin.
+     */
+    const origin = originMs ?? (enabled ? performance.now() : 0);
     return {
         time: <T>(name: ProducerSpanName, run: () => Promise<T>): Promise<T> => {
             if (!enabled) return run();
@@ -228,15 +330,21 @@ export function producerClock(): {
             // `finally` rather than `then`: a producer that rejects still consumed the time, and
             // `allSettled` will surface the rejection — swallowing it here would hide a real fault.
             return run().finally(() => {
-                out[name] = Math.round(performance.now() - started);
+                const ended = performance.now();
+                out[name] = Math.round(ended - started);
+                off[name] = { at: Math.round(started - origin), end: Math.round(ended - origin) };
             });
         },
         spans: () => out,
+        offsets: () => off,
     };
 }
 
 /** Merge the producer spans into the request's existing `route_compose_spans`, never replacing it. */
-export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, number>>): void {
+export function recordProducerSpans(
+    spans: Partial<Record<ProducerSpanName, number>>,
+    offsets?: Partial<Record<ProducerSpanName, { at: number; end: number }>>,
+): void {
     if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
     try {
         const { marks } = routeTimingCollector();
@@ -246,6 +354,7 @@ export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, numb
             attendance_ms: spans.attendance_ms ?? null,
             health_ms: spans.health_ms ?? null,
             financials_build_ms: spans.financials_build_ms ?? null,
+            ...(offsets ? { offsets } : {}),
         };
         // The outer compose records `route_compose_spans` AFTER the producers finish, so the object
         // may not exist yet. Stashing the producers now and letting the outer record merge would be
@@ -254,6 +363,53 @@ export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, numb
         marks.route_compose_spans = existing
             ? { ...existing, producers }
             : ({ producers } as never);
+    } catch {
+        /* diagnostics are never load-bearing */
+    }
+}
+
+/**
+ * A CLOCK FOR THE HEALTH BUILD'S FOUR CONCURRENT READS.
+ *
+ * `health_ms` measured 559 ms deployed and is the BINDING producer once the Financials gate is
+ * removed — yet the card's first-order content is four requirement flags and an emergency-contact
+ * count. Four reads run under one `Promise.allSettled`, so they DO NOT SUM and the 559 ms is
+ * approximately the slowest of them. Which one decides whether a request-time first-order
+ * architecture is viable at all, so it is measured rather than assumed.
+ */
+export type HealthSpanName = "health_facts_ms" | "health_profile_ms" | "health_documents_ms" | "health_contacts_ms";
+
+export function healthClock(): {
+    time: <T>(name: HealthSpanName, run: () => PromiseLike<T>) => Promise<T>;
+    spans: () => Partial<Record<HealthSpanName, number>>;
+} {
+    const enabled = routeTimingEnabled();
+    const out: Partial<Record<HealthSpanName, number>> = {};
+    return {
+        time: <T>(name: HealthSpanName, run: () => PromiseLike<T>): Promise<T> => {
+            if (!enabled) return Promise.resolve(run());
+            const started = performance.now();
+            return Promise.resolve(run()).finally(() => {
+                out[name] = Math.round(performance.now() - started);
+            });
+        },
+        spans: () => out,
+    };
+}
+
+/** Merge the Health spans into the request's `route_compose_spans`, never replacing it. */
+export function recordHealthSpans(spans: Partial<Record<HealthSpanName, number>>): void {
+    if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
+    try {
+        const { marks } = routeTimingCollector();
+        const existing = marks.route_compose_spans;
+        const health = {
+            health_facts_ms: spans.health_facts_ms ?? null,
+            health_profile_ms: spans.health_profile_ms ?? null,
+            health_documents_ms: spans.health_documents_ms ?? null,
+            health_contacts_ms: spans.health_contacts_ms ?? null,
+        };
+        marks.route_compose_spans = existing ? { ...existing, health } : ({ health } as never);
     } catch {
         /* diagnostics are never load-bearing */
     }

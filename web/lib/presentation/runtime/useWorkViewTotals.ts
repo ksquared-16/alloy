@@ -33,6 +33,8 @@ import {
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
 import type { QueueItemsResult } from "@/lib/queues/types";
 import { queueTotalCountFromQueueItemsResult } from "./types";
+import { matchWorkViewTotalsSeed } from "./matchWorkViewTotalsSeed";
+import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 import {
     applyWorkViewTotalsFetchResult,
     buildWorkViewPopulationKey,
@@ -112,8 +114,46 @@ export function useWorkViewTotalsState(args: {
      * seeds the display AND skips the fan-out; a stale cache seeds then revalidates (SWR).
      */
     cacheContext?: WorkUnitViewModelCacheContext | null;
+    /**
+     * THE DOCUMENT SEED — the configured Work View counts already resolved server-side.
+     *
+     * WU-03's counts are the product's completion owner: measured deployed, this hook's request
+     * starts ~57ms AFTER the document lands, costs ~1.6s, and WU-03 paints ~11ms later. The
+     * document now computes the same counts from truth it already holds, so a MATCHING seed means
+     * this hook issues no request at all.
+     *
+     * It is consumed only at mount, through the same one-shot path the session cache already uses,
+     * which is what makes "a stale seed may never overwrite a fresher live answer" structural
+     * rather than a rule to remember: any later scope change refetches, and nothing re-reads the
+     * seed afterwards.
+     */
+    /**
+     * WHICH RUNTIME MOUNTED THIS HOOK.
+     *
+     * A minified production stack names React's commit internals and nothing else, so the
+     * previous attempt to identify the fetching instance from `new Error().stack` returned
+     * `ih`/`uf`/`uc` and no component. The call site is the only thing that reliably knows who it
+     * is, so it says so. An instance reporting "unlabelled" is a caller nobody has accounted for,
+     * which is itself the finding.
+     */
+    ownerLabel?: string;
+    documentSeed?: WorkViewTotalsSeed | null;
+    /** Org identity the seed must match. */
+    seedOrgId?: string | null;
+    /** Surface work unit the seed must match. */
+    seedHostWorkUnitId?: string | null;
 }): WorkViewTotalsState {
-    const { targets, selectedSiteId, enabled = true, refreshToken, cacheContext } = args;
+    const {
+        targets,
+        selectedSiteId,
+        enabled = true,
+        refreshToken,
+        cacheContext,
+        documentSeed,
+        seedOrgId,
+        seedHostWorkUnitId,
+        ownerLabel = "unlabelled",
+    } = args;
 
     const targetsKey = useMemo(
         () =>
@@ -145,17 +185,115 @@ export function useWorkViewTotalsState(args: {
     const totalsSeedRef = useRef<{ totals: Map<string, number | null>; fresh: boolean } | null | undefined>(
         undefined,
     );
-    if (totalsSeedRef.current === undefined) {
-        const read = cacheContext ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey }) : null;
-        totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+    /**
+     * The document seed outranks the session cache: it was computed for THIS request, by the
+     * server, from authoritative truth, whereas the cache is a previous navigation's answer. It is
+     * only used when its identity matches exactly — org, host work unit, site scope and the
+     * configured view signature — and a rejection simply falls through to the existing behaviour.
+     */
+    /*
+     * TWO INSTANCES OF THIS HOOK ARE MOUNTED — Settlement and the workspace surface runtime — and
+     * a single overwritten global cannot say which one issued the request. The deployed matcher
+     * reported ok:true while a request still went out, which is only readable per instance.
+     */
+    const instanceIdRef = useRef<string>(Math.random().toString(36).slice(2, 8));
+    const seededAdoptRef = useRef(false);
+    const seedMatchRef = useRef<ReturnType<typeof matchWorkViewTotalsSeed> | null>(null);
+    /*
+     * THE SEED IS MATCHED WHEN THE QUESTION EXISTS, NOT AT THE FIRST RENDER.
+     *
+     * Deployed measurement caught this: the seed reached the browser with a correct identity and
+     * the client fetched anyway. `targets` are derived from the committed snapshot's Settlement
+     * locators, so on the FIRST render they are empty — the signature compared "" against seven
+     * configured views, rejected, and the one-shot ref was already spent. The seed was structurally
+     * unusable, and every unit gate passed because each one supplies targets up front.
+     *
+     * So the match is deferred until `targetsKey` is non-empty. It is still one-shot: once decided,
+     * `seedMatchRef` is set and this never runs again, which is what keeps a stale seed from
+     * overwriting a fresher live answer.
+     */
+    if (totalsSeedRef.current === undefined && targetsKey) {
+        const match = matchWorkViewTotalsSeed({
+            seed: documentSeed,
+            orgId: seedOrgId,
+            hostWorkUnitId: seedHostWorkUnitId,
+            selectedSiteId,
+            viewIds: parsedTargets.map((t) => t.viewId),
+        });
+        seedMatchRef.current = match;
+        /*
+         * WHY THE SEED WAS OR WAS NOT USED — published for the deployed probe.
+         *
+         * Two deploys have now shown the seed resolving server-side, reaching the browser intact,
+         * and the client fetching anyway. The first repair (defer until targets exist) was a
+         * reasoned guess and did not bind it. Guessing a second time would be worse than the
+         * defect: the rejection already knows its own reason, so it is published rather than
+         * re-derived from the outside.
+         *
+         * Diagnostic only — read by the probe, never by the product, and it carries no counts.
+         */
+        try {
+            const w = window as unknown as { __alloyWorkViewSeed?: unknown[] };
+            if (!Array.isArray(w.__alloyWorkViewSeed)) w.__alloyWorkViewSeed = [];
+            w.__alloyWorkViewSeed.push({
+                instance: instanceIdRef.current,
+                owner: ownerLabel,
+                phase: "match",
+                targetCount: parsedTargets.length,
+                ok: match.ok,
+                reason: match.ok ? null : match.reason,
+                clientViewIds: parsedTargets.map((t) => t.viewId),
+                clientOrgId: seedOrgId ?? null,
+                clientHostWorkUnitId: seedHostWorkUnitId ?? null,
+                clientSelectedSiteId: selectedSiteId ?? null,
+                seedPresent: !!documentSeed,
+                seedStatus: documentSeed?.status ?? null,
+                seedIdentity:
+                    documentSeed && documentSeed.status === "resolved" ? documentSeed.identity : null,
+            });
+        } catch {
+            /* a diagnostic may never cost the surface its counts */
+        }
+        if (match.ok) {
+            // `fresh` here means "authoritative for this navigation", which is exactly what makes
+            // the fan-out unnecessary — the same one-shot skip the fresh cache path uses.
+            totalsSeedRef.current = { totals: match.totals, fresh: true };
+        } else {
+            const read = cacheContext
+                ? peekWorkUnitSurfaceTotalsCache({ context: cacheContext, populationKey })
+                : null;
+            totalsSeedRef.current = read ? { totals: new Map(read.entry.totals), fresh: read.fresh } : null;
+        }
     }
     // A fresh seed also skips the count fan-out on this navigation (no duplicate requests).
-    const skipFreshFetchRef = useRef(totalsSeedRef.current?.fresh === true);
+    /*
+     * Set when the seed decision is actually made, which may be a later render than the first.
+     * Initialising from the first render would read `undefined` and lose the skip entirely.
+     */
+    const skipFreshFetchRef = useRef(false);
+    const seedAppliedRef = useRef(false);
+    if (!seedAppliedRef.current && totalsSeedRef.current !== undefined) {
+        seedAppliedRef.current = true;
+        skipFreshFetchRef.current = totalsSeedRef.current?.fresh === true;
+    }
 
     const [resolved, setResolved] = useState<{
         scopeKey: string;
         totals: Map<string, number | null>;
     } | null>(() => (totalsSeedRef.current ? { scopeKey, totals: totalsSeedRef.current.totals } : null));
+    /*
+     * When the decision was deferred, the state initialiser above already ran with nothing. Adopt
+     * the seeded totals on the render that resolved them — guarded by scopeKey so this cannot
+     * clobber a live answer that has already arrived for the same scope.
+     */
+    if (
+        seededAdoptRef.current === false &&
+        totalsSeedRef.current &&
+        (resolved === null || resolved.scopeKey !== scopeKey)
+    ) {
+        seededAdoptRef.current = true;
+        setResolved({ scopeKey, totals: totalsSeedRef.current.totals });
+    }
 
     // Population identity change: prune retention for removed/changed canonical locations.
     useEffect(() => {
@@ -177,10 +315,29 @@ export function useWorkViewTotalsState(args: {
 
         // Fresh cached totals seeded this navigation — do not re-issue the fan-out. (Stale/absent
         // seeds fall through and revalidate.) One-shot: later scope changes always refetch.
+        const noteFetchDecision = (decision: string) => {
+            try {
+                const w = window as unknown as { __alloyWorkViewSeed?: unknown[] };
+                if (!Array.isArray(w.__alloyWorkViewSeed)) w.__alloyWorkViewSeed = [];
+                w.__alloyWorkViewSeed.push({
+                    instance: instanceIdRef.current,
+                    phase: "fetch",
+                    decision,
+                    owner: ownerLabel,
+                    scopeKey,
+                    targetCount: parsedTargets.length,
+                    seedPresent: !!documentSeed,
+                });
+            } catch {
+                /* diagnostics are never load-bearing */
+            }
+        };
         if (skipFreshFetchRef.current) {
             skipFreshFetchRef.current = false;
+            noteFetchDecision("skipped_seeded");
             return;
         }
+        noteFetchDecision("fetching");
 
         let cancelled = false;
 

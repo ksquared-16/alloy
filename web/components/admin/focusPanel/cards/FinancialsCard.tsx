@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
 import { FOCUS_PANEL_RESERVED_MIN_HEIGHT } from "@/components/admin/focusPanel/FocusPanelSummarySkeleton";
@@ -2114,82 +2115,88 @@ export default function FinancialsCard({
 
                     <div className="alloy-os-fdetail__movepanel" data-testid="adjustment-panel">
                         <div className="alloy-os-fdetail__moveheader">Add adjustment</div>
-                        <label className="alloy-os-fdetail__movefield">
+                        <div className="alloy-os-fdetail__movefield">
                             <span>Against enrolment</span>
-                            <select
-                                data-testid="adjustment-agreement"
+                            <AlloySelect
+                                testId="adjustment-agreement"
+                                aria-label="Against enrolment"
+                                allowEmpty={false}
                                 value={adjustAgreementId}
-                                onChange={(e) => {
-                                    setAdjustAgreementId(e.target.value);
+                                options={adjustableSubjects.map((sub) => ({
+                                    value: sub.agreementId,
+                                    label: sub.displayName,
+                                }))}
+                                onChange={(next) => {
+                                    setAdjustAgreementId(next);
                                     // The charges on offer belong to the enrolment; changing it changes them.
                                     setAdjustSourceChargeId("");
                                     setAdjustPreview(null);
                                 }}
-                            >
-                                {adjustableSubjects.map((sub) => (
-                                    <option key={sub.agreementId} value={sub.agreementId}>
-                                        {sub.displayName}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
+                            />
+                        </div>
+                        <div className="alloy-os-fdetail__movefield">
                             <span>Against charge</span>
-                            <select
-                                data-testid="adjustment-source-charge"
+                            <AlloySelect
+                                testId="adjustment-source-charge"
+                                aria-label="Against charge"
+                                placeholder="Choose the charge this is about…"
                                 value={adjustSourceChargeId}
-                                onChange={(e) => {
-                                    setAdjustSourceChargeId(e.target.value);
-                                    setAdjustPreview(null);
-                                }}
-                            >
-                                <option value="">Choose the charge this is about…</option>
-                                {adjustableCharges.map((r) => (
-                                    <option key={r.chargeId} value={r.chargeId}>
-                                        {(r.description ?? r.categoryLabel)}
-                                        {r.date ? ` · ${r.date}` : ""}
-                                        {` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
+                                options={adjustableCharges.map((r) => ({
+                                    value: r.chargeId,
+                                    label:
+                                        `${r.description ?? r.categoryLabel}`
+                                        + (r.date ? ` · ${r.date}` : "")
+                                        + ` · ${(r.outstandingCents / 100).toLocaleString(undefined, {
                                             style: "currency",
                                             currency,
-                                        })} outstanding`}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="alloy-os-fdetail__movefield">
-                            <span>Type</span>
-                            <select
-                                data-testid="adjustment-category"
-                                value={adjustCategory}
-                                onChange={(e) => {
-                                    setAdjustCategory(e.target.value as "credit" | "adjustment");
+                                        })} outstanding`,
+                                }))}
+                                onChange={(next) => {
+                                    setAdjustSourceChargeId(next);
                                     setAdjustPreview(null);
                                 }}
-                            >
-                                {/*
-                                  * Two categories, not three. `discount` exists in the vocabulary but
-                                  * is owned by authored policy — a manual one would land in the same
-                                  * bucket as a configured one and nothing on the card could tell an
-                                  * operator which was policy and which was somebody's decision.
-                                  */}
-                                <option value="credit">Credit — lowers what the family owes</option>
-                                <option value="adjustment">Adjustment — either direction</option>
-                            </select>
+                            />
+                        </div>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Type</span>
+                            {/*
+                              * Two categories, not three. `discount` exists in the vocabulary but
+                              * is owned by authored policy — a manual one would land in the same
+                              * bucket as a configured one and nothing on the card could tell an
+                              * operator which was policy and which was somebody's decision.
+                              */}
+                            <AlloySelect
+                                testId="adjustment-category"
+                                aria-label="Type"
+                                allowEmpty={false}
+                                value={adjustCategory}
+                                options={[
+                                    { value: "credit", label: "Credit — lowers what the family owes" },
+                                    { value: "adjustment", label: "Adjustment — either direction" },
+                                ]}
+                                onChange={(next) => {
+                                    setAdjustCategory(next as "credit" | "adjustment");
+                                    setAdjustPreview(null);
+                                }}
+                            />
                         </label>
                         {adjustCategory === "adjustment" ? (
                             <label className="alloy-os-fdetail__movefield">
                                 <span>Direction</span>
-                                <select
-                                    data-testid="adjustment-direction"
+                                <AlloySelect
+                                    testId="adjustment-direction"
+                                    aria-label="Direction"
+                                    allowEmpty={false}
                                     value={adjustDirection}
-                                    onChange={(e) => {
-                                        setAdjustDirection(e.target.value as "decrease" | "increase");
+                                    options={[
+                                        { value: "decrease", label: "Lower what the family owes" },
+                                        { value: "increase", label: "Raise what the family owes" },
+                                    ]}
+                                    onChange={(next) => {
+                                        setAdjustDirection(next as "decrease" | "increase");
                                         setAdjustPreview(null);
                                     }}
-                                >
-                                    <option value="decrease">Lower what the family owes</option>
-                                    <option value="increase">Raise what the family owes</option>
-                                </select>
+                                />
                             </label>
                         ) : null}
                         <label className="alloy-os-fdetail__movefield">
@@ -2640,36 +2647,39 @@ export default function FinancialsCard({
                             onChange={(e) => setPayAmount(e.target.value)}
                         />
                         <p className="alloy-os-financials__fieldlabel">Method</p>
-                        <select
+                        {/*
+                            Bank transfer is a real rail with no executor yet. Offering it as though
+                            it worked recorded money nobody had collected, which is the same defect
+                            Card had; it stays VISIBLE AND DISABLED so the model reads truthfully —
+                            and the canonical control carries disabled options natively, arrowing
+                            past them rather than parking the operator on a dead row.
+
+                            Availability is the SERVER's answer, carried on the view model from the
+                            merchant's own recorded capability. A chooser deciding this for itself
+                            would offer a collection the provider then refuses, after the operator
+                            was told it was under way.
+                        */}
+                        <AlloySelect
                             value={payMethod}
                             aria-label="Payment method"
-                            data-financials-payment-method="true"
-                            onChange={(e) => setPayMethod(e.target.value)}
-                        >
-                            <option value="card">Card</option>
-                            <option value="cash">Cash</option>
-                            <option value="check">Check</option>
-                            <option value="money_order">Money order</option>
-                            {/*
-                                Bank transfer is a real rail with no executor
-                                yet. Offering it as though it worked recorded
-                                money nobody had collected, which is the same
-                                defect Card had; it stays visible and disabled so
-                                the model reads truthfully.
-                            */}
-                            {/*
-                                Availability is the SERVER's answer, carried on the view model from
-                                the merchant's own recorded capability. A chooser deciding this for
-                                itself would offer a collection the provider then refuses, after the
-                                operator was told it was under way.
-                            */}
-                            <option value="ach" disabled={!vm.achAvailable}>
-                                {vm.achAvailable
-                                    ? "Bank account"
-                                    : "Bank account — not enabled for this organization"}
-                            </option>
-                            <option value="other">Other</option>
-                        </select>
+                            testId="financials-payment-method"
+                            allowEmpty={false}
+                            options={[
+                                { value: "card", label: "Card" },
+                                { value: "cash", label: "Cash" },
+                                { value: "check", label: "Check" },
+                                { value: "money_order", label: "Money order" },
+                                {
+                                    value: "ach",
+                                    label: vm.achAvailable
+                                        ? "Bank account"
+                                        : "Bank account — not enabled for this organization",
+                                    disabled: !vm.achAvailable,
+                                },
+                                { value: "other", label: "Other" },
+                            ]}
+                            onChange={(next) => setPayMethod(next)}
+                        />
                         {/*
                          * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
                          *
@@ -2685,21 +2695,20 @@ export default function FinancialsCard({
                         {vm.payerCandidates.length ? (
                             <>
                             <p className="alloy-os-financials__fieldlabel">Who paid</p>
-                            <select
+                            <AlloySelect
                                 value={payPayerPersonId}
                                 aria-label="Who paid"
-                                data-financials-payment-payer="true"
-                                onChange={(e) => setPayPayerPersonId(e.target.value)}
-                            >
-                                <option value="">Who paid? (optional)</option>
-                                {vm.payerCandidates.map((c) => (
-                                    <option key={c.personId} value={c.personId}>
-                                        {c.name}
-                                        {c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : ""}
-                                        {c.alsoResponsible ? " · also responsible" : ""}
-                                    </option>
-                                ))}
-                            </select>
+                                testId="financials-payment-payer"
+                                placeholder="Who paid? (optional)"
+                                options={vm.payerCandidates.map((c) => ({
+                                    value: c.personId,
+                                    label:
+                                        `${c.name}`
+                                        + (c.roleType ? ` · ${c.roleType.replace(/_/g, " ")}` : "")
+                                        + (c.alsoResponsible ? " · also responsible" : ""),
+                                }))}
+                                onChange={(next) => setPayPayerPersonId(next)}
+                            />
                             </>
                         ) : null}
                         <span className="alloy-os-financials__preview-actions">
@@ -3070,6 +3079,64 @@ export default function FinancialsCard({
                              * account fee cannot become a child's, and a child's tuition cannot
                              * become the household's.
                              */
+                            /*
+                             * ── ONE CONTROL, THE SAME GRAIN MODEL ────────────────────────────
+                             *
+                             * `subjectFilter` is still the anchor and `extraChildIds` still the
+                             * widening; nothing about the payload, the writer or per-child
+                             * obligation identity changes. What changes is that the operator sees
+                             * one question instead of two, and mutual exclusion is enforced in
+                             * the handlers rather than left to them to understand:
+                             *
+                             *   Household  → anchor "all", extras cleared
+                             *   a child    → anchor that child, the rest as extras
+                             *   last child untucked → anchor "all" would mean HOUSEHOLD, which an
+                             *                         empty selection must never mean, so the
+                             *                         anchor is parked on the child just removed
+                             *                         and the summary asks for a choice.
+                             */
+                            unifiedTarget:
+                                selected && categoryPermitsChildGrain(selected.categoryKey ?? "") && vm.subjects.length > 0
+                                    ? {
+                                          householdOffered: categoryPermitsHouseholdGrain(selected.categoryKey ?? ""),
+                                          householdSelected: subjectFilter === "all",
+                                          onSelectHousehold: () => {
+                                              setSubjectFilter("all");
+                                              setExtraChildIds([]);
+                                          },
+                                          children: vm.subjects.map((sub) => ({
+                                              id: sub.customerMemberId,
+                                              label: sub.displayName,
+                                          })),
+                                          selectedChildIds: subjectFilter === "all" ? [] : selectedChildIds,
+                                          onToggleChild: (id: string) => {
+                                              if (subjectFilter === "all") {
+                                                  /* Picking a child is leaving the household grain. */
+                                                  setSubjectFilter(id);
+                                                  setExtraChildIds([]);
+                                                  return;
+                                              }
+                                              if (id === subjectFilter) {
+                                                  /* Untucking the anchor promotes the next extra, or leaves none chosen. */
+                                                  const [next, ...rest] = extraChildIds;
+                                                  if (next) {
+                                                      setSubjectFilter(next);
+                                                      setExtraChildIds(rest);
+                                                  } else {
+                                                      /* No child left. NOT "all" — an empty
+                                                         selection must never become Household. */
+                                                      setSubjectFilter("");
+                                                      setExtraChildIds([]);
+                                                  }
+                                                  return;
+                                              }
+                                              setExtraChildIds((prev) =>
+                                                  prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                              );
+                                          },
+                                          perChildLabel: chargeAmount || selected.amount || null,
+                                      }
+                                    : undefined,
                             subjects: [
                                 ...(categoryPermitsHouseholdGrain(selected.categoryKey ?? "")
                                     ? [{ id: "all", label: "Household" }]
@@ -3519,30 +3586,30 @@ export default function FinancialsCard({
                         <div className="alloy-os-fdetail__moveheader">
                             {movePending ? "Move payment" : "Apply payment"}
                         </div>
-                        <label className="alloy-os-fdetail__movefield">
+                        <div className="alloy-os-fdetail__movefield">
                             <span>{movePending ? "Move to" : "Apply to"}</span>
-                            <select
-                                data-testid="payment-move-target"
+                            <AlloySelect
+                                testId="payment-move-target"
+                                aria-label={movePending ? "Move to" : "Apply to"}
+                                placeholder="Choose a charge…"
                                 value={moveTargetId}
-                                onChange={(e) => {
-                                    setMoveTargetId(e.target.value);
+                                options={moveTargets.map((t) => ({
+                                    value: t.chargeId,
+                                    label:
+                                        `${t.label}`
+                                        + (t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : "")
+                                        + ` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
+                                            style: "currency",
+                                            currency,
+                                        })} outstanding`,
+                                }))}
+                                onChange={(next) => {
+                                    setMoveTargetId(next);
                                     // A new destination invalidates a preview taken for the old one.
                                     setMovePreview(null);
                                 }}
-                            >
-                                <option value="">Choose a charge…</option>
-                                {moveTargets.map((t) => (
-                                    <option key={t.chargeId} value={t.chargeId}>
-                                        {t.label}
-                                        {t.serviceDate ? ` · ${formatDisplayDate(t.serviceDate)}` : ""}
-                                        {` · ${(t.outstandingCents / 100).toLocaleString(undefined, {
-                                            style: "currency",
-                                            currency,
-                                        })} outstanding`}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                            />
+                        </div>
                         {/* A reversal must say why; applying unapplied money undoes nothing. */}
                         {movePending ? (
                             <label className="alloy-os-fdetail__movefield">
@@ -3687,6 +3754,29 @@ export default function FinancialsCard({
                      * account cannot truthfully say "no payment method on file".
                      */
                     paymentMethodsAccount={customerId ? { customerId } : null}
+                    /*
+                     * MANAGE RESPONSIBILITY, from Details. Parties come from the account view
+                     * model — the same `responsibility.parties` Accounts passes — so the operator
+                     * edits who is already on record rather than inventing a party. `load` is the
+                     * card's own canonical re-read: after a commit the panel, the responsibility
+                     * position and the ledger all come back from the server, and nothing here
+                     * guesses at the new state in the meantime.
+                     */
+                    responsibilityAdmin={
+                        customerId
+                            ? {
+                                  customerId,
+                                  parties: (vm?.responsibility?.parties ?? []) as {
+                                      personId: string | null;
+                                      name: string;
+                                  }[],
+                                  householdName: vm?.account?.label ?? null,
+                                  onCommitted: async () => {
+                                      await load();
+                                  },
+                              }
+                            : null
+                    }
                     onMovePayment={openMovePayment}
                     onApplyPayment={openApplyPayment}
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */

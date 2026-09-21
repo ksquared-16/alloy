@@ -4,7 +4,12 @@
  * Assignments Studio — assignment administration on the shared workspace shell.
  *
  * Sections: Types (inventory) · Patterns (schedule shapes) · Templates (future) ·
- * Validation (governed rules inventory). Studio administers Assignments in place.
+ * Validation (governed rules inventory) · Qualifications (staff credential vocabulary and the
+ * policy authored against it). Studio administers Assignments in place.
+ *
+ * The module is named for Assignments because it grew up inside that workspace; it is the
+ * OPERATIONS Studio renderer now, and Qualifications is the first section it hosts that is not
+ * about assignments. Renaming the module is a separate change and not worth coupling to this one.
  */
 
 import { CalendarClock, FunctionSquare, Layers, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
@@ -19,6 +24,7 @@ import SchedulingPatterns, {
     type PatternMutation,
 } from "@/components/adminV2/scheduling/screens/SchedulingPatterns";
 import AssignmentTypesStudioPanel from "@/components/adminV2/scheduling/screens/AssignmentTypesStudioPanel";
+import StaffQualificationsStudioPanel from "@/components/adminV2/staff/screens/StaffQualificationsStudioPanel";
 import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
 
 export type { StudioPattern };
@@ -77,6 +83,28 @@ export default function SchedulingStudio({
                     loading={loading}
                     siteName={siteName}
                     onMutate={onMutatePattern}
+                />
+            : null}
+
+            {/*
+              * QUALIFICATIONS loads its own configuration rather than taking it from the host.
+              *
+              * Every other section here is handed data the host fetched, because those four reads
+              * were already being made together. This one is a fifth read that only matters when
+              * this tab is open, and the host's own doctrine is that Studio pays for what it opens.
+              * It reuses the host's `sites` and `assignmentTypes` for the scope pickers, so the
+              * only new request is its own.
+              */}
+            {view === "qualifications" ?
+                <StaffQualificationsStudioPanel
+                    sites={sites}
+                    // `AssignmentTypeAdminRecord.id` is nullable — a category being drafted has no
+                    // id yet. Those are dropped here rather than widening the panel's prop type,
+                    // because a requirement scoped to a category that has not been saved would
+                    // point at nothing and still read as configured.
+                    assignmentTypes={assignmentTypes
+                        .filter((t): t is typeof t & { id: string } => typeof t.id === "string")
+                        .map((t) => ({ id: t.id, label: t.label }))}
                 />
             : null}
 

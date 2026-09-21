@@ -1,0 +1,33 @@
+{
+  "status": 200,
+  "chargeStatus": "posted",
+  "gross": null,
+  "subject": null,
+  "serviceDate": "2026-09-01",
+  "billingPeriodLabel": "September 2026",
+  "invoiceDate": "2026-09-01",
+  "dueDate": "2026-09-11",
+  "payments": null,
+  "accountingPeriod": {
+    "key": "FY2026-P10",
+    "label": "October 2026",
+    "status": "open",
+    "startsOn": "2026-10-01",
+    "endsOn": "2026-10-31"
+  },
+  "accountingDeferredFrom": "2026-09-01",
+  "reductions": null,
+  "responsibility": {
+    "allocatedCents": 0,
+    "unassignedCents": 0,
+    "parties": []
+  },
+  "accountArrangement": {
+    "id": "30d94536-691b-465a-933d-288b5249301c",
+    "grain": "household"
+  },
+  "glAccount": {
+    "code": "4000",
+    "name": "Tuition Revenue"
+  }
+}

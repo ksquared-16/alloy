@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { billingRecurrenceFor } from "@/lib/financials/billingPeriod";
 import { MoreHorizontal, Plus } from "lucide-react";
 import {
     ConfigurationPrimaryButton,
@@ -205,8 +206,18 @@ export function TuitionBillingFrequenciesPanel({
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <h2 className="config-typo-workspace-title text-lg text-alloy-midnight">Billing Frequencies</h2>
-                    <p className="mt-1 text-sm text-alloy-midnight/55">
-                        How often tuition is billed — used as the primary frequency on Tuition Plans.
+                    {/*
+                     * TWO LEVELS, NAMED. A frequency is the RULE; the periods it produces are
+                     * instances an assignment's accepted term and its anchor derive — nobody
+                     * authors "Sep 15–21" here. And the accounting calendar is a different
+                     * interval entirely, which is why it is named as elsewhere rather than
+                     * implied by silence.
+                     */}
+                    <p className="mt-1 max-w-2xl text-sm text-alloy-midnight/55">
+                        How often tuition recurs. A frequency is the rule; the billing periods it
+                        produces are derived from each assignment&apos;s accepted term and start
+                        date — you never author individual periods here. The accounting calendar is
+                        configured separately, under Accounting.
                     </p>
                 </div>
                 <ConfigurationPrimaryButton
@@ -234,7 +245,14 @@ export function TuitionBillingFrequenciesPanel({
                         <tr className="border-b border-alloy-stone/20 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">
                             <th className="px-4 py-2.5">Name</th>
                             <th className="px-4 py-2.5">Description</th>
-                            <th className="px-4 py-2.5">Cadence</th>
+                            {/*
+                             * "Cadence" showed `cadenceLabel`, which is the description the
+                             * operator typed — or, failing that, the name they typed — echoed back
+                             * beside the Description column that already held it. It told them
+                             * nothing the platform knows. This states what the period authority
+                             * will actually derive from this frequency.
+                             */}
+                            <th className="px-4 py-2.5">Recurrence</th>
                             <th className="px-4 py-2.5">Active</th>
                             <th className="px-4 py-2.5">Plans using</th>
                             <th className="px-4 py-2.5 w-12"><span className="sr-only">More</span></th>
@@ -261,7 +279,20 @@ export function TuitionBillingFrequenciesPanel({
                                 >
                                     <td className="px-4 py-3 font-medium text-alloy-midnight">{row.name}</td>
                                     <td className="px-4 py-3 text-alloy-midnight/60">{row.description ?? "—"}</td>
-                                    <td className="px-4 py-3 text-alloy-midnight/60">{row.cadenceLabel}</td>
+                                    {(() => {
+                                        const rec = billingRecurrenceFor(row.itemKey);
+                                        return (
+                                            <td
+                                                className={`px-4 py-3 ${
+                                                    rec.billable ? "text-alloy-midnight/60" : "text-alloy-ember"
+                                                }`}
+                                                data-billing-recurrence={row.itemKey}
+                                                data-billing-recurrence-billable={rec.billable ? "true" : "false"}
+                                            >
+                                                {rec.recurrence}
+                                            </td>
+                                        );
+                                    })()}
                                     <td className="px-4 py-3">
                                         <span
                                             className={`text-[11px] font-semibold ${

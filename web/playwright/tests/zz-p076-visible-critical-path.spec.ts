@@ -58,8 +58,80 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
      *                              + JSON serialization
      */
     let drawerVmServerHeaders: Record<string, string | null> = {};
+    /*
+     * THE COMPLETION OWNER'S OWN SERVER DAG.
+     *
+     * /api/admin/queue-view-totals is what FIRST_ORDER_VISIBLE_COMPLETE now waits on — WU-03's final
+     * authoritative mutation lands ~11ms after it responds. Its Server-Timing header carries the
+     * phase decomposition; the request body carries the configured view set it was asked for, and
+     * the response carries which views answered vs stayed UNKNOWN.
+     *
+     * All three are captured because the phases alone cannot separate fixed setup from per-view
+     * cost, and because the configured view set is part of the specimen's identity: a count that got
+     * faster because a view left the configuration has not got faster.
+     */
+    let queueViewTotals: Record<string, unknown> | null = null;
     page.on("response", (r) => {
         const u = r.url();
+        if (/\/api\/admin\/queue-view-totals/.test(u)) {
+            const h = r.headers();
+            const req = r.request();
+            let requested: unknown = null;
+            try {
+                requested = JSON.parse(req.postData() || "null");
+            } catch {
+                requested = null;
+            }
+            const targets = Array.isArray((requested as { targets?: unknown[] })?.targets)
+                ? ((requested as { targets: Array<Record<string, unknown>> }).targets)
+                : [];
+            queueViewTotals = {
+                status: r.status(),
+                serverTiming: h["server-timing"] ?? null,
+                requestedTargetCount: targets.length,
+                requestedViewIds: targets.map((t) => String(t.workViewId ?? "")),
+                /*
+                 * THE GROUP KEY, not just the view id.
+                 *
+                 * The route groups by (workUnitId, queueKey) and memoizes access + department
+                 * metadata BY workUnitId. So five groups over ONE work unit resolve access once
+                 * and await it five times, while five groups over five work units resolve it five
+                 * times. `qvt_access` accumulates awaits and cannot tell those apart — only the
+                 * distinct work-unit count can, and it decides whether there is any duplication
+                 * inside this request at all.
+                 */
+                requestedTargets: targets.map((t) => ({
+                    w: String(t.workUnitId ?? ""),
+                    q: String(t.queueKey ?? ""),
+                    v: String(t.workViewId ?? ""),
+                })),
+                distinctWorkUnitIds: [...new Set(targets.map((t) => String(t.workUnitId ?? "")))],
+                distinctQueueKeys: [...new Set(targets.map((t) => String(t.queueKey ?? "")))],
+                distinctGroupKeys: [
+                    ...new Set(targets.map((t) => String(t.workUnitId ?? "") + "::" + String(t.queueKey ?? ""))),
+                ],
+                selectedSiteId: (requested as { selectedSiteId?: unknown })?.selectedSiteId ?? null,
+            };
+            void r
+                .json()
+                .then((j: { totals?: Array<{ workViewId?: string; count?: number | null; known?: boolean }> }) => {
+                    const totals = Array.isArray(j?.totals) ? j.totals : [];
+                    if (queueViewTotals) {
+                        queueViewTotals.returnedCount = totals.length;
+                        // `known:false` is UNKNOWN, which must never be read as a count of zero.
+                        queueViewTotals.knownCount = totals.filter((t) => t.known).length;
+                        queueViewTotals.unknownViewIds = totals
+                            .filter((t) => !t.known)
+                            .map((t) => String(t.workViewId ?? ""));
+                        queueViewTotals.counts = totals.map((t) => ({
+                            v: String(t.workViewId ?? ""),
+                            c: t.count ?? null,
+                            k: !!t.known,
+                        }));
+                    }
+                })
+                .catch(() => {});
+        }
         if (/\/api\/admin\/view-models\/drawer\/opportunity\//.test(u) && r.status() === 200) {
             const h = r.headers();
             drawerVmServerHeaders = {
@@ -152,6 +224,10 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
     // Anything that changes after the quiet window is a post-complete visible mutation.
     const settleAt = await page.evaluate(() => {
         const w = window as unknown as { __p076?: { count: number } };
+        // Arm the post-complete recorder exactly here, so the records describe the same window
+        // the count describes and nothing from first-order assembly leaks in.
+        const post = (window as unknown as { __p076post?: { armed: boolean } }).__p076post;
+        if (post) post.armed = true;
         return w.__p076?.count ?? 0;
     });
     await page.waitForTimeout(5_000);
@@ -159,6 +235,10 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const w = window as unknown as { __p076?: { count: number } };
         return (w.__p076?.count ?? 0) - before;
     }, settleAt);
+    const postCompleteRecords = await page.evaluate(() => {
+        const post = (window as unknown as { __p076post?: { records: Array<Record<string, unknown>> } }).__p076post;
+        return post?.records ?? [];
+    });
     const idleMs = visibleCompleteMs;
 
     /*
@@ -350,12 +430,84 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         return { diag: w.__alloyFocusChain ?? null, chainMarks };
     });
 
+    /*
+     * DID THE SEED REACH THE BROWSER AT ALL?
+     *
+     * The server reports `outcome: resolved`, yet the client still issued its fallback request.
+     * That has two very different causes — the field never crossed into the payload, or it
+     * crossed and the identity match rejected it — and they need opposite repairs. Searching the
+     * serialized document for the key separates them before any theory is formed.
+     */
+    /*
+     * The client's OWN verdict on the seed, with both sides of every compared field. Two deploys
+     * have shown the seed present and the client fetching anyway; this names the mismatch instead
+     * of inviting a third guess.
+     */
+    const seedMatchDiagnostic = await page.evaluate(() => {
+        // An ARRAY now: one record per hook instance per phase. A single overwritten value could
+        // not say which of the two mounted instances issued the request.
+        const raw = (window as unknown as { __alloyWorkViewSeed?: unknown[] }).__alloyWorkViewSeed;
+        return Array.isArray(raw) ? raw : raw ?? null;
+    });
+
+    const seedReachedClient = await page.evaluate(() => {
+        const html = document.documentElement.innerHTML;
+        const idx = html.indexOf("workViewTotalsSeed");
+        return {
+            present: idx >= 0,
+            // A short window around the key shows the identity it shipped with, if any.
+            excerpt: idx >= 0 ? html.slice(idx, idx + 420) : null,
+            mentionsSignature: html.includes("configuredViewSignature"),
+        };
+    });
+
     const marks = await page.evaluate(() => {
         const el = document.getElementById("__alloy_route_timing");
         try { return el ? JSON.parse(el.textContent || "null") : null; } catch { return null; }
     });
     const buildInfo = await page.evaluate(async () => {
         try { return await (await fetch("/api/build-info")).json(); } catch { return null; }
+    });
+
+    /*
+     * FIRST-ORDER CORRECTNESS — because a faster wrong answer is a regression, not a win.
+     *
+     * The producer overlap starts the card producers from a SPECULATIVE subject and household
+     * announced before composition settles. The join is supposed to verify both against the
+     * canonical identities and discard the whole run on any mismatch. That guard is unit-gated,
+     * but only the deployed surface can show whether the cards actually still say the right thing.
+     *
+     * So every sample carries the first-order text of every configured card, plus the two failure
+     * shapes that a wrong identity or a lost authority would produce: a card that collapsed to
+     * "unavailable"/"forbidden", and a schema/records error. A timing taken on a surface in either
+     * state is not a measurement of the product.
+     */
+    const correctness = await page.evaluate(() => {
+        const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+        const cards = [...document.querySelectorAll("article.alloy-os-ucard")].map((el) => {
+            const key =
+                el.getAttribute("data-universal-card-key") ||
+                el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") ||
+                "unidentified";
+            const text = norm((el as HTMLElement).innerText || "");
+            return {
+                key,
+                chars: text.length,
+                firstOrder: text.slice(0, 400),
+                unavailable: /\bunavailable\b|\bforbidden\b|not available|no access/i.test(text),
+                recordsUnavailable: /records unavailable|unable to load|could not load/i.test(text),
+            };
+        });
+        const body = norm(document.body.innerText || "");
+        return {
+            cards,
+            cardCount: cards.length,
+            unavailableCards: cards.filter((c) => c.unavailable).map((c) => c.key),
+            recordsUnavailableCards: cards.filter((c) => c.recordsUnavailable).map((c) => c.key),
+            // A PostgREST/schema failure surfaces as text on the page rather than a thrown error.
+            schemaError: /schema cache|PGRST\d+|column .* does not exist|relation .* does not exist/i.test(body),
+            authenticated: !/sign in to continue|please sign in|log in to continue/i.test(body.slice(0, 2000)),
+        };
     });
 
     const out = {
@@ -366,12 +518,38 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             visibleCompleteV1QuietWindowMs: visibleCompleteMs,
             quietWindowMs: QUIET_MS,
             postCompleteVisibleMutationCount: postComplete,
+            postCompleteRecords,
+            postCompleteAuthoritative: postCompleteRecords.filter((r) => r.advancesFinality === true).length,
         },
         metricV2: v2,
         marks,
         dataProbe,
         regions,
-        valid: dataProbe.rows > 0 && !dataProbe.signedOut,
+        /*
+         * THE ACCEPTANCE FACT FOR THE WU-03 SEED.
+         *
+         * A matching seed means the browser issues NO queue-view-totals request at all, so the
+         * proof is a COUNT of requests, not the shape of a response — with a bound seed there is
+         * no response to inspect. Counted from the request log rather than the response listener
+         * for exactly that reason.
+         */
+        queueViewTotalsRequestCount: requests.filter((r) => /\/api\/admin\/queue-view-totals/.test(r.url))
+            .length,
+        seedReachedClient,
+        seedMatchDiagnostic,
+        correctness,
+        /*
+         * A sample is valid only if the surface it measured was the real, authenticated,
+         * fully-answering product. Rows alone were enough while the only failure mode was an
+         * expired session; the overlap adds identity and authority failure modes that render a
+         * populated page which is nonetheless wrong.
+         */
+        valid:
+            dataProbe.rows > 0 &&
+            !dataProbe.signedOut &&
+            correctness.authenticated &&
+            !correctness.schemaError &&
+            correctness.recordsUnavailableCards.length === 0,
         apiRequestCount: requests.length,
         drawerBlocked,
         warmUpUrl: WARM_URL || null,
@@ -393,6 +571,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         focusChain,
         drawerVmTiming,
         drawerVmServerHeaders,
+        queueViewTotals,
         retiredReadProbe: {
             eppEnrichmentHttp: requests.filter((r) => /effective-enrollment|epp/i.test(r.url)).length,
             tourEnrichmentHttp: requests.filter((r) => /tour-bookings|active-tour/i.test(r.url)).length,
@@ -412,7 +591,9 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         + `chain=${focusChain.diag ? "present" : "ABSENT"} flips=${(focusChain.diag as {flips?:unknown[]} | null)?.flips?.length ?? 0} `
         + `postMut=${postComplete} `
         + `api=${requests.length} marks=${marks ? "present" : "ABSENT"} rows=${dataProbe.rows} sections=${Object.keys(regions.presentSections).length} `
-        + `valid=${out.valid} signedOut=${dataProbe.signedOut} `
+        + `qvt=${(queueViewTotals as {serverTiming?:string}|null)?.serverTiming ?? "ABSENT"} `
+        + `qvtViews=${(queueViewTotals as {requestedTargetCount?:number}|null)?.requestedTargetCount ?? "-"} `
+        + `valid=${out.valid} signedOut=${dataProbe.signedOut} auth=${correctness.authenticated} schemaErr=${correctness.schemaError} unavail=[${correctness.unavailableCards.join("|")}] `
         + `kpiSet=[${configIdentity.configuredKpiSlots.join("|")}] `
         + `cardSet=[${configIdentity.configuredCardSet.join("|")}] `
         + `kpis=${configIdentity.configuredKpiCount} cards=${configIdentity.configuredCardCount}`,

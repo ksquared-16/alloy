@@ -33,6 +33,7 @@ import {
 import { DEFAULT_CARD_GRAINS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { focusPanelWorkModeModelFromDurablePerson } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
+import { derivePersonQualificationsCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import {
     personEmploymentSignal,
     type DurablePersonSubject,
@@ -57,6 +58,7 @@ function employedComposition(): PersonEmploymentComposition {
             primary_location_id: "loc-1",
             primary_location_label: "Riverside",
             external_employee_id: null,
+            badge_number: null,
             start_date: "2026-01-05",
             end_date: null,
             end_reason_key: null,
@@ -73,6 +75,7 @@ function employedComposition(): PersonEmploymentComposition {
                 primary_location_id: "loc-1",
                 primary_location_label: "Riverside",
                 external_employee_id: null,
+                badge_number: null,
                 start_date: "2026-01-05",
                 end_date: null,
                 end_reason_key: null,
@@ -255,8 +258,17 @@ describe("card applicability is declared per card, not switched centrally", () =
      * The assertion is updated rather than loosened. An exact list is what makes an accidental
      * widening visible, and this test earned its keep by failing the moment the grain changed.
      */
-    it("the person grain selects Employment and Assignments out of the whole catalog", () => {
-        expect(cardKeysForGrain("person")).toEqual(["staff", "scheduling"]);
+    it("the person grain selects Staff, Qualifications, Availability, Readiness and Assignments", () => {
+        /*
+         * `staff_qualifications` is the third, and it arrived the same way `scheduling` did — by
+         * DECLARATION, not by a central switch. The list stays exact for the reason above: an
+         * accidental widening is only visible against an exact list.
+         *
+         * Order matters here because it is registry order, and registry order is the order a
+         * composer reads. Qualifications is declared immediately after Staff because the two are
+         * read together.
+         */
+        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
         // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
@@ -269,9 +281,17 @@ describe("card applicability is declared per card, not switched centrally", () =
         // is the point: the ONLY cards outside the case grain are ones explicitly declared elsewhere.
         const caseKeys = cardKeysForGrain("opportunity");
         const excluded = FOCUS_PANEL_CARDS.map((c) => c.key).filter((k) => !caseKeys.includes(k));
-        // `staff` joins it: a person-grain card is legitimately not case-grain. The invariant the
-        // test guards is unchanged — no card that WAS case-grain silently stopped being one.
-        expect(excluded).toEqual(["staff", "child_identity"]);
+        // `staff` and `staff_qualifications` join it: a person-grain card is legitimately not
+        // case-grain. The invariant the test guards is unchanged — no card that WAS case-grain
+        // silently stopped being one.
+        // `staff_compensation` joins them (Slice 9). `health_safety` was already
+        // outside the case grain and this census had stopped noticing — recording it
+        // restores the test's function rather than papering over it; the drift is
+        // another lane's and is called out here rather than absorbed silently.
+        expect(excluded).toEqual([
+            "staff", "staff_qualifications", "staff_availability", "staff_readiness",
+            "staff_compensation", "health_safety", "child_identity",
+        ]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -289,18 +309,94 @@ describe("card applicability is declared per card, not switched centrally", () =
             subject: staffSubject(),
             canMutate: true,
         });
-        expect([...model.cardModels.keys()]).toEqual(["staff"]);
+        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
         // No empty shell pretending applicability.
         expect(model.cardReadiness.has("current_work")).toBe(false);
         expect(model.cardReadiness.has("household")).toBe(false);
     });
+
+    /*
+     * DECLARED AND PLACED IS NOT COMPOSED — the defect this locks, found on deployed staging.
+     *
+     * `staff_qualifications` was declared for the `person` grain, placed on the person composition,
+     * and given a renderer branch. All three were green, and the card still never appeared: the
+     * DERIVATION had no branch for it, so no model was ever built and the panel rendered as though
+     * the card had never been added.
+     *
+     * The assertion above asserted `["staff"]`, passed, and was reporting exactly this the whole
+     * time. So the lock is stated in its own words here: every card the person composition places
+     * must actually come out of the derivation.
+     */
+    it("every card the person composition places is actually derived into a model", () => {
+        const model = focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+        });
+        const derived = new Set(model.cardModels.keys());
+        for (const entry of focusPanelDefaultCompositionForGrain("person")) {
+            expect(
+                derived.has(entry.key),
+                `${entry.key} is placed on the person surface and declared for the grain, but no `
+                    + "model is derived for it — the panel will render nothing.",
+            ).toBe(true);
+        }
+    });
+
+    it("the qualifications model is a shell, and is not visible without an employment", () => {
+        // It carries no facts on purpose: standing is derived server-side against the org day, and
+        // a count baked in here would be wrong the moment a credential expired overnight.
+        const withJob = derivePersonQualificationsCard({
+            primary: {
+                personId: "p1",
+                personLabel: "A Person",
+                employment: {
+                    is_staff: true,
+                    current: { id: "emp-1" } as never,
+                    periods: [],
+                    configured_facts: [],
+                    never_employed: false,
+                },
+            },
+            people: [],
+            hasEmployment: true,
+        } as never);
+        expect(withJob.key).toBe("staff_qualifications");
+        expect(withJob.visible).toBe(true);
+        expect(withJob.title).toBe("Qualifications");
+
+        // Never employed: not visible, and phrased as a fact rather than a pending read.
+        const never = derivePersonQualificationsCard(null);
+        expect(never.visible).toBe(false);
+    });
 });
 
 describe("default composition varies by grain", () => {
-    it("person composes exactly one card, and it is Staff", () => {
+    it("person composes Staff, Qualifications, Availability and Readiness, all visible", () => {
+        /*
+         * This asserted exactly one card for as long as Employment was the only canonical Person
+         * truth. Qualifications is the second, and it had to be earned TWICE to appear here — once
+         * by declaring the `person` grain in the registry, once by being placed on this surface.
+         * Either alone is inert, which is the friction the composition module documents.
+         */
         const composition = focusPanelDefaultCompositionForGrain("person");
-        expect(composition.map((e) => e.key)).toEqual(["staff"]);
-        expect(composition[0]!.visibility).toBe("visible");
+        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
+        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible", "visible", "visible"]);
+        // Side by side, not stacked: two six-column areas on the same row. A qualification that
+        // expires is not something an operator should have to scroll to.
+        expect(composition.map((e) => e.area)).toEqual([
+            { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+            { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+            // Availability takes the full width beneath them: a week of windows reads
+            // as a row of days, and six columns would wrap every one.
+            { colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 3 },
+            // Readiness reads LAST: it summarises the three above it, so an operator
+            // sees the verdict after the facts it derives from.
+            { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
+            // Compensation last: the most sensitive card in the family, and the least
+            // often the reason the record was opened.
+            { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 3 },
+        ]);
     });
 
     it("child composes its own identity card, never the case composition", () => {

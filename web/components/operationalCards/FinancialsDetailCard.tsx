@@ -1,9 +1,11 @@
 "use client";
 
 import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
+import { Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -65,6 +67,7 @@ export default function FinancialsDetailCard({
     ledgerPending = false,
     paymentBand,
     paymentMethodsAccount,
+    responsibilityAdmin,
     lens: lensProp,
     onLensChange,
     expandedPeriods,
@@ -120,6 +123,25 @@ export default function FinancialsDetailCard({
         payerName?: string | null;
         payerEmail?: string | null;
         canManage?: boolean;
+    } | null;
+    /*
+     * ── MANAGE, BESIDE FILTER — the gap this closes ───────────────────────────────────────────
+     *
+     * Accounts has carried the Responsible party FILTER and the Manage responsibility GEAR side by
+     * side since 11B. Details carried only the filter, so the surface an operator actually opens
+     * from a family could answer "show me rows by who owes" and not "change who owes".
+     *
+     * Given, the gear appears next to the filter and opens the SAME `FinancialsResponsibilityPanel`
+     * through its established hosted contract — one component, now three hosts, still not a second
+     * panel and still not a second writer. Absent, this card behaves exactly as it always has.
+     */
+    responsibilityAdmin?: {
+        customerId: string;
+        /** Parties already on record, from the account view model — never invented here. */
+        parties: { personId: string | null; name: string }[];
+        householdName?: string | null;
+        /** Re-read committed truth. The card does not report its own success. */
+        onCommitted: () => Promise<void> | void;
     } | null;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
@@ -259,6 +281,50 @@ export default function FinancialsDetailCard({
      * exist. An obligation with no named party files under "Unassigned", which is a real and
      * frequently the most actionable choice.
      */
+    /*
+     * ── RESPONSIBILITY ADMINISTRATION STATE ───────────────────────────────────────────────────
+     *
+     * Open state only. The arrangement itself is the panel's business and the authority's; this
+     * card holds no copy of it, so there is nothing here to drift from the committed truth.
+     */
+    const [manageResponsibilityOpen, setManageResponsibilityOpen] = useState(false);
+    /*
+     * The control that opened the card, so focus can return to it. Without this, dismissing the
+     * card drops focus to <body> and a keyboard operator restarts from the top of the page.
+     */
+    const manageResponsibilityGearRef = useRef<HTMLButtonElement | null>(null);
+    const closeResponsibility = useCallback(() => {
+        setManageResponsibilityOpen(false);
+        manageResponsibilityGearRef.current?.focus();
+    }, []);
+    const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
+        { customerMemberId: string; label: string }[]
+    >([]);
+    useEffect(() => {
+        /*
+         * Canonical household membership, read when the operator asks to administer — not on every
+         * card open, because the ledger does not need it. Same endpoint Accounts asks; the children
+         * an account may arrange for are not derivable from ledger rows, which name parties and not
+         * members.
+         */
+        const customerId = responsibilityAdmin?.customerId;
+        if (!manageResponsibilityOpen || !customerId || responsibilityScopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && b?.members) setResponsibilityScopeMembers(b.members);
+            })
+            .catch(() => {
+                /* The card still administers the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [manageResponsibilityOpen, responsibilityAdmin?.customerId, responsibilityScopeMembers.length]);
+
     const responsiblePartyChoices = useMemo(
         () =>
             [...new Set(allEntries.map((e) => (e.responsibleParty ?? "").trim() || UNASSIGNED_LABEL))].sort(
@@ -515,6 +581,29 @@ export default function FinancialsDetailCard({
                                 options={responsiblePartyChoices}
                             />
                         ) : null}
+                        {/*
+                          * MANAGE, beside FILTER — the same two intents Accounts already pairs, in
+                          * the same order and the same row. The FILTER answers "show me rows by who
+                          * owes"; the GEAR answers "change who owes". They sit together because they
+                          * are about one concept, and the filter is never allowed to mutate it.
+                          *
+                          * Quiet on purpose: an icon at the filters' own size, no fill and no
+                          * border, so the filter row does not become a command footer. Its
+                          * accessible name says what it does — an icon shape is not a sentence.
+                          */}
+                        {lens !== "payments" && responsibilityAdmin ? (
+                            <button
+                                type="button"
+                                ref={manageResponsibilityGearRef}
+                                onClick={() => setManageResponsibilityOpen(true)}
+                                aria-label="Manage responsibility"
+                                title="Manage responsibility — who contractually owes, from a date"
+                                data-financials-manage-responsibility="gear"
+                                className="inline-flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded text-alloy-midnight/45 transition hover:bg-alloy-stone/15 hover:text-alloy-bend-pine focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40"
+                            >
+                                <Settings2 aria-hidden size={14} strokeWidth={1.9} />
+                            </button>
+                        ) : null}
                         {lens === "payments" && payerChoices.length > 1 ? (
                             <LensFilter
                                 testId="payer"
@@ -763,6 +852,54 @@ export default function FinancialsDetailCard({
                   * existed, because nothing owned payers, methods or autopay. W2 owns methods, so
                   * they are presented here directly rather than behind a button that goes nowhere.
                   */}
+                {/*
+                  * THE PANEL THE GEAR OPENS. Hosted: this card owns the trigger and the open state,
+                  * the panel owns everything else — the scope question, the arrangement in force,
+                  * effective dating, specificity, and `billing.configure_responsibility`, which
+                  * remains the only thing that writes.
+                  *
+                  * `defaultScopeMemberId` is null because Details administers the ACCOUNT, so the
+                  * household is what this host means. It is a stated default, not an absence, and
+                  * the operator still confirms the scope before anything is written.
+                  */}
+                {responsibilityAdmin ? (
+                    /*
+                     * ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT — the containment Accounts has
+                     * carried since 24ffad5bb, now here too. The workspace behind this listens for
+                     * Escape, so a depth card that does not answer FIRST hands its own dismissal to
+                     * its host: measured on the deployed build, one Escape closed the card AND the
+                     * whole Details surface, and the operator lost the account, the lens, the
+                     * filters and their place in the ledger. The card is the innermost open thing,
+                     * so it answers and stops there — and focus goes back to the gear that opened
+                     * it rather than to <body>.
+                     */
+                    <div
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            closeResponsibility();
+                        }}
+                    >
+                    <FinancialsResponsibilityPanel
+                        customerId={responsibilityAdmin.customerId}
+                        customerMemberId={null}
+                        subjectLabel={responsibilityAdmin.householdName ?? null}
+                        parties={responsibilityAdmin.parties}
+                        memberOptions={responsibilityScopeMembers}
+                        defaultScopeMemberId={null}
+                        hostedOpen={manageResponsibilityOpen}
+                        onHostedClose={closeResponsibility}
+                        onCommitted={async () => {
+                            /* Committed truth is re-read; the card does not report its own success. */
+                            await responsibilityAdmin.onCommitted();
+                            closeResponsibility();
+                        }}
+                    />
+                    </div>
+                ) : null}
+
                 {paymentMethodsAccount?.customerId ? (
                     <div className="alloy-os-fdetail__methods" data-financials-payment-methods="detail">
                         <PaymentMethodsSection

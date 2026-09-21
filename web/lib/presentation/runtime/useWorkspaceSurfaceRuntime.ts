@@ -235,6 +235,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
 
     // Gate on org readiness — a totals request racing org-context bootstrap 404s transiently.
     const workViewTotalsState = useWorkViewTotalsState({
+        ownerLabel: "workspace-surface",
         targets: workViewTotalTargets,
         selectedSiteId,
         enabled: orgId != null,

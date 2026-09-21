@@ -160,7 +160,16 @@ describe("the child path reuses the production provider and cannot degrade to fa
         // The answer takes its rows from it…
         expect(read(ANSWER)).toContain("loadChildGrainMembersForLens");
         // …and the totals route takes its count from it, never from the opportunity lane.
-        const totals = read("app/api/admin/queue-view-totals/route.ts");
+        /*
+         * RE-ANCHORED: the count evaluation moved out of the route into the canonical evaluator so
+         * the document seed and the endpoint share ONE predicate. The rule this gate protects is
+         * unchanged — rows and counts must come from the same membership — it simply follows the
+         * code to its new owner. Both files are read, so the rule cannot be satisfied by the route
+         * merely re-importing something.
+         */
+        const totals =
+            read("lib/queues/evaluateWorkViewTotalsForGroup.ts") +
+            read("app/api/admin/queue-view-totals/route.ts");
         expect(totals).toContain("countChildGrainMembersForLens");
         expect(totals).toContain("workViews: laneViews");
         expect(totals).not.toContain("workViews: requestedViews");

@@ -31,9 +31,13 @@ import {
 } from "@/lib/admin/locationDisplayLabel";
 import {
     buildSubjectEmploymentContext,
+    buildSubjectAvailabilityContext,
+    buildSubjectQualificationsContext,
+    buildSubjectReadinessContext,
     buildSubjectHouseholdContext,
     buildSubjectIdentityContext,
     buildSubjectProcessContexts,
+    buildSubjectCompensationContext,
     buildSubjectScheduleContext,
     type SubjectProcessRow,
     type SubjectScheduleRow,
@@ -51,6 +55,12 @@ import {
 const LIVE_SCHEDULE_STATUSES = ["planned", "active", "ending"];
 
 export type LoadSubjectContextsInput = {
+    /**
+     * Whether THIS CALLER may see compensation. Resolved from `ctx.permissionKeys`
+     * by the route; defaulted to false here so a caller that forgets it discloses
+     * nothing rather than everything.
+     */
+    canReadCompensation?: boolean;
     supabase: SupabaseClient;
     orgId: string;
     dimensions: AdminAccessScopeDimensions;
@@ -164,6 +174,27 @@ export async function loadSubjectContexts(
 
     const employmentContext = buildSubjectEmploymentContext(employment, subjectId);
     if (employmentContext) contexts.push(employmentContext);
+
+    // Beside Employment, from the same composition, so the two can never disagree about whether
+    // this person is staff.
+    const qualificationsContext = buildSubjectQualificationsContext(employment, subjectId);
+    if (qualificationsContext) contexts.push(qualificationsContext);
+
+    // Beside the other two, from the same composition, so the three can never
+    // disagree about whether this person is staff.
+    const availabilityContext = buildSubjectAvailabilityContext(employment, subjectId);
+    if (availabilityContext) contexts.push(availabilityContext);
+
+    // Readiness reads the three above it, and is emitted from the same composition
+    // so all four agree about whether this person is staff.
+    const readinessContext = buildSubjectReadinessContext(employment, subjectId);
+    if (readinessContext) contexts.push(readinessContext);
+    // Absent unless the caller holds the capability. Defaults to false, so a caller
+    // that forgets to pass it sees no compensation rather than all of it.
+    const compensationContext = buildSubjectCompensationContext(
+        employment, subjectId, input.canReadCompensation === true,
+    );
+    if (compensationContext) contexts.push(compensationContext);
 
     /*
      * THE RECORD ITSELF, AND ITS FAMILY.

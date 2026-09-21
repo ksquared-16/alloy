@@ -1,0 +1,49 @@
+{
+  "trusted_host_action_id": "tha_3a0e7d5deba39d",
+  "query_hash": "bbb820d13abcb8395450541c70f9a7af9be2f061008ccf1dea4c38dcf549c8f6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:40:04.134Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3a0e7d5deba39d",
+    "query_hash": "bbb820d13abcb8395450541c70f9a7af9be2f061008ccf1dea4c38dcf549c8f6",
+    "authorization_id": "grnt_80f991a7f15f4b41",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:40:05.980Z",
+    "question_ids": [
+      "clockmech"
+    ],
+    "questions": {
+      "clockmech": {
+        "question_id": "clockmech",
+        "row_count": null,
+        "rows": [
+          {
+            "pg_cron_installed": false,
+            "pg_net_installed": false,
+            "pg_cron_available": true,
+            "pg_net_available": true,
+            "vault_available": true,
+            "vault_installed": true,
+            "installed_extensions": [
+              "btree_gist",
+              "pg_stat_statements",
+              "pgcrypto",
+              "plpgsql",
+              "supabase_vault",
+              "uuid-ossp"
+            ],
+            "observed_at": "2026-09-21 18:40:05.743077+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

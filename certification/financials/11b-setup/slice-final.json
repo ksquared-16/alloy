@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "present": true,
+    "value": "Available $125.00",
+    "cardText": "FINANCIALS · CURRENT PERIOD · September 2026 · CHARGES · Tuition · $1,450.00 · Fee · $150.00 · Consumable fee · $36.00 · DISCOUNTS & CREDITS · Credit · -$260.06 · Adjustment · $146.71 · Discount · -$145.00 · NET OBLIGATION · $1,487.87 · Add · DUE · $1,912.00 · $1,450.00 · 9 days past due · Balance ·"
+  },
+  "performance": {
+    "shellUsableMs": 138,
+    "forecastMs": 1439,
+    "shellNotBlocked": true
+  },
+  "forecast": {
+    "present": true,
+    "text": "DISCOUNTS · discount · $18.50 expected to apply",
+    "outcomes": [
+      {
+        "kind": "expected",
+        "reason": null,
+        "policy": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "text": "discount · $18.50 expected to apply"
+      }
+    ]
+  },
+  "accounts": {
+    "value": "$125.00",
+    "saysDeposit": false,
+    "zeroShown": true
+  },
+  "target": {
+    "unified": true,
+    "householdOffered": true,
+    "children": [
+      {
+        "id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "checked": false
+      },
+      {
+        "id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "checked": true
+      },
+      {
+        "id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "checked": false
+      },
+      {
+        "id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+        "checked": true
+      }
+    ],
+    "summary": "Certb Certhouse",
+    "legacySelectPresent": false,
+    "legacyAlsoBill": false,
+    "submitDisabled": false
+  },
+  "details": {
+    "value": null
+  }
+}

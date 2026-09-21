@@ -153,6 +153,48 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * of the one owner. `scheduling` stays a separate card answering a separate question.
      */
     "staff",
+    /**
+     * @grain person — the qualifications and certifications this employee holds, what needs
+     * attention, and which configured requirements apply to their work.
+     *
+     * A SEPARATE card from `staff`, not a section inside it, because it answers a separate
+     * question and its answer changes on a different clock: employment facts change when
+     * someone is hired, moved or ended; qualification standing changes by the passage of a
+     * date. Folding it in would have put an expiring credential behind an expander whose
+     * headline says "Active".
+     *
+     * It deliberately does NOT publish a global Staff Ready / Blocked verdict. That verdict
+     * spans more than qualifications and belongs to Staff Readiness; asserting it here would
+     * make this card the owner of a truth it can only see part of.
+     */
+    "staff_qualifications",
+    /**
+     * @grain person — when this employee CAN work: the recurring weekly pattern,
+     * its effective dates, and the dated exceptions that replace it.
+     *
+     * A THIRD person-grain card, and deliberately not folded into `staff` or
+     * `staff_qualifications`. Employment says who works here; qualifications say
+     * what they are cleared to do; availability says when they can be asked. Three
+     * questions, three clocks — a pattern changes when someone renegotiates their
+     * week, a credential lapses by a date, employment changes when someone is hired.
+     *
+     * It shows availability, never the SCHEDULE. What the organization decided
+     * someone will work is `scheduling`'s answer, and this card creates none of it.
+     */
+    "staff_availability",
+    /**
+     * @grain person — is this employee operationally ready, and what needs attention?
+     *
+     * A PROJECTION card. It owns no facts: employment, qualifications and their
+     * requirements are all canonical elsewhere, and this reads the platform's own
+     * readiness result over them. Nothing is stored, so there is no state here that
+     * can go stale.
+     *
+     * It is not the case-grain `readiness_kpi`, which asks whether a FAMILY can
+     * advance. Same word, different subject and different inputs.
+     */
+    "staff_readiness",
+    "staff_compensation",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",

@@ -366,7 +366,6 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $1,665" },
-    historyLine: "Last payment · $1,665 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
@@ -409,7 +408,7 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
     pastDue: {
         amount: "$255",
         oldest: "Aug 15",
-        age: "10 days past due",
+        age: "10 days",
         note: "Visa •••• 4242 declined Aug 16",
     },
     ledger: [
@@ -430,7 +429,6 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         autopayHealthy: false,
         nextChargeLabel: "Retry after payment method update",
     },
-    historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
@@ -479,7 +477,6 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance", funding: true },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $965" },
-    historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.

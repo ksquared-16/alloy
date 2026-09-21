@@ -90,18 +90,17 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         encodedDensity: "standard",
     },
     {
+        /*
+         * ASSIGNMENT TAKES THE WHOLE ROW IT USED TO SHARE. Billing Preview sat at 7/6 beside it
+         * and is retired from normal composition (Financials 11B): tuition is part of an
+         * Assignment, not an independent operational concept, and this card now carries what that
+         * card was placed for. Leaving the half-row empty would be the layout still describing the
+         * old product.
+         */
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
-    },
-    {
-        key: "billing_preview",
-        tier: "context",
-        visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 12, rowStart: 8, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },
@@ -179,6 +178,79 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         // 12-column card forcing the panel out of `lanes`; that rule is gone with the lane reading.)
         area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
         encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * The second person-grain card, and the first one earned under the rule above: it declares
+         * the `person` grain in the registry because it has canonical Person truth (qualifications
+         * hang off employment, which is person-owned), AND it belongs on the default surface
+         * because an expiring credential is not something an operator should have to go looking
+         * for.
+         *
+         * It is NOT a sparse-panel exception. On a person who has never been employed it renders
+         * nothing at all — there is no employment to hang a qualification from — so it cannot
+         * become the empty shell the note above warns about.
+         */
+        key: "staff_qualifications",
+        tier: "reference",
+        visibility: "visible",
+        // Beside Staff, not below it: the two are read together, and the six remaining columns are
+        // exactly what the left band leaves.
+        area: { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * The third person-grain card, earned the same way the second was: declared
+         * for the grain AND placed here. On a person who has never been employed it
+         * renders nothing, so it cannot become an empty shell asserting a working
+         * relationship that does not exist.
+         */
+        key: "staff_availability",
+        tier: "reference",
+        visibility: "visible",
+        // Beneath the two above, full width: a week of windows reads as a row of
+        // days, and squeezing it into six columns would wrap every one of them.
+        area: { colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 3 },
+        encodedSpan: 2,
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * The fourth person-grain card, earned the same way: declared for the grain
+         * AND placed here. It reads LAST because it is a summary of the three above
+         * it — an operator who wants the verdict sees it after the facts it derives
+         * from, and one who wants the facts is not made to read a verdict first.
+         */
+        key: "staff_readiness",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
+        encodedSpan: 2,
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * COMPENSATION reads LAST, and the order is the argument.
+         *
+         * It is the most sensitive card in the family and the least often the reason
+         * an operator opened the record — somebody checking a badge number or a
+         * credential should not scroll past a salary to reach it. Placed after the
+         * verdict rather than beside the identity, so pay is something you go to
+         * rather than something you land on.
+         *
+         * It is also the only card here that may not render at all: the context is
+         * withheld from a caller without `staff.compensation.read`, and the card
+         * returns null on a 403. A placed card that renders nothing leaves no gap —
+         * the grid closes over it, exactly as it does for a person with no employment.
+         */
+        key: "staff_compensation",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 3 },
+        encodedSpan: 2,
         encodedDensity: "standard",
     },
 ];
@@ -305,25 +377,11 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "financials",
         tier: "work",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 8, rowStart: 3, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 12, rowStart: 3, rowSpan: 2 },
         encodedSpan: 1,
         // `standard` IS the V5 summary. The compact density is a different placement — supporting
         // financial context inside another process — and states the balance without the breakdown.
         encodedDensity: "standard",
-    },
-    {
-        /*
-         * The 4/12 companion, and a genuine one rather than filler. Billing Preview answers "is
-         * billing CONFIGURED?" while Financials answers "what is owed?" — the readiness of the
-         * arrangement beside the state of the account, which is the pairing an operator actually
-         * reads together.
-         */
-        key: "billing_preview",
-        tier: "context",
-        visibility: "visible",
-        area: { colStart: 9, colSpan: 4, rowStart: 3, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
     },
     {
         /*

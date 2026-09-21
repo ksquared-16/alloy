@@ -27,6 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPeriodBillableCadence } from "@/lib/financials/billingPeriod";
 
 import { composeCommercialExport } from "@/lib/commercial/execution/export/composeCommercialExport";
 import {
@@ -79,6 +80,7 @@ export type PricingCommitRefusalCode =
     | "override_reason_required"
     | "override_matches_recommendation"
     | "term_already_accepted"
+    | "cadence_not_billable"
     | "db_error";
 
 export type PricingCommitResult =
@@ -168,6 +170,37 @@ async function insertTerm(
 ): Promise<PricingCommitResult> {
     const { read, resolution, option } = args;
     const effectiveStart = read.facts.asOf;
+
+    /*
+     * ── A TERM THE PLATFORM CANNOT BILL IS NOT A TERM ─────────────────────────────────────────
+     *
+     * `cadence_key` is free text: no CHECK, no enum, no foreign key. The platform seeds no
+     * cadences either — `billing_cadences` is authored by the organisation, and the authoring
+     * surface mints the key from whatever label was typed. So nothing between a typed label and
+     * this INSERT has ever asked whether the recurrence engine can derive periods for it.
+     *
+     * Measured in this tenant: "Semi-Annual" is authored and active, and
+     * `isPeriodBillableCadence` does not know it. Accepting a term on it would have written a
+     * commercial agreement the platform can never generate an obligation for — generation refuses
+     * such a cadence, correctly, but it refuses in a run outcome long after the family agreed.
+     *
+     * The refusal belongs here, where the agreement is made. Usage-priced cadences (`hourly`,
+     * `per_session`) reach the same answer for the same reason: they price a unit, not an
+     * interval, and a recurring term is the wrong shape for them.
+     *
+     * This does not delete or hide anything already authored. It declines to create NEW commercial
+     * truth the platform cannot execute.
+     */
+    if (!isPeriodBillableCadence(option.cadenceKey)) {
+        return {
+            ok: false,
+            code: "cadence_not_billable",
+            message:
+                `Tuition cannot be accepted on the "${option.cadenceKey}" billing frequency: the platform `
+                + "cannot derive billing periods for it, so nothing would ever be generated. Choose a "
+                + "frequency with a recurrence, or correct the frequency in Financials configuration.",
+        };
+    }
 
     // A live term already standing for this assignment on this date.
     const { data: liveRows, error: liveError } = await supabase

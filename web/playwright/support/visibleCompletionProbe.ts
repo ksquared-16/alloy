@@ -126,7 +126,28 @@ export function installVisibleCompletionProbe(): void {
             if (!rules || depth > 4) return;
             for (let i = 0; i < rules.length; i++) {
                 const rule = rules[i] as CSSStyleRule & { cssRules?: CSSRuleList };
-                const sel = typeof rule.selectorText === "string" ? rule.selectorText : "";
+                const rawSel = typeof rule.selectorText === "string" ? rule.selectorText : "";
+                /*
+                 * STRIP CSS ESCAPES BEFORE LOOKING FOR ATTRIBUTE SELECTORS.
+                 *
+                 * The harvester treated every "[" as the start of an attribute selector. Tailwind
+                 * arbitrary variants produce CLASS names containing escaped brackets — the live
+                 * sheet carries `.\[name\:redacted\]` — so "name" was harvested as a styled
+                 * attribute when nothing styles it at all.
+                 *
+                 * That single misparse made WU-04 the apparent owner of ~4.4s of "authoritative
+                 * visible state": the late mutation there is the removal of `name` from an INPUT,
+                 * and removing it was measured on the deployed page to produce ZERO computed-style
+                 * and ZERO geometry difference. An identity attribute was being scored as visible
+                 * truth.
+                 *
+                 * Removing each backslash-escaped character leaves genuine attribute selectors
+                 * intact (`input[name="x"]`, `[data-state="open"]` carry no escapes) while an
+                 * escaped class name collapses to a plain token with no bracket left to match.
+                 * This is a parsing repair, not a relaxation: no attribute that actually styles
+                 * the surface stops counting.
+                 */
+                const sel = rawSel.replace(/\\./g, "");
                 const re = /\[\s*([A-Za-z_:][-\w:.]*)/g;
                 let m: RegExpExecArray | null = re.exec(sel);
                 while (m !== null) { out.add(m[1].toLowerCase()); m = re.exec(sel); }
@@ -536,6 +557,25 @@ export function installVisibleCompletionProbe(): void {
         perCard: {},
     };
 
+    /*
+     * POST-COMPLETE RECORDS (P0-7.6 — the double-commit causal chain).
+     *
+     * `postCompleteVisibleMutationCount` has always been a delta of the RAW V1 counter, so it
+     * answers "how many visible mutations happened after the quiet window" — not the metric that
+     * is actually gated, POST_COMPLETE_VISIBLE_AUTHORITATIVE_MUTATIONS. The V2.1 classifier
+     * already knows which kinds advance finality; it was simply never consulted here.
+     *
+     * This records each post-complete record WITH the classification the unchanged classifier
+     * gives it, plus the identity needed to correlate it to a React commit: batch id, section,
+     * generation, and the before/after fingerprints. Recording is armed by the harness at the
+     * settle point, so nothing is captured during normal first-order assembly.
+     */
+    const postRecords: Array<Record<string, unknown>> = [];
+    (window as unknown as { __p076post?: { armed: boolean; records: Array<Record<string, unknown>> } }).__p076post = {
+        armed: false,
+        records: postRecords,
+    };
+
     const mark = (recs?: MutationRecord[]) => {
         const now = performance.now();
         w.__p076!.last = now; w.__p076!.count++;
@@ -572,6 +612,29 @@ export function installVisibleCompletionProbe(): void {
             if (live) v2.latestGeneration = live;
             const genOfMutation = generationOf(judged[0]);
             const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
+
+            const post = (window as unknown as { __p076post?: { armed: boolean; records: Array<Record<string, unknown>> } }).__p076post;
+            if (post?.armed && post.records.length < 400) {
+                const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
+                post.records.push({
+                    t: Math.round(now - w.__p076!.t0),
+                    batchId,
+                    kind,
+                    kind21,
+                    advancesFinality: ADVANCES_FINALITY[kind21] === true,
+                    type: r.type,
+                    attributeName: r.attributeName ?? null,
+                    sectionId: blockingHost(r.target) ?? attribute(r.target),
+                    parentPath: el ? `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}` : null,
+                    componentId: el?.closest?.("[data-alloy-section-id]")?.getAttribute("data-alloy-section-id") ?? null,
+                    addedFp: fingerprintList(r.addedNodes),
+                    removedFp: fingerprintList(r.removedNodes),
+                    identical: fingerprintList(r.addedNodes) === fingerprintList(r.removedNodes),
+                    generation: genOfMutation,
+                    liveGeneration: live,
+                    stale,
+                });
+            }
 
             const host = blockingHost(r.target);
             if (host) {

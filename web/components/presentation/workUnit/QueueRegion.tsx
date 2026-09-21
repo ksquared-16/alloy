@@ -232,8 +232,30 @@ export function QueueRegion({
             .join(",");
     }, [queue.rows, principalUserId, orgId]);
 
+    /*
+     * THE ANSWER MAY ALREADY STATE THIS — ASK ONLY WHEN IT DOES NOT.
+     *
+     * Measured on the canonical six-card baseline (n=11, SHA 786a96eb1): this hydrate was the
+     * product's completion owner. WU-05 set FIRST_ORDER_VISIBLE_COMPLETE in 11 of 11, its
+     * completion-setting mutation was the removal of an unread dot, and the round trip below
+     * measured 592ms (P50) — the dominant interval after the document landed.
+     *
+     * The document now resolves `personal_seen` during composition, from the same canonical
+     * resolver this endpoint uses. When every row carries it the first frame is already correct,
+     * so there is nothing to correct and nothing to ask.
+     *
+     * The test is ALL rows, not any: a partially-answered page still needs the network to settle
+     * the rest, and a row without a verdict falls back to "unseen" — which must be corrected, not
+     * left standing. Absent, unavailable or partial all keep the original behaviour intact.
+     */
+    const serverResolvedAllPersonalSeen = useMemo(() => {
+        if (!queue.rows.length) return false;
+        return queue.rows.every((row) => row.context?.personal_seen != null);
+    }, [queue.rows]);
+
     // Hydrate personal seen for visible occurrence keys (stale refresh cannot revive cleared dots).
     useEffect(() => {
+        if (serverResolvedAllPersonalSeen) return;
         if (!ackOccurrenceKeys) return;
         let cancelled = false;
         void (async () => {
@@ -253,7 +275,7 @@ export function QueueRegion({
         return () => {
             cancelled = true;
         };
-    }, [ackOccurrenceKeys]);
+    }, [ackOccurrenceKeys, serverResolvedAllPersonalSeen]);
     const holdActive = queue.loading && queue.rows.length > 0;
     const rowsForList = queueRowsForListDuringHold({
         queueRows: queue.rows,

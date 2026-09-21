@@ -25,13 +25,63 @@
  * never checks them against an obligation, and never reports success from anything but committed
  * persistence re-read.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { isPostedStatus } from "@/lib/financials/billableSource";
 
 export const CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
+
+/**
+ * HOUSEHOLD IS A VALUE, NOT AN ABSENCE. A select whose empty option meant "the whole account"
+ * would let an operator who chose nothing commit money for everyone — the defect class this
+ * product already removed from Add Charge, on the surface that decides who owes.
+ */
+export const HOUSEHOLD_SCOPE = "__household__";
+
+/** Cents as the operator reads them. Formatting only — no figure is derived here. */
+function money(cents: number): string {
+    return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+type ScopeArrangement = {
+    arrangement: {
+        id: string;
+        customerMemberId: string | null;
+        effectiveStart: string | null;
+        effectiveEnd: string | null;
+        shares: { id: string; name: string; amountCents: number | null; method: string | null }[];
+    } | null;
+    /** False when the household's arrangement is merely REACHING this child. */
+    authoredAtRequestedScope: boolean;
+};
+
+/**
+ * What already governs the scope the operator has selected.
+ *
+ * Specificity is not decided here. The route asks the one grain-aware reader every other consumer
+ * asks, and this renders its answer — because a management card that computed precedence itself
+ * would be the second opinion this thread just finished removing from the read path.
+ */
+async function readScopeArrangement(
+    customerId: string | null,
+    customerMemberId: string | null,
+): Promise<ScopeArrangement | null> {
+    if (!customerId) return null;
+    const qs = new URLSearchParams({ customer_id: customerId });
+    if (customerMemberId) qs.set("customer_member_id", customerMemberId);
+    try {
+        const res = await fetch(`/api/admin/financials/responsibility-arrangement?${qs.toString()}`, {
+            credentials: "include",
+        });
+        if (!res.ok) return null;
+        return (await res.json()) as ScopeArrangement;
+    } catch {
+        return null;
+    }
+}
 
 type ShareDraft = {
     responsiblePartyId: string;
@@ -182,6 +232,10 @@ export default function FinancialsResponsibilityPanel({
     subjectLabel,
     arrangement,
     parties,
+    memberOptions,
+    defaultScopeMemberId,
+    hostedOpen,
+    onHostedClose,
     onCommitted,
 }: {
     customerId: string | null;
@@ -207,9 +261,49 @@ export default function FinancialsResponsibilityPanel({
     arrangement?: { effectiveStart: string | null; shares: { responsiblePartyId: string | null }[] } | null;
     /** The parties already on record, so the operator edits what exists rather than inventing it. */
     parties: { personId: string | null; name: string }[];
+    /*
+     * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
+     *
+     * Charge detail has ONE child in view and the scope control offers Household or that child,
+     * which is the whole truth there. Account administration has no such context: the operator is
+     * choosing which scope to govern, so the choice must be the household's actual children.
+     *
+     * Absent, the panel behaves exactly as it always has. Given, APPLIES TO becomes the first
+     * question and lists Household plus these members.
+     */
+    memberOptions?: { customerMemberId: string; label: string }[];
+    /*
+     * The scope this host means by default. Assignment already has a child in hand and means that
+     * child; Financials Details is administering the account and means the household. Neither is
+     * a write — the operator still confirms — and neither is an absence: the value is stated.
+     */
+    defaultScopeMemberId?: string | null;
+    /** Opened by an external control — the Manage responsibility gear — instead of its own button. */
+    hostedOpen?: boolean;
+    onHostedClose?: () => void;
     onCommitted: () => Promise<void> | void;
 }) {
-    const [open, setOpen] = useState(false);
+    const [selfOpen, setSelfOpen] = useState(false);
+    /*
+     * ── WHO OWNS THE TRIGGER ──────────────────────────────────────────────────────────────────
+     *
+     * Charge detail gives the panel its own button and the panel owns its open state. Account
+     * administration puts the trigger elsewhere — the Manage responsibility gear beside the
+     * responsible-party filter — so the host owns it there. One component, two hosts; not a
+     * second panel.
+     */
+    const hosted = hostedOpen !== undefined;
+    const open = hosted ? Boolean(hostedOpen) : selfOpen;
+    const setOpen = useCallback(
+        (next: boolean) => {
+            if (hosted) {
+                if (!next) onHostedClose?.();
+                return;
+            }
+            setSelfOpen(next);
+        },
+        [hosted, onHostedClose],
+    );
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
     /*
@@ -222,10 +316,65 @@ export default function FinancialsResponsibilityPanel({
      * the common case and the one this panel has always written.
      */
     const [scope, setScope] = useState<"household" | "child">("household");
+    /*
+     * ── WHICH CHILD, WHEN THERE IS MORE THAN ONE ──────────────────────────────────────────────
+     *
+     * `scope` answers household-or-child and is what charge detail has always used. Account
+     * administration also has to say WHICH child, and the honest default is none: an operator who
+     * has not chosen a scope has not chosen Household either. `HOUSEHOLD_SCOPE` is an explicit
+     * value, never the absence of one — an empty selection meaning Household is the exact defect
+     * class this product removed from Add Charge.
+     */
+    const administering = (memberOptions?.length ?? 0) > 0;
+    const [scopeMemberId, setScopeMemberId] = useState<string>(defaultScopeMemberId ?? HOUSEHOLD_SCOPE);
+    const [scopeArrangement, setScopeArrangement] = useState<ScopeArrangement | null>(null);
+    const [scopeLoading, setScopeLoading] = useState(false);
+    /** The grain actually being written: account administration reads it from the member choice. */
+    const effectiveMemberId = administering
+        ? (scopeMemberId === HOUSEHOLD_SCOPE ? null : scopeMemberId)
+        : (scope === "child" ? customerMemberId : null);
     const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
     const [preview, setPreview] = useState<PreviewPayload>(null);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<string | null>(null);
+
+    /*
+     * A HOSTED OPEN STILL HAS TO LOAD. `start()` is the self-hosted button's path; when the gear
+     * opens the card there is no click here to run it, and a card with no candidates would invite
+     * the operator to arrange responsibility between nobody.
+     */
+    useEffect(() => {
+        if (!hosted || !open || shares.length > 0) return;
+        let cancelled = false;
+        void loadCandidates(customerId, chargeId ?? null, parties).then((loaded) => {
+            if (cancelled) return;
+            setShares(loaded.candidates);
+            if (loaded.error) setError(loaded.error);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [hosted, open, shares.length, customerId, chargeId, parties]);
+
+    /*
+     * CHANGING THE SCOPE IS CHANGING THE SUBJECT. The arrangement shown must be the one governing
+     * the scope now selected, never the last one looked at — an operator reading Certa's figures
+     * under "Household" would supersede the wrong arrangement.
+     */
+    useEffect(() => {
+        if (!administering || !open) return;
+        let cancelled = false;
+        setScopeLoading(true);
+        setScopeArrangement(null);
+        void readScopeArrangement(customerId, effectiveMemberId).then((r) => {
+            if (cancelled) return;
+            setScopeArrangement(r);
+            setScopeLoading(false);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [administering, open, customerId, effectiveMemberId]);
 
     const start = useCallback(async () => {
         setPreview(null);
@@ -251,7 +400,7 @@ export default function FinancialsResponsibilityPanel({
                     customerId,
                     customerMemberId,
                     /* The arrangement's own grain — not the charge's, which never changes here. */
-                    arrangementMemberId: scope === "child" ? customerMemberId : null,
+                    arrangementMemberId: effectiveMemberId,
                     effectiveStart,
                     shares,
                 });
@@ -288,6 +437,8 @@ export default function FinancialsResponsibilityPanel({
     );
 
     if (!open) {
+        /* The gear is the trigger when hosted; a second one here would be two ways in. */
+        if (hosted) return null;
         return (
             <div className="mb-3">
                 <button
@@ -340,10 +491,17 @@ export default function FinancialsResponsibilityPanel({
         );
     }
 
+    /*
+     * The card is focusable (-1) so that IT, not the workspace behind it, is what Escape reaches,
+     * and so a keyboard operator who opened it with Enter is already inside it. -1 keeps it
+     * reachable by script and click without adding a stop to the tab order.
+     */
     return (
         <section
             className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
             data-financials-manage-responsibility="open-panel"
+            tabIndex={-1}
+            ref={(el) => el?.focus({ preventScroll: true })}
         >
             <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
             <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
@@ -356,22 +514,95 @@ export default function FinancialsResponsibilityPanel({
               * Offered only where a child is actually in view; on an account-wide charge there is
               * no second scope to choose and a control with one option divides nothing.
               */}
-            {customerMemberId ? (
-                <label className="mt-2 block text-[11px] text-alloy-midnight/60" data-financials-arrangement-scope={scope}>
+            {/*
+              * ── ACCOUNT ADMINISTRATION ASKS THE SCOPE FIRST ───────────────────────────────
+              *
+              * Charge detail already knows whose charge it is, so scope is a qualifier there.
+              * Here the operator is choosing which scope to govern, and every field below —
+              * the party, the amount, the date, and what is already in force — means something
+              * different depending on the answer. So it is the first question, and it is
+              * answered explicitly: HOUSEHOLD_SCOPE is a value, never an empty selection.
+              */}
+            {administering ? (
+                <label
+                    className="mt-2 block text-[11px] text-alloy-midnight/60"
+                    data-financials-arrangement-scope={effectiveMemberId ? "child" : "household"}
+                    data-financials-arrangement-member={effectiveMemberId ?? "household"}
+                >
                     Applies to
-                    <select
-                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight"
-                        data-testid="responsibility-scope"
-                        value={scope}
-                        onChange={(e) => {
-                            setScope(e.target.value === "child" ? "child" : "household");
+                    <AlloySelect
+                        testId="responsibility-scope"
+                        aria-label="Applies to"
+                        density="compact"
+                        allowEmpty={false}
+                        value={scopeMemberId}
+                        options={[
+                            { value: HOUSEHOLD_SCOPE, label: "Household — the whole account" },
+                            ...(memberOptions ?? []).map((m) => ({
+                                value: m.customerMemberId,
+                                label: m.label,
+                            })),
+                        ]}
+                        onChange={(next) => {
+                            setScopeMemberId(next);
                             /* A different scope is a different arrangement; its preview is not this one's. */
                             setPreview(null);
                         }}
-                    >
-                        <option value="household">Household — the whole account</option>
-                        <option value="child">{subjectLabel ? `${subjectLabel} only` : "This child only"}</option>
-                    </select>
+                    />
+                    {/*
+                      * WHAT ALREADY GOVERNS THIS SCOPE, and whether it belongs to this scope.
+                      * Inherited household money shown as though the child had been given it
+                      * deliberately is the misreading this sentence exists to prevent.
+                      */}
+                    {scopeLoading ? (
+                        <span className="mt-1 block text-[11px] text-alloy-midnight/45">Reading what applies…</span>
+                    ) : scopeArrangement?.arrangement ? (
+                        <span
+                            className="mt-1 block text-[11px] text-alloy-midnight/55"
+                            data-financials-scope-arrangement={scopeArrangement.authoredAtRequestedScope ? "authored" : "inherited"}
+                            data-financials-scope-arrangement-id={scopeArrangement.arrangement.id}
+                        >
+                            {scopeArrangement.authoredAtRequestedScope
+                                ? effectiveMemberId
+                                    ? "Overrides household responsibility."
+                                    : "Household responsibility."
+                                : "No child-specific arrangement — household responsibility applies."}{" "}
+                            {scopeArrangement.arrangement.shares
+                                .map((sh) => `${sh.name}${sh.amountCents != null ? ` ${money(sh.amountCents)}` : ""}`)
+                                .join(" · ")}
+                            {scopeArrangement.arrangement.effectiveStart
+                                ? ` · from ${formatDisplayDate(scopeArrangement.arrangement.effectiveStart)}`
+                                : ""}
+                            {scopeArrangement.arrangement.effectiveEnd
+                                ? ` until ${formatDisplayDate(scopeArrangement.arrangement.effectiveEnd)}`
+                                : ""}
+                            {scopeArrangement.authoredAtRequestedScope ? " · saving supersedes it" : ""}
+                        </span>
+                    ) : (
+                        <span className="mt-1 block text-[11px] text-alloy-midnight/55" data-financials-scope-arrangement="none">
+                            Nothing governs this scope yet — saving creates the first arrangement.
+                        </span>
+                    )}
+                </label>
+            ) : customerMemberId ? (
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60" data-financials-arrangement-scope={scope}>
+                    Applies to
+                    <AlloySelect
+                        testId="responsibility-scope"
+                        aria-label="Applies to"
+                        density="compact"
+                        allowEmpty={false}
+                        value={scope}
+                        options={[
+                            { value: "household", label: "Household — the whole account" },
+                            { value: "child", label: subjectLabel ? `${subjectLabel} only` : "This child only" },
+                        ]}
+                        onChange={(next) => {
+                            setScope(next === "child" ? "child" : "household");
+                            /* A different scope is a different arrangement; its preview is not this one's. */
+                            setPreview(null);
+                        }}
+                    />
                 </label>
             ) : null}
 

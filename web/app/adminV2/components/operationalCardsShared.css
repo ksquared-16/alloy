@@ -953,14 +953,6 @@
   font-weight: 600;
 }
 /* When the ledger steps out of a primary zone it becomes one supporting line. */
-.alloy-os-billing__history {
-  margin: 9px 0 0;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
-  font-size: 11.5px;
-  color: var(--alloy-os-text-secondary, #4b5563);
-}
-
 /* payer strip — full width, below the zones, deliberately placed rather than left over. */
 .alloy-os-billing__payers {
   margin-top: 9px;
@@ -2886,6 +2878,11 @@
 .alloy-os-billing__cardlink:focus-visible {
   color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 78%, #04303f);
 }
+/*
+ * Navigation holds its own row beneath both commands, at the card's lower-right edge — the
+ * commands are a row above it. Sharing the command row reclaimed height but put a quiet link on
+ * the same baseline as a filled button, which reads as one group rather than two ranks.
+ */
 .alloy-os-billing__nav {
   grid-column: 1 / -1;
   display: flex;

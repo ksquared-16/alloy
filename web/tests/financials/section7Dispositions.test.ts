@@ -45,8 +45,16 @@ describe("THE GATE — a child-grain arrangement is operator-authorable (§7C)",
      * charges and be impossible for an operator to create or supersede.
      */
     it("offers the two legitimate scopes and sends the chosen one", () => {
-        expect(panel).toContain('data-testid="responsibility-scope"');
-        expect(panel).toContain('arrangementMemberId: scope === "child" ? customerMemberId : null');
+        /*
+         * The scope control is now the canonical `AlloySelect`, which takes the identifier as a
+         * `testId` prop and renders it as `data-testid`. The RULE is unchanged and is what is
+         * asserted: the control exists, it is the canonical one, and the chosen scope is what
+         * gets sent.
+         */
+        expect(panel).toContain('testId="responsibility-scope"');
+        expect(panel).toContain("<AlloySelect");
+        expect(panel).toContain("arrangementMemberId: effectiveMemberId");
+        expect(panel).toMatch(/effectiveMemberId = administering[\s\S]{0,200}scope === "child" \? customerMemberId : null/);
         expect(panel).toContain("customer_member_id: args.arrangementMemberId");
     });
 
@@ -57,7 +65,17 @@ describe("THE GATE — a child-grain arrangement is operator-authorable (§7C)",
 
     /* A scope with nothing to choose between is not offered. */
     it("offers the control only where a child is actually in view", () => {
-        expect(panel).toMatch(/\{customerMemberId \? \([\s\S]{0,400}responsibility-scope/);
+        /*
+         * TWO PLACES OFFER A SCOPE, AND BOTH REQUIRE SOMETHING TO CHOOSE BETWEEN. Account
+         * administration offers it when the household has members to name; charge detail offers it
+         * when a child is in view. Neither renders a choice with one option.
+         */
+        const adminBranch = panel.slice(panel.indexOf("{administering ? ("), panel.indexOf(") : customerMemberId ? ("));
+        const childBranch = panel.slice(panel.indexOf(") : customerMemberId ? ("));
+        expect(adminBranch, "account administration offers the scope").toContain('testId="responsibility-scope"');
+        expect(childBranch, "and so does charge detail, where a child is in view").toContain('testId="responsibility-scope"');
+        expect(adminBranch.length, "the branches are distinct, not one window over both").toBeGreaterThan(0);
+        expect(panel).toContain("const administering = (memberOptions?.length ?? 0) > 0;");
     });
 });
 

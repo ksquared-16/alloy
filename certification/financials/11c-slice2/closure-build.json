@@ -1,0 +1,10 @@
+{
+  "gitSha": "33e8a90d9ea9e3fd2072935d9a79c0bfc044c028",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1162 from ksquared-16/agent/financials-11c-slice2\n\nFinancials 11C slice 2 — Escape dismisses the card, not Details",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-p0xjpyxsw-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_47exrXkeb7GYhTrgDvF4dhui6fmD",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+}

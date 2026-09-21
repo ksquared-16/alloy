@@ -201,6 +201,8 @@ export const employmentUpdateAction: RegisteredAction = {
                     payload.external_employee_id !== undefined
                         ? t(payload.external_employee_id) || null
                         : undefined,
+                badgeNumber:
+                    payload.badge_number !== undefined ? t(payload.badge_number) || null : undefined,
                 startDate: payload.start_date !== undefined ? t(payload.start_date) : undefined,
                 actorUserId: ctx.userId ?? null,
                 todayYmd,

@@ -141,6 +141,13 @@ export type ChargeDetail = {
     billingPeriodKey: string | null;
     billingPeriodLabel: string | null;
     accountingPeriod: { key: string; label: string | null; status: string; startsOn: string; endsOn: string } | null;
+    /**
+     * Set when the entry's own period was CLOSED and attribution deferred to a later open one —
+     * the date it was effective on. Null for an ordinary posting, so the two are distinguishable.
+     */
+    accountingDeferredFrom: string | null;
+    /** Present when attribution could not be READ — which is not the same as not posted. */
+    accountingReadError: string | null;
     glAccount: { code: string; name: string | null } | null;
 
     /*
@@ -261,7 +268,16 @@ export async function resolveChargeDetail(
     }
 
     const responsibilityRead = await readResponsibility(supabase, args.orgId, [chargeId]);
-    const accountArrangement = await readAccountArrangement(supabase, { orgId: args.orgId, customerId });
+    /*
+     * THE ARRANGEMENT IN FORCE FOR THIS CHARGE, not "whatever this account most recently arranged".
+     * The charge is for a child, and a child-scoped arrangement beats the household one — so the
+     * charge's own subject is what decides which arrangement governs it.
+     */
+    const accountArrangement = await readAccountArrangement(supabase, {
+        orgId: args.orgId,
+        customerId,
+        customerMemberId,
+    });
 
     /*
      * ── THE TWO PERIODS AND THE GL ACCOUNT ─────────────────────────────────────────────────────
@@ -290,16 +306,56 @@ export async function resolveChargeDetail(
     }
 
     let accountingPeriod: ChargeDetail["accountingPeriod"] = null;
+    /** The effective date whose own period was closed, when attribution was deferred. */
+    let accountingDeferredFrom: string | null = null;
+    /** Why the attribution is unknown, when it is — never conflated with "not posted". */
+    let accountingReadError: string | null = null;
     try {
-        const { data: entry } = await supabase
+        /*
+         * ── THE JOURNAL HAS NO `charge_id` COLUMN ─────────────────────────────────────────────
+         *
+         * This filtered `.eq("charge_id", chargeId)` against a column that does not exist. The
+         * charge is identified by `source_type = 'charge'` and `source_id`; the id also travels in
+         * `metadata.charge_id` for entries whose SOURCE is something else, such as a payment
+         * application. PostgREST answers an unknown column with an error, the `try` below swallowed
+         * it, and so EVERY charge — posted or not — reported "Not posted to a period yet".
+         *
+         * Measured: charge 18e860f9, status `posted`, accountingPeriod null. The accounting period
+         * row on charge detail had never once displayed a period.
+         */
+        const { data: entry, error: entryError } = await supabase
             .from("financial_journal_entries")
-            .select("accounting_period_id")
+            .select("accounting_period_id, effective_on, metadata")
             .eq("org_id", args.orgId)
-            .eq("charge_id", chargeId)
+            .eq("source_type", "charge")
+            .eq("source_id", chargeId)
             .not("accounting_period_id", "is", null)
             .limit(1)
             .maybeSingle();
-        const periodId = t((entry as { accounting_period_id?: unknown } | null)?.accounting_period_id);
+        /*
+         * A FAILED READ IS NOT "NOT POSTED". Those are different answers and only one of them is
+         * safe to show; the silence is what let a broken query look like an unposted charge.
+         */
+        if (entryError) throw new Error(`accounting attribution could not be read (${entryError.message.trim()})`);
+        const journal = entry as {
+            accounting_period_id?: unknown;
+            effective_on?: unknown;
+            metadata?: Record<string, unknown> | null;
+        } | null;
+        const periodId = t(journal?.accounting_period_id);
+        /*
+         * ── WHY IT LANDED WHERE IT DID ────────────────────────────────────────────────────────
+         *
+         * A closed accounting period does not refuse a posting — it defers it to the next open
+         * period and stamps the entry with where it came from. Without reading that stamp, an
+         * entry effective in September and reporting in October looks identical to one that was
+         * always an October entry, and the operator has no way to tell a deferral from an
+         * ordinary posting. The trigger records it; this is the read that makes it visible.
+         */
+        const meta = (journal?.metadata ?? {}) as Record<string, unknown>;
+        if (meta.accounting_period_deferred === true) {
+            accountingDeferredFrom = t(meta.accounting_period_deferred_from_date) || t(journal?.effective_on) || null;
+        }
         if (periodId) {
             const { data: period } = await supabase
                 .from("financial_accounting_periods")
@@ -324,8 +380,16 @@ export async function resolveChargeDetail(
                 };
             }
         }
-    } catch {
+    } catch (e) {
+        /*
+         * TOLERANT, BUT NOT SILENT. A charge whose attribution cannot be read is still a charge an
+         * operator must be able to open, so this does not fail the whole detail — but the reason is
+         * carried out rather than discarded. A bare `catch {}` here is what let a query against a
+         * non-existent column read as "not posted" on every charge in the system.
+         */
         accountingPeriod = null;
+        accountingDeferredFrom = null;
+        accountingReadError = e instanceof Error ? e.message : "accounting attribution could not be read";
     }
 
     let glAccount: ChargeDetail["glAccount"] = null;
@@ -430,6 +494,8 @@ export async function resolveChargeDetail(
         billingPeriodKey: billing.key,
         billingPeriodLabel: billing.key ? billingPeriodLabel(billing.key) : null,
         accountingPeriod,
+        accountingDeferredFrom,
+        accountingReadError,
         glAccount,
         customerId,
         customerMemberId,

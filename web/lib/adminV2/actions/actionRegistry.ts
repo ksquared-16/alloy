@@ -26,6 +26,8 @@ import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definition
 import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
 import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
 import { staffAddAction } from "@/lib/adminV2/actions/definitions/staffAddAction";
+import { STAFF_AVAILABILITY_ACTIONS } from "@/lib/adminV2/actions/definitions/staffAvailabilityActions";
+import { STAFF_QUALIFICATION_ACTIONS } from "@/lib/adminV2/actions/definitions/staffQualificationActions";
 import { childAddAction } from "@/lib/adminV2/actions/definitions/childAddAction";
 import {
     enrollmentDirectAction,
@@ -41,6 +43,7 @@ import {
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { serviceDayExceptionActions } from "@/lib/adminV2/actions/definitions/serviceDayExceptionActions";
+import { commercialPolicyExceptionActions } from "@/lib/adminV2/actions/definitions/commercialPolicyExceptionActions";
 import { enrollmentPricingActions } from "@/lib/adminV2/actions/definitions/enrollmentPricingActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
 import { financialReductionActions } from "@/lib/adminV2/actions/definitions/financialReductionActions";
@@ -70,6 +73,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     assignmentDeleteProposedAction,
     assignmentChangeRoomAction,
     staffAddAction,
+    ...STAFF_QUALIFICATION_ACTIONS,
+    ...STAFF_AVAILABILITY_ACTIONS,
     childAddAction,
     enrollmentStartAction,
     enrollmentDirectAction,
@@ -80,6 +85,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
     ...serviceDayExceptionActions,
+    ...commercialPolicyExceptionActions,
     ...enrollmentPricingActions,
     ...financialChargeActions,
     ...tuitionGenerationActions,

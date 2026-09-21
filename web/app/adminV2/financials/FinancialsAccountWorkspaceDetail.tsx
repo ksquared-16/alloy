@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Settings2 } from "lucide-react";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 
 import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -112,13 +114,79 @@ export default function FinancialsAccountWorkspaceDetail({
     const [periodKey, setPeriodKey] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
     const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
+    /*
+     * ── TWO CONTROLS, TWO QUESTIONS ───────────────────────────────────────────────────────────
+     *
+     * The Responsible party dropdown FILTERS the ledger: show me the rows this person owes. The
+     * gear CONFIGURES: decide who owes, from a date. They sit next to each other because an
+     * operator asking the first often wants the second, and they stay separate controls because
+     * folding configuration into a filter would make selecting a name a money decision.
+     *
+     * `manageOpen` is the card's own depth state. Nothing about the ledger below changes while it
+     * is open, so dismissing it lands back on exactly the account, lens, filters and scroll the
+     * operator left.
+     */
+    const [manageOpen, setManageOpen] = useState(false);
+    /* The gear that opened the card, so dismissing it returns focus there and not to <body>. */
+    const manageGearRef = useRef<HTMLButtonElement | null>(null);
+    const closeManage = useCallback(() => {
+        setManageOpen(false);
+        manageGearRef.current?.focus();
+    }, []);
+    const [scopeMembers, setScopeMembers] = useState<{ customerMemberId: string; label: string }[]>([]);
+    useEffect(() => {
+        /* Canonical household membership, read when the operator asks to administer — not on every
+           account open, because the ledger does not need it. */
+        if (!manageOpen || !customerId || scopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && b?.members) setScopeMembers(b.members);
+            })
+            .catch(() => {
+                /* The card still administers the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [manageOpen, customerId, scopeMembers.length]);
 
     /* The account still selected. Every response is checked against it before it is allowed to land. */
     const wantedRef = useRef(customerId);
 
-    useEffect(() => {
+    /*
+     * ── RE-READING IS NOT SWITCHING ACCOUNTS ──────────────────────────────────────────────────
+     *
+     * Opening a different account clears the lens and every filter, because the previous family's
+     * view means nothing here. Re-reading the SAME account after a command must not: an operator
+     * who configured responsibility while looking at October under one child expects October and
+     * that child still selected when the card closes. The fetch is therefore separate from the
+     * reset, and only the account change performs both.
+     */
+    const reload = useCallback(async () => {
         const wanted = customerId;
         wantedRef.current = wanted;
+        try {
+            const res = await fetch(`/api/admin/financials/card?customer_id=${wanted}`, { cache: "no-store" });
+            const json = (await res.json()) as { vm?: Vm; error?: string };
+            if (wantedRef.current !== wanted) return;
+            /*
+             * A FAILED READ IS NOT A ZERO BALANCE. The surface says it could not look rather
+             * than rendering an account that owes nothing — the two are different answers and
+             * only one of them is safe to act on.
+             */
+            if (!res.ok || !json.vm) { setError(json.error ?? `The account could not be read (${res.status}).`); return; }
+            setVm(json.vm);
+        } catch (e) {
+            if (wantedRef.current !== wanted) return;
+            setError(e instanceof Error ? e.message : "The account could not be read.");
+        }
+    }, [customerId]);
+
+    useEffect(() => {
         /* The previous account's money must not sit under this one's name for even a frame. */
         setVm(null);
         setError(null);
@@ -126,24 +194,10 @@ export default function FinancialsAccountWorkspaceDetail({
         setSubject(null);
         setPeriodKey(null);
         setPayer(null);
-        void (async () => {
-            try {
-                const res = await fetch(`/api/admin/financials/card?customer_id=${wanted}`, { cache: "no-store" });
-                const json = (await res.json()) as { vm?: Vm; error?: string };
-                if (wantedRef.current !== wanted) return;
-                /*
-                 * A FAILED READ IS NOT A ZERO BALANCE. The surface says it could not look rather
-                 * than rendering an account that owes nothing — the two are different answers and
-                 * only one of them is safe to act on.
-                 */
-                if (!res.ok || !json.vm) { setError(json.error ?? `The account could not be read (${res.status}).`); return; }
-                setVm(json.vm);
-            } catch (e) {
-                if (wantedRef.current !== wanted) return;
-                setError(e instanceof Error ? e.message : "The account could not be read.");
-            }
-        })();
-    }, [customerId]);
+        setManageOpen(false);
+        setScopeMembers([]);
+        void reload();
+    }, [customerId, reload]);
 
     const rows = useMemo(() => (vm?.rows ?? []) as Row[], [vm]);
     const payments = useMemo(() => (vm?.payments ?? []) as Row[], [vm]);
@@ -313,6 +367,25 @@ export default function FinancialsAccountWorkspaceDetail({
                                 options={responsibleParties}
                             />
                         ) : null}
+                        {/*
+                          * MANAGE, beside FILTER. Quiet: an icon at the filters' own size, in the
+                          * filters' own row, with no fill and no border — it must not turn the
+                          * filter row into a command footer. Its accessible name says what it
+                          * does, because an icon shape is not a sentence.
+                          */}
+                        {!loading && lens !== "payments" ? (
+                            <button
+                                type="button"
+                                ref={manageGearRef}
+                                onClick={() => setManageOpen(true)}
+                                aria-label="Manage responsibility"
+                                title="Manage responsibility — who contractually owes, from a date"
+                                data-financials-manage-responsibility="gear"
+                                className="inline-flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded text-alloy-midnight/45 transition hover:bg-alloy-stone/15 hover:text-alloy-bend-pine focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40"
+                            >
+                                <Settings2 aria-hidden size={14} strokeWidth={1.9} />
+                            </button>
+                        ) : null}
                         {!loading && lens === "payments" && hasChoice(payers) ? (
                             <Filter
                                 testId="payer"
@@ -324,6 +397,57 @@ export default function FinancialsAccountWorkspaceDetail({
                         ) : null}
                     </span>
                 </div>
+
+                {/*
+                  * ── THE DEPTH CARD, ABOVE THE ACTIVITY AND INSIDE THIS SURFACE ──────────────
+                  *
+                  * Not a route, not a second modal system, and not a replacement for the ledger:
+                  * it opens in place, directly under the controls it was raised from, and the
+                  * account, lens, filters, period expansion and scroll beneath it are untouched.
+                  * Dismissal is therefore not a restoration — there is nothing to restore, which
+                  * is the only way to be certain the operator lands where they left.
+                  *
+                  * The panel is the one that already exists. `memberOptions` is what turns it
+                  * from "this charge's child" into account administration; the writer, the
+                  * preview and the refusal path are unchanged.
+                  */}
+                {/*
+                  * ── ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT ─────────────────────────────
+                  *
+                  * MEASURED: Escape closed the whole Financials surface. The workspace modal
+                  * listens for it, and a depth card that does not answer first hands its own
+                  * dismissal to its host — so an operator closing a panel lost the account, the
+                  * lens, the filters and their place in the ledger.
+                  *
+                  * The card is the innermost open thing, so it answers and stops there.
+                  */}
+                {manageOpen ? (
+                    <div
+                        className="px-0.5 pt-2"
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            closeManage();
+                        }}
+                    >
+                        <FinancialsResponsibilityPanel
+                            customerId={customerId}
+                            customerMemberId={null}
+                            subjectLabel={householdName}
+                            parties={(vm?.responsibility?.parties ?? []) as { personId: string | null; name: string }[]}
+                            memberOptions={scopeMembers}
+                            hostedOpen={manageOpen}
+                            onHostedClose={closeManage}
+                            onCommitted={async () => {
+                                /* Committed truth is re-read; the card does not report its own success. */
+                                await reload();
+                                setManageOpen(false);
+                            }}
+                        />
+                    </div>
+                ) : null}
 
                 {/* THE SCROLL REGION BEGINS HERE — with the activity, never with the controls. */}
                 <div className="min-h-0 flex-1 overflow-y-auto pt-0.5" data-financials-activity-scroll="true">
