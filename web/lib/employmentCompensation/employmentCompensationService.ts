@@ -141,10 +141,27 @@ export async function recordCompensationTerm(
     if (openErr) throw new EmploymentCompensationError("db_error", openErr.message);
     const open = ((openRows ?? []) as unknown as CompensationTermRow[])[0] ?? null;
 
-    if (open && open.effective_start > effectiveStart) {
+    /*
+     * A new term must begin AFTER the one it supersedes.
+     *
+     * `>=`, not `>`. Equal dates were the gap: closing the open term on the day
+     * before a same-day successor sets its end BEFORE its own start, which the
+     * `end_after_start` check rejects — so a same-day change surfaced as a 500
+     * carrying a raw constraint name instead of an answer. Mounted QA found it on
+     * the deployed build.
+     *
+     * Same-day is not a supersession at all. Two terms cannot both be "the rate on
+     * 1 January", so changing a rate that starts today is a CORRECTION to that term,
+     * which is a different operation this authority does not yet offer. Refusing it
+     * in the operator's words is honest; inventing a correction path here would be
+     * Slice 9 quietly growing an edit-history model.
+     */
+    if (open && open.effective_start >= effectiveStart) {
         throw new EmploymentCompensationError(
             "conflict",
-            "A later term is already in force. Record the correction against that term instead.",
+            open.effective_start === effectiveStart
+                ? "A term already begins on that date. Correcting an existing term is not the same as recording a new one."
+                : "A later term is already in force. Record the correction against that term instead.",
         );
     }
 
