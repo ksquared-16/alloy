@@ -825,6 +825,36 @@ export async function composeWorkUnitProvisioningAnswer(
     /** Diagnostic only — how long one named step inside composition took. */
     const spans: Record<string, number> = {};
     const markSpan = (name: string, startedAt: number) => { spans[name] = Math.round(now() - startedAt); };
+    /*
+     * INTERVALS, NOT DURATIONS — because a duration inventory cannot reconcile a wall.
+     *
+     * `composition_ms` correlates 0.99 with the compose wall, yet every span named inside it is
+     * either fully overlapped (document_children tail 0, header_kpi join wait 0, work_view_seed
+     * join wait 0) or small (records ~125, location ~133). Summing the phases gives ~1,259ms
+     * against a ~644ms wall, so they overlap and must not be added. About 500ms of the critical
+     * path was therefore unattributed, and no compute target could be modelled against it.
+     *
+     * A duration says how long something took; it cannot say whether anyone WAITED for it. This
+     * records the three facts that separate concurrent work from critical-path work:
+     *   `<name>_at_ms`    when the join was reached, as an offset from composition start
+     *   `<name>_wait_ms`  what the join actually cost once we got there — the WALL contribution
+     *   `<name>_done_ms`  when it resolved, so the joins form an ordered timeline
+     * Work that finished before its join contributes 0 to the wall no matter how long it ran, and
+     * consecutive `_at_ms` values expose any serial gap the joins themselves do not explain.
+     *
+     * DIAGNOSTIC ONLY: nothing here awaits anything the composition did not already await, and the
+     * rejection path is re-thrown rather than observed, so a timed promise fails exactly as before.
+     */
+    const joinWait = async <T,>(name: string, promise: Promise<T>): Promise<T> => {
+        const at = now();
+        spans[`${name}_at_ms`] = Math.round(at - t0);
+        try {
+            return await promise;
+        } finally {
+            spans[`${name}_wait_ms`] = Math.round(now() - at);
+            spans[`${name}_done_ms`] = Math.round(now() - t0);
+        }
+    };
     // A refusal carries whatever navigational frame was ALREADY resolved when it happened, so the
     // operator keeps a way out. `frame` is threaded explicitly rather than captured from an outer
     // mutable: the lens set does not exist for the early failures, and a closure would silently offer
@@ -2097,10 +2127,10 @@ export async function composeWorkUnitProvisioningAnswer(
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
-    const { enriched, rows, presentation } = await cohortRowsOnce();
+    const { enriched, rows, presentation } = await joinWait("cohort_rows", cohortRowsOnce());
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
-    const actionsProjection = await actionsProjectionPromise;
-    let focusPanelStageWork = await focusPanelStageWorkPromise;
+    const actionsProjection = await joinWait("actions_projection", actionsProjectionPromise);
+    let focusPanelStageWork = await joinWait("focus_panel_stage_work", focusPanelStageWorkPromise);
 
     // Mixed context Mission: keep the primary stage-work slice, then append each additional
     // Mission stage's primary template as secondary items (sync from already-loaded dept metadata —
@@ -2448,7 +2478,7 @@ export async function composeWorkUnitProvisioningAnswer(
     // A — the published Summary composition for the committed scope. Selected with the SAME axes the
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
     // wildcard), so the carried doc and any later client re-fetch resolve identically.
-    const summaryLayoutRows = await focusPanelSummaryRowsPromise;
+    const summaryLayoutRows = await joinWait("focus_panel_summary_rows", focusPanelSummaryRowsPromise);
     const summaryRecord = summaryLayoutRows
         ? resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
               workViewId: contextFrame.workViewId,
