@@ -519,6 +519,27 @@ export async function failArrangementsForMethod(
 }
 
 
+
+/**
+ * WHEN THE SCHEDULE SHOULD FIRST WAKE — never earlier than today.
+ *
+ * A daily recurrence advances one day per wake, so a schedule starting at a BACKDATED
+ * `effective_from` walks forward one past day at a time: authorize with a start date three weeks
+ * ago and the next twenty-one wakes each materialise a historical occurrence.
+ *
+ * Nothing is double-collected when that happens — every occurrence re-resolves the current
+ * collectible, and W3's intent key collapses same-day retries onto one attempt — but it is still
+ * wrong. Those days were not missed and collecting for them would be the catch-up the resume rule
+ * explicitly forbids, and in the meantime the operator sees a run of occurrences that mean nothing.
+ *
+ * An effective date in the FUTURE is honoured exactly: Autopay starts when the payer said it would.
+ */
+export function firstWakeAt(effectiveFrom: string, now: Date = new Date()): string {
+    const today = `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
+    const start = `${effectiveFrom.slice(0, 10)}T00:00:00.000Z`;
+    return start > today ? start : today;
+}
+
 /**
  * REGISTER THE ARRANGEMENT WITH THE GENERIC CLOCK — the step without which Autopay never happens.
  *
@@ -552,7 +573,11 @@ export async function ensureAutopaySchedule(
         // handler twice a day, and only the occurrence identity would stop the second collection.
         await supabase
             .from(SCHEDULE_TABLE)
-            .update({ is_active: true, next_due_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .update({
+                is_active: true,
+                next_due_at: firstWakeAt(arrangement.effectiveFrom),
+                updated_at: new Date().toISOString(),
+            })
             .eq("id", existingId);
         return existingId;
     }
@@ -563,7 +588,7 @@ export async function ensureAutopaySchedule(
             org_id: arrangement.orgId,
             handler_key: AUTOPAY_HANDLER_KEY,
             recurrence_kind: "daily",
-            next_due_at: new Date(`${arrangement.effectiveFrom}T00:00:00.000Z`).toISOString(),
+            next_due_at: firstWakeAt(arrangement.effectiveFrom),
             is_active: true,
             domain_ref: { arrangement_id: arrangement.id },
             label: "Autopay",

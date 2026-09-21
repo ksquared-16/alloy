@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
     enrollAutopay,
+    firstWakeAt,
     failArrangementsForMethod,
     pauseAutopay,
     resumeAutopay,
@@ -180,6 +181,29 @@ describe("enrollment is an explicit authorization, not a side effect of storing 
         expect((await enrollAutopay(s.client, { ...enrollInput, timingOffsetDays: 99 })).ok).toBe(false);
         expect((await enrollAutopay(s.client, { ...enrollInput, effectiveTo: "2026-09-01" })).ok).toBe(false);
         expect(s.inserted, "nothing is written when the terms are rejected").toHaveLength(0);
+    });
+});
+
+describe("the schedule never starts in the past", () => {
+    /*
+     * A daily recurrence advances one day per wake. Starting at a backdated `effective_from` makes
+     * the schedule walk forward one historical day per wake — twenty-one meaningless occurrences for
+     * a start date three weeks ago. Live execution against a real runtime is what surfaced this:
+     * two wakes in the same second each dispatched, because each materialised a different past day.
+     */
+    const NOW = new Date("2026-10-15T09:00:00.000Z");
+
+    it("wakes today when the authorization was backdated", () => {
+        expect(firstWakeAt("2026-09-24", NOW)).toBe("2026-10-15T00:00:00.000Z");
+    });
+
+    it("wakes today when the authorization starts today", () => {
+        expect(firstWakeAt("2026-10-15", NOW)).toBe("2026-10-15T00:00:00.000Z");
+    });
+
+    /* A future start is honoured exactly: Autopay begins when the payer said it would. */
+    it("waits when the authorization starts later", () => {
+        expect(firstWakeAt("2026-11-01", NOW)).toBe("2026-11-01T00:00:00.000Z");
     });
 });
 

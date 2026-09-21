@@ -146,9 +146,14 @@ describe.runIf(LIVE)("the generic clock reaches Payments", () => {
 
     /*
      * THE DUPLICATE WAKE. Materializing converges on `(scheduled_work_id, due_at)`, so a second
-     * wake for the same moment finds the occurrence already completed and does not run it again.
+     * wake finds today's occurrence already completed and does not run it again.
+     *
+     * The first version of this case FAILED, and the code was wrong rather than the test: the
+     * schedule started at a backdated `effective_from`, so each wake materialised a further past
+     * day and dispatched for it. `firstWakeAt` now clamps the start to today, which is what makes
+     * "a second wake does nothing" true instead of merely intended.
      */
-    it("a second wake for the same moment cannot collect twice", async () => {
+    it("a second wake on the same day cannot collect twice", async () => {
         const before = dispatched.length;
         await runScheduledWorkWake(db, {});
         const again = dispatched.slice(before).filter((d) => d.arrangement_id === arrangementId);
