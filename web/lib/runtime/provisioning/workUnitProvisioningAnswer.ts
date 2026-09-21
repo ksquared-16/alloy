@@ -1177,6 +1177,19 @@ export async function composeWorkUnitProvisioningAnswer(
         .catch(() => null);
     void headerLayoutRecordsPromise.catch(() => {});
 
+    /*
+     * THE PRESENTATION BRANCH'S OWN DURATION (P0-7.6 — is cohort enrichment on the critical path?).
+     *
+     * `presentation_ms` is measured at the JOIN, so it spans this branch AND the projection +
+     * enrichment that run concurrently with it: the comment at that join says the enrichment cost
+     * is hidden underneath it. That makes the branch durations unrecoverable from it, and with
+     * them the only fact that decides whether cohort enrichment is on the critical path at all —
+     * a 486 ms enrichment behind a 590 ms presentation branch costs nothing to remove, and behind
+     * a 200 ms one it costs nearly all of it. Maintained truth must not be argued from a number
+     * that cannot tell those apart.
+     */
+    const tPresBranch = now();
+    let presentationBranchMs: number | null = null;
     const presentationPromise = (async () => {
         // The queue-row layout and the header layout are INDEPENDENT DB reads — fetch them concurrently,
         // then compose (compose is in-memory). Collapses the two sequential ~700ms + ~335ms reads into one.
@@ -1214,7 +1227,14 @@ export async function composeWorkUnitProvisioningAnswer(
     })();
     // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real
     // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
-    void presentationPromise.catch(() => {});
+    void presentationPromise
+        .then(() => {
+            // `then`, not `finally`: a rejected branch did not produce a presentation, and timing
+            // the failure would put a duration for work that never completed beside durations for
+            // work that did.
+            presentationBranchMs = Math.round(now() - tPresBranch);
+        })
+        .catch(() => {});
 
     /*
      * THE HEADER KPI ANSWER, STARTED AS SOON AS ITS CONFIG EXISTS.
@@ -1530,6 +1550,10 @@ export async function composeWorkUnitProvisioningAnswer(
     if (page.length === 0) {
         const presentation = await presentationPromise;
         timings.presentation_ms = now() - tPres;
+        // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
+        // `timings.spans` here would write to undefined and then be overwritten by that assignment.
+        // The `.then` above was attached BEFORE this await, so it has already run when we get here.
+        if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
         const actionsProjection = await actionsProjectionPromise;
         timings.composition_ms = now() - tComp;
         timings.total_ms = now() - t0;
@@ -1680,6 +1704,10 @@ export async function composeWorkUnitProvisioningAnswer(
         // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
         const presentation = await presentationPromise;
         timings.presentation_ms = now() - tPres;
+        // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
+        // `timings.spans` here would write to undefined and then be overwritten by that assignment.
+        // The `.then` above was attached BEFORE this await, so it has already run when we get here.
+        if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
 
         // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
         // Canonical config owner = the matched published variant (not a second Work View authority).

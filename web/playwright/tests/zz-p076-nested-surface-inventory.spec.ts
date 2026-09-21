@@ -62,7 +62,7 @@ test("p076 nested surface inventory", async ({ page }) => {
         };
 
         // Per-surface and per-field weighing inside nestedSurfaces.
-        const surfaces: Array<{ id: string; bytes: number; keys: Array<[string, number]> }> = [];
+        const surfaces: Array<{ id: string; bytes: number; secondOrderBytes: number; keys: Array<[string, number]> }> = [];
         if (nested) {
             const body = decoded.slice(nested.start, nested.end);
             const idRe = /"([a-z0-9_]+_surface)":/g;
@@ -78,10 +78,29 @@ test("p076 nested surface inventory", async ({ page }) => {
                     const ks = spanOf(sBody, km[1], km.index);
                     if (ks) keys[km[1]] = (keys[km[1]] ?? 0) + bytes(sBody.slice(ks.start, ks.end));
                 }
+                /*
+                 * Classification comes from the REMOVAL SIMULATION, not from the names: every key
+                 * listed second-order here is one whose removal left the collapsed first-order
+                 * face byte-identical in nestedSurfaceFirstOrderContract.test.ts. `key`, `enabled`,
+                 * `roleOverride` and `sectionSemantic` decide contact bucketing and stay.
+                 */
+                const SECOND_ORDER = new Set([
+                    "fieldPlacements", "expandedFieldKeys", "evidenceCollections", "fieldPolicies",
+                    "fieldLayoutWidths", "fieldLayoutWidthsByPurpose", "displayOptions", "fieldModes",
+                    "contextFieldKeys", "selectedFieldKeys", "fieldLabels", "fieldIcons",
+                    "presentationRef", "definitionKey", "instanceKey",
+                ]);
+                let secondOrder = 0;
+                for (const [k, v] of Object.entries(keys)) {
+                    // `groups` is the container of all of them — counting it would double-count.
+                    if (k === "groups") continue;
+                    if (SECOND_ORDER.has(k)) secondOrder += v;
+                }
                 surfaces.push({
                     id: im[1],
                     bytes: bytes(sBody),
-                    keys: Object.entries(keys).sort((a, b) => b[1] - a[1]).slice(0, 12),
+                    secondOrderBytes: secondOrder,
+                    keys: Object.entries(keys).sort((a, b) => b[1] - a[1]),
                 });
             }
         }
