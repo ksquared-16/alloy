@@ -1487,6 +1487,7 @@ export async function composeWorkUnitProvisioningAnswer(
                       orgId: req.orgId,
                       // Personal seen is per-operator; without it the rows carry no verdict.
                       currentUserId: req.currentUserId ?? null,
+                      onPhase: (name, ms) => { spans[name] = ms; },
                       rows: familyPage as unknown as EnrichableProjectionRow[],
                       queue: {
                           key: activeView.id,
@@ -1506,6 +1507,7 @@ export async function composeWorkUnitProvisioningAnswer(
                   orgId: req.orgId,
                   // Personal seen is per-operator; without it the rows carry no verdict.
                   currentUserId: req.currentUserId ?? null,
+                  onPhase: (name, ms) => { spans[name] = ms; },
                   rows: page as unknown as EnrichableProjectionRow[],
                   queue: {
                       key: activeView.id,
