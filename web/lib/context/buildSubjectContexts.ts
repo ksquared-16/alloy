@@ -175,7 +175,17 @@ export function buildSubjectScheduleContext(
     return {
         kind: "schedule",
         key: "schedule",
-        label: "Schedule",
+        /*
+         * ASSIGNMENT, not Schedule.
+         *
+         * The card this chip opens has been titled "Assignments" since the registry
+         * gave it a title, and the two names described one thing. Staff & Workforce V2
+         * settles the noun: Assignment is the durable operating plan, and a future
+         * scheduling experience is a different, later idea that must not borrow this
+         * word first. The KIND stays `schedule` because it keys stored layouts and
+         * URLs — the operator-facing label is what had to converge.
+         */
+        label: "Assignment",
         detail: schedule.pattern_label,
         secondary: locationLabel,
         // The site the commitment is AT. Every canonical scheduling read is site-scoped, and this
