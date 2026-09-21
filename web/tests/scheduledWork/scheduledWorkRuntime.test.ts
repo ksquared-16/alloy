@@ -7,7 +7,7 @@
  * claim about what the DATABASE does under concurrency and a mock would only
  * restate the code's own assumptions back to it.
  */
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -285,14 +285,43 @@ async function cleanupConsumers() {
     }
 }
 
+/**
+ * THE THREE CONSUMERS — and one of them is no longer a stub.
+ *
+ * Autopay was productized in Payments V1 W5, so its `domain_ref` is now the real shape the
+ * registered handler reads (`arrangement_id`) rather than a plausible-looking guess, and it answers
+ * with a Payments evaluation instead of `not_productized_v1`. The arrangement id below deliberately
+ * names nothing: what this suite certifies is the BOUNDARY — that one wake reaches each domain's
+ * registered code and gets a structured outcome back — and Autopay's own suites certify what it
+ * then decides.
+ */
 const CONSUMERS = [
-    { key: BILLING_PERIODIC_HANDLER_KEY, domain: "periodic_billing", ref: { billing_period_id: "bp-1" } },
-    { key: CHARGE_AGING_HANDLER_KEY, domain: "charge_aging", ref: { as_of: "2026-09-21" } },
-    { key: AUTOPAY_HANDLER_KEY, domain: "autopay", ref: { mandate_id: "m-1", attempt_window: "am" } },
+    { key: BILLING_PERIODIC_HANDLER_KEY, domain: "periodic_billing", ref: { billing_period_id: "bp-1" }, productized: false },
+    { key: CHARGE_AGING_HANDLER_KEY, domain: "charge_aging", ref: { as_of: "2026-09-21" }, productized: false },
+    {
+        key: AUTOPAY_HANDLER_KEY,
+        domain: "autopay",
+        ref: { arrangement_id: "00000000-0000-4000-8000-0000000000a5" },
+        productized: true,
+    },
 ] as const;
 
 
 describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime", () => {
+    /*
+     * A TENANT, FOR THE PRODUCTIZED CONSUMER ONLY.
+     *
+     * The two stubs answer without one because they read nothing. Autopay resolves an authorization
+     * scoped to an organisation, so a schedule with no `org_id` names work it cannot identify — and
+     * it fails that occurrence terminally rather than guessing. That refusal is asserted on its own
+     * below; here the schedule carries a real org so the boundary itself is what is measured.
+     */
+    let consumerOrgId = "";
+    beforeAll(async () => {
+        const { data } = await db.from("orgs").select("id").limit(1).maybeSingle();
+        consumerOrgId = (data as { id: string } | null)?.id ?? "";
+    });
+
     beforeEach(async () => {
         __resetScheduledWorkRegistryForTests();
         // NOT the `ensure` wrapper: its module-level latch would make this a no-op
@@ -311,6 +340,7 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
                 .insert({
                     handler_key: c.key, recurrence_kind: "one_time",
                     next_due_at: past, label: CONSUMER_TAG, domain_ref: c.ref,
+                    org_id: c.productized ? consumerOrgId : null,
                 })
                 .select("id").single();
             ids.set(c.key, (data as { id: string }).id);
@@ -352,13 +382,50 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
             expect(list[0].attempt_number).toBe(1);
             expect(list[0].worker_id).toBe(result.workerId);
 
-            // The handler that ran was THIS domain's, and the opaque reference it was
-            // handed back is the one the schedule stored.
+            // The handler that ran was THIS domain's.
             const diag = list[0].diagnostic ?? {};
             expect(diag.domain).toBe(c.domain);
-            expect(diag.domain_ref_keys).toEqual(Object.keys(c.ref).sort());
-            expect(diag.mutation).toBe("not_productized_v1");
+
+            if (c.productized) {
+                /*
+                 * A PRODUCTIZED CONSUMER ANSWERS IN ITS OWN VOCABULARY. Autopay resolved the
+                 * arrangement the reference named, found none, and reported a truthful no-collection
+                 * — which is a COMPLETED run, not a failure. That is the contract's central rule and
+                 * the reason this still counts toward `result.completed`.
+                 */
+                expect(diag.mutation, "a productized consumer no longer claims to be a stub").toBeUndefined();
+                expect(diag.collected).toBe(false);
+                expect(diag.no_collection_reason).toBe("arrangement_missing");
+            } else {
+                // The opaque reference was handed back untouched.
+                expect(diag.domain_ref_keys).toEqual(Object.keys(c.ref).sort());
+                expect(diag.mutation).toBe("not_productized_v1");
+            }
         }
+    });
+
+    /*
+     * A PRODUCTIZED CONSUMER REFUSES WORK IT CANNOT IDENTIFY.
+     *
+     * An Autopay occurrence with no organisation cannot resolve an authorization, and guessing a
+     * tenant is the one thing a money handler must never do. It fails TERMINALLY rather than
+     * retryably, because a second attempt reads the same empty reference and would only delay the
+     * operator seeing it.
+     */
+    it("an Autopay occurrence with no tenant fails terminally rather than guessing one", async () => {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        await db.from("scheduled_work").insert({
+            handler_key: AUTOPAY_HANDLER_KEY, recurrence_kind: "one_time",
+            next_due_at: past, label: CONSUMER_TAG,
+            domain_ref: { arrangement_id: "00000000-0000-4000-8000-0000000000a5" },
+            org_id: null,
+        });
+
+        const result = await runScheduledWorkWake(db);
+        expect(result.claimed).toBe(1);
+        expect(result.completed).toBe(0);
+        expect(result.terminallyFailed).toBe(1);
+        expect(result.retryScheduled, "retrying reads the same empty reference").toBe(0);
     });
 
     it("a consumer key that is NOT registered fails terminally rather than silently passing", async () => {
@@ -378,27 +445,61 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
         expect(result.completed).toBe(0);
     });
 
-    it("V1 consumers mutate nothing — every outcome is a completed evaluation", async () => {
-        // Stated as a limitation in the consumers file; asserted here so productizing
-        // a mutation cannot happen without this test being consciously changed.
+    /*
+     * THIS TEST CHANGED, AND CHANGING IT IS THE POINT.
+     *
+     * It asserted that ALL THREE consumers report `not_productized_v1`, and its own note said it
+     * existed "so productizing a mutation cannot happen without this test being consciously
+     * changed". Payments V1 W5 is that conscious change: Autopay now resolves an authorization,
+     * reads the live collectible and can raise a collection attempt.
+     *
+     * What it protects is unchanged — a stub must not quietly start mutating — so the assertion is
+     * narrowed to the two that are still stubs rather than deleted. Autopay is asserted separately,
+     * as a productized consumer that still returns a COMPLETED evaluation.
+     */
+    it("the two remaining V1 stubs mutate nothing, and Autopay is no longer one of them", async () => {
         const past = new Date(Date.now() - 60_000).toISOString();
         for (const c of CONSUMERS) {
             await db.from("scheduled_work").insert({
                 handler_key: c.key, recurrence_kind: "one_time",
                 next_due_at: past, label: CONSUMER_TAG, domain_ref: c.ref,
+                org_id: c.productized ? consumerOrgId : null,
             });
         }
         const result = await runScheduledWorkWake(db);
-        expect(result.completed).toBe(3);
+        expect(result.completed, "a domain no-op is a completed run for all three").toBe(3);
+
+        /*
+         * SCOPED TO THIS TEST'S OWN OCCURRENCES, not to the handler keys.
+         *
+         * The certification stack is shared, so filtering attempts by `handler_key` alone picks up
+         * whatever another session ran a moment ago — which is how this first read a stub attempt
+         * with no diagnostic at all and looked like a product defect.
+         */
+        const { data: mine } = await db
+            .from("scheduled_work").select("id").eq("label", CONSUMER_TAG);
+        const scheduleIds = ((mine ?? []) as { id: string }[]).map((r) => r.id);
+        const { data: occs } = await db
+            .from("scheduled_work_occurrences").select("id").in("scheduled_work_id", scheduleIds);
+        const occIds = ((occs ?? []) as { id: string }[]).map((r) => r.id);
 
         const { data } = await db
             .from("scheduled_work_attempts")
-            .select("diagnostic")
-            .in("handler_key", CONSUMERS.map((c) => c.key));
-        const diags = ((data ?? []) as { diagnostic: Record<string, unknown> | null }[])
-            .map((r) => r.diagnostic?.mutation);
-        expect(diags.length).toBeGreaterThanOrEqual(3);
-        expect(new Set(diags)).toEqual(new Set(["not_productized_v1"]));
+            .select("handler_key,diagnostic")
+            .in("occurrence_id", occIds);
+        const rows = (data ?? []) as { handler_key: string; diagnostic: Record<string, unknown> | null }[];
+
+        const stubKeys = CONSUMERS.filter((c) => !c.productized).map((c) => c.key);
+        const stubDiags = rows.filter((r) => stubKeys.includes(r.handler_key)).map((r) => r.diagnostic?.mutation);
+        expect(stubDiags.length).toBeGreaterThanOrEqual(2);
+        expect(new Set(stubDiags)).toEqual(new Set(["not_productized_v1"]));
+
+        const autopay = rows.filter((r) => r.handler_key === AUTOPAY_HANDLER_KEY);
+        expect(autopay.length).toBeGreaterThanOrEqual(1);
+        for (const r of autopay) {
+            expect(r.diagnostic?.mutation, "Autopay is productized and must not claim otherwise").toBeUndefined();
+            expect(r.diagnostic?.domain).toBe("autopay");
+        }
     });
 });
 
