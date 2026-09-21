@@ -41,10 +41,13 @@ describe("Organization Configuration Runtime", () => {
         expect(domains.map((domain) => domain.key)).toEqual([
             "programs-locations",
             "financials",
-            // `staff` arrived with the Employment foundation merge and this ordered list was not
-            // updated with it, so the branch inherited a red assertion about a domain that really
-            // does exist. The list is still exhaustive and still ordered — that is the property.
-            "staff",
+            // `staff` is GONE, by the Staff & Workforce V2 final convergence decision. It arrived
+            // with the Employment foundation merge and pointed at a directory Roster already owned.
+            // Organization publishes CONFIGURATION domains, and "the people who work here" is
+            // operating data — so the three questions went to three owners, none of them here:
+            // Data Model holds what facts an Employment can carry, Operations · Work holds the
+            // operating surfaces, Operations · Studio holds their configuration.
+            // `/organization/staff` survives as a redirect; a compatibility route is not a domain.
             "access",
             "communications",
             // Integrations joined the landing in the Developer Platform productization pass. The
