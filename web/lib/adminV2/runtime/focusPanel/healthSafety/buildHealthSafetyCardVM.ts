@@ -115,7 +115,15 @@ export type HealthSafetyCardVM = {
 };
 
 /** Requirement keys whose evidence is a document of the matching `doc_type`. */
-const DOCUMENT_BACKED_REQUIREMENTS: ReadonlyArray<{ key: string; label: string; docType: string }> = [
+/**
+ * The requirement set, and the document type that satisfies each one.
+ *
+ * EXPORTED so there is ONE owner of this rule. The A′ first-order composer answers "how many of
+ * this child's requirements are satisfied?" without building the whole card, and a second copy of
+ * this list would let the two surfaces disagree about what a requirement IS — the card saying three
+ * of four while the first-order face said two of three, with both honest about their own list.
+ */
+export const DOCUMENT_BACKED_REQUIREMENTS: ReadonlyArray<{ key: string; label: string; docType: string }> = [
     { key: "physical", label: "Physical / health assessment", docType: "physical" },
     { key: "immunization", label: "Immunization record", docType: "immunization_record" },
     { key: "health_care_plan", label: "Health care plan", docType: "health_care_plan" },
