@@ -24,6 +24,7 @@ import {
     type AccountLens,
 } from "@/lib/financials/workspace/accountLenses";
 import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/cardLabTypes";
+import AutopaySection from "@/components/operationalCards/AutopaySection";
 import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
 
 /**
@@ -907,6 +908,22 @@ export default function FinancialsDetailCard({
                             payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
                             payerName={paymentMethodsAccount.payerName ?? null}
                             payerEmail={paymentMethodsAccount.payerEmail ?? null}
+                            canManage={paymentMethodsAccount.canManage ?? true}
+                        />
+                    </div>
+                ) : null}
+
+                {/*
+                  * AUTOPAY SITS DIRECTLY BELOW THE METHODS, because the question it answers is the
+                  * one an operator asks next: the card is on file, does it get charged by itself?
+                  * Keeping them apart would let a surface imply that storing a card is consent.
+                  */}
+                {paymentMethodsAccount?.customerId ? (
+                    <div className="alloy-os-fdetail__autopay" data-financials-autopay="detail">
+                        <AutopaySection
+                            customerId={paymentMethodsAccount.customerId}
+                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
+                            payerName={paymentMethodsAccount.payerName ?? null}
                             canManage={paymentMethodsAccount.canManage ?? true}
                         />
                     </div>

@@ -156,12 +156,25 @@ describe("payment capabilities", () => {
     it("separates unsupported from not configured", async () => {
         const setup = await resolvePaymentSetup(fakeSupabase({ merchant: null }), ARGS);
         /*
-         * Alloy has no implementation at all for autopay, and says so. That is still the only
-         * `unsupported` capability, and it stays one until W5.
+         * AUTOPAY MOVED SIDES IN W5, AND THAT IS THE POINT — the same move `manageMethods` made in
+         * W2, for the same reason.
+         *
+         * This asserted `unsupported` with a reason matching /no autopay model/, and the note beside
+         * it said so "until W5". Alloy now has `payment_autopay_arrangements`, a single write
+         * authority and a registered scheduled handler, so `unsupported` would be a lie about the
+         * PLATFORM. An organisation with no merchant is `not_configured`: a state an operator can
+         * act on.
+         *
+         * What has NOT changed is the distinction the case exists to protect. `unsupported` means
+         * Alloy has nothing to offer; `not_configured` means it does and this org has not set it up.
+         * Autopay simply stopped being an example of the first.
          */
-        expect(setup.autopay.state).toBe("unsupported");
-        expect(setup.autopay.reason, "and the reason is about Alloy, not about the family")
-            .toMatch(/no autopay model/i);
+        expect(setup.autopay.state).toBe("not_configured");
+        expect(setup.autopay.reason, "the reason is about this organisation, not about Alloy")
+            .toMatch(/payment provider|payment method/i);
+
+        /* And with no arrangement row, "no Autopay" is a measurement rather than an absent feature. */
+        expect(setup.autopayArrangement).toBeNull();
 
         /*
          * MANAGING METHODS MOVED SIDES, and that is the point of W2.
