@@ -40,10 +40,12 @@ test("p076 prototype run", async ({ page }) => {
         return;
     }
 
+    const discover = process.env.P076_DISCOVER === "1" ? "&discover=1" : "";
+    await page.evaluate((d) => { (window as unknown as { __p076discover?: string }).__p076discover = d; }, discover);
     for (let i = 0; i < n; i++) {
         const out = await page.evaluate(async ([mid, cid]) => {
             const t0 = performance.now();
-            const res = await fetch(`/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}`, { credentials: "include" });
+            const res = await fetch(`/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}${(window as unknown as {__p076discover?:string}).__p076discover ?? ""}`, { credentials: "include" });
             const wall = Math.round(performance.now() - t0);
             const body = await res.json().catch(() => null);
             return { status: res.status, clientWallMs: wall, body };

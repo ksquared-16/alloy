@@ -4,6 +4,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { CUSTOMER_MEMBER_CONFIG_FIELD_KEYS } from "@/lib/fields/customerMemberFieldRegistry";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
+import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
+import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
+import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
+import { loadAcknowledgedOccurrenceKeys } from "@/lib/queues/operatorStageMembershipAck";
+import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 
 /**
  * P0-7.6 — FIRST-ORDER READ-DAG PROTOTYPE. DIAGNOSTIC ONLY, NOT A PRODUCT SURFACE.
@@ -180,8 +185,117 @@ export async function GET(req: NextRequest) {
         };
     }
 
+    /*
+     * THE COMPLETE A' STAGE-1 DAG.
+     *
+     * Measuring two fast queries does not answer the architecture question. This executes the
+     * proposed Stage-1 read set with its REAL parallel structure and reports a WALL, because the
+     * budget is a wall and concurrent durations must never be summed.
+     *
+     * Two paths run concurrently, which is the architecture's whole claim:
+     *   QUEUE  process population -> { CRM || children || personal_seen }
+     *   CARD   participant scope  -> { attendance || health reads || prepaid aggregate }
+     *
+     * Canonical owners are CALLED, not reimplemented, so the DAG measures the real cost of the
+     * real reads. Nothing here writes, and no maintained state exists.
+     */
+    const workUnitId = req.nextUrl.searchParams.get("work_unit_id");
+    let dag: Record<string, unknown> | null = null;
+    if (workUnitId) {
+        const origin = performance.now();
+        const at = () => Math.round(performance.now() - origin);
+        const marks: Array<{ name: string; at: number; end: number; ms: number; n: number | null }> = [];
+        const step = async <T,>(name: string, run: () => Promise<T>, count?: (v: T) => number): Promise<T | null> => {
+            const a = at();
+            try {
+                const v = await run();
+                marks.push({ name, at: a, end: at(), ms: at() - a, n: count ? count(v) : null });
+                return v;
+            } catch (e) {
+                marks.push({ name, at: a, end: at(), ms: at() - a, n: null });
+                return null;
+            }
+        };
+
+        const queuePath = (async () => {
+            const pop = await step("population", () =>
+                loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId }), (v) => v?.rows.length ?? 0);
+            const rows = (pop?.rows ?? []) as Array<Record<string, unknown>>;
+            const crmSource = rows.map((r) => ({
+                id: String(r.id), primary_person_id: (r.primary_person_id ?? null) as string | null,
+                location_id: (r.location_id ?? null) as string | null,
+            }));
+            const childSource = rows.map((r) => ({
+                id: String(r.id), customer_id: (r.customer_id ?? null) as string | null, metadata: r.metadata,
+            }));
+            // The three enrichments are INDEPENDENT of one another. Cohort SCHEDULING is closed as
+            // serial in the product; this measures the reads themselves, not a scheduling change.
+            await Promise.all([
+                step("crm", () => enrichOpportunityRowsWithCrmProjection(supabase, orgId, crmSource), (v) => v?.size ?? 0),
+                step("children", () => enrichOpportunityRowsWithChildrenForCompactQueue(supabase, orgId, childSource), (v) => v?.size ?? 0),
+                step("personal_seen", () => loadAcknowledgedOccurrenceKeys({
+                    supabase, orgId, userId: access.userId,
+                    occurrenceKeys: rows.map((r) => `${String(r.id)}:${String(r.stage_key ?? "")}:${String(r.stage_entered_at ?? "")}`),
+                }), (v) => v?.size ?? 0),
+            ]);
+            return rows.length;
+        })();
+
+        const cardPath = (async () => {
+            if (!memberId) return 0;
+            await Promise.all([
+                step("attendance", () => buildAttendanceCardVM(supabase, { orgId, customerMemberId: memberId, recentDays: 5 }), () => 1),
+                step("health_profile_1hop", () => Promise.resolve(
+                    supabase.from("field_values")
+                        .select("entity_id, field_definition_id, value_text, value_number, value_date, value_json, field_definitions!inner(field_key, entity_type, is_active)")
+                        .eq("org_id", orgId).eq("entity_type", "customer_member").in("entity_id", [memberId])
+                        .eq("field_definitions.is_active", true)
+                        .in("field_definitions.field_key", [...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS])),
+                    (v) => (v?.data ?? []).length),
+                step("health_docs", () => Promise.resolve(supabase.from("documents")
+                    .select("id, doc_type, title, status, created_at")
+                    .eq("org_id", orgId).eq("entity_type", "customer_member").eq("entity_id", memberId)),
+                    (v) => (v?.data ?? []).length),
+                step("health_contacts", () => Promise.resolve(supabase.from("person_child_relationships")
+                    .select("person_id, relationship_type, priority, status")
+                    .eq("org_id", orgId).eq("customer_member_id", memberId).eq("status", "active")),
+                    (v) => (v?.data ?? []).length),
+                step("prepaid_aggregate", async () => {
+                    const pays = await supabase.from("payments").select("id, amount_cents, status")
+                        .eq("org_id", orgId).eq("customer_id", customerId ?? "");
+                    const ids = ((pays.data ?? []) as Array<{ id: string }>).map((x) => x.id);
+                    const allocs = ids.length
+                        ? await supabase.from("payment_allocations").select("payment_id, amount_cents")
+                            .eq("org_id", orgId).in("payment_id", ids)
+                        : { data: [] };
+                    return { payments: ids.length, allocations: (allocs.data ?? []).length };
+                }, (v) => v?.payments ?? 0),
+            ]);
+            return 1;
+        })();
+
+        const [queueRows] = await Promise.all([queuePath, cardPath]);
+        const wall = at();
+        const byName = Object.fromEntries(marks.map((m) => [m.name, m]));
+        const queueWall = Math.max(0, ...marks.filter((m) => ["population", "crm", "children", "personal_seen"].includes(m.name)).map((m) => m.end));
+        const cardWall = Math.max(0, ...marks.filter((m) => !["population", "crm", "children", "personal_seen"].includes(m.name)).map((m) => m.end));
+        dag = {
+            wallMs: wall,
+            queuePathEndMs: queueWall,
+            cardPathEndMs: cardWall,
+            bindingPath: queueWall >= cardWall ? "queue" : "card",
+            queueRows,
+            marks,
+            reconciledPct: wall > 0 ? Math.round((100 * Math.max(queueWall, cardWall)) / wall) : null,
+            queryCount: marks.length + 1,
+            note: "WALL, not a sum. Concurrent steps overlap; read `at`/`end` offsets rather than adding `ms`.",
+        };
+        void byName;
+    }
+
     return NextResponse.json({
         ok: true,
+        dag,
         parity,
         orgId_present: Boolean(orgId),
         memberId_present: Boolean(memberId),
