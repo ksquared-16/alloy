@@ -190,3 +190,40 @@ describe("acquisition + aggregate together", () => {
         expect(r.outcome.position).toEqual({ availableCents: 45_000, pendingCents: 30_000, heldCents: 30_000 });
     });
 });
+
+describe("A DELIBERATE DIVERGENCE FROM THE LEGACY ORACLE, recorded so it is not 'fixed'", () => {
+    /*
+     * buildFinancialsCardVM degrades a FAILED HOLDS READ to held = 0, and says so in its own
+     * comment: "A failed holds read leaves the map empty, which reports held money as zero — the
+     * conservative direction is arguable either way, and this one is chosen because the
+     * alternative is refusing to show a family's prepaid position at all."
+     *
+     * This reader returns UNAVAILABLE instead. That is a REAL semantic difference from the oracle,
+     * and it is intentional: the first-order architecture's stated rules are UNKNOWN != ZERO and
+     * PARTIAL FAILURE != MONEY, and a held amount that could not be counted is exactly an unknown
+     * restriction on money the card is about to offer. Reporting it as zero overstates what the
+     * family may spend.
+     *
+     * It is recorded here for two reasons. A live parity run exercises only the happy path, so it
+     * will never surface this. And without a gate, someone reconciling the two implementations
+     * would "fix" the divergence by weakening this reader to match the legacy behaviour, which is
+     * the wrong direction — the legacy VM is the thing that should eventually move.
+     */
+    it("a failed holds read is UNAVAILABLE here, where the legacy VM would report held = 0", async () => {
+        vi.mocked(readHoldsForPayments).mockRejectedValueOnce(new Error("holds down"));
+        const { client } = fake(base);
+        const r = await readAccountPrepaidPosition(client, { orgId: "o", householdId: "h", authorized: true });
+        expect(r.outcome.state).toBe("unavailable");
+        // The specific thing that must never happen: a confident position with held silently zero.
+        expect(JSON.stringify(r.outcome)).not.toContain("heldCents");
+    });
+
+    it("THE DIRECTION OF THE DIFFERENCE MATTERS: it withholds an answer, it never inflates one", async () => {
+        // Degrading to held=0 would make MORE money look available than the family can spend.
+        // Failing closed can only ever show less, never more.
+        vi.mocked(readHoldsForPayments).mockRejectedValueOnce(new Error("holds down"));
+        const { client } = fake(base);
+        const r = await readAccountPrepaidPosition(client, { orgId: "o", householdId: "h", authorized: true });
+        expect(r.outcome.state).not.toBe("ok");
+    });
+});
