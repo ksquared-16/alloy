@@ -34,7 +34,14 @@ const db: SupabaseClient = LIVE
     ? createClient(URL, KEY, { auth: { persistSession: false } })
     : (null as unknown as SupabaseClient);
 
-const TAG = "qa_autopay_w5";
+/*
+ * UNIQUE PER RUN. `uq_payment_methods_provider_method_ref` is a real unique index, so a fixed
+ * reference means a crashed run leaves a row that makes every later run fail at setup — which reads
+ * as a product defect and is not one. This suite establishes its own preconditions and restores
+ * what it borrows, per the cert-environment doctrine.
+ */
+const RUN = Math.random().toString(36).slice(2, 10);
+const TAG = `qa_autopay_w5_${RUN}`;
 let orgId = "";
 let customerId = "";
 let methodId = "";
@@ -51,6 +58,22 @@ beforeAll(async () => {
         .from("customers").select("id, org_id").limit(1).maybeSingle();
     customerId = (cust as { id: string }).id;
     orgId = (cust as { org_id: string }).org_id;
+
+    /*
+     * BORROWED STATE, RESTORED BEFORE USE. At most one live arrangement may exist per account, so
+     * an arrangement left by an earlier crashed run would make `enrollAutopay` refuse
+     * `already_enrolled` — a correct refusal that would read here as a broken enrollment.
+     */
+    const { data: stale } = await db
+        .from("payment_autopay_arrangements")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId)
+        .in("status", ["active", "paused"]);
+    for (const row of ((stale ?? []) as Array<{ id: string }>)) {
+        await db.from("scheduled_work").delete().eq("domain_ref->>arrangement_id", row.id);
+        await db.from("payment_autopay_arrangements").delete().eq("id", row.id);
+    }
 
     /* An instrument to authorize. Provider refs are synthetic: nothing here calls a provider. */
     const { data: m } = await db
