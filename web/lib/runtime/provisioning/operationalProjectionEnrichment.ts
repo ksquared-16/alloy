@@ -74,15 +74,31 @@ export async function enrichOperationalProjectionRows(args: {
      * exactly as it always has. Absent is a degrade, never a claim.
      */
     currentUserId?: string | null;
+    /**
+     * Phase reporter for the composition DAG. `cohort_rows` was measured at 535ms of serial
+     * composition wall with nothing named inside it, so the repair candidate could not be chosen:
+     * a batched read, a pure transform and an N+1 all look identical from outside the join.
+     * Durations only — the caller owns the offsets.
+     */
+    onPhase?: (name: string, ms: number) => void;
 }): Promise<Record<string, unknown>[]> {
     const rows = args.rows as unknown as Record<string, unknown>[];
     if (!rows.length) return [];
+    const phase = async <T,>(name: string, run: () => Promise<T> | T): Promise<T> => {
+        const at = Date.now();
+        try {
+            return await run();
+        } finally {
+            args.onPhase?.(name, Date.now() - at);
+        }
+    };
+    args.onPhase?.("enrich_rows", rows.length);
 
     // ONE batched enrichment pass for the whole page (person + location + children reads are
     // batched by id inside the shared owners — not a per-row query).
     let projectionById = new Map<string, Record<string, unknown>>();
     try {
-        const crm = await enrichOpportunityRowsWithCrmProjection(
+        const crm = await phase("enrich_crm_ms", () => enrichOpportunityRowsWithCrmProjection(
             args.supabase,
             args.orgId,
             args.rows.map((r) => ({
@@ -91,7 +107,7 @@ export async function enrichOperationalProjectionRows(args: {
                 location_id: (r.location_id as string | null) ?? null,
                 metadata: r.metadata,
             })),
-        );
+        ));
         projectionById = crm as unknown as Map<string, Record<string, unknown>>;
     } catch {
         // Enrichment failure is NOT an operational error. The context builders degrade honestly —
@@ -106,7 +122,7 @@ export async function enrichOperationalProjectionRows(args: {
     // contact enrichment alone does not attach those — without this pass Secondary stays empty
     // live while Builder preview (seeded) looks correct.
     try {
-        const children = await enrichOpportunityRowsWithChildrenForCompactQueue(
+        const children = await phase("enrich_children_ms", () => enrichOpportunityRowsWithChildrenForCompactQueue(
             args.supabase,
             args.orgId,
             args.rows.map((r) => ({
@@ -114,7 +130,7 @@ export async function enrichOperationalProjectionRows(args: {
                 customer_id: (r.customer_id as string | null) ?? null,
                 metadata: r.metadata,
             })),
-        );
+        ));
         for (const [id, projection] of children) {
             const prior = projectionById.get(id) ?? {};
             projectionById.set(id, { ...prior, ...projection });
@@ -128,7 +144,9 @@ export async function enrichOperationalProjectionRows(args: {
         return p ? { ...r, ...p } : r;
     });
 
+    const tCtx = Date.now();
     const withContext = attachPartialQueueRowContextToRows(merged, args.queue);
+    args.onPhase?.("enrich_row_context_ms", Date.now() - tCtx);
 
     /*
      * PERSONAL SEEN, RESOLVED HERE INSTEAD OF IN A SECOND ROUND TRIP.
@@ -178,6 +196,7 @@ export async function enrichOperationalProjectionRows(args: {
             );
         }
         if (keyByRowId.size) {
+            const tSeen = Date.now();
             try {
                 const acknowledged = await loadAcknowledgedOccurrenceKeys({
                     supabase: args.supabase,
@@ -202,6 +221,8 @@ export async function enrichOperationalProjectionRows(args: {
                  * silently clear a dot the operator still needs.
                  */
             }
+            args.onPhase?.("enrich_personal_seen_ms", Date.now() - tSeen);
+            args.onPhase?.("enrich_personal_seen_keys", keyByRowId.size);
         }
     }
 
@@ -210,7 +231,10 @@ export async function enrichOperationalProjectionRows(args: {
     // compact projection: it keeps exactly the fields the compact row reads and drops the dead heavy
     // flat enrichment. Same shared owner the deployed queue path already uses, so the row the
     // operator sees is composed from the same fields either way — this trims the wire, not the truth.
-    return projectQueuePreviewRowContexts(withContext);
+    const tProj = Date.now();
+    const projected = projectQueuePreviewRowContexts(withContext);
+    args.onPhase?.("enrich_projection_ms", Date.now() - tProj);
+    return projected;
 }
 
 /** Read the attached context back off an enriched row. */
