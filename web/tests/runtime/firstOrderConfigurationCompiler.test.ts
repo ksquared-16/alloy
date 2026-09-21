@@ -68,6 +68,11 @@ vi.mock("@/lib/runtime/firstOrder/readAccountLedgerPosition", () => ({
 vi.mock("@/lib/runtime/firstOrder/readFirstOrderValueSeeds", () => ({
     readHeaderKpiValues: vi.fn(async () => ({ status: "ok", values: { a: 6, b: 6, c: 20 } })),
 }));
+vi.mock("@/lib/runtime/firstOrder/readWorkViewTotalsForFirstOrder", () => ({
+    readWorkViewTotalsForFirstOrder: vi.fn(async () => ({
+        status: "ok", totalsByViewId: { v1: 4, v2: 9 }, configuredViewSignature: "v1|v2",
+    })),
+}));
 vi.mock("@/lib/queues/operatorStageMembershipAck", () => ({ loadAcknowledgedOccurrenceKeys: vi.fn(async () => new Set<string>()) }));
 
 import {
@@ -83,6 +88,7 @@ import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendan
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
 import { readHeaderKpiValues } from "@/lib/runtime/firstOrder/readFirstOrderValueSeeds";
+import { readWorkViewTotalsForFirstOrder } from "@/lib/runtime/firstOrder/readWorkViewTotalsForFirstOrder";
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 
 const SRC_DIR = resolve(process.cwd(), "lib/runtime/firstOrder");
@@ -102,7 +108,14 @@ const compose = (configuration: FirstOrderSurfaceConfiguration, over: Record<str
     composeFirstOrderWorkUnitProjection({
         supabase: {} as never, orgId: "org-1", workUnitId: "wu-1", viewerId: "u1",
         customerMemberId: "m1", householdId: "h1", configuration,
-        authority: { financialsRead: true, healthView: true }, ...over,
+        authority: { financialsRead: true, healthView: true },
+        // The two genuinely request-scoped facts the evaluator needs and A′ must not invent.
+        workViewCaller: {
+            recordScopeConstraints: null, recordScopeImpossible: false,
+            viewerDisplayTimeZone: { iana: "UTC", source: "test", cacheHit: false },
+            activeWorkViewId: "v1",
+        },
+        ...over,
     } as never);
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -332,11 +345,12 @@ describe("PART 7/8 — a synthetic Billing process compiles through the SAME run
         expect(buildAttendanceCardVM).not.toHaveBeenCalled();
         expect(readHealthFirstOrderSupplements).not.toHaveBeenCalled();
         expect(r.timing.executedResolvers.sort()).toEqual([
-            "crm_projection", "header_kpis", "personal_seen", "population", "prepaid_position", "process_config",
+            "crm_projection", "header_kpis", "personal_seen", "population", "prepaid_position",
+            "process_config", "work_view_totals",
         ]);
         // population 1 + personal_seen 1 + crm_projection 2 + prepaid_position 7 + process_config 1
-        // + header_kpis 2 (Billing configures four KPI slots, which are first-order VALUES)
-        expect(r.timing.queryCount).toBe(14);
+        // + header_kpis 2 + work_view_totals 2 — KPI and Work View are first-order VALUES
+        expect(r.timing.queryCount).toBe(16);
     });
 
     it("a one-card Billing surface costs less than the four-card one", async () => {
@@ -548,7 +562,7 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
 
     it("query count for today's Enrollment specimen is stable", async () => {
         const r = await compose(enrollment());
-        expect(r.timing.queryCount).toBe(26);
+        expect(r.timing.queryCount).toBe(28);
     });
 
     it("PART 12 — THE QUERY CENSUS IS EXECUTABLE, not prose", async () => {
@@ -569,7 +583,7 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
         expect([...executed].sort(), "unique prerequisite reads").toEqual([
             "account_ledger", "attendance_fold", "children_projection", "crm_projection",
             "header_kpis", "health_profile", "health_supplements", "personal_seen", "population",
-            "prepaid_position", "process_config",
+            "prepaid_position", "process_config", "work_view_totals",
         ]);
 
         // DUPLICATE READS = 0. Each prerequisite is acquired exactly once, however many
@@ -584,7 +598,7 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
         for (const name of executed) expect(needed.has(name), `${name} ran for nobody`).toBe(true);
 
         // NO N+1: the cost is a constant per prerequisite, never a function of row or child count.
-        expect(r.timing.queryCount).toBe(26);
+        expect(r.timing.queryCount).toBe(28);
     });
 });
 
@@ -831,15 +845,17 @@ describe("STATE SEMANTICS OF THE VALUE FAMILIES — UNKNOWN is not ZERO here eit
     });
 
     it("A FAILED WORK VIEW READ IS UNAVAILABLE, never zero", async () => {
-        const r = await compose(enrollment(), { workViewTotals: null });
+        vi.mocked(readWorkViewTotalsForFirstOrder).mockRejectedValueOnce(new Error("down"));
+        const r = await compose(enrollment());
         for (const v of ["v1", "v2"]) expect(r.projection.workViewTotals[v].state).toBe("unavailable");
         expect(JSON.stringify(r.projection.workViewTotals)).not.toContain('"value":0');
     });
 
     it("A WORK VIEW TOTAL OF ZERO IS A REAL ANSWER", async () => {
-        const r = await compose(enrollment(), {
-            workViewTotals: { status: "ok", totalsByViewId: { v1: 0, v2: 7 } },
+        vi.mocked(readWorkViewTotalsForFirstOrder).mockResolvedValueOnce({
+            status: "ok", totalsByViewId: { v1: 0, v2: 7 }, configuredViewSignature: "v1|v2",
         });
+        const r = await compose(enrollment());
         const a = r.projection.workViewTotals.v1; const b = r.projection.workViewTotals.v2;
         expect(a.state).toBe("known");
         if (a.state === "known") expect(a.value).toBe(0);
@@ -847,9 +863,10 @@ describe("STATE SEMANTICS OF THE VALUE FAMILIES — UNKNOWN is not ZERO here eit
     });
 
     it("A WORK VIEW THE EVALUATOR DID NOT ANSWER IS UNKNOWN", async () => {
-        const r = await compose(enrollment(), {
-            workViewTotals: { status: "ok", totalsByViewId: { v1: 3 } },
+        vi.mocked(readWorkViewTotalsForFirstOrder).mockResolvedValueOnce({
+            status: "ok", totalsByViewId: { v1: 3 }, configuredViewSignature: "v1|v2",
         });
+        const r = await compose(enrollment());
         expect(r.projection.workViewTotals.v2.state).toBe("unknown");
     });
 });

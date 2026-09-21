@@ -65,6 +65,14 @@ test("p076 prototype run", async ({ page }) => {
          * and measured nothing, which is the failure mode worth naming: the run was green and
          * vacuous. The same selector the critical-path probe already uses is the canonical one.
          */
+        /*
+         * The tenant's REAL KPI source keys and Work View ids, read off the same rendered frame
+         * the card keys come from. Synthetic identities made the diagnostic ask a question the
+         * product never asks.
+         */
+        kpiKeys: [...new Set([...document.documentElement.outerHTML.matchAll(/"sourceKey":"([a-z0-9_.]{3,60})"/g)].map((m) => m[1]))],
+        viewIds: [...new Set([...document.querySelectorAll("[data-work-view-id]")]
+            .map((el) => el.getAttribute("data-work-view-id") || "").filter(Boolean))],
         cards: [...document.querySelectorAll("article.alloy-os-ucard")]
             .map((el) => el.getAttribute("data-universal-card-key")
                 || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
@@ -76,8 +84,11 @@ test("p076 prototype run", async ({ page }) => {
     }
     const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
     console.log(`[proto-config] ${JSON.stringify({ cards: [...new Set(rendered.cards)] })}`);
+    const kpiParam = rendered.kpiKeys.length ? `&kpi_keys=${encodeURIComponent(rendered.kpiKeys.join(","))}` : "";
+    const viewParam = rendered.viewIds.length ? `&view_ids=${encodeURIComponent(rendered.viewIds.join(","))}` : "";
+    console.log(`[proto-identities] ${JSON.stringify({ kpiKeys: rendered.kpiKeys, viewIds: rendered.viewIds })}`);
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
-        + (process.env.P076_SHADOW === "1" ? `${cardParam}&kpis=3&views=2` : "")
+        + (process.env.P076_SHADOW === "1" ? `${cardParam}${kpiParam}${viewParam}` : "")
         + (process.env.P076_MONEY === "1" ? "&discover_money=1" : "")
         + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
     await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);
