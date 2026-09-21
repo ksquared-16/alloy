@@ -168,6 +168,20 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * make this card the owner of a truth it can only see part of.
      */
     "staff_qualifications",
+    /**
+     * @grain person — when this employee CAN work: the recurring weekly pattern,
+     * its effective dates, and the dated exceptions that replace it.
+     *
+     * A THIRD person-grain card, and deliberately not folded into `staff` or
+     * `staff_qualifications`. Employment says who works here; qualifications say
+     * what they are cleared to do; availability says when they can be asked. Three
+     * questions, three clocks — a pattern changes when someone renegotiates their
+     * week, a credential lapses by a date, employment changes when someone is hired.
+     *
+     * It shows availability, never the SCHEDULE. What the organization decided
+     * someone will work is `scheduling`'s answer, and this card creates none of it.
+     */
+    "staff_availability",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",

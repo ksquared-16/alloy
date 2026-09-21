@@ -31,6 +31,9 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     // held and the requirements that apply. A profile archetype would present a fixed set of
     // labelled fields, which is the wrong shape for a list that is often empty and sometimes long.
     staff_qualifications: "collection",
+    // A list whose length varies — the weekdays worked, and the exceptions on the
+    // books. A profile archetype would promise a fixed set of labelled fields.
+    staff_availability: "collection",
     attendance: "timeline",
     financials: "summary",
     health_safety: "status",
