@@ -1,0 +1,23 @@
+{
+  "base": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 0
+  },
+  "opened": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 1
+  },
+  "escape1": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 0,
+    "focus": "BUTTON(\"Manage responsibility\")"
+  },
+  "escape2": {
+    "detailsOpen": 0,
+    "rows": 0,
+    "panel": 0
+  }
+}

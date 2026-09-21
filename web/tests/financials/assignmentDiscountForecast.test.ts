@@ -17,6 +17,13 @@ const ROOT = join(__dirname, "..", "..");
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const FORECAST = "lib/financials/reductions/forecastAssignmentReductions.ts";
 const ROUTE = "app/api/admin/financials/reduction-forecast/route.ts";
+/*
+ * The forecast body moved out of the route into this reader so a FAMILY-grain caller could ask the
+ * same question of each of a household's relationships without a second implementation existing.
+ * The rules below are unchanged and are asserted where they now live; the route is still asserted
+ * to DELEGATE, so none of them can be bypassed by answering in the route again.
+ */
+const READER = "lib/financials/reductions/readAssignmentDiscountPosition.ts";
 const CARD = "components/admin/focusPanel/cards/SchedulingCard.tsx";
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
@@ -73,34 +80,46 @@ describe("it writes nothing", () => {
 
 describe("the gross is the accepted term, not a recommendation", () => {
     it("forecasts against what was agreed", () => {
-        const r = src(ROUTE);
+        const r = src(READER);
         expect(r).toContain("accepted.amountCents");
         expect(r, "an unaccepted price is not a forecast").toContain("no_accepted_term");
         expect(r, "and not the resolver's suggestion").not.toMatch(/view\.recommended\.amountCents/);
+        expect(src(ROUTE), "the route delegates rather than forecasting again")
+            .toContain("readAssignmentDiscountPosition");
     });
 
     it("uses the period the assignment is billing now", () => {
-        expect(src(ROUTE)).toContain("acceptedTermBillingPeriods");
+        expect(src(READER)).toContain("acceptedTermBillingPeriods");
+        expect(src(ROUTE), "and the route derives no period of its own")
+            .not.toContain("acceptedTermBillingPeriods");
     });
 });
 
 describe("the reasons are the domain's", () => {
     it("renders canonical reason codes, not an invented vocabulary", () => {
         const card = src(CARD);
-        /* Every key is a `NotEligibleReason` the resolver actually returns. */
+        /*
+         * The vocabulary moved into `reductionReasonLabels`, shared with the family Discount
+         * surface so one canonical reason reads the same way at both grains. The rule is
+         * unchanged — every label is for a reason the RESOLVER actually returns, never an
+         * invented one — and is asserted where the words now live, plus the card consuming them.
+         */
         const resolver = src("lib/financials/reductions/resolveFinancialReductions.ts");
+        const vocab = src("lib/financials/reductions/reductionReasonLabels.ts");
         for (const reason of [
             "no_policy_configured", "not_enough_siblings", "rank_not_covered",
             "not_an_employee_household", "category_not_covered", "category_not_discountable",
         ]) {
             expect(resolver, `${reason} is a domain reason`).toContain(`"${reason}"`);
-            expect(card, `${reason} has an operator label`).toContain(reason);
+            expect(vocab, `${reason} has an operator label`).toContain(reason);
         }
+        expect(card, "and the card reads that vocabulary").toContain("reductionReasonLabels");
     });
 
     it("an unmapped reason is still shown, not hidden", () => {
-        const card = src(CARD);
-        expect(card).toContain('REDUCTION_REASON_LABEL[reason] ?? reason.replace(/_/g, " ")');
+        expect(src("lib/financials/reductions/reductionReasonLabels.ts"))
+            .toContain('reason.replace(/_/g, " ")');
+        expect(src(CARD)).toContain("REDUCTION_REASON_LABEL[reason]");
     });
 
     it("the surface carries the outcome and its reason for measurement", () => {
@@ -119,7 +138,7 @@ describe("the forecast asks about a month, because reductions are monthly", () =
          * month by the same doctrine that keeps `placeInBillingPeriod` monthly by default — while
          * a weekly assignment's current commercial period is `2026-09-15~2026-09-21`.
          */
-        const r = src(ROUTE);
+        const r = src(READER);
         expect(r).toContain('periods?.current.start');
         expect(r).toContain('.slice(0, 7)');
         expect(r, "never the interval key").not.toMatch(/periods\?\.current\.key/);

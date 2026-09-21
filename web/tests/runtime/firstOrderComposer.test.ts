@@ -72,10 +72,19 @@ vi.mock("@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQ
      * identity cannot be placed. The first version of this fixture supplied only first/last name
      * and the normalizer dropped both children — the rule was right and the fixture was not.
      */
-    ["o1", { _inquiry_children: [
-        { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
-        { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
-    ] }],
+    ["o1", {
+        _inquiry_children: [
+            { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
+            { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
+        ],
+        // The enricher's UNIFIED key, written by BOTH its branches — the source the children
+        // capability reads. A fixture with only `_inquiry_children` hid a live defect where a
+        // household-derived roster projected zero.
+        _crm_compact_children: [
+            { primary: "Ada L", secondary: null, customerMemberId: "cm1" },
+            { primary: "Bo L", secondary: null, customerMemberId: "cm2" },
+        ],
+    }],
     ["o2", { _inquiry_children: [{ id: "ch9", customer_member_id: "cm9", display_name: "Zed Q" }] }],
     ["o3", { _inquiry_children: [] }],
 ])) }));
@@ -247,10 +256,24 @@ describe("state semantics are never collapsed", () => {
         expect(r.projection.geometry.workViewCount).toBe(2);
     });
 
-    it("unresolved KPI and Work View totals are UNKNOWN, not zero", async () => {
+    it("KPI and Work View slots carry a CANONICAL STATE — never a placeholder", async () => {
+        /*
+         * This gate used to assert every KPI and Work View was UNKNOWN, which was the truth when
+         * A′ did not resolve them. They are FIRST-ORDER VALUES now by Director ruling, so the
+         * contract is no longer "always unknown" — it is that every configured slot carries a
+         * state from its canonical owner, and never a placeholder standing in for one.
+         *
+         * This suite supplies no KPI reader and no Work View totals, so the honest state here is
+         * UNAVAILABLE. The value-family state matrix lives in the compiler suite, which mocks the
+         * canonical owners and exercises known / known-zero / unknown / unavailable / forbidden.
+         */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(Object.values(r.projection.kpiValues).every((f) => f.state === "unknown")).toBe(true);
-        expect(Object.values(r.projection.workViewTotals).every((f) => f.state === "unknown")).toBe(true);
+        const all = [...Object.values(r.projection.kpiValues), ...Object.values(r.projection.workViewTotals)];
+        expect(all.length).toBe(5);
+        for (const f of all) {
+            expect(["known", "known_zero", "known_empty", "unknown", "unavailable", "forbidden"]).toContain(f.state);
+        }
+        expect(JSON.stringify(all), "an unresolved slot must not carry a value").not.toContain('"value":0');
     });
 });
 
@@ -592,9 +615,10 @@ describe("the new reads obey configuration and cost nothing when unconfigured", 
         /*
          * 17 → 20 with process configuration (1) and the two health supplements (2); 20 → 24 with
          * the account ledger (agreements · paged charges · batched applications · batched payment
-         * statuses). A silent extra read is the thing this catches.
+         * statuses); 24 → 26 with header KPIs, whose VALUES are first-order. A silent extra read
+         * is the thing this catches.
          */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.timing.queryCount).toBe(24);
+        expect(r.timing.queryCount).toBe(26);
     });
 });

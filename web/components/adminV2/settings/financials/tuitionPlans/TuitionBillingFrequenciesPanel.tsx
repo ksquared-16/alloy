@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { billingRecurrenceFor } from "@/lib/financials/billingPeriod";
+import { previewBillingPeriods } from "@/lib/financials/tuitionPlans/billingPeriodPreview";
 import { MoreHorizontal, Plus } from "lucide-react";
 import {
     ConfigurationPrimaryButton,
@@ -88,6 +89,36 @@ function BillingFrequencyDialog({
                             data-testid="billing-frequency-interval"
                         />
                     </label>
+                    {/*
+                     * ── WHAT THE NAME ACTUALLY DECIDES ───────────────────────────────────────
+                     *
+                     * AUDITED, and this is the finding. The form has three fields and none of them
+                     * is a redundant requirement — but the NAME is not merely a label: it becomes
+                     * the cadence key, through `billingFrequencyItemKeyFromLabel`, and that key is
+                     * what `billingRecurrenceFor` and the period authority consume. "Weekly" makes
+                     * a frequency the platform can derive periods for; "Semi-Annual" makes one it
+                     * cannot, and until now the operator learned which only by saving and reading
+                     * the list.
+                     *
+                     * So the consequence is stated while they type, from the same authority the
+                     * list and generation use. It derives nothing of its own and is not a field:
+                     * nothing here is persisted, and there is nothing to edit.
+                     */}
+                    {name.trim() ? (
+                        (() => {
+                            const cadenceKey = billingFrequencyItemKeyFromLabel(name) || "custom_frequency";
+                            const rec = billingRecurrenceFor(cadenceKey);
+                            return (
+                                <p
+                                    className={`text-[11px] ${rec.billable ? "text-alloy-midnight/55" : "text-alloy-ember"}`}
+                                    data-testid="billing-frequency-consequence"
+                                    data-billing-frequency-billable={rec.billable ? "true" : "false"}
+                                >
+                                    {rec.recurrence}
+                                </p>
+                            );
+                        })()
+                    ) : null}
                 </div>
                 <div className="mt-5 flex justify-end gap-2">
                     <ConfigurationSecondaryButton disabled={busy} onClick={onCancel}>
@@ -119,6 +150,18 @@ export function TuitionBillingFrequenciesPanel({
     snapshot: TuitionPlansSnapshot;
     onReload: () => void;
 }) {
+    /*
+     * The preview reasons from a STATED anchor and a STATED day rather than reading the clock inside
+     * the render: a configuration screen should show the same intervals to two operators looking at
+     * it a second apart, and a test should be able to ask what it shows.
+     *
+     * The anchor is the first of the current month — a plain, explainable stand-in for "an agreement
+     * that started at the beginning of this month", because no real agreement is in hand on a
+     * configuration screen. The intervals themselves are still the period authority's.
+     */
+    const previewTodayYmd = new Date().toISOString().slice(0, 10);
+    const previewAnchorYmd = `${previewTodayYmd.slice(0, 7)}-01`;
+
     const [cadences, setCadences] = useState(snapshot.cadences);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -253,6 +296,14 @@ export function TuitionBillingFrequenciesPanel({
                              * will actually derive from this frequency.
                              */}
                             <th className="px-4 py-2.5">Recurrence</th>
+                            {/*
+                             * WHAT COMMERCIAL PERIOD DOES THAT CREATE? Recurrence says how often;
+                             * this says what interval it actually produces, derived by the same
+                             * authority generation and the Assignment read-back use. Configuration
+                             * that explains only the cadence leaves the operator to infer the
+                             * period, which is the gap this column closes.
+                             */}
+                            <th className="px-4 py-2.5">Billing period</th>
                             <th className="px-4 py-2.5">Active</th>
                             <th className="px-4 py-2.5">Plans using</th>
                             <th className="px-4 py-2.5 w-12"><span className="sr-only">More</span></th>
@@ -261,13 +312,13 @@ export function TuitionBillingFrequenciesPanel({
                     <tbody>
                         {loading && rows.length === 0 ?
                             <tr>
-                                <td colSpan={6} className="px-4 py-6 text-alloy-midnight/50">
+                                <td colSpan={7} className="px-4 py-6 text-alloy-midnight/50">
                                     Loading…
                                 </td>
                             </tr>
                         : rows.length === 0 ?
                             <tr>
-                                <td colSpan={6} className="px-4 py-6 text-alloy-midnight/50">
+                                <td colSpan={7} className="px-4 py-6 text-alloy-midnight/50">
                                     No billing frequencies configured yet.
                                 </td>
                             </tr>
@@ -290,6 +341,45 @@ export function TuitionBillingFrequenciesPanel({
                                                 data-billing-recurrence-billable={rec.billable ? "true" : "false"}
                                             >
                                                 {rec.recurrence}
+                                            </td>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        /*
+                                         * READ-ONLY PREVIEW, from `billingPeriodFor` — never
+                                         * described in prose. An unsupported cadence gets no
+                                         * interval rather than a plausible invented one, which is
+                                         * the same answer generation gives when it refuses the run.
+                                         */
+                                        const preview = previewBillingPeriods({
+                                            cadenceKey: row.itemKey,
+                                            anchorYmd: previewAnchorYmd,
+                                            todayYmd: previewTodayYmd,
+                                        });
+                                        return (
+                                            <td
+                                                className="px-4 py-3 text-alloy-midnight/60"
+                                                data-billing-period-preview={row.itemKey}
+                                                data-billing-period-preview-billable={preview.billable ? "true" : "false"}
+                                            >
+                                                {preview.current ?
+                                                    <span className="flex flex-col gap-0.5">
+                                                        <span data-billing-period-current>
+                                                            Current · {preview.current.label}
+                                                        </span>
+                                                        {preview.next ?
+                                                            <span
+                                                                className="text-alloy-midnight/45"
+                                                                data-billing-period-next
+                                                            >
+                                                                Next · {preview.next.label}
+                                                            </span>
+                                                        :   null}
+                                                    </span>
+                                                :   <span className="text-alloy-ember" data-billing-period-none>
+                                                        No billing periods
+                                                    </span>
+                                                }
                                             </td>
                                         );
                                     })()}

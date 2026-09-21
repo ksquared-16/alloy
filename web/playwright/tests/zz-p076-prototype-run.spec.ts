@@ -10,7 +10,19 @@ import { test } from "@playwright/test";
 test("p076 prototype run", async ({ page }) => {
     const url = process.env.P076_URL || "/adminV2/workspace/work-unit/new-leads";
     const n = Number(process.env.P076_N || 1);
+    test.setTimeout(180_000);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120_000 });
+
+    /*
+     * WAIT BEFORE READING ANYTHING — ids AND cards.
+     *
+     * This wait was originally placed after the id extraction, so on a slower load the flight
+     * payload had not arrived, `ids_not_found` fired, and the spec RETURNED EARLY while still
+     * reporting "1 passed". Twenty-three sampling runs produced nothing that way. The Focus Panel
+     * selector is the one signal that the operator's frame actually exists, so everything is read
+     * after it, and every absence below throws rather than returning.
+     */
+    await page.waitForSelector("article.alloy-os-ucard[data-universal-card-key]", { timeout: 60_000 });
 
     const ids = await page.evaluate(() => {
         let decoded = "";
@@ -38,8 +50,8 @@ test("p076 prototype run", async ({ page }) => {
     const customerId = ids.customer[0] ?? null;
     const workUnitId = ids.workUnit[0] ?? null;
     if (!memberId || !customerId) {
-        console.log(`[proto] ${JSON.stringify({ error: "ids_not_found", ids })}`);
-        return;
+        // FATAL. A silent return here is how a sampling run reports success over no samples.
+        throw new Error(`p076: subject ids not found in the rendered frame — ${JSON.stringify(ids)}`);
     }
 
     // Configuration read off the RENDERED frame, so the composer is exercised against the
@@ -58,7 +70,12 @@ test("p076 prototype run", async ({ page }) => {
                 || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
             .filter(Boolean),
     }));
+    if (process.env.P076_SHADOW === "1" && rendered.cards.length === 0) {
+        throw new Error("p076: shadow measurement requested but the rendered frame exposed no "
+            + "configured cards — refusing to measure a projection with no configuration");
+    }
     const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
+    console.log(`[proto-config] ${JSON.stringify({ cards: [...new Set(rendered.cards)] })}`);
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
         + (process.env.P076_SHADOW === "1" ? `${cardParam}&kpis=3&views=2` : "")
         + (process.env.P076_MONEY === "1" ? "&discover_money=1" : "")

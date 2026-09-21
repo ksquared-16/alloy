@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
     VERSION_STATUS_LABEL,
     type VersionStatus,
@@ -175,16 +176,24 @@ export function ConfigPrimaryButton({
     disabled?: boolean;
     testId?: string;
 }) {
+    /*
+     * ── ONE PRIMARY ACTION TREATMENT, NOT TWO ─────────────────────────────────────────────────
+     *
+     * This hand-rolled `bg-alloy-pine` — rgb(39, 63, 82), a dark navy — is what Kelly saw and
+     * called "not Alloy", measured on the deployed Policies screen as the computed background of
+     * "Create future version". The canonical configuration action is `ConfigurationPrimaryButton`,
+     * which is Bend Pine, and eleven Bend Pine elements were already on that same screen: the page
+     * was wearing two different answers to "this is the primary action".
+     *
+     * So this delegates rather than restating the chrome. Every surface that renders a
+     * `ConfigPrimaryButton` — fourteen of them, Policies among them — converges by inheriting it,
+     * and nothing is special-cased to Financials. Semantic status colours are untouched: this
+     * changes ACTION hierarchy, which is the thing that was speaking with two voices.
+     */
     return (
-        <button
-            type="button"
-            className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-            onClick={onClick}
-            disabled={disabled}
-            data-testid={testId}
-        >
+        <ConfigurationPrimaryButton onClick={onClick} disabled={disabled} data-testid={testId}>
             {children}
-        </button>
+        </ConfigurationPrimaryButton>
     );
 }
 

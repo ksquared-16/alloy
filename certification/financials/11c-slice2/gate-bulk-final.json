@@ -1,0 +1,11 @@
+{
+  "openerPresent": 1,
+  "cadence": 1,
+  "canonical": true,
+  "options": [
+    "Monthly",
+    "Weekly",
+    "Bi-weekly"
+  ],
+  "nativeSelects": 0
+}

@@ -2345,6 +2345,14 @@
         "reason": "Payments W1. Reading whether this organization can accept payments is an ordinary Financials read; connecting, refreshing and disconnecting are registered actions behind fin.provider because they decide where money settles."
       }
     },
+    "app/api/admin/financials/family-discount-position/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "The family grain of the same discount forecast the assignment-grain route serves. It reads what is expected to apply to a household's relationships and writes nothing, so it is an ordinary Financials read behind the same helper."
+      }
+    },
     "app/api/admin/financials/reduction-forecast/route.ts": {
       "GET": {
         "status": "declared",
