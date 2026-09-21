@@ -1,0 +1,46 @@
+{
+  "trusted_host_action_id": "tha_0a7dc60a576948",
+  "query_hash": "6bd81e948a270657c01d0d272890c3c7a8fbc67e03d2f5ed4c2f9c89aa841feb",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T18:16:33.387Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0a7dc60a576948",
+    "query_hash": "6bd81e948a270657c01d0d272890c3c7a8fbc67e03d2f5ed4c2f9c89aa841feb",
+    "authorization_id": "grnt_919121c48b1d4ff5",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T18:16:34.964Z",
+    "question_ids": [
+      "gswgrants"
+    ],
+    "questions": {
+      "gswgrants": {
+        "question_id": "gswgrants",
+        "row_count": null,
+        "rows": [
+          {
+            "fn_exec_service_role": 1,
+            "fn_exec_postgres": 1,
+            "fn_all_grantees": [
+              "postgres",
+              "service_role"
+            ],
+            "tbl_service_role": 7,
+            "tbl_all_grantees": [
+              "postgres",
+              "service_role"
+            ],
+            "observed_at": "2026-09-21 18:16:34.879546+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
