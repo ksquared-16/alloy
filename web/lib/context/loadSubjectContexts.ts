@@ -31,6 +31,7 @@ import {
 } from "@/lib/admin/locationDisplayLabel";
 import {
     buildSubjectEmploymentContext,
+    buildSubjectQualificationsContext,
     buildSubjectHouseholdContext,
     buildSubjectIdentityContext,
     buildSubjectProcessContexts,
@@ -164,6 +165,11 @@ export async function loadSubjectContexts(
 
     const employmentContext = buildSubjectEmploymentContext(employment, subjectId);
     if (employmentContext) contexts.push(employmentContext);
+
+    // Beside Employment, from the same composition, so the two can never disagree about whether
+    // this person is staff.
+    const qualificationsContext = buildSubjectQualificationsContext(employment, subjectId);
+    if (qualificationsContext) contexts.push(qualificationsContext);
 
     /*
      * THE RECORD ITSELF, AND ITS FAMILY.

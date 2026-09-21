@@ -48,6 +48,16 @@ export type SubjectContextKind =
     | "placement"
     | "employment"
     /**
+     * The credentials a staff member holds, and what is required of them.
+     *
+     * A sibling of `employment`, not a section inside it. Both are true about the person, but they
+     * change on different clocks: employment changes when someone is hired, moved or ended; a
+     * qualification's standing changes by the passage of a date. An operator asking "is her CPR
+     * current" is asking a different question from "does she work here", and a context vocabulary
+     * that answered both with one entry would bury the expiring one.
+     */
+    | "qualifications"
+    /**
      * The record's OWN information — "Child", and eventually "Person".
      *
      * Listed BESIDE the other contexts rather than framing them. That is the whole correction: a

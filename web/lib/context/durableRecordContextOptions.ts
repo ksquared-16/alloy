@@ -99,6 +99,13 @@ const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = [
      * date of birth: something true about the person, not something promised about their week.
      */
     "employment",
+    /*
+     * Qualifications sits beside `employment` for the same reason `employment` sits here rather
+     * than with the operational relationships: it is a canonical card ABOUT THE RECORD, not a
+     * commitment about someone's week. Whether Jane's CPR is current is of the same kind as
+     * whether she works here.
+     */
+    "qualifications",
 ];
 
 export type DurableRecordContextOption = {
