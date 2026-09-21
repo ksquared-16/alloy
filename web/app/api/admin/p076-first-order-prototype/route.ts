@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { CUSTOMER_MEMBER_CONFIG_FIELD_KEYS } from "@/lib/fields/customerMemberFieldRegistry";
+import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
 
 /**
  * P0-7.6 — FIRST-ORDER READ-DAG PROTOTYPE. DIAGNOSTIC ONLY, NOT A PRODUCT SURFACE.
@@ -120,8 +121,68 @@ export async function GET(req: NextRequest) {
         return { payments: ids.length, allocations: (allocs.data ?? []).length };
     });
 
+    /*
+     * SEMANTIC ORACLE — old shape vs new shape, SAME REQUEST, SAME DATA.
+     *
+     * The architecture changes exactly two read SHAPES; every other Stage-1 read reuses its
+     * existing canonical owner unchanged, so this is the whole parity surface. Comparing the two
+     * shapes against each other on one request is stronger evidence than comparing either against
+     * a rendered frame, because nothing else can drift between them.
+     *
+     * THE SPECIMEN MUST NOT BE EMPTY. The default subject has zero profile values and zero
+     * payments, so an equality check on it passes for the wrong reason — it compares nothing with
+     * nothing. `discover` finds a subject that actually has rows, and the answer reports whether
+     * it succeeded, so a vacuous PASS cannot be mistaken for a real one.
+     */
+    const discover = req.nextUrl.searchParams.get("discover") === "1";
+    let parity: Record<string, unknown> | null = null;
+    if (discover) {
+        const defs = await supabase.from("field_definitions").select("id")
+            .eq("org_id", orgId).eq("entity_type", "customer_member").eq("is_active", true)
+            .in("field_key", [...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS]);
+        const defIds = ((defs.data ?? []) as Array<{ id: string }>).map((d) => d.id);
+        const withValues = defIds.length
+            ? await supabase.from("field_values").select("entity_id")
+                .eq("org_id", orgId).eq("entity_type", "customer_member")
+                .in("field_definition_id", defIds).limit(25)
+            : { data: [] };
+        const candidates = [...new Set(((withValues.data ?? []) as Array<{ entity_id: string }>).map((r) => r.entity_id))];
+
+        const rows: Array<Record<string, unknown>> = [];
+        for (const id of candidates.slice(0, 5)) {
+            const [oldShape, newShape] = await Promise.all([
+                loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]),
+                supabase.from("field_values")
+                    .select("entity_id, field_definition_id, value_text, value_number, value_date, value_json, field_definitions!inner(field_key, entity_type, is_active)")
+                    .eq("org_id", orgId).eq("entity_type", "customer_member").in("entity_id", [id])
+                    .eq("field_definitions.is_active", true)
+                    .in("field_definitions.field_key", [...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS]),
+            ]);
+            const oldRow = (oldShape.get(id) ?? {}) as Record<string, unknown>;
+            const newKeys = ((newShape.data ?? []) as Array<{ field_definitions?: { field_key?: string } }>)
+                .map((r) => r.field_definitions?.field_key).filter(Boolean).sort();
+            const oldKeys = Object.keys(oldRow).filter((k) => oldRow[k] != null && !["person_id", "first_name", "last_name", "dob"].includes(k)).sort();
+            rows.push({
+                memberId: id,
+                oldConfigKeys: oldKeys,
+                newConfigKeys: newKeys,
+                match: JSON.stringify(oldKeys) === JSON.stringify(newKeys),
+                nonEmpty: newKeys.length > 0,
+            });
+        }
+        parity = {
+            candidatesFound: candidates.length,
+            compared: rows.length,
+            nonEmptyCompared: rows.filter((r) => r.nonEmpty === true).length,
+            allMatch: rows.length > 0 && rows.every((r) => r.match === true),
+            rows,
+            caveat: "A comparison over zero rows is not parity. Read nonEmptyCompared before allMatch.",
+        };
+    }
+
     return NextResponse.json({
         ok: true,
+        parity,
         orgId_present: Boolean(orgId),
         memberId_present: Boolean(memberId),
         customerId_present: Boolean(customerId),
