@@ -5299,6 +5299,16 @@
         "helper": "requireCompensationCapability",
         "reason": "Records an effective-dated compensation term and closes the prior open period. Gated separately from the read because a principal who may see a rate is not thereby a principal who may change one. Creates no payroll run and no financial transaction."
       }
+    },
+    "app/api/scheduled-work/wake/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The generic scheduled-work wake, called by the hosting platform's external clock and authenticated by x-cron-token against INTERNAL_CRON_TOKEN - the same machine-caller convention communication-scheduled-sends/process-due already uses. There is no operator session path: this runs as the system across organizations, so a capability scoped to one operator's org could only ever do part of the job. A missing or mismatched token is 401, never open."
+      },
+      "GET": {
+        "status": "none",
+        "reason": "The external clock's entry point. Vercel Cron issues GET with Authorization: Bearer CRON_SECRET, so the clock arrives on GET rather than POST; both verbs run the same wake through the same runtime. Unauthenticated GET is 401 and drives nothing - it is not a liveness endpoint that returns ok to anyone who finds the URL."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {
