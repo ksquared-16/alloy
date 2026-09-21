@@ -6,7 +6,7 @@
  * a family gets charged $500 they paid in cash yesterday. So this is called immediately before
  * collection, every time, and it reads the same authorities the operator's own screen reads:
  *
- *   · which charges belong to this account ... `resolveChargeAccount` (W3's mapping, not a copy)
+ *   · which sources bill this account ...... the customer itself and its enrolment agreements
  *   · what each charge still owes ............ `readChargeBalance` (canonical outstanding)
  *
  * No total is stored anywhere. There is no Autopay balance, because a second balance would be free
@@ -22,7 +22,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
-import { resolveChargeAccount } from "@/lib/financials/payments/collectionAttempt";
 
 export type AutopayDueCharge = {
     chargeId: string;
@@ -69,50 +68,53 @@ export async function resolveAutopayCollectible(
     const empty: AutopayCollectible = { charges: [], totalCents: 0, nextDueDate: null };
     if (!orgId || !customerId) return empty;
 
+    /*
+     * THE ACCOUNT'S BILLABLE SOURCES, RESOLVED FIRST.
+     *
+     * The first version read every posted charge in the organisation and filtered afterwards. That
+     * is wrong in a way that costs money rather than time: PostgREST caps a read at 1000 rows, so
+     * an organisation past that silently lost charges — and a charge Autopay cannot see is money it
+     * does not collect, with no error anywhere.
+     *
+     * A charge settles against this account either directly (`customer`) or through one of its
+     * enrolment agreements. Both are enumerable, so the charge read is bounded to this family.
+     */
+    const { data: agreementRows } = await supabase
+        .from("child_enrollment_agreements")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId);
+
+    const sourceIds = [
+        customerId,
+        ...((agreementRows ?? []) as Array<{ id?: unknown }>).map((r) => t(r.id)).filter(Boolean),
+    ];
+
     const { data, error } = await supabase
         .from("charges")
         .select("id, billable_source_type, billable_source_id, due_date, status")
         .eq("org_id", orgId)
         .eq("status", "posted")
-        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES]);
+        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+        .in("billable_source_id", sourceIds);
     if (error) return empty;
 
     type Row = { id?: unknown; billable_source_type?: unknown; billable_source_id?: unknown; due_date?: unknown };
     const rows = (data ?? []) as Row[];
 
-    /*
-     * The account mapping is memoised per billable source for the same reason the operator's
-     * chooser memoises it: a family's charges overwhelmingly share one agreement, and asking once
-     * per charge is a round trip per charge.
-     */
-    const accountBySource = new Map<string, string>();
     const due: AutopayDueCharge[] = [];
     let nextDueDate: string | null = null;
 
     for (const row of rows) {
         const chargeId = t(row.id);
         const dueDate = t(row.due_date);
-        const sourceType = t(row.billable_source_type);
-        const sourceId = t(row.billable_source_id);
-        if (!chargeId || !sourceType || !sourceId) continue;
+        if (!chargeId) continue;
         /*
          * A charge with no due date has no `on_due_date` moment, so this policy cannot say it has
          * come due. Collecting it anyway would be Autopay inventing a due date Financials declined
          * to state.
          */
         if (!dueDate) continue;
-
-        const key = `${sourceType}:${sourceId}`;
-        if (!accountBySource.has(key)) {
-            accountBySource.set(
-                key,
-                await resolveChargeAccount(supabase, orgId, {
-                    billable_source_type: sourceType,
-                    billable_source_id: sourceId,
-                }),
-            );
-        }
-        if (accountBySource.get(key) !== customerId) continue;
 
         const actionableFrom = actionableOnOrAfter(dueDate, args.timingOffsetDays);
         if (actionableFrom > args.asOf) {

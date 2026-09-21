@@ -24,15 +24,28 @@ vi.mock("@/lib/financials/childcarePaymentService", () => ({
 
 type Row = Record<string, unknown>;
 
-/** Charges keyed so the mocked balance above reads the amount out of the id: `chg-<cents>`. */
-function store(charges: Row[]) {
+/**
+ * Charges keyed so the mocked balance above reads the amount out of the id: `chg-<cents>`.
+ *
+ * The store HONOURS the `billable_source_id` filter, because that filter is the fix for a real
+ * defect: the reader used to scan every posted charge in the organisation and filter in memory,
+ * which silently lost charges past PostgREST's 1000-row cap. A fake that ignored the filter would
+ * let that regression back in unnoticed.
+ */
+function store(charges: Row[], agreements: Row[] = []) {
     return {
-        from() {
+        from(table: string) {
+            const filters: Array<(r: Row) => boolean> = [];
             const self: Record<string, unknown> = {};
             self.select = () => self;
             self.eq = () => self;
-            self.in = () => self;
-            self.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: charges, error: null }).then(res);
+            self.in = (col: string, values: unknown[]) => {
+                filters.push((r) => values.includes(r[col]));
+                return self;
+            };
+            const source = () => (table === "child_enrollment_agreements" ? agreements : charges);
+            self.then = (res: (v: unknown) => unknown) =>
+                Promise.resolve({ data: source().filter((r) => filters.every((f) => f(r))), error: null }).then(res);
             return self;
         },
     } as never;
@@ -125,6 +138,35 @@ describe("what is deliberately never collected", () => {
             orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01",
         });
         expect(out.charges).toEqual([]);
+    });
+});
+
+describe("the account's charges are found through both billable sources", () => {
+    /*
+     * Tuition is billed to an ENROLMENT AGREEMENT, not to the customer. If the reader only looked
+     * for charges whose source is the customer, Autopay would silently never collect tuition —
+     * which is most of what a family owes.
+     */
+    it("collects a charge billed to one of the account's enrolment agreements", async () => {
+        const out = await resolveAutopayCollectible(
+            store(
+                [{ id: "chg-40000", billable_source_type: "enrollment_agreement", billable_source_id: "ea-1", due_date: "2026-10-01", status: "posted" }],
+                [{ id: "ea-1" }],
+            ),
+            { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01" },
+        );
+        expect(out.totalCents).toBe(40_000);
+    });
+
+    it("never collects a charge billed to another family's agreement", async () => {
+        const out = await resolveAutopayCollectible(
+            store(
+                [{ id: "chg-40000", billable_source_type: "enrollment_agreement", billable_source_id: "ea-OTHER", due_date: "2026-10-01", status: "posted" }],
+                [{ id: "ea-1" }],
+            ),
+            { orgId: ORG, customerId: CUSTOMER, timingOffsetDays: 0, asOf: "2026-10-01" },
+        );
+        expect(out.totalCents).toBe(0);
     });
 });
 
