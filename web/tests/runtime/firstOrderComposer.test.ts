@@ -256,10 +256,24 @@ describe("state semantics are never collapsed", () => {
         expect(r.projection.geometry.workViewCount).toBe(2);
     });
 
-    it("unresolved KPI and Work View totals are UNKNOWN, not zero", async () => {
+    it("KPI and Work View slots carry a CANONICAL STATE — never a placeholder", async () => {
+        /*
+         * This gate used to assert every KPI and Work View was UNKNOWN, which was the truth when
+         * A′ did not resolve them. They are FIRST-ORDER VALUES now by Director ruling, so the
+         * contract is no longer "always unknown" — it is that every configured slot carries a
+         * state from its canonical owner, and never a placeholder standing in for one.
+         *
+         * This suite supplies no KPI reader and no Work View totals, so the honest state here is
+         * UNAVAILABLE. The value-family state matrix lives in the compiler suite, which mocks the
+         * canonical owners and exercises known / known-zero / unknown / unavailable / forbidden.
+         */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(Object.values(r.projection.kpiValues).every((f) => f.state === "unknown")).toBe(true);
-        expect(Object.values(r.projection.workViewTotals).every((f) => f.state === "unknown")).toBe(true);
+        const all = [...Object.values(r.projection.kpiValues), ...Object.values(r.projection.workViewTotals)];
+        expect(all.length).toBe(5);
+        for (const f of all) {
+            expect(["known", "known_zero", "known_empty", "unknown", "unavailable", "forbidden"]).toContain(f.state);
+        }
+        expect(JSON.stringify(all), "an unresolved slot must not carry a value").not.toContain('"value":0');
     });
 });
 
@@ -601,9 +615,10 @@ describe("the new reads obey configuration and cost nothing when unconfigured", 
         /*
          * 17 → 20 with process configuration (1) and the two health supplements (2); 20 → 24 with
          * the account ledger (agreements · paged charges · batched applications · batched payment
-         * statuses). A silent extra read is the thing this catches.
+         * statuses); 24 → 26 with header KPIs, whose VALUES are first-order. A silent extra read
+         * is the thing this catches.
          */
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
-        expect(r.timing.queryCount).toBe(24);
+        expect(r.timing.queryCount).toBe(26);
     });
 });
