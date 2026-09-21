@@ -444,6 +444,10 @@ export async function GET(req: NextRequest) {
     const shadowCards = (req.nextUrl.searchParams.get("cards") ?? "").split(",").map((c) => c.trim()).filter(Boolean);
     let shadow: Record<string, unknown> | null = null;
     if (shadowCards.length && workUnitId) {
+        const csv = (name: string) => (req.nextUrl.searchParams.get(name) ?? "")
+            .split(",").map((v) => v.trim()).filter(Boolean);
+        const shadowKpiKeys = csv("kpi_keys");
+        const shadowViewIds = csv("view_ids");
         const kpis = Number(req.nextUrl.searchParams.get("kpis") ?? "0") || 0;
         const views = Number(req.nextUrl.searchParams.get("views") ?? "0") || 0;
         const started = performance.now();
@@ -459,8 +463,23 @@ export async function GET(req: NextRequest) {
                  */
                 configuration: resolveFirstOrderSurfaceConfiguration({
                     cardKeys: shadowCards,
-                    kpiKeys: Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
-                    workViewIds: Array.from({ length: views }, (_, i) => `view_${i}`),
+                    /*
+                     * REAL CONFIGURED IDENTITIES, supplied by the caller.
+                     *
+                     * These were synthesised as `kpi_0..n` and `view_0..n`. Synthetic KPI keys are
+                     * not known metric keys, so `isKnownOipMetricKey` rejected every one and the
+                     * frame reported UNKNOWN — correct runtime behaviour, and worthless as parity
+                     * evidence. The probe reads the tenant's own `sourceKey`s off the rendered
+                     * frame and passes them here, so the diagnostic asks the SAME question the
+                     * product asks. The `kpis`/`views` counts remain only as a scaling knob for
+                     * configuration-cost experiments.
+                     */
+                    kpiKeys: shadowKpiKeys.length
+                        ? shadowKpiKeys
+                        : Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
+                    workViewIds: shadowViewIds.length
+                        ? shadowViewIds
+                        : Array.from({ length: views }, (_, i) => `view_${i}`),
                     siteScopeId: null,
                 }),
                 // Request-time decisions, resolved by this route's own gate. The composer never

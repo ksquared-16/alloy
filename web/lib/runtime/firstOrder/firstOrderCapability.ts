@@ -97,8 +97,16 @@ export type FirstOrderProjectionContext = {
     readonly processConfigRead?: boolean;
     /** Resolved KPI values by configured source key, or null when the read failed. */
     readonly headerKpis?: { status: string; values: Record<string, unknown> } | null;
-    /** Resolved Work View totals by configured view id, or null when the read failed. */
-    readonly workViewTotals?: { status: string; totalsByViewId: Record<string, number | null> } | null;
+    /**
+     * Resolved Work View totals, or null when the read failed.
+     *
+     * The unavailable arm deliberately carries NO totals — an empty map would read as
+     * authoritative zeros, which is the distinction the seed contract exists to preserve.
+     */
+    readonly workViewTotals?:
+        | { status: "ok"; totalsByViewId: Record<string, number | null>; configuredViewSignature: string }
+        | { status: "unavailable"; reason: string }
+        | null;
     readonly childrenRead?: boolean;
 };
 
