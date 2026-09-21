@@ -1,0 +1,34 @@
+[
+  {
+    "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+    "label": "CC Certa Certhouse Enrolled North Campus Program School Age Date of birth Apr 12",
+    "who": "Certa Certhouse",
+    "heading": null,
+    "forecastPresent": true,
+    "forecastText": "DISCOUNTS | Sibling discount (QA specimen) · $18.50 expected to apply | Add exception | Sibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding, superseded so the walkthrough starts clean | Ended",
+    "outcomes": [
+      {
+        "kind": "expected",
+        "policy": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "reason": null,
+        "text": "Sibling discount (QA specimen) · $18.50 expected to apply Add exception"
+      }
+    ]
+  },
+  {
+    "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+    "label": "CC Certb Certhouse Enrolled North Campus Program Preschool Date of birth Sep 30,",
+    "who": "Certb Certhouse",
+    "heading": null,
+    "forecastPresent": true,
+    "forecastText": "DISCOUNTS | Sibling discount (QA specimen) · $145.00 expected to apply | Add exception | Sibling discount (QA specimen) · ended 2026-08-31 — Retired: certification scaffolding dated into a future period | Ended",
+    "outcomes": [
+      {
+        "kind": "expected",
+        "policy": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "reason": null,
+        "text": "Sibling discount (QA specimen) · $145.00 expected to apply Add exception"
+      }
+    ]
+  }
+]

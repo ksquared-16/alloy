@@ -35,6 +35,7 @@
  * Pure. No I/O, no clock, no Supabase.
  */
 
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
 import { chargeCategorySemantics } from "@/lib/financials/chargeCategorySemantics";
 
 /** How a benefit is expressed — the authoring vocabulary of the policy registry. */
@@ -259,7 +260,14 @@ function evaluateOne(
     const cap = num(policy.params.max_benefit_cents);
     const capped = cap != null && cap >= 0 && raw > cap;
     const amount = capped ? cap! : raw;
-    const shown = basis === "percentage" ? `${value}%` : `$${(value / 100).toFixed(2)}`;
+    /*
+     * ONE MONEY FORMAT PER LINE. `toFixed(2)` prints 145000 cents as "$1450.00" while every
+     * surface that renders this explanation formats its own amounts through Intl — so the
+     * Financials Details line read "Expected $145.00 · … 10% of $1450.00", two conventions for
+     * the same currency, side by side. MEASURED on deployed f160bb907. The canonical formatter
+     * is the one the rest of admin already uses.
+     */
+    const shown = basis === "percentage" ? `${value}%` : formatMoneyFromCents(value);
     return {
         policyId: policy.id,
         policyKind: policy.kind,
@@ -269,8 +277,8 @@ function evaluateOne(
         amountCents: -amount,
         capped,
         explanation:
-            `${policy.label ?? policy.kind} · ${shown} of $${(gross.amountCents / 100).toFixed(2)}`
-            + (capped ? `, capped at $${(amount / 100).toFixed(2)}` : ""),
+            `${policy.label ?? policy.kind} · ${shown} of ${formatMoneyFromCents(gross.amountCents)}`
+            + (capped ? `, capped at ${formatMoneyFromCents(amount)}` : ""),
     };
 }
 

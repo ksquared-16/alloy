@@ -1,0 +1,10 @@
+{
+  "gitSha": "cfd4168b80357997adbc428bc94bbb2eb04ece7b",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1173 from ksquared-16/agent/financials-11c-slice3\n\nFinancials 11C slice 3 — final repair: escape ownership, per-relationship basis, one policy name",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-78g78tzzx-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_2eFZQm84VmWPFdAfXbsYTbaC1Rw8",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+}

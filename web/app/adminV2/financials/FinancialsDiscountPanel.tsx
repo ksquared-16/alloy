@@ -79,6 +79,28 @@ function money(cents: number, currency: string): string {
  * something that is already there.
  */
 
+
+/**
+ * THE BASIS, WITHOUT THE NAME IN FRONT OF IT.
+ *
+ * The forecast builds its explanation as "<policy name> · <basis>" — it has to, because a caller
+ * reading one outcome in isolation needs to know which policy it is about. This surface already
+ * states the policy name as a header, so rendering the explanation whole printed the name twice
+ * on every relationship line.
+ *
+ * MEASURED on deployed cfd4168b8: "Certa Certhouse · Expected $18.50 · Sibling discount (QA
+ * specimen) · 10% of $185.00". Two fixes interacting — D2 moved the basis onto the relationship
+ * line, D3 gave the explanation the policy's real name — and neither was wrong alone.
+ *
+ * Only a LEADING, exact name is removed. Nothing is recomputed, and an explanation that does not
+ * begin with the name is shown untouched rather than guessed at.
+ */
+function basisWithoutPolicyName(explanation: string | null, policyName: string): string | null {
+    if (!explanation) return null;
+    const prefix = `${policyName} · `;
+    return explanation.startsWith(prefix) ? explanation.slice(prefix.length) : explanation;
+}
+
 export default function FinancialsDiscountPanel({
     customerId,
     childLabelFor,
@@ -205,10 +227,13 @@ export default function FinancialsDiscountPanel({
                     {policies.map((p) => (
                         <div key={p.policyId} data-financials-discount-policy={p.policyId}>
                             {/*
-                              * THE NAME ONLY. The forecast's explanation already leads with the
-                              * policy kind, so rendering both produced "discount · discount · 10%
-                              * of $185.00" — and that basis was one child's, shown as if it were
-                              * the policy's. The derivation now sits on the line it belongs to.
+                              * THE NAME ONLY, AND ONLY HERE. The forecast's explanation always
+                              * leads with the policy's own name, so rendering both printed the name
+                              * twice — "discount · discount · 10% of $185.00" before D3 gave the
+                              * policy its real name, "Sibling discount (QA specimen) · Sibling
+                              * discount (QA specimen) · 10% of $185.00" after. And that basis was
+                              * one child's, shown as if it were the policy's. The name stays at
+                              * policy grain; the derivation sits on the line it belongs to.
                               */}
                             <p className="text-[11px] text-alloy-midnight/75">{p.label}</p>
                             {p.subjects.map((s) => (
@@ -218,8 +243,8 @@ export default function FinancialsDiscountPanel({
                                     data-financials-discount-subject={s.opportunityCustomerMemberId}
                                 >
                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
-                                    {s.explanation ? (
-                                        <span className="text-alloy-midnight/40"> · {s.explanation}</span>
+                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
+                                        <span className="text-alloy-midnight/40"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
                                     ) : null}
                                 </p>
                             ))}
@@ -279,8 +304,8 @@ export default function FinancialsDiscountPanel({
                                             <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
                                                 <p className="text-[11px] text-alloy-midnight/70">
                                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
-                                                    {s.explanation ? (
-                                                        <span className="text-alloy-midnight/45"> · {s.explanation}</span>
+                                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
+                                                        <span className="text-alloy-midnight/45"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
                                                     ) : null}
                                                 </p>
                                                 {excepted ? (

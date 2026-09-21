@@ -1,0 +1,399 @@
+{
+  "projection": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "relationships": 2,
+      "policies": [
+        {
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyKind": "discount",
+          "label": "Sibling discount (QA specimen)",
+          "explanation": "Sibling discount (QA specimen) · 10% of $185.00",
+          "subjects": [
+            {
+              "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+              "customerMemberId": "e408fa51-7261-43c4-8e60-555d17fc9888",
+              "expectedCents": -1850,
+              "currencyCode": "USD",
+              "explanation": "Sibling discount (QA specimen) · 10% of $185.00"
+            },
+            {
+              "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+              "customerMemberId": "46105cd4-6030-417d-a7cb-faf409071c0d",
+              "expectedCents": -14500,
+              "currencyCode": "USD",
+              "explanation": "Sibling discount (QA specimen) · 10% of $1450.00"
+            }
+          ]
+        }
+      ],
+      "notExpected": [],
+      "exceptions": [
+        {
+          "id": "362c6562-827b-486c-b791-224d447913a1",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "A-K final — mounted authoring on the repaired deployed build",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "df5bc525-7be9-4c6b-8e1a-4c392a9b410e",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "A-K final — mounted authoring on the repaired deployed build",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "67b2d2b9-3078-41d9-a68b-b8e5da613c07",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": "2026-09-20",
+          "reason": "11B promotion proof — board waived this policy for this family",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "22fecfb3-5b14-4ae3-884c-79d212ee8dc6",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "A-K final — mounted authoring on the repaired build",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "83c1a9e0-48c3-4549-abfe-327800fc7056",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "A-K final — re-authored the same combination after ending",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "bb096357-cb56-461c-b519-5454b90855ab",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-20",
+          "effectiveEnd": null,
+          "reason": "A-K final — re-authored the same combination after ending",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "aaa30633-3166-4ec3-9d65-94f0cc5761fe",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": "2026-09-19",
+          "reason": "§12 — governed this period, and already ended",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "49ab10f4-a45c-4461-adeb-ab0311a0a496",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": "2026-09-30",
+          "reason": "H/I — moved out of the way of the next period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "34c519db-2c0a-471a-810a-7442bc6164d6",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": "2026-09-20",
+          "reason": "11B promotion proof — excluded for the whole period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "52949df2-7728-4c97-a933-20739080c4fb",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "reason": "A-K final — excluded for the whole period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "eef1869d-c4a1-4e85-b078-3fb4057cf91b",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": "2026-09-30",
+          "reason": "H/I — moved out of the way of the next period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "bdc54087-34cd-4aec-820d-6953b79e48f7",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-08-01",
+          "effectiveEnd": "2026-08-31",
+          "reason": "Retired: certification scaffolding, superseded so the walkthrough starts clean",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": false,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "8f2b648b-66d0-4efe-bbb6-a69600ebfe09",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-08-01",
+          "effectiveEnd": "2026-08-31",
+          "reason": "A-K final — a window that closed before this period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "3e825cfc-fb08-407d-8790-837d07ac1848",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-07-01",
+          "effectiveEnd": "2026-07-31",
+          "reason": "F — retired to a long-closed window so the period is ungoverned",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "79f8011d-a236-4054-bee7-af10f1dbc632"
+        },
+        {
+          "id": "0ba7961b-740a-4a44-baeb-20363d540018",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-10-01",
+          "effectiveEnd": null,
+          "reason": "H/I — excluded for the next period, to prove no row is written",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "467bb381-24a9-4340-9a1e-2962b19d64e9",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-10-01",
+          "effectiveEnd": null,
+          "reason": "H/I — excluded for the next period, to prove no row is written",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "e5a43c40-b345-43ab-8471-ed4e5faa0ba3",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "reason": "A-K final — excluded for the whole period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "153915cb-d0eb-4b40-b08d-571b7f7d0f89",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "reason": "A-K — second, same start, must be refused or supersede",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "d84dbd9a-141a-4a03-83f4-0151e1b88e46",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-09-01",
+          "effectiveEnd": null,
+          "reason": "A-K — first of a duplicate pair",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": false,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "8037f56b-b49e-45d5-9524-f1a3409d54a1",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-08-01",
+          "effectiveEnd": "2026-08-31",
+          "reason": "Retired: certification scaffolding dated into a future period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": false,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "7577d506-4129-4510-9a4f-b94c071926db",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-08-01",
+          "effectiveEnd": "2026-08-31",
+          "reason": "A-K final — a window that closed before this period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        },
+        {
+          "id": "3ad43e60-8ab7-4f00-95ad-d7974b9b7868",
+          "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+          "policyLabel": "Sibling discount (QA specimen)",
+          "effectiveStart": "2026-08-01",
+          "effectiveEnd": "2026-08-31",
+          "reason": "A-K — a window that closed before this period",
+          "appliesNow": false,
+          "isLiveNow": false,
+          "ended": true,
+          "superseded": true,
+          "opportunityCustomerMemberId": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+        }
+      ],
+      "withoutForecast": []
+    }
+  },
+  "surfaceRequests": [
+    "GET /api/admin/workspace/site-filter",
+    "GET /api/admin/communications/unread-count",
+    "GET /api/admin/operational-tasks?scope=workspace&summary=true",
+    "GET /api/admin/lifecycle-catalog",
+    "GET /api/admin/work-units",
+    "GET /api/admin/departments",
+    "GET /api/admin/entity-labels",
+    "GET /api/admin/ai/workflow-assist/capabilities",
+    "GET /api/admin/ai/config-layout-assist/capabilities",
+    "GET /api/admin/status-options?entity_type=opportunities",
+    "GET /api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5",
+    "POST /api/admin/queue-view-totals",
+    "GET /api/admin/verticals",
+    "GET /api/admin/queues/stage-membership-ack?keys=93667019-bd28-49b5-a688-acc9bb1e0a19%3Aa92a0f18-6efb-40d0-b74f-52708e96fb03%3Achild%3A46105cd4-6030-417d-a7cb-faf409071c0d%3Aenrolled%3A2026-08-27T22%3A52%3A37.442Z%2C93667019-bd28-49b5-a688-acc9bb1e0a19%3Aa92a0f18-6efb-40d0-b74f-52708e96fb03%3Achild%3Ae408fa51-7261-43c4-8e60-555d17fc9888%3Aenrolled%3A2026-08-27T22%3A52%3A36.854Z",
+    "GET /api/admin/option-sets/person_gender",
+    "GET /api/admin/locations?hierarchy=1",
+    "GET /api/admin/option-sets/childcare_program_type",
+    "GET /api/admin/location-program-categories?include_inactive=true",
+    "GET /api/admin/entity-layouts/focus-panel-summary?workViewId=new_work_view_7&stageKey=enrolled",
+    "GET /api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a852-b11b8888a6cd",
+    "GET /api/admin/actions/right-rail-bundle?department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_unit_id=dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+    "GET /api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788?processKey=enrollment",
+    "GET /api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+    "GET /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&composer_channel=email",
+    "GET /api/admin/communications/threads?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=40",
+    "GET /api/admin/communications/bindings",
+    "GET /api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/operational-tasks?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/communications/conversations",
+    "GET /api/admin/locations?hierarchy=1",
+    "GET /api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/activity?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=100",
+    "GET /api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&thread_id=6e75a85c-1d6f-4fab-a0cf-6e67f4c30259",
+    "GET /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/financials/payment-methods?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/financials/autopay?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/financials/payment-methods?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+  ],
+  "position": {
+    "text": "DISCOUNTS | Sibling discount (QA specimen) | Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00 | Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "header": "Sibling discount (QA specimen)",
+        "subjects": [
+          {
+            "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "text": "Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00"
+          },
+          {
+            "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "text": "Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00"
+          }
+        ]
+      }
+    ]
+  },
+  "management": {
+    "rootPresent": true,
+    "text": "Manage discounts | Which policies reach this family, and whether a relationship is excepted from one. Rates and eligibility are organization configuration. | Sibling discount (QA specimen) | Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00 | Add exception | Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00 | Add exception | Close",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "text": "Sibling discount (QA specimen) Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00 Add exception Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00 Add exception"
+      }
+    ]
+  },
+  "belowLedger": {
+    "ledgerRows": 116,
+    "discountPositionAfterLedger": true,
+    "responsibilityAfterLedger": false,
+    "payerAdminAfterLedger": true
+  }
+}
