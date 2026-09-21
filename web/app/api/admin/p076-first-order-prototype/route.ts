@@ -547,6 +547,7 @@ export async function GET(req: NextRequest) {
                 workViewValues: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [
                     k, { state: f.state, value: f.state === "known" ? f.value : null },
                 ])),
+                workViewDiagnostics: r.workViewDiagnostics ?? null,
                 serializedBytes: new TextEncoder().encode(JSON.stringify(p)).length,
             };
         } catch (e) {
