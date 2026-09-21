@@ -145,3 +145,39 @@ export function resolvePrepaidPositionOutcome(reads: {
         }),
     };
 }
+
+/**
+ * THE READER'S SCOPING PROBLEM — read this before building it (P0-7.6 · A′ Slice 1 item C-reader).
+ *
+ * The pure aggregate above is proven against the oracle. The READER that feeds it is NOT yet
+ * built, and it is harder than the four-reads sketch implies, for a reason worth recording rather
+ * than rediscovering.
+ *
+ * AN ACCOUNT'S PAYMENTS ARE NOT SELECTABLE BY `customer_id`. `payments` is scoped by
+ * `billable_source_type` / `billable_source_id`, and the canonical reader
+ * (`resolveHouseholdPaymentViews`) therefore SCANS the org's inbound childcare payments in pages
+ * and resolves each distinct source to a household afterwards. A diagnostic query I measured
+ * earlier used `.eq("customer_id", …)`; that is not the same query and its timings are not
+ * evidence about this reader.
+ *
+ * THE BOUNDED SHAPE, from the two source types in `CHILDCARE_BILLABLE_SOURCE_TYPES`:
+ *   · `customer`             — `billable_source_id` IS the household id;
+ *   · `enrollment_agreement` — resolves through `child_enrollment_agreements` to the household.
+ *
+ * So the account's receipts are reachable without an org scan:
+ *   1  agreements for the household              (child_enrollment_agreements by customer)
+ *   2  payments where source is this customer OR source is one of those agreements  (one `.or`)
+ *   3  allocations || refunds || holds           (batched over those payment ids)
+ *   4  hold dispositions                         (inside the canonical `readHoldsForPayments`)
+ *
+ * That is roughly six reads at four hops of DEPTH — bounded by the household's agreement count,
+ * not by its payment count, which is the property that matters against the current N+1.
+ *
+ * REUSE `readHoldsForPayments` rather than reimplementing it: `remainingCents` needs the
+ * dispositions, and a second implementation of "how much of this receipt is still held" would be
+ * exactly the second semantic owner this architecture forbids.
+ *
+ * PARITY MUST BE RE-PROVEN AT THE READER LEVEL. The matrix above proves the ARITHMETIC matches;
+ * it says nothing about whether the reader selects the same receipts the canonical path does.
+ * Those are different claims and only the first is currently evidenced.
+ */
