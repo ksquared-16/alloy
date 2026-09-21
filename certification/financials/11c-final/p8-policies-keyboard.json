@@ -1,0 +1,50 @@
+{
+  "toRow": {
+    "found": true,
+    "steps": 31,
+    "at": {
+      "tag": "BUTTON",
+      "role": "option",
+      "testId": "policy-5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "name": "Sibling discount (QA specimen) Pricing · Discount 10% off ev",
+      "focusVisible": true,
+      "ring": "auto 1px rgb(0, 95, 204) | box-shadow:rgba(20, 25, 34, 0.05) 0px 1px 2px 0px, rgba(20, 25, 34, 0.0"
+    }
+  },
+  "selected": "Sibling discount (QA specimen)\n\nReduce the price of tuition, fees, or everything by a percentage or a fixed amount.\n\nWhat it does\n10% off everything\nCategory\nPricing\nType\nDiscount\nStatus\nActive\nApplied to\nWhole organization\nLocations\nAll locations\nEffective\n2026-01-01 – Present",
+  "toEdit": {
+    "found": true,
+    "steps": 1,
+    "at": {
+      "tag": "BUTTON",
+      "role": null,
+      "testId": "policy-edit",
+      "name": "Edit Policy",
+      "focusVisible": true,
+      "ring": "none 1px rgb(0, 95, 203) | box-shadow:rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0"
+    }
+  },
+  "afterActivate": {
+    "dialog": 1,
+    "nativeSelects": 3,
+    "alloySelects": 0,
+    "text": "Edit policy | Pricing · Reduce the price of tuition, fees, or everything by a percentage or a fixed amount. e.g. 10% off tuition for staff families. | Rule name (recommended) | Discount type | Select… | Percentage off | Fixed amount off | Percentage | % | Applies to | Select… | Tuition only | Fees & add-ons | Everything | Applied to | Which commercial object this rule attaches to. Fees and add-ons"
+  },
+  "afterDismiss": {
+    "before": true,
+    "escapeDismissed": false,
+    "cancelUsed": true,
+    "cancelReachable": true,
+    "cancelSteps": 24,
+    "afterEscape": true,
+    "final": false,
+    "focus": {
+      "tag": "BODY",
+      "role": null,
+      "testId": null,
+      "name": "STAGING — NOT PRODUCTION ⌘K QS Organization financials Finan",
+      "focusVisible": false,
+      "ring": "none 3px rgb(24, 39, 58) | box-shadow:none"
+    }
+  }
+}

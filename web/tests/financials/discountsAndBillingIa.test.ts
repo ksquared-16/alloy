@@ -565,3 +565,39 @@ describe("one policy identity has one operator-facing name", () => {
         expect(panel, "and is never matched as text").not.toMatch(/label\s*===\s*["'`]/);
     });
 });
+
+describe("the policy name is stated once, not once per line", () => {
+    const PANEL = "app/adminV2/financials/FinancialsDiscountPanel.tsx";
+
+    it("the relationship line carries the basis without the name in front of it", () => {
+        /*
+         * MEASURED on deployed cfd4168b8, and only mounting showed it: two correct fixes
+         * interacted. D2 moved the basis onto the relationship line; D3 gave the forecast's
+         * explanation the policy's real name — and the explanation is built as
+         * "<policy name> · <basis>", so the line read
+         *   "Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00"
+         * with the name already sitting in the header above it.
+         */
+        const panel = code(PANEL);
+        expect(panel).toContain("function basisWithoutPolicyName");
+        expect(panel, "the raw explanation is never rendered beside the name")
+            .not.toMatch(/·\s*\{s\.explanation\}/);
+        expect(panel, "only an exact leading name is removed").toContain("explanation.startsWith(prefix)");
+        expect(panel, "and nothing is recomputed").not.toMatch(/percent|basisPoints/);
+    });
+});
+
+describe("one money format per line", () => {
+    it("the forecast explanation formats currency the way the rest of admin does", () => {
+        /*
+         * MEASURED on deployed f160bb907: "Certb Certhouse · Expected $145.00 · Sibling discount
+         * (QA specimen) · 10% of $1450.00". The amount and its basis sat on one line in two
+         * conventions, because the surface formats through Intl and the explanation used
+         * toFixed(2), which has no thousands separator.
+         */
+        const src = code("lib/financials/reductions/resolveFinancialReductions.ts");
+        expect(src).toContain("formatMoneyFromCents");
+        expect(src, "no hand-rolled currency in the explanation")
+            .not.toMatch(/\$\$\{|\$\{\([^)]*\/ 100\)\.toFixed\(2\)\}/);
+    });
+});

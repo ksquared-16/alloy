@@ -1,0 +1,68 @@
+{
+  "before": {
+    "detailsOpen": 1,
+    "account": null,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "responsibilityPanel": 0,
+    "discountPanel": 0
+  },
+  "opened": {
+    "detailsOpen": 1,
+    "account": null,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "responsibilityPanel": 0,
+    "discountPanel": 1
+  },
+  "afterEscape": {
+    "detailsOpen": 1,
+    "account": null,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "responsibilityPanel": 0,
+    "discountPanel": 0
+  },
+  "focusAfterEscape": {
+    "tag": "BUTTON",
+    "name": "Manage discounts",
+    "manageDiscounts": "gear",
+    "isTheOpener": true
+  },
+  "afterExplicit": {
+    "detailsOpen": 1,
+    "account": null,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "responsibilityPanel": 0,
+    "discountPanel": 0
+  }
+}

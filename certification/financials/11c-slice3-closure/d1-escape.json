@@ -1,0 +1,55 @@
+{
+  "before": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "discountPanel": 0
+  },
+  "opened": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "discountPanel": 1
+  },
+  "afterEscape": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "discountPanel": 0
+  },
+  "focusAfterEscape": "BUTTON(\"Manage discounts\")",
+  "afterClose": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPosition": 1,
+    "responsibilityGear": 1,
+    "discountPanel": 0
+  }
+}
