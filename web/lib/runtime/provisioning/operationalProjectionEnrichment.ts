@@ -37,6 +37,7 @@ import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOp
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 import {
     attachPartialQueueRowContextToRows,
+    resolveQueueRowOccurrenceIdentity,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContext";
 import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
@@ -94,11 +95,30 @@ export async function enrichOperationalProjectionRows(args: {
     };
     args.onPhase?.("enrich_rows", rows.length);
 
-    // ONE batched enrichment pass for the whole page (person + location + children reads are
-    // batched by id inside the shared owners — not a per-row query).
-    let projectionById = new Map<string, Record<string, unknown>>();
-    try {
-        const crm = await phase("enrich_crm_ms", () => enrichOpportunityRowsWithCrmProjection(
+    /*
+     * THREE INDEPENDENT READS, STARTED TOGETHER.
+     *
+     * Measured deployed (n=6): CRM 186ms, children 224ms, personal_seen 106ms -- and they SUMMED
+     * to the 526ms cohort_rows wall, which is what proved they were serial. Nothing required that
+     * order: CRM needs primary_person_id/location_id, children needs customer_id, and the
+     * occurrence key needs id/org_id/stage_key/stage_entered_at/created_at. Every one of those is
+     * a RAW column in PROCESS_POPULATION_SELECT, so no read consumes another's output.
+     *
+     * FAILURE ISOLATION IS PRESERVED DELIBERATELY. Each read keeps its own catch and its own
+     * degrade, exactly as before: a CRM failure yields an empty projection and rows fall back to
+     * title/name, a children failure leaves Secondary absent, and a personal_seen failure leaves
+     * the verdict ABSENT so the client hydrates it. `Promise.all` would convert three independent
+     * best-effort reads into one fail-together read, turning any single degrade into a blank page.
+     * Starting them together is a scheduling change; it is not a contract change.
+     *
+     * MERGE PRECEDENCE IS UNCHANGED: raw < CRM < children. The children loop still folds over the
+     * CRM map with `{...prior, ...projection}`, and the row merge is still `{...raw, ...projection}`.
+     * Concurrency changes when the answers arrive, never which answer wins.
+     */
+    const viewerId = args.currentUserId?.trim() || null;
+
+    const crmP = phase("enrich_crm_ms", () =>
+        enrichOpportunityRowsWithCrmProjection(
             args.supabase,
             args.orgId,
             args.rows.map((r) => ({
@@ -107,22 +127,14 @@ export async function enrichOperationalProjectionRows(args: {
                 location_id: (r.location_id as string | null) ?? null,
                 metadata: r.metadata,
             })),
-        ));
-        projectionById = crm as unknown as Map<string, Record<string, unknown>>;
-    } catch {
-        // Enrichment failure is NOT an operational error. The context builders degrade honestly —
-        // an absent `_customer_name` falls back to title/name, an absent `_status_display` resolves
-        // through the shared status-label pipeline. The operator gets a real row, not a placeholder,
-        // and recognition never depends on a best-effort read succeeding.
-        projectionById = new Map();
-    }
+        ),
+    ).then(
+        (v) => ({ ok: true as const, v }),
+        () => ({ ok: false as const, v: null }),
+    );
 
-    // Secondary band (`children.names` / `children.count`) needs related_subjects_summary, which
-    // is built from `_crm_compact_children` / `_household_children` / `_inquiry_children`. CRM
-    // contact enrichment alone does not attach those — without this pass Secondary stays empty
-    // live while Builder preview (seeded) looks correct.
-    try {
-        const children = await phase("enrich_children_ms", () => enrichOpportunityRowsWithChildrenForCompactQueue(
+    const childrenP = phase("enrich_children_ms", () =>
+        enrichOpportunityRowsWithChildrenForCompactQueue(
             args.supabase,
             args.orgId,
             args.rows.map((r) => ({
@@ -130,13 +142,65 @@ export async function enrichOperationalProjectionRows(args: {
                 customer_id: (r.customer_id as string | null) ?? null,
                 metadata: r.metadata,
             })),
-        ));
-        for (const [id, projection] of children) {
+        ),
+    ).then(
+        (v) => ({ ok: true as const, v }),
+        () => ({ ok: false as const, v: null }),
+    );
+
+    /*
+     * The occurrence keys come from the RAW page via the canonical derivation, so this read no
+     * longer waits for the enrichment merge it never depended on.
+     */
+    const keyByRowId = new Map<string, string>();
+    if (viewerId) {
+        for (const r of rows) {
+            const identity = resolveQueueRowOccurrenceIdentity(r, args.queue);
+            if (!identity?.enteredAtIso || !identity.stageKey) continue;
+            keyByRowId.set(
+                String(r.id),
+                occurrenceKeyForAck({
+                    orgId: args.orgId,
+                    userId: viewerId,
+                    subjectType: identity.subjectType,
+                    subjectId: identity.subjectId,
+                    stageKey: identity.stageKey,
+                    stageEnteredAtIso: identity.enteredAtIso,
+                }),
+            );
+        }
+    }
+    const seenP: Promise<ReadonlySet<string> | null> =
+        viewerId && keyByRowId.size
+            ? phase("enrich_personal_seen_ms", () =>
+                  loadAcknowledgedOccurrenceKeys({
+                      supabase: args.supabase,
+                      orgId: args.orgId,
+                      userId: viewerId,
+                      occurrenceKeys: [...keyByRowId.values()],
+                  }),
+              ).then(
+                  (v) => v,
+                  /*
+                   * UNAVAILABLE IS NOT ACKNOWLEDGED. Null leaves `personal_seen` absent so the
+                   * client hydrates over the network; writing a verdict here would turn "we could
+                   * not find out" into "you have seen this" and clear a dot still owed.
+                   */
+                  () => null,
+              )
+            : Promise.resolve(null);
+    args.onPhase?.("enrich_personal_seen_keys", keyByRowId.size);
+
+    let projectionById = new Map<string, Record<string, unknown>>();
+    const crm = await crmP;
+    if (crm.ok && crm.v) projectionById = crm.v as unknown as Map<string, Record<string, unknown>>;
+
+    const children = await childrenP;
+    if (children.ok && children.v) {
+        for (const [id, projection] of children.v) {
             const prior = projectionById.get(id) ?? {};
             projectionById.set(id, { ...prior, ...projection });
         }
-    } catch {
-        // Same honest degrade: Secondary absent is preferable to failing the page.
     }
 
     const merged = rows.map((r) => {
@@ -149,88 +213,28 @@ export async function enrichOperationalProjectionRows(args: {
     args.onPhase?.("enrich_row_context_ms", Date.now() - tCtx);
 
     /*
-     * PERSONAL SEEN, RESOLVED HERE INSTEAD OF IN A SECOND ROUND TRIP.
+     * FOLD THE ALREADY-RUNNING ACKNOWLEDGEMENT READ.
      *
-     * Measured on the canonical six-card baseline (n=11, SHA 786a96eb1): WU-05 owned completion in
-     * 11 of 11, and its completion-setting mutation was the REMOVAL of an unread dot —
-     * `aria-label "Not yet opened by you" -> null` — driven by a post-mount
-     * GET /api/admin/queues/stage-membership-ack. That round trip measured 592ms (P50) and was the
-     * dominant interval between the document landing and first-order finality.
+     * Same canonical pair as before -- `loadAcknowledgedOccurrenceKeys` for the set and
+     * `personalSeenFromOccurrence` for the per-row verdict -- so a key composed here still cannot
+     * diverge from one composed by the endpoint or the POST path. Only the START moved.
      *
-     * The document already asserts a value for this: with `personal_seen` absent, `resolveRowUnseen`
-     * returns TRUE for every row ("treat as unseen until ack"). For rows the operator HAS opened
-     * that assertion is FALSE, and the fetch exists to correct it. So this is not a duplicated
-     * read — it is a false early claim plus a correction. Answering here removes both.
-     *
-     * NO SECOND OWNER: the acknowledged set comes from `loadAcknowledgedOccurrenceKeys` and the
-     * per-row verdict from `personalSeenFromOccurrence` — the same canonical pair the endpoint
-     * uses. The occurrence key is built by `occurrenceKeyForAck`, the same builder the client and
-     * the POST path use, so a key composed here and a key composed there cannot diverge.
-     *
-     * The key already binds org, operator, subject, stage and stage-entry time, so a verdict cannot
-     * be carried across navigations or re-used after a subject re-enters a stage: a new occurrence
-     * is a different key and reads as unseen again.
-     *
-     * ONE query for the whole page, and it is the already-bounded page (<= 100 rows).
+     * A null result means the read failed or there was no viewer: `personal_seen` stays ABSENT and
+     * the client hydrates exactly as it always has.
      */
-    const viewerId = args.currentUserId?.trim() || null;
-    if (viewerId) {
-        const keyByRowId = new Map<string, string>();
+    const acknowledged = await seenP;
+    if (acknowledged) {
         for (const row of withContext) {
             const ctx = queueRowContextOf(row);
-            const stageKey = ctx?.operational_state?.stage_key?.trim();
-            const enteredAt = ctx?.operational_state?.entered_at?.trim();
-            const subjectType = ctx?.row_subject?.subject_type;
-            const subjectId = ctx?.row_subject?.subject_id;
-            if (!stageKey || !enteredAt || !subjectType || !subjectId) continue;
-            keyByRowId.set(
-                String(row.id),
-                occurrenceKeyForAck({
-                    orgId: args.orgId,
-                    userId: viewerId,
-                    subjectType,
-                    subjectId,
-                    stageKey,
-                    stageEnteredAtIso: enteredAt,
-                }),
-            );
-        }
-        if (keyByRowId.size) {
-            const tSeen = Date.now();
-            try {
-                const acknowledged = await loadAcknowledgedOccurrenceKeys({
-                    supabase: args.supabase,
-                    orgId: args.orgId,
-                    userId: viewerId,
-                    occurrenceKeys: [...keyByRowId.values()],
-                });
-                for (const row of withContext) {
-                    const ctx = queueRowContextOf(row);
-                    const key = keyByRowId.get(String(row.id));
-                    if (!ctx || !key) continue;
-                    ctx.personal_seen = personalSeenFromOccurrence({
-                        occurrenceKey: key,
-                        acknowledgedKeys: acknowledged,
-                    });
-                }
-            } catch {
-                /*
-                 * UNAVAILABLE IS NOT ACKNOWLEDGED. A failed read leaves `personal_seen` ABSENT, so
-                 * the client keeps its existing behaviour and hydrates over the network. Writing a
-                 * verdict here would turn "we could not find out" into "you have seen this" and
-                 * silently clear a dot the operator still needs.
-                 */
-            }
-            args.onPhase?.("enrich_personal_seen_ms", Date.now() - tSeen);
-            args.onPhase?.("enrich_personal_seen_keys", keyByRowId.size);
+            const key = keyByRowId.get(String(row.id));
+            if (!ctx || !key) continue;
+            ctx.personal_seen = personalSeenFromOccurrence({
+                occurrenceKey: key,
+                acknowledgedKeys: acknowledged,
+            });
         }
     }
 
-    // BOUNDED PAYLOAD. The full QueueRowContext is heavy — attaching it raw took the answer from
-    // 19KB to 101KB (5.2x) for a 100-row page. `projectQueuePreviewRowContexts` is the canonical
-    // compact projection: it keeps exactly the fields the compact row reads and drops the dead heavy
-    // flat enrichment. Same shared owner the deployed queue path already uses, so the row the
-    // operator sees is composed from the same fields either way — this trims the wire, not the truth.
     const tProj = Date.now();
     const projected = projectQueuePreviewRowContexts(withContext);
     args.onPhase?.("enrich_projection_ms", Date.now() - tProj);

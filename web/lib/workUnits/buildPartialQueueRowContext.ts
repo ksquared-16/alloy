@@ -512,6 +512,48 @@ function buildLifecycleSubjectRef(params: {
  * Child/candidate grain membership is not synthesized — pass subject_grain when
  * queue_definition declares it; row_subject still uses opportunity id until phase 6.
  */
+/**
+ * The stage-membership occurrence this row represents, for the CURRENT operator.
+ *
+ * Exported so personal-seen acquisition can start from the RAW page instead of waiting for the
+ * enrichment merge. Measured: the three cohort reads ran serially at 186 + 224 + 106ms, and the
+ * only thing forcing personal_seen last was that its key was read off the BUILT context.
+ *
+ * It is the same derivation the context build performs -- `resolveStageKey` then
+ * `buildOperationalStateQueueContext` -- called here rather than copied, because "which stage
+ * occurrence is this row in" must have exactly one definition. Re-deriving the persisted-vs-intake
+ * fallback beside it would be a second answer to that question, and the two would drift.
+ *
+ * Reads only raw projection columns (id, org_id, stage_key, stage_entered_at, created_at) plus
+ * queue meta, all present in PROCESS_POPULATION_SELECT — nothing produced by CRM or children
+ * enrichment, which is what makes the three reads genuinely independent.
+ */
+export function resolveQueueRowOccurrenceIdentity(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta,
+): { subjectType: LifecycleSubjectType; subjectId: string; stageKey: string; enteredAtIso: string | null } | null {
+    const subjectId = trimOrNull(row.id);
+    if (!subjectId) return null;
+    const stageKey = resolveStageKey(row, queue);
+    const operational = buildOperationalStateQueueContext({
+        orgId: trimOrNull(row.org_id) ?? "",
+        grain: "case",
+        subjectType: "case",
+        subjectId,
+        currentStageKey: stageKey,
+        persistedStageEnteredAt: trimOrNull(row.stage_entered_at),
+        intakeCreatedAt: trimOrNull(row.created_at),
+        neverTransitioned:
+            !trimOrNull(row.stage_entered_at) && (trimOrNull(stageKey)?.toLowerCase() === "lead"),
+    });
+    return {
+        subjectType: "case",
+        subjectId,
+        stageKey: operational.stage_key ?? stageKey,
+        enteredAtIso: operational.entered_at,
+    };
+}
+
 export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextInput): QueueRowContext {
     const row = input.row;
     const caseId = trimOrNull(row.id) ?? "";

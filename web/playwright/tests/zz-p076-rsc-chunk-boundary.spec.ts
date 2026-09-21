@@ -68,6 +68,27 @@ test("p076 rsc chunk boundary", async ({ page }) => {
         new MutationObserver((records) => {
             for (const r of records) for (const n of Array.from(r.addedNodes)) scan(n);
         }).observe(document, { childList: true, subtree: true });
+
+        /*
+         * IS THE CLIENT INTERVAL WORK, OR WAITING?
+         *
+         * ~685ms separates the first-order payload arriving in the browser from the operator
+         * seeing it. That interval has two completely different causes and they need different
+         * repairs: main-thread execution (decode, hydration, model construction) versus idle time
+         * behind a boundary or a scheduled effect. Long tasks separate them without guessing --
+         * blocked main thread shows up as tasks, waiting does not.
+         */
+        const w2 = window as unknown as { __p076tasks?: { t: number; d: number }[] };
+        w2.__p076tasks = [];
+        try {
+            new PerformanceObserver((list) => {
+                for (const e of list.getEntries()) {
+                    w2.__p076tasks!.push({ t: Math.round(e.startTime), d: Math.round(e.duration) });
+                }
+            }).observe({ type: "longtask", buffered: true });
+        } catch {
+            /* longtask unsupported — reported as UNMEASURED rather than assumed absent */
+        }
     });
 
     await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -93,6 +114,13 @@ test("p076 rsc chunk boundary", async ({ page }) => {
             personalSeenT: firstWith("personal_seen"),
             responseStart: n ? Math.round(n.responseStart) : null,
             responseEnd: n ? Math.round(n.responseEnd) : null,
+            domInteractive: n ? Math.round(n.domInteractive) : null,
+            domContentLoaded: n ? Math.round(n.domContentLoadedEventEnd) : null,
+            loadEvent: n ? Math.round(n.loadEventEnd) : null,
+            tasks: (window as unknown as { __p076tasks?: { t: number; d: number }[] }).__p076tasks ?? null,
+            // The whole chunk timeline: what is still streaming AFTER first-order truth has landed
+            // decides whether a Stage-2 boundary is even possible.
+            timeline: chunks.map((c) => ({ t: c.t, len: c.len, m: c.marks.length })),
             // MEASURE THE MEASUREMENT: if the markers are absent from the document entirely, the
             // probe is looking in the wrong place and its silence means nothing.
             scriptTagsWithPush: document.querySelectorAll("script").length,
