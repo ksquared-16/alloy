@@ -28,6 +28,20 @@ const DECLARATIONS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "
 
 const identity = (over: Partial<FirstOrderConfigurationIdentity> = {}): FirstOrderConfigurationIdentity => ({
     cardKeys: ["business_process", "financials", "children", "household", "attendance", "health_safety"],
+    /*
+     * FIELD MEMBERSHIP IS PART OF IDENTITY. Card membership alone cannot identify a frame: two
+     * frames can agree on six cards and disagree about what those cards say, and a projection
+     * answering for the wrong field set is as stale as one answering for the wrong cards — it
+     * just fails less visibly, as a region rendering the previous tenant's choice.
+     */
+    cardFields: {
+        business_process: ["process.name", "process.stage_count"],
+        financials: ["financials.prepaid_available_cents"],
+        children: ["children.count"],
+        household: ["household.label", "person.primary_contact_name"],
+        attendance: ["attendance.state"],
+        health_safety: ["health.profile_fact_count"],
+    },
     kpiKeys: ["needs_attention", "overdue_work", "pipeline_children"],
     workViewIds: ["new-leads", "tours"],
     siteScopeId: null,
@@ -38,7 +52,7 @@ const projection = (id = identity()): FirstOrderWorkUnitProjection => ({
     workUnitId: "wu-1",
     subjectId: known("subj-1"),
     configurationIdentity: id,
-    geometry: { cardOrder: id.cardKeys, kpiSlotCount: id.kpiKeys.length, workViewCount: id.workViewIds.length },
+    geometry: { cardOrder: id.cardKeys, cardFieldSlots: id.cardFields, kpiSlotCount: id.kpiKeys.length, workViewCount: id.workViewIds.length },
     queueRows: known([]),
     kpiValues: {},
     workViewTotals: {},
@@ -98,6 +112,22 @@ describe("configuration identity: N cannot satisfy N+1", () => {
         ["a Work View removed", { workViewIds: ["new-leads"] }],
         ["Work Views reordered", { workViewIds: ["tours", "new-leads"] }],
         ["site scope changed", { siteScopeId: "site-2" }],
+        ["a FIELD removed from a card", {
+            cardFields: { ...identity().cardFields, household: ["household.label"] },
+        }],
+        ["a FIELD added to a card", {
+            cardFields: { ...identity().cardFields, children: ["children.count", "children.enrolling_count"] },
+        }],
+        ["FIELDS reordered within a card", {
+            cardFields: { ...identity().cardFields, household: ["person.primary_contact_name", "household.label"] },
+        }],
+        ["a field MOVED between cards", {
+            cardFields: {
+                ...identity().cardFields,
+                household: ["household.label", "person.primary_contact_name", "children.count"],
+                children: [],
+            },
+        }],
     ];
 
     for (const [name, over] of CHANGES) {
@@ -151,5 +181,7 @@ describe("the projection carries Stage-1 truth only", () => {
         const p = projection();
         expect(p.geometry.cardOrder).toEqual(p.configurationIdentity.cardKeys);
         expect(p.geometry.kpiSlotCount).toBe(p.configurationIdentity.kpiKeys.length);
+        // A card cannot reserve its regions from its position alone — the slots are geometry too.
+        expect(p.geometry.cardFieldSlots).toEqual(p.configurationIdentity.cardFields);
     });
 });

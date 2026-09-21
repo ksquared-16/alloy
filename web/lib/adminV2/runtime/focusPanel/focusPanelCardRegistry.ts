@@ -1,5 +1,6 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { CardAuthoring } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import type { CardFirstOrderFields } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardFirstOrderConcern";
 import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     declarationAppliesToGrain,
@@ -73,7 +74,13 @@ export type CardDefinition = CardIdentity &
     Partial<CardLifecycle> &
     Partial<CardGrainApplicability> &
     Partial<CardSupersession> &
-    Partial<CardAuthoring>;
+    Partial<CardAuthoring> &
+    /*
+     * FIRST-ORDER concern (owned by `focusPanelCardFirstOrderConcern`, read by the A′ compiler).
+     * Folded in as its own optional slice, per the DESIGN LAW above — the registry does not learn
+     * what a semantic key means, only that a card declares some.
+     */
+    Partial<CardFirstOrderFields>;
 
 /**
  * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
@@ -100,7 +107,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * retired card's name. The runtime card already renders its configured process name; this is
      * the identity an operator picks it by.
      */
-    { key: "business_process", title: "Business Process", ownsWorkCompletion: true },
+    {
+        key: "business_process", title: "Business Process", ownsWorkCompletion: true,
+        firstOrderFields: [
+            "process.name", "process.stage_count", "process.current_stage_key",
+            "process.current_stage_label", "process.stage_position", "process.stage_entered_at",
+        ],
+    },
     /**
      * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
      * durable Household surface exist at all. Silence would have left it case-only by the
@@ -112,7 +125,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * them" from `customer_persons` alone, with no case involved. Same card, same renderer, same
      * model builder — only the producer of the record differs.
      */
-    { key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"] },
+    {
+        key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"],
+        firstOrderFields: [
+            "household.label", "household.updated_at", "person.primary_contact_name",
+            "person.primary_contact_line", "record.location_label", "children.count",
+        ],
+    },
     /**
      * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads the canonical child
      * collection — on a case, one enrollment's projection of a family's children — while a durable
@@ -138,7 +157,10 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * collection, so the card composes from real truth rather than from a case borrowed for the
      * occasion. `ChildrenCard` reads `context.grain` and opens on that member — see its docblock.
      */
-    { key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    {
+        key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: ["children.count", "children.enrolling_count"],
+    },
     /**
      * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
      *
@@ -205,7 +227,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      */
     { key: "staff_readiness", title: "Readiness", grains: ["person"] },
     { key: "staff_compensation", title: "Compensation", grains: ["person"] },
-    { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
+    {
+        key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "attendance.state", "attendance.date", "attendance.expected_room_label",
+            "attendance.unavailable_reason",
+        ],
+    },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".
      *
@@ -218,7 +246,15 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * child-grain panel scopes the same account to one subject rather than answering a different
      * question.
      */
-    { key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    {
+        key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "financials.prepaid_available_cents", "financials.prepaid_pending_cents",
+            "financials.prepaid_held_cents", "financials.billing_period_key",
+            "financials.responsibility_cents", "financials.balance_cents",
+            "financials.past_due_cents",
+        ],
+    },
     /*
      * HEALTH & SAFETY — "what do I need to know to care for this child safely right now?"
      *
@@ -232,7 +268,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * CHILD GRAIN ONLY, deliberately. Health is about a person, and a case panel covering several
      * children has no single health subject — the card refuses rather than choosing one.
      */
-    { key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"] },
+    {
+        key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"],
+        firstOrderFields: [
+            "health.profile_fact_count", "health.requirements_satisfied",
+            "health.requirements_total", "health.emergency_contact_count",
+        ],
+    },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *
