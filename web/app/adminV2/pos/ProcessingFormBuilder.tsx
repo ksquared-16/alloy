@@ -67,6 +67,11 @@ const QUESTION_TYPES: Array<{ type: BuilderFieldType; label: string; meta: strin
     { type: "date", label: "Date", meta: "Calendar picker", category: "basic" },
     { type: "select", label: "Dropdown", meta: "Select one option", category: "choice" },
     { type: "boolean", label: "Yes / No", meta: "Boolean toggle", category: "choice" },
+    /*
+     * Multi-select was in the builder's own type union and in the schema, and simply absent from
+     * this menu — so a question the family may answer several ways could not be authored at all.
+     */
+    { type: "multiselect", label: "Choose multiple", meta: "Select any that apply", category: "choice" },
     { type: "signature", label: "Signature", meta: "Draw or type signature", category: "capture" },
     { type: "file_ref", label: "File upload", meta: "Attach a document", category: "capture" },
 ];
@@ -358,7 +363,7 @@ export default function ProcessingFormBuilder({
             type,
             label: `Untitled ${label.toLowerCase()}`,
             sectionId: librarySectionId,
-            ...(type === "select" ? { options: [{ value: "option_1", label: "Option 1" }] } : {}),
+            ...(type === "select" || type === "multiselect" ? { options: [{ value: "option_1", label: "Option 1" }] } : {}),
         };
         const { schema: next, fieldId } = addField(schema, spec);
         setSchema(next);

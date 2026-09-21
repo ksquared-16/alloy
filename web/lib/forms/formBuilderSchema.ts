@@ -30,8 +30,35 @@ export interface BuilderFieldSpec {
     label: string;
     required?: boolean;
     description?: string;
-    /** For select/multiselect. */
+    /** For select/multiselect — inline choices, when the vocabulary is this Form's own. */
     options?: Array<{ value: string; label: string }>;
+    /**
+     * For select/multiselect — an ORGANIZATION vocabulary instead of inline choices.
+     *
+     * `person_gender` is the case that forced this: the tenant already maintains that list, and an
+     * imported "How would you describe your child's gender?" text box should join it rather than
+     * grow a private copy that drifts. Setting this clears inline options; they are two ways to say
+     * the same thing and a field holding both has no single answer to "where do the choices come
+     * from".
+     */
+    option_set_key?: string;
+    /**
+     * When this question is asked at all — the schema's own `visibility`, surfaced for authoring.
+     *
+     * One condition is what an imported "If yes, …" box needs, and it is all this exposes: the
+     * field it depends on, and the answer that reveals it. `formVisibilitySchema` supports several
+     * ANDed conditions and the evaluator honours them; nothing here prevents that, it simply does
+     * not invent an authoring surface for a shape no imported paperwork has yet produced.
+     */
+    visible_when?: { field_id: string; equals: string | number | boolean | null } | null;
+    /**
+     * A value Alloy CALCULATES and never asks for.
+     *
+     * "Student Age Upon Enrolling" is the case: a family typing "2" is being asked to compute
+     * something Alloy holds the inputs for. `derived` has existed in the schema all along with no
+     * authoring path.
+     */
+    derived?: { kind: "age_from_date_of_birth" | "execution_date"; source_key?: string; as_of_key?: string } | null;
     /** Optional canonical binding; unbound fields are allowed. */
     field_source?: { entity_type: string; field_key: string; shared_value_key?: string };
     /**
@@ -90,6 +117,8 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
         ...(spec.field_source && spec.field_source.entity_type && spec.field_source.field_key
             ? { field_source: { entity_type: spec.field_source.entity_type, field_key: spec.field_source.field_key, ...(spec.field_source.shared_value_key ? { shared_value_key: spec.field_source.shared_value_key } : {}) } }
             : {}),
+        ...(visibilityFromSpec(spec.visible_when) ? { visibility: visibilityFromSpec(spec.visible_when)! } : {}),
+        ...(spec.derived?.kind ? { derived: { kind: spec.derived.kind, ...(spec.derived.source_key ? { source_key: spec.derived.source_key } : {}), ...(spec.derived.as_of_key ? { as_of_key: spec.derived.as_of_key } : {}) } } : {}),
     };
     switch (spec.type) {
         case "short_text":
@@ -115,10 +144,29 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
         case "signature":
             return { ...base, type: "signature" };
         case "select":
-            return { ...base, type: "select", static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
+            return { ...base, type: "select", ...choiceSource(spec) };
         case "multiselect":
-            return { ...base, type: "multiselect", static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
+            return { ...base, type: "multiselect", ...choiceSource(spec) };
     }
+}
+
+/**
+ * Where a closed question's answers come from — an organization vocabulary, or this Form's own list.
+ *
+ * Never both. The schema permits either and `validateFormSchema` requires at least one; a field
+ * carrying both would have two answers to "what may the family choose", and the renderer would pick
+ * one of them silently.
+ */
+function choiceSource(spec: BuilderFieldSpec): { option_set_key: string } | { static_options: Array<{ value: string; label: string }> } {
+    const key = spec.option_set_key?.trim();
+    if (key) return { option_set_key: key };
+    return { static_options: (spec.options ?? []).filter((o) => o.value && o.label) };
+}
+
+/** The schema's own condition shape, from the one the inspector speaks. */
+function visibilityFromSpec(v: BuilderFieldSpec["visible_when"]): { all: [{ field_id: string; op: "eq"; value: string | number | boolean | null }] } | null {
+    if (!v || !v.field_id) return null;
+    return { all: [{ field_id: v.field_id, op: "eq", value: v.equals }] };
 }
 
 /** Add a registry-backed canonical field to a section. */
@@ -163,6 +211,33 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
         }
         if (patch.options !== undefined && (next.type === "select" || next.type === "multiselect")) {
             (next as { static_options?: Array<{ value: string; label: string }> }).static_options = patch.options.filter((o) => o.value && o.label);
+            // Choosing an inline list is choosing NOT to use the organization's vocabulary.
+            delete (next as { option_set_key?: string }).option_set_key;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, "option_set_key") && (next.type === "select" || next.type === "multiselect")) {
+            const key = patch.option_set_key?.trim();
+            if (key) {
+                (next as { option_set_key?: string }).option_set_key = key;
+                // and the inline copy goes, so the two can never disagree
+                delete (next as { static_options?: unknown }).static_options;
+            } else {
+                delete (next as { option_set_key?: string }).option_set_key;
+                if (!(next as { static_options?: unknown[] }).static_options?.length) {
+                    (next as { static_options?: Array<{ value: string; label: string }> }).static_options = [];
+                }
+            }
+        }
+        /* Presence, not value — the same rule `field_source` needed, and for the same reason: the
+           only way to say "ask this always" is to clear the condition. */
+        if (Object.prototype.hasOwnProperty.call(patch, "visible_when")) {
+            const v = visibilityFromSpec(patch.visible_when);
+            if (v) (next as { visibility?: unknown }).visibility = v;
+            else delete (next as { visibility?: unknown }).visibility;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, "derived")) {
+            const d = patch.derived;
+            if (d?.kind) (next as { derived?: unknown }).derived = { kind: d.kind, ...(d.source_key ? { source_key: d.source_key } : {}), ...(d.as_of_key ? { as_of_key: d.as_of_key } : {}) };
+            else delete (next as { derived?: unknown }).derived;
         }
         /*
          * UNBINDING IS SAYING `undefined`, SO `undefined` CANNOT MEAN "NOT MENTIONED".
