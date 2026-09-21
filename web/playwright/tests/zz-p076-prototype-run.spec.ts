@@ -10,7 +10,19 @@ import { test } from "@playwright/test";
 test("p076 prototype run", async ({ page }) => {
     const url = process.env.P076_URL || "/adminV2/workspace/work-unit/new-leads";
     const n = Number(process.env.P076_N || 1);
+    test.setTimeout(180_000);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120_000 });
+
+    /*
+     * WAIT BEFORE READING ANYTHING — ids AND cards.
+     *
+     * This wait was originally placed after the id extraction, so on a slower load the flight
+     * payload had not arrived, `ids_not_found` fired, and the spec RETURNED EARLY while still
+     * reporting "1 passed". Twenty-three sampling runs produced nothing that way. The Focus Panel
+     * selector is the one signal that the operator's frame actually exists, so everything is read
+     * after it, and every absence below throws rather than returning.
+     */
+    await page.waitForSelector("article.alloy-os-ucard[data-universal-card-key]", { timeout: 60_000 });
 
     const ids = await page.evaluate(() => {
         let decoded = "";
@@ -38,23 +50,9 @@ test("p076 prototype run", async ({ page }) => {
     const customerId = ids.customer[0] ?? null;
     const workUnitId = ids.workUnit[0] ?? null;
     if (!memberId || !customerId) {
-        console.log(`[proto] ${JSON.stringify({ error: "ids_not_found", ids })}`);
-        return;
+        // FATAL. A silent return here is how a sampling run reports success over no samples.
+        throw new Error(`p076: subject ids not found in the rendered frame — ${JSON.stringify(ids)}`);
     }
-
-    /*
-     * WAIT FOR THE CARDS, AND REFUSE TO MEASURE WITHOUT THEM.
-     *
-     * The frame is read after `domcontentloaded`, which is BEFORE the Focus Panel paints. The
-     * probe therefore found zero cards, sent no `cards` parameter, and the route answered
-     * `shadow: null` — a run that passed in 8.9s having measured nothing. The selector was right;
-     * the moment was wrong, which is the same green-and-vacuous failure the note below describes
-     * arriving by a different route.
-     *
-     * So the wait is explicit AND the absence is fatal. A probe that cannot see the operator's
-     * configuration must say so, not quietly measure a default.
-     */
-    await page.waitForSelector("article.alloy-os-ucard[data-universal-card-key]", { timeout: 60_000 });
 
     // Configuration read off the RENDERED frame, so the composer is exercised against the
     // operator's real configuration rather than one the probe invented.
@@ -67,6 +65,14 @@ test("p076 prototype run", async ({ page }) => {
          * and measured nothing, which is the failure mode worth naming: the run was green and
          * vacuous. The same selector the critical-path probe already uses is the canonical one.
          */
+        /*
+         * The tenant's REAL KPI source keys and Work View ids, read off the same rendered frame
+         * the card keys come from. Synthetic identities made the diagnostic ask a question the
+         * product never asks.
+         */
+        kpiKeys: [...new Set([...document.documentElement.outerHTML.matchAll(/"sourceKey":"([a-z0-9_.]{3,60})"/g)].map((m) => m[1]))],
+        viewIds: [...new Set([...document.querySelectorAll("[data-work-view-id]")]
+            .map((el) => el.getAttribute("data-work-view-id") || "").filter(Boolean))],
         cards: [...document.querySelectorAll("article.alloy-os-ucard")]
             .map((el) => el.getAttribute("data-universal-card-key")
                 || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
@@ -78,8 +84,11 @@ test("p076 prototype run", async ({ page }) => {
     }
     const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
     console.log(`[proto-config] ${JSON.stringify({ cards: [...new Set(rendered.cards)] })}`);
+    const kpiParam = rendered.kpiKeys.length ? `&kpi_keys=${encodeURIComponent(rendered.kpiKeys.join(","))}` : "";
+    const viewParam = rendered.viewIds.length ? `&view_ids=${encodeURIComponent(rendered.viewIds.join(","))}` : "";
+    console.log(`[proto-identities] ${JSON.stringify({ kpiKeys: rendered.kpiKeys, viewIds: rendered.viewIds })}`);
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
-        + (process.env.P076_SHADOW === "1" ? `${cardParam}&kpis=3&views=2` : "")
+        + (process.env.P076_SHADOW === "1" ? `${cardParam}${kpiParam}${viewParam}` : "")
         + (process.env.P076_MONEY === "1" ? "&discover_money=1" : "")
         + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
     await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);

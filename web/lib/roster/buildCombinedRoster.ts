@@ -89,7 +89,7 @@ export type ChildServiceDayState = {
      */
     dayClosed: boolean;
 };
-import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
+import { resolveAssignmentTimes, uniformDailyInterval } from "@/lib/assignmentTime/resolveAssignmentTime";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import {
     buildStaffSupply,
@@ -417,21 +417,19 @@ export async function buildCombinedRoster(
         }[]).map((p) => [p.id, displayNameFrom(p)])
     );
 
-    const patternIds = [...new Set(expectedToday.map((e) => e.schedulePatternId).filter(Boolean))];
-    const patternRows =
-        patternIds.length > 0
-            ? ((
-                  await supabase
-                      .from("schedule_patterns")
-                      .select("id, metadata")
-                      .eq("org_id", orgId)
-                      .in("id", patternIds)
-              ).data ?? [])
-            : [];
-    const patternTimeLabel = new Map<string, string | null>();
-    for (const p of patternRows as { id: string; metadata: unknown }[]) {
-        const hours = readPatternDefaultHours((p.metadata ?? null) as Record<string, unknown> | null);
-        patternTimeLabel.set(p.id, hours ? formatCompactScheduleHours(hours.arrive, hours.depart) : null);
+    // Hours come from the ASSIGNMENT each expectation came from, not from the pattern
+    // it was created with: two children on one pattern may legitimately differ.
+    const assignmentTimes = await resolveAssignmentTimes(supabase, {
+        orgId,
+        assignmentIds: expectedToday.map((e) => e.assignmentId).filter(Boolean),
+    });
+    const assignmentTimeLabel = new Map<string, string | null>();
+    for (const [assignmentId, time] of assignmentTimes) {
+        const uniform = uniformDailyInterval(time);
+        assignmentTimeLabel.set(
+            assignmentId,
+            uniform ? formatCompactScheduleHours(uniform.startTime, uniform.endTime) : null
+        );
     }
 
     // Demand is INTERPRETED, never taken raw: the ratio engine reports 0 required
@@ -464,7 +462,7 @@ export async function buildCombinedRoster(
             displayName:
                 (personId ? personNameById.get(personId) : null) ??
                 (member ? displayNameFrom(member) : "Unnamed child"),
-            timeLabel: patternTimeLabel.get(e.schedulePatternId) ?? null,
+            timeLabel: assignmentTimeLabel.get(e.assignmentId) ?? null,
             scheduleTypeKey: e.scheduleTypeKey,
             programCategoryId: e.programCategoryId,
             actual: (() => {

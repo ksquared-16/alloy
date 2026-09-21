@@ -316,17 +316,17 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         payers,
         payment: {
             /*
-             * AUTOPAY IS NOT A PAYMENT METHOD, and this used to say it was: it read the payment
-             * setup line — a hardcoded null at the time — into the autopay slot, so a family with a
-             * card on file would have been labelled as having autopay, and every family was labelled
-             * as not having it. Two different questions had one answer.
+             * AUTOPAY IS NOT A PAYMENT METHOD, and this once said it was: it read the payment setup
+             * line — a hardcoded null at the time — into the autopay slot, so a family with a card
+             * on file would have been labelled as having autopay. Two different questions had one
+             * answer.
              *
-             * There is no canonical autopay anywhere in the platform: no table, no column, no
-             * writer. `resolvePaymentSetup` reports that as `unsupported` with the reason, and the
-             * label here is that reason's short form — never a state derived from something else.
+             * W5 gave the second question its own authority. This is now the canonical arrangement's
+             * own sentence and never a state derived from a stored method, because storing a card is
+             * still not consent to charge it.
              */
-            autopayLabel: null,
-            autopayHealthy: false,
+            autopayLabel: vm.autopayLine ?? null,
+            autopayHealthy: vm.autopayHealthy === true,
             nextChargeLabel: null,
         },
         upcoming: [],

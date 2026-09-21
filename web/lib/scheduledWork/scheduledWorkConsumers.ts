@@ -1,5 +1,12 @@
+import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
 import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
 import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
+import {
+    AUTOPAY_HANDLER_KEY,
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
  * THE THREE V1 CONSUMERS, registered at the same boundary.
@@ -9,23 +16,30 @@ import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduled
  *
  * ── WHAT THESE HANDLERS DO AND DO NOT DO IN V1 ──
  *
- * Periodic Billing, Charge Aging and Autopay economics are NOT productized here,
- * and inventing them to demonstrate scheduling would be worse than a stated
+ * Periodic Billing and Charge Aging economics are NOT productized here, and
+ * inventing them to demonstrate scheduling would be worse than a stated
  * limitation — it would put fabricated financial behaviour behind a real clock.
  *
- * So each handler crosses the exact registered-handler boundary the real one will,
- * receives the same context, returns the same structured outcome, and performs a
- * NON-MUTATING evaluation. What is certified is the boundary and the runtime, not
- * billing arithmetic. When Financials and Payments productize their mutations,
- * they replace the body of these functions and nothing above changes.
+ * AUTOPAY IS the exception, and now the proof: Payments V1 W5 replaced its body
+ * with the real implementation and nothing above this file changed.
+ *
+ * So the two remaining stubs cross the exact registered-handler boundary their real
+ * implementations will, receive the same context, return the same structured
+ * outcome, and perform a NON-MUTATING evaluation. What was certified is the
+ * boundary and the runtime, not billing arithmetic. When Financials productizes
+ * its mutations it replaces those bodies, and nothing above this file changes —
+ * which is no longer a prediction, because Autopay has now done exactly that.
  *
  * Each returns COMPLETED for a no-op, which is the contract's most easily
  * mistaken rule: "evaluated, nothing was due" is a successful run, not a failure.
  */
 
-export const BILLING_PERIODIC_HANDLER_KEY = "financials.periodic_billing.evaluate";
-export const CHARGE_AGING_HANDLER_KEY = "financials.charge_aging.evaluate";
-export const AUTOPAY_HANDLER_KEY = "payments.autopay.evaluate";
+/* Declared in a leaf module so a domain can name its key without importing this one. */
+export {
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+    AUTOPAY_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 
 /** Shared shape so the three read alike and differ only where they must. */
 function evaluated(domain: string, ctx: ScheduledWorkContext): ScheduledWorkOutcome {
@@ -56,10 +70,18 @@ export function registerScheduledWorkConsumers(): void {
         evaluated("charge_aging", ctx),
     );
 
+    /*
+     * AUTOPAY IS PRODUCTIZED (Payments V1 W5). It is no longer an evaluation stub.
+     *
+     * The seam is unchanged and that is the point: the same key, the same context, the same
+     * structured outcome. What changed is only the body, exactly as this file predicted.
+     *
+     * The client is built HERE rather than inside the handler so the handler stays injectable —
+     * its tests drive it with a fake client and a fixed clock, and nothing about it needs the
+     * service-role environment to be readable.
+     */
     registerScheduledWorkHandler(AUTOPAY_HANDLER_KEY, async (ctx) =>
-        // Real implementation collects an authorized balance. Payments owns its own
-        // payment-retry policy; it is NOT the scheduler's bounded infrastructure retry.
-        evaluated("autopay", ctx),
+        evaluateAutopayOccurrence(ctx, { supabase: createAdminClient() }),
     );
 }
 

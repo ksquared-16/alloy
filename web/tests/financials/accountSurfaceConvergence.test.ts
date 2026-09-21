@@ -1069,9 +1069,14 @@ describe("F23 · one financial summary grammar", () => {
             expect(account, `the workspace states ${label}`).toContain(`label="${label}"`);
         }
         /*
-         * Autopay is gone from the metric row: the platform has no autopay model, so the metric
-         * could only ever read "Not available yet" — a statement about Alloy in a slot meant for a
-         * statement about this family.
+         * Autopay is not a metric, and W5 did not make it one.
+         *
+         * The original reason was that the platform had no autopay model, so the metric could only
+         * read "Not available yet" — a statement about Alloy in a slot meant for a statement about
+         * this family. There IS a model now, and the conclusion is unchanged for a better reason:
+         * Autopay is a standing authorization with a payer, a method, a ceiling and a timing, and
+         * flattening that into one number beside Current balance would lose everything an operator
+         * needs. It renders as its own Details section instead.
          */
         expect(detail, "autopay is not a metric").not.toContain('label="Autopay"');
     });

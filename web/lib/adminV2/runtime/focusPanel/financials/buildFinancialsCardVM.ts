@@ -385,6 +385,13 @@ export type FinancialsCardVM = {
      */
     paymentSetup: string | null;
     /**
+     * The Autopay sentence, from the canonical arrangement (W5). Null means NO arrangement, which
+     * is a measurement — it used to be listed as a platform unavailability because nothing could
+     * answer the question at all.
+     */
+    autopayLine: string | null;
+    autopayHealthy: boolean;
+    /**
      * WHAT THIS ORGANISATION CAN ACTUALLY DO WITH MONEY, per capability, with a reason when it
      * cannot. `unsupported` (Alloy has no implementation) and `not_configured` (it has one and this
      * organisation has not set it up) are deliberately different answers.
@@ -581,6 +588,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
+        autopayLine: null,
+        autopayHealthy: false,
         paymentCapabilities: null,
         payerCandidates: [],
         achAvailable: false,
@@ -598,10 +607,6 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
  */
 function platformUnavailabilities(): FinancialsUnavailable[] {
     return [
-        {
-            fact: "autopay",
-            reason: "no canonical autopay truth exists — the concept appears only in design fixtures",
-        },
         {
             fact: "payer_split",
             reason: "responsibility splits are owned by Processing, not by Financials configuration",
@@ -1919,6 +1924,13 @@ async function buildFinancialsCardVMInner(
     const setup = await setupP;
     vm.paymentCapabilities = setup;
     vm.paymentSetup = setup?.summaryLine ?? null;
+    /*
+     * "Healthy" means ON AND NOT ASKING FOR ANYTHING. A paused arrangement is a decision somebody
+     * made rather than a problem, so it is neither healthy nor an alarm — it simply reads as paused.
+     */
+    vm.autopayLine = setup?.autopayArrangement?.summaryLine ?? null;
+    vm.autopayHealthy = setup?.autopayArrangement?.status === "active"
+        && setup.autopayArrangement.needsAttention === false;
 
     vm.payerCandidates = (await payersP).candidates;
 

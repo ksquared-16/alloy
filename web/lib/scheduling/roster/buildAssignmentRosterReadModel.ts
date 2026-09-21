@@ -13,7 +13,7 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 import { resolveAssignmentLifecycleState } from "@/lib/operationalAssignments/assignmentLifecycleState";
 import { formatWeekdays } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import type { AssignmentTypePresentation } from "@/lib/scheduling/projection/schedulingProjectionTypes";
-import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
+import { resolveAssignmentTimes, uniformDailyInterval } from "@/lib/assignmentTime/resolveAssignmentTime";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import { resolveIdentityPhotoUrlFromMetadata } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
@@ -237,27 +237,21 @@ async function resolvePatternWeekdays(
     supabase: SupabaseClient,
     orgId: string,
     patternIds: string[]
-): Promise<{ weekdaysById: Map<string, number[]>; timeLabelById: Map<string, string> }> {
+): Promise<{ weekdaysById: Map<string, number[]> }> {
+    // RECURRENCE ONLY. Hours are resolved from each Assignment's own intervals, so a
+    // pattern default can no longer decide what a subject's day looks like.
     const weekdaysById = new Map<string, number[]>();
-    const timeLabelById = new Map<string, string>();
     const distinct = [...new Set(patternIds.filter(Boolean))];
-    if (distinct.length === 0) return { weekdaysById, timeLabelById };
+    if (distinct.length === 0) return { weekdaysById };
     const { data } = await supabase
         .from("schedule_patterns")
-        .select("id, weekdays, metadata")
+        .select("id, weekdays")
         .eq("org_id", orgId)
         .in("id", distinct);
-    for (const row of (data ?? []) as {
-        id: string;
-        weekdays: number[] | null;
-        metadata: Record<string, unknown> | null;
-    }[]) {
+    for (const row of (data ?? []) as { id: string; weekdays: number[] | null }[]) {
         weekdaysById.set(row.id, Array.isArray(row.weekdays) ? row.weekdays.map(Number) : []);
-        const hours = readPatternDefaultHours(row.metadata ?? null);
-        const timeLabel = hours ? formatCompactScheduleHours(hours.arrive, hours.depart) : null;
-        if (timeLabel) timeLabelById.set(row.id, timeLabel);
     }
-    return { weekdaysById, timeLabelById };
+    return { weekdaysById };
 }
 
 async function resolveAssignmentTypes(
@@ -429,12 +423,16 @@ export async function buildAssignmentRosterReadModel(
         .map((r) => r.operational_assignment_type_id)
         .filter((id): id is string => Boolean(id));
 
-    const [roomLabels, { weekdaysById: patternWeekdays, timeLabelById: patternTimeLabels }, typeMap, staffPositions] =
+    const [roomLabels, { weekdaysById: patternWeekdays }, typeMap, staffPositions, assignmentTimes] =
         await Promise.all([
             resolveLocationLabels(supabase, orgId, roomIds),
             resolvePatternWeekdays(supabase, orgId, patternIds),
             resolveAssignmentTypes(supabase, orgId, typeIds),
             resolveStaffPositionLabels(supabase, orgId, staffPersonIds),
+            resolveAssignmentTimes(supabase, {
+                orgId,
+                assignmentIds: rows.map((r) => r.id),
+            }),
         ]);
 
     const bySubject = new Map<string, AssignmentRosterRow[]>();
@@ -489,7 +487,11 @@ export async function buildAssignmentRosterReadModel(
         }
 
         const weekdays = (row.schedule_pattern_id ? patternWeekdays.get(row.schedule_pattern_id) : []) ?? [];
-        const timeLabel = (row.schedule_pattern_id ? patternTimeLabels.get(row.schedule_pattern_id) : null) ?? null;
+        // Null when hours are unknown, the day is split, or the week is not uniform —
+        // each a real shape a single label would misstate.
+        const assignmentTime = assignmentTimes.get(row.id) ?? null;
+        const uniform = assignmentTime ? uniformDailyInterval(assignmentTime) : null;
+        const timeLabel = uniform ? formatCompactScheduleHours(uniform.startTime, uniform.endTime) : null;
         const type = row.operational_assignment_type_id
             ? typeMap.get(row.operational_assignment_type_id)
             : null;

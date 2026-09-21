@@ -97,6 +97,10 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.recognize",
     "deposit.hold",
     "deposit.release",
+    "autopay.enroll",
+    "autopay.pause",
+    "autopay.resume",
+    "autopay.revoke",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -194,6 +198,91 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // ── Health ─────────────────────────────────────────────────────────────
     // Three operator intents over the one canonical Health mutation seam. Each refuses without
     // `health.manage` (D-H6) — route admission is not authorization for structured health data.
+    /*
+     * ── AUTOPAY — `fin.write`, because it administers HOW an account pays ──
+     *
+     * Setting up Autopay is payment-method administration, which `fin.write` already means and
+     * `ops` already holds. There is deliberately no `fin.autopay`, and deliberately no
+     * `autopay.collect`: scheduled execution enters through the registered handler
+     * `payments.autopay.evaluate` and nowhere else, so every collection carries the scheduled-work
+     * occurrence identity that makes it idempotent.
+     *
+     * None of the four moves money. They decide whether a future collection is authorized.
+     */
+    def({
+        capabilityKey: "autopay.enroll",
+        canonicalCommandKey: "autopay.enroll",
+        operatorLabel: "Set up Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "autopay.enroll",
+        implementationStatus: "production",
+        reason:
+            "Records a payer's standing authorization to collect what is owed automatically. A "
+            + "saved payment method is NOT this: storing an instrument says it may be charged when "
+            + "the family asks, and this says it may be charged when they have not. The amount is "
+            + "resolved from Financials at execution time, so there is no Autopay balance.",
+    }),
+    def({
+        capabilityKey: "autopay.pause",
+        canonicalCommandKey: "autopay.pause",
+        operatorLabel: "Pause Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "autopay.pause",
+        implementationStatus: "production",
+        reason:
+            "Stops future automatic collection while keeping the authorization. A collection "
+            + "already with the provider continues, because money in flight has its own truth and a "
+            + "pause cannot reach back into a submitted debit.",
+    }),
+    def({
+        capabilityKey: "autopay.resume",
+        canonicalCommandKey: "autopay.resume",
+        operatorLabel: "Resume Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "autopay.resume",
+        implementationStatus: "production",
+        reason:
+            "Restores future eligibility under the existing authorization, after rechecking the "
+            + "payment method. Periods missed while paused are NOT collected retrospectively — a "
+            + "pause is not a deferral, and inventing catch-up charges would be a term the payer "
+            + "never agreed to.",
+    }),
+    def({
+        capabilityKey: "autopay.revoke",
+        canonicalCommandKey: "autopay.revoke",
+        operatorLabel: "Turn off Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "autopay.revoke",
+        implementationStatus: "production",
+        reason:
+            "Ends the authorization permanently. A withdrawn consent is never reactivated, so "
+            + "restarting Autopay records a NEW arrangement with its own authorization time and the "
+            + "original remains readable exactly as it was given.",
+    }),
     def({
         capabilityKey: "health_fact.add",
         canonicalCommandKey: "health_fact.add",

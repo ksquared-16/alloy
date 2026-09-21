@@ -1,8 +1,6 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
--- RE-MEASURED 2026-09-20T12:5xZ AFTER the W3 merge (1e7c1745d). The previous reading was taken
--- while staging was still 7e87fd71e, so hosted parity reported PASS against a tree that did not yet
--- contain 20260922120000 — stale evidence refusing an apply, the mirror of stale evidence refusing
--- a merge.
+-- RE-MEASURED after the W4 merge: the apply was refused production_precondition_refused, which in
+-- W3 meant the promotion pipeline had already applied it. Verifying rather than assuming.
 --
 --
 --

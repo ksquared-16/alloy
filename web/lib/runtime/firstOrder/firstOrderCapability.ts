@@ -60,6 +60,13 @@ export type FirstOrderPrerequisiteKey =
     | "process_config"
     | "prepaid_position"
     /*
+     * KPI values and Work View values are FIRST-ORDER product truth, not Stage-2 detail. They
+     * enter the plan as prerequisites like any other read, so they are deduped, run concurrently
+     * with the card reads, and cost nothing when a surface configures none of them.
+     */
+    | "header_kpis"
+    | "work_view_totals"
+    /*
      * The account's current-period ledger: charges, their applications, and the reconciliation
      * both feed. Separate from `prepaid_position` because they answer different questions —
      * prepaid is money sitting ON the account, this is what the account OWES — and a surface may
@@ -71,7 +78,7 @@ export type FirstOrderPrerequisiteKey =
  * Authorization is a REQUIREMENT declared here and EVALUATED at request time. A capability never
  * carries a verdict, and a compiled plan never stores one — see `compileFirstOrderPlan`.
  */
-export type FirstOrderAuthorityRequirement = "none" | "financials_read" | "health_view";
+export type FirstOrderAuthorityRequirement = "none" | "financials_read" | "health_view" | "analytics_read";
 
 /** Everything a projector may read. Assembled once by the composer; never fetched by a projector. */
 export type FirstOrderProjectionContext = {
@@ -88,6 +95,18 @@ export type FirstOrderProjectionContext = {
     readonly accountLedger?: AccountLedgerPosition | null;
     readonly rail?: OpportunityWorkspaceLifecycleRail | null;
     readonly processConfigRead?: boolean;
+    /** Resolved KPI values by configured source key, or null when the read failed. */
+    readonly headerKpis?: { status: string; values: Record<string, unknown> } | null;
+    /**
+     * Resolved Work View totals, or null when the read failed.
+     *
+     * The unavailable arm deliberately carries NO totals — an empty map would read as
+     * authoritative zeros, which is the distinction the seed contract exists to preserve.
+     */
+    readonly workViewTotals?:
+        | { status: "ok"; totalsByViewId: Record<string, number | null>; configuredViewSignature: string }
+        | { status: "unavailable"; reason: string }
+        | null;
     readonly childrenRead?: boolean;
 };
 
@@ -109,7 +128,30 @@ export type FirstOrderCapability = {
      * about whether a read failed or a value is genuinely absent.
      */
     readonly project: (ctx: FirstOrderProjectionContext) => FirstOrderField<FirstOrderScalar>;
+    /**
+     * FAMILY capabilities only: project ONE configured member (a KPI source key, a Work View id).
+     *
+     * A card field's semantic key is registered once by the platform; a KPI slot names a
+     * tenant-configured identity, so the family owns the read and the member selects within its
+     * result. When present this is used in place of `project`.
+     */
+    readonly projectMember?: (
+        identity: string,
+        ctx: FirstOrderProjectionContext,
+    ) => FirstOrderField<FirstOrderScalar>;
 };
+
+/**
+ * DYNAMIC CAPABILITY FAMILIES — declared HERE, in the contract module.
+ *
+ * They were first declared in the compiler, which the registry then imported while the compiler
+ * imported the registry's lookup. That cycle left the constants `undefined` at registry
+ * initialisation, so every family registered as `"undefined:*"` and every configured KPI and Work
+ * View compiled as an unsupported capability. The contract module is imported by both and imports
+ * neither, so there is no cycle to get wrong.
+ */
+export const KPI_CAPABILITY_FAMILY = "kpi" as const;
+export const WORK_VIEW_CAPABILITY_FAMILY = "work_view" as const;
 
 /** Why a configured semantic key could not be compiled. Never a silent omission. */
 export type FirstOrderUnsupportedCapability = {
