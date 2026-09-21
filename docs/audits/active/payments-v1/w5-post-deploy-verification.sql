@@ -54,3 +54,8 @@ select
         'autopay_arrangements_total',  (select count(*) from public.payment_autopay_arrangements),
         'autopay_arrangements_live',   (select count(*) from public.payment_autopay_arrangements where status in ('active','paused'))
     )::text as payload;
+
+-- RE-MEASURED after the deployed probes below, to confirm nothing was created by them:
+--   · GET  /api/admin/financials/autopay            -> 200 {"arrangement":null,...}
+--   · POST /api/admin/actions/execute autopay.enroll -> 404 method_not_found
+--   · GET  /api/admin/financials/provider            -> readiness "not_connected"
