@@ -283,3 +283,39 @@ describe("combined roster — batched reads", () => {
         expect(personReads).toBeLessThanOrEqual(3);
     });
 });
+
+/**
+ * A GUARD ON THE HARNESS, NOT ON THE PRODUCT.
+ *
+ * `buildCombinedRoster` reaches effective-dated expectations through
+ * `.or("valid_to.is.null,valid_to.gt.<t>")`. The mock had no `.or` at all, so all
+ * twelve tests above threw before asserting anything — they were red for a reason
+ * that had nothing to do with the roster.
+ *
+ * Supplying the method fixes that. But a permissive `.or` that kept every row
+ * would ALSO fix it, and would silently call a closed record open. Replacing the
+ * disjunction with `() => true` leaves the twelve green, so this asserts the
+ * semantics directly instead of trusting that they matter somewhere upstream.
+ */
+describe("the roster mock's .or is a real disjunction", () => {
+    it("keeps rows matching either clause and drops rows matching neither", async () => {
+        const m = rosterMock({
+            or_probe: [
+                { id: "open", valid_to: null },
+                { id: "ends_later", valid_to: "2026-09-30" },
+                { id: "ended_already", valid_to: "2026-08-01" },
+            ],
+        });
+        const { data } = await m.supabase
+            .from("or_probe")
+            .select("*")
+            .or("valid_to.is.null,valid_to.gt.2026-09-01");
+        expect((data ?? []).map((r: { id: string }) => r.id).sort()).toEqual(["ends_later", "open"]);
+    });
+
+    it("refuses an operator it cannot honour rather than dropping rows quietly", async () => {
+        const m = rosterMock({ or_probe2: [{ id: "a", valid_to: null }] });
+        expect(() => m.supabase.from("or_probe2").select("*").or("valid_to.wat.1"))
+            .toThrow(/unsupported \.or operator/);
+    });
+});
