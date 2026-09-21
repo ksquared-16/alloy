@@ -586,3 +586,18 @@ describe("the policy name is stated once, not once per line", () => {
         expect(panel, "and nothing is recomputed").not.toMatch(/percent|basisPoints/);
     });
 });
+
+describe("one money format per line", () => {
+    it("the forecast explanation formats currency the way the rest of admin does", () => {
+        /*
+         * MEASURED on deployed f160bb907: "Certb Certhouse · Expected $145.00 · Sibling discount
+         * (QA specimen) · 10% of $1450.00". The amount and its basis sat on one line in two
+         * conventions, because the surface formats through Intl and the explanation used
+         * toFixed(2), which has no thousands separator.
+         */
+        const src = code("lib/financials/reductions/resolveFinancialReductions.ts");
+        expect(src).toContain("formatMoneyFromCents");
+        expect(src, "no hand-rolled currency in the explanation")
+            .not.toMatch(/\$\$\{|\$\{\([^)]*\/ 100\)\.toFixed\(2\)\}/);
+    });
+});
