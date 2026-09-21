@@ -43,6 +43,7 @@ test("p076 prototype run", async ({ page }) => {
     }
 
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
+        + (process.env.P076_MONEY === "1" ? "&discover_money=1" : "")
         + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
     await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);
     for (let i = 0; i < n; i++) {

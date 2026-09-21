@@ -11,6 +11,9 @@ import { loadAcknowledgedOccurrenceKeys } from "@/lib/queues/operatorStageMember
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
 /**
  * P0-7.6 — FIRST-ORDER READ-DAG PROTOTYPE. DIAGNOSTIC ONLY, NOT A PRODUCT SURFACE.
@@ -351,7 +354,50 @@ export async function GET(req: NextRequest) {
             const r = await readAccountPrepaidPosition(supabase, {
                 orgId, householdId: hh, authorized: true, measure: true,
             });
+            /*
+             * THE LIVE ORACLE — the canonical VM's own prepaid answer, on the same account, in the
+             * same request.
+             *
+             * Fixture parity proves the ARITHMETIC matches. It says nothing about whether the new
+             * reader ACQUIRES the same receipts as `resolveHouseholdPaymentViews`, which scans the
+             * org and resolves billable sources afterwards. Those are different claims and only a
+             * live comparison settles the second.
+             *
+             * Constructed exactly as buildFinancialsCardVM does it, held money included, so a
+             * difference is a difference in acquisition and not in how the oracle was assembled.
+             */
+            let oracle: Record<string, unknown> | null = null;
+            try {
+                const views = await resolveHouseholdPaymentViews(supabase, { orgId, customerId: hh });
+                const oHolds = await readHoldsForPayments(supabase, { orgId, paymentIds: views.map((v) => v.paymentId) });
+                const heldByPayment: Record<string, number> = {};
+                for (const v of views) {
+                    const held = heldCentsFor(v.paymentId, oHolds);
+                    if (held > 0) heldByPayment[v.paymentId] = held;
+                }
+                const pos = resolveAccountPrepaidPosition(views, heldByPayment);
+                oracle = {
+                    viewCount: views.length,
+                    availableCents: pos.availableCents,
+                    pendingCents: pos.pendingCents,
+                    heldCents: pos.heldCents,
+                };
+            } catch (e) {
+                oracle = { error: String(e).slice(0, 120) };
+            }
+            const mine = r.outcome.state === "ok" ? r.outcome.position : null;
+            const parity = oracle && mine && !oracle.error
+                ? {
+                      available: oracle.availableCents === mine.availableCents,
+                      pending: oracle.pendingCents === mine.pendingCents,
+                      held: oracle.heldCents === mine.heldCents,
+                      receiptCountMatches: oracle.viewCount === r.diagnostics.paymentCount,
+                  }
+                : null;
+
             measured.push({
+                oracle,
+                parity,
                 household: hh,
                 wallMs: Math.round(performance.now() - started),
                 queryCount: r.diagnostics.queryCount,
