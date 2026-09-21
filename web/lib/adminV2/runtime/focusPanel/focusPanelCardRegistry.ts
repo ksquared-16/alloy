@@ -204,6 +204,7 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * elevating a derived answer to canvas truth would invite someone to edit it.
      */
     { key: "staff_readiness", title: "Readiness", grains: ["person"] },
+    { key: "staff_compensation", title: "Compensation", grains: ["person"] },
     { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".
