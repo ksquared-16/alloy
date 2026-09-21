@@ -82,7 +82,7 @@ export async function loadOperationalExpectationInputs(
         agreementIds.length > 0
             ? supabase
                   .from("schedule_assignments")
-                  .select("enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
+                  .select("id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
                   .eq("org_id", orgId)
                   .in("enrollment_agreement_id", agreementIds)
                   .eq("commitment_kind", "committed")
@@ -91,7 +91,7 @@ export async function loadOperationalExpectationInputs(
         supabase
             .from("schedule_assignments")
             .select(
-                "customer_member_id, site_location_id, room_location_id, program_category_id, schedule_pattern_id, start_date, end_date, status"
+                "id, customer_member_id, site_location_id, room_location_id, program_category_id, schedule_pattern_id, start_date, end_date, status"
             )
             .eq("org_id", orgId)
             .eq("site_location_id", siteLocationId)

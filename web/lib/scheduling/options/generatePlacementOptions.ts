@@ -152,6 +152,10 @@ export function buildRoomEngineFacts(args: BuildRoomEngineFactsArgs): RoomEngine
             status: "active",
         };
         const hypoAssignment = {
+            // Hypothetical: this Assignment does not exist, so it owns no interval
+            // rows and resolves to unknown hours. That is the truthful answer for a
+            // what-if, and the id is marked so it can never be mistaken for a real one.
+            id: "hypothetical-placement-option",
             enrollment_agreement_id: childAgreementId,
             schedule_pattern_id: args.patternId,
             start_date: args.dateStart,

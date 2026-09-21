@@ -38,6 +38,8 @@ export type OperationalPlacementInput = {
 };
 
 export type OperationalAssignmentInput = {
+    /** The Assignment's own id — the authority its hours hang from. */
+    id: string;
     enrollment_agreement_id: string;
     schedule_pattern_id: string;
     start_date: string;
@@ -58,6 +60,8 @@ export type SchedulePatternInput = {
  * "planned" signal alongside committed occupancy.
  */
 export type OperationalProposedAssignmentInput = {
+    /** The Assignment's own id — the authority its hours hang from. */
+    id: string;
     customer_member_id: string;
     site_location_id: string | null;
     room_location_id: string | null;
@@ -76,6 +80,9 @@ export type ExpectedAttendanceEntry = {
     siteLocationId: string;
     roomLocationId: string | null;
     programCategoryId: string | null;
+    /** The Assignment this expectation came from — the authority for its hours. */
+    assignmentId: string;
+    /** Recurrence template only. Hours live on the Assignment, not here. */
     schedulePatternId: string;
     scheduleTypeKey: string;
 };
@@ -94,6 +101,9 @@ export type PlannedAttendanceEntry = {
     siteLocationId: string | null;
     roomLocationId: string | null;
     programCategoryId: string | null;
+    /** The Assignment this expectation came from — the authority for its hours. */
+    assignmentId: string;
+    /** Recurrence template only. Hours live on the Assignment, not here. */
     schedulePatternId: string;
     scheduleTypeKey: string;
 };
@@ -212,6 +222,7 @@ export function expandExpectedAttendance(
                 siteLocationId: agreement.site_location_id,
                 roomLocationId: placementCovers ? placement!.room_location_id : null,
                 programCategoryId: placementCovers ? placement!.program_category_id : null,
+                assignmentId: assignment.id,
                 schedulePatternId: pattern.id,
                 scheduleTypeKey: pattern.schedule_type_key,
             });
@@ -286,6 +297,7 @@ export function expandPlannedAttendance(
                 siteLocationId: a.site_location_id,
                 roomLocationId: a.room_location_id,
                 programCategoryId: a.program_category_id,
+                assignmentId: a.id,
                 schedulePatternId: pattern.id,
                 scheduleTypeKey: pattern.schedule_type_key,
             });
