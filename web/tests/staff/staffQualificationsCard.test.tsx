@@ -394,6 +394,100 @@ describe("Staff Qualifications card", () => {
         expect(stateReads).toHaveLength(2);
     });
 
+    it("records and RENEWS through one command, because renewal is a record carrying its predecessor", async () => {
+        const held = {
+            id: "q-9",
+            qualification_type_id: "type-cpr",
+            issued_on: "2025-01-01",
+            expires_on: "2026-01-01",
+            verification_state: "verified",
+            supersedes_qualification_id: null,
+            revoked_at: null,
+            standing: "expired",
+            days_until_expiry: -10,
+            evidence_count: 0,
+        };
+        const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+            if (String(url).includes("/api/admin/actions/execute")) {
+                return { ok: true, json: async () => ({ ok: true }) };
+            }
+            return { ok: true, json: async () => payload({ held: [held] }) };
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await render(contextWithEmployment("emp-1"));
+        await expand();
+
+        // RENEW pre-fills the type it is replacing and carries it as `supersedes`.
+        await act(async () => {
+            container
+                .querySelector('[data-staff-qualification-command="renew"]')!
+                .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        expect(container.querySelector('[data-staff-qualification-form="renew"]')).not.toBeNull();
+        await act(async () => {
+            container
+                .querySelector('[data-staff-qualification-form="renew"]')!
+                .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+        await act(async () => {});
+
+        const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("/actions/execute"));
+        const body = JSON.parse((call![1] as unknown as { body: string }).body);
+        expect(body.action_key).toBe("staff_qualification.record");
+        // The predecessor is kept as history, never overwritten: a credential that was valid last
+        // year WAS valid, and editing the row would erase that.
+        expect(body.payload.supersedes_qualification_id).toBe("q-9");
+        expect(body.payload.qualification_type_id).toBe("type-cpr");
+        expect(body.payload.employment_id).toBe("emp-1");
+    });
+
+    it("attaches evidence by REFERENCE to a document the canonical authority already holds", async () => {
+        const held = {
+            id: "q-10",
+            qualification_type_id: "type-cpr",
+            issued_on: "2026-01-01",
+            expires_on: "2027-01-01",
+            verification_state: "verified",
+            supersedes_qualification_id: null,
+            revoked_at: null,
+            standing: "valid",
+            days_until_expiry: 300,
+            evidence_count: 0,
+        };
+        const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+            const u = String(url);
+            if (u.includes("/api/admin/actions/execute")) return { ok: true, json: async () => ({ ok: true }) };
+            if (u.includes("/api/admin/documents")) {
+                return { ok: true, json: async () => ({ documents: [{ id: "doc-1", name: "QA Staff CPR Certificate" }] }) };
+            }
+            return { ok: true, json: async () => payload({ held: [held] }) };
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        await render(contextWithEmployment("emp-1"));
+        await expand();
+
+        await act(async () => {
+            container
+                .querySelector('[data-staff-qualification-command="attach-evidence"]')!
+                .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        await act(async () => {});
+        // The candidates come from Documents. The card never uploads and never copies bytes.
+        const option = container.querySelector('[data-staff-qualification-evidence-option="doc-1"]');
+        expect(option, "the person's existing documents should be offered").not.toBeNull();
+        await act(async () => {
+            option!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        await act(async () => {});
+
+        const call = fetchMock.mock.calls.find((c) => String(c[0]).includes("/actions/execute"));
+        const body = JSON.parse((call![1] as unknown as { body: string }).body);
+        expect(body.action_key).toBe("staff_qualification.attach_evidence");
+        expect(body.payload).toMatchObject({ qualification_id: "q-10", document_id: "doc-1" });
+        // A reference, not a copy: nothing resembling file content is sent.
+        expect(JSON.stringify(body.payload)).not.toMatch(/base64|bytes|content|storage_path/i);
+    });
+
     it("surfaces a command refusal verbatim instead of swallowing it", async () => {
         const held = {
             id: "q-4",
