@@ -80,6 +80,7 @@ const makeSeed = (args: {
         epp: 0,
         tours: 0,
         aggregate: 0,
+        child_batches: [],
         views: args.views.length,
         child_views: 0,
         lane_views: args.views.length,

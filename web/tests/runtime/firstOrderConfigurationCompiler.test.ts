@@ -70,7 +70,7 @@ vi.mock("@/lib/runtime/firstOrder/readFirstOrderValueSeeds", () => ({
 }));
 vi.mock("@/lib/runtime/firstOrder/readWorkViewTotalsForFirstOrder", () => ({
     readWorkViewTotalsForFirstOrder: vi.fn(async () => ({
-        status: "ok", totalsByViewId: { v1: 4, v2: 9 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1 },
+        status: "ok", totalsByViewId: { v1: 4, v2: 9 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1, shareChildAcquisition: false },
     })),
 }));
 vi.mock("@/lib/queues/operatorStageMembershipAck", () => ({ loadAcknowledgedOccurrenceKeys: vi.fn(async () => new Set<string>()) }));
@@ -853,7 +853,7 @@ describe("STATE SEMANTICS OF THE VALUE FAMILIES — UNKNOWN is not ZERO here eit
 
     it("A WORK VIEW TOTAL OF ZERO IS A REAL ANSWER", async () => {
         vi.mocked(readWorkViewTotalsForFirstOrder).mockResolvedValueOnce({
-            status: "ok", totalsByViewId: { v1: 0, v2: 7 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1 },
+            status: "ok", totalsByViewId: { v1: 0, v2: 7 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1, shareChildAcquisition: false },
         });
         const r = await compose(enrollment());
         const a = r.projection.workViewTotals.v1; const b = r.projection.workViewTotals.v2;
@@ -864,7 +864,7 @@ describe("STATE SEMANTICS OF THE VALUE FAMILIES — UNKNOWN is not ZERO here eit
 
     it("A WORK VIEW THE EVALUATOR DID NOT ANSWER IS UNKNOWN", async () => {
         vi.mocked(readWorkViewTotalsForFirstOrder).mockResolvedValueOnce({
-            status: "ok", totalsByViewId: { v1: 3 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1 },
+            status: "ok", totalsByViewId: { v1: 3 }, configuredViewSignature: "v1|v2", diagnostics: { spans: {}, targetCount: 2, hostWorkUnitCount: 1, groupCount: 1, locatorMs: 0, seedMs: 0, deptUnitsMs: 0, deptUnitCount: 1, shareChildAcquisition: false },
         });
         const r = await compose(enrollment());
         expect(r.projection.workViewTotals.v2.state).toBe("unknown");

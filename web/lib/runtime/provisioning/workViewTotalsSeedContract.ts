@@ -17,6 +17,13 @@
  * nothing server-side to drag with it.
  */
 
+/*
+ * TYPE-ONLY, therefore erased. The rule this file enforces is about VALUE imports reaching the
+ * browser bundle; a `import type` emits nothing at all, so the diagnostic shape can be named from
+ * its owner rather than copied here and left to drift from it.
+ */
+import type { ChildMembershipBatchMeasurement } from "@/lib/runtime/provisioning/childGrainMembership";
+
 /** One configured view's count, as both the endpoint and the seed report it. */
 export type WorkViewTotalRow = {
     workUnitId: string;
@@ -44,6 +51,14 @@ export type WorkViewTotalsSpans = {
     child_views: number;
     lane_views: number;
     unknown_views: number;
+    /**
+     * One entry per group that had child lenses: which lenses ran, in which membership mode, what
+     * each acquisition cost and at what cardinality. Diagnostic only — no predicate reads it.
+     *
+     * `child_counts` alone says the child lenses cost 1.5s. It cannot say whether that is one
+     * expensive projection or three copies of the same reads, and those have opposite repairs.
+     */
+    child_batches: ChildMembershipBatchMeasurement[];
 };
 
 export function emptyWorkViewTotalsSpans(): WorkViewTotalsSpans {
@@ -57,6 +72,7 @@ export function emptyWorkViewTotalsSpans(): WorkViewTotalsSpans {
         child_views: 0,
         lane_views: 0,
         unknown_views: 0,
+        child_batches: [],
     };
 }
 
