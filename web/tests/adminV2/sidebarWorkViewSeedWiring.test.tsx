@@ -276,51 +276,58 @@ describe("ordering: the seed must arrive before the question", () => {
     });
 });
 
-describe("the nav observes; it does not claim", () => {
-    const SRC = (() => {
+describe("the nav observes the owner; it does not re-acquire", () => {
+    const SRC = readSource();
+    function readSource() {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { readFileSync } = require("node:fs") as typeof import("node:fs");
         const { join } = require("node:path") as typeof import("node:path");
         const raw = readFileSync(join(process.cwd(), "app/adminV2/components/Sidebar.tsx"), "utf8");
         /*
-         * Comments are stripped first. The prose in this file NAMES the things these gates forbid
-         * — it explains why the nav must not consume — so an unstripped read fails on its own
-         * explanation, and the obvious "fix" is to delete the explanation.
+         * Comments stripped first. The prose in Sidebar.tsx NAMES the retired approach — it
+         * explains why the nav must not peek the provisioning cache — so an unstripped read fails
+         * on its own explanation, and the obvious "fix" is to delete the explanation.
          */
         return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-    })();
+    }
 
-    it("PEEKS, NEVER CONSUMES", () => {
-        // Consuming would delete the answer the Work Unit surface owns: a documented 4.7s defect.
-        expect(SRC).toContain("peekFreshProvisioning");
-        expect(SRC).not.toContain("consumeFreshProvisioning");
-    });
-
-    it("addresses the entry through the CANONICAL url builder", () => {
-        // A hand-built string would drift from the seeding path and silently always miss.
-        expect(SRC).toContain("provisioningAnswerUrl(workUnitSlug)");
-    });
-
-    it("RE-PEEKS ON EVERY ROUTE CHANGE AND CLEARS WHEN THERE IS NO ANSWER", () => {
+    it("THE RETIRED PEEK IS NOT REINTRODUCED", () => {
         /*
-         * This is the nav's actual route binding, and the only one it has. The nav is mounted
-         * ABOVE the route and never remounts, so nothing else scopes its observation to the
-         * current work unit: the peek key carries the CURRENT slug, the effect re-runs when that
-         * slug changes, and a route with no fresh answer must fall back to a settled MISS rather
-         * than keep serving the previous work unit's counts.
+         * Measured deployed: the peek hit 0 of 6. The provisioning entry is consume-once and the
+         * route surface — which commits before this Suspense-deferred nav — has always already
+         * consumed it. Reaching back into that cache from here is the defect, not the fix.
          */
-        expect(SRC).toContain("provisioningAnswerUrl(workUnitSlug)");
-        expect(SRC).toMatch(/\}, \[workUnitSlug\]\);/);
-        expect(SRC).toMatch(/if\s*\(!promise\)\s*\{\s*setPeeked\(PEEK_MISS\);/);
-        expect(SRC).toMatch(/if\s*\(!workUnitSlug\)\s*\{\s*setPeeked\(PEEK_MISS\);/);
+        expect(SRC).not.toContain("peekFreshProvisioning");
+        expect(SRC).not.toContain("consumeFreshProvisioning");
+        expect(SRC).not.toContain("provisioningAnswerUrl");
     });
 
-    it("withholds targets until the peek has settled", () => {
-        expect(SRC).toMatch(/if\s*\(!peekSettled\)\s*return EMPTY_TARGETS;/);
+    it("observes the owner's publication through the existing store seam", () => {
+        expect(SRC).toContain("useSyncExternalStore");
+        expect(SRC).toContain("subscribeWorkViewTotalsPublication");
+        expect(SRC).toContain("getWorkViewTotalsPublicationServerSnapshot");
+    });
+
+    it("WITHHOLDS TARGETS WHILE AN OWNER IS PENDING", () => {
+        // Asking before the owner's answer arrives spends the hook's single seed decision on
+        // "no_seed" and fetches anyway — the defect a deployed measurement already caught.
+        expect(SRC).toMatch(/if\s*\(!publicationSettled\)\s*return EMPTY_TARGETS;/);
+        expect(SRC).toMatch(/phase\s*!==\s*"pending"/);
+    });
+
+    it("treats a settled-but-empty answer as fall back, never as zero", () => {
+        expect(SRC).toMatch(/published\?\.seed\s*\?\?\s*null/);
     });
 
     it("names itself so a deployed probe can attribute the request", () => {
-        // The owner of this request was unattributable for three deploys; "unlabelled" found it.
+        // This request was unattributable for three deploys; the default label found it.
         expect(SRC).toContain('ownerLabel: "sidebar"');
+    });
+
+    it("EVALUATES NOTHING — the Work Unit surface stays the canonical evaluator", () => {
+        // A predicate here would be a second answer to the same question.
+        expect(SRC).not.toContain("getWorkUnitQueueItems");
+        expect(SRC).not.toContain("evaluateWorkViewTotalsForGroup");
+        expect(SRC).not.toContain("departmentMetadata");
     });
 });
