@@ -35,6 +35,8 @@ import {
 
 const ROOT = join(__dirname, "..", "..");
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
+/** Source with comments stripped, for rules that must judge what a file DOES, not what it says. */
+const code = (rel: string) => src(rel).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const PANEL = "components/adminV2/settings/financials/tuitionPlans/TuitionBillingFrequenciesPanel.tsx";
 
 describe("a configured frequency states the recurrence the platform will derive", () => {
@@ -112,9 +114,28 @@ describe("the configuration surface reports the authority, not the operator's ow
     });
 
     it("authors no period instances", () => {
-        /* Nobody types "Sep 15–21" into configuration. */
-        const panel = src(PANEL);
-        expect(panel).not.toMatch(/billingPeriodFor|billingPeriodsBetween|assignmentBillingPeriods/);
+        /*
+         * THE INTENT, UNCHANGED: nobody types "Sep 15–21" into configuration. Periods are DERIVED.
+         *
+         * This used to be expressed as "the panel must not mention the derivation functions",
+         * which was a fair proxy while nothing on the screen derived anything. It is no longer:
+         * the configuration surface now shows a READ-ONLY preview of the intervals a frequency
+         * produces, precisely so the operator does not have to infer them — and that preview is
+         * derived by the period authority, which is the opposite of authoring.
+         *
+         * So the rule is asserted as what it always meant: no typed period, no stored period, no
+         * form field that lets one be entered. Comments are stripped, because a note explaining
+         * where a figure comes from is not a figure.
+         */
+        const panel = code(PANEL);
+        expect(panel, "no period literal is typed into configuration")
+            .not.toMatch(/["'`]\s*\w{3}\s+\d{1,2}\s*[–-]\s*\d{1,2}/);
+        expect(panel, "and no field offers to author one")
+            .not.toMatch(/period_start|period_end|periodStart|periodEnd/);
+        /* What it MAY do is ask the authority — through the preview, never by its own arithmetic. */
+        expect(panel).toContain("previewBillingPeriods");
+        expect(panel, "the panel does no date arithmetic of its own")
+            .not.toMatch(/setDate\(|getTime\(\)\s*\+|\* 24 \* 60 \* 60/);
     });
 });
 

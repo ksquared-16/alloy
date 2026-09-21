@@ -17,6 +17,13 @@ const ROOT = join(__dirname, "..", "..");
 const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const FORECAST = "lib/financials/reductions/forecastAssignmentReductions.ts";
 const ROUTE = "app/api/admin/financials/reduction-forecast/route.ts";
+/*
+ * The forecast body moved out of the route into this reader so a FAMILY-grain caller could ask the
+ * same question of each of a household's relationships without a second implementation existing.
+ * The rules below are unchanged and are asserted where they now live; the route is still asserted
+ * to DELEGATE, so none of them can be bypassed by answering in the route again.
+ */
+const READER = "lib/financials/reductions/readAssignmentDiscountPosition.ts";
 const CARD = "components/admin/focusPanel/cards/SchedulingCard.tsx";
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
@@ -73,14 +80,18 @@ describe("it writes nothing", () => {
 
 describe("the gross is the accepted term, not a recommendation", () => {
     it("forecasts against what was agreed", () => {
-        const r = src(ROUTE);
+        const r = src(READER);
         expect(r).toContain("accepted.amountCents");
         expect(r, "an unaccepted price is not a forecast").toContain("no_accepted_term");
         expect(r, "and not the resolver's suggestion").not.toMatch(/view\.recommended\.amountCents/);
+        expect(src(ROUTE), "the route delegates rather than forecasting again")
+            .toContain("readAssignmentDiscountPosition");
     });
 
     it("uses the period the assignment is billing now", () => {
-        expect(src(ROUTE)).toContain("acceptedTermBillingPeriods");
+        expect(src(READER)).toContain("acceptedTermBillingPeriods");
+        expect(src(ROUTE), "and the route derives no period of its own")
+            .not.toContain("acceptedTermBillingPeriods");
     });
 });
 
@@ -119,7 +130,7 @@ describe("the forecast asks about a month, because reductions are monthly", () =
          * month by the same doctrine that keeps `placeInBillingPeriod` monthly by default — while
          * a weekly assignment's current commercial period is `2026-09-15~2026-09-21`.
          */
-        const r = src(ROUTE);
+        const r = src(READER);
         expect(r).toContain('periods?.current.start');
         expect(r).toContain('.slice(0, 7)');
         expect(r, "never the interval key").not.toMatch(/periods\?\.current\.key/);
