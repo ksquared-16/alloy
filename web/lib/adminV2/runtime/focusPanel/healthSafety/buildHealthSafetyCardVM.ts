@@ -28,6 +28,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { healthClock, recordHealthSpans } from "@/lib/perf/routeTimingDiagnostic";
 
 import {
     evaluateHealthAccess,
@@ -212,29 +213,37 @@ export async function buildHealthSafetyCardVM(
         },
     ];
 
+    const hClock = healthClock();
     const [factsResult, profileResult, documentsResult, contactsResult] = await Promise.allSettled([
-        resolveActiveHealthFacts(supabase, {
+        hClock.time("health_facts_ms", () => resolveActiveHealthFacts(supabase, {
             orgId: args.orgId,
             subjectEntityId: memberId,
             subjectEntityType: "customer_member",
             access: args.access,
-        }),
-        import("@/lib/completion/loadCustomerMemberProfileFields").then((m) =>
-            m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId]),
+        })),
+        hClock.time("health_profile_ms", () =>
+            import("@/lib/completion/loadCustomerMemberProfileFields").then((m) =>
+                m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId]),
+            ),
         ),
-        supabase
-            .from("documents")
-            .select("id, doc_type, title, status, created_at")
-            .eq("org_id", args.orgId)
-            .eq("entity_type", "customer_member")
-            .eq("entity_id", memberId),
-        supabase
-            .from("person_child_relationships")
-            .select("person_id, relationship_type, priority, status")
-            .eq("org_id", args.orgId)
-            .eq("customer_member_id", memberId)
-            .eq("status", "active"),
+        hClock.time("health_documents_ms", () =>
+            supabase
+                .from("documents")
+                .select("id, doc_type, title, status, created_at")
+                .eq("org_id", args.orgId)
+                .eq("entity_type", "customer_member")
+                .eq("entity_id", memberId),
+        ),
+        hClock.time("health_contacts_ms", () =>
+            supabase
+                .from("person_child_relationships")
+                .select("person_id, relationship_type, priority, status")
+                .eq("org_id", args.orgId)
+                .eq("customer_member_id", memberId)
+                .eq("status", "active"),
+        ),
     ]);
+    recordHealthSpans(hClock.spans());
 
     if (factsResult.status === "rejected") {
         /*
