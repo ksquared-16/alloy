@@ -39,10 +39,18 @@ vi.mock("@/lib/workspace/enrichOpportunityQueueProjection", () => ({ enrichOppor
     ["o1", { _primary_contact_name: "Cara L", _primary_contact_line: "Cara L · cara@x.test", _location_label: "North Campus" }],
 ])) }));
 vi.mock("@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue", () => ({ enrichOpportunityRowsWithChildrenForCompactQueue: vi.fn(async () => new Map([
-    ["o1", { _inquiry_children: [
-        { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
-        { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
-    ] }],
+    ["o1", {
+        _inquiry_children: [
+            { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
+            { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
+        ],
+        // The enricher's UNIFIED key — populated by both its branches. A fixture carrying only
+        // `_inquiry_children` cannot distinguish the two sources and hid a live defect.
+        _crm_compact_children: [
+            { primary: "Ada L", secondary: null, customerMemberId: "cm1" },
+            { primary: "Bo L", secondary: null, customerMemberId: "cm2" },
+        ],
+    }],
     ["o2", { _inquiry_children: [{ id: "ch9", customer_member_id: "cm9", display_name: "Zed Q" }] }],
     ["o3", { _inquiry_children: [] }],
 ])) }));
@@ -70,6 +78,7 @@ import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccount
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
+import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 
 const SRC_DIR = resolve(process.cwd(), "lib/runtime/firstOrder");
 const read = (f: string) => readFileSync(resolve(SRC_DIR, f), "utf8");
@@ -588,5 +597,60 @@ describe("PART 10 — the first-order classification is not the composer's", () 
         });
         expect(cfg.cards[0].semanticKeys).toEqual([]);
         expect(compileFirstOrderPlan(cfg).ok).toBe(true);
+    });
+});
+
+describe("FACT IDENTITY — children reached through the HOUSEHOLD are still children", () => {
+    /*
+     * FOUND ON DEPLOYED DATA, not in review. `enrichOpportunityRowsWithChildrenForCompactQueue`
+     * writes `_inquiry_children` only for children seeded from inquiry metadata; children reached
+     * via `customer_members` land under `_household_children`. The capability read a normalizer
+     * that sees neither of those — only `_inquiry_children` — so a real family with one child
+     * projected `known(0)` while the operator's frame rendered "1 child".
+     *
+     * A state-shape oracle passes that. Only comparing the VALUE against the canonical fact
+     * catches it, which is why this suite exists alongside the state gates.
+     */
+    const householdOnly = {
+        // No `_inquiry_children` at all: this roster was reached through the household.
+        _crm_compact_children: [{ primary: "Specee S", secondary: null, customerMemberId: "cm9" }],
+        _household_children: [{ id: "cm9", customer_member_id: "cm9", display_name: "Specee S" }],
+    };
+
+    it("a household-derived roster is COUNTED, not reported as zero", async () => {
+        vi.mocked(enrichOpportunityRowsWithChildrenForCompactQueue).mockResolvedValueOnce(
+            new Map([["o1", householdOnly]]) as never);
+        const r = await compose(enrollment({ cardKeys: ["children"] }));
+        const f = r.projection.cards.children.facts["children.count"];
+        expect(f.state).toBe("known");
+        if (f.state === "known") expect(f.value, "a household-derived child is still a child").toBe(1);
+    });
+
+    it("ENROLLING COUNT IS UNKNOWN when the roster carries no outcome", async () => {
+        /*
+         * Only the inquiry roster carries `outcome_status_key`. Reporting 0 enrolling for children
+         * nobody has assessed would be the same false-fact mistake in a new place.
+         */
+        vi.mocked(enrichOpportunityRowsWithChildrenForCompactQueue).mockResolvedValueOnce(
+            new Map([["o1", householdOnly]]) as never);
+        const r = await compose(enrollment({ cardKeys: ["children"] }));
+        expect(r.projection.cards.children.facts["children.enrolling_count"].state).toBe("unknown");
+    });
+
+    it("an outcome-bearing roster still reports the enrolling count", async () => {
+        const r = await compose(enrollment({ cardKeys: ["children"] }));
+        const e = r.projection.cards.children.facts["children.enrolling_count"];
+        expect(e.state).toBe("known");
+        if (e.state === "known") expect(e.value).toBe(1);
+    });
+
+    it("a genuinely childless record is a REAL zero, not unknown", async () => {
+        vi.mocked(enrichOpportunityRowsWithChildrenForCompactQueue).mockResolvedValueOnce(
+            new Map([["o1", { _crm_compact_children: [], _inquiry_children: [] }]]) as never);
+        const r = await compose(enrollment({ cardKeys: ["children"] }));
+        const f = r.projection.cards.children.facts["children.count"];
+        expect(f.state).toBe("known");
+        if (f.state === "known") expect(f.value).toBe(0);
+        expect(r.projection.cards.children.facts["children.enrolling_count"].state).toBe("known");
     });
 });

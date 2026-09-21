@@ -72,10 +72,19 @@ vi.mock("@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQ
      * identity cannot be placed. The first version of this fixture supplied only first/last name
      * and the normalizer dropped both children — the rule was right and the fixture was not.
      */
-    ["o1", { _inquiry_children: [
-        { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
-        { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
-    ] }],
+    ["o1", {
+        _inquiry_children: [
+            { id: "ch1", customer_member_id: "cm1", display_name: "Ada L", outcome_status_key: "enrolling" },
+            { id: "ch2", customer_member_id: "cm2", display_name: "Bo L", outcome_status_key: "declined" },
+        ],
+        // The enricher's UNIFIED key, written by BOTH its branches — the source the children
+        // capability reads. A fixture with only `_inquiry_children` hid a live defect where a
+        // household-derived roster projected zero.
+        _crm_compact_children: [
+            { primary: "Ada L", secondary: null, customerMemberId: "cm1" },
+            { primary: "Bo L", secondary: null, customerMemberId: "cm2" },
+        ],
+    }],
     ["o2", { _inquiry_children: [{ id: "ch9", customer_member_id: "cm9", display_name: "Zed Q" }] }],
     ["o3", { _inquiry_children: [] }],
 ])) }));
