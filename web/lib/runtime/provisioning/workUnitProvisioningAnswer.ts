@@ -1455,6 +1455,8 @@ export async function composeWorkUnitProvisioningAnswer(
                   return enrichOperationalProjectionRows({
                       supabase: req.supabase,
                       orgId: req.orgId,
+                      // Personal seen is per-operator; without it the rows carry no verdict.
+                      currentUserId: req.currentUserId ?? null,
                       rows: familyPage as unknown as EnrichableProjectionRow[],
                       queue: {
                           key: activeView.id,
@@ -1472,6 +1474,8 @@ export async function composeWorkUnitProvisioningAnswer(
             : (enrichOperationalProjectionRows({
                   supabase: req.supabase,
                   orgId: req.orgId,
+                  // Personal seen is per-operator; without it the rows carry no verdict.
+                  currentUserId: req.currentUserId ?? null,
                   rows: page as unknown as EnrichableProjectionRow[],
                   queue: {
                       key: activeView.id,
