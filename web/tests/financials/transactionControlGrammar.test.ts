@@ -87,6 +87,33 @@ describe("no native select survives in the transaction surfaces", () => {
     });
 });
 
+describe("the whole Financials control set is canonical, not just the command surfaces", () => {
+    /*
+     * The seven surfaces the slice measured. Zero native selects across all of them — and asserted
+     * against comment-stripped CODE, because three of the counts in the inherited census were the
+     * word `<select>` inside a comment explaining why AlloySelect is used instead.
+     */
+    const SURFACES = [
+        "components/operationalCards/AddChargeCommand.tsx",
+        "components/admin/focusPanel/cards/FinancialsCard.tsx",
+        "components/operationalCards/FinancialsDetailCard.tsx",
+        "app/adminV2/financials/FinancialsResponsibilityPanel.tsx",
+        "app/adminV2/financials/FinancialsExpectedFundingPanel.tsx",
+        "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx",
+        "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
+    ];
+
+    it.each(SURFACES)("%s carries no native select", (rel) => {
+        expect(code(rel).match(RAW_SELECT) ?? []).toHaveLength(0);
+    });
+
+    it("Expected Funding keeps its optional agency as a real placeholder, not an absence", () => {
+        /* "Choose an agency…" was an empty option; it is now the placeholder, still selectable. */
+        expect(src("app/adminV2/financials/FinancialsExpectedFundingPanel.tsx"))
+            .toContain('placeholder="Choose an agency…"');
+    });
+});
+
 describe("Details can change who owes, not only filter by it", () => {
     it("renders the gear", () => {
         expect(src(DETAIL)).toContain('data-financials-manage-responsibility="gear"');

@@ -27,6 +27,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { isPostedStatus } from "@/lib/financials/billableSource";
@@ -529,23 +530,25 @@ export default function FinancialsResponsibilityPanel({
                     data-financials-arrangement-member={effectiveMemberId ?? "household"}
                 >
                     Applies to
-                    <select
-                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight"
-                        data-testid="responsibility-scope"
+                    <AlloySelect
+                        testId="responsibility-scope"
+                        aria-label="Applies to"
+                        density="compact"
+                        allowEmpty={false}
                         value={scopeMemberId}
-                        onChange={(e) => {
-                            setScopeMemberId(e.target.value);
+                        options={[
+                            { value: HOUSEHOLD_SCOPE, label: "Household — the whole account" },
+                            ...(memberOptions ?? []).map((m) => ({
+                                value: m.customerMemberId,
+                                label: m.label,
+                            })),
+                        ]}
+                        onChange={(next) => {
+                            setScopeMemberId(next);
                             /* A different scope is a different arrangement; its preview is not this one's. */
                             setPreview(null);
                         }}
-                    >
-                        <option value={HOUSEHOLD_SCOPE}>Household — the whole account</option>
-                        {(memberOptions ?? []).map((m) => (
-                            <option key={m.customerMemberId} value={m.customerMemberId}>
-                                {m.label}
-                            </option>
-                        ))}
-                    </select>
+                    />
                     {/*
                       * WHAT ALREADY GOVERNS THIS SCOPE, and whether it belongs to this scope.
                       * Inherited household money shown as though the child had been given it
@@ -584,19 +587,22 @@ export default function FinancialsResponsibilityPanel({
             ) : customerMemberId ? (
                 <label className="mt-2 block text-[11px] text-alloy-midnight/60" data-financials-arrangement-scope={scope}>
                     Applies to
-                    <select
-                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight"
-                        data-testid="responsibility-scope"
+                    <AlloySelect
+                        testId="responsibility-scope"
+                        aria-label="Applies to"
+                        density="compact"
+                        allowEmpty={false}
                         value={scope}
-                        onChange={(e) => {
-                            setScope(e.target.value === "child" ? "child" : "household");
+                        options={[
+                            { value: "household", label: "Household — the whole account" },
+                            { value: "child", label: subjectLabel ? `${subjectLabel} only` : "This child only" },
+                        ]}
+                        onChange={(next) => {
+                            setScope(next === "child" ? "child" : "household");
                             /* A different scope is a different arrangement; its preview is not this one's. */
                             setPreview(null);
                         }}
-                    >
-                        <option value="household">Household — the whole account</option>
-                        <option value="child">{subjectLabel ? `${subjectLabel} only` : "This child only"}</option>
-                    </select>
+                    />
                 </label>
             ) : null}
 
