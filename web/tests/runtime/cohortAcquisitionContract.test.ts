@@ -95,7 +95,17 @@ describe("UNAVAILABLE is not ACKNOWLEDGED", () => {
     });
 });
 
-describe("the concurrent implementation keeps its contracts", () => {
+describe("serial acquisition is the restored contract", () => {
+    /*
+     * Full concurrency was implemented, deployed and REJECTED on the product metric: cohort_rows
+     * fell 526 -> 308ms, but the producer tail rose 310 -> 512ms, FIRST_ORDER_VISIBLE_COMPLETE
+     * moved 1,832 -> 1,938ms and the tail widened to 5,929ms. That evidence was cross-build and
+     * never promoted to a causal finding -- but it failed the burden of proof to stay deployed.
+     *
+     * These gates now pin the SERIAL shape, and pin it as an absence, so the mechanism cannot
+     * return quietly. Everything that did not depend on scheduling is still gated above:
+     * occurrence identity from raw columns, one definition, and UNKNOWN != SEEN.
+     */
     const SRC = (() => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { readFileSync } = require("node:fs") as typeof import("node:fs");
@@ -107,69 +117,77 @@ describe("the concurrent implementation keeps its contracts", () => {
         return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
     })();
 
-    it("NO AWAIT SEPARATES THE THREE STARTS", () => {
-        /*
-         * The defect this whole change exists to remove, and the gate has to be stated as an
-         * ABSENCE. An earlier version checked only that the three starts preceded the first
-         * `await crmP`; two planted defects -- awaiting children before the acknowledgement read
-         * starts, and awaiting the acknowledgement read before CRM -- both passed it, because an
-         * await inserted BETWEEN the starts still leaves the starts in order.
-         *
-         * The real invariant is that the window from the first start to the last contains no
-         * suspension point at all. Any await in there re-serialises the reads while every timing
-         * span and every ordering check still looks correct.
-         */
-        const crmStart = SRC.indexOf("const crmP =");
-        const childrenStart = SRC.indexOf("const childrenP =");
-        const seenStart = SRC.indexOf("const seenP:");
-        expect(crmStart).toBeGreaterThan(-1);
-        expect(childrenStart).toBeGreaterThan(crmStart);
-        expect(seenStart).toBeGreaterThan(childrenStart);
-        const lastStartEnd = SRC.indexOf("enrich_personal_seen_keys");
-        expect(lastStartEnd).toBeGreaterThan(seenStart);
-        const window = SRC.slice(crmStart, lastStartEnd);
-        expect(window).not.toMatch(/\bawait\b/);
+    it("THE THREE READS ARE AWAITED SERIALLY", () => {
+        // Each acquisition must be awaited before the next is issued.
+        const crm = SRC.indexOf("enrichOpportunityRowsWithCrmProjection(");
+        const children = SRC.indexOf("enrichOpportunityRowsWithChildrenForCompactQueue(");
+        const seen = SRC.indexOf("loadAcknowledgedOccurrenceKeys(");
+        expect(crm).toBeGreaterThan(-1);
+        expect(children).toBeGreaterThan(crm);
+        expect(seen).toBeGreaterThan(children);
+        // An await separates each pair — the inverse of the rejected concurrent shape.
+        expect(SRC.slice(crm, children)).toMatch(/\bawait\b/);
+        expect(SRC.slice(children, seen)).toMatch(/\bawait\b/);
     });
 
-    it("FAILURE ISOLATION SURVIVES — no Promise.all over the three reads", () => {
-        // Promise.all turns three independent best-effort reads into one fail-together read.
-        expect(SRC).not.toMatch(/Promise\.all\(\s*\[?\s*crmP/);
-        expect(SRC).not.toContain("Promise.all([crmP");
-        /*
-         * COUNTED, NOT MEASURED BY DISTANCE. The first version asserted a rejection handler within
-         * 400 characters of each start; the real distance is 495 and the gate failed on formatting
-         * rather than on behaviour. What matters is that each of the two enrichment reads owns a
-         * rejection path, and that the acknowledgement read degrades to null.
-         */
-        expect((SRC.match(/ok:\s*false as const/g) ?? []).length).toBe(2);
-        expect(SRC).toMatch(/seenP[\s\S]*?\(\)\s*=>\s*null/);
+    it("NO CONCURRENT SCHEDULING REMAINS", () => {
+        // The rejected mechanism must not return by accident.
+        expect(SRC).not.toMatch(/\bcrmP\b/);
+        expect(SRC).not.toMatch(/\bchildrenP\b/);
+        expect(SRC).not.toMatch(/\bseenP\b/);
+        expect(SRC).not.toContain("Promise.all");
+        expect(SRC).not.toContain("allSettled");
+    });
+
+    it("FAILURE ISOLATION SURVIVED THE REVERT", () => {
+        // Three independent best-effort reads, three independent catches.
+        expect((SRC.match(/\bcatch\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
     });
 
     it("MERGE PRECEDENCE stays raw < CRM < children", () => {
-        // Children must still fold OVER the CRM map, and the row merge must still let the
-        // projection win over raw. Arrival order must not decide this.
         expect(SRC).toContain("{ ...prior, ...projection }");
         expect(SRC).toContain("{ ...r, ...p }");
     });
 
-    it("the acknowledgement read keeps ONE definition", () => {
+    it("the occurrence identity is still resolved from RAW columns, one definition", () => {
+        // This was never the scheduling change and is deliberately retained.
         expect(SRC).toContain("resolveQueueRowOccurrenceIdentity");
         expect(SRC).toContain("occurrenceKeyForAck");
-        expect(SRC).toContain("loadAcknowledgedOccurrenceKeys");
-        expect(SRC).toContain("personalSeenFromOccurrence");
-        // and does not re-derive the stage/entry fallback beside it
         expect(SRC).not.toContain("intakeCreatedAt");
     });
 
-    it("a failed acknowledgement read writes NO verdict", () => {
-        // Exactly one place may assign personal_seen: the success fold.
+    it("A FAILED ACKNOWLEDGEMENT READ LEAVES THE VERDICT ABSENT, NOT EMPTY", () => {
+        /*
+         * Counting assignment sites is not enough, and a planted defect proved it: substituting an
+         * empty Set for null on failure keeps exactly one assignment while changing the meaning
+         * completely. An empty set is an ANSWER -- every row resolves to an explicit
+         * `unseen: true` verdict -- whereas null leaves `personal_seen` ABSENT and the client
+         * hydrates over the network. The dot looks the same either way, which is what makes it
+         * dangerous: with a false verdict the client stops correcting, so a row the operator HAS
+         * opened keeps its dot for the whole navigation.
+         *
+         * So the gate is on the failure path itself: the catch must yield null and must not
+         * fabricate a set.
+         */
         expect((SRC.match(/personal_seen\s*=/g) ?? []).length).toBe(1);
+        const at = SRC.indexOf("acknowledged = await phase");
+        expect(at).toBeGreaterThan(-1);
+        const tail = SRC.slice(at, at + 600);
+        expect(tail).toMatch(/catch[\s\S]*?acknowledged\s*=\s*null/);
+        expect(tail).not.toMatch(/catch[\s\S]*?acknowledged\s*=\s*new Set/);
     });
 
     it("each read is issued exactly once", () => {
         expect((SRC.match(/enrichOpportunityRowsWithCrmProjection\(/g) ?? []).length).toBe(1);
         expect((SRC.match(/enrichOpportunityRowsWithChildrenForCompactQueue\(/g) ?? []).length).toBe(1);
         expect((SRC.match(/loadAcknowledgedOccurrenceKeys\(/g) ?? []).length).toBe(1);
+    });
+
+    it("phase instrumentation is retained", () => {
+        for (const span of ["enrich_crm_ms", "enrich_children_ms", "enrich_personal_seen_ms",
+                            "enrich_row_context_ms", "enrich_projection_ms", "enrich_personal_seen_keys"]) {
+            expect(SRC).toContain(span);
+        }
     });
 
     it("resolves the whole page in one acknowledgement query", () => {

@@ -96,61 +96,77 @@ export async function enrichOperationalProjectionRows(args: {
     args.onPhase?.("enrich_rows", rows.length);
 
     /*
-     * THREE INDEPENDENT READS, STARTED TOGETHER.
+     * SERIAL ACQUISITION. The three reads are independent, and starting them together was tried,
+     * deployed and REJECTED on the product metric.
      *
-     * Measured deployed (n=6): CRM 186ms, children 224ms, personal_seen 106ms -- and they SUMMED
-     * to the 526ms cohort_rows wall, which is what proved they were serial. Nothing required that
-     * order: CRM needs primary_person_id/location_id, children needs customer_id, and the
-     * occurrence key needs id/org_id/stage_key/stage_entered_at/created_at. Every one of those is
-     * a RAW column in PROCESS_POPULATION_SELECT, so no read consumes another's output.
+     * Measured: concurrency did what it was designed to do -- cohort_rows fell 526 -> 308ms, with
+     * the wall becoming the slowest single read rather than the sum. But the adjacent producer
+     * tail rose 310 -> 512ms, FIRST_ORDER_VISIBLE_COMPLETE moved 1,832 -> 1,938ms, and the tail
+     * widened from 2,073 to 5,929ms. The saving reappeared almost exactly where it was lost
+     * (-218 / +202), while the floor improved and the ceiling blew out -- the signature of three
+     * simultaneous reads contending with the card producers that were already running.
      *
-     * FAILURE ISOLATION IS PRESERVED DELIBERATELY. Each read keeps its own catch and its own
-     * degrade, exactly as before: a CRM failure yields an empty projection and rows fall back to
-     * title/name, a children failure leaves Secondary absent, and a personal_seen failure leaves
-     * the verdict ABSENT so the client hydrates it. `Promise.all` would convert three independent
-     * best-effort reads into one fail-together read, turning any single degrade into a blank page.
-     * Starting them together is a scheduling change; it is not a contract change.
+     * That comparison spanned two staging builds, so it was never promoted to a causal finding
+     * and this comment does not claim one. Full concurrency simply failed the burden of proof
+     * required to stay deployed: product P50 did not improve, the tail got materially worse, and
+     * establishing causality would have needed experiment infrastructure that does not exist.
      *
-     * MERGE PRECEDENCE IS UNCHANGED: raw < CRM < children. The children loop still folds over the
-     * CRM map with `{...prior, ...projection}`, and the row merge is still `{...raw, ...projection}`.
-     * Concurrency changes when the answers arrive, never which answer wins.
+     * So the reads are serial again. What was NOT reverted is everything that does not depend on
+     * scheduling: the occurrence identity still resolves from RAW columns through the canonical
+     * exported helper (one definition, no drift), each read keeps its own failure degrade, merge
+     * precedence stays raw < CRM < children, and every phase span stays. This is the removal of
+     * one scheduling mechanism, not a rollback of the slice.
+     *
+     * Do not reintroduce concurrency here without NEW evidence from another critical-path change.
      */
     const viewerId = args.currentUserId?.trim() || null;
 
-    const crmP = phase("enrich_crm_ms", () =>
-        enrichOpportunityRowsWithCrmProjection(
-            args.supabase,
-            args.orgId,
-            args.rows.map((r) => ({
-                id: r.id,
-                primary_person_id: (r.primary_person_id as string | null) ?? null,
-                location_id: (r.location_id as string | null) ?? null,
-                metadata: r.metadata,
-            })),
-        ),
-    ).then(
-        (v) => ({ ok: true as const, v }),
-        () => ({ ok: false as const, v: null }),
-    );
+    let projectionById = new Map<string, Record<string, unknown>>();
+    try {
+        const crm = await phase("enrich_crm_ms", () =>
+            enrichOpportunityRowsWithCrmProjection(
+                args.supabase,
+                args.orgId,
+                args.rows.map((r) => ({
+                    id: r.id,
+                    primary_person_id: (r.primary_person_id as string | null) ?? null,
+                    location_id: (r.location_id as string | null) ?? null,
+                    metadata: r.metadata,
+                })),
+            ),
+        );
+        projectionById = crm as unknown as Map<string, Record<string, unknown>>;
+    } catch {
+        // Enrichment failure is NOT an operational error: an absent `_customer_name` falls back to
+        // title/name and recognition never depends on a best-effort read succeeding.
+        projectionById = new Map();
+    }
 
-    const childrenP = phase("enrich_children_ms", () =>
-        enrichOpportunityRowsWithChildrenForCompactQueue(
-            args.supabase,
-            args.orgId,
-            args.rows.map((r) => ({
-                id: r.id,
-                customer_id: (r.customer_id as string | null) ?? null,
-                metadata: r.metadata,
-            })),
-        ),
-    ).then(
-        (v) => ({ ok: true as const, v }),
-        () => ({ ok: false as const, v: null }),
-    );
+    try {
+        const children = await phase("enrich_children_ms", () =>
+            enrichOpportunityRowsWithChildrenForCompactQueue(
+                args.supabase,
+                args.orgId,
+                args.rows.map((r) => ({
+                    id: r.id,
+                    customer_id: (r.customer_id as string | null) ?? null,
+                    metadata: r.metadata,
+                })),
+            ),
+        );
+        // Children fold OVER the CRM map: precedence is raw < CRM < children.
+        for (const [id, projection] of children) {
+            const prior = projectionById.get(id) ?? {};
+            projectionById.set(id, { ...prior, ...projection });
+        }
+    } catch {
+        // Same honest degrade: Secondary absent is preferable to failing the page.
+    }
 
     /*
-     * The occurrence keys come from the RAW page via the canonical derivation, so this read no
-     * longer waits for the enrichment merge it never depended on.
+     * The occurrence keys still come from the RAW page through the canonical derivation. That was
+     * never the scheduling change -- it is what gives "which stage occurrence is this row in" a
+     * single definition, and it holds regardless of when the read runs.
      */
     const keyByRowId = new Map<string, string>();
     if (viewerId) {
@@ -170,36 +186,26 @@ export async function enrichOperationalProjectionRows(args: {
             );
         }
     }
-    const seenP: Promise<ReadonlySet<string> | null> =
-        viewerId && keyByRowId.size
-            ? phase("enrich_personal_seen_ms", () =>
-                  loadAcknowledgedOccurrenceKeys({
-                      supabase: args.supabase,
-                      orgId: args.orgId,
-                      userId: viewerId,
-                      occurrenceKeys: [...keyByRowId.values()],
-                  }),
-              ).then(
-                  (v) => v,
-                  /*
-                   * UNAVAILABLE IS NOT ACKNOWLEDGED. Null leaves `personal_seen` absent so the
-                   * client hydrates over the network; writing a verdict here would turn "we could
-                   * not find out" into "you have seen this" and clear a dot still owed.
-                   */
-                  () => null,
-              )
-            : Promise.resolve(null);
     args.onPhase?.("enrich_personal_seen_keys", keyByRowId.size);
 
-    let projectionById = new Map<string, Record<string, unknown>>();
-    const crm = await crmP;
-    if (crm.ok && crm.v) projectionById = crm.v as unknown as Map<string, Record<string, unknown>>;
-
-    const children = await childrenP;
-    if (children.ok && children.v) {
-        for (const [id, projection] of children.v) {
-            const prior = projectionById.get(id) ?? {};
-            projectionById.set(id, { ...prior, ...projection });
+    let acknowledged: ReadonlySet<string> | null = null;
+    if (viewerId && keyByRowId.size) {
+        try {
+            acknowledged = await phase("enrich_personal_seen_ms", () =>
+                loadAcknowledgedOccurrenceKeys({
+                    supabase: args.supabase,
+                    orgId: args.orgId,
+                    userId: viewerId,
+                    occurrenceKeys: [...keyByRowId.values()],
+                }),
+            );
+        } catch {
+            /*
+             * UNAVAILABLE IS NOT ACKNOWLEDGED. Leaving this null keeps `personal_seen` ABSENT so
+             * the client hydrates over the network; writing a verdict here would turn "we could
+             * not find out" into "you have seen this" and clear a dot the operator still needs.
+             */
+            acknowledged = null;
         }
     }
 
@@ -222,7 +228,6 @@ export async function enrichOperationalProjectionRows(args: {
      * A null result means the read failed or there was no viewer: `personal_seen` stays ABSENT and
      * the client hydrates exactly as it always has.
      */
-    const acknowledged = await seenP;
     if (acknowledged) {
         for (const row of withContext) {
             const ctx = queueRowContextOf(row);
