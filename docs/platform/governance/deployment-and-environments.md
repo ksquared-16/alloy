@@ -78,6 +78,51 @@ against an empty schedule set were indistinguishable. `scheduled_work_clock` rec
 every wake for that reason; read `wake_count` and `last_wake_at` to answer "is the
 clock running" without inferring it from work that happened to be due.
 
+### Clock doctrine
+
+**CANONICAL CLOCK INTERFACE:** the generic authenticated Alloy wake endpoint,
+`POST|GET /api/scheduled-work/wake`. The scheduled-work runtime must not care who
+physically provides the clock. A clock owns TIME and nothing else — all due-work
+discovery, claiming, leases, dispatch, outcomes, retry and convergence stay inside the
+certified runtime. No clock may call a domain endpoint.
+
+**STAGING CLOCK:** external scheduler (Director decision, 2026-09-21). Staging is not
+to be converted into a production-class Vercel deployment merely to obtain Vercel Cron.
+
+**PRODUCTION CLOCK:** may use the same external-scheduler contract, or a production
+hosting scheduler later. Both are interchangeable because the interface is the endpoint.
+
+**Two clocks are safe.** Delivery is at-least-once, a duplicate wake converges on the
+same occurrence through the `(scheduled_work_id, due_at)` identity, and a completed
+occurrence cannot execute twice. That is what makes the clock portable.
+
+#### Mechanisms, and which are actually viable here
+
+| Mechanism | Viable | Evidence |
+|---|---|---|
+| Vercel Cron | **No** | staging is `VERCEL_ENV=preview`; crons register only from a production deployment, and `main` carries no `vercel.json` |
+| GitHub Actions `schedule` | **No** | fires only from the **default branch** (`main`, thousands of commits behind `staging`), and has produced **one** scheduled run ever — 2026-09-15, none in the six days since, while the repo ran ~100 Actions runs in two hours |
+| `pg_cron` + `pg_net` | **Yes** | both `available` on the staging project (not yet installed); `supabase_vault` already installed. Installable through the governed `database.apply_migration` capability |
+
+The GitHub Actions row is the one that surprises people: a `schedule:` block on a
+feature or trunk branch that is not the default branch is silent, exactly like the
+Vercel `crons` block. Neither reports an error. **Assume no scheduler works until a
+tick has been observed** — read `scheduled_work_clock.last_wake_at`, never a config
+file and never a workflow's run history.
+
+#### Secret handling for the clock
+
+The wake boundary uses the machine-auth contract already certified in Governed
+Scheduled Work V1 — `Authorization: Bearer $CRON_SECRET`, or `x-cron-token` against
+`INTERNAL_CRON_TOKEN`. Do not invent a second scheme. A missing or empty expected value
+never authorizes.
+
+The credential must be high-entropy, server-side only, never `NEXT_PUBLIC_*`, never
+written into source or into this document, and never printed in evidence or log output.
+Rotation must not require a domain code change, which is why the value is read from
+configuration (Vercel environment for the verifying side, Supabase Vault for a
+`pg_cron` sending side) rather than embedded anywhere.
+
 ---
 
 ## Environment variables (categories)
