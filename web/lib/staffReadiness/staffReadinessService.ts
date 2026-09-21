@@ -122,10 +122,12 @@ export async function composeStaffReadiness(
         satisfaction: state.satisfaction,
         typeLabel: (id) => labelById.get(id) ?? "Qualification",
         // Naming the actual site is what turns "required at this site" into something
-        // an operator can act on.
+        // an operator can act on. The label is a phrase, not a noun: it is substituted
+        // into "Required ___" beside defaults like "organization-wide" and "this site",
+        // so a bare name would read "Required North Campus".
         scopeLabel: (scopeType, scopeId) =>
             scopeType === "site" && scopeId && scopeId === employment.primary_location_id && siteLabel
-                ? siteLabel
+                ? `at ${siteLabel}`
                 : "",
     });
 
