@@ -1,6 +1,7 @@
 import { findFirstOrderCapability } from "@/lib/runtime/firstOrder/firstOrderCapabilityRegistry";
-import type {
-    FirstOrderCapability, FirstOrderPrerequisiteKey, FirstOrderUnsupportedCapability,
+import {
+    KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY,
+    type FirstOrderCapability, type FirstOrderPrerequisiteKey, type FirstOrderUnsupportedCapability,
 } from "@/lib/runtime/firstOrder/firstOrderCapability";
 
 /**
@@ -40,10 +41,31 @@ export type CompiledCardRequirement = {
 export type FirstOrderSurfaceConfiguration = {
     /** Configured cards IN ORDER, each with its configured first-order semantic keys IN ORDER. */
     readonly cards: readonly CompiledCardRequirement[];
+    /**
+     * Configured KPI slots IN ORDER. These are VALUES, not geometry: a KPI slot with no value is
+     * not a first-order-complete frame, so each one selects a capability exactly as a card field
+     * does.
+     */
     readonly kpiKeys: readonly string[];
+    /** Configured Work View identities IN ORDER. Also values, for the same reason. */
     readonly workViewIds: readonly string[];
     readonly siteScopeId: string | null;
 };
+
+/**
+ * DYNAMIC CAPABILITY FAMILIES.
+ *
+ * A card field names a semantic key the platform registers once. A KPI slot and a Work View name
+ * a TENANT-CONFIGURED identity, so there is no fixed list to register against — `needs_attention`
+ * on one tenant and `overdue_work` on another are the same capability family with different
+ * members.
+ *
+ * They are therefore resolved by FAMILY: the family owns the prerequisite, the authorization and
+ * the projector, and the configured identity selects a member of it. That keeps one owner per
+ * family rather than a registry entry per tenant value, and it is still configuration selecting
+ * capabilities — nothing here knows which KPIs exist.
+ */
+export { KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY } from "@/lib/runtime/firstOrder/firstOrderCapability";
 
 export type CompiledField = {
     readonly cardKey: string;
@@ -89,6 +111,35 @@ export function compileFirstOrderPlan(configuration: FirstOrderSurfaceConfigurat
     const fields: CompiledField[] = [];
     const unsupported: FirstOrderUnsupportedCapability[] = [];
     const prerequisites = new Set<FirstOrderPrerequisiteKey>(PROJECTION_BASE_PREREQUISITES);
+
+    /*
+     * KPI and Work View values join the SAME plan as card fields. They are not a second pass and
+     * not a seed running beside the composition: one plan, one deduplicated prerequisite set, one
+     * concurrent execution. A surface configuring no KPI selects no KPI capability and pays
+     * nothing for it.
+     */
+    const valueSlots: Array<{ cardKey: string; keys: readonly string[]; family: string }> = [
+        { cardKey: KPI_CAPABILITY_FAMILY, keys: configuration.kpiKeys, family: KPI_CAPABILITY_FAMILY },
+        { cardKey: WORK_VIEW_CAPABILITY_FAMILY, keys: configuration.workViewIds, family: WORK_VIEW_CAPABILITY_FAMILY },
+    ];
+    for (const slot of valueSlots) {
+        for (const identity of slot.keys) {
+            const capability = findFirstOrderCapability(`${slot.family}:*`);
+            if (!capability) {
+                unsupported.push({
+                    semanticKey: `${slot.family}:${identity}`, cardKey: slot.cardKey,
+                    reason: "no_registered_capability",
+                    message: `No first-order capability family is registered for "${slot.family}".`,
+                });
+                continue;
+            }
+            fields.push({ cardKey: slot.cardKey, semanticKey: `${slot.family}:${identity}`, capability });
+            for (const p of capability.prerequisites) {
+                prerequisites.add(p);
+                for (const dep of PREREQUISITE_DEPENDENCIES[p] ?? []) prerequisites.add(dep);
+            }
+        }
+    }
 
     for (const card of configuration.cards) {
         for (const semanticKey of card.semanticKeys) {
