@@ -14,6 +14,8 @@ import {
     type StripeFormCall,
 } from "./providerPaymentMethod";
 
+import { failArrangementsForMethod } from "@/lib/financials/payments/autopayArrangement";
+
 /**
  * THE CANONICAL PAYMENT METHOD REFERENCE — the one authority that writes `payment_methods`.
  *
@@ -504,6 +506,19 @@ export async function revokePaymentMethod(
      */
     const detach = await detachPaymentMethod(call, existing.providerMethodRef);
 
+    /*
+     * AUTOPAY CONVERGENCE (W5). A standing authorization names ONE instrument, so removing it ends
+     * the arrangement's ability to execute. Leaving it `active` would mean the Financials card says
+     * "Autopay on" while every scheduled wake refuses — the surface and the truth disagreeing about
+     * a family's money. There is deliberately no fallback to another method on file: the payer
+     * authorized this one.
+     */
+    await failArrangementsForMethod(supabase, {
+        orgId: t(args.orgId),
+        paymentMethodId: t(args.methodId),
+        reason: "The authorized payment method was removed.",
+    });
+
     return { ok: true, method: toRecord(data as unknown as Record<string, unknown>), providerDetached: detach.detached };
 }
 
@@ -649,6 +664,25 @@ export async function applyProviderMethodUpdate(
 
     if (error) return { ok: false, reason: "write_failed", message: error.message };
     const next = data ? toRecord(data as unknown as Record<string, unknown>) : current;
+
+    /*
+     * THE ACH MANDATE RULE, CONVERGED RATHER THAN RESTATED (W5).
+     *
+     * W3 established that a return invalidates the mandate and the canonical method stops being
+     * usable. That decision is made upstream and arrives here as a usability change; this does not
+     * re-derive it, it follows it. Any live arrangement standing on the method fails, because a
+     * mandate that the bank refused cannot authorize the next debit either.
+     */
+    if (next.usabilityState !== "usable" && current.usabilityState === "usable") {
+        await failArrangementsForMethod(supabase, {
+            orgId: current.orgId,
+            paymentMethodId: current.id,
+            reason: next.usabilityState === "blocked"
+                ? "The bank refused the authorization for this payment method."
+                : "The authorized payment method can no longer be charged.",
+        });
+    }
+
     const changed =
         next.brand !== current.brand
         || next.last4 !== current.last4
