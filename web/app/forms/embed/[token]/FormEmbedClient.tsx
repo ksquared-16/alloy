@@ -247,6 +247,7 @@ export function FormEmbedClient({
     token,
     showPreviewBanner = false,
     initialResolve = null,
+    initialObjective = null,
 }: {
     token: string;
     showPreviewBanner?: boolean;
@@ -255,6 +256,15 @@ export function FormEmbedClient({
      * has the form. Null when the server could not resolve it — bootstrap then fetches as before.
      */
     initialResolve?: Record<string, unknown> | null;
+    /**
+     * The Enrollment objective, resolved by the SERVER on the same request.
+     *
+     * Without it this component learned which presentation to show only after hydration, so a
+     * journey that must open as a conversation opened as eighty form fields and then replaced them.
+     * Seeded into state, the FIRST render already suppresses the packet flow. Null for an ordinary
+     * public Form link, which is the overwhelming majority and is unchanged.
+     */
+    initialObjective?: Record<string, unknown> | null;
 }) {
     const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
     const [message, setMessage] = useState<string | null>(null);
@@ -279,7 +289,9 @@ export function FormEmbedClient({
     // The tenant's own brand, resolved server-side from the authored form metadata. Held here and
     // applied by the frame so the conversation and the artifact review cannot theme differently.
     const [brand, setBrand] = useState<ParticipantBrand | null>(null);
-    const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(null);
+    const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(
+        (initialObjective as ParticipantObjectiveWire | null) ?? null,
+    );
     /**
      * The runtime phase, kept in sync as the conversation advances.
      *
@@ -287,7 +299,9 @@ export function FormEmbedClient({
      * crosses from shared collection into artifact review MID-conversation — waiting for a reload to
      * notice would leave them looking at a finished conversation and no paperwork.
      */
-    const [enrollmentPhase, setEnrollmentPhase] = useState<ParticipantObjectiveWire["phase"] | null>(null);
+    const [enrollmentPhase, setEnrollmentPhase] = useState<ParticipantObjectiveWire["phase"] | null>(
+        (initialObjective as ParticipantObjectiveWire | null)?.phase ?? null,
+    );
     /**
      * Original-document presentation state.
      *

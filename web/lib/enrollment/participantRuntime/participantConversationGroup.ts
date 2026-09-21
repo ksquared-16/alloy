@@ -36,6 +36,7 @@ import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeed
 import { confirmationSubjectFor } from "@/lib/enrollment/participantRuntime/confirmationGroup";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import { personSlotKey, type ParticipantPersonLabel } from "@/lib/enrollment/participantRuntime/participantPersonLabel";
+import { participantTopicLabel } from "@/lib/enrollment/participantRuntime/participantTopicLabel";
 import {
     traversalContext,
     traversalPlacement,
@@ -122,7 +123,12 @@ export function participantConversationGroup(input: {
             const name = (input.childName ?? "").trim();
             return { key: placement.blockKey, title: name ? `${name}'s details` : "Your child's details" };
         }
-        const section = humanizeSection(need.occurrences[0]?.section_title ?? "");
+        /*
+         * The chapter's NAVIGATION name, not its authored name — see `participantTopicLabel`. The
+         * section keeps what the school called it everywhere the document is the subject; this is
+         * the signpost, read at a glance in a column beside six people's names.
+         */
+        const section = humanizeSection(participantTopicLabel(need.occurrences[0]?.section_title ?? ""));
         if (!section) return null;
         /*
          * A CHILD TOPIC LEADS WITH THE CHILD, exactly as a person row leads with the person.
