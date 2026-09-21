@@ -1,0 +1,1439 @@
+{
+  "build": {
+    "gitSha": "1ce2e31a5ff10fd2187d2102de9baf959d9c7fbc",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1178 from ksquared-16/agent/config-organization\n\nfeat(scheduling): Coverage — day-specific Staff allocation authority",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-dhuz5op8x-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_BDm2Z2mGiwud8zy8MSzeyHmu9VJS",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "periods": [
+    "2026-09",
+    "2026-08",
+    "2026-07",
+    "2026-06",
+    "2026-05",
+    "2026-04",
+    "2026-03",
+    "2026-02",
+    "2026-01",
+    "2025-12",
+    "2025-11",
+    "2025-10",
+    "2025-09",
+    "2025-08",
+    "2025-07",
+    "2025-06",
+    "2025-05",
+    "2025-04",
+    "2025-03"
+  ],
+  "rows": [
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 1,
+        "unchanged": 0,
+        "notDue": 1,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 145000,
+      "servicePeriod": {
+        "start": "2026-09-01",
+        "end": "2026-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-08-01",
+        "end": "2026-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-07-01",
+        "end": "2026-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-06-01",
+        "end": "2026-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-05-01",
+        "end": "2026-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-04-01",
+        "end": "2026-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-03-01",
+        "end": "2026-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-02",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-02-01",
+        "end": "2026-02-28"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2026-01",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-01-01",
+        "end": "2026-01-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-12",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-12-01",
+        "end": "2025-12-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-11",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-11-01",
+        "end": "2025-11-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-10",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-10-01",
+        "end": "2025-10-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-09-01",
+        "end": "2025-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-08-01",
+        "end": "2025-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-07-01",
+        "end": "2025-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-06-01",
+        "end": "2025-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-05-01",
+        "end": "2025-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-04-01",
+        "end": "2025-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "monthly",
+      "periodKey": "2025-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 2,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-03-01",
+        "end": "2025-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "term_not_yet_effective",
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 5,
+        "unchanged": 0,
+        "notDue": 5,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 92500,
+      "servicePeriod": {
+        "start": "2026-09-01",
+        "end": "2026-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-08-01",
+        "end": "2026-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-07-01",
+        "end": "2026-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 12,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-06-01",
+        "end": "2026-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-05-01",
+        "end": "2026-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-04-01",
+        "end": "2026-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 12,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-03-01",
+        "end": "2026-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-02",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-02-01",
+        "end": "2026-02-28"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2026-01",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-01-01",
+        "end": "2026-01-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-12",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 12,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-12-01",
+        "end": "2025-12-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-11",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-11-01",
+        "end": "2025-11-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-10",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-10-01",
+        "end": "2025-10-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 12,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-09-01",
+        "end": "2025-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-08-01",
+        "end": "2025-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-07-01",
+        "end": "2025-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-06-01",
+        "end": "2025-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-05-01",
+        "end": "2025-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-04-01",
+        "end": "2025-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "weekly",
+      "periodKey": "2025-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 10,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-03-01",
+        "end": "2025-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run",
+        "term_not_yet_effective"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-09-01",
+        "end": "2026-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-08-01",
+        "end": "2026-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-07-01",
+        "end": "2026-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-06-01",
+        "end": "2026-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-05-01",
+        "end": "2026-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-04-01",
+        "end": "2026-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 8,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-03-01",
+        "end": "2026-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-02",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-02-01",
+        "end": "2026-02-28"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2026-01",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2026-01-01",
+        "end": "2026-01-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-12",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-12-01",
+        "end": "2025-12-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-11",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-11-01",
+        "end": "2025-11-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-10",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-10-01",
+        "end": "2025-10-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-09",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 8,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-09-01",
+        "end": "2025-09-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-08",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-08-01",
+        "end": "2025-08-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-07",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-07-01",
+        "end": "2025-07-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-06",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-06-01",
+        "end": "2025-06-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-05",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-05-01",
+        "end": "2025-05-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-04",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-04-01",
+        "end": "2025-04-30"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    },
+    {
+      "cadence": "biweekly",
+      "periodKey": "2025-03",
+      "status": 200,
+      "ok": true,
+      "error": null,
+      "counts": {
+        "generated": 0,
+        "unchanged": 0,
+        "notDue": 6,
+        "refused": 0,
+        "alreadyPosted": 0,
+        "errors": 0
+      },
+      "totalAmountCents": 0,
+      "servicePeriod": {
+        "start": "2025-03-01",
+        "end": "2025-03-31"
+      },
+      "refusedReasons": [],
+      "notDueReasons": [
+        "cadence_not_billed_by_this_run"
+      ]
+    }
+  ]
+}
