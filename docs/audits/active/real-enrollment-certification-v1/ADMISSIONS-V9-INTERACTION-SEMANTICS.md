@@ -111,3 +111,49 @@ STATEMENT. *"I agree to the Tuition and Enrollment Agreement"* is still an ackno
 `validateSubmission` will not demand a hidden required field; the projection was the one reader that
 did not ask. It now evaluates the operator's own condition with the platform's own evaluator, after
 the walk, because a condition names another field.
+
+---
+
+# v10 — two questions the grammar rule called closed and the school does not
+
+**Published 21 September 2026**, same governed path, same parity: 80 questions, 65 required, order,
+labels, sections, the 13 canonical bindings, the four conditionals and the read-only destinations all
+unchanged, verified from the product's own read-back. Booleans **14 → 12**.
+
+| Field | v9 | v10 | Why |
+|---|---|---|---|
+| `field_69` | boolean | long_text | *"Does your child have any fears? **(dark, spiders, etc.)**"* — the parenthetical is a list of example ANSWERS. Two buttons cannot carry "the dark and the vacuum cleaner", which is the only part a teacher can act on. |
+| `field_75` | boolean | long_text | *"Is there anything else you would like us to know about your child?"* — optional, and open-ended by its whole purpose. As a boolean, a family answering Yes has nowhere to say the thing. |
+
+`labelIsClosedQuestion` was not wrong about either: both ARE closed questions by sentence shape.
+The rule reads grammar, which is the right basis for choosing an interaction from a bare question and
+is blind to a school showing, inside the question, what kind of answer it wants. That is an authoring
+judgement, and it belongs in the Form rather than in a new runtime heuristic.
+
+**Deliberately left as yes/no**, because a yes or no genuinely is a complete triage answer and the
+packet offers no detail box either way: `field_40` (therapy), `field_41` (accommodations),
+`field_72` (behaviour management at home). Reasonable people could argue these; naming them is the
+point.
+
+## The health chapter, as v10 actually asks it
+
+41 questions in *Health Information and Developmental History*:
+
+```
+  10  yes/no
+   2  follow-ups that exist only on a Yes   (siblings; a previous programme)
+   6  short answers   physician and dentist name and number, bedtime, waking time
+  23  paragraphs      developmental history, general health, eating, toileting,
+                      sleep, temperament, comfort, fears, what you hope for them
+```
+
+## The seam this still does not close
+
+`field_46` — *"Does your child have any allergies? If so, please list."* — remains ONE destination
+asking a closed question and a detail at once. The Form model can express `boolean`, and it can
+express `boolean` plus a conditional text field, but not both in one box. Authoring it as a boolean
+would refuse the list the school is explicitly asking for, so it stays a paragraph.
+
+Closing it properly means a second destination and an 81st question, which is an authoring decision
+about the school's paperwork rather than a runtime repair. **Unchanged in v10, and deliberately not
+special-cased anywhere in the runtime.**

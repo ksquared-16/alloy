@@ -443,45 +443,46 @@ QA cycle.**
 
 ## Before you start: which conversation you are opening
 
-A participant link **resumes**. That is the product behaving correctly — Part D proved a resend
-reuses the same session rather than starting a second one — but it means **you only get one first
-impression per child**, so E1 has its own untouched specimen below and E2–E6 continue in it.
+A participant link **resumes**, so you only get one first impression per child. E1 has its own
+untouched specimen below and E2–E7 continue in it.
 
-**What changed since you last read this.** Admissions was republished as **version 9**. It asks the
-same **80 questions**, **65 of them required**, in the same order, with the same 13 connections to
-Alloy — nothing was added, removed or renamed. What changed is that the paperwork now says **how**
-it wants to be answered:
+**Check the version before you report anything.** A conversation shows you the Form version it was
+*started* on, not the newest one. The session you last looked at was pinned to **Admissions v4**,
+where "Does your child have siblings?" genuinely is a text box and the "If yes…" follow-up is asked
+whatever you answer — the runtime was being faithful to that form. The specimen below is a fresh
+conversation on **v10**, and it behaves differently on purpose.
 
-- **fourteen questions are yes/no** and are asked with two buttons instead of a text box;
-- **four questions only exist if the answer above them is yes** — custody arrangements, a
-  restraining order, siblings, a previous programme. Answer **No** and the follow-up is not asked
-  at all;
-- **twenty-five questions are paragraphs** rather than one-line boxes.
+**What v10 asks.** The same **80 questions**, **65 required**, same order, same labels, same 13
+connections to Alloy. What changed since v8 is how it asks:
 
-The reasoning for every one of those choices is in `ADMISSIONS-V9-INTERACTION-SEMANTICS.md` beside
-this file. One thing it records that you should know before you start: *"Does your child have any
-allergies? **If so, please list.**"* is deliberately **not** a yes/no question — the school is
-asking for a list and a button cannot give one.
+- **twelve questions are yes/no** and are answered with two buttons;
+- **four questions only exist if the answer above them is yes** — custody, a restraining order,
+  siblings, a previous programme. Answer **No** and the follow-up is never asked;
+- **twenty-seven questions are paragraphs** rather than one-line boxes.
 
-**E1–E6 below were each driven on the real runtime against a fresh v9 conversation.** Every EXPECT
-is a thing that was observed, not a thing that ought to work.
+Two questions moved back out of yes/no in v10, because the school is plainly asking for words:
+*"Does your child have any fears? (dark, spiders, etc.)"* — the bracket lists example answers — and
+*"Is there anything else you would like us to know about your child?"*. Three stay yes/no even
+though you might argue either way: therapy, accommodations, and behaviour management at home. The
+reasoning for every one is in `ADMISSIONS-V9-INTERACTION-SEMANTICS.md` beside this file.
+
+**E1–E7 below were each driven on the real runtime against a fresh v10 conversation.**
 
 ---
 
-**E1. OPENING — what Alloy already has, and how little of it you should have to read.**
+**E1. OPENING — what Alloy already has.**
 
 **DO** — Open the E1 specimen link:
 
 ```
-https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/yqOqme-nx_2r6Ks9HiGeGvK9NhOJnkDWbchJ_Fx1_yA
+https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/wwkWIDw7OslgEKlamVSBO_9xE8EYHZsRdv9ejhA15Ig
 ```
 
-That is a fresh, unused conversation for **Lennon Kurzman**, whose record genuinely holds a name, a
-date of birth, and a parent with a name, a phone number and an email address. Nothing was hand-fed
-for the demo; it is the household data that was already there.
+A fresh, unused conversation for **Lennon Kurzman**, whose record genuinely holds a name, a date of
+birth, and a parent with a name, a phone number and an email address.
 
-**EXPECT — the opening** — a line naming the child, and **one block per person**, each headed by
-that person's own name. Five facts, two blocks. Not a list:
+**EXPECT** — a line naming the child, then **one block per person**, each headed by that person's own
+name. Five facts, two blocks:
 
 ```
 Let's finish Lennon's enrollment paperwork. Here's what I already have —
@@ -497,191 +498,147 @@ I'll ask you for anything that's missing.
       Email address   ·  kelly.kurzman@gmail.com
 ```
 
-> **STOP** if there is a **Show N more** control here. What Alloy already holds is a summary, and a
-> summary you have to expand is a list.
+> **STOP** if there is a **Show N more** here. What Alloy already holds is a summary; a summary you
+> have to expand is a list.
 
-> **STOP** if you are told *"I already have most of …'s information"* and are shown nothing. That
-> sentence is only spoken when there is something under it.
+> **STOP** if the first thing you are asked is something Alloy can already answer.
 
-> **STOP** if the first thing you are asked is something Alloy can already answer — the child's name
-> or birthday as an empty box. A fact on file is confirmed, never collected.
-
-> These summary rows carry **no Edit link** before you confirm, on purpose. Nothing there has been
-> verified by you yet, and showing a value is not the same as you agreeing to it.
-
-**DO** — Press **Yes, that's right**.
-
-**EXPECT** — Lennon's two facts move into a **Confirmed** block, each with an **Edit** beside it, and
-the progress figure moves. Your own details stay in the un-confirmed summary above, because you have
-not been asked about them yet.
-
-**EXPECT — the first genuinely missing question** — only now, and it is something Alloy has no way
-to know: *Student Age Upon Enrolling*.
+**DO** — Press **Yes, that's right**. **EXPECT** Lennon's two facts move into a **Confirmed** block
+with an **Edit** beside each, and the first genuinely missing question arrives: *Student Age Upon
+Enrolling*.
 
 ---
 
-**E2. THE CHILD — their questions come first, and they arrive together.**
+**E2. THE CHILD, THEN EACH PERSON IN TURN.**
 
-**DO** — Answer whatever the conversation asks, one turn at a time, until the subject changes.
+**EXPECT** — a quiet label above the question naming whose questions these are, and each person
+finished before the next begins: the child, then Guardian #1, Guardian #2, the emergency contacts,
+the physician, the dentist.
 
-**EXPECT** — A quiet label above the question reading **`LENNON'S DETAILS`**, and the child's
-questions in one run: name, birthday, age, first day, gender and home address — **the ones Alloy
-stores and the ones it does not, side by side**.
+> **STOP** if the label is a page heading from the PDF where a person is meant. It names *whose*
+> questions these are.
 
-> **STOP** if the child's own name is asked *after* a parent's phone number or email. Whether Alloy
-> happens to store a fact must never decide whose question it is.
-
----
-
-**E3. THE TWO GUARDIANS — one person finished before the next.**
-
-**EXPECT** — the label changes to **`GUARDIAN #1`** and you are asked that person's phone, email,
-name, employer and employer address in one run — including the **Parent Name** box on the last page
-of the packet, under the Tuition agreement. It is the same person, so it is asked here. Then the
-label moves to **`GUARDIAN #2`** and asks that person's five.
-
-> **STOP** if the label still says **Contact Information** or another page heading from the form.
-> The label names *whose* questions these are, not which page of the PDF they came from.
-
-> **STOP** if an answer you gave for **Guardian #2** appears against **Guardian #1** anywhere.
+> **STOP** if an answer you gave for one guardian appears against the other.
 
 ---
 
-**E4. THE EMERGENCY CONTACTS, AND BEING ASKED WHETHER THERE IS ANOTHER PERSON.**
+**E3. WHAT YOU TOLD US — named people, one line each.**
 
-**EXPECT** — the label moves on, in this order, and each person is finished before the next begins:
-
-```
-EMERGENCY CONTACT #1   the authorized-adult line, relationship, phone, address
-EMERGENCY CONTACT #2   the same four
-EMERGENCY CONTACT #3   the same four   (optional — you may decline all four)
-PHYSICIAN              name, phone
-DENTIST                name, phone     (optional)
-```
-
-> The **authorized adult** question is not a separate group — the school wrote it as the emergency
-> contact's own line, so it is asked with that person. That is the form's own structure, not a merge.
-
-> A role the packet names only once is deliberately **not** numbered: *Physician*, not *Physician #1*.
-
-**EXPECT — adding another person is a choice, not a typing exercise.** Once the packet's own boxes
-are answered, the conversation asks whether a role that can hold more than one person has one — and
-offers buttons, including the people Alloy already knows:
+**EXPECT** — below what Alloy already holds, the answers **you** have given, one line per person or
+topic, with the person's **name** wherever the conversation has learned it:
 
 ```
-    Would you like to add a parent or guardian?
+    WHAT YOU TOLD US
+      Lennon's details                    6 answers   Review →
+      Daniel Kurzman · Guardian           5 answers   Review →
+      Kelly Kurzman · Guardian            2 answers   Review →
+      Marisol Vega · Emergency contact    4 answers   Review →
+      Tomas Rivera · Emergency contact    4 answers   Review →
+      Dr. Amelia Chen · Physician         2 answers   Review →
+      Health Information and Developmental History   37 answers   Review →
 
-    [ Kristi Kurzman ]  [ Kelly Kurzman · 6022904816 ]  [ Someone else ]  [ No, continue ]
+      Review all answers →
 ```
 
-> **STOP** if you are asked this as a question you have to answer in words.
+> **STOP** if a row says **Guardian #1** or **Emergency contact #2** for someone whose name you have
+> already given. A number is only correct for a person nobody has named yet.
 
-> **Where this arrives is worth knowing.** It comes after the numbered boxes, not between them,
-> because those boxes belong to the paperwork and this question belongs to the household. Pressing
-> **No, continue** moves on and leaves no blanks behind.
+> **Two rows are named after the school's own section headings** — *Emergency Contact Information &
+> Authorized Adults*, *Health Information and Developmental History*. Those are the child's own
+> questions that the packet files under a page heading, not people. That is correct, not a defect.
+
+> **"Kelly Kurzman · Guardian", not "Primary contact".** Alloy shows the relationship it actually
+> holds. This child has no stored relationship records yet, so the name comes from your own answer
+> and the role from the box. When a person record says primary contact, that is what the row will
+> say.
 
 ---
 
-**E5. YES / NO — a closed question gets two buttons, and a No is never followed up.**
+**E4. REVIEW ONE GROUP.**
 
-**EXPECT** — when the conversation reaches the health chapter, a question the school wrote as a
-yes/no question is asked as one:
+**DO** — Press **Review →** beside any one row. **EXPECT** only that person's answers open, each with
+its own **Edit**, and the link becomes **Back to the summary**.
+
+> **STOP** if pressing it opens everybody's answers. That was the defect: one way in, and it was all
+> of them.
+
+**DO** — **Edit** one answer, change it, **Save**.
+
+**EXPECT** the row shows the new value with **UPDATED**, every other row is untouched, and — this is
+the one to watch — **the question the conversation was asking has not moved**. Reviewing is not a
+turn.
+
+Driven on three groups: the child, the first guardian, and an emergency contact.
+
+---
+
+**E5. YES / NO.**
+
+**EXPECT** — a question the school wrote as yes/no is asked as one, with **no text box on screen at
+all**:
 
 ```
-    EMERGENCY CONTACT INFORMATION & AUTHORIZED ADULTS
-
     Are there any custody or visiting arrangements we need to be aware of?
 
                                               [ Yes ]   [ No ]
 ```
 
-There are **fourteen** of these. Among them: *"Has your student ever participated in speech,
-behavioral, play or occupational therapy?"*, *"Does your child have siblings?"*, *"Is your child able
-to play alone?"*
+Twelve of these. You can also type **yes**, **no**, **yeah** or **nope** and be understood — the
+buttons are the obvious path, not the only one.
 
-> **STOP** if any of them offers a text box as the way to answer. You may still type "no" or "yes,
-> last year" and be understood — the buttons are the obvious path, not the only one.
+> **STOP** if any yes/no question offers a text box as the way to answer, including after a "Sorry —
+> I didn't catch that". Correcting one later must also offer Yes and No.
 
 > **EXPECT, and do not report:** *"Does your child have any allergies? If so, please list."* is a
-> paragraph box, not two buttons. The school is asking for a list.
-
-**DO** — Answer **No** to *"Are there any custody or visiting arrangements we need to be aware of?"*
-
-**EXPECT** — the very next question is *"Is there anyone who has a legal restraining order…"*.
-
-> **STOP** if you are asked *"If yes, please explain arrangements and custody"* — greyed out, skipped
-> past, or in any other form. You have just said there are none. It must not be asked.
-
-**DO** — Keep going until *"Does your child have siblings?"* and answer **Yes**.
-
-**EXPECT** — the very next question is *"If yes, please list siblings name(s) and age(s)"*.
-
-There are four of these pairs — custody, restraining order, siblings, and a previous school or
-daycare. **All four were driven.** Changing a Yes back to a No withdraws the follow-up again: that
-was driven too, and the answer to the follow-up stops being asked for.
+> paragraph. The school is asking for a list, and that is the one question this Form model still
+> cannot express as a button plus a detail in a single answer.
 
 ---
 
-**E6. WHAT YOU TOLD US — grouped, and every answer still correctable.**
+**E6. NO MEANS THE FOLLOW-UP IS NEVER ASKED.**
 
-**EXPECT** — below what Alloy already holds, the answers **you** have given, summarised one line per
-chapter rather than listed:
+**DO** — Answer **No** to the custody question. **EXPECT** the next question is the restraining-order
+one.
 
-```
-    WHAT YOU TOLD US
-      Lennon's details          ·  6 answers
-      Guardian #2               ·  5 answers
-      Guardian #1               ·  2 answers
-      Emergency contact #1      ·  4 answers
-      Emergency contact #2      ·  4 answers
-      Physician                 ·  2 answers
+> **STOP** if you are asked *"If yes, please explain arrangements and custody"* in any form. You have
+> just said there are none.
 
-      Review all answers →
-```
+**DO** — Answer **Yes** to *"Does your child have siblings?"* **EXPECT** the very next question is
+*"If yes, please list siblings name(s) and age(s)"*.
 
-> **STOP** if this is a flat list of every answer you have given with a **Show N more** beneath it.
-> That was the defect. Measured on this specimen: thirty answers, six lines.
+**DO** — Now open **Review →** on that group and change the siblings answer back to **No**.
 
-> **STOP** if anything Alloy already held — Lennon's name, your email — appears in this list. This
-> section is only what you supplied or confirmed in this sitting.
+**EXPECT** the follow-up and its answer are withdrawn — driven directly, on the restraining-order
+pair: the detail disappeared from the record the moment the parent answer changed.
 
-**DO** — Press **Review all answers →**, then **Edit** beside an answer you gave earlier, type a
-different value, and **Save**.
-
-**EXPECT** — the record opens still grouped by chapter, every answer carrying its own **Edit**. The
-row you changed shows the new value with **UPDATED** beside it, and every other row is untouched.
-
-> Verified at the storage level, not just on screen: correcting the child's name changed that one
-> destination and left both guardians' name boxes exactly as they were.
-
-**DO** — When you are asked something, type **`What do I still need to do?`** and send it.
-
-**EXPECT** — a reply telling you where you are, and **the same question still waiting**.
-
-> **STOP** if your question is stored as the answer. Open **Review all answers** and check: the words
-> *"What do I still need to do?"* must not appear.
-
-> **KNOWN WART, not a defect to report.** The transcript echoes a correction underneath whichever
-> question happens to be open, so it can look as though you answered *that* question with the
-> corrected value. The stored data is correct; only the echo is misplaced.
-
-> **KNOWN WART, not a defect to report.** Two of the chapter names in *What you told us* are the
-> form's own section headings — *"Emergency Contact Information & Authorized Adults"* and *"Health
-> Information and Developmental History"* — rather than a person or a topic. Those are the child's
-> own questions that the packet files under a page heading; the name is honest, just wordy.
+All four pairs were driven, in both directions.
 
 ---
 
-## E7 to E10 — NOT CERTIFIED. Please do not QA these yet.
+**E7. THE HEALTH CHAPTER.**
+
+**EXPECT** — a mix, not a wall of the same thing. Of its 41 questions: **10 yes/no**, **2 follow-ups
+that only appear on a Yes**, **6 short answers** (physician and dentist names and numbers, bedtime,
+waking time), and **23 paragraphs** where the school is asking you to describe your child.
+
+> **STOP** if *"Developmental History"*, *"General health"* or *"How is your child comforted?"* is
+> offered as Yes/No. Those are narrative questions and must stay conversational.
+
+> **STOP** if *"Has your student ever participated in speech, behavioral, play or occupational
+> therapy?"* is a text box. That one is yes/no.
+
+---
+
+## E8 to E11 — NOT CERTIFIED. Please do not QA these yet.
 
 | | |
 |---|---|
-| **E7** | Finishing the whole of Admissions |
-| **E8** | The **Family Handbook** read-and-acknowledge step |
-| **E9** | The **Immunization record** upload step |
-| **E10** | Completion, and what Processing shows afterwards |
+| **E8** | Finishing the whole of Admissions |
+| **E9** | The **Family Handbook** read-and-acknowledge step |
+| **E10** | The **Immunization record** upload step |
+| **E11** | Completion, and what Processing shows afterwards |
 
-Nothing above E7 depends on them, and none of them has been driven end to end yet. They will be
+Nothing above E8 depends on them, and none of them has been driven end to end yet. They will be
 written the same way — DO / EXPECT / STOP, from behaviour that was actually observed — once they
 have been.
 
