@@ -182,6 +182,18 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * someone will work is `scheduling`'s answer, and this card creates none of it.
      */
     "staff_availability",
+    /**
+     * @grain person — is this employee operationally ready, and what needs attention?
+     *
+     * A PROJECTION card. It owns no facts: employment, qualifications and their
+     * requirements are all canonical elsewhere, and this reads the platform's own
+     * readiness result over them. Nothing is stored, so there is no state here that
+     * can go stale.
+     *
+     * It is not the case-grain `readiness_kpi`, which asks whether a FAMILY can
+     * advance. Same word, different subject and different inputs.
+     */
+    "staff_readiness",
     "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",

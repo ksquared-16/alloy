@@ -33,6 +33,7 @@ import {
     buildSubjectEmploymentContext,
     buildSubjectAvailabilityContext,
     buildSubjectQualificationsContext,
+    buildSubjectReadinessContext,
     buildSubjectHouseholdContext,
     buildSubjectIdentityContext,
     buildSubjectProcessContexts,
@@ -176,6 +177,11 @@ export async function loadSubjectContexts(
     // disagree about whether this person is staff.
     const availabilityContext = buildSubjectAvailabilityContext(employment, subjectId);
     if (availabilityContext) contexts.push(availabilityContext);
+
+    // Readiness reads the three above it, and is emitted from the same composition
+    // so all four agree about whether this person is staff.
+    const readinessContext = buildSubjectReadinessContext(employment, subjectId);
+    if (readinessContext) contexts.push(readinessContext);
 
     /*
      * THE RECORD ITSELF, AND ITS FAMILY.

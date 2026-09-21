@@ -53,6 +53,7 @@ import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveO
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import {
     derivePersonAvailabilityCard,
+    derivePersonReadinessCard,
     derivePersonQualificationsCard,
     derivePersonStaffCard,
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
@@ -398,6 +399,27 @@ export default function DurableRecordContextualCard({
                     // Tab-pane drill navigation, which a contextual card has no tabs for. The
                     // renderer requires it; pure cards ignore it.
                     compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "readiness" && subject.kind === "staff") {
+            /*
+             * The same card the person panel composes. It evaluates server-side, so
+             * both surfaces read one verdict rather than each deriving their own.
+             */
+            if (!cardAppliesToGrain("staff_readiness", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_readiness"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonReadinessCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );

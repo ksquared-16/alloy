@@ -298,6 +298,34 @@ export function buildSubjectAvailabilityContext(
 }
 
 /**
+ * Whether this staff member is ready, as a context.
+ *
+ * Gated on EMPLOYMENT like its siblings. No detail is derived here: the verdict
+ * depends on the organisation's day and is computed by the card's own server-side
+ * read, so a summary in the context would be a second readiness answer.
+ */
+export function buildSubjectReadinessContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "readiness",
+        key: "readiness",
+        label: "Readiness",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
  * The record's own information, as a context.
  *
  * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──

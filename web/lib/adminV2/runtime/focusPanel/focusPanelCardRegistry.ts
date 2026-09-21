@@ -196,6 +196,14 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * it would put "could work Tuesdays" on the same plane as who is here now.
      */
     { key: "staff_availability", title: "Availability", grains: ["person"] },
+    /*
+     * STAFF READINESS — "is this Staff member ready, and what needs attention?"
+     *
+     * Person grain. It does NOT declare `ownsOperationalTruth`, and that is the
+     * whole point: readiness owns nothing. Every input belongs to another card, and
+     * elevating a derived answer to canvas truth would invite someone to edit it.
+     */
+    { key: "staff_readiness", title: "Readiness", grains: ["person"] },
     { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".

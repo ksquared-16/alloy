@@ -217,6 +217,20 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         encodedSpan: 2,
         encodedDensity: "standard",
     },
+    {
+        /*
+         * The fourth person-grain card, earned the same way: declared for the grain
+         * AND placed here. It reads LAST because it is a summary of the three above
+         * it — an operator who wants the verdict sees it after the facts it derives
+         * from, and one who wants the facts is not made to read a verdict first.
+         */
+        key: "staff_readiness",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
+        encodedSpan: 2,
+        encodedDensity: "standard",
+    },
 ];
 
 /**
