@@ -7,6 +7,11 @@ import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUn
 import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 import { loadAcknowledgedOccurrenceKeys } from "@/lib/queues/operatorStageMembershipAck";
+import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { buildChildrenCardModel, buildHouseholdCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
+import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
+import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import {
     forbidden, known, knownEmpty, unavailable, unknown,
     type FirstOrderCardSummary, type FirstOrderConfigurationIdentity, type FirstOrderField,
@@ -147,7 +152,18 @@ export async function composeFirstOrderWorkUnitProjection(
         return { crm: c, children: ch, seen: sn, rows: depRows };
     });
 
-    const [population, attendance, healthProfile, prepaid, dependent] = await Promise.all([
+    /*
+     * THE THREE FIRST-ORDER SUPPLEMENTS ALSO BELONG IN PHASE 1.
+     *
+     * None of them consumes the population: the process configuration is addressed by work unit,
+     * and both health supplements by the focused child. Chaining them behind anything would buy
+     * serialization for nothing, which is the defect this DAG was already repaired for once.
+     *
+     * Each is gated on its own card being CONFIGURED, so an unconfigured Health & Safety card
+     * costs zero queries rather than running and being discarded.
+     */
+    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, dependent] =
+        await Promise.all([
         populationPromise,
         configured("attendance") && input.customerMemberId
             ? run("attendance", 2, () => buildAttendanceCardVM(supabase, {
@@ -157,6 +173,14 @@ export async function composeFirstOrderWorkUnitProjection(
         configured("health_safety") && input.authority.healthView && input.customerMemberId
             ? run("health_profile", 2, () =>
                   loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!]))
+            : Promise.resolve(null),
+        configured("health_safety") && input.authority.healthView && input.customerMemberId
+            ? run("health_supplements", 2, () =>
+                  readHealthFirstOrderSupplements({ supabase, orgId, customerMemberId: input.customerMemberId! }))
+            : Promise.resolve(null),
+        configured("business_process")
+            ? run("process_config", 1, () =>
+                  readWorkUnitProcessConfiguration({ supabase, orgId, workUnitId }))
             : Promise.resolve(null),
         configured("financials") && input.householdId
             ? run("prepaid", 7, () => readAccountPrepaidPosition(supabase, {
@@ -187,6 +211,66 @@ export async function composeFirstOrderWorkUnitProjection(
         };
     });
 
+    /*
+     * ── THE FOCUSED SUBJECT'S RECORD ──────────────────────────────────────────────────────────
+     *
+     * Household, Children and Business Process all answer about ONE record, not about the
+     * population. That record is the one whose account the request already named: `householdId`
+     * is the same identity `opportunities.customer_id` carries, and it is the identity the money
+     * reader is already scoped by, so resolving the row this way cannot disagree with Financials
+     * about whose family is on screen.
+     *
+     * NO FALLBACK TO `rows[0]`. A request with no household, or a population that does not contain
+     * it, yields NO subject record — and every fact those three cards state is then UNKNOWN. The
+     * tempting alternative is to answer about whichever record came back first, which would render
+     * a confident household label belonging to a different family.
+     */
+    const subjectRow: Record<string, unknown> | null = input.householdId
+        ? (rows.find((r) => str(r.customer_id) === input.householdId) ?? null)
+        : null;
+    const subjectId = subjectRow ? str(subjectRow.id) : "";
+
+    /*
+     * The enriched record the canonical card owners read.
+     *
+     * `buildHouseholdCardModel` and `buildChildrenCardModel` are the Focus Panel's own pure card
+     * owners and they read a single flat truth record: the opportunity row plus its CRM and
+     * children enrichment. A′ already produces all three, so assembling them here is a projection
+     * and not a fourth source. Spread order matters — enrichment is layered ON the row, never
+     * under it, so an enriched contact never loses to a raw column.
+     */
+    const subjectTruth: Record<string, unknown> | null = subjectRow
+        ? {
+              ...subjectRow,
+              ...((crm?.get(subjectId) ?? {}) as Record<string, unknown>),
+              ...((children?.get(subjectId) ?? {}) as Record<string, unknown>),
+          }
+        : null;
+
+    /*
+     * THE LIFECYCLE RAIL, FROM THE OWNER THAT ALREADY DECIDES IT.
+     *
+     * `statusDefs: []` and `statusKey: null` are the canonical answer composer's own arguments
+     * (`workUnitProvisioningAnswer.ts`): that pair exists only to turn a status key into a stage
+     * for the rail's `current_stage_key`, and the record's own `stage_key` — which A′ holds on the
+     * population row — is what the card's current marker reads. Passing them would buy an answer
+     * already in hand at the cost of a read.
+     */
+    const rail = processConfig
+        ? buildOpportunityWorkspaceLifecycleRail({
+              departmentMetadata: processConfig.departmentMetadata,
+              statusKey: null,
+              statusDefs: [],
+              record: subjectTruth,
+              annotationLabels: {
+                  locationLabel: subjectTruth
+                      ? ((subjectTruth._location_label as string | null | undefined) ?? null)
+                      : null,
+                  ownerLabel: null,
+              },
+          })
+        : null;
+
     const cards: Record<string, FirstOrderCardSummary> = {};
     for (const cardKey of cfg.cardKeys) {
         const facts: Record<string, FirstOrderField<string | number>> = {};
@@ -209,13 +293,141 @@ export async function composeFirstOrderWorkUnitProjection(
                 facts.availableCents = unavailable<number>(prepaid.outcome.reason);
             }
         } else if (cardKey === "attendance") {
-            facts.today = attendance ? known(String((attendance as { todayLabel?: unknown }).todayLabel ?? "")) : unavailable<string>("attendance unavailable");
+            /*
+             * `state` IS THE ANSWER. The first version of this read `todayLabel`, a property
+             * `AttendanceCardVM` does not have: the cast made it typecheck, `?? ""` made it
+             * `known("")`, and a SUCCESSFUL attendance read therefore published a known-empty
+             * string. A false KNOWN is worse than an honest UNKNOWN, and it was produced here by
+             * naming a field the owner never declared.
+             */
+            if (!attendance) {
+                facts.state = unavailable<string>("attendance unavailable");
+            } else {
+                facts.state = known(attendance.state);
+                facts.date = known(attendance.date);
+                facts.expectedRoomLabel = attendance.expected.roomLabel
+                    ? known(attendance.expected.roomLabel)
+                    : knownEmpty<string>();
+                /*
+                 * WHY NO RECORD IS RECORDABLE — projected from the owner, with no second
+                 * attendance read. `unavailableReason` is null when attendance IS recordable, and
+                 * that is a real answer (`known_empty`), not an absent one.
+                 */
+                facts.unavailableReason = attendance.unavailableReason
+                    ? known(attendance.unavailableReason)
+                    : knownEmpty<string>();
+                insight = known(attendance.state);
+            }
         } else if (cardKey === "health_safety") {
             facts.profileFactCount = healthProfile
                 ? known(Object.keys(healthProfile.get(input.customerMemberId ?? "") ?? {}).length)
                 : unavailable<number>("health profile unavailable");
+            if (!input.authority.healthView) {
+                // A refusal is NOT an empty health card. Empty reads as "no allergies".
+                facts.profileFactCount = forbidden<number>();
+                facts.requirementsSatisfied = forbidden<number>();
+                facts.emergencyContactCount = forbidden<number>();
+                insight = forbidden<string>();
+            } else if (healthSupplements) {
+                facts.requirementsSatisfied = known(healthSupplements.requirementsSatisfied);
+                facts.requirementsTotal = known(healthSupplements.requirementsTotal);
+                facts.emergencyContactCount = known(healthSupplements.emergencyContactCount);
+            } else {
+                facts.requirementsSatisfied = unavailable<number>("health supplements unavailable");
+                facts.requirementsTotal = unavailable<number>("health supplements unavailable");
+                facts.emergencyContactCount = unavailable<number>("health supplements unavailable");
+            }
         } else if (cardKey === "children") {
-            facts.childCount = children ? known(children.size) : unavailable<number>("children unavailable");
+            /*
+             * THE COUNT IS OF CHILDREN, NOT OF ENRICHED ROWS. This read `children.size` — the size
+             * of the enrichment MAP, which is one entry per opportunity. On a population of
+             * fourteen families it reported fourteen children for a family with two.
+             *
+             * The count now comes from the canonical normalizer the Children card itself uses, so
+             * "what is a child of this record" has one answer.
+             */
+            if (!children) {
+                facts.childCount = unavailable<number>("children unavailable");
+            } else if (!subjectTruth) {
+                facts.childCount = unknown<number>();
+            } else {
+                const { rows: childRows } = normalizeFocusPanelChildrenRowsFromTruth(subjectTruth);
+                const model = buildChildrenCardModel(subjectTruth);
+                facts.childCount = known(childRows.length);
+                facts.enrollingCount = known(
+                    childRows.filter((r) => r.outcome_status_key !== "declined").length,
+                );
+                insight = model.insight ? known(model.insight) : knownEmpty<string>();
+            }
+        } else if (cardKey === "household") {
+            if (!subjectTruth) {
+                // No resolved subject is UNKNOWN, never an empty household.
+                facts.label = unknown<string>();
+                facts.updatedAt = unknown<string>();
+                facts.primaryContactName = unknown<string>();
+            } else {
+                const label = str(subjectTruth.name) || str(subjectTruth.title);
+                const model = buildHouseholdCardModel(subjectTruth, label);
+                facts.label = label ? known(label) : knownEmpty<string>();
+                facts.updatedAt = str(subjectTruth.updated_at)
+                    ? known(str(subjectTruth.updated_at))
+                    : unknown<string>();
+                const contact = str(subjectTruth._primary_contact_name);
+                facts.primaryContactName = contact ? known(contact) : knownEmpty<string>();
+                const line = str(subjectTruth._primary_contact_line);
+                facts.primaryContactLine = line ? known(line) : knownEmpty<string>();
+                const loc = str(subjectTruth._location_label);
+                facts.locationLabel = loc ? known(loc) : knownEmpty<string>();
+                facts.childCount = children
+                    ? known(normalizeFocusPanelChildrenRowsFromTruth(subjectTruth).rows.length)
+                    : unavailable<number>("children unavailable");
+                insight = model.insight ? known(model.insight) : knownEmpty<string>();
+            }
+        } else if (cardKey === "business_process") {
+            if (!processConfig) {
+                const reason = "process configuration unavailable";
+                facts.processName = unavailable<string>(reason);
+                facts.stageCount = unavailable<number>(reason);
+                facts.currentStageLabel = unavailable<string>(reason);
+                facts.stagePosition = unavailable<number>(reason);
+                insight = unavailable<string>(reason);
+            } else if (!rail) {
+                /*
+                 * The builder returns null when the department declares no active process, or one
+                 * with fewer than two stages. That is a CONFIGURED ABSENCE — a real answer about
+                 * this tenant — so it is `known_empty`, not `unavailable`.
+                 */
+                facts.processName = knownEmpty<string>();
+                facts.stageCount = knownEmpty<number>();
+                facts.currentStageLabel = knownEmpty<string>();
+                facts.stagePosition = knownEmpty<number>();
+                insight = knownEmpty<string>();
+            } else {
+                facts.processName = rail.process_name ? known(rail.process_name) : knownEmpty<string>();
+                facts.stageCount = known(rail.stages.length);
+                /*
+                 * THE MARKER COMES FROM THE RECORD, NOT FROM THE WORK UNIT. A work unit answers
+                 * "which lens did I open?" and cannot answer "which stage is this record in?" —
+                 * the rail's own contract makes that point at length. With no subject record there
+                 * is no position, and saying so is the honest answer.
+                 */
+                const stageKey = subjectRow ? str(subjectRow.stage_key) : "";
+                const index = stageKey ? rail.stages.findIndex((st) => st.key === stageKey) : -1;
+                if (!subjectRow) {
+                    facts.currentStageKey = unknown<string>();
+                    facts.currentStageLabel = unknown<string>();
+                    facts.stagePosition = unknown<number>();
+                    facts.stageEnteredAt = unknown<string>();
+                } else {
+                    facts.currentStageKey = stageKey ? known(stageKey) : knownEmpty<string>();
+                    // A stage the rail does not declare is UNKNOWN to the rail, not stage zero.
+                    facts.currentStageLabel = index >= 0 ? known(rail.stages[index].label) : unknown<string>();
+                    facts.stagePosition = index >= 0 ? known(index + 1) : unknown<number>();
+                    const entered = str(subjectRow.stage_entered_at);
+                    facts.stageEnteredAt = entered ? known(entered) : knownEmpty<string>();
+                }
+                insight = rail.process_name ? known(rail.process_name) : knownEmpty<string>();
+            }
         }
         cards[cardKey] = { cardKey, insight, facts };
     }
