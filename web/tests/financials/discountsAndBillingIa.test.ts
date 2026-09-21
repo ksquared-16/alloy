@@ -484,3 +484,84 @@ describe("family and Assignment speak one discount vocabulary", () => {
         expect(code(VOCAB)).toContain('reason.replace(/_/g, " ")');
     });
 });
+
+describe("the family position states a basis where the basis belongs", () => {
+    const PANEL = "app/adminV2/financials/FinancialsDiscountPanel.tsx";
+    const ROUTE = "app/api/admin/financials/family-discount-position/route.ts";
+
+    it("the derivation is carried per relationship, not per policy", () => {
+        /*
+         * MEASURED on deployed 76a8f3fc8: the position rendered
+         *   "discount · discount · 10% of $185.00"
+         * for a policy affecting two children whose bases are $185.00 and $1,450.00. Two defects in
+         * one line — the forecast's explanation already leads with the policy kind, so the label was
+         * printed twice; and one child's basis was stated as though it were the policy's.
+         */
+        expect(code(ROUTE)).toContain("explanation: outcome.explanation");
+        const panel = code(PANEL);
+        expect(panel, "the subject line carries its own explanation").toMatch(
+            /Expected \{money\(Math\.abs\(s\.expectedCents\), s\.currencyCode\)\}[\s\S]{0,200}s\.explanation/,
+        );
+    });
+
+    it("the policy header is the name, not the name plus an echo of it", () => {
+        const panel = code(PANEL);
+        expect(panel, "no policy-level explanation beside the label")
+            .not.toMatch(/\{p\.label\}[\s\S]{0,120}p\.explanation/);
+    });
+});
+
+describe("one policy identity has one operator-facing name", () => {
+    const PROJECTION = "lib/commercial/execution/export/readCommercialConfig.ts";
+    const FORECAST = "lib/financials/reductions/forecastAssignmentReductions.ts";
+    const READER = "lib/financials/reductions/readAssignmentDiscountPosition.ts";
+    const DEF = "lib/commercial/execution/commercialExport.ts";
+
+    it("the canonical projection carries the configured name", () => {
+        /*
+         * D3, ROOT CAUSE — classification A, READ PROJECTION OMISSION. `commercial_policies.label`
+         * is where an operator's name for a policy lives. The Organization API selected it; this
+         * projection did not, so every consumer downstream fell back to the policy KIND and one
+         * policy wore two names: "Sibling discount (QA specimen)" in configuration and "discount"
+         * on the family's own finances.
+         */
+        /*
+         * SCOPED TO `readPolicies`. Asserted against the whole file this did NOT bind: the module
+         * holds eleven `select(` calls and the regex happily matched `label` in a different one,
+         * so removing it from the policy projection left every test green. A verified plant caught
+         * it. Presence-style assertions over a whole file are the weakest kind of lock, and this
+         * is the third one this slice.
+         */
+        const projection = code(PROJECTION);
+        const at = projection.indexOf("export async function readPolicies");
+        expect(at, "readPolicies exists").toBeGreaterThan(-1);
+        const body = projection.slice(at, projection.indexOf("\nexport ", at + 10));
+        expect(body, "label is selected by THIS projection").toMatch(/select\([^)]*\blabel\b/);
+        expect(body, "and carried on the projection").toContain("label: nstr(r.label)");
+        expect(code(DEF), "the type admits it").toMatch(/label: string \| null/);
+    });
+
+    it("every consumer prefers the configured name over the kind", () => {
+        /*
+         * The kind is a LAST resort, not the usual answer. A consumer that reaches for it while a
+         * configured name exists is the defect, wherever it sits.
+         */
+        for (const rel of [FORECAST, READER]) {
+            expect(code(rel), `${rel} prefers the configured name`).toMatch(
+                /p\.label \?\?[\s\S]{0,80}\?\? p\.kind/,
+            );
+        }
+    });
+
+    it("no consumer performs a second policy lookup or a display-text join", () => {
+        /*
+         * The architecture is: configured identity -> canonical projection -> forecast outcome
+         * carries identity AND name -> family and Assignment consume it. A component that fetched
+         * the policy again to learn its name would be a second read of the same fact.
+         */
+        const panel = code("app/adminV2/financials/FinancialsDiscountPanel.tsx");
+        expect(panel).not.toContain("commercial/policies");
+        expect(panel, "the name arrives with the outcome").toContain("p.label");
+        expect(panel, "and is never matched as text").not.toMatch(/label\s*===\s*["'`]/);
+    });
+});

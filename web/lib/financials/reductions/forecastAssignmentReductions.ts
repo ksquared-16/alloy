@@ -92,7 +92,13 @@ export async function forecastAssignmentReductions(
         id: p.id,
         kind: p.kind as ReductionPolicyKind,
         params: p.params,
-        label: (p.params.label as string | undefined) ?? p.kind,
+        /*
+         * THE CONFIGURED NAME FIRST. `commercial_policies.label` is what an operator called this
+         * policy, and the projection now carries it; `params.label` stays as a secondary source
+         * for policies whose name was authored into their value, and the KIND is the last resort
+         * rather than the usual answer.
+         */
+        label: p.label ?? (p.params.label as string | undefined) ?? p.kind,
     }));
 
     const household = await resolveHouseholdEligibility(supabase, {

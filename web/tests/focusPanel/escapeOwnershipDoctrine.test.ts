@@ -38,6 +38,20 @@ const REGISTERED_CHILDREN = [
     ["INLINE_EDIT_SELECTOR", '[data-identity-editing="true"]'],
 ] as const;
 
+/**
+ * EVERY Financials depth card must be registered, and forgetting one reproduces the defect exactly.
+ *
+ * Measured on deployed 76a8f3fc8: the new Manage discounts card carried the same host Escape guard
+ * Manage responsibility has, and Escape still closed the entire Details surface. A per-card guard
+ * is a React bubble handler; the Focus Panel grid listens at window CAPTURE and cannot lose that
+ * race. Registration is the only thing that makes the parent yield — so the lock is over the SET
+ * of depth cards, not over one of them.
+ */
+const DEPTH_CARD_MARKERS = [
+    '[data-financials-manage-responsibility="open-panel"]',
+    '[data-financials-manage-discounts="open-panel"]',
+] as const;
+
 describe("one authority, consulted by every parent that can steal the gesture", () => {
     it.each(PARTICIPATING_PARENTS)("%s yields to a registered child", (rel) => {
         const parent = code(rel);
@@ -68,6 +82,10 @@ describe("one authority, consulted by every parent that can steal the gesture", 
         expect(owner).toContain(selector);
         /* Declared AND consulted — an exported constant nothing reads protects nothing. */
         expect(owner).toMatch(new RegExp(`closest\\(${name}\\)`));
+    });
+
+    it.each(DEPTH_CARD_MARKERS)("%s is registered as an inner dismissible layer", (marker) => {
+        expect(code(OWNERSHIP), `${marker} must be in the ownership selector`).toContain(marker);
     });
 
     it("a registered child counts only while it holds focus", () => {

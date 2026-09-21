@@ -29,6 +29,11 @@ function policy(over: Partial<CommercialPolicyDef> & Pick<CommercialPolicyDef, "
         scopeType: "org",
         scope: { locationId: null, programKey: null, offeringId: null, variantId: null },
         effective: { start: null, end: null },
+        /*
+         * Unnamed by default, so a test that cares about the operator-facing name has to say so.
+         * `label` is required on the projection precisely so a consumer cannot forget it.
+         */
+        label: null,
         params: {},
         isActive: true,
         ...over,

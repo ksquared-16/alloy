@@ -32,6 +32,8 @@ type Subject = {
     customerMemberId: string | null;
     expectedCents: number;
     currencyCode: string;
+    /** How THIS relationship's effect was derived — the basis differs per child. */
+    explanation: string | null;
 };
 type PolicyPosition = {
     policyId: string;
@@ -202,10 +204,13 @@ export default function FinancialsDiscountPanel({
                 <div className="mt-0.5 flex flex-col gap-1">
                     {policies.map((p) => (
                         <div key={p.policyId} data-financials-discount-policy={p.policyId}>
-                            <p className="text-[11px] text-alloy-midnight/75">
-                                {p.label}
-                                {p.explanation ? <span className="text-alloy-midnight/45"> · {p.explanation}</span> : null}
-                            </p>
+                            {/*
+                              * THE NAME ONLY. The forecast's explanation already leads with the
+                              * policy kind, so rendering both produced "discount · discount · 10%
+                              * of $185.00" — and that basis was one child's, shown as if it were
+                              * the policy's. The derivation now sits on the line it belongs to.
+                              */}
+                            <p className="text-[11px] text-alloy-midnight/75">{p.label}</p>
                             {p.subjects.map((s) => (
                                 <p
                                     key={s.opportunityCustomerMemberId}
@@ -213,6 +218,9 @@ export default function FinancialsDiscountPanel({
                                     data-financials-discount-subject={s.opportunityCustomerMemberId}
                                 >
                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
+                                    {s.explanation ? (
+                                        <span className="text-alloy-midnight/40"> · {s.explanation}</span>
+                                    ) : null}
                                 </p>
                             ))}
                         </div>
@@ -261,9 +269,6 @@ export default function FinancialsDiscountPanel({
                             policies.map((p) => (
                                 <div key={p.policyId} className="mt-2 border-t border-alloy-stone/10 pt-2" data-financials-discount-manage-policy={p.policyId}>
                                     <p className="text-[12px] font-medium text-alloy-midnight">{p.label}</p>
-                                    {p.explanation ? (
-                                        <p className="text-[11px] text-alloy-midnight/55">{p.explanation}</p>
-                                    ) : null}
                                     {p.subjects.map((s) => {
                                         const excepted = (position?.exceptions ?? []).find(
                                             (e) => e.policyId === p.policyId
@@ -274,6 +279,9 @@ export default function FinancialsDiscountPanel({
                                             <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
                                                 <p className="text-[11px] text-alloy-midnight/70">
                                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
+                                                    {s.explanation ? (
+                                                        <span className="text-alloy-midnight/45"> · {s.explanation}</span>
+                                                    ) : null}
                                                 </p>
                                                 {excepted ? (
                                                     <p className="text-[11px] text-alloy-ember" data-financials-discount-exception={excepted.id}>
