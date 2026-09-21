@@ -121,6 +121,31 @@ describe("enrollment is an explicit authorization, not a side effect of storing 
         expect((schedule?.row.domain_ref as Row).arrangement_id).toBe(arrangement?.row.id);
     });
 
+    /*
+     * A CONSENT THAT CANNOT BE SCHEDULED IS THE SILENT FAILURE W5 EXISTS TO PREVENT. The row would
+     * read "Autopay on" and never collect. It is surfaced as needing attention rather than
+     * swallowed, and the enrollment is NOT rolled back — the payer did authorize it, and a
+     * revocation record would misdescribe what happened.
+     */
+    it("says so when the authorization cannot be scheduled", async () => {
+        const s = store();
+        /* Make only the schedule insert fail, leaving the arrangement insert intact. */
+        const inner = s.client as unknown as { from: (t: string) => Record<string, unknown> };
+        const original = inner.from.bind(inner);
+        (s.client as unknown as { from: (t: string) => unknown }).from = (table: string) => {
+            const builder = original(table) as Record<string, unknown>;
+            if (table === "scheduled_work") {
+                builder.maybeSingle = async () => ({ data: null, error: { message: "no" } });
+                builder.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { message: "no" } }).then(res);
+            }
+            return builder;
+        };
+
+        const out = await enrollAutopay(s.client, enrollInput);
+        expect(out.ok).toBe(true);
+        expect(out.ok && out.value.lastFailureReason).toMatch(/could not be scheduled/i);
+    });
+
     it("refuses a second authorization while one is already live", async () => {
         const s = store({ arrangements: [live()] });
         const out = await enrollAutopay(s.client, enrollInput);

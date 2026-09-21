@@ -309,8 +309,22 @@ export async function enrollAutopay(
     /*
      * The consent exists; now make it wakeable. Without this the arrangement would sit `active`
      * forever and collect nothing — the exact silent failure W5 stopped for.
+     *
+     * If the schedule cannot be created, the authorization is real and unusable. That is recorded
+     * ON the arrangement rather than swallowed, so the surface says it needs attention instead of
+     * saying "Autopay on" about something that will never run. The enrollment is not rolled back:
+     * the payer did authorize this, and a revocation record would misdescribe what happened.
      */
-    await ensureAutopaySchedule(supabase, arrangement);
+    const scheduleId = await ensureAutopaySchedule(supabase, arrangement);
+    if (!scheduleId) {
+        const reason = "Autopay was authorized but could not be scheduled; turn it off and set it up again.";
+        await supabase
+            .from(TABLE)
+            .update({ last_failure_reason: reason, updated_at: new Date().toISOString() })
+            .eq("org_id", orgId)
+            .eq("id", arrangement.id);
+        return { ok: true, value: { ...arrangement, lastFailureReason: reason } };
+    }
     return { ok: true, value: arrangement };
 }
 
