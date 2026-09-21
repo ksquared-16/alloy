@@ -42,6 +42,44 @@ Vercel project settings).
 
 ---
 
+## Scheduled work and the external clock
+
+**There is no demonstrated external clock in this estate.** Measured 2026-09-21.
+
+`staging.workwithalloy.com` runs as a **Preview** deployment behind an alias —
+`/api/build-info` reports `vercelEnv: "preview"`, which is the app's own read of
+`VERCEL_ENV`. Vercel registers and fires `crons` only from the **Production**
+deployment, and `web/vercel.json` does not exist on `main` at all. So a `crons` block
+added to `web/vercel.json` is registered nowhere and never fires, on either branch.
+
+This is a trap worth naming, because nothing reports it: the block is valid, the
+deploy is green, the endpoint is live, and no request ever arrives. There is no error
+to find.
+
+The machine-token callers in the codebase (`x-cron-token` against
+`INTERNAL_CRON_TOKEN` — `communication-scheduled-sends/process-due`,
+`scheduled-work/wake`) accept a caller, but what *calls* them in a deployed
+environment is unknown; the Conversation Platform Phase 0 live verification recorded
+the same open question about `process-due` and could not answer it either.
+
+Two separate prerequisites, both operator-owned, before any recurring trigger can be
+certified in staging:
+
+| Prerequisite | Why it is not a code change |
+|---|---|
+| A production-class deployment, or an external scheduler | Vercel fires crons only from Production; staging is Preview |
+| `CRON_SECRET` provisioned in the Vercel project | Vercel sends `Authorization: Bearer $CRON_SECRET` **only** when that variable is set; absent it, no auth header is sent at all and a fail-closed endpoint returns 401 |
+
+**If you are about to certify a periodic trigger:** first ask what row the trigger
+writes in an environment with nothing scheduled yet. The Governed Scheduled Work
+runtime wrote nothing — occurrences and attempts only exist when work is *due* — so a
+cron that never fired, one refused for a missing secret, and one running correctly
+against an empty schedule set were indistinguishable. `scheduled_work_clock` records
+every wake for that reason; read `wake_count` and `last_wake_at` to answer "is the
+clock running" without inferring it from work that happened to be due.
+
+---
+
 ## Environment variables (categories)
 
 | Category | Rule |
