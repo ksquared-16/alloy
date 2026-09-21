@@ -13,7 +13,7 @@ import { activeElementDescriptor, alloyOptions, isAlloyControl, openAlloy } from
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/deployed/alloy_staging_web/storage-state.json";
 const OUT = "../certification/financials/11c-slice2";
 const ENTRY = "/workspace/work-unit/enrolled-children";
-const REPAIRED = "33e8a90d9ea9e3fd2072935d9a79c0bfc044c028";
+const REPAIRED = "41a17c2a4aaef56fc4d81bf28f0ea448c9635bce";
 
 test.use({ storageState: STORAGE, baseURL: "https://staging.workwithalloy.com", viewport: { width: 1680, height: 1050 } });
 test.describe.configure({ mode: "serial" });

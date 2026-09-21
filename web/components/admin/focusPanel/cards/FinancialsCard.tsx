@@ -3755,6 +3755,30 @@ export default function FinancialsCard({
                      */
                     paymentMethodsAccount={customerId ? { customerId } : null}
                     /*
+                     * The family's discount position. `load` is the card's own canonical re-read,
+                     * so after a governed exception the position, the ledger and the forecast all
+                     * come back from the server rather than being patched here.
+                     */
+                    discountAdmin={
+                        customerId
+                            ? {
+                                  customerId,
+                                  /*
+                                   * The card's subjects are keyed by `customerMemberId`, which is
+                                   * the child; the discount position is keyed by the RELATIONSHIP.
+                                   * The panel passes both, so the label is looked up by the one
+                                   * this view model actually holds rather than by position.
+                                   */
+                                  childLabelFor: (_ocmId, customerMemberId) =>
+                                      (vm?.subjects ?? []).find((s) => s.customerMemberId === customerMemberId)
+                                          ?.displayName ?? null,
+                                  onCommitted: async () => {
+                                      await load();
+                                  },
+                              }
+                            : null
+                    }
+                    /*
                      * MANAGE RESPONSIBILITY, from Details. Parties come from the account view
                      * model — the same `responsibility.parties` Accounts passes — so the operator
                      * edits who is already on record rather than inventing a party. `load` is the

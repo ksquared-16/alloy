@@ -174,9 +174,21 @@ describe("§6 · the surface asks the lifecycle question", () => {
         expect(card, "no date arithmetic on exceptions in the card").not.toMatch(/effectiveEnd\s*[<>]=?\s*new Date/);
     });
 
-    it("the route answers both questions, and they come from different predicates", () => {
-        expect(route).toContain("appliesNow: exceptionAppliesOn(e, onDate)");
-        expect(route).toContain("isLiveNow: exceptionIsLiveOn(e, todayYmd)");
+    it("the server answers both questions, and they come from different predicates", () => {
+        /*
+         * The body moved out of the route into `readAssignmentDiscountPosition` so a FAMILY-grain
+         * reader could ask the same question of each of a household's relationships without a
+         * second implementation existing. The RULE is unchanged and is what is asserted — two
+         * questions, two predicates, judged against two different dates — plus the fact that the
+         * route still delegates, so the rule cannot be bypassed by answering in the route again.
+         */
+        const reader = src("lib/financials/reductions/readAssignmentDiscountPosition.ts");
+        expect(reader).toContain("appliesNow: exceptionAppliesOn(e, periodStartForExceptions)");
+        expect(reader).toContain("isLiveNow: exceptionIsLiveOn(e, todayYmd)");
+        expect(route, "the route delegates rather than answering again").toContain(
+            "readAssignmentDiscountPosition",
+        );
+        expect(route, "and does not recompute either answer").not.toContain("exceptionAppliesOn(");
     });
 });
 
