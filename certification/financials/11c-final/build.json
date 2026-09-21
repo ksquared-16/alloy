@@ -1,0 +1,11 @@
+{
+  "gitSha": "92f27e11f45e786974b0ec46dac9d54c3448ac97",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1175 from ksquared-16/agent/config-organization\n\nStaffing V1 Slice 2 — staffing participation governs Staff supply",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-2d542b5q7-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_mBNRJcoZAAQfGaK4cta1N7RytuCR",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu",
+  "slice3Merge": "cfd4168b80357997adbc428bc94bbb2eb04ece7b"
+}
