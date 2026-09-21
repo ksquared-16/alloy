@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_345f67109d76da",
-  "query_hash": "4523fc7f8c9ecfaa89d6246e614e06e715427273d77cec91c8266c39504bcc51",
+  "trusted_host_action_id": "tha_2b19b34db509f0",
+  "query_hash": "6e5bdae22337bb44ff62de44e9b11c486e3a87089030ccf6456037223d23ab9e",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-21T21:38:50.176Z",
+    "executed_at": "2026-09-21T21:43:24.078Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_345f67109d76da",
-    "query_hash": "4523fc7f8c9ecfaa89d6246e614e06e715427273d77cec91c8266c39504bcc51",
-    "authorization_id": "grnt_5825e85939984b51",
+    "trusted_host_action_id": "tha_2b19b34db509f0",
+    "query_hash": "6e5bdae22337bb44ff62de44e9b11c486e3a87089030ccf6456037223d23ab9e",
+    "authorization_id": "grnt_cf23a4cb72a44d9e",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-21T21:38:52.065Z",
+    "census_run_at": "2026-09-21T21:43:29.458Z",
     "question_ids": [
       "w5_post_deploy"
     ],
@@ -36,9 +36,9 @@
             "payment_methods_intact_w2": true,
             "attempts_intact_w3": true,
             "holds_intact_w4": true,
-            "clock_wake_count": 27,
-            "clock_last_wake_at": "2026-09-21 21:35:03.465357+00",
-            "clock_seconds_since_wake": 229,
+            "clock_wake_count": 28,
+            "clock_last_wake_at": "2026-09-21 21:40:01.389444+00",
+            "clock_seconds_since_wake": 208,
             "autopay_schedules": 0,
             "autopay_schedules_active": 0,
             "autopay_occurrences": 0,
