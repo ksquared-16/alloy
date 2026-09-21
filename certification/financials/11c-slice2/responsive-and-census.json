@@ -1,0 +1,26 @@
+{
+  "w1280": {
+    "nativeSelects": 0,
+    "alloyControls": 4,
+    "horizontalOverflow": false,
+    "overflowBy": 0,
+    "prepaidNamed": true,
+    "gear": 1
+  },
+  "w1440": {
+    "nativeSelects": 0,
+    "alloyControls": 4,
+    "horizontalOverflow": false,
+    "overflowBy": 0,
+    "prepaidNamed": true,
+    "gear": 1
+  },
+  "w1680": {
+    "nativeSelects": 0,
+    "alloyControls": 4,
+    "horizontalOverflow": false,
+    "overflowBy": 0,
+    "prepaidNamed": true,
+    "gear": 1
+  }
+}

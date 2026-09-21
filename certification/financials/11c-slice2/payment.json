@@ -1,0 +1,53 @@
+{
+  "reachable": true,
+  "method": {
+    "canonical": true,
+    "options": [
+      {
+        "label": "Card",
+        "value": "card",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "label": "Cash",
+        "value": "cash",
+        "selected": true,
+        "disabled": false
+      },
+      {
+        "label": "Check",
+        "value": "check",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "label": "Money order",
+        "value": "money_order",
+        "selected": false,
+        "disabled": false
+      },
+      {
+        "label": "Bank account — not enabled for this organization",
+        "value": "ach",
+        "selected": false,
+        "disabled": true
+      },
+      {
+        "label": "Other",
+        "value": "other",
+        "selected": false,
+        "disabled": false
+      }
+    ]
+  },
+  "disabledOptions": [
+    "Bank account — not enabled for this organization"
+  ],
+  "keyboardLandedOnDisabled": false,
+  "payer": {
+    "present": 1,
+    "canonical": true
+  },
+  "nativeSelectsOnSurface": 0
+}

@@ -127,6 +127,12 @@ export default function FinancialsAccountWorkspaceDetail({
      * operator left.
      */
     const [manageOpen, setManageOpen] = useState(false);
+    /* The gear that opened the card, so dismissing it returns focus there and not to <body>. */
+    const manageGearRef = useRef<HTMLButtonElement | null>(null);
+    const closeManage = useCallback(() => {
+        setManageOpen(false);
+        manageGearRef.current?.focus();
+    }, []);
     const [scopeMembers, setScopeMembers] = useState<{ customerMemberId: string; label: string }[]>([]);
     useEffect(() => {
         /* Canonical household membership, read when the operator asks to administer — not on every
@@ -370,6 +376,7 @@ export default function FinancialsAccountWorkspaceDetail({
                         {!loading && lens !== "payments" ? (
                             <button
                                 type="button"
+                                ref={manageGearRef}
                                 onClick={() => setManageOpen(true)}
                                 aria-label="Manage responsibility"
                                 title="Manage responsibility — who contractually owes, from a date"
@@ -422,7 +429,7 @@ export default function FinancialsAccountWorkspaceDetail({
                             if (e.key !== "Escape") return;
                             e.stopPropagation();
                             e.preventDefault();
-                            setManageOpen(false);
+                            closeManage();
                         }}
                     >
                         <FinancialsResponsibilityPanel
@@ -432,7 +439,7 @@ export default function FinancialsAccountWorkspaceDetail({
                             parties={(vm?.responsibility?.parties ?? []) as { personId: string | null; name: string }[]}
                             memberOptions={scopeMembers}
                             hostedOpen={manageOpen}
-                            onHostedClose={() => setManageOpen(false)}
+                            onHostedClose={closeManage}
                             onCommitted={async () => {
                                 /* Committed truth is re-read; the card does not report its own success. */
                                 await reload();

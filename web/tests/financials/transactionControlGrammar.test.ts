@@ -124,9 +124,23 @@ describe("Details can change who owes, not only filter by it", () => {
         const filterAt = detail.indexOf('testId="responsible-party"');
         const gearAt = detail.indexOf('data-financials-manage-responsibility="gear"');
         expect(filterAt).toBeGreaterThan(-1);
-        expect(gearAt).toBeGreaterThan(filterAt);
-        /* Adjacent, not merely both present somewhere on a 1,000-line card. */
-        expect(gearAt - filterAt).toBeLessThan(1600);
+        expect(gearAt, "the gear follows the filter it belongs to").toBeGreaterThan(filterAt);
+        /*
+         * ADJACENCY IS NOT A CHARACTER COUNT. This asserted a source distance under 1,600 chars,
+         * which is a proxy for "rendered beside it" and a bad one: it fired when the gear gained a
+         * ref, a change that moved nothing on screen. Raising the number to fit an edit would be
+         * weakening the lock to pass it.
+         *
+         * What the rule actually means is measured on the MOUNTED product instead, where it can be
+         * measured honestly — deployed 9675a76be: verticalDelta 0px, horizontalGap 6px, same
+         * control row (certification/financials/11c-slice2/responsibility-details.json).
+         *
+         * What stays locked here is what source CAN answer: no other control is authored between
+         * them, so the pair cannot be split up by a later edit without this failing.
+         */
+        const between = detail.slice(filterAt, gearAt);
+        expect(between, "nothing else is authored between the filter and its gear")
+            .not.toMatch(/<LensFilter\b/);
         /* The filter's own handler sets local filter state and nothing else. */
         expect(detail).toMatch(/testId="responsible-party"[\s\S]{0,220}setResponsibleParty\(v \|\| null\)/);
     });
@@ -160,5 +174,44 @@ describe("Prepaid is untouched", () => {
         expect(detail).toContain("Available prepaid");
         /* A gear on a financial POSITION would imply an authored policy. There is none. */
         expect(code(DETAIL)).not.toMatch(/prepaid[\s\S]{0,200}data-financials-manage/i);
+    });
+});
+
+describe("a depth card dismisses itself, not the account beneath it", () => {
+    /*
+     * MEASURED on deployed 9675a76be: one Escape with the responsibility card open closed the card
+     * AND the whole Details surface, and focus went to <body>. The operator lost the account, the
+     * lens, the filters and their place in the ledger. Accounts had answered Escape itself since
+     * 24ffad5bb; the Details host I added did not, so the migration regressed the depth stack on
+     * exactly the surface this slice introduced.
+     */
+    const HOSTS = [
+        ["components/operationalCards/FinancialsDetailCard.tsx", "Details"],
+        ["app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx", "Accounts"],
+    ] as const;
+
+    it.each(HOSTS)("%s answers Escape itself and stops it there", (rel) => {
+        const host = code(rel);
+        const at = host.indexOf('data-financials-manage-responsibility="depth-card"');
+        expect(at, "the panel is wrapped in a depth card").toBeGreaterThan(-1);
+        const guard = host.slice(at, at + 420);
+        expect(guard).toContain('e.key !== "Escape"');
+        expect(guard, "and stops it reaching the workspace behind").toContain("stopPropagation");
+    });
+
+    it.each(HOSTS)("%s returns focus to the gear that opened the card", (rel) => {
+        const host = code(rel);
+        /* A ref on the gear, and a close path that focuses it — not a bare setState(false). */
+        expect(host).toMatch(/ref=\{manage\w*GearRef\}/);
+        expect(host).toMatch(/GearRef\.current\?\.focus\(\)/);
+    });
+
+    it("neither host closes the card without going through that path", () => {
+        for (const [rel] of HOSTS) {
+            const host = code(rel);
+            /* onHostedClose must route through the focus-restoring close, never a raw setter. */
+            expect(host, `${rel} routes onHostedClose through the restoring close`)
+                .toMatch(/onHostedClose=\{close\w*\}/);
+        }
     });
 });
