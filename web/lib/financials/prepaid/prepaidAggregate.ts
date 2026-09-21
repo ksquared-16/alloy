@@ -164,14 +164,33 @@ export function resolvePrepaidPositionOutcome(reads: {
  *   · `customer`             — `billable_source_id` IS the household id;
  *   · `enrollment_agreement` — resolves through `child_enrollment_agreements` to the household.
  *
- * So the account's receipts are reachable without an org scan:
- *   1  agreements for the household              (child_enrollment_agreements by customer)
- *   2  payments where source is this customer OR source is one of those agreements  (one `.or`)
- *   3  allocations || refunds || holds           (batched over those payment ids)
- *   4  hold dispositions                         (inside the canonical `readHoldsForPayments`)
+ * MY FIRST VERSION OF THIS NOTE WAS INCOMPLETE IN A WAY THAT WOULD HAVE CAUSED A FALSE ZERO.
+ * It said the household's agreements are "child_enrollment_agreements by customer".
+ * `child_enrollment_agreements.customer_id` IS NULLABLE, and `resolveBillableSourceHouseholdId`
+ * falls back to the agreement's `customer_member_id` → `customer_members.customer_id` when it is
+ * absent. An inverse lookup that filtered on `customer_id` alone would silently omit those
+ * agreements, drop their receipts, and report prepaid money that exists as ZERO — the precise
+ * failure this architecture's UNKNOWN/ZERO rules exist to prevent, arrived at from the other side.
  *
- * That is roughly six reads at four hops of DEPTH — bounded by the household's agreement count,
- * not by its payment count, which is the property that matters against the current N+1.
+ * TWO CANDIDATE READER DESIGNS, neither yet measured:
+ *
+ *   (i) INVERSE TRAVERSAL — members for the household, then agreements by `customer_id` OR
+ *       `customer_member_id`, then payments by source, then batched allocations || refunds ||
+ *       holds, then dispositions. Bounded by agreement/member count rather than payment count,
+ *       but roughly seven reads at FIVE hops of depth. At the ~120 ms per hop this database shows,
+ *       that is ~600 ms — which would make the CARD path binding (it currently ends at 197 ms
+ *       against a 428 ms queue path) and put the product model at roughly 1,001 ms, i.e. AT the
+ *       target with no headroom. Depth is the risk here, not row count.
+ *
+ *  (ii) SCAN-AND-BATCH — keep the canonical shape (paged org scan of inbound childcare payments,
+ *       sources resolved to households) and replace ONLY the per-payment N+1 with batched
+ *       allocation, refund and hold reads. Far shallower, and it removes the part that actually
+ *       scales with payment count. Its exposure is the org-wide scan, which the canonical path
+ *       already accepts and caps.
+ *
+ * (ii) looks the better trade for the first-order budget, because the N+1 is what scales while the
+ * scan is already bounded and already paid today. Neither is chosen here: this is a note about
+ * what the measurement must decide, not a decision taken without one.
  *
  * REUSE `readHoldsForPayments` rather than reimplementing it: `remainingCents` needs the
  * dispositions, and a second implementation of "how much of this receipt is still held" would be
