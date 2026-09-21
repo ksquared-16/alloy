@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ReadinessResult, ReadinessTrigger } from "@/lib/completion/readinessTypes";
+import { isOpenEmploymentStatus } from "@/lib/employment/employmentTypes";
 import { listQualificationTypes, resolveQualificationStateForWorkContext } from "@/lib/staffQualifications/staffQualificationService";
 import {
     evaluateStaffReadiness,
@@ -28,8 +29,6 @@ export type StaffReadinessComposition = {
     work_context: StaffReadinessWorkContext;
     employment: { id: string; status: string | null; start_date: string | null; end_date: string | null };
 };
-
-const OPEN_EMPLOYMENT_STATUSES = new Set(["active", "ending"]);
 
 export async function composeStaffReadiness(
     supabase: SupabaseClient,
@@ -110,10 +109,13 @@ export async function composeStaffReadiness(
         context: work_context,
         employment: {
             status: employment.employment_status,
-            // "Open" is the canonical employment reading, not a date comparison:
-            // `lib/employment` already decides what counts, and a second opinion here
-            // would drift from the Employment card the operator is looking at.
-            isOpen: OPEN_EMPLOYMENT_STATUSES.has(String(employment.employment_status ?? "")),
+            // "Open" is the canonical employment reading, not a date comparison and
+            // not a local list: `lib/employment` owns which statuses count, and a copy
+            // here drifts from the Employment card the operator is looking at. It did —
+            // a hand-written set omitted `pending_start`, so an employment the roster
+            // and the Employment card both call open was reported as "not started yet",
+            // and that enforced gap short-circuited every qualification requirement.
+            isOpen: isOpenEmploymentStatus(employment.employment_status),
             startDate: employment.start_date,
             endDate: employment.end_date,
         },
@@ -146,6 +148,6 @@ async function resolveLocationLabel(
 ): Promise<string | null> {
     if (!locationId) return null;
     const { data } = await supabase
-        .from("locations").select("name").eq("id", locationId).eq("org_id", orgId).maybeSingle();
-    return (data as { name?: string } | null)?.name ?? null;
+        .from("locations").select("label").eq("id", locationId).eq("org_id", orgId).maybeSingle();
+    return (data as { label?: string } | null)?.label ?? null;
 }
