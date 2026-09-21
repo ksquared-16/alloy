@@ -161,6 +161,28 @@ describe("the migration closes both doors in the file that opens them", () => {
     });
 });
 
+describe("a same-day change is refused in words, not as a 500", () => {
+    it("guards on >= so the close date can never precede its own start", () => {
+        // The bug: closing the open term on the day BEFORE a same-day successor sets
+        // its end before its start, which `end_after_start` rejects — so the operator
+        // got a 500 carrying a raw constraint name. Found by mounted QA on the
+        // deployed build; the guard is the fix and this is what holds it.
+        const src = statements(code("lib/employmentCompensation/employmentCompensationService.ts"));
+        expect(src).toMatch(/open\.effective_start >= effectiveStart/);
+        expect(src, "a strict > lets equal dates through and reproduces the 500")
+            .not.toMatch(/open\.effective_start > effectiveStart/);
+    });
+
+    it("says what happened rather than naming a constraint", () => {
+        // `statements`, not the raw file: the comment above the guard NAMES the
+        // constraint in order to explain it, and asserting on raw source fails on
+        // the very sentence documenting the fix.
+        const src = statements(code("lib/employmentCompensation/employmentCompensationService.ts"));
+        expect(src).toMatch(/A term already begins on that date/);
+        expect(src).not.toMatch(/end_after_start/);
+    });
+});
+
 describe("compensation has no payroll or financial consequence", () => {
     it("the service writes only compensation terms", () => {
         const src = statements(code("lib/employmentCompensation/employmentCompensationService.ts"));
