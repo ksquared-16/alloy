@@ -151,9 +151,11 @@ describe("explainability names the authority, not a rule key", () => {
     });
 
     it("uses supplied scope labels when the caller can resolve them", () => {
+        // The caller supplies a PHRASE, because the label is substituted into
+        // "Required ___" alongside defaults like "organization-wide".
         const s = sat();
         s.requirement.provenance = [{ requirementId: "r1", scopeType: "site", scopeId: "site-1", level: "required" }] as never;
-        expect(explainProvenance(s, () => "North Campus")).toBe("Required North Campus");
+        expect(explainProvenance(s, () => "at North Campus")).toBe("Required at North Campus");
     });
 
     it("offers a resolution that points at the canonical command", () => {
@@ -222,5 +224,32 @@ describe("nothing is persisted", () => {
         expect(r).not.toHaveProperty("id");
         // It is a computed answer with a timestamp, not a stored one.
         expect(r.evaluated_at).toBeTruthy();
+    });
+});
+
+describe("provenance reads as a sentence, not a slot-fill", () => {
+    // `explainProvenance` substitutes the scope label into "Required ___", beside
+    // defaults like "organization-wide" and "this site". A bare site name produced
+    // "Required North Campus." — it named the site, which was the point of the fix,
+    // and still read wrong. The label is a phrase.
+    it("a named site reads as a place, not a subject", () => {
+        const sat = {
+            requirement: { qualificationTypeId: "t1", level: "required" as const,
+                provenance: [{ scopeType: "site", scopeId: "loc-1" }] },
+            satisfied: false, reason: "missing" as const,
+        };
+        const why = explainProvenance(sat as never, (scopeType, scopeId) =>
+            scopeType === "site" && scopeId === "loc-1" ? "at North Campus" : "");
+        expect(why).toBe("Required at North Campus");
+        expect(why, "a bare noun after 'Required' is not a sentence").not.toBe("Required North Campus");
+    });
+
+    it("falls back to the generic phrase when the site cannot be named", () => {
+        const sat = {
+            requirement: { qualificationTypeId: "t1", level: "required" as const,
+                provenance: [{ scopeType: "site", scopeId: "loc-1" }] },
+            satisfied: false, reason: "missing" as const,
+        };
+        expect(explainProvenance(sat as never, () => "")).toBe("Required this site");
     });
 });

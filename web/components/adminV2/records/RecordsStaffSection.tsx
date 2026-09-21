@@ -19,6 +19,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import StaffReadinessSignalChip from "@/components/adminV2/staff/StaffReadinessSignalChip";
+import type { StaffReadinessSignal } from "@/lib/staffReadiness/staffReadinessSignals";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 import AddStaffModal from "@/components/adminV2/settings/staff/AddStaffModal";
@@ -48,6 +50,12 @@ export type StaffEntry = {
     endDate: string | null;
     /** Actor-scoped canonical photo from the platform's one projection. Null → initials. */
     photoUrl?: string | null;
+    /**
+     * ADVISORY readiness. Informs the scan; gates nothing. Absent means the caller
+     * did not ask, which is not the same as "no concern" — only a `ready` tone says
+     * that, and it renders nothing at all.
+     */
+    readiness?: StaffReadinessSignal | null;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -107,7 +115,12 @@ export default function RecordsStaffSection({
              * Measured on the Operations Staff tab: the identical URL twice.
              */
             const res = await dedupeAdminFetchWithTtl(
-                "/api/admin/staff/directory?include_ended=true",
+                /*
+                 * Readiness rides the projection Records already reads. This is the
+                 * surface where an operator scans the workforce, so a lapsed credential
+                 * that is invisible here is invisible until somebody opens that person.
+                 */
+                "/api/admin/staff/directory?include_ended=true&include_readiness=true",
                 { credentials: "include" },
                 15_000,
             );
@@ -287,6 +300,11 @@ export default function RecordsStaffSection({
                                                 .filter(Boolean)
                                                 .join(" · ") || "No position set"}
                                         </span>
+                                        {/* Under the identity line, where the eye already is
+                                            after the name. The row's open gesture is untouched. */}
+                                        {s.isOpen ? (
+                                            <StaffReadinessSignalChip signal={s.readiness} className="mt-0.5" />
+                                        ) : null}
                                     </span>
                                     <span className="shrink-0 text-right">
                                         <span

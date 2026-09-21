@@ -27,6 +27,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+import StaffReadinessSignalChip from "@/components/adminV2/staff/StaffReadinessSignalChip";
+import type { StaffReadinessSignal } from "@/lib/staffReadiness/staffReadinessSignals";
 import { X } from "lucide-react";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
@@ -40,7 +43,15 @@ export type AssignmentSubjectChoice =
 type Tab = "child" | "staff";
 
 type ChildRow = { customerMemberId: string; name: string };
-type StaffRow = { personId: string; name: string };
+type StaffRow = {
+  personId: string;
+  name: string;
+  /**
+   * ADVISORY only. It tells the operator what they are about to walk into; it
+   * never decides who may be chosen. Every staff row stays selectable.
+   */
+  readiness: StaffReadinessSignal | null;
+};
 
 export default function AssignmentSubjectPicker({
   open,
@@ -116,7 +127,15 @@ export default function AssignmentSubjectPicker({
         fetch("/api/admin/records/children?limit=200", {
           credentials: "include",
         }),
-        fetch("/api/admin/staff/directory", { credentials: "include" }),
+        /*
+         * `include_readiness` — choosing WHO to assign is the moment a lapsed
+         * credential is worth knowing about, and the only place in this modal it
+         * could change an operator's mind. It is opt-in per caller so surfaces that
+         * are not making a staffing decision do not pay for the evaluation.
+         */
+        fetch("/api/admin/staff/directory?include_readiness=true", {
+          credentials: "include",
+        }),
       ]);
       const childJson = await childRes.json().catch(() => ({}));
       const staffJson = await staffRes.json().catch(() => ({}));
@@ -148,9 +167,14 @@ export default function AssignmentSubjectPicker({
           (staffJson?.staff ?? []) as {
             personId: string;
             displayName: string;
+            readiness?: StaffReadinessSignal | null;
           }[]
         )
-          .map((r) => ({ personId: r.personId, name: r.displayName }))
+          .map((r) => ({
+            personId: r.personId,
+            name: r.displayName,
+            readiness: r.readiness ?? null,
+          }))
           .filter((r) => Boolean(r.personId)),
       );
     } catch (e) {
@@ -282,7 +306,16 @@ export default function AssignmentSubjectPicker({
                     )
                   }
                 >
-                  {r.name}
+                  <span className="flex-1 truncate">{r.name}</span>
+                  {/*
+                   * Beside the name, never in front of the click. The row's onClick is
+                   * unchanged and unconditional: an operator who needs this person today
+                   * selects them exactly as before, and reads the reason it was worth
+                   * mentioning.
+                   */}
+                  {tab === "staff" ? (
+                    <StaffReadinessSignalChip signal={r.readiness} className="ml-2 shrink-0" />
+                  ) : null}
                 </button>
               );
             })
