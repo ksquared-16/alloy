@@ -1,0 +1,51 @@
+{
+  "before": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "gear": 1,
+    "panel": 0
+  },
+  "opened": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "gear": 1,
+    "panel": 1
+  },
+  "afterEscape": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "gear": 1,
+    "panel": 0
+  },
+  "focusAfterEscape": "BUTTON(\"Manage responsibility\")",
+  "afterOutsideClick": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "gear": 1,
+    "panel": 1
+  }
+}

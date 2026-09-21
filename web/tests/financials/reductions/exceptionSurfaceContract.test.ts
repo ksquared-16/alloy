@@ -128,7 +128,13 @@ describe("what is excluded is visible, with its reason", () => {
      * them looking for configuration that is not missing.
      */
     it("speaks the domain's exclusion reason in operator words", () => {
-        expect(card).toContain("excluded_by_exception:");
-        expect(card).toContain('"Excluded for this assignment"');
+        /*
+         * The words moved into the shared vocabulary so the family Discount surface says the same
+         * thing; the card consumes it. Asserted at the vocabulary, and at the card reading it.
+         */
+        const vocab = source("lib/financials/reductions/reductionReasonLabels.ts");
+        expect(vocab).toContain("excluded_by_exception:");
+        expect(vocab).toContain('"Excluded for this assignment"');
+        expect(card, "the card reads the shared vocabulary").toContain("reductionReasonLabels");
     });
 });

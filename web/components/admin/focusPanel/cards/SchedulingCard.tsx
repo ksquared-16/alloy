@@ -1,6 +1,8 @@
 "use client";
 
 import { invalidateFinancialConfig, loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
+import { REDUCTION_REASON_LABEL as REDUCTION_REASON_LABELS } from "@/lib/financials/reductions/reductionReasonLabels";
+import { executeFinancialsAction } from "@/lib/financials/executeFinancialsAction";
 import type { AssignmentTuitionView } from "@/lib/enrollment/pricing/buildAssignmentTuitionView";
 import { acceptedTermBillingPeriods } from "@/lib/financials/billingPeriod";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
@@ -181,25 +183,13 @@ type SchedSubject = {
     dobAge: string | null;
 };
 
-/**
- * The domain's eligibility reasons, in operator words. A LABEL for a canonical reason, never a
- * reason of its own: an unmapped code still renders, spelled out, rather than being hidden.
+/*
+ * The domain's eligibility reasons now live in `reductionReasonLabels`, shared with the family
+ * Discount surface so the same canonical reason reads the same way at both grains. Re-exported
+ * under the local name so every call site below is unchanged — this moved the vocabulary, not
+ * the words.
  */
-const REDUCTION_REASON_LABEL: Record<string, string> = {
-    no_policy_configured: "No discount policies configured",
-    not_enough_siblings: "Not eligible — not enough enrolled siblings",
-    rank_not_covered: "Not eligible — this child's sibling rank is not covered",
-    not_an_employee_household: "Not eligible — not an employee household",
-    category_not_covered: "Not eligible — tuition is not covered by a policy",
-    category_not_discountable: "Not eligible — this charge category cannot be discounted",
-    no_accepted_gross: "No accepted tuition to forecast against",
-    /*
-     * Not "no discount" and not "off". Somebody decided this policy does not apply HERE, and the
-     * surface says so in those words so the operator goes looking for the decision, not for
-     * missing configuration.
-     */
-    excluded_by_exception: "Excluded for this assignment",
-};
+const REDUCTION_REASON_LABEL = REDUCTION_REASON_LABELS;
 
 const WEEKDAYS = [
     { i: 1, l: "M" },
@@ -226,27 +216,13 @@ async function schedApi(path: string, init?: RequestInit): Promise<any> {
     return body;
 }
 
-async function executeAssignmentAction(body: Record<string, unknown>): Promise<void> {
-    const { operatorFacingAssignmentError } = await import(
-        "@/lib/operationalAssignments/operatorAssignmentErrors"
-    );
-    const res = await fetch("/api/admin/actions/execute", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok || json?.ok === false) {
-        const err = json?.error;
-        const message =
-            typeof err === "string"
-                ? err
-                : err && typeof err === "object" && typeof err.message === "string"
-                  ? err.message
-                  : `Action failed (${res.status})`;
-        throw new Error(operatorFacingAssignmentError(message));
-    }
-}
+/*
+ * The governed-action transport now lives in `executeFinancialsAction`, so the family Discount
+ * surface invokes the SAME certified exception actions through the same error handling rather
+ * than carrying a second copy of it. The local name is kept so every call site below reads
+ * unchanged — this moved the implementation, not the behaviour.
+ */
+const executeAssignmentAction = executeFinancialsAction;
 
 /**
  * After an assignment mutation, push the reloaded child projection into Focus Panel

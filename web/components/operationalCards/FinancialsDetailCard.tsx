@@ -1,6 +1,7 @@
 "use client";
 
 import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
+import FinancialsDiscountPanel from "@/app/adminV2/financials/FinancialsDiscountPanel";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
@@ -67,6 +68,7 @@ export default function FinancialsDetailCard({
     ledgerPending = false,
     paymentBand,
     paymentMethodsAccount,
+    discountAdmin,
     responsibilityAdmin,
     lens: lensProp,
     onLensChange,
@@ -135,6 +137,16 @@ export default function FinancialsDetailCard({
      * through its established hosted contract — one component, now three hosts, still not a second
      * panel and still not a second writer. Absent, this card behaves exactly as it always has.
      */
+    /*
+     * The family's DISCOUNT position, beside Responsibility in the administration region. Given,
+     * the position and its manage gear render; absent, this card behaves exactly as before.
+     */
+    discountAdmin?: {
+        customerId: string;
+        /** Names a relationship in the operator's words. The panel invents no label. */
+        childLabelFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
+        onCommitted: () => Promise<void> | void;
+    } | null;
     responsibilityAdmin?: {
         customerId: string;
         /** Parties already on record, from the account view model — never invented here. */
@@ -897,6 +909,22 @@ export default function FinancialsDetailCard({
                             closeResponsibility();
                         }}
                     />
+                    </div>
+                ) : null}
+
+                {/*
+                  * DISCOUNTS, with the other administration concepts rather than on the command
+                  * row. Responsibility answers who owes; this answers what reduces it. Both are
+                  * positions with a gear, and neither is a transaction — which is why they sit
+                  * below Payment | Add and not in it.
+                  */}
+                {discountAdmin ? (
+                    <div className="alloy-os-fdetail__discounts" data-financials-discounts="detail">
+                        <FinancialsDiscountPanel
+                            customerId={discountAdmin.customerId}
+                            childLabelFor={discountAdmin.childLabelFor}
+                            onCommitted={discountAdmin.onCommitted}
+                        />
                     </div>
                 ) : null}
 
