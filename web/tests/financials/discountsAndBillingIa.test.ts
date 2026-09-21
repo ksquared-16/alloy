@@ -484,3 +484,29 @@ describe("family and Assignment speak one discount vocabulary", () => {
         expect(code(VOCAB)).toContain('reason.replace(/_/g, " ")');
     });
 });
+
+describe("the family position states a basis where the basis belongs", () => {
+    const PANEL = "app/adminV2/financials/FinancialsDiscountPanel.tsx";
+    const ROUTE = "app/api/admin/financials/family-discount-position/route.ts";
+
+    it("the derivation is carried per relationship, not per policy", () => {
+        /*
+         * MEASURED on deployed 76a8f3fc8: the position rendered
+         *   "discount · discount · 10% of $185.00"
+         * for a policy affecting two children whose bases are $185.00 and $1,450.00. Two defects in
+         * one line — the forecast's explanation already leads with the policy kind, so the label was
+         * printed twice; and one child's basis was stated as though it were the policy's.
+         */
+        expect(code(ROUTE)).toContain("explanation: outcome.explanation");
+        const panel = code(PANEL);
+        expect(panel, "the subject line carries its own explanation").toMatch(
+            /Expected \{money\(Math\.abs\(s\.expectedCents\), s\.currencyCode\)\}[\s\S]{0,200}s\.explanation/,
+        );
+    });
+
+    it("the policy header is the name, not the name plus an echo of it", () => {
+        const panel = code(PANEL);
+        expect(panel, "no policy-level explanation beside the label")
+            .not.toMatch(/\{p\.label\}[\s\S]{0,120}p\.explanation/);
+    });
+});

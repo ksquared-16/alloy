@@ -35,7 +35,13 @@ export const TRANSIENT_POPUP_SELECTOR = '[role="listbox"], [role="menu"][data-st
 export const INLINE_EDIT_SELECTOR = '[data-identity-editing="true"]';
 
 /**
- * An open FINANCIALS DEPTH CARD — currently Manage responsibility.
+ * An open FINANCIALS DEPTH CARD — Manage responsibility, and Manage discounts.
+ *
+ * EVERY depth card belongs in this selector, and forgetting one reproduces the defect exactly.
+ * Measured on deployed 76a8f3fc8: the discount card carried the same host guard responsibility
+ * has, and Escape still closed the whole Details surface with focus landing on <body> — because
+ * the guard is a React bubble handler and the grid listens at window CAPTURE. Registering here is
+ * the only thing that makes a parent yield; a per-card guard cannot win that race.
  *
  * MEASURED on deployed 33e8a90d9: with the card open on Financials Details, one Escape closed the
  * card AND the whole Details surface, leaving focus on <body>. The card already answers Escape in
@@ -49,7 +55,8 @@ export const INLINE_EDIT_SELECTOR = '[data-identity-editing="true"]';
  * will not act would leave Escape doing nothing at all. The panel takes focus when it opens
  * (`tabIndex={-1}` plus a focusing ref), so this is true exactly while it is the innermost thing.
  */
-export const FINANCIALS_DEPTH_CARD_SELECTOR = '[data-financials-manage-responsibility="open-panel"]';
+export const FINANCIALS_DEPTH_CARD_SELECTOR =
+    '[data-financials-manage-responsibility="open-panel"], [data-financials-manage-discounts="open-panel"]';
 
 /**
  * True when a transient popup is open anywhere.
