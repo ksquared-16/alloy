@@ -1,0 +1,51 @@
+{
+  "tablist": {
+    "present": 1,
+    "tabs": [
+      {
+        "mode": "charge",
+        "label": "Charge",
+        "selected": "true"
+      },
+      {
+        "mode": "adjustment",
+        "label": "Adjustment",
+        "selected": "false"
+      }
+    ]
+  },
+  "controls": {
+    "adjustment-agreement": {
+      "canonical": true,
+      "options": [
+        "Certa Certhouse",
+        "Certb Certhouse"
+      ]
+    },
+    "adjustment-source-charge": {
+      "canonical": true,
+      "options": [
+        "Choose the charge this is about…",
+        "Field trip · 2026-10-01 · $40.00 outstanding",
+        "Materials · 2026-09-25 · $18.00 outstanding",
+        "Registration fee · 2026-09-18 · $0.00 outstanding"
+      ]
+    },
+    "adjustment-category": {
+      "canonical": true,
+      "options": [
+        "Credit — lowers what the family owes",
+        "Adjustment — either direction"
+      ]
+    },
+    "adjustment-direction": {
+      "presentUnderCredit": 0
+    }
+  },
+  "nativeSelects": 0,
+  "panelOpen": 1,
+  "backToCharge": {
+    "appliesTo": 1,
+    "adjustmentPanel": 0
+  }
+}
