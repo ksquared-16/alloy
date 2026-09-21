@@ -67,6 +67,26 @@ export async function readWorkViewTotalsForFirstOrder(
     const workViews = savedWorkViewsFromDepartmentMetadata(args.departmentMetadata);
     if (!workViews.length) return { status: "unavailable", reason: "no configured work views" };
 
+    /*
+     * THE DEPARTMENT'S WORK UNITS ARE FETCHED ONCE AND SERVE BOTH CONSUMERS.
+     *
+     * The first version let `loadSettlementLocators` fetch them internally and then passed
+     * `deptWorkUnits: []` to the seed. The seed uses that set to decide host ACCESSIBILITY, and
+     * its contract is explicit: "a target whose host is NOT in the set is not assumed accessible
+     * — it resolves UNKNOWN." With an empty set no host was present, so all seven configured
+     * Work Views resolved UNKNOWN against an operator frame showing 3, 0, 3, 16, 0, 7 and 2.
+     *
+     * The seed was right and the caller was wrong: it refused to assume accessibility for hosts
+     * it had never been shown. One fetch, both consumers.
+     */
+    const { data: deptRows, error: deptError } = await supabase
+        .from("work_units")
+        .select("id, key, name, department_id, is_active, sort_order, queue_definition")
+        .eq("org_id", args.orgId)
+        .eq("department_id", departmentId);
+    if (deptError) return { status: "unavailable", reason: `department work units unavailable: ${deptError.message}` };
+    const deptWorkUnits = (deptRows ?? []) as Parameters<typeof loadSettlementLocators>[0]["deptWorkUnits"] & object;
+
     const locators = await loadSettlementLocators({
         supabase,
         orgId: args.orgId,
@@ -74,6 +94,7 @@ export async function readWorkViewTotalsForFirstOrder(
         workViews,
         activeWorkViewId: args.caller.activeWorkViewId,
         surfaceWorkUnitId: args.workUnitId,
+        deptWorkUnits,
     });
     if (locators.status !== "resolved") {
         return { status: "unavailable", reason: "settlement locators unavailable" };
@@ -84,7 +105,7 @@ export async function readWorkViewTotalsForFirstOrder(
         orgId: args.orgId,
         hostWorkUnitId: args.workUnitId,
         countTargets: locators.workViewCountTargets,
-        deptWorkUnits: [],
+        deptWorkUnits: deptWorkUnits as Parameters<typeof resolveWorkViewTotalsSeed>[0]["deptWorkUnits"],
         departmentMetadata: args.departmentMetadata,
         departmentId,
         recordScopeConstraints: args.caller.recordScopeConstraints,
