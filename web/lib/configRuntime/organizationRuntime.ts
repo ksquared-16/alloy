@@ -201,31 +201,24 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             "Accounting mappings",
         ],
     },
-    {
-        key: "staff",
-        label: "Staff",
-        description: "The people who work for this organization, their capacity, and their employment history.",
-        href: "/organization/staff",
-        icon: "access",
-        publisherLabel: "Organization",
-        configurationOwner: "Employment",
-        runtimeOwner: "Employment",
-        consumers: ["Scheduling", "Locations", "Person record"],
-        inheritance: {
-            kind: "availability",
-            path: ["organization", "location"],
-            label: "Employment is organization-scoped; primary location narrows where it applies",
-        },
-        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
-        override: { state: "not_allowed", label: "One open employment per person per organization" },
-        health: {
-            state: "not_assessed",
-            label: "Not assessed",
-            detail: "Employment health is not yet assessed.",
-        },
-        distributionMode: "assignment",
-        ownedConfiguration: ["Employment records", "Position vocabulary", "Configured staff facts"],
-    },
+    /*
+     * STAFF IS NOT AN ORGANIZATION DOMAIN, and its tile is gone.
+     *
+     * Organization publishes CONFIGURATION domains. Staff is neither: "the people who
+     * work here" is operating data, and the tile that used to sit here pointed at a
+     * directory that Roster already owned — two products answering one question, with
+     * the older one listed first.
+     *
+     * The three questions now have three owners, and none of them is this list:
+     *
+     *   what facts an Employment can hold   -> Data Model
+     *   how the workforce operates          -> Operations - Work
+     *   how that operation is configured    -> Operations - Studio
+     *
+     * `/organization/staff` survives as a REDIRECT for bookmarks written before that
+     * was true. A compatibility route is not a product destination, and removing the
+     * tile without removing the redirect is the whole of the distinction.
+     */
     {
         key: "access",
         label: "Access",
