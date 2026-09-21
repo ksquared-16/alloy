@@ -349,7 +349,7 @@ const CAPABILITIES: readonly FirstOrderCapability[] = [
         project: () => unknown<FirstOrderScalar>(),
         projectMember: (identity, c) => {
             if (!c.workViewTotals) return unavailable<FirstOrderScalar>("work view totals unavailable");
-            if (c.workViewTotals.status !== "ok") return unavailable<FirstOrderScalar>(`work view totals ${c.workViewTotals.status}`);
+            if (c.workViewTotals.status !== "ok") return unavailable<FirstOrderScalar>(c.workViewTotals.reason);
             const v = c.workViewTotals.totalsByViewId[identity];
             if (v == null) return unknown<FirstOrderScalar>();
             return known(v);
