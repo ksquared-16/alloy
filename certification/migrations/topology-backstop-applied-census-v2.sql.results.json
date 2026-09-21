@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_03b6cbbf0d7de8",
+  "query_hash": "2743cba2b36b75e3ef808f52d2c52ff05fb47283d98ed8a577c4a336e8a06b36",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T10:55:50.559Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_03b6cbbf0d7de8",
+    "query_hash": "2743cba2b36b75e3ef808f52d2c52ff05fb47283d98ed8a577c4a336e8a06b36",
+    "authorization_id": "grnt_94b5ce14264b4329",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T10:55:51.890Z",
+    "question_ids": [
+      "guard_children",
+      "guard_live_placement",
+      "guard_cross_site_move",
+      "reads_child_placements",
+      "fn_body_chars"
+    ],
+    "questions": {
+      "guard_children": {
+        "question_id": "guard_children",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "guard_live_placement": {
+        "question_id": "guard_live_placement",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "guard_cross_site_move": {
+        "question_id": "guard_cross_site_move",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "reads_child_placements": {
+        "question_id": "reads_child_placements",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fn_body_chars": {
+        "question_id": "fn_body_chars",
+        "row_count": null,
+        "rows": [
+          6529
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

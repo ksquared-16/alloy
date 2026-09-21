@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_c82c265ac717e3",
+  "query_hash": "458c0c9638e946b34de78067f18ff320f07dd58baa03a2bded461eda4c04a44d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T15:50:39.770Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c82c265ac717e3",
+    "query_hash": "458c0c9638e946b34de78067f18ff320f07dd58baa03a2bded461eda4c04a44d",
+    "authorization_id": "grnt_3b35831a71104526",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T15:50:41.213Z",
+    "question_ids": [
+      "c1_table_exists",
+      "c2_rls_enabled",
+      "c3_authenticated_grants",
+      "c4_policy_names",
+      "c5_capability_keys",
+      "c6_roles_granted"
+    ],
+    "questions": {
+      "c1_table_exists": {
+        "question_id": "c1_table_exists",
+        "row_count": null,
+        "rows": [
+          1
+        ]
+      },
+      "c2_rls_enabled": {
+        "question_id": "c2_rls_enabled",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "c3_authenticated_grants": {
+        "question_id": "c3_authenticated_grants",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "c4_policy_names": {
+        "question_id": "c4_policy_names",
+        "row_count": null,
+        "rows": [
+          "employment_compensation_terms_org_owner_insert,employment_compensation_terms_org_owner_select,employment_compensation_terms_org_owner_update,employment_compensation_terms_service_all"
+        ]
+      },
+      "c5_capability_keys": {
+        "question_id": "c5_capability_keys",
+        "row_count": null,
+        "rows": [
+          "staff.compensation.read,staff.compensation.write"
+        ]
+      },
+      "c6_roles_granted": {
+        "question_id": "c6_roles_granted",
+        "row_count": null,
+        "rows": [
+          "admin"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

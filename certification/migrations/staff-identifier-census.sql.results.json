@@ -1,0 +1,113 @@
+{
+  "trusted_host_action_id": "tha_7abc016ccc6b4e",
+  "query_hash": "1a4ce56c0945c72e95e35a31734866c356733023ba330f7931353932116bfc11",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T21:18:40.012Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_7abc016ccc6b4e",
+    "query_hash": "1a4ce56c0945c72e95e35a31734866c356733023ba330f7931353932116bfc11",
+    "authorization_id": "grnt_93dc69d46b414507",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T21:18:41.605Z",
+    "question_ids": [
+      "emp_total",
+      "emp_id_populated",
+      "emp_id_null_or_blank",
+      "collision_groups_exact",
+      "collision_groups_normalized",
+      "needs_normalization",
+      "placeholder_shaped",
+      "kiosk_codes_active",
+      "kiosk_codes_persons",
+      "persons_multi_active_code",
+      "employments_active"
+    ],
+    "questions": {
+      "emp_total": {
+        "question_id": "emp_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "emp_id_populated": {
+        "question_id": "emp_id_populated",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "emp_id_null_or_blank": {
+        "question_id": "emp_id_null_or_blank",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      },
+      "collision_groups_exact": {
+        "question_id": "collision_groups_exact",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "collision_groups_normalized": {
+        "question_id": "collision_groups_normalized",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "needs_normalization": {
+        "question_id": "needs_normalization",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "placeholder_shaped": {
+        "question_id": "placeholder_shaped",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "kiosk_codes_active": {
+        "question_id": "kiosk_codes_active",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "kiosk_codes_persons": {
+        "question_id": "kiosk_codes_persons",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "persons_multi_active_code": {
+        "question_id": "persons_multi_active_code",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "employments_active": {
+        "question_id": "employments_active",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}
