@@ -2,7 +2,7 @@
  * WHAT THE PRODUCT IS ALLOWED TO CLAIM, and what has to be true before it claims it.
  */
 import { describe, expect, it } from "vitest";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -27,8 +27,13 @@ function statements(src: string): string {
 function sourceFiles(): string[] {
     const out: string[] = [];
     const walk = (dir: string) => {
-        let entries: ReturnType<typeof readdirSync>;
-        try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        /*
+         * Typed explicitly. `ReturnType<typeof readdirSync>` resolves to the buffer-name overload
+         * under this tsconfig, so `e.name` was a Buffer and every string operation on it was
+         * wrong — invisible to vitest, which never typechecks, and caught by typecheck:tests.
+         */
+        let entries: Dirent[];
+        try { entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" }) as Dirent[]; } catch { return; }
         for (const e of entries) {
             const p = join(dir, e.name);
             if (e.isDirectory()) { if (e.name !== "node_modules") walk(p); }
