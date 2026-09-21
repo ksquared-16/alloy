@@ -13,6 +13,7 @@ import {
     QUALIFICATION_ATTACH_EVIDENCE_ACTION_KEY,
     QUALIFICATION_RECORD_ACTION_KEY,
     QUALIFICATION_VERIFY_ACTION_KEY,
+    staffQualificationRecordAction,
 } from "@/lib/adminV2/actions/definitions/staffQualificationActions";
 
 const KEYS = [
@@ -123,5 +124,70 @@ describe("6. renewal is a record that supersedes, never an overwrite", () => {
         const a = getRegisteredAction(QUALIFICATION_RECORD_ACTION_KEY)!;
         const preview = await a.buildPreview({ payload: { supersedes_qualification_id: "q-old" } } as never);
         expect(JSON.stringify(preview)).toMatch(/history|replaces|keep/i);
+    });
+});
+
+/**
+ * THE RESULT SHAPE IS THE CONTRACT, AND A CAST HID IT.
+ *
+ * Every test above asserts what the command ASKS FOR — the payload, the blockers, the preview.
+ * None asserted what it HANDS BACK, and the three commands returned
+ * `{ actionKey, data }` cast through `as unknown as ActionResult` while the runtime expects
+ * `{ ok, correlationId, result: { actionKey, entityType, entityId, affectedId, detail } }`.
+ *
+ * It typechecked. It registered. It passed every gate. And on deployed staging every execution
+ * came back 500 INTERNAL, because the runtime validates the result it is handed and this one did
+ * not match. Mounted QA was the first thing that could see it.
+ *
+ * So these assert the ENVELOPE, against the real exported type rather than a lookalike.
+ */
+describe("the commands return the envelope the runtime validates", () => {
+    const supabaseOk = {
+        from() { return this; },
+        select() { return this; },
+        eq() { return this; },
+        insert() { return this; },
+        update() { return this; },
+        maybeSingle: async () => ({ data: { id: "emp-1" }, error: null }),
+        single: async () => ({ data: { id: "q-1", org_id: "o1" }, error: null }),
+    } as never;
+    const ctx = { orgId: "o1", userId: "u1" } as never;
+
+    it("record returns ok with result.affectedId, never a bare data bag", async () => {
+        const res = await staffQualificationRecordAction.execute!({
+            supabase: supabaseOk,
+            ctx,
+            payload: { employment_id: "emp-1", qualification_type_id: "t-1" },
+        } as never);
+        expect(res.ok).toBe(true);
+        if (!res.ok) return;
+        // The four fields the runtime reads. A missing one is a 500, not a type error.
+        expect(res.correlationId).toBeTruthy();
+        expect(res.result.actionKey).toBe("staff_qualification.record");
+        expect(res.result.entityType).toBe("person");
+        expect(res.result.affectedId).toBe("q-1");
+        // The old shape, explicitly refused.
+        expect(res).not.toHaveProperty("data");
+        expect(res).not.toHaveProperty("actionKey");
+    });
+
+    it("a domain refusal returns a STRING error and an http status, not a nested object", async () => {
+        const supabaseMissing = {
+            from() { return this; },
+            select() { return this; },
+            eq() { return this; },
+            maybeSingle: async () => ({ data: null, error: null }),
+        } as never;
+        const res = await staffQualificationRecordAction.execute!({
+            supabase: supabaseMissing,
+            ctx,
+            payload: { employment_id: "nope", qualification_type_id: "t-1" },
+        } as never);
+        expect(res.ok).toBe(false);
+        if (res.ok) return;
+        expect(typeof res.error).toBe("string");
+        // The employment belongs to another org, so this is not found — not a 500.
+        expect(res.status).toBe(404);
+        expect(res.correlationId).toBeTruthy();
     });
 });
