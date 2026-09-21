@@ -375,3 +375,321 @@ export function AlloySelect({
         </div>
     );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+ * MULTI-SELECT — the same primitive, answering "which of these", not "which one".
+ *
+ * This is an extension of the control above, not a second control. It shares the stylesheet, the
+ * keyboard model, the typeahead resolver, the flip measurement and the focus-restoration rule, so
+ * a surface that needs more than one answer does not acquire a different set of manners. The three
+ * things that genuinely differ are stated here and nowhere else:
+ *
+ *   1. SELECTING DOES NOT CLOSE. Picking one of several is not finishing, so Enter/Space toggles
+ *      and the list stays open. Escape, Tab and an outside click are what finish.
+ *   2. THERE IS NO PLACEHOLDER ENTRY. In a single select the placeholder is a real choice that
+ *      means "none". Here, "none" is the empty array — and on the surface this was built for,
+ *      an empty selection must NEVER quietly mean "everyone". Offering a row that clears the
+ *      selection would invite exactly that reading.
+ *   3. AN OPTION MAY BE EXCLUSIVE. Some answers cannot be combined with the others — "Household"
+ *      is the whole account, so it cannot also be two of its children. Exclusivity is declared on
+ *      the OPTION and enforced here, so no calling surface has to police it and none can forget.
+ *
+ * Everything else is deliberately identical.
+ * ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type AlloyMultiSelectOption = AlloySelectOption & {
+    /**
+     * This option is the whole set: choosing it clears every other selection, and choosing any
+     * other clears it. Declared on the option because it is a property of the MEANING of the
+     * value, not of the surface that happens to render it.
+     */
+    exclusive?: boolean;
+};
+
+/**
+ * Apply one toggle under the exclusivity rule.
+ *
+ * Exported and pure so the rule can be locked directly. A test that had to mount a listbox to
+ * discover that Household and a child cannot coexist would be testing React, not the rule.
+ */
+export function resolveMultiSelection(
+    options: readonly AlloyMultiSelectOption[],
+    current: readonly string[],
+    toggled: string,
+): string[] {
+    const option = options.find((o) => o.value === toggled);
+    if (!option || option.disabled) return [...current];
+
+    /* Turning something OFF never needs the exclusivity rule — it only ever shrinks the set. */
+    if (current.includes(toggled)) return current.filter((v) => v !== toggled);
+
+    /* An exclusive option IS the answer: it replaces whatever was there. */
+    if (option.exclusive) return [toggled];
+
+    /* A normal option evicts any exclusive one, then joins the rest, in the options' own order. */
+    const exclusiveValues = new Set(options.filter((o) => o.exclusive).map((o) => o.value));
+    const kept = current.filter((v) => !exclusiveValues.has(v));
+    const next = new Set([...kept, toggled]);
+    return options.filter((o) => next.has(o.value)).map((o) => o.value);
+}
+
+/**
+ * How the trigger reads when several things are chosen.
+ *
+ * Names while they fit, because an operator about to commit money should see WHO, not a count.
+ * A count only takes over once the names would be truncated into uselessness anyway.
+ */
+export function summariseMultiSelection(
+    options: readonly AlloyMultiSelectOption[],
+    values: readonly string[],
+    maxNames = 3,
+): string {
+    const labels = options.filter((o) => values.includes(o.value)).map((o) => o.label);
+    if (labels.length === 0) return "";
+    if (labels.length <= maxNames) return labels.join(", ");
+    return `${labels.length} selected`;
+}
+
+export function AlloyMultiSelect({
+    values,
+    onChange,
+    options,
+    disabled,
+    placeholder = "Select…",
+    density = "default",
+    testId,
+    id,
+    "aria-label": ariaLabel,
+    className,
+    triggerClassName,
+}: {
+    values: readonly string[];
+    onChange: (values: string[]) => void;
+    options: readonly AlloyMultiSelectOption[];
+    disabled?: boolean;
+    placeholder?: string;
+    density?: "default" | "compact";
+    testId?: string;
+    id?: string;
+    "aria-label"?: string;
+    className?: string;
+    triggerClassName?: string;
+}) {
+    const [open, setOpen] = useState(false);
+    const [dropUp, setDropUp] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const listRef = useRef<HTMLUListElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const listId = useId();
+
+    useEffect(() => {
+        if (!open) return;
+        const onPointerDown = (event: MouseEvent) => {
+            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setOpen(false);
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown);
+            document.removeEventListener("keydown", onKeyDown);
+        };
+    }, [open]);
+
+    const summary = summariseMultiSelection(options, values);
+    const typeahead = useRef<{ buffer: string; at: number }>({ buffer: "", at: 0 });
+
+    const seek = useCallback(
+        (char: string, fromIndex: number): number => {
+            const now = Date.now();
+            const t = typeahead.current;
+            t.buffer = now - t.at > TYPEAHEAD_RESET_MS ? char : t.buffer + char;
+            t.at = now;
+            return resolveTypeaheadIndex(options, t.buffer, fromIndex);
+        },
+        [options],
+    );
+
+    const toggle = useCallback(
+        (value: string) => {
+            onChange(resolveMultiSelection(options, values, value));
+            /* Deliberately NOT closing — see (1) above. */
+        },
+        [onChange, options, values],
+    );
+
+    const openList = useCallback(() => {
+        const first = options.findIndex((o) => values.includes(o.value));
+        setActiveIndex(first >= 0 ? first : 0);
+        const rect = rootRef.current?.getBoundingClientRect();
+        setDropUp(
+            rect ? window.innerHeight - rect.bottom < MENU_SPACE_PX && rect.top > MENU_SPACE_PX : false,
+        );
+        setOpen(true);
+    }, [options, values]);
+
+    useEffect(() => {
+        if (!open) return;
+        const node = listRef.current?.querySelectorAll<HTMLLIElement>("[role=option]")[activeIndex];
+        node?.focus();
+    }, [open, activeIndex]);
+
+    const wasOpen = useRef(false);
+    useEffect(() => {
+        const closing = wasOpen.current && !open;
+        wasOpen.current = open;
+        if (!closing || disabled) return;
+        const active = document.activeElement;
+        const strayed = active !== null && active !== document.body && !rootRef.current?.contains(active);
+        if (strayed) return;
+        triggerRef.current?.focus();
+    }, [open, disabled]);
+
+    const isTypeaheadKey = (event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) =>
+        event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey;
+
+    const stepIndex = (from: number, delta: number): number => {
+        let next = from + delta;
+        while (next >= 0 && next < options.length && options[next]?.disabled) next += delta;
+        return next >= 0 && next < options.length ? next : from;
+    };
+
+    const onTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (disabled) return;
+        if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openList();
+            return;
+        }
+        if (isTypeaheadKey(event)) {
+            event.preventDefault();
+            const found = seek(event.key, -1);
+            openList();
+            if (found >= 0) setActiveIndex(found);
+        }
+    };
+
+    const onOptionKeyDown = (event: React.KeyboardEvent<HTMLLIElement>, index: number) => {
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActiveIndex((i) => stepIndex(i, 1));
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveIndex((i) => stepIndex(i, -1));
+        } else if (event.key === "Home") {
+            event.preventDefault();
+            setActiveIndex(options[0]?.disabled ? stepIndex(0, 1) : 0);
+        } else if (event.key === "End") {
+            event.preventDefault();
+            const last = options.length - 1;
+            setActiveIndex(options[last]?.disabled ? stepIndex(last, -1) : last);
+        } else if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            const option = options[index];
+            if (option && !option.disabled) toggle(option.value);
+        } else if (event.key === "Escape" || event.key === "Tab") {
+            setOpen(false);
+        } else if (isTypeaheadKey(event)) {
+            event.preventDefault();
+            const found = seek(event.key, index);
+            if (found >= 0) setActiveIndex(found);
+        }
+    };
+
+    return (
+        <div
+            ref={rootRef}
+            className={clsx(
+                "alloy-select",
+                "alloy-select--multi",
+                density === "compact" && "alloy-select--compact",
+                open && "alloy-select--open",
+                className,
+            )}
+            data-testid={testId}
+            data-alloy-multiselect="true"
+            data-selected-count={values.length}
+        >
+            <button
+                ref={triggerRef}
+                type="button"
+                id={id}
+                disabled={disabled}
+                aria-label={ariaLabel}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-controls={listId}
+                className={clsx(
+                    triggerClassName ?? WS_FIELD_SELECT_CHROME,
+                    "alloy-select__trigger w-full disabled:opacity-50",
+                )}
+                onClick={() => {
+                    if (disabled) return;
+                    if (open) setOpen(false);
+                    else openList();
+                }}
+                onKeyDown={onTriggerKeyDown}
+            >
+                <span className={clsx("alloy-select__value", !summary && "alloy-select__value--placeholder")}>
+                    {summary || placeholder}
+                </span>
+                <span className="alloy-select__chevron" aria-hidden>
+                    ▾
+                </span>
+            </button>
+            {open ? (
+                <ul
+                    id={listId}
+                    ref={listRef}
+                    role="listbox"
+                    aria-multiselectable
+                    className={clsx("alloy-select__list", dropUp && "alloy-select__list--above")}
+                    aria-label={ariaLabel}
+                    aria-activedescendant={`${listId}-opt-${activeIndex}`}
+                >
+                    {options.map((o, index) => {
+                        const checked = values.includes(o.value);
+                        return (
+                            <li
+                                key={o.value}
+                                id={`${listId}-opt-${index}`}
+                                role="option"
+                                tabIndex={-1}
+                                aria-selected={checked}
+                                aria-disabled={o.disabled ? true : undefined}
+                                data-option-value={o.value}
+                                data-option-exclusive={o.exclusive ? "true" : undefined}
+                                className={clsx(
+                                    "alloy-select__option",
+                                    "alloy-select__option--check",
+                                    o.disabled && "alloy-select__option--disabled",
+                                    checked && "alloy-select__option--selected",
+                                    index === activeIndex && "alloy-select__option--active",
+                                )}
+                                onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    if (!o.disabled) toggle(o.value);
+                                }}
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                }}
+                                onKeyDown={(event) => onOptionKeyDown(event, index)}
+                                onMouseEnter={() => {
+                                    if (!o.disabled) setActiveIndex(index);
+                                }}
+                            >
+                                <span className="alloy-select__check" aria-hidden>
+                                    {checked ? "✓" : ""}
+                                </span>
+                                <span className="alloy-select__option-label">{o.label}</span>
+                            </li>
+                        );
+                    })}
+                </ul>
+            ) : null}
+        </div>
+    );
+}

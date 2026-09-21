@@ -5,6 +5,16 @@ import type { ReactNode } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
+import { AlloyMultiSelect } from "@/components/workspace/AlloySelect";
+
+/**
+ * HOUSEHOLD IS A VALUE, NOT AN ABSENCE.
+ *
+ * The multi-select needs a value to carry "the whole account", and it must not be a real member
+ * id or an empty list. An empty selection means the operator has chosen nobody — the one reading
+ * that must never silently become "everybody" on the surface that commits money.
+ */
+const ADDCHARGE_HOUSEHOLD_VALUE = "__household__";
 
 /**
  * Add charge — the command surface, driven by `financial_charge_templates`.
@@ -222,31 +232,52 @@ export default function AddChargeCommand({
              */}
             {controls && controls.unifiedTarget ? (
                 <Field label="Applies to" required={t.requiresSubject}>
-                    <div className="alloy-os-addcharge__children" data-addcharge-target>
-                        {controls.unifiedTarget.householdOffered ? (
-                            <label className="alloy-os-addcharge__child">
-                                <input
-                                    type="radio"
-                                    name="addcharge-target"
-                                    data-addcharge-target-household
-                                    checked={controls.unifiedTarget.householdSelected}
-                                    onChange={() => controls.unifiedTarget!.onSelectHousehold()}
-                                />
-                                <span>Household</span>
-                            </label>
-                        ) : null}
-                        {controls.unifiedTarget.children.map((c) => (
-                            <label key={c.id} className="alloy-os-addcharge__child">
-                                <input
-                                    type="checkbox"
-                                    data-addcharge-child={c.id}
-                                    checked={controls.unifiedTarget!.selectedChildIds.includes(c.id)}
-                                    onChange={() => controls.unifiedTarget!.onToggleChild(c.id)}
-                                />
-                                <span>{c.label}</span>
-                            </label>
-                        ))}
-                    </div>
+                    {/*
+                     * ONE control, the canonical one. This was a radio plus a row of checkboxes
+                     * sitting open on the command surface — correct in its model and wrong in its
+                     * grammar, and the only native-select-shaped island left on the surface that
+                     * commits money. It is now `AlloyMultiSelect`, which is the same primitive the
+                     * rest of the runtime uses, extended once for multiple answers.
+                     *
+                     * The MODEL beneath is untouched. Household is still an explicit option with a
+                     * value, still mutually exclusive with the children — now enforced by the
+                     * primitive's own `exclusive` flag rather than by this surface remembering to —
+                     * and an empty selection still means nothing has been chosen, never "everyone".
+                     * The per-child economics are unchanged: each selected child receives their own
+                     * independent charge, which the line below still says out loud.
+                     */}
+                    <AlloyMultiSelect
+                        aria-label="Applies to"
+                        testId="addcharge-target"
+                        placeholder="Choose who receives this charge"
+                        values={
+                            controls.unifiedTarget.householdSelected
+                                ? [ADDCHARGE_HOUSEHOLD_VALUE]
+                                : controls.unifiedTarget.selectedChildIds
+                        }
+                        options={[
+                            ...(controls.unifiedTarget.householdOffered
+                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true }]
+                                : []),
+                            ...controls.unifiedTarget.children.map((c) => ({ value: c.id, label: c.label })),
+                        ]}
+                        onChange={(next) => {
+                            const target = controls.unifiedTarget!;
+                            if (next.includes(ADDCHARGE_HOUSEHOLD_VALUE)) {
+                                if (!target.householdSelected) target.onSelectHousehold();
+                                return;
+                            }
+                            /*
+                             * Replay the difference through the EXISTING per-child toggle rather
+                             * than setting a list wholesale: that handler owns whatever the grain
+                             * model does on each change, and a surface that bypassed it would be a
+                             * second writer for the same decision.
+                             */
+                            const before = target.householdSelected ? [] : target.selectedChildIds;
+                            for (const id of next) if (!before.includes(id)) target.onToggleChild(id);
+                            for (const id of before) if (!next.includes(id)) target.onToggleChild(id);
+                        }}
+                    />
                     {/*
                      * COLLAPSED TO ONE LINE. The count and the per-child total are the two numbers
                      * an operator checks before committing money, and neither is a chip row.
