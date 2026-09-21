@@ -70,7 +70,23 @@ test("p076 prototype run", async ({ page }) => {
          * the card keys come from. Synthetic identities made the diagnostic ask a question the
          * product never asks.
          */
-        kpiKeys: [...new Set([...document.documentElement.outerHTML.matchAll(/"sourceKey":"([a-z0-9_.]{3,60})"/g)].map((m) => m[1]))],
+        /*
+         * DECODE THE FLIGHT PAYLOAD FIRST.
+         *
+         * This matched `"sourceKey":"..."` against raw `outerHTML`, where the payload is
+         * JSON-ESCAPED as \"sourceKey\":\"...\" — so it never matched, the sampler passed no
+         * KPI keys, and 23 cold samples measured 36 capabilities while reporting themselves as
+         * the complete frame. The parity probe decodes before matching, which is the only reason
+         * it found the keys and this did not.
+         */
+        kpiKeys: (() => {
+            let dec = "";
+            const lit = /self\.__next_f\.push\(\[\d+,("(?:[^"\\]|\\.)*")\]\)/g;
+            const html = document.documentElement.outerHTML;
+            let mm: RegExpExecArray | null;
+            while ((mm = lit.exec(html)) !== null) { try { dec += JSON.parse(mm[1]); } catch { /* skip */ } }
+            return [...new Set([...dec.matchAll(/"sourceKey":"([a-z0-9_.]{3,60})"/g)].map((x) => x[1]))];
+        })(),
         viewIds: [...new Set([...document.querySelectorAll("[data-work-view-id]")]
             .map((el) => el.getAttribute("data-work-view-id") || "").filter(Boolean))],
         cards: [...document.querySelectorAll("article.alloy-os-ucard")]
@@ -78,6 +94,11 @@ test("p076 prototype run", async ({ page }) => {
                 || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
             .filter(Boolean),
     }));
+    if (process.env.P076_SHADOW === "1" && (rendered.kpiKeys.length === 0 || rendered.viewIds.length === 0)) {
+        // An under-configured sample is fatal. Silently measuring 36 of 39 capabilities and
+        // calling the result a complete frame is the failure this guard exists to stop.
+        throw new Error(`p076: incomplete configuration — kpi=${rendered.kpiKeys.length} views=${rendered.viewIds.length}`);
+    }
     if (process.env.P076_SHADOW === "1" && rendered.cards.length === 0) {
         throw new Error("p076: shadow measurement requested but the rendered frame exposed no "
             + "configured cards — refusing to measure a projection with no configuration");
