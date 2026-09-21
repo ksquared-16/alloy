@@ -30,22 +30,25 @@ test("p076 prototype run", async ({ page }) => {
         return {
             customerMember: [...grab("customer_member_id"), ...grab("customerMemberId")],
             customer: [...grab("customer_id"), ...grab("customerId")],
+            workUnit: [...grab("work_unit_id"), ...grab("workUnitId"), ...grab("hostWorkUnitId")],
         };
     });
 
     const memberId = ids.customerMember[0] ?? null;
     const customerId = ids.customer[0] ?? null;
+    const workUnitId = ids.workUnit[0] ?? null;
     if (!memberId || !customerId) {
         console.log(`[proto] ${JSON.stringify({ error: "ids_not_found", ids })}`);
         return;
     }
 
-    const discover = process.env.P076_DISCOVER === "1" ? "&discover=1" : "";
-    await page.evaluate((d) => { (window as unknown as { __p076discover?: string }).__p076discover = d; }, discover);
+    const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
+        + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
+    await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);
     for (let i = 0; i < n; i++) {
         const out = await page.evaluate(async ([mid, cid]) => {
             const t0 = performance.now();
-            const res = await fetch(`/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}${(window as unknown as {__p076discover?:string}).__p076discover ?? ""}`, { credentials: "include" });
+            const res = await fetch(`/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}${(window as unknown as {__p076extra?:string}).__p076extra ?? ""}`, { credentials: "include" });
             const wall = Math.round(performance.now() - t0);
             const body = await res.json().catch(() => null);
             return { status: res.status, clientWallMs: wall, body };
