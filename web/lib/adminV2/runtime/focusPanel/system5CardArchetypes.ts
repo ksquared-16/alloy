@@ -34,6 +34,8 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     // A list whose length varies — the weekdays worked, and the exceptions on the
     // books. A profile archetype would promise a fixed set of labelled fields.
     staff_availability: "collection",
+    // The same archetype as the case-grain readiness answer, so the two look alike.
+    staff_readiness: "status",
     attendance: "timeline",
     financials: "summary",
     health_safety: "status",

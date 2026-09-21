@@ -413,6 +413,9 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      * operator goes from there.
      */
     availability: () => null,
+    // Readiness resolves no destination: it is a verdict about a record, not a
+    // queue position, and the record itself is where an operator acts.
+    readiness: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {

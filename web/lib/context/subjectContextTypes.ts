@@ -66,6 +66,15 @@ export type SubjectContextKind =
      */
     | "availability"
     /**
+     * Whether this staff member is operationally ready, and what needs attention.
+     *
+     * A sibling of the other three staff contexts, and the only one that owns no
+     * facts of its own — it reads the others. Listing it beside them is honest: an
+     * operator asking "can she work this week" is asking a different question from
+     * "what does she hold".
+     */
+    | "readiness"
+    /**
      * The record's OWN information — "Child", and eventually "Person".
      *
      * Listed BESIDE the other contexts rather than framing them. That is the whole correction: a

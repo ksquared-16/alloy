@@ -8,6 +8,7 @@ import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import EmploymentCard from "@/components/admin/focusPanel/cards/EmploymentCard";
 import StaffAvailabilityCard from "@/components/admin/focusPanel/cards/StaffAvailabilityCard";
+import StaffReadinessCard from "@/components/admin/focusPanel/cards/StaffReadinessCard";
 import StaffQualificationsCard from "@/components/admin/focusPanel/cards/StaffQualificationsCard";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
@@ -194,6 +195,13 @@ export default function FocusPanelCardRenderer({
     // Qualifications reads its own state for the person's OPEN employment. A separate component
     // because it is a separate question on a separate clock — see the card key's comment.
     // Availability answers a third question on a third clock — its own component.
+    // Readiness is a projection over the other three — its own component, because
+    // it fetches a server-side verdict rather than deriving one locally.
+    if (model.key === "staff_readiness") {
+        return (
+            <StaffReadinessCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
     if (model.key === "staff_availability") {
         return (
             <StaffAvailabilityCard
