@@ -119,10 +119,25 @@ needing a model.
 | explicit absence/detail | missing | missing | — | proposed shape: `absence: { offered, label? }` |
 | configuration-supplied value | missing | missing | — | owner exists (Financials charge templates); bridge missing |
 
-**"Certified" here means:** authored through the same `updateField` path the inspector calls, accepted
-by `validateFormSchema`, and — for the condition — agreed with by the runtime's own
-`evaluateFieldVisibility`. It does **not** yet mean a human has clicked through the Studio; that is
-the next step, and the walkthrough is in the run summary.
+**"Certified" here means** the configuration was authored, saved through the real product versioning
+path, reloaded from the product, and read back intact — on a throwaway fixture Form, since certifying
+on Admissions or a participant packet would be using live paperwork as disposable test state.
+
+Read back from the product after save and reload:
+
+```
+gender        option_set_key "person_gender" · static_options absent · bound customer_member.gender
+first day     date · bound enrollment.start_date
+age           derived age_from_date_of_birth · source dob · as of first_day
+sibling list  visibility all[ siblings eq true ]
+```
+
+And after editing each one back and re-saving, **none of the previous configuration survived**:
+vocabulary gone and the inline list restored, binding gone, derivation gone, condition gone. A
+configuration that lingers after an administrator removes it is worse than one that never saved.
+
+It does **not** yet mean a human has clicked through the Studio. That is the next step; the
+walkthrough is in the run summary.
 
 ## What the inspector now asks
 
