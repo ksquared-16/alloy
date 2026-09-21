@@ -257,6 +257,9 @@ export async function composeProvisioningAnswerForRoute(input: {
                 const cards = await projectFocusPanelCardProducers({
                     supabase,
                     orgId,
+                    // Same origin as every other offset in `overlapDiag`, so producer `end` can be
+                    // compared with `compose_end_offset_ms` to name the residual tail's owner.
+                    timingOriginMs: tInner,
                     access: gate.access,
                     /*
                      * The producers' declared input is already this narrowed shape — not a full
@@ -438,6 +441,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                       return projectFocusPanelCardProducers({
                           supabase,
                           orgId: gate.orgId,
+                          timingOriginMs: tInner,
                           // The route's OWN resolved authority — the same canonical bundle the
                           // endpoint uses.
                           access: gate.access,

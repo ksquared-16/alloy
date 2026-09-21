@@ -191,6 +191,14 @@ export type RouteTimingMarks = {
             attendance_ms: number | null;
             health_ms: number | null;
             financials_build_ms: number | null;
+            /**
+             * Start/end of each producer, from the COMPOSE origin (see `producerClock`).
+             *
+             * This is what makes the residual tail attributable: the owner is the producer whose
+             * `end` is latest, and the tail it owns is `end - compose_end_offset_ms`. Durations
+             * cannot answer that, because a late start and a long run look identical in a duration.
+             */
+            offsets?: Partial<Record<ProducerSpanName, { at: number; end: number }>>;
         };
         /**
          * INSIDE `financials_build_ms`, which Slice 12D measured deployed as the producer long pole
@@ -287,12 +295,27 @@ type ProducerSpanName = "financials_gate_ms" | "attendance_ms" | "health_ms" | "
  * Inert when the flag is off: `time()` then returns the caller's promise untouched, adding no clock
  * read and no allocation to the product path.
  */
-export function producerClock(): {
+export function producerClock(originMs?: number): {
     time: <T>(name: ProducerSpanName, run: () => Promise<T>) => Promise<T>;
     spans: () => Partial<Record<ProducerSpanName, number>>;
+    offsets: () => Partial<Record<ProducerSpanName, { at: number; end: number }>>;
 } {
     const enabled = routeTimingEnabled();
     const out: Partial<Record<ProducerSpanName, number>> = {};
+    const off: Partial<Record<ProducerSpanName, { at: number; end: number }>> = {};
+    /*
+     * THE ORIGIN IS THE COMPOSE'S, NOT THE CLOCK'S (P0-7.6 — producer-tail ownership).
+     *
+     * Durations alone cannot say who owns the residual tail: three producers that each took 200 ms
+     * are indistinguishable from one that started 200 ms late, and only the one still running at
+     * composition end is on the critical path. Offsets are therefore measured from the SAME origin
+     * the overlap block uses (`tInner`), so `end` is directly comparable to `compose_end_offset_ms`
+     * and `early_end_offset_ms` without reconciling two clocks.
+     *
+     * Falls back to clock creation when no origin is passed, which keeps the spans self-consistent
+     * but NOT comparable across blocks — callers that need attribution must pass the origin.
+     */
+    const origin = originMs ?? (enabled ? performance.now() : 0);
     return {
         time: <T>(name: ProducerSpanName, run: () => Promise<T>): Promise<T> => {
             if (!enabled) return run();
@@ -300,15 +323,21 @@ export function producerClock(): {
             // `finally` rather than `then`: a producer that rejects still consumed the time, and
             // `allSettled` will surface the rejection — swallowing it here would hide a real fault.
             return run().finally(() => {
-                out[name] = Math.round(performance.now() - started);
+                const ended = performance.now();
+                out[name] = Math.round(ended - started);
+                off[name] = { at: Math.round(started - origin), end: Math.round(ended - origin) };
             });
         },
         spans: () => out,
+        offsets: () => off,
     };
 }
 
 /** Merge the producer spans into the request's existing `route_compose_spans`, never replacing it. */
-export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, number>>): void {
+export function recordProducerSpans(
+    spans: Partial<Record<ProducerSpanName, number>>,
+    offsets?: Partial<Record<ProducerSpanName, { at: number; end: number }>>,
+): void {
     if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
     try {
         const { marks } = routeTimingCollector();
@@ -318,6 +347,7 @@ export function recordProducerSpans(spans: Partial<Record<ProducerSpanName, numb
             attendance_ms: spans.attendance_ms ?? null,
             health_ms: spans.health_ms ?? null,
             financials_build_ms: spans.financials_build_ms ?? null,
+            ...(offsets ? { offsets } : {}),
         };
         // The outer compose records `route_compose_spans` AFTER the producers finish, so the object
         // may not exist yet. Stashing the producers now and letting the outer record merge would be

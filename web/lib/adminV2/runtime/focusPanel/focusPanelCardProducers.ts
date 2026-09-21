@@ -137,6 +137,14 @@ export async function projectFocusPanelCardProducers(input: {
      * the fact it asked for would invite the next producer to invent its own channel.
      */
     access: AdminAccessContextSuccess;
+    /**
+     * The compose clock's origin, so producer offsets share the overlap block's frame.
+     *
+     * DIAGNOSTIC ONLY and optional: absent, the producer clock falls back to its own creation and
+     * the spans stay self-consistent but are not comparable with `compose_end_offset_ms`. Callers
+     * that want the residual tail ATTRIBUTED must pass it — see `producerClock`.
+     */
+    timingOriginMs?: number;
 }): Promise<FocusPanelCardProducerResults> {
     const { supabase, orgId, context, access } = input;
 
@@ -206,7 +214,7 @@ export async function projectFocusPanelCardProducers(input: {
      * `forbidden` (the gate said no) from `unavailable` (there is no account), which are different
      * answers and must not collapse into one.
      */
-    const clock = producerClock();
+    const clock = producerClock(input.timingOriginMs);
     const [attendance, health, financials] = await Promise.allSettled([
         customerMemberId
             ? clock.time("attendance_ms", () =>
@@ -275,7 +283,7 @@ export async function projectFocusPanelCardProducers(input: {
             : Promise.resolve(null),
     ]);
 
-    recordProducerSpans(clock.spans());
+    recordProducerSpans(clock.spans(), clock.offsets());
 
     return {
         attendance:
