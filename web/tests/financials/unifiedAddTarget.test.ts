@@ -28,10 +28,24 @@ const target = () => {
 
 describe("Household is explicit, and never an absence", () => {
     it("is its own control with its own value", () => {
+        /*
+         * The PRESENTATION moved — the radio and its sibling checkboxes are now one canonical
+         * `AlloyMultiSelect`, so this no longer looks for `type="radio"`. The RULE did not move,
+         * and is what is asserted: Household is carried by a value of its own, it is offered as a
+         * real option, and `householdSelected` still decides whether it is chosen.
+         *
+         * Its mutual exclusivity with the children is now enforced by the primitive rather than by
+         * this surface, and is locked at that primitive in `alloyMultiSelectGrammar.test.ts` —
+         * where the rule is decided — plus `operatorModelConvergence.test.ts` for the wiring that
+         * declares it here.
+         */
         const cmd = src(CMD);
-        expect(cmd).toContain("data-addcharge-target-household");
-        expect(cmd).toContain('type="radio"');
+        expect(cmd).toContain("ADDCHARGE_HOUSEHOLD_VALUE");
+        expect(cmd).toMatch(/const ADDCHARGE_HOUSEHOLD_VALUE = "__household__"/);
+        expect(cmd).toMatch(/value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true/);
         expect(cmd).toContain("householdSelected");
+        /* An absence must never be the household: no branch may treat an empty list as Household. */
+        expect(strip(cmd)).not.toMatch(/length === 0[\s\S]{0,80}onSelectHousehold/);
     });
 
     it("selecting it clears every child", () => {

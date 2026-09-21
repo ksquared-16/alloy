@@ -33,6 +33,10 @@
  */
 
 import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import {
+    deriveAccountChargeLedgerRows, reversalBySourceChargeId,
+    type AccountChargeLedgerRow,
+} from "@/lib/financials/account/accountChargeLedger";
 import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
@@ -1413,17 +1417,24 @@ async function buildFinancialsCardVMInner(
      * `status <> 'void'` and `correction_kind = 'reversal'` are the same predicate the database's
      * unique index uses, so the card and the constraint agree on what a live reversal is.
      */
-    const reversalBySource = new Map<string, string>();
-    for (const c of charges) {
-        const sourceId = t(c.source_charge_id);
-        const kind = t(((c.metadata ?? {}) as Record<string, unknown>).correction_kind);
-        if (sourceId && kind === "reversal" && t(c.status) !== "void") {
-            reversalBySource.set(sourceId, t(c.id));
-        }
-    }
+    const reversalBySource = reversalBySourceChargeId(charges);
+
+    /*
+     * THE RECONCILIATION-RELEVANT DERIVATIONS COME FROM THEIR CANONICAL OWNER.
+     *
+     * Period, category and lifecycle used to be decided here, inline, and the first-order runtime
+     * could reach `reconcileRows` but not these — so a second consumer would have had to re-derive
+     * what a period is and when a draft is "scheduled". They now come from
+     * `deriveAccountChargeLedgerRows`, which both surfaces call, and this mapper layers its
+     * PRESENTATION on top: GL account, template label, subject name, reduction provenance.
+     */
+    const canonicalByChargeId = new Map(
+        deriveAccountChargeLedgerRows(charges, today).map((r) => [r.chargeId, r]),
+    );
 
     const rows: FinancialsLedgerRow[] = charges.map((c) => {
-        const categoryKey = t(c.charge_category) || t(c.charge_type) || "one_time";
+        const canonical = canonicalByChargeId.get(t(c.id))!;
+        const categoryKey = canonical.categoryKey;
         const metadata = (c.metadata ?? {}) as Record<string, unknown>;
         const mappingKey =
             t(metadata.gl_mapping_key)
@@ -1431,7 +1442,7 @@ async function buildFinancialsCardVMInner(
             || "";
         const account = mappingKey ? accountByMappingKey.get(mappingKey) ?? null : null;
         const placement = placeInBillingPeriod(c);
-        const status = t(c.status);
+        const status = canonical.status;
         const billableOn = t(c.billable_on) || null;
         const agreementId = t(c.billable_source_id);
         const subjectMemberId = memberByAgreement.get(agreementId) ?? null;
@@ -1442,7 +1453,7 @@ async function buildFinancialsCardVMInner(
         return {
             chargeId: t(c.id),
             date: billableOn ?? t(c.occurs_on) ?? t(c.service_date) ?? null,
-            periodKey: placement.key,
+            periodKey: canonical.periodKey,
             periodBasis: placement.basis,
             subjectMemberId,
             subjectName: subjectMemberId ? nameByMember.get(subjectMemberId) ?? null : null,
@@ -1452,16 +1463,7 @@ async function buildFinancialsCardVMInner(
             amountCents,
             currencyCode: t(c.currency_code) || "USD",
             status,
-            lifecycleStatus:
-                status === "void"
-                    ? "void"
-                    : status !== "draft"
-                      ? reversedByChargeId
-                          ? "reversed"
-                          : "posted"
-                      : billableOn && billableOn > today
-                        ? "scheduled"
-                        : "draft",
+            lifecycleStatus: canonical.lifecycleStatus,
             correctsChargeId,
             correctionKind,
             reversedByChargeId,
@@ -1474,7 +1476,7 @@ async function buildFinancialsCardVMInner(
             appliedCents: 0,
             outstandingCents: amountCents,
             offersPayment: false,
-            dueDate: t(c.due_date) || null,
+            dueDate: canonical.dueDate,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
             /* Filled in below, once the responsibility read has answered. Absent until then. */
@@ -2018,7 +2020,15 @@ export function isPostedMoney(lifecycleStatus: FinancialsLedgerRow["lifecycleSta
  * which is a different statement from "we cannot say" and is the honest one now that we can.
  */
 export function reconcileRows(
-    rows: readonly FinancialsLedgerRow[],
+    /*
+     * The CANONICAL reconciliation input, not this card's presentation row.
+     *
+     * `FinancialsLedgerRow` structurally satisfies `AccountChargeLedgerRow`, so this card keeps
+     * passing its own richer rows unchanged while the first-order runtime passes the narrow ones
+     * its reader produces. One implementation of the arithmetic, two shapes of caller — rather
+     * than a second reconciliation written against a second row type.
+     */
+    rows: readonly AccountChargeLedgerRow[],
     periodKey: string,
     _today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
@@ -2080,11 +2090,11 @@ export function reconcileRows(
  * record; how much is outstanding is read from them.
  */
 export function pastDueFor(
-    rows: readonly FinancialsLedgerRow[],
+    rows: readonly AccountChargeLedgerRow[],
     today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
 ): FinancialsPastDue | null {
-    const outstanding = (r: FinancialsLedgerRow): number =>
+    const outstanding = (r: AccountChargeLedgerRow): number =>
         r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
     const overdue = rows.filter(
         (r) =>

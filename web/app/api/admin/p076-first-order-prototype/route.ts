@@ -12,6 +12,8 @@ import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendan
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
+import { composeFirstOrderWorkUnitProjection } from "@/lib/runtime/firstOrder/composeFirstOrderWorkUnitProjection";
+import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
@@ -428,8 +430,67 @@ export async function GET(req: NextRequest) {
         };
     }
 
+    /*
+     * SHADOW EXECUTION of the real Stage-1 composer.
+     *
+     * Runs BESIDE the product path and renders nothing: the existing Work Unit answer stays
+     * authoritative, this is not a fallback, and no client state is touched.
+     *
+     * CONFIGURATION IS PASSED IN, not resolved here. The caller reads the configured card keys off
+     * the RENDERED frame, so the composer is exercised against the configuration the operator
+     * actually has rather than one a diagnostic invented — and this route does not acquire a
+     * second opinion about what is configured.
+     */
+    const shadowCards = (req.nextUrl.searchParams.get("cards") ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+    let shadow: Record<string, unknown> | null = null;
+    if (shadowCards.length && workUnitId) {
+        const kpis = Number(req.nextUrl.searchParams.get("kpis") ?? "0") || 0;
+        const views = Number(req.nextUrl.searchParams.get("views") ?? "0") || 0;
+        const started = performance.now();
+        try {
+            const r = await composeFirstOrderWorkUnitProjection({
+                supabase, orgId, workUnitId, viewerId: access.userId,
+                customerMemberId: memberId, householdId: customerId,
+                /*
+                 * The published surface is RESOLVED, not asserted. `resolveFirstOrderSurfaceConfiguration`
+                 * reads each card's configured collapsed fields and falls back to the card's own
+                 * registry declaration — so this diagnostic exercises the same compile path the
+                 * product would, rather than a card list with the fields implied.
+                 */
+                configuration: resolveFirstOrderSurfaceConfiguration({
+                    cardKeys: shadowCards,
+                    kpiKeys: Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
+                    workViewIds: Array.from({ length: views }, (_, i) => `view_${i}`),
+                    siteScopeId: null,
+                }),
+                // Request-time decisions, resolved by this route's own gate. The composer never
+                // decides authorization itself.
+                authority: { financialsRead: true, healthView: true },
+            });
+            const p = r.projection;
+            shadow = {
+                outerWallMs: Math.round(performance.now() - started),
+                timing: r.timing,
+                geometry: p.geometry,
+                configurationIdentity: p.configurationIdentity,
+                queueRowCount: p.queueRows.state === "known" ? p.queueRows.value.length : null,
+                queueRowsState: p.queueRows.state,
+                cardStates: Object.fromEntries(Object.entries(p.cards).map(([k, c]) => [k, {
+                    insight: c.insight.state,
+                    facts: Object.fromEntries(Object.entries(c.facts).map(([fk, f]) => [fk, f.state === "known" ? { state: f.state, value: f.value } : { state: f.state }])),
+                }])),
+                kpiStates: Object.fromEntries(Object.entries(p.kpiValues).map(([k, f]) => [k, f.state])),
+                workViewStates: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [k, f.state])),
+                serializedBytes: new TextEncoder().encode(JSON.stringify(p)).length,
+            };
+        } catch (e) {
+            shadow = { error: String(e).slice(0, 200) };
+        }
+    }
+
     return NextResponse.json({
         ok: true,
+        shadow,
         prepaid,
         dag,
         parity,

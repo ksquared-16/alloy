@@ -172,3 +172,31 @@
   min-width: 11rem;
   max-width: 18rem;
 }
+
+/*
+ * Multi-select rows carry a checkmark gutter, so the labels align whether or not a row is
+ * selected and the eye can run down the column of ticks. Everything else — surface, elevation,
+ * active and selected treatment — is inherited from the single-select rules above, because it is
+ * the same control answering a different question.
+ */
+.alloy-select__option--check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alloy-select__check {
+  flex: 0 0 auto;
+  width: 12px;
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+  color: var(--alloy-os-accent, #1f7a52);
+}
+
+.alloy-select__option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

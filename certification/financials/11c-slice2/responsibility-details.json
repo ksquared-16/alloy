@@ -1,0 +1,36 @@
+{
+  "filterPresent": 1,
+  "gearPresent": 1,
+  "geometry": {
+    "verticalDelta": 0,
+    "horizontalGap": 6
+  },
+  "prepaid": {
+    "availablePrepaid": "AVAILABLE PREPAID $125.00",
+    "balance": "BALANCE $1,412.87",
+    "heldNamed": false,
+    "depositNamed": false,
+    "prepaidGear": 0
+  },
+  "payerRow": {
+    "present": true,
+    "text": "PAYMENT METHODS Add card Add bank account No payment method on file.",
+    "providerStateStated": false,
+    "belowCommandRow": true,
+    "deadLinks": 0
+  },
+  "gearAccessibleName": "Manage responsibility",
+  "gearFocused": "BUTTON(\"Manage responsibility\")",
+  "panel": {
+    "opened": true,
+    "scopeControls": 1,
+    "householdNamed": true,
+    "text": "STAGING — NOT PRODUCTION 9+ 6 ⌘K All locations ▾ QS Enrollment Pipeline 0 Needs attention 6 Overdue work 20 Pipeline Children Actions (2) ▶ New 3 Active Pipeline 0 Registration 3 Waitlist 16 Tours 0 All 7 Enrolled children 2 Filters ▼ PRESCHOOL 1 C Certb Certhouse Enrolled Certb (3y11m) 3w 1 child ▼ SCHOOL AGE 1 C Certa Certhouse Enrolled Certa (5y5m) 3w 1 child CC Certb Certhouse Enrolled North Campus Manage ▾ Work Activity ENROLLMENT Lead Aug 26 Tour Decision Sep 18 Waitlist Enrolling Enrolled Sep 18 CC Certa CC Certb LEAD No current work configured · Post-enrollment follow-up. Recent activity 4 ▾ FINANCIALS $1,450.00 past due September 2026 CURRENT BALANCE $1,412.87 DUE $1,912.00 PAST DUE $1,450.00 RESPONSIBILITY $1,487.87 PAID $75.00 AVAILABLE PREPAID $125.00 Cert Certhouse $36.00 No method on file Payment Add All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾"
+  },
+  "scopeOptions": [
+    "Household — the whole account",
+    "Certa Certhouse",
+    "Certb Certhouse"
+  ],
+  "focusAfterEscape": "BODY"
+}

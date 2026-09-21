@@ -83,7 +83,14 @@ describe("dismissal returns to the same Details state", () => {
         const handler = card.slice(0, card.indexOf("<FinancialsResponsibilityPanel"));
         expect(handler).toContain('e.key !== "Escape"');
         expect(handler, "and it stops there").toContain("e.stopPropagation()");
-        expect(handler).toContain("setManageOpen(false)");
+        /*
+         * The handler closes the card. It now does so through `closeManage`, which ALSO returns
+         * focus to the gear — measured on deployed 9675a76be, dismissing the card dropped focus to
+         * <body> and a keyboard operator restarted from the top of the page. Asserted as the
+         * effect (a close path runs) rather than as the name of a setState call, so the rule
+         * survives the next refactor of how closing is spelled.
+         */
+        expect(handler).toMatch(/close\w*\(\)|setManageOpen\(false\)/);
         /* It can only receive the key if focus is inside it. */
         expect(src(PANEL)).toContain("tabIndex={-1}");
     });

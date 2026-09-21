@@ -93,6 +93,16 @@ export type FirstOrderConfigurationIdentity = {
     readonly kpiKeys: readonly string[];
     /** Configured Work View ids, in order. */
     readonly workViewIds: readonly string[];
+    /**
+     * Each configured card's first-order semantic keys, IN CONFIGURED ORDER.
+     *
+     * Card membership alone cannot identify a frame. Two frames can agree on six cards and
+     * disagree about what those cards say, and a projection answering for the wrong field set is
+     * as stale as one answering for the wrong cards — it just fails less visibly, as a region
+     * that renders the previous tenant's choice. Order is carried because field order is
+     * configured presentation and a reorder is a different frame.
+     */
+    readonly cardFields: Readonly<Record<string, readonly string[]>>;
     /** The scope the frame was composed under; a site change is a different frame. */
     readonly siteScopeId: string | null;
 };
@@ -105,6 +115,15 @@ export type FirstOrderConfigurationIdentity = {
  */
 export type FirstOrderGeometry = {
     readonly cardOrder: readonly string[];
+    /**
+     * Reserved field slots per card, in configured order.
+     *
+     * Geometry has to include this or a card cannot reserve its regions: knowing a Financials
+     * card is second tells the frame nothing about how many lines it will occupy. It is derived
+     * from CONFIGURATION, never from which providers happened to resolve — a slow read must
+     * change when a value arrives, never whether its space exists.
+     */
+    readonly cardFieldSlots: Readonly<Record<string, readonly string[]>>;
     readonly kpiSlotCount: number;
     readonly workViewCount: number;
 };
@@ -159,6 +178,11 @@ export function projectionMatchesConfiguration(
     if (!same(a.cardKeys, current.cardKeys)) return { matches: false, reason: "card membership or order changed" };
     if (!same(a.kpiKeys, current.kpiKeys)) return { matches: false, reason: "KPI membership or order changed" };
     if (!same(a.workViewIds, current.workViewIds)) return { matches: false, reason: "Work View membership or order changed" };
+    for (const cardKey of current.cardKeys) {
+        if (!same(a.cardFields[cardKey] ?? [], current.cardFields[cardKey] ?? [])) {
+            return { matches: false, reason: `field membership or order changed on card "${cardKey}"` };
+        }
+    }
     if (a.siteScopeId !== current.siteScopeId) return { matches: false, reason: "site scope changed" };
     return { matches: true };
 }
