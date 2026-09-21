@@ -4435,6 +4435,12 @@
                 "reason": "Reads one employment's availability pattern, its exceptions and the resolved answer for a day. The org comes from the session, the employment is checked to belong to it before anything is read, and the handler writes nothing. Reads of a staff record's own operational facts are not gated anywhere in this estate; gating this one would invent a read boundary the product does not have."
             }
         },
+    "app/api/admin/staff-readiness/route.ts": {
+            "GET": {
+                "status": "none",
+                "reason": "Derives one employment's readiness from facts the caller may already read. The org comes from the session, the employment is checked to belong to it before anything is evaluated, and the handler writes nothing - readiness has no storage. Reads of a staff record's own operational state are not gated anywhere in this estate."
+            }
+        },
     "app/api/admin/staff-qualification-config/route.ts": {
       "GET": {
         "status": "none",

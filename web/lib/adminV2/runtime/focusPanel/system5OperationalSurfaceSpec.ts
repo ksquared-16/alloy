@@ -33,6 +33,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     // status each needs before the status wraps under the label.
     staff_qualifications: "wide",
     staff_availability: "wide",
+    staff_readiness: "wide",
     attendance: "wide",
     financials: "wide",
     health_safety: "wide",
@@ -97,6 +98,8 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     staff_qualifications: "BadgeCheck",
     // The clock glyph: the subject is when, not who.
     staff_availability: "CalendarClock",
+    // Reuses the readiness glyph the platform already associates with the question.
+    staff_readiness: "ShieldCheck",
     attendance: "Clock",
     financials: "DollarSign",
     health_safety: "HeartPulse",

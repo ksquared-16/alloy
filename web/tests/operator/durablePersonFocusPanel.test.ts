@@ -258,7 +258,7 @@ describe("card applicability is declared per card, not switched centrally", () =
      * The assertion is updated rather than loosened. An exact list is what makes an accidental
      * widening visible, and this test earned its keep by failing the moment the grain changed.
      */
-    it("the person grain selects Staff, Qualifications, Availability and Assignments", () => {
+    it("the person grain selects Staff, Qualifications, Availability, Readiness and Assignments", () => {
         /*
          * `staff_qualifications` is the third, and it arrived the same way `scheduling` did — by
          * DECLARATION, not by a central switch. The list stays exact for the reason above: an
@@ -268,7 +268,7 @@ describe("card applicability is declared per card, not switched centrally", () =
          * composer reads. Qualifications is declared immediately after Staff because the two are
          * read together.
          */
-        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "scheduling"]);
+        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
         // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
@@ -284,7 +284,7 @@ describe("card applicability is declared per card, not switched centrally", () =
         // `staff` and `staff_qualifications` join it: a person-grain card is legitimately not
         // case-grain. The invariant the test guards is unchanged — no card that WAS case-grain
         // silently stopped being one.
-        expect(excluded).toEqual(["staff", "staff_qualifications", "staff_availability", "child_identity"]);
+        expect(excluded).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "child_identity"]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -302,7 +302,7 @@ describe("card applicability is declared per card, not switched centrally", () =
             subject: staffSubject(),
             canMutate: true,
         });
-        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability"]);
+        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness"]);
         // No empty shell pretending applicability.
         expect(model.cardReadiness.has("current_work")).toBe(false);
         expect(model.cardReadiness.has("household")).toBe(false);
@@ -365,7 +365,7 @@ describe("card applicability is declared per card, not switched centrally", () =
 });
 
 describe("default composition varies by grain", () => {
-    it("person composes Staff, Qualifications and Availability, all visible", () => {
+    it("person composes Staff, Qualifications, Availability and Readiness, all visible", () => {
         /*
          * This asserted exactly one card for as long as Employment was the only canonical Person
          * truth. Qualifications is the second, and it had to be earned TWICE to appear here — once
@@ -373,8 +373,8 @@ describe("default composition varies by grain", () => {
          * Either alone is inert, which is the friction the composition module documents.
          */
         const composition = focusPanelDefaultCompositionForGrain("person");
-        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability"]);
-        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible"]);
+        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness"]);
+        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible", "visible"]);
         // Side by side, not stacked: two six-column areas on the same row. A qualification that
         // expires is not something an operator should have to scroll to.
         expect(composition.map((e) => e.area)).toEqual([
@@ -383,6 +383,9 @@ describe("default composition varies by grain", () => {
             // Availability takes the full width beneath them: a week of windows reads
             // as a row of days, and six columns would wrap every one.
             { colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 3 },
+            // Readiness reads LAST: it summarises the three above it, so an operator
+            // sees the verdict after the facts it derives from.
+            { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
         ]);
     });
 

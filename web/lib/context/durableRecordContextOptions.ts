@@ -112,6 +112,8 @@ const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = [
      * she WILL work is a schedule, and that is a different authority.
      */
     "availability",
+    // A canonical card about the record, like the three above it.
+    "readiness",
 ];
 
 export type DurableRecordContextOption = {
