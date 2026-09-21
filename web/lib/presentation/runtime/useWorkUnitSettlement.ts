@@ -44,13 +44,10 @@ import {
 } from "./useWorkViewTotals";
 import {
     announceWorkViewTotalsOwner,
+    buildPublishedWorkViewTotalsSeed,
     clearWorkViewTotalsPublication,
     publishWorkViewTotals,
 } from "./workViewTotalsPublication";
-import {
-    buildConfiguredViewSignature,
-    emptyWorkViewTotalsSpans,
-} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { isKnownOipMetricKey } from "@/lib/metrics/registry";
@@ -235,26 +232,14 @@ export function useWorkUnitSettlement(
             return;
         }
         publishWorkViewTotals({
-            seed: {
-                status: "resolved",
-                identity: {
-                    orgId: settlementOrgId,
-                    hostWorkUnitId: workUnitId,
-                    selectedSiteId: siteId ?? null,
-                    configuredViewSignature: buildConfiguredViewSignature(targets.map((t) => t.viewId)),
-                },
-                totals: targets.map((t) => {
-                    const count = totalsState.totals.get(workViewTotalKey(t.workUnitId, t.viewId));
-                    return {
-                        workUnitId: t.workUnitId,
-                        queueKey: t.baseQueueKey,
-                        workViewId: t.viewId,
-                        count: typeof count === "number" ? count : null,
-                        known: typeof count === "number",
-                    };
-                }),
-                spans: emptyWorkViewTotalsSpans(),
-            },
+            seed: buildPublishedWorkViewTotalsSeed({
+                targets,
+                totals: totalsState.totals,
+                keyOf: workViewTotalKey,
+                orgId: settlementOrgId,
+                hostWorkUnitId: workUnitId,
+                selectedSiteId: siteId ?? null,
+            }),
             orgId: settlementOrgId,
             hostWorkUnitId: workUnitId,
         });

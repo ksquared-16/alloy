@@ -27,6 +27,7 @@ vi.mock("@/lib/presentation/runtime/fetchQueueViewTotalsBatched", () => ({
 
 import {
     announceWorkViewTotalsOwner,
+    buildPublishedWorkViewTotalsSeed,
     clearWorkViewTotalsPublication,
     getWorkViewTotalsPublication,
     getWorkViewTotalsPublicationServerSnapshot,
@@ -275,5 +276,131 @@ describe("the publication is a carrier, not a second evaluator", () => {
         act(() => publishWorkViewTotals({ seed: seedFor(VIEWS), orgId: ORG, hostWorkUnitId: HOST }));
         act(() => announceWorkViewTotalsOwner()); // a re-render of the owner
         expect(getWorkViewTotalsPublication().phase).toBe("settled");
+    });
+});
+
+describe("the REAL owner is wired, not just the fixture", () => {
+    /*
+     * WHY THESE EXIST. The ordering gates above model the owner with a fixture component. That is
+     * right for testing ORDER, but it means a defect planted in the real `useWorkUnitSettlement`
+     * changes nothing those gates run — four planted defects (never publish, never announce,
+     * never clear, UNKNOWN becomes zero) all stayed green against the fixture. A stand-in for the
+     * owner cannot catch the owner breaking, so the real wiring is pinned here directly.
+     */
+    const OWNER = (() => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { readFileSync } = require("node:fs") as typeof import("node:fs");
+        const { join } = require("node:path") as typeof import("node:path");
+        const raw = readFileSync(join(process.cwd(), "lib/presentation/runtime/useWorkUnitSettlement.ts"), "utf8");
+        return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+    })();
+
+    it("ANNOUNCES IN RENDER PHASE — not in an effect", () => {
+        /*
+         * The announcement must precede the nav's effects. Moving it into an effect would put it
+         * back in the same ordering race that made the peek fail, and every gate above would
+         * still pass because the fixture announces during render.
+         */
+        expect(OWNER).toContain("announceWorkViewTotalsOwner();");
+        expect(OWNER).not.toMatch(/useEffect\([^)]*announceWorkViewTotalsOwner/);
+    });
+
+    it("PUBLISHES its resolved totals", () => {
+        expect(OWNER).toContain("publishWorkViewTotals(");
+        expect(OWNER).toContain("buildPublishedWorkViewTotalsSeed(");
+        // From the RESOLVED totals, so the evaluator's own fetch is the single canonical fallback.
+        expect(OWNER).toContain("totals: totalsState.totals");
+    });
+
+    it("PUBLISHES NULL ONLY WHEN IT GENUINELY HAS NOTHING — otherwise two owners fetch", () => {
+        /*
+         * If the owner published null while still having fetched its own totals, BOTH it and the
+         * nav would issue a request: two logical fallback owners for one question. Request dedupe
+         * would hide that in production, which is exactly why it is pinned at the source instead.
+         * The null branch must stay guarded by a real "nothing to share" condition.
+         */
+        expect(OWNER).toContain("if (targets.length === 0 || !settlementOrgId || !workUnitId) {");
+        expect(OWNER).not.toMatch(/if\s*\(true\)\s*\{[\s\S]{0,200}?publishWorkViewTotals/);
+    });
+
+    it("CLEARS the claim when it leaves the route", () => {
+        // Without this the next route's nav could observe the previous work unit's counts.
+        expect(OWNER).toContain("useEffect(() => clearWorkViewTotalsPublication, []);");
+    });
+});
+
+describe("the published answer is built correctly", () => {
+    const keyOf = (w: string, v: string) => `${w}|${v}`;
+
+    it("PRESERVES UNKNOWN — a missing count is null/known:false, never zero", () => {
+        const seed = buildPublishedWorkViewTotalsSeed({
+            targets: [
+                { viewId: "view-a", workUnitId: HOST, baseQueueKey: "lane" },
+                { viewId: "view-b", workUnitId: HOST, baseQueueKey: "lane" },
+            ],
+            // view-b is absent from the map entirely: the owner does not know its count.
+            totals: new Map<string, number | null>([[keyOf(HOST, "view-a"), 0]]),
+            keyOf,
+            orgId: ORG,
+            hostWorkUnitId: HOST,
+            selectedSiteId: null,
+        });
+        const rows = seed.status === "resolved" ? seed.totals : [];
+        // A known zero stays zero; an unknown stays unknown. Collapsing them is the classic defect.
+        expect(rows).toEqual([
+            { workUnitId: HOST, queueKey: "lane", workViewId: "view-a", count: 0, known: true },
+            { workUnitId: HOST, queueKey: "lane", workViewId: "view-b", count: null, known: false },
+        ]);
+    });
+
+    it("an explicit null count is UNKNOWN, not zero", () => {
+        const seed = buildPublishedWorkViewTotalsSeed({
+            targets: [{ viewId: "view-a", workUnitId: HOST, baseQueueKey: "lane" }],
+            totals: new Map<string, number | null>([[keyOf(HOST, "view-a"), null]]),
+            keyOf,
+            orgId: ORG,
+            hostWorkUnitId: HOST,
+            selectedSiteId: null,
+        });
+        const rows = seed.status === "resolved" ? seed.totals : [];
+        expect(rows[0]).toEqual({
+            workUnitId: HOST,
+            queueKey: "lane",
+            workViewId: "view-a",
+            count: null,
+            known: false,
+        });
+    });
+
+    it("states the scope it was resolved for", () => {
+        const seed = buildPublishedWorkViewTotalsSeed({
+            targets: [{ viewId: "view-a", workUnitId: HOST, baseQueueKey: "lane" }],
+            totals: new Map(),
+            keyOf,
+            orgId: ORG,
+            hostWorkUnitId: HOST,
+            selectedSiteId: "site-9",
+        });
+        expect(seed.status === "resolved" && seed.identity).toEqual({
+            orgId: ORG,
+            hostWorkUnitId: HOST,
+            selectedSiteId: "site-9",
+            configuredViewSignature: "view-a",
+        });
+    });
+});
+
+describe("configuration identity binds content, not size", () => {
+    it("A DIFFERENT VIEW OF THE SAME SIGNATURE LENGTH IS STILL REFUSED", () => {
+        /*
+         * "view-a" and "view-b" produce signatures of IDENTICAL length. A matcher that compared
+         * cardinality or string length instead of identity would accept one configuration's counts
+         * for another whenever the sizes happened to line up — and a fixture whose two cases
+         * differ in length would never notice.
+         */
+        act(() => publishWorkViewTotals({ seed: seedFor(["view-a"]), orgId: ORG, hostWorkUnitId: HOST }));
+        const h = mount(createElement(Nav, { views: ["view-b"] }));
+        expect(decisions("sidebar")).toEqual(["fetching"]);
+        h.unmount();
     });
 });

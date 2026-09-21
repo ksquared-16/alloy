@@ -37,7 +37,11 @@
  */
 
 import { createWarmCache } from "@/lib/runtime/warmCache";
-import type { WorkViewTotalsSeed } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
+import {
+    buildConfiguredViewSignature,
+    emptyWorkViewTotalsSpans,
+    type WorkViewTotalsSeed,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 
 /**
  * `absent`  — no Work Unit owner announced for this route; an observer must fall back NOW.
@@ -104,6 +108,48 @@ export function publishWorkViewTotals(value: {
  */
 export function clearWorkViewTotalsPublication(): void {
     publication.invalidate();
+}
+
+/**
+ * Build the owner's published answer from the totals it resolved.
+ *
+ * Extracted from the owner hook so it can be gated directly. A planted defect here — a null count
+ * turned into a confident zero, say — was invisible while this logic lived inline in a hook that
+ * no test drove: the ordering suite modelled the owner with a fixture, so mutating the real
+ * implementation changed nothing it ran. A fixture standing in for the real owner cannot catch
+ * the real owner breaking.
+ *
+ * `known` is the whole contract: UNKNOWN must arrive as UNKNOWN. A known zero (`count: 0,
+ * known: true`) is a different, authoritative answer and stays zero.
+ */
+export function buildPublishedWorkViewTotalsSeed(args: {
+    targets: readonly { viewId: string; workUnitId: string; baseQueueKey: string }[];
+    totals: ReadonlyMap<string, number | null>;
+    keyOf: (workUnitId: string, viewId: string) => string;
+    orgId: string;
+    hostWorkUnitId: string;
+    selectedSiteId: string | null;
+}): WorkViewTotalsSeed {
+    return {
+        status: "resolved",
+        identity: {
+            orgId: args.orgId,
+            hostWorkUnitId: args.hostWorkUnitId,
+            selectedSiteId: args.selectedSiteId,
+            configuredViewSignature: buildConfiguredViewSignature(args.targets.map((t) => t.viewId)),
+        },
+        totals: args.targets.map((t) => {
+            const count = args.totals.get(args.keyOf(t.workUnitId, t.viewId));
+            return {
+                workUnitId: t.workUnitId,
+                queueKey: t.baseQueueKey,
+                workViewId: t.viewId,
+                count: typeof count === "number" ? count : null,
+                known: typeof count === "number",
+            };
+        }),
+        spans: emptyWorkViewTotalsSpans(),
+    };
 }
 
 export function subscribeWorkViewTotalsPublication(listener: () => void): () => void {
