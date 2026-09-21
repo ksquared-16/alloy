@@ -407,6 +407,12 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      * naming a unit anyway would be the fabricated route this resolver exists to refuse.
      */
     qualifications: () => null,
+    /*
+     * Availability resolves no destination either: a standing intent is not a queue
+     * position. The context ranks and displays, and the person's record is where an
+     * operator goes from there.
+     */
+    availability: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {

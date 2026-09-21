@@ -184,6 +184,18 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * put a credential on the same plane as attendance.
      */
     { key: "staff_qualifications", title: "Qualifications", grains: ["person"] },
+    /*
+     * AVAILABILITY — "when can this Staff member work?"
+     *
+     * Person grain, and like Qualifications it is askable nowhere else: a case
+     * panel shows a linked contact's employment as display, and when that person
+     * can work is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. Canvas elevation is for cards
+     * that own the operating day; availability is a standing intent, and elevating
+     * it would put "could work Tuesdays" on the same plane as who is here now.
+     */
+    { key: "staff_availability", title: "Availability", grains: ["person"] },
     { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".

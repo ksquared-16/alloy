@@ -201,6 +201,22 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
         encodedSpan: 1,
         encodedDensity: "standard",
     },
+    {
+        /*
+         * The third person-grain card, earned the same way the second was: declared
+         * for the grain AND placed here. On a person who has never been employed it
+         * renders nothing, so it cannot become an empty shell asserting a working
+         * relationship that does not exist.
+         */
+        key: "staff_availability",
+        tier: "reference",
+        visibility: "visible",
+        // Beneath the two above, full width: a week of windows reads as a row of
+        // days, and squeezing it into six columns would wrap every one of them.
+        area: { colStart: 1, colSpan: 12, rowStart: 4, rowSpan: 3 },
+        encodedSpan: 2,
+        encodedDensity: "standard",
+    },
 ];
 
 /**

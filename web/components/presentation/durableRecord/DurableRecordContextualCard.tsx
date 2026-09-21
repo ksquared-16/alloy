@@ -52,6 +52,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import {
+    derivePersonAvailabilityCard,
     derivePersonQualificationsCard,
     derivePersonStaffCard,
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
@@ -397,6 +398,29 @@ export default function DurableRecordContextualCard({
                     // Tab-pane drill navigation, which a contextual card has no tabs for. The
                     // renderer requires it; pure cards ignore it.
                     compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "availability" && subject.kind === "staff") {
+            /*
+             * The same card the person panel composes — one component, one answer.
+             * It reads its own state from the employment in this context and resolves
+             * against the organisation's day server-side, so the two surfaces cannot
+             * come to disagree about when someone can work.
+             */
+            if (!cardAppliesToGrain("staff_availability", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_availability"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonAvailabilityCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );

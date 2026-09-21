@@ -174,6 +174,34 @@ export function derivePersonQualificationsCard(
     };
 }
 
+/**
+ * THE AVAILABILITY CARD MODEL — a content-free shell, like Qualifications.
+ *
+ * The component addresses its own read and resolves the answer against the
+ * organisation's day server-side. Deriving a summary here would be a second
+ * resolver for one question, and it would be stale the morning an exception took
+ * effect.
+ */
+export function derivePersonAvailabilityCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_availability";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Availability",
+        insight: employment ? "Reading availability…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
 export type DerivePersonFocusPanelCardsInput = {
     employment: OperationalEmploymentSignal | null;
 };
@@ -199,6 +227,11 @@ export function derivePersonFocusPanelCards(
     // already declares for `person`.
     if (cardAppliesToGrain("staff_qualifications", "person")) {
         cards.set("staff_qualifications", derivePersonQualificationsCard(input.employment));
+    }
+    // When they can work is a third question on a third clock — a separate model,
+    // gated by the registry exactly as the other two are.
+    if (cardAppliesToGrain("staff_availability", "person")) {
+        cards.set("staff_availability", derivePersonAvailabilityCard(input.employment));
     }
     return cards;
 }

@@ -58,6 +58,14 @@ export type SubjectContextKind =
      */
     | "qualifications"
     /**
+     * When this staff member can work.
+     *
+     * A sibling of `employment` and `qualifications`, not a section of either.
+     * Whether Jane works here, what she is cleared to do, and when she can be asked
+     * are three facts about the same person that change independently.
+     */
+    | "availability"
+    /**
      * The record's OWN information — "Child", and eventually "Person".
      *
      * Listed BESIDE the other contexts rather than framing them. That is the whole correction: a
