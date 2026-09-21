@@ -82,8 +82,27 @@ function store(opts: { arrangement?: Row | null; method?: Row | null; merchant?:
     };
     const updates: Array<{ table: string; patch: Row }> = [];
 
+    /*
+     * STRICT ON PURPOSE (W4 boundary).
+     *
+     * An unexpected table is an error rather than an empty result, which is what makes "Autopay
+     * never touches held money" a PROVEN claim instead of a stated one: if the handler ever read or
+     * wrote `payment_holds`, `payment_hold_dispositions` or `payments`, every case below would fail
+     * loudly rather than quietly returning nothing and passing.
+     */
+    const ALLOWED = new Set([
+        "payment_autopay_arrangements",
+        "payment_methods",
+        "payment_provider_merchants",
+        "scheduled_work",
+    ]);
+
+    const touched = new Set<string>();
+
     const client = {
         from(table: string) {
+            if (!ALLOWED.has(table)) throw new Error(`autopay must not touch ${table}`);
+            touched.add(table);
             const filters: Array<(r: Row) => boolean> = [];
             let kind: "select" | "update" = "select";
             let patch: Row = {};
@@ -114,7 +133,7 @@ function store(opts: { arrangement?: Row | null; method?: Row | null; merchant?:
             return self;
         },
     };
-    return { client: client as never, updates, tables };
+    return { client: client as never, updates, tables, touched };
 }
 
 const ctx = (over: Partial<ScheduledWorkContext> = {}): ScheduledWorkContext => ({
@@ -404,6 +423,31 @@ describe("Payments' own retry policy is bounded three separate ways", () => {
         expect(out.nextDueAt).toBeNull();
         expect(s.updates.some((u) => u.patch.status === "failed")).toBe(true);
         expect((collect as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(0);
+    });
+});
+
+describe("the W4 boundary", () => {
+    /*
+     * Held money is W4's, and Autopay owns none of those economics. It may not release a hold,
+     * consume one, or treat held money as available prepaid — so it must not reach those tables at
+     * all. The store above throws on any table outside the four this handler legitimately reads,
+     * which is what makes this case meaningful rather than decorative.
+     */
+    it("collects without reading or writing any held-money table", async () => {
+        const s = store();
+        const out = await evaluateAutopayOccurrence(ctx(), {
+            supabase: s.client, now: NOW, collect: collectorOk(),
+            resolveCollectible: collectibleOf([{ chargeId: "chg-1", outstandingCents: 50_000 }]),
+        });
+        expect(out.diagnostic?.collected).toBe(true);
+        /*
+         * The tables ACTUALLY reached, not the ones the fixture happens to hold. The first version
+         * of this asserted `Object.keys(s.tables)`, which is fixed at construction and would have
+         * passed even if the handler had read every hold in the database.
+         */
+        expect([...s.touched].sort()).toEqual([
+            "payment_autopay_arrangements", "payment_methods", "payment_provider_merchants",
+        ]);
     });
 });
 
