@@ -40,6 +40,7 @@ import {
     participantConversationGroup,
     type ParticipantConversationGroup,
 } from "@/lib/enrollment/participantRuntime/participantConversationGroup";
+import { participantPersonLabels } from "@/lib/enrollment/participantRuntime/participantPersonLabel";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -440,6 +441,11 @@ function collectedRecord(
     const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
     const childName = (subjectName ?? "").trim().split(/\s+/)[0] ?? null;
     const policy = enrollmentConfirmationPolicy();
+    const personLabels = participantPersonLabels({
+        parties: objective.parties,
+        slots: objective.party_slots,
+        needs: objective.needs.needs,
+    });
     return collectedAnswers(objective.needs.needs).flatMap((member) => {
         const need = byKey.get(member.need_key);
         if (!need) return [];
@@ -450,6 +456,7 @@ function collectedRecord(
             allNeeds: objective.needs.needs,
             requiresConfirmation: policy,
             childName,
+            personLabels,
         });
         return [{ ref, label, value, editor, group: group ? { key: group.key, title: group.title } : null }];
     });
@@ -681,6 +688,11 @@ export function participantObjectiveWireModel(
                 allNeeds: objective.needs.needs,
                 requiresConfirmation: enrollmentConfirmationPolicy(),
                 childName: (subjectName ?? "").trim().split(/\s+/)[0] ?? null,
+                personLabels: participantPersonLabels({
+                    parties: objective.parties,
+                    slots: objective.party_slots,
+                    needs: objective.needs.needs,
+                }),
             }),
             party: turn.party
                 ? {

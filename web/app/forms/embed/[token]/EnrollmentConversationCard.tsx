@@ -617,7 +617,9 @@ function CollectedAnswers({
     onCancel: () => void;
     onSave: (ref: string, value: unknown) => void;
 }) {
-    const [open, setOpen] = useState(false);
+    const [openAll, setOpenAll] = useState(false);
+    /** One chapter opened on its own. Local: reviewing is not a turn and changes no question. */
+    const [openChapter, setOpenChapter] = useState<string | null>(null);
 
     /*
      * Chapters in the order the parent met them, which is the order the runtime handed them over.
@@ -641,9 +643,61 @@ function CollectedAnswers({
     }, [collected]);
 
     if (collected.length === 0) return null;
+
     // An edit in progress always shows its own row, whichever state the record is in.
-    const editingHere = collected.some((f) => f.ref === editingRef);
-    const expanded = open || editingHere;
+    const editingChapter = editingRef
+        ? (chapters.find((c) => c.facts.some((f) => f.ref === editingRef))?.key ?? null)
+        : null;
+    const shownChapters =
+        openAll ? chapters
+        : (openChapter ?? editingChapter)
+            ? chapters.filter((c) => c.key === (openChapter ?? editingChapter))
+            : [];
+    const expanded = shownChapters.length > 0;
+
+    const factRows = (chapter: (typeof chapters)[number]) => (
+        <dl className="mt-1 space-y-1">
+            {chapter.facts.map((fact) => (
+                <div
+                    key={fact.ref}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                    data-participant-collected-fact={fact.ref}
+                >
+                    <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
+                    <span aria-hidden className="text-alloy-midnight/15">·</span>
+                    {editingRef === fact.ref ? (
+                        <dd className="w-full">
+                            <StructuredFactEditor
+                                editor={fact.editor}
+                                label={fact.label}
+                                initial={fact.value}
+                                busy={busy}
+                                onSave={(value) => onSave(fact.ref, value)}
+                                onCancel={onCancel}
+                            />
+                        </dd>
+                    ) : (
+                        <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
+                            <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
+                            {justUpdated.has(fact.ref) ? (
+                                <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                    Updated
+                                </span>
+                            ) : null}
+                            <button
+                                type="button"
+                                onClick={() => onEdit(fact.ref)}
+                                disabled={busy}
+                                className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                            >
+                                Edit
+                            </button>
+                        </dd>
+                    )}
+                </div>
+            ))}
+        </dl>
+    );
 
     return (
         <section className="px-0.5" data-participant-collected={collected.length}>
@@ -652,51 +706,11 @@ function CollectedAnswers({
             </p>
 
             {expanded ? (
-                <div className="mt-1.5 space-y-3" data-participant-collected-state="expanded">
-                    {chapters.map((chapter) => (
+                <div className="mt-1.5 space-y-3" data-participant-collected-state={openAll ? "all" : "chapter"}>
+                    {shownChapters.map((chapter) => (
                         <div key={chapter.key} data-participant-collected-chapter={chapter.key}>
                             <p className="text-[11px] font-medium text-alloy-midnight/35">{chapter.title}</p>
-                            <dl className="mt-1 space-y-1">
-                                {chapter.facts.map((fact) => (
-                                    <div
-                                        key={fact.ref}
-                                        className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
-                                        data-participant-collected-fact={fact.ref}
-                                    >
-                                        <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
-                                        <span aria-hidden className="text-alloy-midnight/15">·</span>
-                                        {editingRef === fact.ref ? (
-                                            <dd className="w-full">
-                                                <StructuredFactEditor
-                                                    editor={fact.editor}
-                                                    label={fact.label}
-                                                    initial={fact.value}
-                                                    busy={busy}
-                                                    onSave={(value) => onSave(fact.ref, value)}
-                                                    onCancel={onCancel}
-                                                />
-                                            </dd>
-                                        ) : (
-                                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
-                                                <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
-                                                {justUpdated.has(fact.ref) ? (
-                                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
-                                                        Updated
-                                                    </span>
-                                                ) : null}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onEdit(fact.ref)}
-                                                    disabled={busy}
-                                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
-                                                >
-                                                    Edit
-                                                </button>
-                                            </dd>
-                                        )}
-                                    </div>
-                                ))}
-                            </dl>
+                            {factRows(chapter)}
                         </div>
                     ))}
                 </div>
@@ -708,11 +722,27 @@ function CollectedAnswers({
                             className="flex flex-wrap items-baseline gap-x-2"
                             data-participant-collected-chapter={chapter.key}
                         >
-                            <dt className="text-[12px] text-alloy-midnight/30">{chapter.title}</dt>
-                            <span aria-hidden className="text-alloy-midnight/15">·</span>
+                            <dt className="min-w-0 flex-1 text-[12px] text-alloy-midnight/30">{chapter.title}</dt>
                             <dd className="text-[13px] text-alloy-midnight/50">
                                 {chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}
                             </dd>
+                            {/*
+                              * REVIEW OPENS ONE GROUP.
+                              *
+                              * "Review all answers" was the only way in, so a parent who wanted to fix
+                              * their own phone number opened every answer they had ever given. This
+                              * opens that person, or that topic, and nothing else. It is local state:
+                              * no turn is taken, and the question the conversation is asking does not
+                              * move.
+                              */}
+                            <button
+                                type="button"
+                                data-participant-collected-review={chapter.key}
+                                onClick={() => { setOpenChapter(chapter.key); setOpenAll(false); }}
+                                className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine"
+                            >
+                                Review →
+                            </button>
                         </div>
                     ))}
                 </dl>
@@ -720,11 +750,14 @@ function CollectedAnswers({
 
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
-                data-participant-collected-toggle={expanded ? "collapse" : "review"}
+                onClick={() => {
+                    if (expanded) { setOpenAll(false); setOpenChapter(null); onCancel(); }
+                    else { setOpenAll(true); setOpenChapter(null); }
+                }}
+                data-participant-collected-toggle={expanded ? "collapse" : "review-all"}
                 className="mt-1.5 text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine"
             >
-                {expanded ? "Hide answers" : "Review all answers →"}
+                {expanded ? "Back to the summary" : "Review all answers →"}
             </button>
         </section>
     );
@@ -1525,6 +1558,26 @@ export function EnrollmentConversationCard({
         if (optionalUnanswered && skipLabel) {
             suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
         }
+    } else if (control.kind === "boolean") {
+        /*
+         * A BOOLEAN IS A BOOLEAN WHETHER OR NOT THE FORM INSISTS ON IT.
+         *
+         * This branch sat BELOW the optional one, which is the same defect the options branch
+         * carries a comment about and was fixed for: a question the school wrote as yes/no and
+         * marked optional — "Is there anything else you would like us to know about your child?" —
+         * offered "Nothing to add" and "Yes — I'll tell you", and the second of those reveals the
+         * authored control as a TEXT box. So the only authored boolean on this packet that is not
+         * required was the one question that could never be answered with a button.
+         *
+         * Optionality is about whether an answer is REQUIRED, never about what shape it takes.
+         */
+        suggestionKind = "boolean";
+        suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
+        suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
+        // Leaving it blank stays available, beside the two answers rather than instead of them.
+        if (optionalUnanswered && skipLabel) {
+            suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
+        }
     } else if (optionalUnanswered && skipLabel && affirmLabel) {
         suggestionKind = "optional";
         suggestions.push({
@@ -1544,10 +1597,6 @@ export function EnrollmentConversationCard({
             label: affirmLabel,
             onSelect: () => setElaborating(true),
         });
-    } else if (control.kind === "boolean") {
-        suggestionKind = "boolean";
-        suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
-        suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
     } else if (skipLabel && elaborating) {
         suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
     }

@@ -29,6 +29,7 @@ import type {
     StructuredCandidate,
 } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { looksLikeParticipantQuestion } from "@/lib/enrollment/participantRuntime/participantQuestionShape";
+import { normalizeBooleanInput } from "@/lib/enrollment/participantRuntime/normalizeParticipantValue";
 
 /** Unambiguous affirmations only. Anything hedged falls through to clarification. */
 const AFFIRMATIVE = new Set([
@@ -156,6 +157,29 @@ export function interpretParticipantResponseDeterministically(
      * "actually she was born 5/6/21" is still refused, because a date need is not free text. What
      * is admitted is the case where the parent answered the question they were asked.
      */
+    /*
+     * YES AND NO ARE THE WHOLE ANSWER TO A YES/NO QUESTION.
+     *
+     * The free-text rule below refuses anything that is not a free-text control, and it is right to:
+     * a date or a choice carries a shape the words would have to be PARSED into. A boolean carries
+     * no shape. There are two answers, the vocabulary for them is already owned by
+     * `normalizeBooleanInput`, and nothing is extracted — "yeah" is not evidence ABOUT the answer,
+     * it is the answer.
+     *
+     * Without this, an authored boolean could only ever be answered by pressing a button. The
+     * surface deliberately shows no composer on a boolean turn, so this is not the parent's usual
+     * path; it is the one that has to work when the buttons are not how the words arrived — a
+     * dictated reply, an assistive client, a resumed draft. A question answerable two ways that
+     * accepts only one of them is a dead end for whoever is on the other side.
+     */
+    if (input.turn.kind === "collect_missing_value" && answersBoolean(input.turn)) {
+        const decided = normalizeBooleanInput(input.text);
+        if (decided.kind === "normalized" && typeof decided.value === "boolean") {
+            return { kind: "corrected_value", value: decided.value };
+        }
+        // Anything else about a yes/no question is conversation, and falls through to clarification.
+    }
+
     if (input.turn.kind === "collect_missing_value" && acceptsWholeText(input.turn)) {
         const spoken = (input.text ?? "").trim();
         if (spoken && !isUnambiguousAffirmation(normalized) && !NEGATIVE.has(normalized)) {
@@ -165,6 +189,18 @@ export function interpretParticipantResponseDeterministically(
 
     // Anything else is natural language this layer does not pretend to parse.
     return { kind: "clarification_needed" };
+}
+
+/**
+ * Is every destination behind this need an authored yes/no?
+ *
+ * Same test shape as `acceptsWholeText` and the same reason: one need can fill several controls, so
+ * a boolean answer is only the answer when EVERY one of them is a boolean.
+ */
+function answersBoolean(turn: ParticipantTurn): boolean {
+    const occurrences = turn.need?.occurrences ?? [];
+    if (occurrences.length === 0) return false;
+    return occurrences.every((o) => o.field_type === "boolean" || o.field_type === "checkbox");
 }
 
 /**

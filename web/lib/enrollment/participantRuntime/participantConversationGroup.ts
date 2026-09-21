@@ -35,6 +35,7 @@
 import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
 import { confirmationSubjectFor } from "@/lib/enrollment/participantRuntime/confirmationGroup";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
+import { personSlotKey, type ParticipantPersonLabel } from "@/lib/enrollment/participantRuntime/participantPersonLabel";
 import {
     traversalContext,
     traversalPlacement,
@@ -70,6 +71,13 @@ export function participantConversationGroup(input: {
     readonly requiresConfirmation: ReadonlySet<string>;
     /** The child's familiar name, for their own block. */
     readonly childName: string | null;
+    /**
+     * Who each numbered slot is about, keyed `role#ordinal` — see `participantPersonLabel`.
+     *
+     * Optional so every existing caller keeps the numbered titles exactly as they were; supplying
+     * it is what turns "Guardian #1" into "Kelly Kurzman · Primary contact".
+     */
+    readonly personLabels?: ReadonlyMap<string, ParticipantPersonLabel>;
 }): ParticipantConversationGroup | null {
     const need = input.need;
     if (!need) return null;
@@ -93,6 +101,18 @@ export function participantConversationGroup(input: {
                 .filter((s) => s.kind === "person" && s.entity_type === role)
                 .map((s) => s.ordinal ?? 1),
         );
+        /*
+         * A PERSON, WHERE THE PLATFORM KNOWS ONE.
+         *
+         * "Guardian #1" names a box on a page. The moment a real person is behind it — canonically,
+         * or because the family has just typed their name into this slot's own name box — the block
+         * is called by that person's name and their own relationship. The numbered form remains for
+         * a slot nobody has filled yet, which is the only case where the position IS the identity.
+         */
+        const identity = input.personLabels?.get(personSlotKey(role, subject.ordinal ?? 1));
+        if (identity?.name) {
+            return { key: placement.blockKey, title: `${identity.name} · ${identity.role_label}` };
+        }
         const title = peers.size > 1 ? `${base} #${subject.ordinal ?? 1}` : base;
         return { key: placement.blockKey, title };
     }

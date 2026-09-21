@@ -38,7 +38,11 @@ import {
     outstandingRequiredEvidence,
     type ParticipantEvidenceObligation,
 } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
-import { artifactSlotsForProjection } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
+import {
+    artifactPartySlots,
+    artifactSlotsForProjection,
+    type PartySlotDestination,
+} from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
@@ -71,6 +75,13 @@ export type ParticipantEnrollmentObjective = {
     readonly parties: readonly ChildParty[];
     /** Household people not yet related to this child — the reuse offer. */
     readonly party_candidates: readonly ChildParty[];
+    /**
+     * Every numbered person destination the pinned artifacts print, with its attribute.
+     *
+     * Carried so presentation can say WHO a block is about rather than which box it is. Destinations,
+     * never people: the people are `parties`, and the projection between them is the owner's.
+     */
+    readonly party_slots: readonly PartySlotDestination[];
 };
 
 export type ParticipantEnrollmentObjectiveResult =
@@ -106,6 +117,8 @@ function buildParticipantObjective(
      */
     const parties = context?.parties ?? [];
     const partySlots = (context?.forms ?? []).flatMap((f) => artifactSlotsForProjection(f.schema, []));
+    // The same destinations at ATTRIBUTE grain — which box holds the name, the phone, the address.
+    const partySlotDestinations = (context?.forms ?? []).flatMap((f) => artifactPartySlots(f.schema, []));
     const partyOffer: PartyOffer | null = context
         ? nextPartyOffer({ parties, slots: partySlots, declines: context.partyDeclines ?? {} })
         : null;
@@ -114,6 +127,7 @@ function buildParticipantObjective(
         outstanding_evidence,
         parties,
         party_candidates: context?.candidates ?? [],
+        party_slots: partySlotDestinations,
         process_instance_id: progress.process_instance_id,
         session_id: needs.session_id,
         business_process_revision_id: progress.business_process_revision_id,
