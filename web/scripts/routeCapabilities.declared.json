@@ -2292,6 +2292,14 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/needs-recognition/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments W3. Seeing which provider-confirmed collections Alloy has not recognized is an ordinary Financials read; recognizing one is a registered action behind fin.write. The route exposes no provider reference as row identity."
+      }
+    },
     "app/api/admin/financials/overview-metrics/route.ts": {
       "GET": {
         "status": "declared",
@@ -2304,6 +2312,14 @@
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/payment-methods/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments W2. Reading what a family has on file is an ordinary Financials read; adding, defaulting and removing a method are registered actions behind fin.write. The route returns brand, last four, expiry, rail and state and holds no credential to expose."
       }
     },
     "app/api/admin/financials/position/route.ts": {
@@ -2321,23 +2337,28 @@
         "reason": "Payments W1. Reading whether this organization can accept payments is an ordinary Financials read; connecting, refreshing and disconnecting are registered actions behind fin.provider because they decide where money settles."
       }
     },
-    "app/api/admin/financials/payment-methods/route.ts": {
+    "app/api/admin/financials/reduction-forecast/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "Payments W2. Reading what a family has on file is an ordinary Financials read; adding, defaulting and removing a method are registered actions behind fin.write. The route returns brand, last four, expiry, rail and state and holds no credential to expose."
+        "helper": "assertFinancialsReadAllowed"
       }
     },
-    "app/api/admin/financials/needs-recognition/route.ts": {
+    "app/api/admin/financials/responsibility-arrangement/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "Payments W3. Seeing which provider-confirmed collections Alloy has not recognized is an ordinary Financials read; recognizing one is a registered action behind fin.write. The route exposes no provider reference as row identity."
+        "helper": "assertFinancialsReadAllowed"
       }
     },
     "app/api/admin/financials/responsibility-candidates/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/responsibility-scopes/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
@@ -3489,6 +3510,12 @@
         "helper": "requireAnalyticsManageAccess"
       }
     },
+    "app/api/admin/p076-first-order-prototype/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "P0-7.6 read-DAG prototype. DIAGNOSTIC, not a product surface: it answers 404 unless ALLOY_ROUTE_TIMING=1, and behind that flag it is admitted by the ordinary request-time admin gate (getAdminAccessContextCached) and returns 403 without it. It reads nothing the caller's own Work Unit page does not already read, creates no state, and carries no capability of its own because it grants no capability -- it times repaired READ SHAPES over the same tables with the same filters. Remove with the prototype."
+      }
+    },
     "app/api/admin/payments/[id]/route.ts": {
       "PATCH": {
         "status": "declared",
@@ -4430,17 +4457,11 @@
       }
     },
     "app/api/admin/staff-availability/route.ts": {
-            "GET": {
-                "status": "none",
-                "reason": "Reads one employment's availability pattern, its exceptions and the resolved answer for a day. The org comes from the session, the employment is checked to belong to it before anything is read, and the handler writes nothing. Reads of a staff record's own operational facts are not gated anywhere in this estate; gating this one would invent a read boundary the product does not have."
-            }
-        },
-    "app/api/admin/staff-readiness/route.ts": {
-            "GET": {
-                "status": "none",
-                "reason": "Derives one employment's readiness from facts the caller may already read. The org comes from the session, the employment is checked to belong to it before anything is evaluated, and the handler writes nothing - readiness has no storage. Reads of a staff record's own operational state are not gated anywhere in this estate."
-            }
-        },
+      "GET": {
+        "status": "none",
+        "reason": "Reads one employment's availability pattern, its exceptions and the resolved answer for a day. The org comes from the session, the employment is checked to belong to it before anything is read, and the handler writes nothing. Reads of a staff record's own operational facts are not gated anywhere in this estate; gating this one would invent a read boundary the product does not have."
+      }
+    },
     "app/api/admin/staff-qualification-config/route.ts": {
       "GET": {
         "status": "none",
@@ -4457,6 +4478,12 @@
       "GET": {
         "status": "none",
         "reason": "Composed qualification state for ONE employment, as attendance/card is for one child. Org comes from the session, the employment is re-resolved against it so another tenant's employment answers not_found, and the handler writes nothing - every mutation goes through the registered staff_qualification.* commands, so this route cannot become a second write path."
+      }
+    },
+    "app/api/admin/staff-readiness/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Derives one employment's readiness from facts the caller may already read. The org comes from the session, the employment is checked to belong to it before anything is evaluated, and the handler writes nothing - readiness has no storage. Reads of a staff record's own operational state are not gated anywhere in this estate."
       }
     },
     "app/api/admin/staff/directory/route.ts": {
@@ -5257,27 +5284,6 @@
       "POST": {
         "status": "none",
         "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
-      }
-    },
-    "app/api/admin/financials/reduction-forecast/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
-      }
-    },
-    "app/api/admin/financials/responsibility-arrangement/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
-      }
-    },
-    "app/api/admin/financials/responsibility-scopes/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
       }
     }
   },
