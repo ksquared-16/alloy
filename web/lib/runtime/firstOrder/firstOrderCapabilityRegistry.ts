@@ -39,7 +39,42 @@ const needSubject = (
     fn: (truth: Record<string, unknown>) => FirstOrderField<FirstOrderScalar>,
 ): FirstOrderField<FirstOrderScalar> => (ctx.subjectTruth ? fn(ctx.subjectTruth) : unknown<FirstOrderScalar>());
 
-const childRowsOf = (truth: Record<string, unknown>) => normalizeFocusPanelChildrenRowsFromTruth(truth).rows;
+/**
+ * THE CHILDREN OF THIS RECORD — from the enricher's own unified projection.
+ *
+ * ── THE DEFECT THIS REPLACES, FOUND BY LIVE FACT IDENTITY ──
+ *
+ * This read `normalizeFocusPanelChildrenRowsFromTruth`, which resolves
+ * `_inquiry_children ?? _durable_child_rows`. `enrichOpportunityRowsWithChildrenForCompactQueue`
+ * writes `_inquiry_children` only for children seeded from `metadata.inquiry_children`; children
+ * reached through the HOUSEHOLD (`customer_members`) land under `_household_children`. The
+ * normalizer never reads that key, so on the deployed specimen the projection reported
+ * `known(0)` children while the operator's own frame rendered "1 child Specee Specq0913".
+ *
+ * Honest state, wrong fact — which a state-shape oracle passes and only a fact-identity check
+ * catches. It is the third time this programme has produced that shape.
+ *
+ * `_crm_compact_children` is the enricher's UNIFIED answer: both branches populate it, so it is
+ * the one key that means "the children of this queue record" regardless of how they were reached.
+ * That makes it the right source here, and it keeps a single owner — the enricher — rather than
+ * teaching A′ a precedence of its own.
+ */
+const compactChildrenOf = (truth: Record<string, unknown>): Array<Record<string, unknown>> => {
+    const compact = truth._crm_compact_children;
+    return Array.isArray(compact) ? (compact as Array<Record<string, unknown>>) : [];
+};
+
+/**
+ * Children the record carries an ENROLMENT OUTCOME for.
+ *
+ * Only the inquiry roster carries `outcome_status_key`; a child reached through the household is
+ * a household member, not an inquiry participant, and has no outcome to report. So this answers
+ * only when the roster that carries outcomes is present — otherwise the count is genuinely
+ * UNKNOWN, and saying "0 enrolling" about children whose status nobody recorded would be the same
+ * false-fact mistake in a new place.
+ */
+const inquiryChildRowsOf = (truth: Record<string, unknown>) =>
+    normalizeFocusPanelChildrenRowsFromTruth(truth).rows;
 
 const CAPABILITIES: readonly FirstOrderCapability[] = [
     // ── HOUSEHOLD ────────────────────────────────────────────────────────────────────────────
@@ -81,7 +116,7 @@ const CAPABILITIES: readonly FirstOrderCapability[] = [
         grain: "record", prerequisites: ["population", "children_projection"], authorization: "none",
         project: (c) => {
             if (c.childrenRead === false) return unavailable<FirstOrderScalar>("children unavailable");
-            return needSubject(c, (t) => known(childRowsOf(t).length));
+            return needSubject(c, (t) => known(compactChildrenOf(t).length));
         },
     },
     {
@@ -90,7 +125,13 @@ const CAPABILITIES: readonly FirstOrderCapability[] = [
         grain: "record", prerequisites: ["population", "children_projection"], authorization: "none",
         project: (c) => {
             if (c.childrenRead === false) return unavailable<FirstOrderScalar>("children unavailable");
-            return needSubject(c, (t) => known(childRowsOf(t).filter((r) => r.outcome_status_key !== "declined").length));
+            return needSubject(c, (t) => {
+                const withOutcome = inquiryChildRowsOf(t);
+                // No outcome-bearing roster: nobody recorded an enrolment status, so the count is
+                // unknown. Reporting 0 would state a fact about children nobody has assessed.
+                if (withOutcome.length === 0 && compactChildrenOf(t).length > 0) return unknown<FirstOrderScalar>();
+                return known(withOutcome.filter((r) => r.outcome_status_key !== "declined").length);
+            });
         },
     },
 
