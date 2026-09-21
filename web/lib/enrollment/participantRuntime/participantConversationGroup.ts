@@ -124,7 +124,22 @@ export function participantConversationGroup(input: {
         }
         const section = humanizeSection(need.occurrences[0]?.section_title ?? "");
         if (!section) return null;
-        return { key: placement.blockKey, title: section };
+        /*
+         * A CHILD TOPIC LEADS WITH THE CHILD, exactly as a person row leads with the person.
+         *
+         * The section heading alone read as a peer of the people listed beside it, and on this
+         * packet that was actively misleading: "Emergency Contact Information & Authorized Adults"
+         * sat directly under "Marisol Vega · Emergency contact" and held two answers that are about
+         * the CHILD — whether there are custody arrangements, and whether anyone has a restraining
+         * order. A parent scanning that summary would reasonably read them as Marisol's.
+         *
+         * The school's own words are kept, because the parent meets them on the paperwork and
+         * inventing a friendlier name would describe a section they can see with words nobody chose.
+         * What changes is only WHOSE topic it is said to be — `subject · qualifier`, the same
+         * grammar every person row already uses, so no row in the summary is a page location.
+         */
+        const name = (input.childName ?? "").trim();
+        return { key: placement.blockKey, title: name ? `${name} · ${section}` : section };
     }
 
     if (subject.kind === "household") {

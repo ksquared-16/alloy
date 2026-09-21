@@ -200,3 +200,90 @@ describe("a naming box is not always called name", () => {
         expect(labels.get(personSlotKey(slot.role, slot.ordinal))?.name).toBe("Marisol Vega");
     });
 });
+
+/**
+ * THE SUMMARY ROW IS A BUTTON, AND THE COUNT IS HOW YOU KNOW.
+ *
+ * Every row used to carry its own "Review →", so the word appeared once per person and the eye read
+ * a column of the same instruction instead of a list of people. A source-order assertion cannot
+ * prove a click works — the browser certification does that — but it can stop the repeated label
+ * coming back, and it can stop the row reverting to a div with a handler, which is how a control
+ * silently loses its keyboard.
+ */
+describe("the record summary offers one target per row", () => {
+    const source = () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { readFileSync } = require("node:fs") as typeof import("node:fs");
+        return readFileSync(
+            new URL("../../app/forms/embed/[token]/EnrollmentConversationCard.tsx", import.meta.url),
+            "utf8",
+        );
+    };
+
+    /**
+     * The summary block only — the expanded record legitimately keeps its own per-fact controls.
+     *
+     * Comments are stripped first. The block's own prose says "A real <button>, not a div with a
+     * click handler", and counting that as markup made the tag count 2 on correct source: a guard
+     * measuring the explanation instead of the code.
+     */
+    const summaryBlock = () => {
+        const src = source();
+        const from = src.indexOf('data-participant-collected-state="summary"');
+        expect(from).toBeGreaterThan(-1);
+        return src
+            .slice(from, src.indexOf("</ul>", from))
+            .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+    };
+
+    it("says Review once per row at most — as the accessible name, never as visible text", () => {
+        const block = summaryBlock();
+        expect(block).not.toContain(">\n                                Review →");
+        expect(block).toContain("aria-label={`Review ${chapter.title}");
+    });
+
+    it("makes the row itself the control, with ONE real button around the whole row", () => {
+        const block = summaryBlock();
+        /*
+         * Counting the tags, not just their order.
+         *
+         * A first version of this checked that the title appeared after the first `<button`, and a
+         * planted defect that CLOSED the button before the title and opened a second one after it
+         * sailed straight through — the title was still "after a button". One row, one control, so
+         * the honest assertion is that there is exactly one of each tag and nothing closes between
+         * the name and the count.
+         */
+        expect((block.match(/<button/g) ?? []).length).toBe(1);
+        expect((block.match(/<\/button>/g) ?? []).length).toBe(1);
+
+        const open = block.indexOf("<button");
+        const close = block.indexOf("</button>");
+        const title = block.indexOf("{chapter.title}");
+        const count = block.indexOf("answers`}");
+        expect(title).toBeGreaterThan(open);
+        expect(count).toBeGreaterThan(open);
+        expect(title).toBeLessThan(close);
+        expect(count).toBeLessThan(close);
+    });
+
+    it("keeps hover and focus treatment on the row", () => {
+        const block = summaryBlock();
+        expect(block).toContain("hover:bg-");
+        /*
+         * An OUTLINE, not a ring.
+         *
+         * `focus-visible:ring-2` was written first and rendered nothing: measured in Chromium the
+         * row matched `:focus-visible` with `boxShadow` fully transparent, so the row was reachable
+         * by Tab with no visible indicator at all — the exact failure the class was there to
+         * prevent. Every other focusable control on this participant surface uses the outline
+         * utilities, and they work.
+         */
+        expect(block).toContain("focus-visible:outline-2");
+        expect(block).not.toContain("focus-visible:ring");
+    });
+
+    it("keeps Review all answers as the one global action", () => {
+        expect(source()).toContain("Review all answers →");
+    });
+});

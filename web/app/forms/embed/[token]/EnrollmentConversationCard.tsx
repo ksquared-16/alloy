@@ -715,37 +715,47 @@ function CollectedAnswers({
                     ))}
                 </div>
             ) : (
-                <dl className="mt-1.5 space-y-1" data-participant-collected-state="summary">
+                /*
+                 * A LIST OF GROUPS, not a description list. `dt`/`dd` cannot live inside the button
+                 * that now owns the row, and they were the wrong semantics anyway: each row is one
+                 * navigable thing, so it is a list item.
+                 */
+                <ul className="mt-1.5 list-none" data-participant-collected-state="summary">
+                    {/*
+                      * THE ROW IS THE CONTROL.
+                      *
+                      * Every row carried its own "Review →", so the word appeared once per person and
+                      * the eye read a column of the same instruction instead of a list of people. The
+                      * row is one thing — a person, or a topic, and its answers — so the whole row is
+                      * one target, and the count it already had carries the arrow.
+                      *
+                      * A real <button>, not a div with a click handler: tab order, Enter and Space,
+                      * and the focus ring all come from the element rather than from anything this
+                      * file has to remember. It opens the SAME per-group surface as before; nothing
+                      * about reviewing changed except how it is reached.
+                      */}
                     {chapters.map((chapter) => (
-                        <div
-                            key={chapter.key}
-                            className="flex flex-wrap items-baseline gap-x-2"
-                            data-participant-collected-chapter={chapter.key}
-                        >
-                            <dt className="min-w-0 flex-1 text-[12px] text-alloy-midnight/30">{chapter.title}</dt>
-                            <dd className="text-[13px] text-alloy-midnight/50">
-                                {chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}
-                            </dd>
-                            {/*
-                              * REVIEW OPENS ONE GROUP.
-                              *
-                              * "Review all answers" was the only way in, so a parent who wanted to fix
-                              * their own phone number opened every answer they had ever given. This
-                              * opens that person, or that topic, and nothing else. It is local state:
-                              * no turn is taken, and the question the conversation is asking does not
-                              * move.
-                              */}
+                        <li key={chapter.key} data-participant-collected-chapter={chapter.key}>
                             <button
                                 type="button"
                                 data-participant-collected-review={chapter.key}
                                 onClick={() => { setOpenChapter(chapter.key); setOpenAll(false); }}
-                                className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine"
+                                aria-label={`Review ${chapter.title} — ${chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}`}
+                                className="group -mx-1 flex w-[calc(100%+0.5rem)] flex-wrap items-baseline gap-x-2 rounded-md px-1 py-1 text-left transition hover:bg-alloy-stone/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine"
                             >
-                                Review →
+                                <span className="min-w-0 flex-1 text-[12px] text-alloy-midnight/30 group-hover:text-alloy-midnight/55">
+                                    {chapter.title}
+                                </span>
+                                <span className="text-[13px] text-alloy-midnight/50 group-hover:text-alloy-bend-pine">
+                                    {chapter.facts.length === 1 ? "1 answer" : `${chapter.facts.length} answers`}
+                                    <span aria-hidden className="ml-1 text-alloy-midnight/35 group-hover:text-alloy-bend-pine">
+                                        →
+                                    </span>
+                                </span>
                             </button>
-                        </div>
+                        </li>
                     ))}
-                </dl>
+                </ul>
             )}
 
             <button

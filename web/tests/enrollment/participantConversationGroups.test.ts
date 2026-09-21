@@ -83,7 +83,27 @@ describe("what the conversation calls the block it is in", () => {
 
     it("speaks the child's name for their basics and the SCHOOL's heading for a later topic", () => {
         expect(group("c_name")?.title).toBe("Lennon's details");
-        expect(group("h_sleep")?.title).toBe("Health and daily routines");
+        /*
+         * The school's words are still the school's — what changed is WHOSE topic it is said to be.
+         *
+         * Named by the section alone, a child topic read as a peer of the people listed beside it,
+         * and on the real packet that was misleading: "Emergency Contact Information & Authorized
+         * Adults" sat under "Marisol Vega · Emergency contact" and held two answers about the CHILD
+         * — custody arrangements, and whether anyone has a restraining order. Every row now leads
+         * with its subject, which is the same grammar the person rows already used.
+         */
+        expect(group("h_sleep")?.title).toBe("Lennon · Health and daily routines");
+        expect(group("h_sleep")?.title).toContain("Health and daily routines");
+    });
+
+    it("falls back to the bare heading when nothing names the child", () => {
+        const anonymous = participantConversationGroup({
+            need: byField("h_sleep"),
+            allNeeds: needs,
+            requiresConfirmation: enrollmentConfirmationPolicy(),
+            childName: null,
+        });
+        expect(anonymous?.title).toBe("Health and daily routines");
     });
 
     it("is keyed by the traversal's own block, so it changes exactly when the subject does", () => {
