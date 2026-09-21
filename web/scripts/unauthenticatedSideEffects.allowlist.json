@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "W-40 (S-1) — reviewed exemption register for the unauthenticated side-effect check.",
+    "W-40 (S-1) \u2014 reviewed exemption register for the unauthenticated side-effect check.",
     "Enforced by web/scripts/checkUnauthenticatedSideEffects.mjs; locked by",
     "web/tests/access/unauthenticatedSideEffectSender.test.ts (RL-30).",
     "",
@@ -9,12 +9,12 @@
     "Adding one is a security decision. Name the model and cite the line that enforces it.",
     "",
     "The list may only shrink. A stale entry fails the check. The `ratchet` ceiling is",
-    "ENFORCED BY THE CHECK, not only by the lock — over it is a violation, under it is stale,",
+    "ENFORCED BY THE CHECK, not only by the lock \u2014 over it is a violation, under it is stale,",
     "because a ceiling left above a fallen floor hands out that many free exemptions.",
     "",
     "ALL THREE CURRENT ENTRIES ARE THE SAME CLASS, and it is worth stating plainly rather than",
-    "burying in three reasons: they are PUBLIC INTAKE. There is no sender to authenticate — an",
-    "anonymous prospect holds no credential and never will — so S-1's first two legs (signature,",
+    "burying in three reasons: they are PUBLIC INTAKE. There is no sender to authenticate \u2014 an",
+    "anonymous prospect holds no credential and never will \u2014 so S-1's first two legs (signature,",
     "hashed token) do not apply and the invariant's own third leg, 'an explicit, reviewed",
     "exemption', is the correct disposition. What SHOULD bound them is abuse control, which is",
     "`S-2` / `W-35` ('abuse control becomes a declared property', needs `AD-14`) and is NOT BUILT:",
@@ -25,9 +25,10 @@
   "reviewed": "2026-08-11",
   "reviewed_by": "assignment asg_fdf10a529525f5 (mission msn_f74ed02c126c88d7ff, W-40 session 11, 2026-08-11)",
   "ratchet": {
-    "max_unauthenticated_side_effect_routes": 4,
+    "max_unauthenticated_side_effect_routes": 5,
     "history": [
-      "2026-09-15: 3 → 4 for app/api/dev/qa/developer-platform/route.ts, the Developer Platform human-QA backend. Deliberate. Its side effects are the certification fixture's own rows and credentials it revokes in the same call, and the route returns 404 when NODE_ENV is production, so there is no unauthenticated production sender to authenticate. Putting an operator session in front of it would reinstate the manual step the instrument exists to remove."
+      "2026-09-15: 3 \u2192 4 for app/api/dev/qa/developer-platform/route.ts, the Developer Platform human-QA backend. Deliberate. Its side effects are the certification fixture's own rows and credentials it revokes in the same call, and the route returns 404 when NODE_ENV is production, so there is no unauthenticated production sender to authenticate. Putting an operator session in front of it would reinstate the manual step the instrument exists to remove.",
+      "2026-09-21: 4 -> 5 for app/api/scheduled-work/wake, the Governed Scheduled Work clock entry point. Deliberate. The sender is authenticated by machine secret; what it lacks is a credential bound to a row, which a cross-organization scheduler cannot have. Execution is bounded by the code-owned handler registry."
     ]
   },
   "exemptions": [
@@ -39,17 +40,22 @@
     {
       "route": "app/api/leads/gutters/route.ts",
       "model": "public-intake-create",
-      "reason": "Public inbound gutter-lead intake, marked LEGACY_COMPAT in its own header. There is no sender to authenticate. Creates only — a contact upsert plus an opportunity create — so as with vendor-application there is no caller-supplied selector reaching an existing row. It reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, which is why W-4 carries it under `advisory_transitive_only` rather than as an exception; it is a genuine S-1 subject either way. UNBOUNDED: no rate limit, no captcha. W-35's work, and W-15 separately holds the question of whether this legacy route should exist at all."
+      "reason": "Public inbound gutter-lead intake, marked LEGACY_COMPAT in its own header. There is no sender to authenticate. Creates only \u2014 a contact upsert plus an opportunity create \u2014 so as with vendor-application there is no caller-supplied selector reaching an existing row. It reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, which is why W-4 carries it under `advisory_transitive_only` rather than as an exception; it is a genuine S-1 subject either way. UNBOUNDED: no rate limit, no captcha. W-35's work, and W-15 separately holds the question of whether this legacy route should exist at all."
     },
     {
       "route": "app/api/marketing/demo-request/route.ts",
       "model": "public-intake-notify",
-      "reason": "Unauthenticated marketing demo form. POST validates name/organization/email (:22-31) and then POSTs to https://api.resend.com/emails (:45) delivering to the fixed MARKETING_DEMO_INBOX (:4). There is no sender to authenticate. The side effect is OUTBOUND EMAIL, not a database write: the route touches no Supabase client of any kind, which is exactly why W-4's service-client census could never see it — this route is the concrete proof that W-4's subject and S-1's subject are different sets. UNBOUNDED, and specifically: no rate limit, so an anonymous caller can drive arbitrary volume through the org's Resend account to a single inbox; `reply_to` is caller-supplied (:54) and the subject and body embed caller text (:55-62). W-35's work, sized. Also logs the full payload including the submitter's email at :41 — noted for the same lane, not a separate finding."
+      "reason": "Unauthenticated marketing demo form. POST validates name/organization/email (:22-31) and then POSTs to https://api.resend.com/emails (:45) delivering to the fixed MARKETING_DEMO_INBOX (:4). There is no sender to authenticate. The side effect is OUTBOUND EMAIL, not a database write: the route touches no Supabase client of any kind, which is exactly why W-4's service-client census could never see it \u2014 this route is the concrete proof that W-4's subject and S-1's subject are different sets. UNBOUNDED, and specifically: no rate limit, so an anonymous caller can drive arbitrary volume through the org's Resend account to a single inbox; `reply_to` is caller-supplied (:54) and the subject and body embed caller text (:55-62). W-35's work, sized. Also logs the full payload including the submitter's email at :41 \u2014 noted for the same lane, not a separate finding."
     },
     {
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
-      "reason": "Unauthenticated vendor application intake. There is no sender to authenticate. What holds instead is the pair W-4 already reviewed and this check re-verifies: the org is pinned to ALLOY_PUBLIC_ORG_ID from the environment and the route 500s without it (:33-37), never taking an org from the caller; and the handler CREATES ONLY — it selects no existing row by a caller-supplied id, so there is no object it can be pointed at. That is the property whose absence froze W-4's book-v2 baseline. UNBOUNDED: no rate limit, so the side effect is unlimited anonymous row creation in the pinned org. W-35's work."
+      "reason": "Unauthenticated vendor application intake. There is no sender to authenticate. What holds instead is the pair W-4 already reviewed and this check re-verifies: the org is pinned to ALLOY_PUBLIC_ORG_ID from the environment and the route 500s without it (:33-37), never taking an org from the caller; and the handler CREATES ONLY \u2014 it selects no existing row by a caller-supplied id, so there is no object it can be pointed at. That is the property whose absence froze W-4's book-v2 baseline. UNBOUNDED: no rate limit, so the side effect is unlimited anonymous row creation in the pinned org. W-35's work."
+    },
+    {
+      "route": "app/api/scheduled-work/wake/route.ts",
+      "model": "machine-clock-secret",
+      "reason": "The generic scheduled-work wake. The sender IS authenticated - a shared machine secret is compared before anything runs (Authorization: Bearer CRON_SECRET, or x-cron-token against INTERNAL_CRON_TOKEN) and an empty or missing expected value never authorizes - but the credential binds to no ROW, which is why the detector's session/signature/credential taxonomy does not classify it. It cannot: the caller is the hosting platform's clock and the due work it claims spans organizations, so there is no row the secret could be bound to and no operator session that could authorize the whole job. The blast radius is bounded elsewhere, by the code-owned handler registry - a scheduled_work row names a handler_key, and a key resolving to no registered handler fails terminally rather than executing anything, so an attacker holding the secret can only cause already-due, already-registered work to run slightly earlier. Note the sibling communication-scheduled-sends/process-due is NOT here because it also accepts an admin session and classifies as session; this route deliberately has no session path, since an operator scoped to one organization could only ever do part of the job. UNBOUNDED: the endpoint itself has no rate limit, so a holder of the secret may call it arbitrarily often. What that cannot do is duplicate consequence - each call claims only already-due occurrences, the (scheduled_work_id, due_at) identity makes repeat wakes converge on the same occurrence, and a completed occurrence cannot execute again. The unbounded quantity is therefore wake FREQUENCY, not work executed; W-35 inherits the rate-limit question for this route."
     }
   ]
 }
