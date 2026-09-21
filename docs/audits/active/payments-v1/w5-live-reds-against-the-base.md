@@ -62,3 +62,37 @@ Test Files  1 passed (1)
 ordering-sensitive and pass in isolation on the lane. The pre-existing five belong to Financials and
 are carried, not repaired here — W5 does not own those surfaces and repairing them in a Payments
 workstream would hide whose defect they are.
+
+---
+
+## The platform / access / adminV2 sweep, measured the same way
+
+`tests/platform tests/access tests/adminV2` reports **194 failed files and 457 failed tests** on the
+W5 lane. That is 26% of the files in that sweep, which is far too broad for a change this narrow —
+so it was measured rather than explained away.
+
+The identical command was run at `af5074594`, the pre-W5 base:
+
+| | W5 lane | Base `af5074594` |
+|---|---|---|
+| Files failed | 194 | **194** |
+| Tests failed | 457 | **457** |
+| Tests passed | 6467 | 6463 |
+
+The failing **file sets are byte-identical** (`diff` of the sorted `FAIL` lines is empty). The four
+extra passes on the lane are the W5 tests that do not exist on the base.
+
+The failures cluster into four causes, none of them Payments:
+
+| Count | Cause |
+|---|---|
+| 439 | `TypeError: Failed to parse URL from /api/admin/...` — relative fetch URLs in a runner with no base URL |
+| 40 | `ENOENT … app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx` — a route that moved to `workspace/work-unit/[workUnitSlug]/`; the test still points at the old path |
+| 15 | `ECONNREFUSED 127.0.0.1:3018` — a dev server on another slot's port, not this lane's 3017 |
+| rest | assorted assertions in the same pre-existing files |
+
+**Zero failures in this sweep are attributable to W5.** They are carried: they belong to other
+programs, and repairing them inside a Payments workstream would hide whose defects they are.
+
+The suite that actually covers W5 — 135 non-live financials and scheduled-work files, 1,782 tests —
+is green, as are all 95 Payments tests and the live Autopay runtime suite.
