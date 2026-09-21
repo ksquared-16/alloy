@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveAccountPrepaidPosition, type PaymentView } from "@/lib/financials/prepaid/availableFunds";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import type { PaymentView } from "@/lib/financials/paymentApplicationView";
 import { aggregatePrepaidPosition, resolvePrepaidPositionOutcome, type PrepaidAggregateInput } from "@/lib/financials/prepaid/prepaidAggregate";
 
 /**
