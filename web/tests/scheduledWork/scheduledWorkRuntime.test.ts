@@ -11,6 +11,12 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
+    AUTOPAY_HANDLER_KEY,
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+    registerScheduledWorkConsumers,
+} from "@/lib/scheduledWork/scheduledWorkConsumers";
+import {
     __resetScheduledWorkRegistryForTests,
     registerScheduledWorkHandler,
 } from "@/lib/scheduledWork/scheduledWorkRegistry";
@@ -265,5 +271,229 @@ describe("the wake is a machine endpoint, and fails closed", () => {
             expect(src, `${rel} must not know what billing means`)
                 .not.toMatch(/invoice|charge|late_fee|autopay|tuition|payment_method|collect/i);
         }
+    });
+});
+
+
+const CONSUMER_TAG = "qa_sched_consumers_v1";
+
+async function cleanupConsumers() {
+    if (!LIVE) return;
+    const { data } = await db.from("scheduled_work").select("id").eq("label", CONSUMER_TAG);
+    for (const s of (data ?? []) as { id: string }[]) {
+        await db.from("scheduled_work").delete().eq("id", s.id);
+    }
+}
+
+const CONSUMERS = [
+    { key: BILLING_PERIODIC_HANDLER_KEY, domain: "periodic_billing", ref: { billing_period_id: "bp-1" } },
+    { key: CHARGE_AGING_HANDLER_KEY, domain: "charge_aging", ref: { as_of: "2026-09-21" } },
+    { key: AUTOPAY_HANDLER_KEY, domain: "autopay", ref: { mandate_id: "m-1", attempt_window: "am" } },
+] as const;
+
+
+describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime", () => {
+    beforeEach(async () => {
+        __resetScheduledWorkRegistryForTests();
+        // NOT the `ensure` wrapper: its module-level latch would make this a no-op
+        // after a reset, and the suite would then certify an empty registry.
+        registerScheduledWorkConsumers();
+        await cleanupConsumers();
+    });
+    afterAll(cleanupConsumers);
+
+    it("one wake serves all three real consumers through the registered-handler boundary", async () => {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        const ids = new Map<string, string>();
+        for (const c of CONSUMERS) {
+            const { data } = await db
+                .from("scheduled_work")
+                .insert({
+                    handler_key: c.key, recurrence_kind: "one_time",
+                    next_due_at: past, label: CONSUMER_TAG, domain_ref: c.ref,
+                })
+                .select("id").single();
+            ids.set(c.key, (data as { id: string }).id);
+        }
+
+        const result = await runScheduledWorkWake(db);
+
+        expect(result.claimed).toBe(3);
+        expect(result.completed).toBe(3);
+        // The failure this guards is the one that matters: a consumer whose key is
+        // declared but never registered fails terminally instead of running.
+        expect(result.unregisteredHandler).toBe(0);
+        expect(result.terminallyFailed).toBe(0);
+        expect(result.retryScheduled).toBe(0);
+
+        // One worker identity served all three — this is the "one runtime" half.
+        expect(new Set([result.workerId]).size).toBe(1);
+
+        for (const c of CONSUMERS) {
+            const { data: occ } = await db
+                .from("scheduled_work_occurrences")
+                .select("id,status,handler_key")
+                .eq("scheduled_work_id", ids.get(c.key)!)
+                .single();
+            const row = occ as { id: string; status: string; handler_key: string };
+            expect(row.status).toBe("completed");
+            expect(row.handler_key).toBe(c.key);
+
+            const { data: attempts } = await db
+                .from("scheduled_work_attempts")
+                .select("worker_id,outcome,diagnostic,attempt_number")
+                .eq("occurrence_id", row.id);
+            const list = (attempts ?? []) as {
+                worker_id: string; outcome: string; attempt_number: number;
+                diagnostic: Record<string, unknown> | null;
+            }[];
+            expect(list).toHaveLength(1);
+            expect(list[0].outcome).toBe("completed");
+            expect(list[0].attempt_number).toBe(1);
+            expect(list[0].worker_id).toBe(result.workerId);
+
+            // The handler that ran was THIS domain's, and the opaque reference it was
+            // handed back is the one the schedule stored.
+            const diag = list[0].diagnostic ?? {};
+            expect(diag.domain).toBe(c.domain);
+            expect(diag.domain_ref_keys).toEqual(Object.keys(c.ref).sort());
+            expect(diag.mutation).toBe("not_productized_v1");
+        }
+    });
+
+    it("a consumer key that is NOT registered fails terminally rather than silently passing", async () => {
+        // The control for the test above: if `unregisteredHandler === 0` were vacuous,
+        // this would also read zero.
+        const past = new Date(Date.now() - 60_000).toISOString();
+        await db.from("scheduled_work").insert({
+            handler_key: "financials.periodic_billing.evaluate.NOT_REGISTERED",
+            recurrence_kind: "one_time", next_due_at: past, label: CONSUMER_TAG,
+        });
+
+        const result = await runScheduledWorkWake(db);
+
+        expect(result.claimed).toBe(1);
+        expect(result.unregisteredHandler).toBe(1);
+        expect(result.terminallyFailed).toBe(1);
+        expect(result.completed).toBe(0);
+    });
+
+    it("V1 consumers mutate nothing — every outcome is a completed evaluation", async () => {
+        // Stated as a limitation in the consumers file; asserted here so productizing
+        // a mutation cannot happen without this test being consciously changed.
+        const past = new Date(Date.now() - 60_000).toISOString();
+        for (const c of CONSUMERS) {
+            await db.from("scheduled_work").insert({
+                handler_key: c.key, recurrence_kind: "one_time",
+                next_due_at: past, label: CONSUMER_TAG, domain_ref: c.ref,
+            });
+        }
+        const result = await runScheduledWorkWake(db);
+        expect(result.completed).toBe(3);
+
+        const { data } = await db
+            .from("scheduled_work_attempts")
+            .select("diagnostic")
+            .in("handler_key", CONSUMERS.map((c) => c.key));
+        const diags = ((data ?? []) as { diagnostic: Record<string, unknown> | null }[])
+            .map((r) => r.diagnostic?.mutation);
+        expect(diags.length).toBeGreaterThanOrEqual(3);
+        expect(new Set(diags)).toEqual(new Set(["not_productized_v1"]));
+    });
+});
+
+describe.runIf(LIVE)("governed scheduled work — the clock leaves a mark", () => {
+    beforeEach(async () => {
+        __resetScheduledWorkRegistryForTests();
+        await cleanupConsumers();
+    });
+    afterAll(cleanupConsumers);
+
+    async function clock() {
+        const { data } = await db
+            .from("scheduled_work_clock")
+            .select("first_wake_at,last_wake_at,wake_count,last_worker_id,last_summary")
+            .eq("id", "singleton")
+            .single();
+        return data as {
+            first_wake_at: string | null; last_wake_at: string | null; wake_count: number;
+            last_worker_id: string | null; last_summary: Record<string, number> | null;
+        };
+    }
+
+    it("a wake with NOTHING due is still recorded — the empty environment case", async () => {
+        // This is the whole reason the clock exists. A freshly deployed scheduler has
+        // no schedules, so occurrences and attempts stay empty and a real external
+        // wake is indistinguishable from a cron that never fired.
+        const before = await clock();
+        const result = await runScheduledWorkWake(db);
+        expect(result.claimed).toBe(0);
+
+        const after = await clock();
+        expect(after.wake_count).toBe(before.wake_count + 1);
+        expect(after.last_worker_id).toBe(result.workerId);
+        expect(result.clockRecordedAt).not.toBeNull();
+        expect(after.last_wake_at).toBe(result.clockRecordedAt);
+    });
+
+    it("the recorded time is the DATABASE's, not the caller's", async () => {
+        // A clock certified against the caller's own clock certifies nothing.
+        const wildlyWrong = new Date("2001-01-01T00:00:00.000Z");
+        const result = await runScheduledWorkWake(db, { now: wildlyWrong });
+        const after = await clock();
+        expect(after.last_wake_at).not.toBeNull();
+        expect(new Date(after.last_wake_at!).getUTCFullYear()).toBeGreaterThan(2020);
+        expect(result.clockRecordedAt).toBe(after.last_wake_at);
+    });
+
+    it("first_wake_at is set once and never moves", async () => {
+        await runScheduledWorkWake(db);
+        const first = await clock();
+        expect(first.first_wake_at).not.toBeNull();
+        await runScheduledWorkWake(db);
+        const second = await clock();
+        expect(second.first_wake_at).toBe(first.first_wake_at);
+        expect(second.wake_count).toBe(first.wake_count + 1);
+    });
+
+    it("overlapping wakes do not lose a tick", async () => {
+        // The counter exists to observe a clock under load, so losing increments
+        // under concurrency would break it exactly when it matters. Read-then-write
+        // in the app would; the atomic increment in the database does not.
+        const before = await clock();
+        await Promise.all(Array.from({ length: 5 }, () => runScheduledWorkWake(db)));
+        const after = await clock();
+        expect(after.wake_count).toBe(before.wake_count + 5);
+    });
+
+    it("the summary records what the wake actually did", async () => {
+        registerScheduledWorkConsumers();
+        const past = new Date(Date.now() - 60_000).toISOString();
+        await db.from("scheduled_work").insert({
+            handler_key: BILLING_PERIODIC_HANDLER_KEY, recurrence_kind: "one_time",
+            next_due_at: past, label: CONSUMER_TAG,
+        });
+        await runScheduledWorkWake(db);
+        const after = await clock();
+        expect(after.last_summary).toMatchObject({ claimed: 1, completed: 1 });
+    });
+
+    it("a wake that THROWS is still recorded — arrival is not the same as success", async () => {
+        // Otherwise a scheduler broken at materialize time reads to an operator as a
+        // clock that never fired, and they go looking in the wrong place.
+        const exploding = {
+            ...db,
+            from(table: string) {
+                if (table === "scheduled_work") throw new Error("materialize exploded");
+                return (db as unknown as { from: (t: string) => unknown }).from(table);
+            },
+            rpc: (...args: unknown[]) =>
+                (db as unknown as { rpc: (...a: unknown[]) => unknown }).rpc(...args),
+        } as unknown as SupabaseClient;
+
+        const before = await clock();
+        await expect(runScheduledWorkWake(exploding)).rejects.toThrow(/materialize exploded/);
+        const after = await clock();
+        expect(after.wake_count).toBe(before.wake_count + 1);
     });
 });
