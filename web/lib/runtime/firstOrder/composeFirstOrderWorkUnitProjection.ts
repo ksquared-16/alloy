@@ -108,9 +108,47 @@ export async function composeFirstOrderWorkUnitProjection(
         }
     };
 
+    /*
+     * PHASE 2 CHAINS OFF POPULATION ALONE, NOT OFF ALL OF PHASE 1.
+     *
+     * The first version awaited the whole phase-1 `Promise.all` before starting the
+     * population-dependent work. Shadow measurement showed the cost: population finished at 127 ms
+     * but CRM, children and personal_seen did not start until 328 ms, because they were waiting on
+     * `prepaid` — a resolver none of them consume. Children then bound the DAG at 576 ms instead of
+     * ~375 ms. Two hundred milliseconds spent on a dependency that does not exist, out of a product
+     * budget with ~170 ms of margin.
+     *
+     * The gate I had written asserted that phase-1 resolvers share a start offset. They did. It
+     * tested the property I was thinking about rather than the one that mattered, and only the
+     * measured offsets caught it — which is the argument for measuring concurrency instead of
+     * reading it off the source.
+     */
     // ── PHASE 1 — everything that depends on nothing but the request. ───────────────────────────
-    const [population, attendance, healthProfile, prepaid] = await Promise.all([
-        run("population", 1, () => loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId })),
+    const populationPromise = run("population", 1, () =>
+        loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId }));
+
+    // ── PHASE 2 — starts the moment the population lands, independently of the rest of phase 1. ──
+    const dependentPromise = populationPromise.then(async (pop) => {
+        const depRows = ((pop?.rows ?? []) as Array<Record<string, unknown>>);
+        if (!depRows.length) return { crm: null, children: null, seen: null, rows: depRows };
+        const [c, ch, sn] = await Promise.all([
+            run("crm", 2, () => enrichOpportunityRowsWithCrmProjection(supabase, orgId,
+                depRows.map((r) => ({ id: str(r.id), primary_person_id: (r.primary_person_id ?? null) as string | null,
+                    location_id: (r.location_id ?? null) as string | null })))),
+            configured("children")
+                ? run("children", 2, () => enrichOpportunityRowsWithChildrenForCompactQueue(supabase, orgId,
+                    depRows.map((r) => ({ id: str(r.id), customer_id: (r.customer_id ?? null) as string | null, metadata: r.metadata }))))
+                : Promise.resolve(null),
+            run("personal_seen", 1, () => loadAcknowledgedOccurrenceKeys({
+                supabase, orgId, userId: input.viewerId,
+                occurrenceKeys: depRows.map((r) => `${str(r.id)}:${str(r.stage_key)}:${str(r.stage_entered_at)}`),
+            })),
+        ]);
+        return { crm: c, children: ch, seen: sn, rows: depRows };
+    });
+
+    const [population, attendance, healthProfile, prepaid, dependent] = await Promise.all([
+        populationPromise,
         configured("attendance") && input.customerMemberId
             ? run("attendance", 2, () => buildAttendanceCardVM(supabase, {
                   orgId, customerMemberId: input.customerMemberId!, recentDays: 5,
@@ -125,23 +163,11 @@ export async function composeFirstOrderWorkUnitProjection(
                   orgId, householdId: input.householdId!, authorized: input.authority.financialsRead,
               }))
             : Promise.resolve(null),
+        dependentPromise,
     ]);
 
-    // ── PHASE 2 — only what genuinely needs the population. ─────────────────────────────────────
-    const rows = ((population?.rows ?? []) as Array<Record<string, unknown>>);
-    const [crm, children, seen] = await Promise.all([
-        rows.length ? run("crm", 2, () => enrichOpportunityRowsWithCrmProjection(supabase, orgId,
-            rows.map((r) => ({ id: str(r.id), primary_person_id: (r.primary_person_id ?? null) as string | null,
-                location_id: (r.location_id ?? null) as string | null })))) : Promise.resolve(null),
-        rows.length && configured("children")
-            ? run("children", 2, () => enrichOpportunityRowsWithChildrenForCompactQueue(supabase, orgId,
-                rows.map((r) => ({ id: str(r.id), customer_id: (r.customer_id ?? null) as string | null, metadata: r.metadata }))))
-            : Promise.resolve(null),
-        rows.length ? run("personal_seen", 1, () => loadAcknowledgedOccurrenceKeys({
-            supabase, orgId, userId: input.viewerId,
-            occurrenceKeys: rows.map((r) => `${str(r.id)}:${str(r.stage_key)}:${str(r.stage_entered_at)}`),
-        })) : Promise.resolve(null),
-    ]);
+    const rows = dependent.rows;
+    const { crm, children, seen } = dependent;
 
     const readDagMs = at();
 

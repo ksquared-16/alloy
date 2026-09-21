@@ -134,6 +134,36 @@ describe("the DAG is not accidentally serialized", () => {
         expect(Math.max(...p1.map((s) => s.at))).toBeLessThanOrEqual(Math.min(...p1.map((s) => s.at)) + 5);
     });
 
+    it("PHASE 2 WAITS ON POPULATION ALONE, not on the whole of phase 1", async () => {
+        /*
+         * THE GATE THAT WAS MISSING, and the defect it now catches was real.
+         *
+         * The first composer awaited the entire phase-1 `Promise.all` before starting the
+         * population-dependent work. Shadow measurement showed population finishing at 127ms while
+         * CRM, children and personal_seen did not start until 328ms — waiting on `prepaid`, which
+         * none of them consume. Children then bound the DAG at 576ms instead of ~375ms: 200ms
+         * spent on a dependency that does not exist, out of a budget with ~170ms of margin.
+         *
+         * My earlier gate asserted phase-1 resolvers share a start offset. They did. It tested the
+         * property I was thinking about rather than the one that mattered, so it stayed green
+         * through the defect. This one pins the dependency edge itself.
+         */
+        const slowPrepaid = new Promise((r) => setTimeout(() => r({
+            outcome: { state: "ok", position: { availableCents: 0, pendingCents: 0, heldCents: 0 } },
+            diagnostics: { queryCount: 7, agreementCount: 0, paymentCount: 0 },
+        }), 60));
+        vi.mocked(readAccountPrepaidPosition).mockReturnValueOnce(slowPrepaid as never);
+        const r = await composeFirstOrderWorkUnitProjection(base() as never);
+        const span = (n: string) => r.timing.spans.find((s) => s.name === n);
+        const pop = span("population")!;
+        const crm = span("crm")!;
+        const prepaid = span("prepaid")!;
+        expect(prepaid.end).toBeGreaterThan(pop.end);
+        // The dependent phase must begin at the population's end, NOT at the slow sibling's.
+        expect(crm.at, "phase 2 started late — it is waiting on more than population")
+            .toBeLessThan(prepaid.end);
+    });
+
     it("THE GATE: the composer calls no full-composer, drawer or Financials VM owner", () => {
         for (const banned of ["composeWorkUnitProvisioningAnswer", "buildFinancialsCardVM", "resolveHouseholdPaymentViews", "drawer"]) {
             expect(DECLARATIONS, `${banned} would restore the coupling A′ exists to remove`).not.toContain(banned);

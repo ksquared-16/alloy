@@ -45,8 +45,18 @@ test("p076 prototype run", async ({ page }) => {
     // Configuration read off the RENDERED frame, so the composer is exercised against the
     // operator's real configuration rather than one the probe invented.
     const rendered = await page.evaluate(() => ({
-        cards: [...document.querySelectorAll("[data-alloy-section-id]")]
-            .map((el) => el.getAttribute("data-alloy-section-id") ?? "").filter(Boolean),
+        /*
+         * `data-universal-card-key` is the CARD key. An earlier version of this read
+         * `data-alloy-section-id`, which is the metric REGION id (WU-00, WU-09, ...) — a different
+         * vocabulary entirely. The composer then recognised none of them, ran no card resolver,
+         * and produced a projection whose cards were all empty. It looked like a plausible result
+         * and measured nothing, which is the failure mode worth naming: the run was green and
+         * vacuous. The same selector the critical-path probe already uses is the canonical one.
+         */
+        cards: [...document.querySelectorAll("article.alloy-os-ucard")]
+            .map((el) => el.getAttribute("data-universal-card-key")
+                || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
+            .filter(Boolean),
     }));
     const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
