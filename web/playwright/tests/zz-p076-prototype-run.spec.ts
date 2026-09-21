@@ -42,7 +42,15 @@ test("p076 prototype run", async ({ page }) => {
         return;
     }
 
+    // Configuration read off the RENDERED frame, so the composer is exercised against the
+    // operator's real configuration rather than one the probe invented.
+    const rendered = await page.evaluate(() => ({
+        cards: [...document.querySelectorAll("[data-alloy-section-id]")]
+            .map((el) => el.getAttribute("data-alloy-section-id") ?? "").filter(Boolean),
+    }));
+    const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
     const extra = (process.env.P076_DISCOVER === "1" ? "&discover=1" : "")
+        + (process.env.P076_SHADOW === "1" ? `${cardParam}&kpis=3&views=2` : "")
         + (process.env.P076_MONEY === "1" ? "&discover_money=1" : "")
         + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
     await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);
