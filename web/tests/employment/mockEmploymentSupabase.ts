@@ -134,6 +134,45 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
             filters.push((r) => r[col] != null && String(r[col]) >= String(val));
             return api;
         };
+        /**
+         * PostgREST `.or("a.is.null,b.gt.x")` — a disjunction over the SAME row.
+         *
+         * Implemented rather than stubbed, because the shapes this mock exists to prove
+         * are exactly the ones a permissive `.or` would hide: an effective-dated row is
+         * "still in force" when `valid_to IS NULL` **or** it ends after the instant asked
+         * about, and a stub returning every row would call a closed record open and the
+         * suite would pass for the wrong reason.
+         */
+        api.or = (expr: string) => {
+            const clauses = String(expr).split(",").map((c) => c.trim()).filter(Boolean);
+            const predicates = clauses.map((clause) => {
+                const first = clause.indexOf(".");
+                const second = clause.indexOf(".", first + 1);
+                if (first < 0 || second < 0) {
+                    throw new Error(`mockEmploymentSupabase: unparseable .or clause "${clause}"`);
+                }
+                const col = clause.slice(0, first);
+                const op = clause.slice(first + 1, second);
+                const raw = clause.slice(second + 1);
+                // Validated HERE, not inside the row predicate: an unsupported operator is
+                // a fault in the test, and it should surface where the query was written
+                // rather than later, during filtering, looking like missing data.
+                const compare: Record<string, (v: unknown) => boolean> = {
+                    is: (v) => (raw === "null" ? v == null : String(v) === raw),
+                    eq: (v) => String(v) === raw,
+                    neq: (v) => String(v) !== raw,
+                    gt: (v) => v != null && String(v) > raw,
+                    gte: (v) => v != null && String(v) >= raw,
+                    lt: (v) => v != null && String(v) < raw,
+                    lte: (v) => v != null && String(v) <= raw,
+                };
+                const fn = compare[op];
+                if (!fn) throw new Error(`mockEmploymentSupabase: unsupported .or operator "${op}"`);
+                return (r: Row): boolean => fn(r[col]);
+            });
+            filters.push((r) => predicates.some((p) => p(r)));
+            return api;
+        };
         api.order = () => api;
         api.limit = () => api;
         api.insert = (payload: Row) => {
