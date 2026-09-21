@@ -342,6 +342,15 @@ export function AlloySelect({
                             id={`${listId}-opt-${index}`}
                             role="option"
                             tabIndex={-1}
+                            /*
+                             * The option's IDENTITY, not its sentence. The multi variant has always
+                             * carried this; the single one did not, and that asymmetry meant anything
+                             * addressing an option by what it IS — certification holding a charge id,
+                             * a debugger, an assistive tool — had to match on the rendered label
+                             * instead, which for these lists is a money string that changes between
+                             * runs. Same attribute, same meaning, both variants.
+                             */
+                            data-option-value={o.value}
                             aria-selected={o.value === value}
                             aria-disabled={o.disabled ? true : undefined}
                             className={clsx(

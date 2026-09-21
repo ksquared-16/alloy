@@ -12,6 +12,7 @@
  * Every money assertion is read back from the canonical account read, never recomputed here.
  */
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { alloyOptionLabels, alloyOptions, alloyValueText, pickAlloyByValue } from "../helpers/alloyControls";
 
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/slot2/storage-state.json";
 const LANE = "/workspace/work-unit/enrolled-children";
@@ -90,13 +91,25 @@ const control = (page: Page, id: string) => card(page).getByTestId(id);
  * asks, so the certification has to answer.
  */
 async function chooseObligation(page: Page) {
-    const select = control(page, "adjustment-source-charge");
-    await expect(select, "the panel asks which obligation this is about").toBeVisible();
+    /*
+     * The control is the canonical Alloy listbox now, not a native select, so this drives it the
+     * way the product does: open, read what is offered, choose the first real obligation. The
+     * assertion is the EFFECT the panel promises — it asks which obligation this is about, and
+     * the answer sticks — rather than `HTMLSelectElement.value`, which is an implementation
+     * detail the product no longer has.
+     */
+    await expect(control(page, "adjustment-source-charge"), "the panel asks which obligation this is about")
+        .toBeVisible();
     await expect
-        .poll(() => select.locator("option").count(), { timeout: 30_000 })
+        .poll(async () => (await alloyOptions(page, "adjustment-source-charge")).length, { timeout: 30_000 })
         .toBeGreaterThan(1);
-    const value = await select.locator("option").nth(1).getAttribute("value");
-    await select.selectOption(value!);
+    const offered = await alloyOptions(page, "adjustment-source-charge");
+    const obligation = offered.find((o) => o.value && !o.disabled);
+    expect(obligation, "an obligation is offered to adjust").toBeTruthy();
+    await pickAlloyByValue(page, "adjustment-source-charge", obligation!.value!);
+    await expect
+        .poll(() => alloyValueText(page, "adjustment-source-charge"), { timeout: 15_000 })
+        .toContain(obligation!.label.split(" · ")[0]!);
 }
 
 test.describe.configure({ mode: "serial" });
@@ -125,12 +138,11 @@ test.describe("Slice 5C — manual adjustments, mounted", () => {
         // SCOPE: the enrolment is named, not assumed.
         const agreement = control(page, "adjustment-agreement");
         await expect(agreement, "the panel says which enrolment this is against").toBeVisible();
-        const agreementOptions = await agreement.locator("option").allTextContents();
+        const agreementOptions = await alloyOptionLabels(page, "adjustment-agreement");
         expect(agreementOptions.length, "and offers the household's enrolments").toBeGreaterThan(0);
 
         // VOCABULARY: credit and adjustment only. Discount belongs to configured policy.
-        const categories = (await control(page, "adjustment-category").locator("option").allTextContents())
-            .join(" | ");
+        const categories = (await alloyOptionLabels(page, "adjustment-category")).join(" | ");
         expect(categories).toMatch(/Credit/i);
         expect(categories).toMatch(/Adjustment/i);
         expect(categories, "manual discount is not offered — policy owns that word").not.toMatch(/Discount/i);
