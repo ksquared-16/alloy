@@ -59,6 +59,10 @@ const artifactEnforced = artifact.enforced.map((e) => e.key);
  * it simply will not be in this list.
  */
 const APPROVED_ADDITIONS: Record<string, string> = {
+    "staff.compensation.read":
+        "20260928120000 — Staff & Workforce V2 Slice 9: seeing an employment's pay. The first Staff read in this estate that is NOT open to anyone who can open a staff record; qualifications and availability are read to run a day, and a salary is not. Deliberately not filed under `financials`, which answers what the organization earns and owes rather than what it pays one person",
+    "staff.compensation.write":
+        "20260928120000 — Staff & Workforce V2 Slice 9: recording an effective-dated compensation term. Separated from the read because a principal who may see a rate is not thereby a principal who may give a raise",
     "health.view": "D-H6 — structured health visibility boundary",
     "health.manage": "D-H6 — structured health mutation boundary",
     "enrollment.requirement_exception.manage":

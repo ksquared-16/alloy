@@ -5285,6 +5285,20 @@
         "status": "none",
         "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
       }
+    },
+    "app/api/admin/staff-compensation/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "staff.compensation.read",
+        "helper": "requireCompensationCapability",
+        "reason": "Compensation is the first Staff fact that is not readable by anyone who can open a staff record. The table revokes every grant from authenticated, so this handler reads through the service role and the capability check is the only operator boundary. requireAdminOrOps resolves portal admission and no capability, so the capability check is what actually withholds pay from a principal who was never granted it."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "staff.compensation.write",
+        "helper": "requireCompensationCapability",
+        "reason": "Records an effective-dated compensation term and closes the prior open period. Gated separately from the read because a principal who may see a rate is not thereby a principal who may change one. Creates no payroll run and no financial transaction."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {
