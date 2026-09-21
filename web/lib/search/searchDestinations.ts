@@ -400,6 +400,13 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      * anyway would be the fabricated route this resolver exists to refuse.
      */
     employment: () => null,
+    /*
+     * Qualifications resolves no destination, for exactly the reason Employment does not: there is
+     * no work unit to route to. A credential is a standing, not a queue position. The context still
+     * RANKS and DISPLAYS, and the person's record destination is where an operator goes from there;
+     * naming a unit anyway would be the fabricated route this resolver exists to refuse.
+     */
+    qualifications: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {

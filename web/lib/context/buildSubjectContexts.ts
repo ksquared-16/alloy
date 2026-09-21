@@ -226,6 +226,46 @@ export function buildSubjectEmploymentContext(
 }
 
 /**
+ * The credentials this staff member holds, as a context.
+ *
+ * ── WHY IT IS GATED ON EMPLOYMENT, NOT ON HOLDING ANYTHING ──
+ *
+ * The option is offered whenever the person is staff, INCLUDING when they hold nothing. "No
+ * qualifications recorded" is an answer an operator needs — often the one they opened the record
+ * for — and hiding the context until a credential exists would make the empty state unreachable
+ * precisely when it matters.
+ *
+ * It is NOT offered to a person who has never worked here: a qualification hangs off an
+ * employment, so there is nothing for the context to be about. That mirrors the Employment context
+ * above and the card's own visibility rule, so the three agree rather than each deciding.
+ *
+ * No detail line is derived here. Standing depends on the organisation's calendar day and is
+ * resolved server-side by the card; computing a summary here would be a second resolver for one
+ * answer, and it would be stale the morning a credential expired.
+ */
+export function buildSubjectQualificationsContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+): SubjectContext | null {
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "qualifications",
+        key: "qualifications",
+        label: "Qualifications",
+        detail: null,
+        secondary: null,
+        // The person owns the record their credentials hang off, exactly as with employment.
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
  * The record's own information, as a context.
  *
  * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──

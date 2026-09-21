@@ -134,6 +134,19 @@ export default function StaffQualificationsCard({ model, context, receded = fals
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
+    /*
+     * ONE FORM FOR RECORD AND RENEW, because they are one command.
+     *
+     * Renewal is `staff_qualification.record` carrying the row it replaces — the authority keeps
+     * history rather than overwriting — so a separate "renew" form would be a second way to say
+     * the same thing, and the two would drift. `renewing` holds the qualification being replaced,
+     * or null for a first record.
+     */
+    const [adding, setAdding] = useState<{ renewing: HeldQualification | null } | null>(null);
+    const [form, setForm] = useState({ typeId: "", issuedOn: "", expiresOn: "" });
+    /** Candidate evidence: documents the canonical Documents authority already holds for this person. */
+    const [documents, setDocuments] = useState<{ id: string; name: string }[]>([]);
+    const [attachingTo, setAttachingTo] = useState<string | null>(null);
 
     useReportPerspective(coordination, "staff_qualifications", expanded ? "focused" : "base");
     useDismissSignal(coordination, "staff_qualifications", () => setExpanded(false));
@@ -181,6 +194,32 @@ export default function StaffQualificationsCard({ model, context, receded = fals
         setState(null);
         void load();
     }, [load]);
+
+    /*
+     * EVIDENCE IS CHOSEN FROM WHAT DOCUMENTS ALREADY OWNS.
+     *
+     * The card offers the person's existing canonical documents and references one. It never
+     * uploads, and it never copies bytes — Forms and Documents stay the artifact's owner, and this
+     * card holds a reference to it. Loaded only when an operator starts attaching, because most
+     * viewings of this card never need the list.
+     */
+    useEffect(() => {
+        if (!attachingTo || !person) return;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/documents?entity_type=person&entity_id=${encodeURIComponent(person.personId)}`,
+                    { credentials: "include" },
+                );
+                const json = (await res.json()) as { documents?: { id: string; name?: string; file_name?: string }[] };
+                setDocuments(
+                    (json?.documents ?? []).map((d) => ({ id: d.id, name: d.name ?? d.file_name ?? "Document" })),
+                );
+            } catch {
+                setDocuments([]);
+            }
+        })();
+    }, [attachingTo, person]);
 
     const typeLabel = useCallback(
         (typeId: string) => state?.types.find((t) => t.id === typeId)?.label ?? "Qualification",
@@ -325,6 +364,73 @@ export default function StaffQualificationsCard({ model, context, receded = fals
 
                         <section data-staff-qualifications-section="held">
                             <h4>Held</h4>
+                            <button
+                                type="button"
+                                disabled={running || (state.types.length === 0)}
+                                data-staff-qualification-command="open-record"
+                                onClick={() => {
+                                    setAdding({ renewing: null });
+                                    setForm({ typeId: state.types[0]?.id ?? "", issuedOn: "", expiresOn: "" });
+                                }}
+                            >
+                                Record qualification
+                            </button>
+                            {adding ? (
+                                <form
+                                    data-staff-qualification-form={adding.renewing ? "renew" : "record"}
+                                    onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        if (!employmentId) return;
+                                        await runCommand("staff_qualification.record", {
+                                            employment_id: employmentId,
+                                            qualification_type_id: form.typeId,
+                                            issued_on: form.issuedOn || null,
+                                            expires_on: form.expiresOn || null,
+                                            // Renewal keeps the row it replaces as history rather
+                                            // than editing it: a credential that was valid last year
+                                            // WAS valid, and overwriting would erase that.
+                                            supersedes_qualification_id: adding.renewing?.id ?? null,
+                                        });
+                                        setAdding(null);
+                                    }}
+                                >
+                                    <select
+                                        data-staff-qualification-field="qualification_type_id"
+                                        value={form.typeId}
+                                        onChange={(e) => setForm({ ...form, typeId: e.target.value })}
+                                    >
+                                        {state.types.map((t) => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <label>
+                                        Issued
+                                        <input
+                                            type="date"
+                                            data-staff-qualification-field="issued_on"
+                                            value={form.issuedOn}
+                                            onChange={(e) => setForm({ ...form, issuedOn: e.target.value })}
+                                        />
+                                    </label>
+                                    <label>
+                                        Expires
+                                        <input
+                                            type="date"
+                                            data-staff-qualification-field="expires_on"
+                                            value={form.expiresOn}
+                                            onChange={(e) => setForm({ ...form, expiresOn: e.target.value })}
+                                        />
+                                    </label>
+                                    <button type="submit" disabled={running} data-staff-qualification-form-action="save">
+                                        Save
+                                    </button>
+                                    <button type="button" data-staff-qualification-form-action="cancel" onClick={() => setAdding(null)}>
+                                        Cancel
+                                    </button>
+                                </form>
+                            ) : null}
                             {state.held.length === 0 ? (
                                 <p data-staff-qualifications-empty="held">Nothing recorded for this employment.</p>
                             ) : (
@@ -363,6 +469,56 @@ export default function StaffQualificationsCard({ model, context, receded = fals
                                                     ? "No evidence"
                                                     : `${h.evidence_count} evidence`}
                                             </span>
+                                            <button
+                                                type="button"
+                                                disabled={running}
+                                                data-staff-qualification-command="attach-evidence"
+                                                onClick={() => setAttachingTo(attachingTo === h.id ? null : h.id)}
+                                            >
+                                                Attach evidence
+                                            </button>
+                                            {attachingTo === h.id ? (
+                                                <span data-staff-qualification-evidence-picker={h.id}>
+                                                    {documents.length === 0 ? (
+                                                        <span data-staff-qualification-evidence-empty="true">
+                                                            No documents on this person yet
+                                                        </span>
+                                                    ) : (
+                                                        documents.map((d) => (
+                                                            <button
+                                                                key={d.id}
+                                                                type="button"
+                                                                disabled={running}
+                                                                data-staff-qualification-evidence-option={d.id}
+                                                                onClick={async () => {
+                                                                    await runCommand("staff_qualification.attach_evidence", {
+                                                                        qualification_id: h.id,
+                                                                        document_id: d.id,
+                                                                    });
+                                                                    setAttachingTo(null);
+                                                                }}
+                                                            >
+                                                                {d.name}
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </span>
+                                            ) : null}
+                                            <button
+                                                type="button"
+                                                disabled={running || state.types.length === 0}
+                                                data-staff-qualification-command="renew"
+                                                onClick={() => {
+                                                    setAdding({ renewing: h });
+                                                    setForm({
+                                                        typeId: h.qualification_type_id,
+                                                        issuedOn: "",
+                                                        expiresOn: "",
+                                                    });
+                                                }}
+                                            >
+                                                Renew
+                                            </button>
                                             {h.verification_state === "unverified" ? (
                                                 <button
                                                     type="button"
