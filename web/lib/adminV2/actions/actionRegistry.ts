@@ -41,6 +41,7 @@ import {
     staffPresenceCorrectAction,
     staffPresenceRecordAction,
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
+import { STAFF_COVERAGE_ACTIONS } from "@/lib/adminV2/actions/definitions/staffCoverageActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { serviceDayExceptionActions } from "@/lib/adminV2/actions/definitions/serviceDayExceptionActions";
 import { commercialPolicyExceptionActions } from "@/lib/adminV2/actions/definitions/commercialPolicyExceptionActions";
@@ -83,6 +84,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     employmentEndAction,
     staffPresenceRecordAction,
     staffPresenceCorrectAction,
+    // Coverage: plan / change / correct / cancel a day-specific Staff allocation.
+    ...STAFF_COVERAGE_ACTIONS,
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
     ...serviceDayExceptionActions,
