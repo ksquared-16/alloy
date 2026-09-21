@@ -139,22 +139,34 @@ export default function PoliciesConfigurationPage({
         [selected],
     );
 
-    const scopeLabel = useMemo(() => {
-        if (!selected) return "—";
-        if (selected.scope_type === "program" && selected.program_key) {
-            return programs.find((p) => p.key === selected.program_key)?.label ?? selected.program_key;
-        }
-        if (selected.scope_type === "location" && selected.location_id) {
-            return locations.find((l) => l.id === selected.location_id)?.name ?? "Location";
-        }
-        if (selected.scope_type === "offering" && selected.offering_id) {
-            return offerings.find((o) => o.id === selected.offering_id)?.label ?? "Tuition Plan";
-        }
-        if (selected.scope_type === "variant" && selected.variant_id) {
-            return variants.find((v) => v.id === selected.variant_id)?.label ?? "Enrollment Commitment";
-        }
-        return SCOPE_LABEL[selected.scope_type] ?? "Configured scope";
-    }, [selected, programs, locations, offerings, variants]);
+    /*
+     * WHAT A POLICY APPLIES TO — one derivation, two call sites.
+     *
+     * This was bound to the SELECTED policy, so "what does it apply to?" could only be answered
+     * after opening one. It is the fourth of the five facts an operator needs BEFORE selecting,
+     * and the only one the row was missing. Lifting it to take a row rather than read `selected`
+     * lets the summary state it without a second scope formatter existing.
+     */
+    const scopeLabelFor = useCallback(
+        (row: CommercialPolicyApiRow | null): string => {
+            if (!row) return "—";
+            if (row.scope_type === "program" && row.program_key) {
+                return programs.find((p) => p.key === row.program_key)?.label ?? row.program_key;
+            }
+            if (row.scope_type === "location" && row.location_id) {
+                return locations.find((l) => l.id === row.location_id)?.name ?? "Location";
+            }
+            if (row.scope_type === "offering" && row.offering_id) {
+                return offerings.find((o) => o.id === row.offering_id)?.label ?? "Tuition Plan";
+            }
+            if (row.scope_type === "variant" && row.variant_id) {
+                return variants.find((v) => v.id === row.variant_id)?.label ?? "Enrollment Commitment";
+            }
+            return SCOPE_LABEL[row.scope_type] ?? "Configured scope";
+        },
+        [programs, locations, offerings, variants],
+    );
+    const scopeLabel = useMemo(() => scopeLabelFor(selected), [scopeLabelFor, selected]);
 
     const locationsSummary = useMemo(() => {
         if (!selected) return "—";
@@ -341,6 +353,13 @@ export default function PoliciesConfigurationPage({
                                                         `${commercialPolicyValueSummary(row.policy_type as CommercialPolicyType, row.value)} · `
                                                     :   ""}
                                                     {row.is_active ? "Active" : "Inactive"}
+                                                    {/*
+                                                      * WHAT IT APPLIES TO — the one fact of the
+                                                      * five that the summary did not state, so an
+                                                      * operator had to open a policy to learn its
+                                                      * scope. Same derivation the detail uses.
+                                                      */}
+                                                    {` · ${scopeLabelFor(row)}`}
                                                     {row.effective_start && row.effective_start !== "2000-01-01"
                                                         ? ` · from ${row.effective_start}`
                                                         : ""}

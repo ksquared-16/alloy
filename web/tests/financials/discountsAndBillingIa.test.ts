@@ -294,3 +294,94 @@ describe("no automatic-execution claim outruns the scheduler", () => {
         }
     });
 });
+
+describe("the policy summary answers all five questions before selection", () => {
+    const PAGE = "components/adminV2/settings/financials/policies/PoliciesConfigurationPage.tsx";
+
+    it("states name, what it does, rate, active and scope in the row", () => {
+        /*
+         * §3's five facts. Four were already there; SCOPE was computed only for the SELECTED
+         * policy, so "what does it apply to?" could not be answered before opening one.
+         */
+        const page = code(PAGE);
+        const rowStart = page.indexOf("visible.map((row)");
+        const row = page.slice(rowStart, page.indexOf("</aside>", rowStart));
+        expect(row).toContain("policyTypeLabel(row.policy_type)");
+        expect(row).toContain("commercialPolicyValueSummary(");
+        expect(row).toMatch(/row\.is_active \? "Active"/);
+        expect(row, "scope is stated before selection").toContain("scopeLabelFor(row)");
+        expect(row).toContain("row.effective_start");
+    });
+
+    it("the rate is not hidden behind a secondary tab, or behind a dead guard", () => {
+        /*
+         * THIS LOCK DID NOT BIND AT FIRST, and the plant proved it: asserting only that the row
+         * CONTAINS `commercialPolicyValueSummary(` stayed green when the call was disabled as
+         * `false && commercialPolicyValueSummary(...)`. The string survived; the rate did not.
+         *
+         * So the rule is asserted as RENDERED: the call is there, and nothing in the row makes it
+         * unreachable. A literal-false guard has no legitimate use in a summary row.
+         */
+        const page = code(PAGE);
+        const rowStart = page.indexOf("visible.map((row)");
+        const row = page.slice(rowStart, page.indexOf("</aside>", rowStart));
+        expect(row, "the economic effect is in the summary itself").toContain("commercialPolicyValueSummary");
+        expect(row, "and is not switched off").not.toMatch(/false\s*&&/);
+        expect(row, "nor rendered only when some tab is open").not.toMatch(/tab\s*===\s*["'`]rules["'`][\s\S]{0,120}commercialPolicyValueSummary/);
+    });
+
+    it("there is ONE scope derivation and one value formatter", () => {
+        const page = code(PAGE);
+        /*
+         * The detail reuses the row's derivation rather than keeping a private copy. Counting raw
+         * `SCOPE_LABEL[` reads was too blunt: the detail also renders the scope TYPE ("Program"),
+         * which is a different fact from the scope LABEL ("Preschool") and legitimately reads the
+         * same dictionary. What must not exist twice is the DERIVATION.
+         */
+        expect(page).toContain("scopeLabelFor(selected)");
+        expect(page).toContain("scopeLabelFor(row)");
+        expect((page.match(/const scopeLabelFor/g) ?? []).length, "one derivation").toBe(1);
+        expect(page, "and no second inline scope resolution").not.toMatch(
+            /scope_type === "program"[\s\S]{0,400}scope_type === "program"/,
+        );
+        /* And the value comes from the canonical helper, never recomputed here. */
+        expect(page).not.toMatch(/value\.percent|basis_points\s*\/\s*100/);
+    });
+});
+
+describe("billing authoring states what the name decides", () => {
+    const PANEL = "components/adminV2/settings/financials/tuitionPlans/TuitionBillingFrequenciesPanel.tsx";
+
+    it("no field is required that the recurrence authority ignores", () => {
+        /*
+         * AUDITED: the form has three fields — Name (required), Description and Interval label
+         * (both optional, both display-only). Only Name is required, and it is the one field the
+         * authority actually consumes, because it becomes the cadence key. There is no
+         * required-but-ignored field to remove.
+         */
+        const panel = code(PANEL);
+        expect(panel).toMatch(/disabled=\{busy \|\| !name\.trim\(\)\}/);
+        expect(panel, "description is not required").not.toMatch(/!description\.trim\(\)/);
+        expect(panel, "interval label is not required").not.toMatch(/!intervalLabel\.trim\(\)/);
+    });
+
+    it("the consequence of the name is shown while it is typed, from the authority", () => {
+        /*
+         * The name BECOMES the cadence key, and the key decides whether periods can be derived at
+         * all. An operator typing "Semi-Annual" was creating a non-billable frequency and learning
+         * it only after saving.
+         */
+        const panel = code(PANEL);
+        expect(panel).toContain('data-testid="billing-frequency-consequence"');
+        expect(panel).toContain("billingFrequencyItemKeyFromLabel(name)");
+        expect(panel).toContain("billingRecurrenceFor(cadenceKey)");
+        expect(panel).toContain("data-billing-frequency-billable");
+    });
+
+    it("the consequence is derived, not described", () => {
+        const panel = code(PANEL);
+        /* No second cadence map in the component. */
+        /* `[\s\S]` rather than the dotAll flag: the tsconfig target predates it. */
+        expect(panel).not.toMatch(/weekly[\s\S]{0,40}7 days|monthly[\s\S]{0,40}calendar month/i);
+    });
+});

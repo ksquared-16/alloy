@@ -89,6 +89,36 @@ function BillingFrequencyDialog({
                             data-testid="billing-frequency-interval"
                         />
                     </label>
+                    {/*
+                     * ── WHAT THE NAME ACTUALLY DECIDES ───────────────────────────────────────
+                     *
+                     * AUDITED, and this is the finding. The form has three fields and none of them
+                     * is a redundant requirement — but the NAME is not merely a label: it becomes
+                     * the cadence key, through `billingFrequencyItemKeyFromLabel`, and that key is
+                     * what `billingRecurrenceFor` and the period authority consume. "Weekly" makes
+                     * a frequency the platform can derive periods for; "Semi-Annual" makes one it
+                     * cannot, and until now the operator learned which only by saving and reading
+                     * the list.
+                     *
+                     * So the consequence is stated while they type, from the same authority the
+                     * list and generation use. It derives nothing of its own and is not a field:
+                     * nothing here is persisted, and there is nothing to edit.
+                     */}
+                    {name.trim() ? (
+                        (() => {
+                            const cadenceKey = billingFrequencyItemKeyFromLabel(name) || "custom_frequency";
+                            const rec = billingRecurrenceFor(cadenceKey);
+                            return (
+                                <p
+                                    className={`text-[11px] ${rec.billable ? "text-alloy-midnight/55" : "text-alloy-ember"}`}
+                                    data-testid="billing-frequency-consequence"
+                                    data-billing-frequency-billable={rec.billable ? "true" : "false"}
+                                >
+                                    {rec.recurrence}
+                                </p>
+                            );
+                        })()
+                    ) : null}
                 </div>
                 <div className="mt-5 flex justify-end gap-2">
                     <ConfigurationSecondaryButton disabled={busy} onClick={onCancel}>
