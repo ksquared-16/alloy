@@ -116,3 +116,39 @@ describe("Billing Period stays distinct from Accounting Period", () => {
         expect(code(PANEL)).not.toMatch(/accounting[_ ]?period/i);
     });
 });
+
+describe("one primary action treatment across configuration", () => {
+    const PRIMITIVES = "components/adminV2/settings/configurationRuntime/ConfigEditorPrimitives.tsx";
+    const CANONICAL = "components/adminV2/settings/configurationRuntime/ConfigurationModeLayout.tsx";
+
+    it("the canonical configuration action is Bend Pine", () => {
+        const canonical = code(CANONICAL);
+        const at = canonical.indexOf("export function ConfigurationPrimaryButton");
+        expect(at).toBeGreaterThan(-1);
+        expect(canonical.slice(at, at + 800)).toContain("bg-alloy-bend-pine");
+    });
+
+    it("no second primary action treatment is hand-rolled beside it", () => {
+        /*
+         * MEASURED on deployed staging: "Create future version" on Policies painted
+         * rgb(39, 63, 82) — alloy-pine, a dark navy — while eleven Bend Pine elements sat on the
+         * same screen. The page was wearing two different answers to "this is the primary action",
+         * which is what reads as "not Alloy" long before anyone can name the token.
+         *
+         * The rule is ACTION hierarchy, not colour policing: semantic status colours are untouched
+         * and deliberately not asserted here.
+         */
+        const primitives = code(PRIMITIVES);
+        const at = primitives.indexOf("export function ConfigPrimaryButton");
+        expect(at).toBeGreaterThan(-1);
+        const body = primitives.slice(at, at + 900);
+        expect(body, "the navy primary is gone").not.toContain("bg-alloy-pine");
+        expect(body, "and it defers to the canonical one").toContain("ConfigurationPrimaryButton");
+    });
+
+    it("status colour is still allowed to mean status", () => {
+        /* The read-only badge is semantic, not an action, and must survive the convergence. */
+        const designed = code("components/adminV2/settings/financials/DesignedConfigurationSurface.tsx");
+        expect(designed).toMatch(/read_only[\s\S]{0,120}sky-/);
+    });
+});
