@@ -214,6 +214,13 @@ export type RouteTimingMarks = {
          * loop made, which is the difference between "one slow read" and "N reads" — two facts that
          * need entirely different repairs and that a single duration cannot tell apart.
          */
+        /** The four concurrent Health reads. They DO NOT SUM; `health_ms` is about the slowest. */
+        health?: {
+            health_facts_ms: number | null;
+            health_profile_ms: number | null;
+            health_documents_ms: number | null;
+            health_contacts_ms: number | null;
+        };
         financials?: {
             agreements_ms: number | null;
             members_ms: number | null;
@@ -356,6 +363,53 @@ export function recordProducerSpans(
         marks.route_compose_spans = existing
             ? { ...existing, producers }
             : ({ producers } as never);
+    } catch {
+        /* diagnostics are never load-bearing */
+    }
+}
+
+/**
+ * A CLOCK FOR THE HEALTH BUILD'S FOUR CONCURRENT READS.
+ *
+ * `health_ms` measured 559 ms deployed and is the BINDING producer once the Financials gate is
+ * removed — yet the card's first-order content is four requirement flags and an emergency-contact
+ * count. Four reads run under one `Promise.allSettled`, so they DO NOT SUM and the 559 ms is
+ * approximately the slowest of them. Which one decides whether a request-time first-order
+ * architecture is viable at all, so it is measured rather than assumed.
+ */
+export type HealthSpanName = "health_facts_ms" | "health_profile_ms" | "health_documents_ms" | "health_contacts_ms";
+
+export function healthClock(): {
+    time: <T>(name: HealthSpanName, run: () => PromiseLike<T>) => Promise<T>;
+    spans: () => Partial<Record<HealthSpanName, number>>;
+} {
+    const enabled = routeTimingEnabled();
+    const out: Partial<Record<HealthSpanName, number>> = {};
+    return {
+        time: <T>(name: HealthSpanName, run: () => PromiseLike<T>): Promise<T> => {
+            if (!enabled) return Promise.resolve(run());
+            const started = performance.now();
+            return Promise.resolve(run()).finally(() => {
+                out[name] = Math.round(performance.now() - started);
+            });
+        },
+        spans: () => out,
+    };
+}
+
+/** Merge the Health spans into the request's `route_compose_spans`, never replacing it. */
+export function recordHealthSpans(spans: Partial<Record<HealthSpanName, number>>): void {
+    if (!routeTimingEnabled() || Object.keys(spans).length === 0) return;
+    try {
+        const { marks } = routeTimingCollector();
+        const existing = marks.route_compose_spans;
+        const health = {
+            health_facts_ms: spans.health_facts_ms ?? null,
+            health_profile_ms: spans.health_profile_ms ?? null,
+            health_documents_ms: spans.health_documents_ms ?? null,
+            health_contacts_ms: spans.health_contacts_ms ?? null,
+        };
+        marks.route_compose_spans = existing ? { ...existing, health } : ({ health } as never);
     } catch {
         /* diagnostics are never load-bearing */
     }

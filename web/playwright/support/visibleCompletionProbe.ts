@@ -557,6 +557,25 @@ export function installVisibleCompletionProbe(): void {
         perCard: {},
     };
 
+    /*
+     * POST-COMPLETE RECORDS (P0-7.6 — the double-commit causal chain).
+     *
+     * `postCompleteVisibleMutationCount` has always been a delta of the RAW V1 counter, so it
+     * answers "how many visible mutations happened after the quiet window" — not the metric that
+     * is actually gated, POST_COMPLETE_VISIBLE_AUTHORITATIVE_MUTATIONS. The V2.1 classifier
+     * already knows which kinds advance finality; it was simply never consulted here.
+     *
+     * This records each post-complete record WITH the classification the unchanged classifier
+     * gives it, plus the identity needed to correlate it to a React commit: batch id, section,
+     * generation, and the before/after fingerprints. Recording is armed by the harness at the
+     * settle point, so nothing is captured during normal first-order assembly.
+     */
+    const postRecords: Array<Record<string, unknown>> = [];
+    (window as unknown as { __p076post?: { armed: boolean; records: Array<Record<string, unknown>> } }).__p076post = {
+        armed: false,
+        records: postRecords,
+    };
+
     const mark = (recs?: MutationRecord[]) => {
         const now = performance.now();
         w.__p076!.last = now; w.__p076!.count++;
@@ -593,6 +612,29 @@ export function installVisibleCompletionProbe(): void {
             if (live) v2.latestGeneration = live;
             const genOfMutation = generationOf(judged[0]);
             const stale = genOfMutation !== null && live !== null && genOfMutation !== live;
+
+            const post = (window as unknown as { __p076post?: { armed: boolean; records: Array<Record<string, unknown>> } }).__p076post;
+            if (post?.armed && post.records.length < 400) {
+                const el = (r.target.nodeType === 1 ? r.target : r.target.parentElement) as Element | null;
+                post.records.push({
+                    t: Math.round(now - w.__p076!.t0),
+                    batchId,
+                    kind,
+                    kind21,
+                    advancesFinality: ADVANCES_FINALITY[kind21] === true,
+                    type: r.type,
+                    attributeName: r.attributeName ?? null,
+                    sectionId: blockingHost(r.target) ?? attribute(r.target),
+                    parentPath: el ? `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}` : null,
+                    componentId: el?.closest?.("[data-alloy-section-id]")?.getAttribute("data-alloy-section-id") ?? null,
+                    addedFp: fingerprintList(r.addedNodes),
+                    removedFp: fingerprintList(r.removedNodes),
+                    identical: fingerprintList(r.addedNodes) === fingerprintList(r.removedNodes),
+                    generation: genOfMutation,
+                    liveGeneration: live,
+                    stale,
+                });
+            }
 
             const host = blockingHost(r.target);
             if (host) {

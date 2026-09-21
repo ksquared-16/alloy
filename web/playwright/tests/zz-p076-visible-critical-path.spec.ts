@@ -224,6 +224,10 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
     // Anything that changes after the quiet window is a post-complete visible mutation.
     const settleAt = await page.evaluate(() => {
         const w = window as unknown as { __p076?: { count: number } };
+        // Arm the post-complete recorder exactly here, so the records describe the same window
+        // the count describes and nothing from first-order assembly leaks in.
+        const post = (window as unknown as { __p076post?: { armed: boolean } }).__p076post;
+        if (post) post.armed = true;
         return w.__p076?.count ?? 0;
     });
     await page.waitForTimeout(5_000);
@@ -231,6 +235,10 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         const w = window as unknown as { __p076?: { count: number } };
         return (w.__p076?.count ?? 0) - before;
     }, settleAt);
+    const postCompleteRecords = await page.evaluate(() => {
+        const post = (window as unknown as { __p076post?: { records: Array<Record<string, unknown>> } }).__p076post;
+        return post?.records ?? [];
+    });
     const idleMs = visibleCompleteMs;
 
     /*
@@ -510,6 +518,8 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             visibleCompleteV1QuietWindowMs: visibleCompleteMs,
             quietWindowMs: QUIET_MS,
             postCompleteVisibleMutationCount: postComplete,
+            postCompleteRecords,
+            postCompleteAuthoritative: postCompleteRecords.filter((r) => r.advancesFinality === true).length,
         },
         metricV2: v2,
         marks,
