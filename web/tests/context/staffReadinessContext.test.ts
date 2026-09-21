@@ -117,3 +117,67 @@ describe("no readiness storage exists anywhere in the slice", () => {
         expect(model).not.toMatch(/staff_availability|availabilityService/i);
     });
 });
+
+/**
+ * TWO CANONICAL FACTS THE SERVICE MUST NOT RESTATE.
+ *
+ * Both defects these lock were the same mistake wearing different clothes: the
+ * service held a private copy of something another module owns, and the copy was
+ * wrong. Mounted QA on 2026-09-21 found each one on the deployed build.
+ */
+describe("readiness reads canonical facts rather than restating them", () => {
+    const SERVICE = "lib/staffReadiness/staffReadinessService.ts";
+
+    it("defers to lib/employment for which statuses are open, and keeps no set of its own", () => {
+        // The hand-written set was `["active", "ending"]` — it omitted `pending_start`,
+        // which `EMPLOYMENT_OPEN_STATUSES` includes. The roster and the Employment card
+        // called the employment open; readiness called it "not started yet", and that
+        // enforced gap short-circuited every qualification requirement behind it.
+        const src = statements(code(SERVICE));
+        expect(src).toMatch(/isOpenEmploymentStatus\(/);
+        expect(src, "readiness must not keep its own list of open employment statuses")
+            .not.toMatch(/new Set\(\s*\[[^\]]*["']active["'][^\]]*\]\s*\)/);
+    });
+
+    it("asks the locations table for a column it actually has", () => {
+        // `locations` stores the display name in `label`. Selecting `name` is not a
+        // type error and does not throw: PostgREST fails, the destructured `data` is
+        // null, and the site simply loses its name — "Required this site" instead of
+        // "Required at North Campus". Scanned repo-wide, because the column is the
+        // same column everywhere.
+        // Two callers outside Staff already had this bug when the lock was written.
+        // They are named rather than excused: the lock's job is to stop NEW ones, and
+        // repairing comms and tours is not Slice 5's to do. See REMAINING DEBT.
+        const PRE_EXISTING = [
+            "lib/communications/inboxThreadsService.ts",
+            "lib/platform/commands/runtime/adapters/cancelTourAdapter.ts",
+        ];
+        const offenders: string[] = [];
+        const roots = ["lib", "app", "components"];
+        const walk = (dir: string): string[] => {
+            const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+            const out: string[] = [];
+            for (const entry of readdirSync(dir)) {
+                const full = join(dir, entry);
+                if (statSync(full).isDirectory()) out.push(...walk(full));
+                else if (/\.tsx?$/.test(entry)) out.push(full);
+            }
+            return out;
+        };
+        for (const root of roots) {
+            for (const file of walk(join(__dirname, "../../", root))) {
+                const src = statements(readFileSync(file, "utf8"));
+                const re = /from\(\s*["']locations["']\s*\)\s*\.\s*select\(\s*["']([^"']*)["']/g;
+                let m: RegExpExecArray | null;
+                while ((m = re.exec(src)) !== null) {
+                    const cols = m[1]!.split(",").map((c) => c.trim());
+                    const rel = file.split("/web/")[1]!;
+                    if (cols.includes("name") && !PRE_EXISTING.includes(rel)) {
+                        offenders.push(`${rel}: select("${m[1]}")`);
+                    }
+                }
+            }
+        }
+        expect(offenders, "locations has `label`, not `name`").toEqual([]);
+    });
+});
