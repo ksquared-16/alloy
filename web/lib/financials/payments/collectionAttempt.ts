@@ -103,7 +103,7 @@ export type CreateCardCollectionResult =
  * stored-method scope check has nothing to compare and the method's own org scope is the boundary
  * that remains. That is a narrower guarantee, and it is why this resolves rather than guesses.
  */
-async function resolveChargeAccount(
+export async function resolveChargeAccount(
     supabase: SupabaseClient,
     orgId: string,
     source: { billable_source_type: string; billable_source_id: string },
