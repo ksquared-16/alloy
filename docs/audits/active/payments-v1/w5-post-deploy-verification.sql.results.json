@@ -1,0 +1,57 @@
+{
+  "trusted_host_action_id": "tha_345f67109d76da",
+  "query_hash": "4523fc7f8c9ecfaa89d6246e614e06e715427273d77cec91c8266c39504bcc51",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:38:50.176Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_345f67109d76da",
+    "query_hash": "4523fc7f8c9ecfaa89d6246e614e06e715427273d77cec91c8266c39504bcc51",
+    "authorization_id": "grnt_5825e85939984b51",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:38:52.065Z",
+    "question_ids": [
+      "w5_post_deploy"
+    ],
+    "questions": {
+      "w5_post_deploy": {
+        "question_id": "w5_post_deploy",
+        "row_count": null,
+        "rows": [
+          {
+            "autopay_table_exists": true,
+            "autopay_rls": true,
+            "autopay_rls_forced": true,
+            "autopay_triggers": 2,
+            "autopay_one_live_index": 1,
+            "autopay_policies": 2,
+            "ledger_has_w5": 1,
+            "payments_intact": true,
+            "payment_methods_intact_w2": true,
+            "attempts_intact_w3": true,
+            "holds_intact_w4": true,
+            "clock_wake_count": 27,
+            "clock_last_wake_at": "2026-09-21 21:35:03.465357+00",
+            "clock_seconds_since_wake": 229,
+            "autopay_schedules": 0,
+            "autopay_schedules_active": 0,
+            "autopay_occurrences": 0,
+            "autopay_occurrences_done": 0,
+            "autopay_attempts": 0,
+            "autopay_attempt_outcomes": null,
+            "autopay_last_diagnostic": null,
+            "autopay_arrangements_total": 0,
+            "autopay_arrangements_live": 0
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
