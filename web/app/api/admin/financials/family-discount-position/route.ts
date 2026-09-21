@@ -83,6 +83,13 @@ export async function GET(request: NextRequest) {
                 customerMemberId: string | null;
                 expectedCents: number;
                 currencyCode: string;
+                /*
+                 * THE BASIS IS PER RELATIONSHIP, NOT PER POLICY. One sibling policy produced
+                 * "10% of $185.00" for one child and "10% of $1,450.00" for the other; carrying
+                 * the first at the policy header stated one child's basis as if it were the
+                 * policy's. The forecast says it per outcome, so it is kept per subject.
+                 */
+                explanation: string | null;
             }[];
         }>();
         /* Why a relationship expects nothing — the sentence an operator needs when a discount is absent. */
@@ -104,6 +111,7 @@ export async function GET(request: NextRequest) {
                         /* Carried through exactly as the forecast stated it. Nothing is summed here. */
                         expectedCents: outcome.amountCents,
                         currencyCode: p.forecast?.currencyCode ?? p.currencyCode ?? "USD",
+                        explanation: outcome.explanation ?? null,
                     });
                     byPolicy.set(outcome.policyId, entry);
                     continue;

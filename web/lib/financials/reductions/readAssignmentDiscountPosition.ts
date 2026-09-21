@@ -130,7 +130,8 @@ export async function readAssignmentDiscountPosition(
     }).catch(() => []);
     const policyLabels = new Map(
         (await readPolicies({ supabase, orgId: args.orgId } as never).catch(() => [])).map(
-            (p) => [p.id, (p.params?.label as string | undefined) ?? p.kind] as const,
+            /* Same precedence as the forecast: configured name, then authored value, then kind. */
+            (p) => [p.id, p.label ?? (p.params?.label as string | undefined) ?? p.kind] as const,
         ),
     );
     const todayYmd = new Date().toISOString().slice(0, 10);
