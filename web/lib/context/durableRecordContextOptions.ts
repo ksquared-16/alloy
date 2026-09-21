@@ -114,6 +114,17 @@ const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = [
     "availability",
     // A canonical card about the record, like the three above it.
     "readiness",
+    /*
+     * Compensation is a record fact — what this employment is paid — not a
+     * commitment about somebody's week, so it belongs in this set rather than
+     * beside `schedule` and `placement`.
+     *
+     * Listing it here is safe precisely because the CONTEXT is already gated:
+     * `buildSubjectCompensationContext` returns null for a caller without
+     * `staff.compensation.read`, so an unauthorized operator never has a
+     * compensation context for this list to admit.
+     */
+    "compensation",
 ];
 
 export type DurableRecordContextOption = {

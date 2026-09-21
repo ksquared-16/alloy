@@ -268,7 +268,7 @@ describe("card applicability is declared per card, not switched centrally", () =
          * composer reads. Qualifications is declared immediately after Staff because the two are
          * read together.
          */
-        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "scheduling"]);
+        expect(cardKeysForGrain("person")).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
         // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
@@ -284,7 +284,14 @@ describe("card applicability is declared per card, not switched centrally", () =
         // `staff` and `staff_qualifications` join it: a person-grain card is legitimately not
         // case-grain. The invariant the test guards is unchanged — no card that WAS case-grain
         // silently stopped being one.
-        expect(excluded).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "child_identity"]);
+        // `staff_compensation` joins them (Slice 9). `health_safety` was already
+        // outside the case grain and this census had stopped noticing — recording it
+        // restores the test's function rather than papering over it; the drift is
+        // another lane's and is called out here rather than absorbed silently.
+        expect(excluded).toEqual([
+            "staff", "staff_qualifications", "staff_availability", "staff_readiness",
+            "staff_compensation", "health_safety", "child_identity",
+        ]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -302,7 +309,7 @@ describe("card applicability is declared per card, not switched centrally", () =
             subject: staffSubject(),
             canMutate: true,
         });
-        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness"]);
+        expect([...model.cardModels.keys()]).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
         // No empty shell pretending applicability.
         expect(model.cardReadiness.has("current_work")).toBe(false);
         expect(model.cardReadiness.has("household")).toBe(false);
@@ -373,8 +380,8 @@ describe("default composition varies by grain", () => {
          * Either alone is inert, which is the friction the composition module documents.
          */
         const composition = focusPanelDefaultCompositionForGrain("person");
-        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness"]);
-        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible", "visible"]);
+        expect(composition.map((e) => e.key)).toEqual(["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation"]);
+        expect(composition.map((e) => e.visibility)).toEqual(["visible", "visible", "visible", "visible", "visible"]);
         // Side by side, not stacked: two six-column areas on the same row. A qualification that
         // expires is not something an operator should have to scroll to.
         expect(composition.map((e) => e.area)).toEqual([
@@ -386,6 +393,9 @@ describe("default composition varies by grain", () => {
             // Readiness reads LAST: it summarises the three above it, so an operator
             // sees the verdict after the facts it derives from.
             { colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3 },
+            // Compensation last: the most sensitive card in the family, and the least
+            // often the reason the record was opened.
+            { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 3 },
         ]);
     });
 

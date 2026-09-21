@@ -53,6 +53,7 @@ import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveO
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import {
     derivePersonAvailabilityCard,
+    derivePersonCompensationCard,
     derivePersonReadinessCard,
     derivePersonQualificationsCard,
     derivePersonStaffCard,
@@ -399,6 +400,28 @@ export default function DurableRecordContextualCard({
                     // Tab-pane drill navigation, which a contextual card has no tabs for. The
                     // renderer requires it; pure cards ignore it.
                     compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "compensation" && subject.kind === "staff") {
+            /*
+             * Reached only when the context layer offered a compensation context,
+             * which it does only for a caller holding `staff.compensation.read`.
+             * The card re-checks anyway and renders nothing on a 403.
+             */
+            if (!cardAppliesToGrain("staff_compensation", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_compensation"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonCompensationCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );

@@ -46,12 +46,15 @@ describe("the final Staff card family", () => {
             "staff_qualifications",
             "staff_availability",
             "staff_readiness",
+            // Slice 9. The only RESTRICTED member of the family: the context layer
+            // withholds it from a caller without `staff.compensation.read`.
+            "staff_compensation",
             "scheduling",
         ]);
     });
 
     it("every card in the family declares the person grain", () => {
-        for (const key of ["staff", "staff_qualifications", "staff_availability", "staff_readiness", "scheduling"] as const) {
+        for (const key of ["staff", "staff_qualifications", "staff_availability", "staff_readiness", "staff_compensation", "scheduling"] as const) {
             expect(cardAppliesToGrain(key, "person"), `${key} must reach the person grain`).toBe(true);
         }
     });

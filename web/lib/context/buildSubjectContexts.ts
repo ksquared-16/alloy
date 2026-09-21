@@ -336,6 +336,38 @@ export function buildSubjectReadinessContext(
 }
 
 /**
+ * Compensation, as a context — offered only to a caller who may see it.
+ *
+ * `canRead` is not a convenience flag: the durable-record route resolves it from
+ * `ctx.permissionKeys`, and passing `false` must produce NOTHING rather than a
+ * placeholder. No detail is carried either, for the same reason the readiness
+ * context carries none — a rate in the chip line would leak the very fact the
+ * capability exists to withhold.
+ */
+export function buildSubjectCompensationContext(
+    employment: PersonEmploymentComposition | null | undefined,
+    personId: string | null,
+    canRead: boolean,
+): SubjectContext | null {
+    if (!canRead) return null;
+    if (!employment?.is_staff) return null;
+    return {
+        kind: "compensation",
+        key: "compensation",
+        label: "Compensation",
+        detail: null,
+        secondary: null,
+        destination_entity_type: personId ? "persons" : null,
+        destination_entity_id: personId,
+        destination_work_unit_key: null,
+        destination_work_view_id: null,
+        stage_key: null,
+        state: null,
+        operational_memberships: null,
+    };
+}
+
+/**
  * The record's own information, as a context.
  *
  * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──

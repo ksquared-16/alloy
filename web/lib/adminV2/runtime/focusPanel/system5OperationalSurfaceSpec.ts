@@ -34,6 +34,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     staff_qualifications: "wide",
     staff_availability: "wide",
     staff_readiness: "wide",
+    staff_compensation: "wide",
     attendance: "wide",
     financials: "wide",
     health_safety: "wide",
@@ -100,6 +101,7 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     staff_availability: "CalendarClock",
     // Reuses the readiness glyph the platform already associates with the question.
     staff_readiness: "ShieldCheck",
+    staff_compensation: "DollarSign",
     attendance: "Clock",
     financials: "DollarSign",
     health_safety: "HeartPulse",

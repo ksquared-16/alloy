@@ -82,7 +82,18 @@ export type SubjectContextKind =
      * identity the frame and everything else an accessory. An operator opening Lennon is as likely
      * to want his schedule as his date of birth, and the chooser should not decide that for them.
      */
-    | "identity";
+    | "identity"
+    /**
+     * What this employment is paid, and since when.
+     *
+     * The only context in this union that depends on WHO IS ASKING. Every other one
+     * exists because the subject has the fact; this one also requires the caller to
+     * hold `staff.compensation.read`, and is absent otherwise — not disabled, not
+     * empty, absent. A greyed-out "Compensation" chip would tell an unauthorized
+     * operator that there is pay data and they are not trusted with it, which is a
+     * disclosure of a different kind.
+     */
+    | "compensation";
 
 /**
  * One configured Work View this subject ACTUALLY belongs to, and can actually compose in.
