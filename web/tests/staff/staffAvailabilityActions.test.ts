@@ -95,19 +95,21 @@ describe("add_exception payload validation", () => {
 });
 
 describe("the result envelope the runtime validates", () => {
-    const db = {
+    // Typed as a record so the refusal case can spread it; `as never` at the call
+    // site is what satisfies the executor's own parameter type.
+    const db: Record<string, unknown> = {
         from() { return this; }, select() { return this; }, eq() { return this; },
         is() { return this; }, lt() { return this; }, order() { return this; },
         update() { return this; }, insert() { return this; },
         maybeSingle: async () => ({ data: { id: "emp-1" }, error: null }),
         single: async () => ({ data: { id: "exc-1", org_id: "o1" }, error: null }),
         then: (res: (v: unknown) => void) => res({ data: [{ id: "w-1" }], error: null }),
-    } as never;
+    };
     const ctx = { orgId: "o1", userId: "u1" } as never;
 
     it("success is { ok, correlationId, result }, never a bare data bag", async () => {
         const res = await staffAvailabilityAddExceptionAction.execute!({
-            supabase: db, ctx,
+            supabase: db as never, ctx,
             payload: { employment_id: "emp-1", exception_date: "2026-09-28", exception_kind: "unavailable" },
         } as never);
         expect(res.ok).toBe(true);
@@ -122,9 +124,9 @@ describe("the result envelope the runtime validates", () => {
     });
 
     it("a domain refusal carries a STRING error and an http status", async () => {
-        const missing = { ...db, maybeSingle: async () => ({ data: null, error: null }) } as never;
+        const missing = { ...db, maybeSingle: async () => ({ data: null, error: null }) };
         const res = await staffAvailabilityAddExceptionAction.execute!({
-            supabase: missing, ctx,
+            supabase: missing as never, ctx,
             payload: { employment_id: "foreign", exception_date: "2026-09-28", exception_kind: "unavailable" },
         } as never);
         expect(res.ok).toBe(false);
