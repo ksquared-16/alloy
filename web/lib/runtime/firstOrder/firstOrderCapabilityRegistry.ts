@@ -3,10 +3,12 @@ import {
     forbidden, known, knownEmpty, unavailable, unknown,
     type FirstOrderField,
 } from "@/lib/runtime/firstOrder/firstOrderWorkUnitProjection";
-import type {
-    FirstOrderCapability, FirstOrderProjectionContext, FirstOrderScalar,
+import {
+    KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY,
+    type FirstOrderCapability, type FirstOrderProjectionContext, type FirstOrderScalar,
 } from "@/lib/runtime/firstOrder/firstOrderCapability";
 import type { AccountLedgerPosition } from "@/lib/runtime/firstOrder/readAccountLedgerPosition";
+
 
 /**
  * THE REGISTERED FIRST-ORDER CAPABILITIES.
@@ -307,6 +309,52 @@ const CAPABILITIES: readonly FirstOrderCapability[] = [
                 return project(c.accountLedger);
             },
         })),
+
+    // ── KPI VALUES (family) ──────────────────────────────────────────────────────────────────
+    /*
+     * ONE capability for the whole family, selected per configured slot. The configured
+     * `sourceKey` is the member; `resolveWorkUnitHeaderKpis` is the canonical owner and
+     * `workUnitHeaderKpiKeysFromSlots` already validates members against `isKnownOipMetricKey`,
+     * so an unknown KPI key is rejected by the platform's own vocabulary rather than by a list
+     * kept here.
+     */
+    {
+        semanticKey: `${KPI_CAPABILITY_FAMILY}:*`,
+        canonicalOwner: "lib/runtime/provisioning/workUnitHeaderKpiResolution.resolveWorkUnitHeaderKpis",
+        grain: "work_unit", prerequisites: ["header_kpis"], authorization: "analytics_read",
+        project: () => unknown<FirstOrderScalar>(),
+        projectMember: (identity, c) => {
+            if (!c.headerKpis) return unavailable<FirstOrderScalar>("KPI resolution failed");
+            if (c.headerKpis.status === "forbidden") return forbidden<FirstOrderScalar>();
+            if (c.headerKpis.status !== "ok") return unavailable<FirstOrderScalar>(`KPI status ${c.headerKpis.status}`);
+            const v = c.headerKpis.values[identity];
+            // A KPI the resolver did not answer is UNKNOWN. Zero is a real operational figure and
+            // must never stand in for "not resolved" on a metric an operator acts on.
+            if (v == null) return unknown<FirstOrderScalar>();
+            const n = typeof v === "number" ? v : Number((v as { value?: unknown })?.value);
+            return Number.isFinite(n) ? known(n) : unknown<FirstOrderScalar>();
+        },
+    },
+
+    // ── WORK VIEW VALUES (family) ────────────────────────────────────────────────────────────
+    /*
+     * `resolveWorkViewTotalsSeed` delegates to `evaluateWorkViewTotalsForGroup`, the ONE canonical
+     * evaluator. Nothing is re-implemented here — the QVT duplication this programme already
+     * closed stays closed.
+     */
+    {
+        semanticKey: `${WORK_VIEW_CAPABILITY_FAMILY}:*`,
+        canonicalOwner: "lib/runtime/provisioning/workViewTotalsSeed.resolveWorkViewTotalsSeed",
+        grain: "work_unit", prerequisites: ["work_view_totals"], authorization: "none",
+        project: () => unknown<FirstOrderScalar>(),
+        projectMember: (identity, c) => {
+            if (!c.workViewTotals) return unavailable<FirstOrderScalar>("work view totals unavailable");
+            if (c.workViewTotals.status !== "ok") return unavailable<FirstOrderScalar>(`work view totals ${c.workViewTotals.status}`);
+            const v = c.workViewTotals.totalsByViewId[identity];
+            if (v == null) return unknown<FirstOrderScalar>();
+            return known(v);
+        },
+    },
 ];
 
 const BY_KEY: ReadonlyMap<string, FirstOrderCapability> = new Map(CAPABILITIES.map((c) => [c.semanticKey, c]));

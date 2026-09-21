@@ -34,11 +34,11 @@
  * (`payment_provider_merchants`), and any stored payment methods (`payment_methods`).
  * Canonical elsewhere: the payment itself, its actual payer, its method, its applications, refunds.
  *
- * NOT canonical anywhere: AUTOPAY. There is no table, no column and no writer — it appears only in
- * design fixtures and the concept catalog. It is therefore reported `unsupported` with that reason,
- * which is the truthful state, and is not invented here. The smallest canonical model it would need
- * is specified in the payment productization document; building an empty table with no writer and
- * no tokenization behind it would add schema without adding truth.
+ * CANONICAL SINCE W5: AUTOPAY. `payment_autopay_arrangements` is the authority, and this reads it.
+ * The previous note here said Autopay had "no table, no column and no writer" and was therefore
+ * reported `unsupported` — the truthful answer at the time, and the reason that constant is gone
+ * rather than edited. What replaced it is a measurement: an account either has an authorization or
+ * it does not, and "no Autopay" now means no row rather than no implementation.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -82,6 +82,29 @@ export type PaymentSetupState = {
     /** Adding, removing or replacing a stored payment method. */
     manageMethods: { state: PaymentCapabilityState; reason: string | null };
     autopay: { state: PaymentCapabilityState; reason: string | null };
+    /**
+     * The canonical arrangement, when one exists (Payments W5).
+     *
+     * Null means NO arrangement — which is a measurement now, not an absence of implementation.
+     * The `autopay` capability above still answers whether Autopay can be SET UP; this answers what
+     * is actually authorized today.
+     */
+    autopayArrangement: {
+        id: string;
+        status: "active" | "paused" | "revoked" | "failed";
+        payerEntityId: string;
+        paymentMethodId: string;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+        maxAmountCents: number | null;
+        timingOffsetDays: number;
+        lastAttemptAt: string | null;
+        lastFailureReason: string | null;
+        /** The one sentence a compact surface shows. */
+        summaryLine: string;
+        /** True when an operator needs to do something. Drives the attention treatment. */
+        needsAttention: boolean;
+    } | null;
     /**
      * Methods already on file for this household, if any. Identifiers and safe display only; never
      * a secret, and never a provider reference.
@@ -210,9 +233,34 @@ export async function resolvePayerCandidates(
     };
 }
 
-const UNSUPPORTED_AUTOPAY =
-    "Alloy has no autopay model yet — no table, no column and no writer, so nothing about this "
-    + "account can be true or false. It is not switched off; it does not exist.";
+/**
+ * The one sentence a compact surface shows for an arrangement, and the attention verdict.
+ *
+ * "Needs attention" is deliberately narrow: only states an OPERATOR can act on. A paused
+ * arrangement is a decision somebody made, not a problem, so it reads as paused and nothing flashes.
+ */
+function autopayPresentation(row: {
+    status: string;
+    lastFailureReason: string | null;
+}): { summaryLine: string; needsAttention: boolean } {
+    if (row.status === "failed") {
+        return {
+            summaryLine: row.lastFailureReason?.trim() || "Autopay needs attention",
+            needsAttention: true,
+        };
+    }
+    if (row.status === "paused") return { summaryLine: "Autopay paused", needsAttention: false };
+    if (row.status === "revoked") return { summaryLine: "No Autopay", needsAttention: false };
+    /*
+     * An ACTIVE arrangement may still carry the last refusal — most often "amount due exceeds the
+     * Autopay authorization", which is the case an operator must see because nothing will collect
+     * until they act, and yet the arrangement is perfectly healthy.
+     */
+    if (row.lastFailureReason?.trim()) {
+        return { summaryLine: row.lastFailureReason.trim(), needsAttention: true };
+    }
+    return { summaryLine: "Autopay on", needsAttention: false };
+}
 
 export async function resolvePaymentSetup(
     supabase: SupabaseClient,
@@ -221,7 +269,7 @@ export async function resolvePaymentSetup(
     const orgId = t(args.orgId);
     const customerId = t(args.customerId);
 
-    const [merchantRow, methodRows] = await Promise.all([
+    const [merchantRow, methodRows, autopayRow] = await Promise.all([
         orgId
             ? supabase
                   .from("payment_provider_merchants")
@@ -252,6 +300,25 @@ export async function resolvePaymentSetup(
                   .order("created_at", { ascending: false })
                   .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as Array<Record<string, unknown>>)))
             : Promise.resolve([] as Array<Record<string, unknown>>),
+        /*
+         * THE CANONICAL AUTOPAY READ (W5). Live statuses only: a revoked arrangement is history,
+         * and surfacing it would tell an operator Autopay exists when the payer withdrew it.
+         */
+        customerId && orgId
+            ? supabase
+                  .from("payment_autopay_arrangements")
+                  .select(
+                      "id, status, payer_entity_id, payment_method_id, effective_from, effective_to, "
+                      + "max_amount_cents, timing_offset_days, last_attempt_at, last_failure_reason",
+                  )
+                  .eq("org_id", orgId)
+                  .eq("customer_id", customerId)
+                  .in("status", ["active", "paused", "failed"])
+                  .order("authorized_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+                  .then((r) => (r.error ? null : (r.data as Record<string, unknown> | null)))
+            : Promise.resolve(null),
     ]);
 
     const readiness = t(merchantRow?.readiness) || null;
@@ -288,6 +355,42 @@ export async function resolvePaymentSetup(
 
     /* Cash, cheque and money order need no merchant. This is the capability that is always there. */
     const recordPayment = { state: "available" as PaymentCapabilityState, reason: null };
+
+    const autopayStatus = t(autopayRow?.status);
+    const autopayArrangement = autopayRow && autopayStatus
+        ? (() => {
+              const presentation = autopayPresentation({
+                  status: autopayStatus,
+                  lastFailureReason: t(autopayRow.last_failure_reason) || null,
+              });
+              return {
+                  id: t(autopayRow.id),
+                  status: autopayStatus as "active" | "paused" | "revoked" | "failed",
+                  payerEntityId: t(autopayRow.payer_entity_id),
+                  paymentMethodId: t(autopayRow.payment_method_id),
+                  effectiveFrom: t(autopayRow.effective_from),
+                  effectiveTo: t(autopayRow.effective_to) || null,
+                  maxAmountCents: autopayRow.max_amount_cents == null ? null : Number(autopayRow.max_amount_cents),
+                  timingOffsetDays: Number(autopayRow.timing_offset_days ?? 0),
+                  lastAttemptAt: t(autopayRow.last_attempt_at) || null,
+                  lastFailureReason: t(autopayRow.last_failure_reason) || null,
+                  ...presentation,
+              };
+          })()
+        : null;
+
+    /*
+     * The CAPABILITY answers "can Autopay be set up here", which needs a usable method and a
+     * merchant that can charge it. It is not the same question as "is Autopay on", which the
+     * arrangement above answers — an account can have Autopay active while the merchant is
+     * temporarily restricted, and a surface that conflated the two would offer to set up something
+     * already running.
+     */
+    const autopayCapability: { state: PaymentCapabilityState; reason: string | null } = !merchant
+        ? { state: "not_configured", reason: NO_MERCHANT }
+        : !methodSummary.hasUsableMethod
+          ? { state: "not_configured", reason: "No usable payment method is on file for this account." }
+          : { state: "available", reason: null };
 
     const card = merchantCapability(merchant?.readiness ?? null, "card");
     /*
@@ -333,7 +436,8 @@ export async function resolvePaymentSetup(
                 ? { state: "available" as PaymentCapabilityState, reason: null }
                 : card
             : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT },
-        autopay: { state: "unsupported", reason: UNSUPPORTED_AUTOPAY },
+        autopay: autopayCapability,
+        autopayArrangement,
         methodsOnFile,
         methodSummary,
         merchant,

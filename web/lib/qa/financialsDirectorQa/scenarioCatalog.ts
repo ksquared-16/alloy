@@ -152,6 +152,8 @@ export const MONEY_INVARIANTS = Object.freeze({
     MOVE_IS_NON_ATOMIC: "Move Payment is deliberately not atomic. If the reversal succeeds and the reapplication fails, the cash stays unapplied and recovery is Apply Payment. Nothing fabricates a rollback.",
     REDUCTION_FLOOR: "A reduction may take an obligation to exactly zero and not one cent further.",
     POSTED_MONEY_IS_IMMUTABLE: "Posted money is never edited or deleted. A correction is appended beside it and the original stays readable.",
+    AUTOPAY_IS_CONSENT_NOT_A_BALANCE: "A saved payment method is not Autopay. Autopay is a payer's standing authorization, recorded once with its payer, method, period, amount policy and any ceiling, and never edited afterwards \u2014 changing the payer or the method is a NEW authorization. What it collects is resolved from Financials at the moment of collection, every time, so a family who has already paid is charged nothing.",
+    AUTOPAY_NEVER_COLLECTS_THE_MAXIMUM: "An authorized maximum is a REFUSAL THRESHOLD, not a cap. When the amount due exceeds it, Autopay collects NOTHING and says why. Collecting the maximum would be a payment plan the payer never agreed to.",
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
@@ -1343,6 +1345,353 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "A chapter that renders a shell with no content.",
         ],
     }),
+    S({
+        key: "autopay_enrollment",
+        order: 61,
+        title: "Setting up Autopay is an explicit authorization, and a saved card alone is not one",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove that storing a payment method does not switch Autopay on, and that enrolling records who authorized what.",
+        whyItMatters:
+            "This is the first capability in the product that takes a family's money with nobody present. If storing a card implied consent, every family who ever saved one would be enrolled without being asked.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With a usable card on file and no Autopay, read the section: it must say there is no Autopay on this account.",
+            "Press Set up Autopay. Choose the payer, the method, the start date, and leave the maximum empty.",
+            "Confirm the terms, then read the section back.",
+        ],
+        expectChanges: [
+            "The section states Autopay on, and names the payer and the method that were authorized.",
+        ],
+        expectUnchanged: [
+            "Every figure on the card. Authorizing future collection moves no money today.",
+            "The stored payment methods list, which is unchanged by enrolling.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Autopay reported as on before anything was authorized.",
+            "A Set up Autopay control offered when no usable method is on file.",
+            "Any balance or Due figure changing when the authorization is recorded.",
+        ],
+    }),
+    S({
+        key: "autopay_card_collection",
+        order: 62,
+        title: "Autopay collects what is currently owed on a card, exactly once",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a scheduled Autopay run raises an ordinary card collection for the amount actually due.",
+        whyItMatters:
+            "Autopay must reuse the ordinary collection path. A separate Autopay payment writer would be a second way money enters the platform, free to disagree with the first about the payer, the rail or the recognition.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active and a posted charge due today, let the scheduled run execute.",
+            "Read the Payments history for the account.",
+            "Read the receipt: payer, method, rail and amount.",
+        ],
+        expectChanges: [
+            "Exactly one collection attempt, for the amount due and no more.",
+            "The receipt carries the authorized payer and the authorized method.",
+        ],
+        expectUnchanged: [
+            "What the family OWES. Collection settles an obligation; it does not create or change one.",
+            "Responsibility. Who pays is not who owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Two attempts for one obligation.",
+            "An amount that is not what was due.",
+            "A receipt with no payer, or a different payer from the one authorized.",
+        ],
+    }),
+    S({
+        key: "autopay_bank_processing",
+        order: 63,
+        title: "A bank debit in flight is not money yet",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove an ACH Autopay collection reads as processing, and does not reduce what is owed until it settles.",
+        whyItMatters:
+            "Bank money takes days. Treating a submitted debit as received would tell an operator a family had paid when the money can still be returned.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay on a bank account, let a scheduled run execute.",
+            "Read the collection immediately, then after settlement.",
+        ],
+        expectChanges: [
+            "The collection appears as processing, with an expected settlement date.",
+            "After settlement, exactly one Payment exists for it.",
+        ],
+        expectUnchanged: [
+            "Current balance and Due, while the debit is still processing. Nothing has arrived yet.",
+            "The number of Payments: settlement completes the one attempt, it does not add a second.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "A balance that drops the moment the debit is submitted.",
+            "Two Payments for one settled debit.",
+            "A processing collection shown with no expected date.",
+        ],
+    }),
+    S({
+        key: "autopay_failure",
+        order: 64,
+        title: "A declined Autopay collection is visible, and is not retried as an infrastructure fault",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a refused collection is recorded against the arrangement and surfaced, without the platform hammering the card.",
+        whyItMatters:
+            "A decline is a money event, not a broken server. Retrying it on infrastructure cadence would re-present a declined card within the minute and could incur fees on the family.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active and a collection that the provider refuses, let a scheduled run execute.",
+            "Read the Autopay section and the account history.",
+        ],
+        expectChanges: [
+            "The Autopay section shows the arrangement needs attention, with the reason.",
+            "One attempt is recorded, not many.",
+        ],
+        expectUnchanged: [
+            "The authorization itself, which is still on file and has not been withdrawn.",
+            "What the family owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Repeated attempts within minutes.",
+            "A decline reported as a system error.",
+            "The arrangement silently disappearing.",
+        ],
+    }),
+    S({
+        key: "autopay_retry",
+        order: 65,
+        title: "Autopay retries are bounded, and bank retries are spaced",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a failed Autopay collection is retried within limits and then stops.",
+        whyItMatters:
+            "Unbounded retries hammer a family's account. Re-presenting a bank debit too soon incurs a second return fee on money that never had time to settle.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "After a failed Autopay collection, observe the following scheduled runs.",
+            "Read the attempt history and the arrangement state.",
+        ],
+        expectChanges: [
+            "At most two retries after the first attempt.",
+            "For a bank account, at least three business days between attempts.",
+            "After the retries are spent, the arrangement reads as failed and stops attempting.",
+        ],
+        expectUnchanged: [
+            "What the family owes, throughout.",
+            "The original authorization record, which is never rewritten by a retry.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A third retry.",
+            "Two bank attempts on consecutive days.",
+            "Attempts continuing after the arrangement has failed.",
+        ],
+    }),
+    S({
+        key: "autopay_pause",
+        order: 66,
+        title: "Pausing stops the next collection and does not reach into money already in flight",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a pause prevents new collections while leaving a submitted collection alone.",
+        whyItMatters:
+            "A pause is an instruction about the future. Pretending it reverses a debit already with the bank would be a claim the bank does not share.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, press Pause.",
+            "Let a scheduled run occur and read the account.",
+            "If a collection was already in flight, read its state too.",
+        ],
+        expectChanges: [
+            "The section reads Autopay paused.",
+            "No new collection is created by the scheduled run.",
+        ],
+        expectUnchanged: [
+            "Any collection already with the provider, which continues on provider truth.",
+            "The authorization, which is kept so resuming needs no new consent.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A new collection appearing while paused.",
+            "An in-flight collection cancelled by the pause.",
+            "The authorization discarded rather than held.",
+        ],
+    }),
+    S({
+        key: "autopay_resume",
+        order: 67,
+        title: "Resuming restores future collection and invents no catch-up",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a resume makes Autopay live again without collecting for the periods it missed.",
+        whyItMatters:
+            "Periods that passed while paused were deliberately not collected. Charging for them on resume would turn a pause into a deferral the payer never agreed to, and could take several periods at once.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay paused across at least one due date, press Resume.",
+            "Let the next scheduled run occur and read what was collected.",
+        ],
+        expectChanges: [
+            "The section reads Autopay on again.",
+            "Only what is currently due is collected.",
+        ],
+        expectUnchanged: [
+            "The missed periods, which are NOT collected retrospectively.",
+            "What the family owes, which the pause never changed.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A catch-up collection covering the paused periods.",
+            "Several collections at once on resume.",
+            "A resume succeeding onto a payment method that is no longer usable.",
+        ],
+    }),
+    S({
+        key: "autopay_revoke",
+        order: 68,
+        title: "Turning Autopay off is permanent for that authorization",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove revoking ends collection for good, and that restarting records a new authorization.",
+        whyItMatters:
+            "Consent that could be switched back on by an operator would mean a payer who withdrew permission could have it restored without being asked. Restarting must be a new decision with its own record.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, press Turn off Autopay and confirm.",
+            "Let a scheduled run occur.",
+            "Then set Autopay up again and read the authorization date.",
+        ],
+        expectChanges: [
+            "The section reads that there is no Autopay, and no collection is created.",
+            "Setting up again produces a NEW authorization with today's date.",
+        ],
+        expectUnchanged: [
+            "Any collection already with the provider.",
+            "The original authorization record, which stays readable as it was given.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A revoked arrangement returning to active.",
+            "A restart reusing the original authorization date.",
+            "Collection continuing after revocation.",
+        ],
+    }),
+    S({
+        key: "autopay_method_invalidated",
+        order: 69,
+        title: "A dead payment method ends the Autopay that stood on it, with no silent fallback",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove that removing or invalidating the authorized method fails the arrangement rather than switching to another card.",
+        whyItMatters:
+            "The payer authorized ONE instrument. Charging a different card on file would be collecting under a consent nobody gave. Leaving the arrangement active would mean the card says Autopay is on while every run refuses.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, remove the authorized payment method, or let a bank return invalidate it.",
+            "Read the Autopay section.",
+            "Confirm whether any other method on file was used.",
+        ],
+        expectChanges: [
+            "The arrangement reads as needing attention and stops collecting.",
+            "The reason names the payment method.",
+        ],
+        expectUnchanged: [
+            "Every other stored payment method, none of which is used as a substitute.",
+            "What the family owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A collection on a method the payer did not authorize.",
+            "Autopay still reading as on after its method was removed.",
+            "The arrangement silently deleted rather than shown as needing attention.",
+        ],
+    }),
 ]);
 
 /** The scenarios a human is actually asked to drive. */
@@ -1425,6 +1774,21 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     refund: "PAYMENTS_PHASE",
     /* Shipped by W2, and unlike the four above it is walkable rather than waiting on the program. */
     payment_method_on_file: "PAYMENTS_PHASE",
+
+    /*
+     * AUTOPAY, shipped by W5. Walkable rather than waiting: the authorization, the surface and the
+     * scheduled execution all exist. Human acceptance is W7, which is why every one of these is
+     * AUTOMATED_CERTIFIED_HUMAN_PENDING and none is a PASS.
+     */
+    autopay_enrollment: "PAYMENTS_PHASE",
+    autopay_card_collection: "PAYMENTS_PHASE",
+    autopay_bank_processing: "PAYMENTS_PHASE",
+    autopay_failure: "PAYMENTS_PHASE",
+    autopay_retry: "PAYMENTS_PHASE",
+    autopay_pause: "PAYMENTS_PHASE",
+    autopay_resume: "PAYMENTS_PHASE",
+    autopay_revoke: "PAYMENTS_PHASE",
+    autopay_method_invalidated: "PAYMENTS_PHASE",
 
     /*
      * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"

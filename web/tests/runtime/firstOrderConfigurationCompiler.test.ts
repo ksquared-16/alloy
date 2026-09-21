@@ -65,6 +65,9 @@ vi.mock("@/lib/runtime/firstOrder/readAccountLedgerPosition", () => ({
         pastDue: { amountCents: 25000, oldestDueDate: "2026-08-01", agingDays: 51 },
     })),
 }));
+vi.mock("@/lib/runtime/firstOrder/readFirstOrderValueSeeds", () => ({
+    readHeaderKpiValues: vi.fn(async () => ({ status: "ok", values: { a: 6, b: 6, c: 20 } })),
+}));
 vi.mock("@/lib/queues/operatorStageMembershipAck", () => ({ loadAcknowledgedOccurrenceKeys: vi.fn(async () => new Set<string>()) }));
 
 import {
@@ -72,12 +75,14 @@ import {
 } from "@/lib/runtime/firstOrder/composeFirstOrderWorkUnitProjection";
 import { compileFirstOrderPlan, type FirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/compileFirstOrderPlan";
 import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
-import { registeredFirstOrderSemanticKeys } from "@/lib/runtime/firstOrder/firstOrderCapabilityRegistry";
+import { findFirstOrderCapability, registeredFirstOrderSemanticKeys } from "@/lib/runtime/firstOrder/firstOrderCapabilityRegistry";
+import { KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY } from "@/lib/runtime/firstOrder/firstOrderCapability";
 import { FOCUS_PANEL_CARDS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
+import { readHeaderKpiValues } from "@/lib/runtime/firstOrder/readFirstOrderValueSeeds";
 import { enrichOpportunityRowsWithChildrenForCompactQueue } from "@/lib/runtime/provisioning/enrichOpportunityRowsWithChildrenForCompactQueue";
 
 const SRC_DIR = resolve(process.cwd(), "lib/runtime/firstOrder");
@@ -326,9 +331,12 @@ describe("PART 7/8 — a synthetic Billing process compiles through the SAME run
         const r = await compose(BILLING);
         expect(buildAttendanceCardVM).not.toHaveBeenCalled();
         expect(readHealthFirstOrderSupplements).not.toHaveBeenCalled();
-        expect(r.timing.executedResolvers.sort()).toEqual(["crm_projection", "personal_seen", "population", "prepaid_position", "process_config"]);
+        expect(r.timing.executedResolvers.sort()).toEqual([
+            "crm_projection", "header_kpis", "personal_seen", "population", "prepaid_position", "process_config",
+        ]);
         // population 1 + personal_seen 1 + crm_projection 2 + prepaid_position 7 + process_config 1
-        expect(r.timing.queryCount).toBe(12);
+        // + header_kpis 2 (Billing configures four KPI slots, which are first-order VALUES)
+        expect(r.timing.queryCount).toBe(14);
     });
 
     it("a one-card Billing surface costs less than the four-card one", async () => {
@@ -403,9 +411,11 @@ describe("PART 11/12 — authorization is request-time; state semantics belong t
             return { ...rest, capability: cap };
         });
         expect(Object.keys(shape[0]).sort()).toEqual(["capability", "cardKey", "semanticKey"]);
+        // Family capabilities carry a `projectMember` function; strip it the same way `project`
+        // is stripped, or the serialisation below inspects a function body rather than data.
         const serialized = JSON.stringify(shape);
         expect(serialized).not.toMatch(/allowed|denied|granted|permitted|"authorized"|viewer|actor|userId/i);
-        expect(plan.fields.every((f) => ["none", "financials_read", "health_view"].includes(f.capability.authorization))).toBe(true);
+        expect(plan.fields.every((f) => ["none", "financials_read", "health_view", "analytics_read"].includes(f.capability.authorization))).toBe(true);
         // A plan compiled for a refused caller is IDENTICAL to one compiled for an allowed caller.
         expect(JSON.stringify(compileFirstOrderPlan(enrollment()).fields.map((f) => f.semanticKey)))
             .toBe(JSON.stringify(plan.fields.map((f) => f.semanticKey)));
@@ -538,7 +548,7 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
 
     it("query count for today's Enrollment specimen is stable", async () => {
         const r = await compose(enrollment());
-        expect(r.timing.queryCount).toBe(24);
+        expect(r.timing.queryCount).toBe(26);
     });
 
     it("PART 12 — THE QUERY CENSUS IS EXECUTABLE, not prose", async () => {
@@ -549,13 +559,16 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
         const r = await compose(enrollment());
         const plan = compileFirstOrderPlan(enrollment());
 
-        expect(plan.fields.length, "selected capabilities").toBe(29);
+        // 29 card fields + 3 configured KPI values + 2 configured Work View values. KPI and Work
+        // View VALUES are first-order by Director ruling, so they select capabilities like any
+        // other configured value rather than arriving from a seed beside the composition.
+        expect(plan.fields.length, "selected capabilities").toBe(34);
         expect(plan.unsupported).toEqual([]);
 
         const executed = r.timing.executedResolvers;
         expect([...executed].sort(), "unique prerequisite reads").toEqual([
             "account_ledger", "attendance_fold", "children_projection", "crm_projection",
-            "health_profile", "health_supplements", "personal_seen", "population",
+            "header_kpis", "health_profile", "health_supplements", "personal_seen", "population",
             "prepaid_position", "process_config",
         ]);
 
@@ -571,7 +584,7 @@ describe("PART 18 — the repaired DAG survives compilation", () => {
         for (const name of executed) expect(needed.has(name), `${name} ran for nobody`).toBe(true);
 
         // NO N+1: the cost is a constant per prerequisite, never a function of row or child count.
-        expect(r.timing.queryCount).toBe(24);
+        expect(r.timing.queryCount).toBe(26);
     });
 });
 
@@ -652,5 +665,191 @@ describe("FACT IDENTITY — children reached through the HOUSEHOLD are still chi
         expect(f.state).toBe("known");
         if (f.state === "known") expect(f.value).toBe(0);
         expect(r.projection.cards.children.facts["children.enrolling_count"].state).toBe("known");
+    });
+});
+
+describe("PART 6 — KPI and Work View VALUES are configuration, with zero source changes", () => {
+    /*
+     * The Director ruled both first-order: geometry without values is not a complete frame. They
+     * therefore select capabilities exactly as card fields do — and, exactly as card fields do,
+     * a surface that configures none must pay nothing for them.
+     */
+    const cfg = (kpiKeys: string[], workViewIds: string[]): FirstOrderSurfaceConfiguration =>
+        ({ cards: [{ cardKey: "household", semanticKeys: ["household.label"] }], kpiKeys, workViewIds, siteScopeId: null });
+
+    it("ADD / REMOVE / REORDER a KPI — plan follows, source does not change", () => {
+        expect(compileFirstOrderPlan(cfg(["a"], [])).fields.filter((f) => f.semanticKey.startsWith("kpi:")).length).toBe(1);
+        expect(compileFirstOrderPlan(cfg(["a", "b", "c"], [])).fields.filter((f) => f.semanticKey.startsWith("kpi:")).length).toBe(3);
+        expect(compileFirstOrderPlan(cfg([], [])).fields.filter((f) => f.semanticKey.startsWith("kpi:")).length).toBe(0);
+        const fwd = compileFirstOrderPlan(cfg(["a", "b"], [])).fields.map((f) => f.semanticKey);
+        const rev = compileFirstOrderPlan(cfg(["b", "a"], [])).fields.map((f) => f.semanticKey);
+        expect(fwd).not.toEqual(rev);
+        expect([...fwd].sort()).toEqual([...rev].sort());
+    });
+
+    it("ADD / REMOVE / REORDER a Work View — same", () => {
+        expect(compileFirstOrderPlan(cfg([], ["v1"])).fields.filter((f) => f.semanticKey.startsWith("work_view:")).length).toBe(1);
+        expect(compileFirstOrderPlan(cfg([], ["v1", "v2", "v3"])).fields.filter((f) => f.semanticKey.startsWith("work_view:")).length).toBe(3);
+        expect(compileFirstOrderPlan(cfg([], [])).fields.filter((f) => f.semanticKey.startsWith("work_view:")).length).toBe(0);
+    });
+
+    it("AN UNCONFIGURED KPI COSTS ZERO WORK", async () => {
+        const none = compileFirstOrderPlan(cfg([], []));
+        expect(none.prerequisites.has("header_kpis"), "the KPI read survived having no consumer").toBe(false);
+        const some = compileFirstOrderPlan(cfg(["a"], []));
+        expect(some.prerequisites.has("header_kpis")).toBe(true);
+    });
+
+    it("AN UNCONFIGURED WORK VIEW COSTS ZERO WORK", () => {
+        expect(compileFirstOrderPlan(cfg([], [])).prerequisites.has("work_view_totals")).toBe(false);
+        expect(compileFirstOrderPlan(cfg([], ["v1"])).prerequisites.has("work_view_totals")).toBe(true);
+    });
+
+    it("THREE KPI SLOTS SHARE ONE READ — the family is acquired once", async () => {
+        const r = await compose(enrollment({ kpiKeys: ["a", "b", "c"] }));
+        expect(r.timing.executedResolvers.filter((x) => x === "header_kpis").length).toBe(1);
+    });
+
+    it("KPI and Work View values reach the projection, not just its geometry", async () => {
+        const r = await compose(enrollment());
+        expect(Object.keys(r.projection.kpiValues).sort()).toEqual(["a", "b", "c"]);
+        expect(Object.keys(r.projection.workViewTotals).sort()).toEqual(["v1", "v2"]);
+        // Every configured slot carries a canonical STATE — never "still loading".
+        for (const f of [...Object.values(r.projection.kpiValues), ...Object.values(r.projection.workViewTotals)]) {
+            expect(["known", "known_zero", "known_empty", "unknown", "unavailable", "forbidden"]).toContain(f.state);
+        }
+    });
+
+    it("the family buckets are NOT surface — a configured card set gains no cards nobody configured", async () => {
+        const r = await compose(enrollment());
+        expect(Object.keys(r.projection.cards)).not.toContain("kpi");
+        expect(Object.keys(r.projection.cards)).not.toContain("work_view");
+        expect(Object.keys(r.projection.cards).sort()).toEqual([...ENROLLMENT_CARDS].sort());
+    });
+
+    it("SYNTHETIC BILLING configures its own KPI and Work View set through the same runtime", async () => {
+        const billing: FirstOrderSurfaceConfiguration = {
+            cards: [{ cardKey: "billing_overview", semanticKeys: ["financials.balance_cents"] }],
+            kpiKeys: ["billing_kpi_1", "billing_kpi_2", "billing_kpi_3", "billing_kpi_4"],
+            workViewIds: ["past_due", "plans"], siteScopeId: "site-7",
+        };
+        const r = await compose(billing);
+        expect(r.plan.ok).toBe(true);
+        expect(Object.keys(r.projection.kpiValues).length).toBe(4);
+        expect(Object.keys(r.projection.workViewTotals).length).toBe(2);
+        // The composer still names neither family member nor Billing.
+        expect(COMPOSER).not.toMatch(/billing|needs_attention|past_due/i);
+    });
+});
+
+describe("THE IMPORT CYCLE MUST NOT BE POSSIBLE AGAIN", () => {
+    /*
+     * The family constants were first declared in the compiler, which the registry imports while
+     * the compiler imports the registry's lookup. At module initialisation the constants were
+     * `undefined`, so every family registered as "undefined:*" and EVERY configured KPI and Work
+     * View compiled as an unsupported capability. Nothing about the source read wrongly; the
+     * cycle only showed up at runtime.
+     *
+     * These gates pin the property rather than the tidy-up: the identifiers are real strings when
+     * the registry registers them, and the contract module stays a leaf.
+     */
+    it("family identifiers are initialised — no capability registers as undefined", () => {
+        expect(KPI_CAPABILITY_FAMILY).toBe("kpi");
+        expect(WORK_VIEW_CAPABILITY_FAMILY).toBe("work_view");
+        for (const key of registeredFirstOrderSemanticKeys()) {
+            expect(key, "a capability registered with an uninitialised family constant")
+                .not.toContain("undefined");
+        }
+    });
+
+    it("both families are findable by the exact key the compiler looks up", () => {
+        for (const family of [KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY]) {
+            const cap = findFirstOrderCapability(`${family}:*`);
+            expect(cap, `the compiler's lookup key "${family}:*" resolves to nothing`).toBeDefined();
+            expect(cap?.projectMember, "a family capability without projectMember cannot project a member")
+                .toBeTypeOf("function");
+        }
+    });
+
+    it("THE CONTRACT MODULE IS A LEAF — it imports no first-order module that imports it back", () => {
+        const contract = readFileSync(resolve(SRC_DIR, "firstOrderCapability.ts"), "utf8");
+        for (const cyclic of ["compileFirstOrderPlan", "firstOrderCapabilityRegistry", "composeFirstOrderWorkUnitProjection"]) {
+            expect(contract, `firstOrderCapability imports ${cyclic}, reopening the cycle`)
+                .not.toMatch(new RegExp(`from "@/lib/runtime/firstOrder/${cyclic}"`));
+        }
+    });
+
+    it("A CONFIGURED KPI AND WORK VIEW ACTUALLY COMPILE — the end-to-end symptom", () => {
+        /*
+         * The defect's visible signature was five unsupported capabilities on a surface that
+         * configures three KPIs and two Work Views. This asserts the symptom directly, so a
+         * future cycle fails here even if the structural gates above are satisfied some other way.
+         */
+        const plan = compileFirstOrderPlan(enrollment());
+        expect(plan.unsupported, JSON.stringify(plan.unsupported)).toEqual([]);
+        expect(plan.ok).toBe(true);
+        expect(plan.fields.filter((f) => f.semanticKey.startsWith("kpi:")).length).toBe(3);
+        expect(plan.fields.filter((f) => f.semanticKey.startsWith("work_view:")).length).toBe(2);
+    });
+});
+
+describe("STATE SEMANTICS OF THE VALUE FAMILIES — UNKNOWN is not ZERO here either", () => {
+    /*
+     * Found by plants, not review: the states were implemented correctly and gated nowhere, so a
+     * mutation turning a missing KPI into known(0) and a failed Work View read into known(0) both
+     * stayed green across the whole battery. A KPI is a figure an operator acts on; zero is a real
+     * operational answer and must never stand in for "we did not resolve it".
+     */
+    it("A KPI THE RESOLVER DID NOT ANSWER IS UNKNOWN, never zero", async () => {
+        vi.mocked(readHeaderKpiValues).mockResolvedValueOnce({ status: "ok", values: { a: 6 } });
+        const r = await compose(enrollment());
+        expect(r.projection.kpiValues.a.state).toBe("known");
+        expect(r.projection.kpiValues.b.state, "an unanswered KPI became a value").toBe("unknown");
+        expect(r.projection.kpiValues.c.state).toBe("unknown");
+        expect(JSON.stringify([r.projection.kpiValues.b, r.projection.kpiValues.c])).not.toContain('"value":0');
+    });
+
+    it("A KPI OF ZERO IS A REAL ANSWER and survives as known", async () => {
+        vi.mocked(readHeaderKpiValues).mockResolvedValueOnce({ status: "ok", values: { a: 0, b: 0, c: 0 } });
+        const r = await compose(enrollment());
+        const f = r.projection.kpiValues.a;
+        expect(f.state).toBe("known");
+        if (f.state === "known") expect(f.value).toBe(0);
+    });
+
+    it("A FAILED KPI RESOLUTION IS UNAVAILABLE, never zero", async () => {
+        vi.mocked(readHeaderKpiValues).mockRejectedValueOnce(new Error("down"));
+        const r = await compose(enrollment());
+        for (const k of ["a", "b", "c"]) expect(r.projection.kpiValues[k].state).toBe("unavailable");
+        expect(JSON.stringify(r.projection.kpiValues)).not.toContain('"value":0');
+    });
+
+    it("A REFUSED ANALYTICS CALLER GETS FORBIDDEN, never zero and never empty", async () => {
+        vi.mocked(readHeaderKpiValues).mockResolvedValueOnce({ status: "forbidden", values: {} });
+        const r = await compose(enrollment());
+        for (const k of ["a", "b", "c"]) expect(r.projection.kpiValues[k].state).toBe("forbidden");
+    });
+
+    it("A FAILED WORK VIEW READ IS UNAVAILABLE, never zero", async () => {
+        const r = await compose(enrollment(), { workViewTotals: null });
+        for (const v of ["v1", "v2"]) expect(r.projection.workViewTotals[v].state).toBe("unavailable");
+        expect(JSON.stringify(r.projection.workViewTotals)).not.toContain('"value":0');
+    });
+
+    it("A WORK VIEW TOTAL OF ZERO IS A REAL ANSWER", async () => {
+        const r = await compose(enrollment(), {
+            workViewTotals: { status: "ok", totalsByViewId: { v1: 0, v2: 7 } },
+        });
+        const a = r.projection.workViewTotals.v1; const b = r.projection.workViewTotals.v2;
+        expect(a.state).toBe("known");
+        if (a.state === "known") expect(a.value).toBe(0);
+        if (b.state === "known") expect(b.value).toBe(7);
+    });
+
+    it("A WORK VIEW THE EVALUATOR DID NOT ANSWER IS UNKNOWN", async () => {
+        const r = await compose(enrollment(), {
+            workViewTotals: { status: "ok", totalsByViewId: { v1: 3 } },
+        });
+        expect(r.projection.workViewTotals.v2.state).toBe("unknown");
     });
 });

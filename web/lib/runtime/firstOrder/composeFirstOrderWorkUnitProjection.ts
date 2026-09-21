@@ -11,12 +11,14 @@ import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/
 import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readWorkUnitProcessConfiguration";
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import { readAccountLedgerPosition } from "@/lib/runtime/firstOrder/readAccountLedgerPosition";
+import { readHeaderKpiValues } from "@/lib/runtime/firstOrder/readFirstOrderValueSeeds";
 import {
     compileFirstOrderPlan, type FirstOrderPlan, type FirstOrderSurfaceConfiguration,
 } from "@/lib/runtime/firstOrder/compileFirstOrderPlan";
-import type {
-    FirstOrderPrerequisiteKey, FirstOrderProjectionContext, FirstOrderScalar,
-    FirstOrderUnsupportedCapability,
+import {
+    KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY,
+    type FirstOrderPrerequisiteKey, type FirstOrderProjectionContext, type FirstOrderScalar,
+    type FirstOrderUnsupportedCapability,
 } from "@/lib/runtime/firstOrder/firstOrderCapability";
 import {
     forbidden, known, unavailable, unknown,
@@ -67,6 +69,16 @@ export type FirstOrderComposeInput = {
     configuration: FirstOrderSurfaceConfiguration;
     /** Request-time decisions, resolved by the caller's gate. Never decided here. */
     authority: { financialsRead: boolean; healthView: boolean };
+    /**
+     * Work View totals, already resolved by the caller through the ONE canonical evaluator.
+     *
+     * Supplied rather than computed for the same reason `authority` is: the seed needs the
+     * caller's record scope, the department's work units and the viewer's timezone, and
+     * resolving those here would make a second scope authority and a second timezone owner out
+     * of a projection runtime. Absent means the surface configured none, or the caller could not
+     * resolve them — the capability then says UNAVAILABLE rather than zero.
+     */
+    workViewTotals?: { status: string; totalsByViewId: Record<string, number | null> } | null;
 };
 
 export type FirstOrderComposeTiming = {
@@ -113,6 +125,10 @@ const PREREQUISITE_QUERY_COST: Readonly<Record<FirstOrderPrerequisiteKey, number
     attendance_fold: 2, health_profile: 2, health_supplements: 2, process_config: 1, prepaid_position: 7,
     // agreements · paged charges · batched applications · batched payment statuses
     account_ledger: 4,
+    // org_settings plus the metric resolver's own reads
+    header_kpis: 2,
+    // the canonical Work View evaluator, supplied by the caller when it can run
+    work_view_totals: 0,
 };
 
 export async function composeFirstOrderWorkUnitProjection(
@@ -144,7 +160,14 @@ export async function composeFirstOrderWorkUnitProjection(
     const authorized = (requirement: string): boolean =>
         requirement === "none"
         || (requirement === "financials_read" && input.authority.financialsRead)
-        || (requirement === "health_view" && input.authority.healthView);
+        || (requirement === "health_view" && input.authority.healthView)
+        /*
+         * Analytics access is decided INSIDE the canonical KPI resolver, which answers
+         * `forbidden` itself. The plan therefore lets the read run and the capability reports the
+         * refusal — duplicating the verdict here would make a second analytics authority, which
+         * is the duplication this programme retired elsewhere.
+         */
+        || requirement === "analytics_read";
 
     const runnable = plan.fields.filter((f) => authorized(f.capability.authorization));
     const needed = new Set<FirstOrderPrerequisiteKey>(["population", "personal_seen"]);
@@ -220,7 +243,7 @@ export async function composeFirstOrderWorkUnitProjection(
         return { crm: c, children: ch, seen: sn, rows: depRows };
     });
 
-    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, accountLedger, dependent] =
+    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, accountLedger, headerKpis, dependent] =
         await Promise.all([
             populationPromise,
             maybe("attendance_fold", () => buildAttendanceCardVM(supabase, {
@@ -236,6 +259,10 @@ export async function composeFirstOrderWorkUnitProjection(
             })),
             maybe("account_ledger", () => readAccountLedgerPosition(supabase, {
                 orgId, customerId: input.householdId, customerMemberId: input.customerMemberId,
+            })),
+            maybe("header_kpis", () => readHeaderKpiValues({
+                supabase, orgId, workUnitId, siteLocationId: cfg.siteScopeId,
+                configuredKpiKeys: cfg.kpiKeys,
             })),
             dependentPromise,
         ]);
@@ -308,6 +335,8 @@ export async function composeFirstOrderWorkUnitProjection(
         healthSupplements,
         prepaid,
         accountLedger,
+        headerKpis,
+        workViewTotals: input.workViewTotals ?? null,
         rail,
         processConfigRead: executable.has("process_config") ? processConfig !== null : undefined,
         childrenRead: executable.has("children_projection") ? children !== null : undefined,
@@ -325,19 +354,58 @@ export async function composeFirstOrderWorkUnitProjection(
     for (const card of cfg.cards) {
         cards[card.cardKey] = { cardKey: card.cardKey, insight: unknown<string>(), facts: {} };
     }
+    // Family buckets receive their members' projections; they are not configured cards and are
+    // removed from the card set before the projection is returned.
+    for (const family of [KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY]) {
+        cards[family] = { cardKey: family, insight: unknown<string>(), facts: {} };
+    }
     for (const field of plan.fields) {
         const summary = cards[field.cardKey];
         if (!summary) continue;
+        /*
+         * A FAMILY capability projects a MEMBER: the configured identity after the `family:`
+         * prefix. Card fields have no prefix and project directly. The composer does not know
+         * what a KPI or a Work View is — only that some capabilities are selected per configured
+         * identity.
+         */
+        const sep = field.semanticKey.indexOf(":");
+        const member = sep >= 0 ? field.semanticKey.slice(sep + 1) : null;
         const value: FirstOrderField<FirstOrderScalar> = authorized(field.capability.authorization)
-            ? field.capability.project(ctx)
+            ? (field.capability.projectMember && member !== null
+                ? field.capability.projectMember(member, ctx)
+                : field.capability.project(ctx))
             // A refusal is a REFUSAL, never an empty region: empty reads as "no allergies".
             : forbidden<FirstOrderScalar>();
         (summary.facts as Record<string, FirstOrderField<string | number>>)[field.semanticKey] = value;
     }
 
+    /** A family member's projected value, read back out of the assembled plan output. */
+    const valueOfMember = (family: string, identity: string): FirstOrderField<number> => {
+        const f = (cards[family]?.facts ?? {})[`${family}:${identity}`];
+        if (!f) return unknown<number>();
+        return f as unknown as FirstOrderField<number>;
+    };
+
     const cardFields: Record<string, readonly string[]> = {};
     for (const card of cfg.cards) cardFields[card.cardKey] = card.semanticKeys;
     const cardOrder = cfg.cards.map((c) => c.cardKey);
+
+    /*
+     * READ THE FAMILY VALUES OUT BEFORE DISCARDING THEIR BUCKETS.
+     *
+     * The delete used to run before the projection literal below, which is where `valueOfMember`
+     * is called — so every configured KPI and Work View read back UNKNOWN from a bucket that no
+     * longer existed. The values were projected correctly and then thrown away one statement too
+     * early.
+     */
+    const kpiValues = Object.fromEntries(
+        cfg.kpiKeys.map((k) => [k, valueOfMember(KPI_CAPABILITY_FAMILY, k)]));
+    const workViewTotals = Object.fromEntries(
+        cfg.workViewIds.map((k) => [k, valueOfMember(WORK_VIEW_CAPABILITY_FAMILY, k)]));
+
+    // The family buckets are plumbing, not surface. A configured card set must not gain two
+    // cards nobody configured.
+    for (const family of [KPI_CAPABILITY_FAMILY, WORK_VIEW_CAPABILITY_FAMILY]) delete cards[family];
 
     const identity: FirstOrderConfigurationIdentity = {
         cardKeys: cardOrder, cardFields, kpiKeys: cfg.kpiKeys,
@@ -355,10 +423,13 @@ export async function composeFirstOrderWorkUnitProjection(
             kpiSlotCount: cfg.kpiKeys.length, workViewCount: cfg.workViewIds.length,
         },
         queueRows: population ? known(queueRows) : unavailable<readonly FirstOrderQueueRow[]>("population unavailable"),
-        // Not yet resolved by this runtime; declared UNKNOWN rather than defaulted to zero, which
-        // is the only state Stage 2 is permitted to replace.
-        kpiValues: Object.fromEntries(cfg.kpiKeys.map((k) => [k, unknown<number>()])),
-        workViewTotals: Object.fromEntries(cfg.workViewIds.map((k) => [k, unknown<number>()])),
+        /*
+         * FIRST-ORDER VALUES, not placeholders. Both are produced by the plan like any other
+         * configured value, so a KPI slot carries its number — or an honest UNKNOWN / UNAVAILABLE
+         * / FORBIDDEN from its canonical owner — in the first authoritative frame.
+         */
+        kpiValues,
+        workViewTotals,
         cards,
     };
 

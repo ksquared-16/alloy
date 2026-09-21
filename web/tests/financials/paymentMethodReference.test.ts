@@ -35,16 +35,30 @@ type Store = {
     client: unknown;
     rows: Row[];
     writes: Array<{ kind: string; values: Row }>;
+    /** Autopay arrangements standing on these methods (W5 convergence). */
+    autopayRows: Row[];
 };
 
-function store(initial: Row[] = []): Store {
+function store(initial: Row[] = [], arrangements: Row[] = []): Store {
     const rows: Row[] = initial.map((r, i) => ({ id: `m-${i + 1}`, created_at: `2026-09-0${i + 1}`, ...r }));
+    /*
+     * W5 CONVERGENCE. A method that stops being usable ends the Autopay arrangements standing on
+     * it, so this authority now touches a third table. The fake stays STRICT — an unexpected table
+     * is still an error — and simply knows about the one that was added, because loosening it to
+     * accept anything would stop it noticing the next unplanned read.
+     */
+    const autopayRows: Row[] = arrangements.map((r) => ({ ...r }));
+    /* Failing an arrangement also stops its schedule waking — see `failAutopay`. */
+    const scheduleRows: Row[] = [];
     const writes: Array<{ kind: string; values: Row }> = [];
     let seq = rows.length;
 
     const client = {
         from(table: string) {
-            if (table !== "payment_methods" && table !== "customers") throw new Error(`unexpected table ${table}`);
+            if (table !== "payment_methods" && table !== "customers"
+                && table !== "payment_autopay_arrangements" && table !== "scheduled_work") {
+                throw new Error(`unexpected table ${table}`);
+            }
             const filters: Array<(r: Row) => boolean> = [];
             let kind = "select";
             let pending: Row | null = null;
@@ -54,7 +68,13 @@ function store(initial: Row[] = []): Store {
             self.order = () => self;
             self.limit = () => self;
             self.eq = (col: string, value: unknown) => {
-                filters.push((r) => r[col] === value);
+                filters.push((r) => (col.includes("->>")
+                    ? ((r.domain_ref as Row | undefined)?.[col.split("->>")[1]!] === value)
+                    : r[col] === value));
+                return self;
+            };
+            self.in = (col: string, values: unknown[]) => {
+                filters.push((r) => values.includes(r[col]));
                 return self;
             };
             self.not = () => self;
@@ -69,7 +89,12 @@ function store(initial: Row[] = []): Store {
                 return self;
             };
 
-            const matching = () => (table === "customers" ? [{ id: CUSTOMER }] : rows).filter((r) => filters.every((f) => f(r)));
+            const source = () =>
+                table === "customers" ? [{ id: CUSTOMER }]
+                : table === "payment_autopay_arrangements" ? autopayRows
+                : table === "scheduled_work" ? scheduleRows
+                : rows;
+            const matching = () => source().filter((r) => filters.every((f) => f(r)));
 
             const settle = () => {
                 if (kind === "insert" && pending) {
@@ -104,7 +129,7 @@ function store(initial: Row[] = []): Store {
             throw new Error("the atomic default move is a database function and is proved against the database");
         },
     };
-    return { client, rows, writes };
+    return { client, rows, writes, autopayRows };
 }
 
 /** A provider that answers whatever the test needs, and records what it was asked. */
@@ -304,6 +329,34 @@ describe("the canonical payment method reference", () => {
         // The row is still there, and still names the instrument a payment may have used.
         expect(s.rows).toHaveLength(1);
         expect(s.rows[0].provider_method_ref).toBe("pm_1");
+    });
+
+    /*
+     * W5 CONVERGENCE — removing the instrument ends the standing consent that named it.
+     *
+     * A payer authorized ONE method. Leaving the arrangement `active` after that method is gone
+     * would mean the Financials card says "Autopay on" while every scheduled wake refuses, and
+     * there is deliberately no fallback to another card on file: choosing a different instrument on
+     * the payer's behalf is not a consent Alloy holds.
+     */
+    it("removing a method also ends the Autopay arrangements that stood on it", async () => {
+        const s = store(
+            [{ org_id: ORG, customer_id: CUSTOMER, provider_method_ref: "pm_1", provider_customer_ref: "cus_1", rail: "card", usability_state: "usable", is_default: true }],
+            [
+                { id: "aa-live", org_id: ORG, payment_method_id: "m-1", status: "active" },
+                { id: "aa-paused", org_id: ORG, payment_method_id: "m-1", status: "paused" },
+                { id: "aa-other", org_id: ORG, payment_method_id: "m-OTHER", status: "active" },
+            ],
+        );
+        const call = provider({ payment_methods: { id: "pm_1", object: "payment_method" } });
+
+        const out = await revokePaymentMethod(s.client as never, { orgId: ORG, methodId: "m-1" }, call);
+        expect(out.ok).toBe(true);
+
+        expect(s.autopayRows.find((r) => r.id === "aa-live")!.status).toBe("failed");
+        expect(s.autopayRows.find((r) => r.id === "aa-paused")!.status).toBe("failed");
+        /* An arrangement on a DIFFERENT method is untouched. */
+        expect(s.autopayRows.find((r) => r.id === "aa-other")!.status).toBe("active");
     });
 
     it("a provider detach that fails does not leave the operator's instruction unexecuted", async () => {
