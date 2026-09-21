@@ -435,7 +435,10 @@ export const staffCoverageCancelAction: RegisteredAction = {
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
-    confirmationPolicy: "destructive",
+    // Confirmed, not destructive: cancelling withdraws a plan, keeps the row as
+    // history, and frees the interval to be planned again. The destructive class
+    // is for what cannot be undone, and reserving it keeps that signal meaningful.
+    confirmationPolicy: "required",
     bosProposalSupport: false,
 
     validatePayload(payload) {

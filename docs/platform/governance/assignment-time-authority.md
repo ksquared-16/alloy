@@ -109,3 +109,11 @@ the certification stack, whose staffing type is called `staff_classroom`.
 
 Coverage, Availability, Presence and Readiness remain separate facts. Staffing remains
 whole-day.
+
+## Day-specific Coverage is a different authority
+
+An Assignment says what someone's recurring days and hours are. It deliberately does not
+say where they were planned on one particular Tuesday — that is
+[Coverage](staff-coverage-authority.md), a separate day-specific fact with its own
+lifecycle. Coverage never writes back to the Assignment, and as of Slice 3 it does not
+participate in staffing supply arithmetic.
