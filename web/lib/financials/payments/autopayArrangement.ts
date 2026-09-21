@@ -436,19 +436,41 @@ export async function failAutopay(
     return outcome;
 }
 
-/** Attempt telemetry. Separate from lifecycle so recording a try never moves the status by accident. */
+/**
+ * Attempt telemetry. Separate from lifecycle so recording a try never moves the status by accident.
+ *
+ * ── WHY `first_failure_at` IS STAMPED HERE ──
+ *
+ * The 40-day retry ceiling is measured from the FIRST failure, not the most recent one. Measuring
+ * from the most recent would make the window slide forward with every attempt and never expire —
+ * a family who left in October could still be charged in December, which is exactly what the
+ * ceiling exists to prevent. Nothing else writes this, so it is stamped on the transition from
+ * zero failures to one and left alone afterwards.
+ */
 export async function recordAutopayAttempt(
     supabase: SupabaseClient,
-    args: { orgId: string; arrangementId: string; at: string; failureReason?: string | null; incrementFailure: boolean; failureCount: number },
+    args: {
+        orgId: string; arrangementId: string; at: string; failureReason?: string | null;
+        incrementFailure: boolean; failureCount: number;
+        /** The arrangement's current metadata, so the stamp is added rather than replacing it. */
+        metadata?: Record<string, unknown>;
+    },
 ): Promise<void> {
+    const patch: Record<string, unknown> = {
+        last_attempt_at: args.at,
+        last_failure_reason: t(args.failureReason) || null,
+        failure_count: args.incrementFailure ? args.failureCount + 1 : args.failureCount,
+        updated_at: new Date().toISOString(),
+    };
+
+    const metadata = args.metadata ?? {};
+    if (args.incrementFailure && !t(metadata.first_failure_at)) {
+        patch.metadata = { ...metadata, first_failure_at: args.at };
+    }
+
     await supabase
         .from(TABLE)
-        .update({
-            last_attempt_at: args.at,
-            last_failure_reason: t(args.failureReason) || null,
-            failure_count: args.incrementFailure ? args.failureCount + 1 : args.failureCount,
-            updated_at: new Date().toISOString(),
-        })
+        .update(patch)
         .eq("org_id", args.orgId)
         .eq("id", args.arrangementId);
 }

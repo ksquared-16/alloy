@@ -275,6 +275,7 @@ export async function evaluateAutopayOccurrence(
             failureReason: "Amount due exceeds the Autopay authorization.",
             incrementFailure: false,
             failureCount: arrangement.failureCount,
+            metadata: arrangement.metadata,
         });
         return noCollection("exceeds_authorized_maximum", {
             collectible_cents: collectible.totalCents,
@@ -315,6 +316,7 @@ export async function evaluateAutopayOccurrence(
         failureReason: anyCollected ? null : (refused[0]?.reason ?? "No collection attempt succeeded."),
         incrementFailure: !anyCollected,
         failureCount: arrangement.failureCount,
+        metadata: arrangement.metadata,
     });
 
     if (!anyCollected) {

@@ -412,6 +412,37 @@ describe("Payments' own retry policy is bounded three separate ways", () => {
         expect(businessDaysBetween("2026-10-01", "2026-10-01")).toBe(0);
     });
 
+    /*
+     * THE WINDOW MUST BE ANCHORED, AND THIS CAUGHT IT NOT BEING.
+     *
+     * `retryAdmission` reads `metadata.first_failure_at` and falls back to the LAST attempt. Nothing
+     * wrote that stamp, so every run fell back — and a window measured from the most recent attempt
+     * slides forward with each one and never expires. A family who left in October could still be
+     * charged in December.
+     */
+    it("stamps the first failure so the 40-day window has something to measure from", async () => {
+        const s = store();
+        const collect = vi.fn(async () => ({ ok: false as const, reason: "method_unavailable_at_provider", message: "declined" })) as never;
+        await evaluateAutopayOccurrence(ctx(), {
+            supabase: s.client, now: NOW, collect,
+            resolveCollectible: collectibleOf([{ chargeId: "chg-1", outstandingCents: 50_000 }]),
+        });
+
+        const stamped = s.updates.find((u) => u.patch.metadata != null);
+        expect(stamped, "the first failure must anchor the window").toBeTruthy();
+        expect((stamped!.patch.metadata as Record<string, unknown>).first_failure_at).toBe(NOW().toISOString());
+    });
+
+    it("does not move the anchor on a later failure", async () => {
+        const s = store({ arrangement: arrangementRow({ failure_count: 1, metadata: { first_failure_at: "2026-09-01T00:00:00.000Z" } }) });
+        const collect = vi.fn(async () => ({ ok: false as const, reason: "method_unavailable_at_provider", message: "declined" })) as never;
+        await evaluateAutopayOccurrence(ctx(), {
+            supabase: s.client, now: NOW, collect,
+            resolveCollectible: collectibleOf([{ chargeId: "chg-1", outstandingCents: 50_000 }]),
+        });
+        expect(s.updates.some((u) => u.patch.metadata != null), "the original anchor stands").toBe(false);
+    });
+
     it("fails the arrangement when the retry budget is spent, and stops waking", async () => {
         const s = store({ arrangement: arrangementRow({ failure_count: AUTOPAY_MAX_RETRIES + 1 }) });
         const collect = collectorOk();
