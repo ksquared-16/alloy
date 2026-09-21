@@ -131,6 +131,25 @@ describe("state semantics are never collapsed", () => {
         if (f.state === "known") expect(f.value).toBe(0);
     });
 
+    it("EVERY configured KPI appears in the projection", async () => {
+        /*
+         * FOUND BY PLANT I, which dropped a configured KPI and stayed green. The existing gate
+         * checked that whatever KPIs were present were UNKNOWN — it never checked that they were
+         * all THERE. A dropped slot renders as a missing region, not a wrong value, so nothing
+         * about the surviving entries looks wrong.
+         */
+        const r = await composeFirstOrderWorkUnitProjection(base() as never);
+        expect(Object.keys(r.projection.kpiValues).sort()).toEqual(["a", "b", "c"]);
+        expect(r.projection.geometry.kpiSlotCount).toBe(3);
+    });
+
+    it("EVERY configured Work View appears in the projection", async () => {
+        // Found by plant J, the same shape of gap as the KPI one above.
+        const r = await composeFirstOrderWorkUnitProjection(base() as never);
+        expect(Object.keys(r.projection.workViewTotals).sort()).toEqual(["v1", "v2"]);
+        expect(r.projection.geometry.workViewCount).toBe(2);
+    });
+
     it("unresolved KPI and Work View totals are UNKNOWN, not zero", async () => {
         const r = await composeFirstOrderWorkUnitProjection(base() as never);
         expect(Object.values(r.projection.kpiValues).every((f) => f.state === "unknown")).toBe(true);
