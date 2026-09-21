@@ -1,0 +1,22 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-11c-adjust-lens.spec.ts:8:5 › hunt the adjustment door
+[1A[2K[chromium] › playwright/tests/zz-11c-adjust-lens.spec.ts:8:5 › hunt the adjustment door
+LENSES: ["all","charges","credits","funding","payments"]
+
+[1A[2KLENS all: {"rows":116,"rowActions":0,"adjustControls":["Credits & adjustments 56"]}
+
+[1A[2KLENS charges: {"rows":16,"rowActions":0,"adjustControls":["Credits & adjustments 56"]}
+
+[1A[2KLENS credits: {"rows":100,"rowActions":0,"adjustControls":["Credits & adjustments 56"]}
+
+[1A[2KLENS funding: {"rows":0,"rowActions":0,"adjustControls":["Credits & adjustments 56"]}
+
+[1A[2KLENS payments: {"rows":2,"rowActions":0,"adjustControls":["Credits & adjustments 56"]}
+
+[1A[2KON HOVER: {"rowActions":[]}
+
+[1A[2KON ROW CLICK: {"rowActions":[],"adjustText":["Credits & adjustments 56"]}
+
+[1A[2K  1 passed (1.2m)
