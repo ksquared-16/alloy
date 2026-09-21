@@ -106,6 +106,20 @@ describe("state semantics are never collapsed", () => {
         expect(r.projection.cards.attendance.facts.today.state).toBe("unavailable");
     });
 
+    it("a FAILED HEALTH read is unavailable, not a count of zero", async () => {
+        /*
+         * FOUND BY THE PLANT BATTERY, not by review. Plant D made profileFactCount unconditionally
+         * `known(...)`, so a failed health read would report ZERO facts — and every gate stayed
+         * green, because the thrown-resolver test above covers ATTENDANCE and nothing covered
+         * health. "Zero care notes" and "we could not read the care notes" are different answers
+         * and an operator cannot tell them apart on the card.
+         */
+        vi.mocked(loadCustomerMemberProfileFieldsByMemberId).mockRejectedValueOnce(new Error("down"));
+        const r = await composeFirstOrderWorkUnitProjection(base() as never);
+        expect(r.projection.cards.health_safety.facts.profileFactCount.state).toBe("unavailable");
+        expect(JSON.stringify(r.projection.cards.health_safety)).not.toContain('"value":0');
+    });
+
     it("KNOWN ZERO survives as a real answer", async () => {
         vi.mocked(readAccountPrepaidPosition).mockResolvedValueOnce({
             outcome: { state: "ok", position: { availableCents: 0, pendingCents: 0, heldCents: 0 } },
