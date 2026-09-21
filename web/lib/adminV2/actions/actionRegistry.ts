@@ -52,6 +52,7 @@ import { financialSubsidyActions } from "@/lib/adminV2/actions/definitions/finan
 import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuitionGenerationActions";
 import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
 import { paymentMethodActions } from "@/lib/adminV2/actions/definitions/paymentMethodActions";
+import { autopayActions } from "@/lib/adminV2/actions/definitions/autopayActions";
 import { depositHoldActions } from "@/lib/adminV2/actions/definitions/depositHoldActions";
 import { paymentRecognitionActions } from "@/lib/adminV2/actions/definitions/paymentRecognitionActions";
 import { providerInstallationActions } from "@/lib/adminV2/actions/definitions/providerInstallationActions";
@@ -98,6 +99,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     ...paymentMethodActions,
     ...paymentRecognitionActions,
     ...depositHoldActions,
+    ...autopayActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,

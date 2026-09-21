@@ -21,7 +21,10 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { AUTOPAY_HANDLER_KEY } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
+
 const TABLE = "payment_autopay_arrangements";
+const SCHEDULE_TABLE = "scheduled_work";
 
 /** Live means "may still collect, now or later". Revoked and failed are history. */
 export const LIVE_AUTOPAY_STATUSES = ["active", "paused"] as const;
@@ -302,7 +305,13 @@ export async function enrollAutopay(
             : "write_failed";
         return { ok: false, reason, message };
     }
-    return { ok: true, value: mapRow(data as unknown as Record<string, unknown>) };
+    const arrangement = mapRow(data as unknown as Record<string, unknown>);
+    /*
+     * The consent exists; now make it wakeable. Without this the arrangement would sit `active`
+     * forever and collect nothing — the exact silent failure W5 stopped for.
+     */
+    await ensureAutopaySchedule(supabase, arrangement);
+    return { ok: true, value: arrangement };
 }
 
 /** Status-only lifecycle write. The immutability trigger guarantees terms cannot ride along. */
@@ -393,11 +402,13 @@ export async function revokeAutopay(
     if (current.status === "revoked") {
         return { ok: false, reason: "already_revoked", message: "That Autopay authorization was already turned off." };
     }
-    return setStatus(supabase, {
+    const outcome = await setStatus(supabase, {
         ...args,
         status: "revoked",
         extra: { revoked_at: new Date().toISOString(), last_failure_reason: t(args.reason) || null },
     });
+    if (outcome.ok) await deactivateAutopaySchedule(supabase, args);
+    return outcome;
 }
 
 /**
@@ -412,12 +423,17 @@ export async function failAutopay(
     supabase: SupabaseClient,
     args: { orgId: string; arrangementId: string; reason: string },
 ): Promise<AutopayResult<AutopayArrangement>> {
-    return setStatus(supabase, {
+    const outcome = await setStatus(supabase, {
         orgId: args.orgId,
         arrangementId: args.arrangementId,
         status: "failed",
         extra: { last_failure_reason: args.reason.slice(0, 300) },
     });
+    // A failed arrangement cannot collect, so it must stop being asked.
+    if (outcome.ok) {
+        await deactivateAutopaySchedule(supabase, { orgId: args.orgId, arrangementId: args.arrangementId });
+    }
+    return outcome;
 }
 
 /** Attempt telemetry. Separate from lifecycle so recording a try never moves the status by accident. */
@@ -464,4 +480,79 @@ export async function failArrangementsForMethod(
         await failAutopay(supabase, { orgId: args.orgId, arrangementId: id, reason: args.reason });
     }
     return ids;
+}
+
+
+/**
+ * REGISTER THE ARRANGEMENT WITH THE GENERIC CLOCK — the step without which Autopay never happens.
+ *
+ * Payments does not own a timer. It owns an opinion about when it is worth being asked, and the
+ * answer for `on_due_date` is DAILY: charges fall due on ordinary calendar days, so the handler is
+ * woken each day and decides for itself whether anything has actually come due. That decision is
+ * Payments', and the schedule carries none of it — `scheduled_work` holds a cadence and an opaque
+ * reference, and would not know a due date if it saw one.
+ *
+ * A cheap daily wake that answers "nothing due" is deliberately preferred to a schedule that tries
+ * to predict the next due date: predicting it means storing it, storing it means a snapshot, and a
+ * snapshot of when money is owed is the same class of mistake as a snapshot of how much.
+ *
+ * `domain_ref` carries ONLY the arrangement id. Everything else the handler needs it re-reads, so
+ * nothing it acts on can be stale.
+ */
+export async function ensureAutopaySchedule(
+    supabase: SupabaseClient,
+    arrangement: AutopayArrangement,
+): Promise<string | null> {
+    const existing = await supabase
+        .from(SCHEDULE_TABLE)
+        .select("id")
+        .eq("org_id", arrangement.orgId)
+        .eq("handler_key", AUTOPAY_HANDLER_KEY)
+        .eq("domain_ref->>arrangement_id", arrangement.id)
+        .maybeSingle();
+    const existingId = t((existing.data as { id?: unknown } | null)?.id);
+    if (existingId) {
+        // Re-activating rather than inserting: a second schedule on one arrangement would wake the
+        // handler twice a day, and only the occurrence identity would stop the second collection.
+        await supabase
+            .from(SCHEDULE_TABLE)
+            .update({ is_active: true, next_due_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+            .eq("id", existingId);
+        return existingId;
+    }
+
+    const { data } = await supabase
+        .from(SCHEDULE_TABLE)
+        .insert({
+            org_id: arrangement.orgId,
+            handler_key: AUTOPAY_HANDLER_KEY,
+            recurrence_kind: "daily",
+            next_due_at: new Date(`${arrangement.effectiveFrom}T00:00:00.000Z`).toISOString(),
+            is_active: true,
+            domain_ref: { arrangement_id: arrangement.id },
+            label: "Autopay",
+            created_by: arrangement.authorizedBy || null,
+        })
+        .select("id")
+        .maybeSingle();
+    return t((data as { id?: unknown } | null)?.id) || null;
+}
+
+/**
+ * Stop waking for this arrangement.
+ *
+ * The handler would wind the schedule down by itself on its next wake, but doing it here means a
+ * revoked authorization stops being asked about immediately rather than one day later. Both paths
+ * exist because only one of them survives a revoke that happens while the runtime is mid-flight.
+ */
+export async function deactivateAutopaySchedule(
+    supabase: SupabaseClient,
+    args: { orgId: string; arrangementId: string },
+): Promise<void> {
+    await supabase
+        .from(SCHEDULE_TABLE)
+        .update({ is_active: false, next_due_at: null, updated_at: new Date().toISOString() })
+        .eq("org_id", args.orgId)
+        .eq("handler_key", AUTOPAY_HANDLER_KEY)
+        .eq("domain_ref->>arrangement_id", args.arrangementId);
 }

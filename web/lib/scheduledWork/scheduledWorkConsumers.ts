@@ -1,6 +1,11 @@
 import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
 import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
 import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
+import {
+    AUTOPAY_HANDLER_KEY,
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -29,9 +34,12 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * mistaken rule: "evaluated, nothing was due" is a successful run, not a failure.
  */
 
-export const BILLING_PERIODIC_HANDLER_KEY = "financials.periodic_billing.evaluate";
-export const CHARGE_AGING_HANDLER_KEY = "financials.charge_aging.evaluate";
-export const AUTOPAY_HANDLER_KEY = "payments.autopay.evaluate";
+/* Declared in a leaf module so a domain can name its key without importing this one. */
+export {
+    BILLING_PERIODIC_HANDLER_KEY,
+    CHARGE_AGING_HANDLER_KEY,
+    AUTOPAY_HANDLER_KEY,
+} from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 
 /** Shared shape so the three read alike and differ only where they must. */
 function evaluated(domain: string, ctx: ScheduledWorkContext): ScheduledWorkOutcome {
