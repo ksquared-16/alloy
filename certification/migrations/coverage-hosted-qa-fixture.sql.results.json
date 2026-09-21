@@ -1,0 +1,154 @@
+{
+  "trusted_host_action_id": "tha_0aaa25a234c633",
+  "query_hash": "5a659085004292c40bd39a4d2c82315798de7dc48cef667295be71b0ba6763db",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T23:29:30.666Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0aaa25a234c633",
+    "query_hash": "5a659085004292c40bd39a4d2c82315798de7dc48cef667295be71b0ba6763db",
+    "authorization_id": "grnt_7b07d6bdc4a54195",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T23:29:31.664Z",
+    "question_ids": [
+      "coverage_qa_fixture"
+    ],
+    "questions": {
+      "coverage_qa_fixture": {
+        "question_id": "coverage_qa_fixture",
+        "row_count": null,
+        "rows": [
+          {
+            "candidate_sites": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "rooms": [
+                  "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                  "0c58d0d2-d756-4b56-9008-32649389d323",
+                  "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+                  "1e141eb9-f2a3-4f4a-a4e8-13fe27159277",
+                  "222440dc-60fd-4a96-bd53-51bd26ed1e1d",
+                  "3a05deac-df20-4e2c-90d6-2f823e61fd3f",
+                  "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+                  "aebc7673-5a79-4715-8b69-c82d9aefee0d",
+                  "edf9398f-c7e2-4267-bda0-8b5846c4f306"
+                ],
+                "staff": [
+                  {
+                    "employment_id": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+                    "person_id": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+                    "start_date": "2026-09-15",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                    "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                    "start_date": "2025-07-21",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                    "person_id": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+                    "start_date": "2026-07-26",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "978e5cda-25a2-42db-a3e9-19f3afca2c5f",
+                    "person_id": "271a35cd-27a9-4d2d-bb92-61893449e450",
+                    "start_date": "2024-06-16",
+                    "end_date": "2026-09-20"
+                  }
+                ]
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+                "rooms": [
+                  "17cf540d-6c64-4ba4-926b-f2b9644b3391",
+                  "497b2e7b-e54c-4798-b4ff-a483a5230ac7",
+                  "5c9577ad-8bdf-4af5-8a1d-2646c5db3136",
+                  "93c66b6f-bc30-4899-900c-c37aad4c3200",
+                  "f82c4f41-31ef-4294-b29d-6e890af04ab1"
+                ],
+                "staff": [
+                  {
+                    "employment_id": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+                    "person_id": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+                    "start_date": "2026-09-15",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                    "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                    "start_date": "2025-07-21",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                    "person_id": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+                    "start_date": "2026-07-26",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "978e5cda-25a2-42db-a3e9-19f3afca2c5f",
+                    "person_id": "271a35cd-27a9-4d2d-bb92-61893449e450",
+                    "start_date": "2024-06-16",
+                    "end_date": "2026-09-20"
+                  }
+                ]
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "rooms": [
+                  "00262a56-7ddb-4f87-aca2-081bf62cd51e",
+                  "4de42d04-86fc-4519-b5bd-f45eb8671429",
+                  "75f44c2c-21b4-4ef0-817f-5978624abc31",
+                  "8d123a2c-4539-4e0a-bce9-c2767c887c81",
+                  "96411dc0-7370-4072-81f6-921cce5b4d7b"
+                ],
+                "staff": [
+                  {
+                    "employment_id": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+                    "person_id": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+                    "start_date": "2026-09-15",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                    "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                    "start_date": "2025-07-21",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                    "person_id": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+                    "start_date": "2026-07-26",
+                    "end_date": null
+                  },
+                  {
+                    "employment_id": "978e5cda-25a2-42db-a3e9-19f3afca2c5f",
+                    "person_id": "271a35cd-27a9-4d2d-bb92-61893449e450",
+                    "start_date": "2024-06-16",
+                    "end_date": "2026-09-20"
+                  }
+                ]
+              }
+            ],
+            "existing_coverage_rows": 0,
+            "existing_effective_rows": 0,
+            "observed_at": "2026-09-21 23:29:31.56938+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

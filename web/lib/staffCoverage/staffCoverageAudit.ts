@@ -81,6 +81,7 @@ function toAllocation(r: Row): CoverageAllocation {
         supersedesCoverageId: (r.supersedes_coverage_id as string | null) ?? null,
         lineageRootId: (r.lineage_root_id as string | null) ?? null,
         reasonKey: (r.reason_key as string | null) ?? null,
+        cancelReasonKey: (r.cancel_reason_key as string | null) ?? null,
         note: (r.note as string | null) ?? null,
         sourceKey: String(r.source_key ?? "operator"),
         createdBy: (r.created_by as string | null) ?? null,
@@ -92,7 +93,7 @@ function toAllocation(r: Row): CoverageAllocation {
 
 const AUDIT_SELECT =
     "id, org_id, employment_id, service_date, start_time, end_time, site_location_id, room_location_id, " +
-    "lifecycle_state, transition_type, supersedes_coverage_id, lineage_root_id, reason_key, note, source_key, " +
+    "lifecycle_state, transition_type, supersedes_coverage_id, lineage_root_id, reason_key, cancel_reason_key, note, source_key, " +
     "created_by, created_at, cancelled_by, cancelled_at";
 
 /** Every allocation in one lineage, oldest first. */
@@ -193,6 +194,9 @@ export function projectCoverageAudit(lineage: readonly CoverageAllocation[]): Co
                 counterpartCoverageId: null,
                 occurredAt: a.cancelledAt,
                 actorUserId: a.cancelledBy,
+                // The cancellation's own reason, not the one the allocation was
+                // authored with — those are facts about different moments.
+                reasonKey: a.cancelReasonKey,
             });
         }
     }

@@ -42,7 +42,10 @@ export type CoverageAllocation = {
     transitionType: CoverageTransition | null;
     supersedesCoverageId: string | null;
     lineageRootId: string | null;
+    /** Why this allocation was authored. A later cancellation never rewrites it. */
     reasonKey: string | null;
+    /** Why it was cancelled. Null unless lifecycleState is "cancelled". */
+    cancelReasonKey: string | null;
     note: string | null;
     sourceKey: string;
     createdBy: string | null;
@@ -73,6 +76,7 @@ function mapRow(r: Row): CoverageAllocation {
         supersedesCoverageId: (r.supersedes_coverage_id as string | null) ?? null,
         lineageRootId: (r.lineage_root_id as string | null) ?? null,
         reasonKey: (r.reason_key as string | null) ?? null,
+        cancelReasonKey: (r.cancel_reason_key as string | null) ?? null,
         note: (r.note as string | null) ?? null,
         sourceKey: String(r.source_key ?? "operator"),
         createdBy: (r.created_by as string | null) ?? null,
