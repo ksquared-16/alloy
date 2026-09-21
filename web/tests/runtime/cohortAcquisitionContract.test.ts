@@ -156,8 +156,25 @@ describe("serial acquisition is the restored contract", () => {
         expect(SRC).not.toContain("intakeCreatedAt");
     });
 
-    it("a failed acknowledgement read writes NO verdict", () => {
+    it("A FAILED ACKNOWLEDGEMENT READ LEAVES THE VERDICT ABSENT, NOT EMPTY", () => {
+        /*
+         * Counting assignment sites is not enough, and a planted defect proved it: substituting an
+         * empty Set for null on failure keeps exactly one assignment while changing the meaning
+         * completely. An empty set is an ANSWER -- every row resolves to an explicit
+         * `unseen: true` verdict -- whereas null leaves `personal_seen` ABSENT and the client
+         * hydrates over the network. The dot looks the same either way, which is what makes it
+         * dangerous: with a false verdict the client stops correcting, so a row the operator HAS
+         * opened keeps its dot for the whole navigation.
+         *
+         * So the gate is on the failure path itself: the catch must yield null and must not
+         * fabricate a set.
+         */
         expect((SRC.match(/personal_seen\s*=/g) ?? []).length).toBe(1);
+        const at = SRC.indexOf("acknowledged = await phase");
+        expect(at).toBeGreaterThan(-1);
+        const tail = SRC.slice(at, at + 600);
+        expect(tail).toMatch(/catch[\s\S]*?acknowledged\s*=\s*null/);
+        expect(tail).not.toMatch(/catch[\s\S]*?acknowledged\s*=\s*new Set/);
     });
 
     it("each read is issued exactly once", () => {
