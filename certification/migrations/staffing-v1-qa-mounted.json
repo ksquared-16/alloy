@@ -1,0 +1,130 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "qaUrl": "https://staging.workwithalloy.com/workspace/qa/staffing-v1",
+  "at": "2026-09-22T15:35:01.750Z",
+  "steps": [
+    {
+      "name": "route_loads",
+      "httpStatus": 200,
+      "finalUrl": "https://staging.workwithalloy.com/workspace/qa/staffing-v1",
+      "title": "Staffing / Scheduling / Coverage V1 — Human Acceptance QA",
+      "suiteMounted": 1
+    },
+    {
+      "name": "build_identity",
+      "buildLine": "staging · build a78f1e3f7 · questions 2026-09-22.1",
+      "deployedSha": "a78f1e3f7d717465838380a3fd5f654c2f2d7cbb",
+      "branch": "staging",
+      "agreesWithServer": true
+    },
+    {
+      "name": "fixture_status",
+      "status": "READY",
+      "shape": [
+        "08:30–09:00: 0 expected · needs 0 · 1 planned · STAFFED",
+        "09:00–16:00: 1 expected · needs 1 · 1 planned · STAFFED",
+        "16:00–17:30: 1 expected · needs 1 · 0 planned · SHORT"
+      ]
+    },
+    {
+      "name": "scenarios_present",
+      "count": 20,
+      "first": [
+        "operations_orientation",
+        "baseline_child_demand",
+        "baseline_staffing",
+        "staffing_requirement"
+      ],
+      "last": [
+        "performance_usability",
+        "final_operator_verdict"
+      ]
+    },
+    {
+      "name": "progress_initial",
+      "progress": "1 passed · 0 failed · 0 blocked · 19 remaining"
+    },
+    {
+      "name": "scenario_opens",
+      "key": "operations_orientation",
+      "heading": "You can find the operating day without being told how",
+      "hasNavigate": true,
+      "hasDoThis": true,
+      "hasInvariant": true,
+      "productLink": "/workspace"
+    },
+    {
+      "name": "fail_without_observation_refused",
+      "refused": true,
+      "message": "Say what you actually observed. A failure nobody described cannot be triaged."
+    },
+    {
+      "name": "pass_recorded",
+      "priorResult": "pass",
+      "line": "Recorded on this build: pass by qa-slot1-product@example.com — “Mounted certification of the QA instrument itself — recorded by the certifying agent, not a human tester.”"
+    },
+    {
+      "name": "next_advances",
+      "key": "baseline_child_demand",
+      "heading": "Children appear only during the hours they are expected"
+    },
+    {
+      "name": "fixture_limited_labeled",
+      "key": "plan_vs_actual",
+      "banner": "Fixture needed. Nobody has been observed on the QA date, so there is no actual to compare the plan against. Check someone in through Presence for the QA date to run it. Record this as Blocked rather than passing it."
+    },
+    {
+      "name": "blocked_recorded",
+      "refusedWithoutClassification": true,
+      "refusal": "Say what you actually observed. A failure nobody described cannot be triaged.",
+      "priorResult": "blocked"
+    },
+    {
+      "name": "persists_across_reload",
+      "beforeReload": "1 passed · 0 failed · 1 blocked · 18 remaining",
+      "afterReload": "1 passed · 0 failed · 1 blocked · 18 remaining",
+      "identical": true
+    },
+    {
+      "name": "product_navigation",
+      "httpStatus": 200,
+      "url": "https://staging.workwithalloy.com/workspace",
+      "signedIn": true,
+      "hasOperationsNav": 1
+    },
+    {
+      "name": "return_to_qa",
+      "url": "https://staging.workwithalloy.com/workspace/qa/staffing-v1",
+      "progress": "1 passed · 0 failed · 1 blocked · 18 remaining"
+    },
+    {
+      "name": "qa_api_shape",
+      "status": 200,
+      "keys": [
+        "suite",
+        "catalogVersion",
+        "environment",
+        "deployedRevision",
+        "fixture",
+        "scenarios",
+        "readiness",
+        "results",
+        "resultsError"
+      ],
+      "resultCount": 2,
+      "scenarioCount": 20
+    },
+    {
+      "name": "runtime_errors",
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()"
+      ],
+      "pageErrors": []
+    }
+  ],
+  "verdict": {
+    "consoleErrors": 2,
+    "pageErrors": 0
+  }
+}

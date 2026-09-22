@@ -1,0 +1,9 @@
+{
+  "isolatedClassificationGuard": {
+    "refused": true,
+    "message": "Choose a classification: PRODUCT_DEFECT, CONFUSING_UX, GUIDE_MISMATCH, FIXTURE_DRIFT, ENVIRONMENT_RUNTIME, UNKNOWN_NEEDS_TRIAGE"
+  },
+  "consoleErrorsDuringThisProbe": [
+    "Failed to load resource: the server responded with a status of 400 ()"
+  ]
+}
