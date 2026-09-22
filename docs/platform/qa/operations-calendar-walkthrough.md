@@ -60,13 +60,18 @@ Assignment or because of Coverage, and whether they have actually been observed 
 
 ## Fix a gap
 
-When a stretch is short, the panel offers **Who could cover this stretch** — the people
-who are available during exactly that stretch and planned nowhere else in it. Nobody is
-ranked and nobody is hidden from you.
+The panel offers **your site's staff**, each with what the system actually knows about them:
 
-Click **Plan ⟨name⟩ here**. The Calendar already knows the site, the room, the date and
-the exact interval, so there is nothing to retype. The day reloads and the gap should
-close.
+- **Available** — their availability is recorded and says yes for this stretch.
+- **Unavailable** — recorded, and the answer is no. The reason is shown when there is one.
+- **Availability not recorded** — nobody has ever told the system when they can work. That
+  is not a yes and it is not a no, and you will never see them described as available.
+
+Anyone already planned elsewhere in that stretch is still listed, with *already planned*
+beside them, so you can decide whether to move them rather than wondering where they went.
+
+Click **Plan ⟨name⟩ here**. The Calendar already knows the site, room, date and exact
+interval, so there is nothing to retype. The day reloads and the gap should close.
 
 If that person is already planned somewhere else for part of the time, you will be told so
 in those words — never a database message — and nothing is moved or cancelled behind your
@@ -80,10 +85,20 @@ Assignment puts them. The day reloads so you can see it happen.
 
 ## When someone calls out
 
-Next to a planned person, **Called out** records that they cannot work that day. It does
-exactly that and no more: **their Coverage is not cancelled for you**, because the rooms
-they were covering are your decision, not the system's. Use the panel to see what they were
-covering, then cancel or re-plan each one deliberately.
+Next to a planned person, **Called out** records that they cannot work that day.
+
+The picture changes immediately. They stay listed as planned — the schedule did say they
+would be there, and hiding it would hide why the room is now short — but they are marked
+**Unavailable**, with the reason, and they stop counting towards the room's requirement. If
+that leaves the room under-staffed, the stretch turns short and the chooser opens for a
+replacement.
+
+**Their Coverage is not cancelled for you**, because the rooms they were covering are your
+decision, not the system's. Plan a replacement, then cancel or change their Coverage
+deliberately.
+
+The same distinction runs through the whole screen: what was *planned* and what is *possible*
+are two different facts, and neither is quietly rewritten to match the other.
 
 ## What you should never see
 
