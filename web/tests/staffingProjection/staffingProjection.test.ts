@@ -435,3 +435,26 @@ describe("states", () => {
         });
     });
 });
+
+describe("the explanation reads as written", () => {
+    it("agrees with itself about one child and about several", () => {
+        const one = day({
+            children: [{ ...child("c1", T1, "08:00", "12:00"), intervals: [], hoursKnown: false }],
+            staff: [staff("Alex", T1, "08:00", "12:00")],
+        });
+        expect(seg(one, T1, "08:00")!.explanation.lines).toContain(
+            "1 expected child has no recorded hours and is counted in no segment"
+        );
+
+        const several = day({
+            children: [
+                { ...child("c1", T1, "08:00", "12:00"), intervals: [], hoursKnown: false },
+                { ...child("c2", T1, "08:00", "12:00"), intervals: [], hoursKnown: false },
+            ],
+            staff: [staff("Alex", T1, "08:00", "12:00")],
+        });
+        expect(seg(several, T1, "08:00")!.explanation.lines).toContain(
+            "2 expected children have no recorded hours and are counted in no segment"
+        );
+    });
+});
