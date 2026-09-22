@@ -1,8 +1,6 @@
 "use client";
 
 import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
-import FinancialsDiscountPanel from "@/app/adminV2/financials/FinancialsDiscountPanel";
-import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import { Settings2 } from "lucide-react";
 import { financialResponsibilityEligibility } from "@/lib/financials/commands/financialTransactionCommands";
 import clsx from "clsx";
@@ -25,8 +23,6 @@ import {
     type AccountLens,
 } from "@/lib/financials/workspace/accountLenses";
 import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/cardLabTypes";
-import AutopaySection from "@/components/operationalCards/AutopaySection";
-import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
 
 /**
  * Billing detail — what "Billing details →" opens.
@@ -69,6 +65,7 @@ export default function FinancialsDetailCard({
     ledgerPending = false,
     paymentBand,
     paymentMethodsAccount,
+    administration,
     discountAdmin,
     responsibilityAdmin,
     lens: lensProp,
@@ -134,9 +131,9 @@ export default function FinancialsDetailCard({
      * side since 11B. Details carried only the filter, so the surface an operator actually opens
      * from a family could answer "show me rows by who owes" and not "change who owes".
      *
-     * Given, the gear appears next to the filter and opens the SAME `FinancialsResponsibilityPanel`
-     * through its established hosted contract — one component, now three hosts, still not a second
-     * panel and still not a second writer. Absent, this card behaves exactly as it always has.
+     * Given, the gear appears next to the filter and opens the SAME responsibility surface the
+     * compact row opens — one component, several doors, still not a second panel and still not a
+     * second writer. This card no longer renders it: administration is depth now.
      */
     /*
      * The family's DISCOUNT position, beside Responsibility in the administration region. Given,
@@ -155,6 +152,29 @@ export default function FinancialsDetailCard({
         householdName?: string | null;
         /** Re-read committed truth. The card does not report its own success. */
         onCommitted: () => Promise<void> | void;
+    } | null;
+    /**
+     * ── THE COMPACT ADMINISTRATION ROW ────────────────────────────────────────────────────────
+     *
+     * `evidence.payers` already answers three of the four questions this region exists for: who is
+     * financially related to the account, what they owe (the share), and how they can pay (the
+     * method state). It has answered them since before this slice — what it never carried was a
+     * way to CHANGE any of it, so administration grew underneath as four stacked sections.
+     *
+     * These give the existing row its management affordances instead. Each opens a real depth
+     * surface through the same stack Add Charge and Payment use; none of them renders an editor
+     * inside this card.
+     */
+    administration?: {
+        /** Concise responsibility state, already resolved. This card composes nothing. */
+        responsibilitySummary: string;
+        /** Concise discount state. "None" is a truthful answer and needs no empty-state block. */
+        discountSummary: string;
+        /** Concise Autopay state, where Payments has one to report. */
+        autopaySummary?: string | null;
+        onManagePayments: () => void;
+        onManageResponsibility: () => void;
+        onManageDiscount: () => void;
     } | null;
     onAddCharge?: () => void;
     onManagePayment?: () => void;
@@ -520,6 +540,77 @@ export default function FinancialsDetailCard({
                 ) : null}
 
                 {/*
+                  * ── ADMINISTRATION, AS ONE COMPACT REGION ──────────────────────────────────
+                  *
+                  * This used to be four stacked sections — payment methods, autopay,
+                  * responsibility, discounts — each with its own heading, its own empty state and
+                  * its own form. Moving them above the ledger fixed the ORDER and left the shape
+                  * wrong: a wall of configuration between the commands and the record.
+                  *
+                  * The row above already says who is related to this account, what they owe and
+                  * whether they can pay. This adds only what was missing — the discount position,
+                  * and a way to change any of it — and every change opens a real depth surface
+                  * rather than unfolding here. Nothing on this line is an editor.
+                  */}
+                {administration ? (
+                    <div className="alloy-os-fdetail__admin" data-financials-administration="compact">
+                        <span className="alloy-os-fdetail__adminitem" data-financials-admin-item="payments">
+                            <span className="alloy-os-fdetail__adminlabel">Payment method</span>
+                            <button
+                                type="button"
+                                onClick={administration.onManagePayments}
+                                data-financials-manage-payments="open"
+                                className="alloy-os-fdetail__adminaction"
+                            >
+                                Manage payments
+                            </button>
+                        </span>
+
+                        <span className="alloy-os-fdetail__adminitem" data-financials-admin-item="responsibility">
+                            <span className="alloy-os-fdetail__adminlabel">Responsibility</span>
+                            <span className="alloy-os-fdetail__adminvalue" data-financials-responsibility-summary="true">
+                                {administration.responsibilitySummary}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={administration.onManageResponsibility}
+                                data-financials-manage-responsibility="gear"
+                                aria-label="Manage responsibility"
+                                title="Manage responsibility"
+                                className="alloy-os-fdetail__admingear"
+                            >
+                                <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
+                            </button>
+                        </span>
+
+                        <span className="alloy-os-fdetail__adminitem" data-financials-admin-item="discount">
+                            <span className="alloy-os-fdetail__adminlabel">Discount</span>
+                            <span className="alloy-os-fdetail__adminvalue" data-financials-discount-summary="true">
+                                {administration.discountSummary}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={administration.onManageDiscount}
+                                data-financials-manage-discounts="gear"
+                                aria-label="Manage discounts"
+                                title="Manage discounts"
+                                className="alloy-os-fdetail__admingear"
+                            >
+                                <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
+                            </button>
+                        </span>
+
+                        {/* Autopay is a Payments fact; it states itself here and is managed there. */}
+                        {administration.autopaySummary ? (
+                            <span className="alloy-os-fdetail__adminitem" data-financials-admin-item="autopay">
+                                <span className="alloy-os-fdetail__adminlabel">Autopay</span>
+                                <span className="alloy-os-fdetail__adminvalue">{administration.autopaySummary}</span>
+                            </span>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {/*
                     TWO PEER ACTIONS, NOT THREE COMPETING BUTTONS.
                     Pay now and Record payment are both ways INTO the same operation — settling what
                     is owed — and giving each permanent equal real estate above the ledger spent a
@@ -539,108 +630,11 @@ export default function FinancialsDetailCard({
                 </div>
 
                 {/*
-                  * ── ADMINISTRATION, BEFORE THE RECORD ──────────────────────────────────────
-                  *
-                  * Who pays, who owes, and what reduces it are the three things an operator
-                  * comes here to CHANGE. They used to sit below the ledger, so reaching them
-                  * meant scrolling past every transaction on the account — measured at 116
-                  * rows on the certification household, which is not an unusual number.
-                  *
-                  * The ledger is the record and it keeps its place below; this is the
-                  * administration of the account, and it belongs beside the position it
-                  * administers rather than after the history it produces.
+                  * The four administration sections that stood here — payment methods,
+                  * autopay, responsibility and discounts — are gone from the document flow.
+                  * Their state is on the compact row above and their management opens as a
+                  * depth surface, so the ledger is never pushed down by an editor.
                   */}
-                {/*
-                  * THE PANEL THE GEAR OPENS. Hosted: this card owns the trigger and the open state,
-                  * the panel owns everything else — the scope question, the arrangement in force,
-                  * effective dating, specificity, and `billing.configure_responsibility`, which
-                  * remains the only thing that writes.
-                  *
-                  * `defaultScopeMemberId` is null because Details administers the ACCOUNT, so the
-                  * household is what this host means. It is a stated default, not an absence, and
-                  * the operator still confirms the scope before anything is written.
-                  */}
-                {responsibilityAdmin ? (
-                    /*
-                     * ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT — the containment Accounts has
-                     * carried since 24ffad5bb, now here too. The workspace behind this listens for
-                     * Escape, so a depth card that does not answer FIRST hands its own dismissal to
-                     * its host: measured on the deployed build, one Escape closed the card AND the
-                     * whole Details surface, and the operator lost the account, the lens, the
-                     * filters and their place in the ledger. The card is the innermost open thing,
-                     * so it answers and stops there — and focus goes back to the gear that opened
-                     * it rather than to <body>.
-                     */
-                    <div
-                        data-financials-manage-responsibility="depth-card"
-                        onKeyDown={(e) => {
-                            if (e.key !== "Escape") return;
-                            e.stopPropagation();
-                            e.preventDefault();
-                            closeResponsibility();
-                        }}
-                    >
-                    <FinancialsResponsibilityPanel
-                        customerId={responsibilityAdmin.customerId}
-                        customerMemberId={null}
-                        subjectLabel={responsibilityAdmin.householdName ?? null}
-                        parties={responsibilityAdmin.parties}
-                        memberOptions={responsibilityScopeMembers}
-                        defaultScopeMemberId={null}
-                        hostedOpen={manageResponsibilityOpen}
-                        onHostedClose={closeResponsibility}
-                        onCommitted={async () => {
-                            /* Committed truth is re-read; the card does not report its own success. */
-                            await responsibilityAdmin.onCommitted();
-                            closeResponsibility();
-                        }}
-                    />
-                    </div>
-                ) : null}
-
-                {/*
-                  * DISCOUNTS, with the other administration concepts rather than on the command
-                  * row. Responsibility answers who owes; this answers what reduces it. Both are
-                  * positions with a gear, and neither is a transaction — which is why they sit
-                  * below Payment | Add and not in it.
-                  */}
-                {discountAdmin ? (
-                    <div className="alloy-os-fdetail__discounts" data-financials-discounts="detail">
-                        <FinancialsDiscountPanel
-                            customerId={discountAdmin.customerId}
-                            childLabelFor={discountAdmin.childLabelFor}
-                            onCommitted={discountAdmin.onCommitted}
-                        />
-                    </div>
-                ) : null}
-
-                {paymentMethodsAccount?.customerId ? (
-                    <div className="alloy-os-fdetail__methods" data-financials-payment-methods="detail">
-                        <PaymentMethodsSection
-                            customerId={paymentMethodsAccount.customerId}
-                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
-                            payerName={paymentMethodsAccount.payerName ?? null}
-                            payerEmail={paymentMethodsAccount.payerEmail ?? null}
-                            canManage={paymentMethodsAccount.canManage ?? true}
-                        />
-                    </div>
-                ) : null}
-
-                {/*
-                  * AUTOPAY SITS DIRECTLY BELOW THE METHODS, because the question it answers is the
-                  * one an operator asks next: the card is on file, does it get charged by itself?
-                  * Keeping them apart would let a surface imply that storing a card is consent.
-                  */}
-                {paymentMethodsAccount?.customerId ? (
-                    <div className="alloy-os-fdetail__autopay" data-financials-autopay="detail">
-                        <AutopaySection
-                            customerId={paymentMethodsAccount.customerId}
-                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
-                            payerName={paymentMethodsAccount.payerName ?? null}
-                            canManage={paymentMethodsAccount.canManage ?? true}
-                        />
-                    </div>
-                ) : null}
 
                 {/*
                     THE LENSES, between the rollup and the record.
@@ -708,11 +702,17 @@ export default function FinancialsDetailCard({
                           * border, so the filter row does not become a command footer. Its
                           * accessible name says what it does — an icon shape is not a sentence.
                           */}
-                        {lens !== "payments" && responsibilityAdmin ? (
+                        {lens !== "payments" && administration ? (
                             <button
                                 type="button"
                                 ref={manageResponsibilityGearRef}
-                                onClick={() => setManageResponsibilityOpen(true)}
+                                /*
+                                 * THE SAME DEPTH SURFACE THE COMPACT ROW OPENS. This gear used to
+                                 * set local state that unfolded the editor inside Details, which
+                                 * is the behaviour that pushed the ledger down. Two hosts, one
+                                 * surface — a second way in must not mean a second experience.
+                                 */
+                                onClick={() => administration?.onManageResponsibility()}
                                 aria-label="Manage responsibility"
                                 title="Manage responsibility — who contractually owes, from a date"
                                 data-financials-manage-responsibility="gear"

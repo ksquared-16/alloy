@@ -19,6 +19,10 @@ import {
 } from "@/components/financials/FinancialCommandChannel";
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
+import FinancialsDiscountPanel from "@/app/adminV2/financials/FinancialsDiscountPanel";
+import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
+import AutopaySection from "@/components/operationalCards/AutopaySection";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import CardCollectionField from "./CardCollectionField";
@@ -231,6 +235,64 @@ export default function FinancialsCard({
     const [entryMode, setEntryMode] = useState<"charge" | "adjustment">("charge");
 
     const expanded = overlay === "detail";
+
+    /*
+     * ── WHAT THE COMPACT ROW SAYS, READ FROM TRUTH THE CARD ALREADY HOLDS ─────────────────────
+     *
+     * `vm.payers` IS responsibility — `paymentSubjectModel` says so plainly: "the card already had
+     * a `payers` field and it means RESPONSIBILITY". So the summary names the parties on record
+     * rather than asking a second source, and says "Household" when nobody has been named, which
+     * is what the resolver itself answers for an account with no arrangement.
+     *
+     * Neither of these computes money. They are labels over answers that already exist.
+     */
+    const responsibilityAdminSummary = useMemo(() => {
+        const parties = (vm?.payers ?? []).filter((p) => (p.name ?? "").trim().length > 0);
+        if (parties.length === 0) return "Household";
+        if (parties.length === 1) return parties[0]!.name;
+        return parties.map((p) => `${p.name} ${p.share}`.trim()).join(" + ");
+    }, [vm?.payers]);
+
+    /*
+     * THE DISCOUNT POSITION, FROM THE ROUTE THAT OWNS IT.
+     *
+     * The card's own view model does not carry it — the depth card fetches it — so the compact
+     * summary asks the SAME canonical route rather than deriving a second answer from something
+     * nearby. One extra read for one line of truth, and no second notion of what a family's
+     * discount position is.
+     *
+     * "None" is a truthful answer and needs no empty-state block: a family with no policy is the
+     * ordinary case, and the surface this replaces gave it several lines of explanation.
+     */
+    const [discountSummaryState, setDiscountSummaryState] = useState<string>("None");
+    useEffect(() => {
+        if (!customerId) return;
+        let cancelled = false;
+        void fetch(
+            `/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`,
+            { credentials: "include" },
+        )
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: { expected?: Array<{ label?: string | null }> } | null) => {
+                if (cancelled || !body) return;
+                const policies = body.expected ?? [];
+                setDiscountSummaryState(
+                    policies.length === 0
+                        ? "None"
+                        : policies.length === 1
+                          ? (policies[0]?.label ?? "Configured")
+                          : `${policies.length} policies`,
+                );
+            })
+            .catch(() => {
+                /* A failed read is not "no discount". The row keeps its last truthful answer. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [customerId]);
+    const discountAdminSummary = discountSummaryState;
+
     /*
      * ── THE DETAILS VIEW BELONGS TO THE CARD, NOT TO THE DETAILS COMPONENT ────────────────────
      *
@@ -3191,6 +3253,123 @@ export default function FinancialsCard({
      * already answers this with its own overlay, and settling is the same kind of act, so it gets
      * the same treatment rather than a CSS argument with a card that is not ours to restyle.
      */
+    /*
+     * ── ADMINISTRATION AS DEPTH ───────────────────────────────────────────────────────────────
+     *
+     * Three surfaces, one shape, and it is the shape Add Charge and Payment already use: the
+     * platform card with the command modal class, hosted by the elevated cell that grants it
+     * interaction. Each hosts the component that already existed — this adds no second writer, no
+     * second read model and no second visual language.
+     *
+     * They return EARLY, like every other overlay, so Details is not rendering underneath them in
+     * the document flow. That is the whole difference between a depth card and an inline editor,
+     * and it is why the ledger no longer moves when an operator manages a discount.
+     */
+    if (overlay === "responsibility_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="responsibility_admin">
+                <UniversalCard
+                    title="Responsibility"
+                    insight=""
+                    iconName="Users"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="responsibility_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="responsibility_admin">
+                        <FinancialsResponsibilityPanel
+                            customerId={customerId}
+                            /*
+                             * ACCOUNT GRAIN. This is the standing arrangement, not one charge's —
+                             * the per-charge surface is `responsibility`, opened from a ledger row,
+                             * and it carries the charge it is about.
+                             */
+                            customerMemberId={null}
+                            parties={(vm.payers ?? [])
+                                .map((party) => ({ personId: party.personId ?? null, name: party.name }))
+                                .filter((party) => party.name.trim().length > 0)}
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                                pop();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "discount_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="discount_admin">
+                <UniversalCard
+                    title="Discounts"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="discount_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="discount_admin">
+                        <FinancialsDiscountPanel
+                            customerId={customerId}
+                            childLabelFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.displayName ?? null
+                            }
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "payments_admin" && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payments_admin">
+                <UniversalCard
+                    title="Payments"
+                    insight=""
+                    iconName="CreditCard"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="payments_admin"
+                    footerAction={null}
+                >
+                    {/*
+                      * THE CANONICAL PAYMENTS SURFACES, REHOSTED — not rebuilt. Add card, add bank
+                      * account, the method list and Autopay all stay exactly the components
+                      * Payments W2/W5 own; what changed is where they are rendered, so Details no
+                      * longer carries a permanent setup band for an account that may never need
+                      * one.
+                      */}
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
+                        <PaymentMethodsSection customerId={customerId} />
+                        <AutopaySection customerId={customerId} />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
     if (overlay === "payment" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payment">
@@ -3748,6 +3927,28 @@ export default function FinancialsCard({
                 ) : null}
 
                 <FinancialsDetailCard
+                    /*
+                     * ── THE COMPACT ADMINISTRATION ROW, AND ITS THREE DOORS ───────────────────
+                     *
+                     * The summaries are read from canonical truth the card already holds — the
+                     * payers line means responsibility, and the discount position is the same
+                     * forecast the depth card shows. Nothing here computes money.
+                     *
+                     * Each door pushes a depth surface onto the SAME stack Add Charge and Payment
+                     * use, so Escape pops exactly one layer and Details survives underneath.
+                     */
+                    administration={
+                        customerId
+                            ? {
+                                  responsibilitySummary: responsibilityAdminSummary,
+                                  discountSummary: discountAdminSummary,
+                                  autopaySummary: null,
+                                  onManagePayments: () => push({ kind: "payments_admin" }),
+                                  onManageResponsibility: () => push({ kind: "responsibility_admin" }),
+                                  onManageDiscount: () => push({ kind: "discount_admin" }),
+                              }
+                            : null
+                    }
                     /*
                      * PAYMENT METHODS (Payments W2) — administered here, in Details, beside the
                      * ledger. Passed only when the household is actually resolved: a card with no
@@ -4549,6 +4750,24 @@ export type FinancialsSurface =
     | { kind: "detail" }
     | { kind: "add_charge" }
     | { kind: "payment" }
+    /*
+     * ── ADMINISTRATION IS DEPTH, NOT DOCUMENT FLOW ────────────────────────────────────────────
+     *
+     * These three ride the same stack Add Charge and Payment ride, for the same reason: an
+     * elevated Focus Panel cell grants interaction to the platform card alone, so a surface that
+     * wants clicks has to BE one. Rendering them inside Details made them part of the record an
+     * operator scrolls, which is what pushed the ledger down a screen.
+     *
+     * Each hosts the component that already exists. None of them is a second writer.
+     *
+     * Named `_admin` deliberately: `responsibility` already exists below as the PER-CHARGE resolve
+     * and reallocate surface a ledger row opens, and the two are different acts. One changes what a
+     * household arranges; the other divides one obligation. Sharing a name would make the stack
+     * ambiguous about which was open.
+     */
+    | { kind: "responsibility_admin" }
+    | { kind: "discount_admin" }
+    | { kind: "payments_admin" }
     | { kind: "adjust_charge"; chargeId: string }
     | { kind: "reverse_charge"; chargeId: string; label: string }
     /*

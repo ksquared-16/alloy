@@ -104,9 +104,21 @@ function basisWithoutPolicyName(explanation: string | null, policyName: string):
 export default function FinancialsDiscountPanel({
     customerId,
     childLabelFor,
+    hostedOpen,
+    onHostedClose,
     onCommitted,
 }: {
     customerId: string;
+    /**
+     * ── HOSTED AS A DEPTH CARD ────────────────────────────────────────────────────────────────
+     *
+     * Given, this panel is the CONTENT of a depth surface someone else opened, so management is
+     * already open and dismissing it must dismiss that surface — not fold back to a position view
+     * sitting inside an otherwise empty card. Without this, Escape took two presses: one to close
+     * the section, another to pop the overlay.
+     */
+    hostedOpen?: boolean;
+    onHostedClose?: () => void;
     /** Names the relationship in the operator's words. The panel never invents a label. */
     childLabelFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
     /** Re-read committed truth. This panel reports no success of its own. */
@@ -115,7 +127,8 @@ export default function FinancialsDiscountPanel({
     const [position, setPosition] = useState<FamilyPosition | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [manageOpen, setManageOpen] = useState(false);
+    /* Hosted, management IS the surface — it opens with it rather than behind another gear. */
+    const [manageOpen, setManageOpen] = useState(Boolean(hostedOpen));
     const [nonce, setNonce] = useState(0);
     const gearRef = useState<{ current: HTMLButtonElement | null }>({ current: null })[0];
 
@@ -151,8 +164,13 @@ export default function FinancialsDiscountPanel({
         setManageOpen(false);
         setDraft(null);
         setActionError(null);
+        /* Hosted, the surface itself is what closes; the gear that opened it lives elsewhere. */
+        if (hostedOpen) {
+            onHostedClose?.();
+            return;
+        }
         gearRef.current?.focus();
-    }, [gearRef]);
+    }, [gearRef, hostedOpen, onHostedClose]);
 
     /**
      * One governed exception, through the certified action. The panel supplies a RELATIONSHIP, a
