@@ -158,7 +158,14 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after the rate class separation (2026-09-22).** Authenticated reads and writes now hold
+**Reconciled with staging (2026-09-22).** Candidate `5173806ca`, reconciled onto `origin/staging`
+`5cc971864` with zero file overlap and zero Thread 7 surface change; staging moved twice during the
+run and the candidate follows the current head. 502 Thread 7 tests green, 7 guards green, canonical
+typecheck and production build both rc=0. The 31 failures in staging's own suites are pre-existing
+and identical on the base. Status: **THREAD7_RECONCILED_CERTIFIED_READY_FOR_PROMOTION_AUTHORIZATION**
+— see `27-promotion-candidate.md`. Not pushed, not promoted.
+
+Earlier: **Updated after the rate class separation (2026-09-22).** Authenticated reads and writes now hold
 independent counters; the limits are unchanged (30/600/120 per 60 s) and the class is derived from
 the operation catalog rather than the HTTP verb. Partner documentation states the final contract.
 Both canonical gates passed. Thread 7 is **THREAD7_HUMAN_ACCEPTANCE_READY** — see
