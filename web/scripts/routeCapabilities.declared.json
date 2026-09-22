@@ -2374,6 +2374,14 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/responsibility-positions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Who owes, per child, for one household. It composes the two readers that already own those answers - readHouseholdScopes and readAccountArrangement - resolves no specificity of its own and writes nothing, so it is an ordinary Financials read behind the same helper as the single-scope route beside it."
+      }
+    },
     "app/api/admin/financials/responsibility-scopes/route.ts": {
       "GET": {
         "status": "declared",
