@@ -125,30 +125,11 @@ export function RuntimeKernelProvider({
             // error for a surface that is perfectly fine. Attention still moves; only preparation
             // is skipped.
             if (e.ref.target === WORKSPACE_ATTENTION_TARGET) return;
-            /*
-             * K2 BEGINS ON A MICROTASK, AND THE ORDERING IS THE REASON.
-             *
-             * `onAttentionMoved` runs synchronously up to its first await, and that synchronous
-             * stretch reaches `consumeFreshProvisioningForRoute`. Attention is now hydrated during
-             * RENDER (SurfaceHostContext), and the server-composed seed is registered by a
-             * render-phase write in a DESCENDANT — the page segment — which React has not rendered
-             * yet at that moment.
-             *
-             * Called inline, K2 would therefore consume before the seed exists, miss, and issue a
-             * live network fetch for an answer already sitting in the flight payload: the render-phase
-             * hydration would have bought a round trip instead of removing one. A microtask lets the
-             * render pass finish — seed included — and still runs long before paint.
-             *
-             * It is not a delay, a timeout or a grace. Nothing waits on it, and no other movement's
-             * semantics change: a click-time gesture is equally unaffected by one microtask.
-             */
-            queueMicrotask(() => {
             void provisioning.onAttentionMoved(e).then((terminal) => {
                 // `null` = the preparation was disposed (superseded/cancelled). Disposal is not an
                 // outcome and never reaches Focus — Kernel §K2: "there is no fourth outcome".
                 if (terminal) focus.onPreparationTerminal(terminal);
                 notify();
-            });
             });
         });
 

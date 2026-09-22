@@ -21,9 +21,22 @@
  * microtask after that render pass, which was also tried — can still precede the descendant's
  * registration, consume nothing, and pay for a round trip the document already carried.
  *
- * The effect is therefore not an oversight. It is what makes the seed reachable, and its cost is
- * the 900ms gap above. Closing that gap requires the answer to be available ABOVE the provider, or
- * the surface to be server-rendered — not a reordering of the same two writes.
+ * ── A CORRECTION, FROM THE REVERT'S OWN MEASUREMENT ─────────────────────────────────────────────
+ *
+ * The paragraph above originally ended by concluding that the effect is "what makes the seed
+ * reachable". The revert disproved that. On d198b6ca — the effect restored — the live fetch was
+ * still 25 of 26, while `seedReachedClient.present` was 26 of 26 and the seed's own match
+ * diagnostic reported `ok: true`. So the payload carries the seed and the CONSUME misses it, on a
+ * build whose hydration ordering is identical to the one that had 0 of 26.
+ *
+ * The render-phase experiment therefore did not cause the seed miss. What it did cause, measurably,
+ * was the P95: 2,405 -> 7,642ms, recovering to 1,892ms once reverted. That is the reason these
+ * assertions stand, and it is the only claim they are entitled to make.
+ *
+ * The missed consume asks for the BARE base key
+ * (`/api/admin/work-units/new-leads/provisioning-answer`, no `work_view_id`) and costs ~2.2s. It
+ * appeared between 5e312eb3 and 5cc97186 and survives this revert, so its owner is elsewhere and is
+ * not yet identified. Recorded here because this is the file a reader will reach for.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
