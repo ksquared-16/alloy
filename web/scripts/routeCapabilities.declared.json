@@ -2314,6 +2314,14 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/assignable-discounts/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Which configured discount policies a household's children could be given. Reads commercial_policies through the canonical config reader and the live assignments beside them; writes nothing, decides no eligibility, and states no amount it did not read."
+      }
+    },
     "app/api/admin/financials/autopay/route.ts": {
       "GET": {
         "status": "declared",

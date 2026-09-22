@@ -50,6 +50,16 @@ export type ReductionPolicyKind = "waiver" | "sibling_discount" | "discount";
  */
 export const STACK_ORDER: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
 
+/**
+ * THE POLICY TYPES THAT REDUCE MONEY, named once.
+ *
+ * The same three, and the same list, but a different question from STACK_ORDER: that one says in
+ * what order they stack, this one says which policy types are reductions at all. Two callers had
+ * each declared their own private copy and a third was about to — and a surface filtering on a
+ * stale copy would offer an operator a proration rule in a discount selector.
+ */
+export const REDUCTION_KINDS: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
+
 /** One authored policy, already narrowed to the winner for its type and scope. */
 export type ReductionPolicy = {
     id: string;
