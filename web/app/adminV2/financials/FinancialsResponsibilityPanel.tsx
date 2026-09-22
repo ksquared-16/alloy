@@ -83,12 +83,60 @@ async function readScopeArrangement(
     }
 }
 
+type ShareMethod = "percentage" | "fixed" | "remainder";
+
+const SHARE_METHOD_OPTIONS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
+    { value: "percentage", label: "Percentage" },
+    { value: "fixed", label: "Fixed amount" },
+    { value: "remainder", label: "Remainder" },
+];
+
+/**
+ * WHETHER THIS ARRANGEMENT RECONCILES, said in the operator's terms before they press Confirm.
+ *
+ * The canonical service refuses a total over 100%, a second remainder, and a duplicate party — so
+ * this is not a second rulebook, it is the same rules stated early enough to be useful. A form
+ * that let an operator fill in 70/40 and then showed them a server error would be making them
+ * discover a rule the product already knew.
+ */
+function reconcileShares(shares: readonly ShareDraft[]): { ok: boolean; message: string | null } {
+    const used = shares.filter((s) => s.method === "remainder" || s.amount.trim() !== "");
+    if (used.length === 0) return { ok: false, message: "Name at least one responsible party." };
+
+    const remainders = used.filter((s) => s.method === "remainder");
+    if (remainders.length > 1) return { ok: false, message: "Only one party can take the remainder." };
+
+    const percentTotal = used
+        .filter((s) => s.method === "percentage")
+        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    if (percentTotal > 100) {
+        return { ok: false, message: `The percentages total ${percentTotal}%.` };
+    }
+    if (used.some((s) => s.method !== "remainder" && !(Number(s.amount) >= 0))) {
+        return { ok: false, message: "Every share needs a number." };
+    }
+
+    const hasPercent = used.some((s) => s.method === "percentage");
+    if (hasPercent && percentTotal < 100 && remainders.length === 0) {
+        return { ok: true, message: `${100 - percentTotal}% is not assigned to anyone.` };
+    }
+    return { ok: true, message: null };
+}
+
 type ShareDraft = {
     responsiblePartyId: string;
     name: string;
     /** Their relationship to the account, shown so the operator knows which person this is. */
     roleLabel: string | null;
-    /** Cents the operator is assigning. Empty means they have not said yet. */
+    /**
+     * How this party's share is expressed. The canonical authority has always accepted all three;
+     * what was missing was anywhere for an operator to say which one they meant.
+     */
+    method: ShareMethod;
+    /**
+     * What the operator typed: cents for `fixed`, whole percent for `percentage`, ignored for
+     * `remainder` — a remainder is defined by the others, so there is nothing to type.
+     */
     amount: string;
 };
 
@@ -137,13 +185,29 @@ async function callAction(
                  * state exactly, and the others stay available to the capability rather than being
                  * approximated here.
                  */
+                /*
+                 * EACH SHARE IN THE METHOD THE OPERATOR CHOSE. This used to send `fixed` for
+                 * everything, because fixed was the only method the surface offered — the action
+                 * accepted all three the whole time. A remainder carries no number: it is defined
+                 * by what the others leave.
+                 */
                 shares: args.shares
-                    .filter((s) => s.amount.trim() !== "")
-                    .map((s) => ({
-                        responsible_party_id: s.responsiblePartyId,
-                        method: "fixed",
-                        amount_cents: Math.round(Number(s.amount) * 100),
-                    })),
+                    .filter((s) => s.method === "remainder" || s.amount.trim() !== "")
+                    .map((s) =>
+                        s.method === "remainder"
+                            ? { responsible_party_id: s.responsiblePartyId, method: "remainder" }
+                            : s.method === "percentage"
+                              ? {
+                                    responsible_party_id: s.responsiblePartyId,
+                                    method: "percentage",
+                                    percent_basis_points: Math.round(Number(s.amount) * 100),
+                                }
+                              : {
+                                    responsible_party_id: s.responsiblePartyId,
+                                    method: "fixed",
+                                    amount_cents: Math.round(Number(s.amount) * 100),
+                                },
+                    ),
             },
         }),
     });
@@ -188,7 +252,7 @@ async function loadCandidates(
 ): Promise<{ candidates: ShareDraft[]; error: string | null }> {
     const fallback = existing
         .filter((p) => p.personId)
-        .map((p) => ({ responsiblePartyId: p.personId as string, name: p.name, roleLabel: null, amount: "" }));
+        .map((p) => ({ responsiblePartyId: p.personId as string, name: p.name, roleLabel: null, method: "fixed" as ShareMethod, amount: "" }));
     if (!customerId && !chargeId) return { candidates: fallback, error: null };
 
     const params = new URLSearchParams();
@@ -212,6 +276,7 @@ async function loadCandidates(
         }
         const candidates = (body.candidates ?? [])
             .map((c) => ({
+                method: "fixed" as ShareMethod,
                 responsiblePartyId: c.personId != null ? String(c.personId) : "",
                 name: c.name != null ? String(c.name) : "Responsible party",
                 roleLabel: c.roleLabel != null ? String(c.roleLabel) : null,
@@ -306,6 +371,8 @@ export default function FinancialsResponsibilityPanel({
     );
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
+    /* The same rules the service enforces, stated early enough for the operator to act on. */
+    const reconciliation = reconcileShares(shares);
     /*
      * ── WHICH SCOPE THIS ARRANGEMENT GOVERNS ──────────────────────────────────────────────────
      *
@@ -629,21 +696,67 @@ export default function FinancialsResponsibilityPanel({
                     {share.roleLabel ? (
                         <span className="ml-1 text-alloy-midnight/40">{share.roleLabel}</span>
                     ) : null}
-                    <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="Amount"
-                        value={share.amount}
-                        onChange={(e) =>
-                            setShares((prev) =>
-                                prev.map((s, j) => (j === i ? { ...s, amount: e.target.value } : s)),
-                            )
-                        }
-                        data-financials-responsibility-share={share.responsiblePartyId}
-                        className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs tabular-nums"
-                    />
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                        <AlloySelect
+                            value={share.method}
+                            onChange={(next) =>
+                                setShares((prev) =>
+                                    prev.map((s, j) =>
+                                        j === i
+                                            ? { ...s, method: next as ShareMethod, amount: next === "remainder" ? "" : s.amount }
+                                            : s,
+                                    ),
+                                )
+                            }
+                            options={SHARE_METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                            allowEmpty={false}
+                            density="compact"
+                            aria-label={`How ${share.name} shares`}
+                            testId={`responsibility-share-method-${share.responsiblePartyId}`}
+                            className="min-w-0 flex-1"
+                        />
+                        {/*
+                          * A REMAINDER HAS NOTHING TO TYPE. It is defined by what the other shares
+                          * leave, so offering an amount box beside it would invite a number the
+                          * authority would then ignore.
+                          */}
+                        {share.method === "remainder" ? (
+                            <span
+                                className="flex-1 text-[11px] text-alloy-midnight/45"
+                                data-financials-responsibility-share={share.responsiblePartyId}
+                                data-share-method="remainder"
+                            >
+                                whatever the others leave
+                            </span>
+                        ) : (
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder={share.method === "percentage" ? "%" : "Amount"}
+                                value={share.amount}
+                                onChange={(e) =>
+                                    setShares((prev) =>
+                                        prev.map((s, j) => (j === i ? { ...s, amount: e.target.value } : s)),
+                                    )
+                                }
+                                data-financials-responsibility-share={share.responsiblePartyId}
+                                data-share-method={share.method}
+                                className="mt-0 block w-full flex-1 rounded border border-alloy-stone/20 px-2 py-1 text-xs tabular-nums"
+                            />
+                        )}
+                    </span>
                 </label>
             ))}
+
+            {/* Whether it reconciles, before Confirm rather than after it. */}
+            {reconciliation.message ? (
+                <p
+                    className={`mt-1.5 text-[11px] ${reconciliation.ok ? "text-alloy-midnight/50" : "text-alloy-ember"}`}
+                    data-financials-responsibility-reconciliation={reconciliation.ok ? "ok" : "invalid"}
+                >
+                    {reconciliation.message}
+                </p>
+            ) : null}
 
             {/*
               * THE ACTION'S OWN PREVIEW, not a guess assembled here. The only change made to it is
@@ -675,7 +788,7 @@ export default function FinancialsResponsibilityPanel({
                     type="button"
                     className="rounded border border-alloy-stone/20 px-2 py-1 text-xs text-alloy-midnight/70"
                     onClick={() => void run("preview")}
-                    disabled={busy !== null}
+                    disabled={busy !== null || !reconciliation.ok}
                     data-financials-responsibility-preview-btn="true"
                 >
                     {busy === "preview" ? "Checking…" : "Preview"}
@@ -684,7 +797,12 @@ export default function FinancialsResponsibilityPanel({
                     type="button"
                     className={WS_ACTION_PRIMARY}
                     onClick={() => void run("execute")}
-                    disabled={busy !== null || !preview}
+                    /*
+                     * AN ARRANGEMENT THAT CANNOT RECONCILE CANNOT BE CONFIRMED. The service would
+                     * refuse it anyway; refusing here means the operator learns it while they can
+                     * still see what they typed.
+                     */
+                    disabled={busy !== null || !preview || !reconciliation.ok}
                     data-financials-responsibility-confirm="true"
                 >
                     {busy === "execute" ? "Saving…" : "Confirm"}

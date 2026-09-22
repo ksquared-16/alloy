@@ -193,9 +193,25 @@ describe("one writer, three intents", () => {
         }
     });
 
-    it("authors fixed shares only", () => {
+    it("authors all three canonical share methods", () => {
+        /*
+         * THIS LOCK USED TO ASSERT THE OPPOSITE, and retiring it is the point.
+         *
+         * `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` recorded that fixed shares were
+         * operator-authorable while percentage and remainder existed in the arrangement authority
+         * with no authoring surface. The authority was never the gap — it has always validated
+         * basis points, refused totals over 100% and refused a second remainder — so the deferral
+         * was about this panel, and this panel now offers all three.
+         *
+         * What must stay true is that the panel sends what the operator CHOSE rather than one
+         * method for everything, which is what it used to do.
+         */
         const panel = strip(src(PANEL));
-        expect(panel, "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED").not.toMatch(/percent_basis_points|"percentage"|"remainder"/);
+        expect(panel, "percentage is authorable").toMatch(/percent_basis_points/);
+        expect(panel, "remainder is authorable").toMatch(/"remainder"/);
+        expect(panel, "fixed is still authorable").toMatch(/amount_cents/);
+        expect(panel, "the method comes from the operator's choice, not a constant")
+            .toMatch(/method: "remainder"[\s\S]{0,400}method: "percentage"[\s\S]{0,400}method: "fixed"/);
     });
 });
 
