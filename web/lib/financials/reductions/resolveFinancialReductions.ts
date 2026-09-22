@@ -121,7 +121,16 @@ export type NotEligibleReason =
      * Collapsing it into `category_not_covered` would tell an operator their configuration is
      * wrong when somebody on their team decided this on purpose and said why.
      */
-    | "excluded_by_exception";
+    | "excluded_by_exception"
+    /**
+     * A policy that applies to this relationship, deliberately withheld from THIS charge.
+     *
+     * Deliberately its own reason rather than folded into `excluded_by_exception`: the two are
+     * different decisions with different blast radius, and an operator reading "excluded for this
+     * assignment" when only one charge was waived would believe the family had lost the discount
+     * entirely.
+     */
+    | "excluded_by_charge_exception";
 
 export type RefusalReason =
     | "unreadable_basis"
@@ -311,9 +320,21 @@ export function resolveFinancialReductions(args: {
      * forecast cannot promise a discount the application path will withhold.
      */
     excludedPolicyIds?: readonly string[];
+    /**
+     * Policies withheld from THIS charge alone, resolved by `chargePolicyExclusionService`.
+     *
+     * Same reasoning as the relationship exclusion above, one grain down: dropping these before
+     * the call would make the resolver answer `no_policy_configured` for a family that has a
+     * policy and an operator who deliberately waived it once. The waiver is an eligibility fact,
+     * so it is evaluated where eligibility is decided and carries its own reason.
+     */
+    chargeExcludedPolicyIds?: readonly string[];
 }): ReductionDecision {
     const { gross, policies, facts } = args;
     const excluded = new Set(args.excludedPolicyIds ?? []);
+    const chargeExcluded = new Set(args.chargeExcludedPolicyIds ?? []);
+    /* Either grain sets a policy aside; only the reason differs. */
+    const setAside = (id: string): boolean => excluded.has(id) || chargeExcluded.has(id);
     if (gross.amountCents <= 0) {
         return { kind: "refused", reason: "negative_gross", detail: `gross ${gross.amountCents}`, policyId: null };
     }
@@ -336,11 +357,17 @@ export function resolveFinancialReductions(args: {
          * "there is a policy and you are excluded from it" and "there is no policy" are different
          * answers and only one of them is about a decision somebody made.
          */
-        if (forKind.every((p) => excluded.has(p.id))) {
-            firstSkip = firstSkip ?? "excluded_by_exception";
+        if (forKind.every((p) => setAside(p.id))) {
+            /*
+             * WHICH DECISION SET IT ASIDE. A charge-level waiver is named as one, because the
+             * family still has the policy for every other charge and the answer must not read as
+             * though they had lost it.
+             */
+            const everyOneCharge = forKind.every((p) => chargeExcluded.has(p.id) && !excluded.has(p.id));
+            firstSkip = firstSkip ?? (everyOneCharge ? "excluded_by_charge_exception" : "excluded_by_exception");
             continue;
         }
-        const contenders = forKind.filter((p) => !excluded.has(p.id));
+        const contenders = forKind.filter((p) => !setAside(p.id));
         if (contenders.length > 1) {
             return {
                 kind: "refused",

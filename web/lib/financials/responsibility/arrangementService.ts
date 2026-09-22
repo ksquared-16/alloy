@@ -29,6 +29,11 @@ export type ConfigureArrangementInput = {
     customerId: string;
     /** One child, or null for the whole account. */
     customerMemberId?: string | null;
+    /**
+     * The charge this arrangement governs, when it governs exactly one. Absent, the arrangement is
+     * the standing household or child answer it has always been.
+     */
+    chargeId?: string | null;
     opportunityCustomerMemberId?: string | null;
     effectiveStart: string;
     effectiveEnd?: string | null;
@@ -127,7 +132,7 @@ export async function configureResponsibilityArrangement(
     // ── CLOSE THE PREDECESSOR, THEN OPEN THE SUCCESSOR ──────────────────────────────────────
     const { data: priorRows, error: priorError } = await supabase
         .from("financial_responsibility_arrangements")
-        .select("id, effective_start, effective_end, customer_member_id")
+        .select("id, effective_start, effective_end, customer_member_id, charge_id")
         .eq("org_id", input.orgId)
         .eq("customer_id", input.customerId)
         .eq("state", "active");
@@ -143,8 +148,15 @@ export async function configureResponsibilityArrangement(
         effective_start: string;
         effective_end: string | null;
         customer_member_id: string | null;
+        charge_id: string | null;
     }>)
+        /*
+         * SUPERSESSION IS PER SCOPE. A charge-scoped arrangement must not close the standing child
+         * or household one — leaving those alone is the entire reason the charge grain exists —
+         * and a standing arrangement must not close a charge-scoped one either.
+         */
         .filter((p) => (p.customer_member_id ?? null) === (input.customerMemberId ?? null))
+        .filter((p) => (p.charge_id ?? null) === (input.chargeId ?? null))
         .filter((p) => !p.effective_end || p.effective_end >= input.effectiveStart)[0] ?? null;
 
     let supersededId: string | null = null;
@@ -172,6 +184,7 @@ export async function configureResponsibilityArrangement(
             org_id: input.orgId,
             customer_id: input.customerId,
             customer_member_id: input.customerMemberId ?? null,
+            charge_id: input.chargeId ?? null,
             opportunity_customer_member_id: input.opportunityCustomerMemberId ?? null,
             effective_start: input.effectiveStart,
             effective_end: input.effectiveEnd ?? null,
