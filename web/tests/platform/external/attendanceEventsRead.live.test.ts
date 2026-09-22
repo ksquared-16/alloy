@@ -65,7 +65,7 @@ type PublicEvent = {
     source: string;
     recorded_at: string;
 };
-type Page = { data: PublicEvent[]; next_cursor: string | null };
+type Page = { data: PublicEvent[]; next_cursor: string | null; sync_token: string | null };
 
 describeLive("GET /api/v1/attendance-events, over the wire", () => {
     let supabase: SupabaseClient;
@@ -330,6 +330,83 @@ describeLive("GET /api/v1/attendance-events, over the wire", () => {
 
         const bare = await get("/api/v1/attendance-events?updated_since=2026-01-01T00:00:00", token);
         expect(bare.status).toBe(400);
+    });
+
+    // ── the exact sync law (7.2) ─────────────────────────────────────────────
+    it("a microsecond watermark is honoured exactly — the boundary fact does not repeat", async () => {
+        /*
+         * The defect slice 7.1 measured and 7.2 removed. The watermark used to be rounded to
+         * milliseconds on the way in, so asking for "everything after .346845" actually asked for
+         * "everything after .346" and the boundary fact came back again. Certified here against a
+         * real stored timestamp, which carries microseconds.
+         */
+        const token = await bearer("reader");
+        const head = (await (await get("/api/v1/attendance-events?limit=5", token)).json()) as Page;
+        const boundary = head.data[2];
+        expect(boundary.recorded_at, "the fixture carries sub-millisecond precision").toMatch(/\.\d{4,}/);
+
+        const after = (await (await get(
+            `/api/v1/attendance-events?limit=10&updated_since=${encodeURIComponent(boundary.recorded_at)}`,
+            token,
+        )).json()) as Page;
+        expect(after.data.map((r) => r.id)).not.toContain(boundary.id);
+        for (const row of after.data) expect(row.recorded_at > boundary.recorded_at).toBe(true);
+    });
+
+    it("every page returns a sync token, including the last one", async () => {
+        const token = await bearer("reader");
+        const page = (await (await get("/api/v1/attendance-events?limit=5", token)).json()) as Page;
+        expect(page.sync_token, "a page with rows always offers a checkpoint").toBeTruthy();
+        expect(page.next_cursor).toBeTruthy();
+
+        // Walk to the end and confirm the final page still hands back a checkpoint.
+        let cursor: string | null = page.next_cursor;
+        let last: Page = page;
+        for (let i = 0; i < 40 && cursor; i += 1) {
+            last = (await (await get(
+                `/api/v1/attendance-events?limit=50&cursor=${encodeURIComponent(cursor)}`,
+                token,
+            )).json()) as Page;
+            cursor = last.next_cursor;
+        }
+        expect(last.next_cursor, "we reached the end").toBeNull();
+        expect(last.sync_token, "the last page is the one worth remembering").toBeTruthy();
+    });
+
+    it("since_token resumes exactly where a previous pass stopped, with no gap and no repeat", async () => {
+        const token = await bearer("reader");
+        const first = (await (await get("/api/v1/attendance-events?limit=7", token)).json()) as Page;
+        expect(first.data).toHaveLength(7);
+
+        const resumed = (await (await get(
+            `/api/v1/attendance-events?limit=7&since_token=${encodeURIComponent(first.sync_token!)}`,
+            token,
+        )).json()) as Page;
+
+        const firstIds = new Set(first.data.map((r) => r.id));
+        for (const row of resumed.data) {
+            expect(firstIds.has(row.id), "a fact was delivered twice across passes").toBe(false);
+        }
+
+        // And nothing fell between the two passes: a single 14-row read is the concatenation.
+        const straight = (await (await get("/api/v1/attendance-events?limit=14", token)).json()) as Page;
+        expect([...first.data, ...resumed.data].map((r) => r.id)).toEqual(straight.data.map((r) => r.id));
+    });
+
+    it("a sync token is a position, not a permission", async () => {
+        const reader = (await (await get("/api/v1/attendance-events?limit=1", await bearer("reader"))).json()) as Page;
+        const res = await get(
+            `/api/v1/attendance-events?since_token=${encodeURIComponent(reader.sync_token!)}`,
+            await bearer("elsewhere"),
+        );
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as Page).data).toEqual([]);
+    });
+
+    it("a malformed sync token is refused, not ignored", async () => {
+        const res = await get("/api/v1/attendance-events?since_token=not-a-token", await bearer("reader"));
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { error: { code: string } }).error.code).toBe("invalid_since_token");
     });
 
     // ── filters ──────────────────────────────────────────────────────────────

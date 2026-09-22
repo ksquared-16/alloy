@@ -182,6 +182,15 @@
             "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
           },
           {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
             "name": "type",
             "in": "query",
             "required": false,
@@ -219,7 +228,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only locations whose `updated_at` is STRICTLY AFTER this instant. Must carry a timezone offset or `Z` — a bare local time is ambiguous and is refused rather than guessed. A future timestamp is valid and matches nothing.\n\nDoes NOT detect deletion: a removed location simply stops appearing. Reconcile disappearances with a full bootstrap."
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
           }
         ],
         "responses": {
@@ -272,7 +281,7 @@
           "Locations"
         ],
         "summary": "List canonical attendance facts",
-        "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record.\n\nBecause nothing disappears, a consumer that has read every page holds the complete history. Order and `updated_since` both advance on `recorded_at` — when Alloy recorded the fact — not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a watermark you had already passed.\n\nSynchronization is at-least-once. `updated_since` is matched at millisecond precision while facts are recorded with finer precision, so the fact on your watermark boundary can be delivered twice; deduplicate by `id`. Nothing is ever skipped, and a cursor carries an exact position, so paging through a single pass returns each fact once.",
+        "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record. Because nothing disappears, a consumer that has read every page holds the complete history.\n\nOrder and synchronization both advance on `recorded_at` — when Alloy recorded the fact — not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a checkpoint you had already passed.\n\n## Keeping a copy in step\n\n1. Bootstrap: request without `since_token` or `updated_since`.\n2. Follow `next_cursor` until it is null, storing each page as you go.\n3. When the pass completes, persist the `sync_token` from the last page you consumed. Persist it only after the whole pass succeeded — a token saved mid-pass would skip whatever you did not store.\n4. Next time, request with `since_token` set to the value you persisted.\n5. Follow `next_cursor` to exhaustion again, then persist the new `sync_token`.\n\nA `sync_token` identifies one record, not an instant, so records sharing a timestamp are neither skipped nor repeated. If you checkpoint with `updated_since` instead, supply the exact `recorded_at` you stopped at — it is matched at full precision.\n\n### Example\n\nBootstrap, then resume:\n\n```\nGET /api/v1/attendance-events?limit=200\n  -> { \"data\": [...], \"next_cursor\": \"eyJ...\", \"sync_token\": \"eyJ...\" }\nGET /api/v1/attendance-events?limit=200&cursor=eyJ...\n  -> { \"data\": [...], \"next_cursor\": null, \"sync_token\": \"eyJhZ...\" }\n\n# store \"eyJhZ...\", then later:\nGET /api/v1/attendance-events?limit=200&since_token=eyJhZ...\n  -> only facts recorded after the one that token names\n```\n\nNarrow a sync to one site or one child with `site_id` or `child_id`; filters never widen what your installation may read.",
         "security": [
           {
             "bearerAuth": []
@@ -302,6 +311,15 @@
             "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
           },
           {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
             "name": "updated_since",
             "in": "query",
             "required": false,
@@ -309,7 +327,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only facts recorded strictly after this instant. Must carry a timezone offset or Z. Matched at millisecond precision, so the boundary fact may repeat; deduplicate by id."
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
           },
           {
             "name": "site_id",
@@ -714,7 +732,8 @@
         "type": "object",
         "required": [
           "data",
-          "next_cursor"
+          "next_cursor",
+          "sync_token"
         ],
         "properties": {
           "data": {
@@ -729,6 +748,13 @@
               "null"
             ],
             "description": "Pass back as `cursor`. Null means the last page — you never need a request to discover there is nothing left."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact position of the last record on this page. Persist it after a successful pass and pass it back as `since_token` to resume. Returned on every page that has records, including the last one."
           }
         }
       },
@@ -761,7 +787,7 @@
               "string",
               "null"
             ],
-            "description": "Your own identifier for the child, if this installation has mapped one. Null when no mapping exists."
+            "description": "Your own identifier for this child, as your installation has mapped it. Null when you have not mapped one. It is the identifier you supplied for the child, returned so you can match this fact to your own record without keeping a second lookup table."
           },
           "site_id": {
             "type": "string",
@@ -772,21 +798,21 @@
               "string",
               "null"
             ],
-            "description": "The room, for facts that name one."
+            "description": "The room the fact happened in, for facts that name one. A room is a location of type `unit`; the same identifier appears in GET /api/v1/locations."
           },
           "from_room_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Origin room of a room transfer."
+            "description": "The room a child moved out of. Present only on a `room_transfer`."
           },
           "to_room_id": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Destination room of a room transfer."
+            "description": "The room a child moved into. Present only on a `room_transfer`."
           },
           "event_kind": {
             "type": "string",
@@ -798,7 +824,7 @@
               "room_transfer",
               "schedule_override"
             ],
-            "description": "What happened."
+            "description": "What happened: `check_in` and `check_out` are arrival and departure, `room_transfer` is a move between rooms, `absence` records an expected child who did not attend, `present` is an observed presence without a recorded arrival, and `schedule_override` records an operational change to the day itself."
           },
           "entry_type": {
             "type": "string",
@@ -807,7 +833,7 @@
               "correction",
               "reversal"
             ],
-            "description": "`original` is a first statement. `correction` restates an earlier fact. `reversal` voids one and contributes nothing of its own."
+            "description": "Whether this fact stands alone or acts on an earlier one. `original` is a first statement. `correction` restates a fact that was wrong, and the restated values are on the correction. `reversal` voids a fact that should not have been recorded and asserts nothing in its place. Both name their target in `corrects_event_id`."
           },
           "corrects_event_id": {
             "type": [
@@ -824,7 +850,7 @@
           "service_date": {
             "type": "string",
             "format": "date",
-            "description": "The service day it belongs to, which is not always the calendar day of event_at."
+            "description": "The operating day this fact belongs to, in the organization's configured operational timezone. It is determined when the fact is recorded and is never recomputed afterwards. It is NOT the UTC date of `event_at`: a late-evening arrival and an early-morning one can share an operating day while falling on different UTC dates, and the reverse."
           },
           "actor_type": {
             "type": "string",
@@ -835,7 +861,7 @@
               "emergency_contact",
               "system"
             ],
-            "description": "The kind of actor who recorded it. Never an identified person."
+            "description": "The kind of actor the fact was recorded by — a staff member, a parent, a guardian, an emergency contact, or an automated system. Alloy never identifies the individual here."
           },
           "source": {
             "type": "string",
@@ -850,7 +876,7 @@
               "door_access",
               "mobile_app"
             ],
-            "description": "The channel the fact was captured through. `integration_api` means it arrived through this API."
+            "description": "The channel the fact was captured through. `integration_api` means it arrived through this API; `kiosk`, `staff_workspace`, `parent_portal` and `door_access` are the operational channels Alloy itself records through. Useful for telling your own writes apart from everyone else's."
           },
           "recorded_at": {
             "type": "string",
@@ -863,7 +889,8 @@
         "type": "object",
         "required": [
           "data",
-          "next_cursor"
+          "next_cursor",
+          "sync_token"
         ],
         "properties": {
           "data": {
@@ -878,13 +905,20 @@
               "null"
             ],
             "description": "Opaque cursor for the next page, or null when this is the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact position of the last record on this page. Persist it after a successful pass and pass it back as `since_token` to resume. Returned on every page that has records, including the last one."
           }
         }
       }
     },
     "responses": {
       "InvalidRequest": {
-        "description": "The request could not be parsed or is not a supported grant.",
+        "description": "The request contains an invalid or unsupported parameter, filter, cursor, sync token, or date value.",
         "content": {
           "application/json": {
             "schema": {
@@ -894,7 +928,7 @@
         }
       },
       "InvalidCredential": {
-        "description": "Authentication failed. Deliberately identical for unknown, wrong, revoked and expired credentials — distinguishing them would tell a prober which half of a guess was right.",
+        "description": "Authentication failed. Present valid credentials or obtain a new access token, then retry.",
         "content": {
           "application/json": {
             "schema": {

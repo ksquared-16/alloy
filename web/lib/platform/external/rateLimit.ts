@@ -44,6 +44,21 @@ export const RATE_LIMIT_POLICY = {
     tokenExchange: { limit: 30, windowSeconds: 60 },
     /** Authenticated reads. A partner paging a collection is normal traffic. */
     authenticatedRead: { limit: 600, windowSeconds: 60 },
+    /**
+     * Authenticated writes. Tighter than reads, and deliberately not tight.
+     *
+     * The shape of external write traffic is known from the one write Alloy already accepts
+     * internally: a producer syncs a day of attendance as a small number of BATCHES, not one
+     * request per fact. So the budget is per request, a batch spends one, and a provider
+     * reconciling a busy site spends a handful — 120 a minute is two a second sustained, which is
+     * generous for submitting facts and five times tighter than reading them.
+     *
+     * It is not tighter still because retries are safe here: every public operation derives a
+     * durable idempotency identity, so a client that retries a timeout replays rather than
+     * duplicates. Punishing that retry would push clients toward the one behaviour — giving up and
+     * resubmitting later with a new identity — that the idempotency contract exists to prevent.
+     */
+    authenticatedWrite: { limit: 120, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 function bucket(parts: readonly string[]): string {

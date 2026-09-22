@@ -42,8 +42,8 @@ import { requireExternalPrincipal } from "@/lib/platform/external/externalReques
 import { requireOperationScope } from "@/lib/platform/external/scopeCatalog";
 import {
     buildPage,
-    decodeCursor,
     resolveLimit,
+    resolvePosition,
     resolveUpdatedSince,
 } from "@/lib/platform/external/collection";
 import { externalIdsForResources } from "@/lib/platform/external/integrationResourceRefs";
@@ -148,11 +148,15 @@ export async function GET(request: NextRequest) {
     const limitResult = resolveLimit(params.get("limit"));
     if (!limitResult.ok) return fail("invalid_limit", limitResult.reason);
 
-    const rawCursor = params.get("cursor");
-    const cursor = rawCursor ? decodeCursor(rawCursor) : null;
-    if (rawCursor && !cursor) {
-        return fail("invalid_cursor", "The cursor is not valid. Restart pagination without one.");
+    // One position, from whichever token the caller supplied — a cursor within a pass, a sync
+    // token between passes. They are compared identically, so they resolve to one concept.
+    const positioned = resolvePosition(params.get("cursor"), params.get("since_token"));
+    if (!positioned.ok) {
+        return positioned.field === "cursor"
+            ? fail("invalid_cursor", "The cursor is not valid. Restart pagination without one.")
+            : fail("invalid_since_token", "The sync token is not valid. Restart with a full read.");
     }
+    const cursor = positioned.position;
 
     const watermark = resolveUpdatedSince(params.get("updated_since"));
     if (!watermark.ok) return fail("invalid_updated_since", watermark.reason);
@@ -206,7 +210,7 @@ export async function GET(request: NextRequest) {
 
     if (authorizedSites.length === 0) {
         const empty = NextResponse.json(
-            { data: [], next_cursor: null },
+            { data: [], next_cursor: null, sync_token: null },
             { status: 200, headers: { ...identityHeaders(identity), ...limitHeaders, "Cache-Control": "no-store" } },
         );
         return finish(empty, activityIds);
@@ -275,6 +279,7 @@ export async function GET(request: NextRequest) {
                 toPublicAttendanceEvent(row, aliases.get(row.customer_member_id) ?? null),
             ),
             next_cursor: page.next_cursor,
+            sync_token: page.sync_token,
         },
         { status: 200, headers: { ...identityHeaders(identity), ...limitHeaders, "Cache-Control": "no-store" } },
     );

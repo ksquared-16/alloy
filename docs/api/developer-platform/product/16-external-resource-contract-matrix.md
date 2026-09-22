@@ -28,7 +28,7 @@ code, the code wins and the correction is recorded.
 | Attendance externalization is a domain build | `ingestExternalAttendance.ts`, `attendanceIngestAuthor.ts`, `attendanceAuthorityAdapter.ts`, `attendancePermissions.assertNonHumanCaptureAllowed`, `attendanceFold.ts` all present | **Domain is built.** Missing piece is an `/api/v1` seam, not Attendance infrastructure |
 | `integration_resource_refs` is absent (Thread 3) | migration `20260911150000_integration_resource_refs.sql` + `lib/platform/external/integrationResourceRefs.ts` | **Exists**, with richer semantics than assumed (below) |
 | Staff is an entity | `buildPersonEmploymentComposition.ts`: *"There is no Staff entity, no Staff drawer and no Staff view model"* | **Staff is Person + Employment composition** |
-| Schedules are stored | `scheduleExpectationCore.ts`: *"Expectations are DERIVED, never persisted as system-of-record"* | **Schedule is a projection**, not a resource of record |
+| Schedules are stored | `scheduleExpectationCore.ts` derives EXPECTATIONS; committed schedule authority is the effective-dated `schedule_assignments` | **Corrected.** Committed schedules ARE persisted. What is derived is the externally useful *dated expectation view*, which therefore has no `updated_at` of its own to synchronize on |
 | Thread 3 inventory is current | It lists Installation, Credential and their UI as absent; all shipped in Thread 5 | **Stale.** Use for structure, verify for state |
 
 ### `integration_resource_refs`, precisely
@@ -100,7 +100,7 @@ Classifications: `V1_READ_RESOURCE` · `V1_GOVERNED_OPERATION` · `EVENT_REQUIRE
 | Staff | Person + Employment | Employment | `employments.id` | ratio, roster, who is on site | **V1_READ_RESOURCE** | no | desirable | yes | org | primary location narrows | composition module | employment authority | no | required | needed | boundary semantics for org-scoped employment | build read resource | Medium |
 | Enrollment | enrollment agreement | Enrollment | agreement id | "is this child enrolled, where, when" | **V1_READ_RESOURCE** | no | **EVENT_REQUIRED** | yes | org | via placement | internal | operator/process | no | required | **must express withdrawal** | no external projection; Business Process internals must stay hidden | build read resource | Medium |
 | Placement | `child_placements`, effective-dated | Childcare Operational | placement id | which room, from when | **V1_READ_RESOURCE** | no | **EVENT_REQUIRED** | yes | org | room unit under site | `childPlacementService` | supersede-by-row | no | required | supersede is already modelled | external effective-dating shape | build read resource | High |
-| Schedules | derived expectations | Operational Expectations | **none** | expected days, to interpret attendance | **V1_READ_RESOURCE (as projection)** | no | INCREMENTAL_SYNC_SUFFICIENT | **no — derived, no `updated_at`** | org | via placement | pure derivation | n/a | no | no | n/a | **derived data has no change timestamp**; sync model must be date-window, not `updated_since` | expose as a dated projection, not a synced collection | High |
+| Schedules (expectation view) | derived expectation over committed `schedule_assignments` | Operational Expectations | none for the view; `schedule_assignments.id` underneath | expected days, to interpret attendance | **V1_READ_RESOURCE (as dated projection)** | no | INCREMENTAL_SYNC_SUFFICIENT | **no — the VIEW is derived and has no `updated_at`; the committed assignment underneath does** | org | via placement | pure derivation | n/a | no | no | n/a | **derived data has no change timestamp**; sync model must be date-window, not `updated_since` | expose as a dated projection, not a synced collection | High |
 | Attendance facts | `child_attendance_events` | Attendance | event id | reconciling presence | **V1_READ_RESOURCE** | — | **EVENT_REQUIRED** | append-only, sync natural | org | room/site on event | per-child + per-site only | `recordAttendanceEvent` | ingestion built | alias exists | reversal = tombstone, already modelled | no org+boundary collection read | build read resource | High |
 | Attendance state | folded presence | Attendance | n/a | "who is here now" | **V1_READ_RESOURCE (projection)** | — | EVENT_REQUIRED | derived | org | site | `attendanceFold` | n/a | no | no | n/a | projection is per-child today | expose as a projection | High |
 | Attendance submission | governed event | Attendance | n/a | partner authors presence | — | **V1_GOVERNED_OPERATION** | n/a | n/a | installation | `allowedSiteLocationIds` | n/a | `ingestExternalAttendanceEvent` | **built** | **required** | correction + reversal built | route + public idempotency contract | **first operation** | High |
@@ -186,10 +186,14 @@ first committed operational assignment).
 - **Enrollment agreement** is the record of service commitment.
 - **Placement** (`child_placements`) is effective-dated with supersede semantics — a change closes
   the prior row the day before the successor starts. That is already the right external shape.
-- **Schedule is derived.** `scheduleExpectationCore.ts` states expectations are derived and never
-  persisted as system-of-record. Therefore a schedule **cannot** participate in `updated_since`
-  synchronization — it has no `updated_at`. Expose it as a **dated projection** ("expected days for
-  this child between these dates"), which is also what a partner actually wants.
+- **Schedule: the distinction that the first draft of this document flattened.** Committed schedule
+  authority is persisted and effective-dated (`schedule_assignments`); it is not derived. What IS
+  derived is the *expectation* view — "which days is this child expected on, between these dates" —
+  computed by `scheduleExpectationCore.ts` from committed truth plus configuration, and never stored
+  as system-of-record. The externally useful resource is that dated expectation view, and because it
+  is derived it carries no `updated_at` and cannot join `updated_since` synchronization. Expose it as
+  a **dated projection**; if a partner later needs change notification on the underlying commitment,
+  that is a read of `schedule_assignments`, which is synchronizable.
 - **Business Process internals stay hidden.** Stage keys, work views and process state are Alloy's
   workflow machinery; the external contract communicates enrolled/where/when, not how Alloy got
   there.
@@ -281,7 +285,9 @@ be hidden inside a resource slice.**
 | Attendance read projections (per child, per site) | `IMPLEMENTED_INTERNAL_FOUNDATION` |
 | Children, Households, Relationships, Staff, Enrollment, Placement, Schedule projection | `PROPOSED_V1` |
 | Attendance public read + governed submission/correction | `PROPOSED_V1` |
-| Archive/delete law, public idempotency, write rate budget, precondition/idempotency error types | `RATIFIED_NOT_IMPLEMENTED` (contract shape known, no implementation) |
+| Exact incremental sync (`sync_token`, full-precision `updated_since`) | `IMPLEMENTED_EXTERNAL` — slice 7.2, on Locations and Attendance |
+| Public write law: idempotency doctrine, `idempotency_conflict` error, `authenticatedWrite` budget | `IMPLEMENTED_EXTERNAL` — slice 7.3 (law and primitives; no mutation endpoint yet) |
+| Archive/delete law | `RATIFIED_NOT_IMPLEMENTED` — representation decided; delivery blocked on `updated_at` maintenance (see gap register 5A) |
 | Events / webhooks | `PROPOSED_V1` platform slice — nothing implemented |
 | Charges, responsibility, balance, payments read, funding/subsidy | `LATER` |
 | External payment submission | `INTERNAL_ONLY` |
