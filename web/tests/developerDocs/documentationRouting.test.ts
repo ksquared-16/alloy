@@ -77,7 +77,7 @@ describe("no destination depends on a file the deployed runtime does not have", 
         const spec = JSON.parse(GOVERNED_OPENAPI_DOCUMENT) as { openapi?: string; paths?: object };
         expect(spec.openapi).toMatch(/^3\./);
         expect(Object.keys(spec.paths ?? {}).length).toBeGreaterThan(0);
-        expect(publicOperations().length).toBe(4);
+        expect(publicOperations().length).toBe(5);
     });
 });
 

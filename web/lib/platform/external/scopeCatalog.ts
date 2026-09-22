@@ -112,6 +112,18 @@ export const PUBLIC_OPERATIONS = {
         scope: "attendance.read",
         route: "/api/v1/attendance-events",
     },
+    /*
+     * The write on the same resource, and a SEPARATE scope from the read.
+     *
+     * The catalog forbids hierarchy by construction, so this is not a courtesy: an installation
+     * granted only `attendance.write` submits facts and cannot read anyone's history back, and one
+     * granted only `attendance.read` cannot author. A producer that needs both is granted both.
+     */
+    submitAttendanceEvents: {
+        operationId: "submitAttendanceEvents",
+        scope: "attendance.write",
+        route: "/api/v1/attendance-events",
+    },
 } as const satisfies Record<
     string,
     { operationId: string; scope: PublicScope | null; route: string }

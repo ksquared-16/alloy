@@ -138,21 +138,24 @@ describe("public OpenAPI drift guard", () => {
         ]);
     });
 
-    it("publishes no attendance MUTATION — the read does not open a write", () => {
+    it("the only attendance write is a fact submission, never a generic mutation", () => {
         /*
-         * The invariant this file has always protected, restated now that an attendance READ
-         * exists. `attendance.write` is a real scope with no public endpoint behind it, and the
-         * arrival of `GET /api/v1/attendance-events` must not be read — by a partner or by a later
-         * change — as evidence that submission shipped too.
+         * This assertion used to say "no attendance mutation exists", which was true until Thread 7
+         * slice 7.4 published one. What it protects now is the sharper thing: attendance is a
+         * ledger, so the public surface may author facts and must never offer to change or remove
+         * one. A PUT, PATCH or DELETE here would be a different product — and the correction and
+         * reversal semantics that make the ledger trustworthy would quietly stop being the only way
+         * to fix a mistake.
          */
         for (const [docPath, operations] of Object.entries(spec.paths)) {
+            if (!/attendance/i.test(docPath)) continue;
             for (const method of Object.keys(operations)) {
-                const isWrite = ["post", "put", "patch", "delete"].includes(method);
                 expect(
-                    isWrite && /attendance/i.test(docPath),
-                    `${method.toUpperCase()} ${docPath} would be a public attendance mutation`,
+                    ["put", "patch", "delete"].includes(method),
+                    `${method.toUpperCase()} ${docPath} would mutate a fact in place`,
                 ).toBe(false);
             }
+            expect(Object.keys(operations).sort()).toEqual(["get", "post"]);
         }
     });
 

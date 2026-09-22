@@ -5322,6 +5322,10 @@
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope attendance.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and the location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed fact submission admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope attendance.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. The route authors nothing itself: it converts the principal through attendanceAuthorityForPrincipal (one-way, granting nothing the installation does not hold) and calls ingestExternalAttendanceEvent, which owns identity resolution, the site-authority check against the child's own enrollment site, the attendance.record capability check, replay identity and the canonical command. An installation whose boundary reaches no site is refused before any event is considered."
       }
     },
     "app/api/v1/context/route.ts": {

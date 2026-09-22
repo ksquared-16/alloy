@@ -23,21 +23,21 @@ describe("the reference is exactly the implemented surface", () => {
             "GET /api/v1/attendance-events",
             "GET /api/v1/context",
             "GET /api/v1/locations",
+            "POST /api/v1/attendance-events",
             "POST /api/v1/oauth/token",
         ]);
     });
 
-    it("the attendance operation that is represented is a READ, and only a read", () => {
+    it("attendance is represented as a read and a fact submission, and nothing else", () => {
         /*
-         * This assertion used to say "no attendance operation is represented", which was true when
-         * attendance existed only as a scope. It now protects the sharper fact: a partner can read
-         * attendance facts and cannot submit one, and the reference must not suggest otherwise.
+         * Slice 7.4 published the first public write, so "only a read" is no longer the invariant.
+         * What must stay true is that the reference shows a partner two ways to touch attendance —
+         * read the ledger, append to it — and never a way to edit or delete what is already there.
          */
         const attendance = reference.operations.filter((o) => /attendance/i.test(o.path));
-        expect(attendance).toHaveLength(1);
-        expect(attendance[0].method).toBe("GET");
-        expect(attendance[0].requiredScope).toBe("attendance.read");
-        expect(reference.operations.some((o) => o.method !== "GET" && /attendance/i.test(o.path))).toBe(false);
+        expect(attendance.map((o) => o.method).sort()).toEqual(["GET", "POST"]);
+        expect(attendance.find((o) => o.method === "GET")!.requiredScope).toBe("attendance.read");
+        expect(attendance.find((o) => o.method === "POST")!.requiredScope).toBe("attendance.write");
     });
 
     it("the page derives its content rather than restating it", () => {

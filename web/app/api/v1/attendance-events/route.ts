@@ -52,13 +52,23 @@ import {
     toPublicAttendanceEvent,
     type CanonicalAttendanceEventRow,
 } from "@/lib/platform/external/resources/attendanceEventResource";
-import { resolveBoundarySites } from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import {
+    attendanceAuthorityForPrincipal,
+    resolveBoundarySites,
+} from "@/lib/platform/principal/attendanceAuthorityAdapter";
+import { ingestExternalAttendanceEvent } from "@/lib/childcareOperational/attendance/integration/ingestExternalAttendance";
+import {
+    parseSubmission,
+    toPublicOutcome,
+    type PublicItemOutcome,
+} from "@/lib/platform/external/resources/attendanceSubmission";
 import { ATTENDANCE_EVENT_KINDS } from "@/lib/childcareOperational/attendance/attendanceVocabulary";
 
 export const dynamic = "force-dynamic";
 
 const ROUTE = "/api/v1/attendance-events";
 const OPERATION_ID = "listAttendanceEvents";
+const SUBMIT_OPERATION_ID = "submitAttendanceEvents";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -284,5 +294,196 @@ export async function GET(request: NextRequest) {
         { status: 200, headers: { ...identityHeaders(identity), ...limitHeaders, "Cache-Control": "no-store" } },
     );
 
+    return finish(response, activityIds);
+}
+
+
+/**
+ * POST /api/v1/attendance-events — submit canonical attendance facts.
+ *
+ * ── THE SAME RESOURCE, AUTHORED ──
+ *
+ * A fact is submitted to the collection it will appear in, so a partner learns one noun and one
+ * address. It is not a PATCH and there is no update: attendance is a ledger, and a mistake is
+ * fixed by submitting a correction that names the fact it supersedes, or a reversal that voids one.
+ *
+ * ── THIS HANDLER DECIDES NOTHING ──
+ *
+ * Every judgement — is this identifier a child, is that child's site within reach, has this event
+ * already been applied, does the correction target exist — belongs to
+ * `ingestExternalAttendanceEvent`, which Alloy already uses for exactly this. The handler proves
+ * the principal, converts it to attendance authority through the one-way adapter, validates the
+ * SHAPE of the request, and translates vocabulary on the way back. A second opinion on any of those
+ * questions would be a second answer.
+ *
+ * ── PER ITEM, NOT PER BATCH ──
+ *
+ * The authority is per event: each one gets its own durable evidence row and its own disposition,
+ * and one unmapped identifier does not discard the fifty facts either side of it. So the response
+ * is a result per item and the status is 200 whenever the batch was processed — including when
+ * every item was refused. A partner reads outcomes, not a status code.
+ */
+export async function POST(request: NextRequest) {
+    const startedAt = Date.now();
+    const identity = resolveRequestIdentity(request.headers);
+    const supabase = createAdminClient();
+
+    const finish = async (response: NextResponse, extra: Record<string, unknown> = {}) => {
+        await recordApiActivity(supabase, {
+            requestId: identity.requestId,
+            method: "POST",
+            route: ROUTE,
+            operationId: SUBMIT_OPERATION_ID,
+            statusCode: response.status,
+            outcome: outcomeForStatus(response.status),
+            latencyMs: Date.now() - startedAt,
+            ...extra,
+        });
+        return response;
+    };
+
+    const auth = await requireExternalPrincipal(supabase, request.headers, identity.requestId);
+    if (!auth.ok) {
+        const response = invalidCredential(identity.requestId);
+        for (const [k, v] of Object.entries(identityHeaders(identity))) response.headers.set(k, v);
+        return finish(response, {
+            orgId: auth.orgId ?? null,
+            installationId: auth.installationId ?? null,
+            tokenId: auth.tokenId ?? null,
+            errorCode: "invalid_credential",
+        });
+    }
+
+    const ctx = auth.context;
+    const activityIds = {
+        orgId: ctx.organizationId,
+        applicationId: ctx.applicationId,
+        installationId: ctx.installationId,
+        tokenId: ctx.tokenId,
+    };
+
+    const scoped = requireOperationScope(ctx.principal, SUBMIT_OPERATION_ID);
+    if (!scoped.ok) {
+        return finish(
+            apiError({
+                code: scoped.code, type: "forbidden_scope", message: scoped.message,
+                requestId: identity.requestId, headers: identityHeaders(identity),
+            }),
+            { ...activityIds, errorCode: scoped.code },
+        );
+    }
+
+    // The platform's write class, not an attendance one. A batch spends one unit.
+    const decision = await consumeRateLimit(
+        supabase,
+        installationBucket(ctx.installationId),
+        RATE_LIMIT_POLICY.authenticatedWrite,
+    );
+    const limitHeaders = {
+        "RateLimit-Limit": String(decision.limit),
+        "RateLimit-Remaining": String(decision.remaining),
+        "RateLimit-Reset": String(decision.resetSeconds),
+    };
+    if (!decision.allowed) {
+        return finish(
+            rateLimited(identity.requestId, decision.resetSeconds, {
+                ...identityHeaders(identity), ...limitHeaders,
+            }),
+            { ...activityIds, errorCode: "rate_limited" },
+        );
+    }
+
+    let body: unknown;
+    try {
+        body = await request.json();
+    } catch {
+        body = null;
+    }
+    const parsed = parseSubmission(body);
+    if (!parsed.ok) {
+        return finish(
+            apiError({
+                code: parsed.code, type: "invalid_request", message: parsed.message,
+                requestId: identity.requestId, headers: { ...identityHeaders(identity), ...limitHeaders },
+            }),
+            { ...activityIds, errorCode: parsed.code },
+        );
+    }
+
+    /*
+     * AUTHORITY BEFORE ANY EVENT IS CONSIDERED.
+     *
+     * The adapter resolves the installation's sites from the same SQL the read uses, and grants
+     * nothing the installation does not already hold. An installation whose boundary reaches no
+     * site is refused here rather than per item: it cannot author anywhere, and saying so once is
+     * clearer than saying it two hundred times.
+     */
+    const authority = await attendanceAuthorityForPrincipal(supabase, ctx.principal);
+    if (!authority.ok) {
+        const noSites = authority.code === "no_sites_in_boundary";
+        return finish(
+            apiError({
+                code: noSites ? "no_authorized_locations" : "internal_error",
+                type: noSites ? "forbidden_resource" : "internal_error",
+                message: noSites
+                    ? "This installation is not authorized for any location, so it cannot record attendance."
+                    : "Attendance could not be submitted.",
+                requestId: identity.requestId,
+                headers: { ...identityHeaders(identity), ...limitHeaders },
+            }),
+            { ...activityIds, errorCode: noSites ? "no_authorized_locations" : "internal_error" },
+        );
+    }
+
+    const author = {
+        kind: "installation" as const,
+        installationId: ctx.installationId,
+        orgId: ctx.organizationId,
+        producerKey: ctx.principal.producerKey,
+        /*
+         * The author's label, from the application's own slug.
+         *
+         * It becomes `actor_label` on the evidence row an operator reads, so it has to name the
+         * integration rather than a person. The canonical attendance fact does not carry it — the
+         * public read publishes `actor_type` and `source`, never a named actor.
+         */
+        label: ctx.principal.applicationSlug || "external-integration",
+        authority: authority.authority,
+    };
+
+    const results: PublicItemOutcome[] = [];
+    for (const event of parsed.events) {
+        /*
+         * Sequential on purpose. The evidence inbox is keyed by (producer, event id, installation),
+         * so two events in one batch never contend — but a correction naming an original EARLIER IN
+         * THE SAME BATCH must find it committed, and only ordered application guarantees that.
+         */
+        const outcome = await ingestExternalAttendanceEvent({
+            supabase,
+            providerKey: author.producerKey,
+            author,
+            event: {
+                externalEventId: event.externalEventId,
+                eventKind: event.eventKind,
+                externalChildId: event.externalChildId,
+                externalRoomId: event.externalRoomId,
+                externalFromRoomId: event.externalFromRoomId,
+                externalToRoomId: event.externalToRoomId,
+                physicalEventAt: event.occurredAt,
+                providerRecordedAt: event.recordedAt,
+                correctsExternalEventId: event.correctsExternalEventId,
+                correctionMode: event.correctionMode,
+            },
+        });
+        results.push(toPublicOutcome(event.externalEventId, outcome));
+    }
+
+    const response = NextResponse.json(
+        { results },
+        {
+            status: 200,
+            headers: { ...identityHeaders(identity), ...limitHeaders, "Cache-Control": "no-store" },
+        },
+    );
     return finish(response, activityIds);
 }

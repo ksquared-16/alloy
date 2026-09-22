@@ -426,6 +426,71 @@
             "$ref": "#/components/responses/InternalError"
           }
         }
+      },
+      "post": {
+        "operationId": "submitAttendanceEvents",
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Submit attendance facts",
+        "description": "Record attendance facts for children at locations within this installation's boundary.\n\nAttendance is a ledger, not a mutable record. There is no update and no delete: a mistake is fixed by submitting a **correction**, which restates the fact and names the event it supersedes, or a **reversal**, which voids it and asserts nothing in its place. Both appear through `GET /api/v1/attendance-events` as new facts carrying `corrects_event_id`.\n\n## Each event is judged on its own\n\nThis operation is **not atomic**. Every event you send gets its own durable outcome, and one unmapped identifier does not discard the events either side of it. The response is `200` whenever the batch was processed — including when every event was refused — so read `results`, not the status code. Results may be returned in any order; match them by `external_event_id`.\n\nEvents are applied in the order you send them, so a correction may name an original earlier in the same batch.\n\n## Retrying is safe\n\n`external_event_id` is the replay identity. If a request times out or you are unsure whether it arrived, send it again: an event Alloy already accepted comes back as `replayed` with the fact it recorded the first time, and nothing is created twice. Reusing an id for DIFFERENT content is a `conflict` — use a new id for a new fact, or submit a correction. You do not need an idempotency header; your own event id is the key.\n\n## Identifiers\n\nChildren and rooms are named with YOUR identifiers, as mapped for this installation. Alloy never creates a record from an identifier it does not recognise: an unmapped identifier returns `pending_mapping`, and the event applies when you submit it again after the mapping exists.\n\n## Reading your own writes\n\nAn accepted fact is immediately readable through `GET /api/v1/attendance-events` at its `recorded_at` position, so a synchronizing consumer picks it up on the next incremental pass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "attendance.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttendanceSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The batch was processed. Every event carries its own outcome.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "RateLimit-Limit": {
+                "$ref": "#/components/headers/RateLimitLimit"
+              },
+              "RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "RateLimit-Reset": {
+                "$ref": "#/components/headers/RateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttendanceSubmissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredential"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
       }
     }
   },
@@ -912,6 +977,169 @@
               "null"
             ],
             "description": "Exact position of the last record on this page. Persist it after a successful pass and pass it back as `since_token` to resume. Returned on every page that has records, including the last one."
+          }
+        }
+      },
+      "AttendanceSubmissionEvent": {
+        "type": "object",
+        "description": "One attendance fact you are asserting. Corrections and reversals are submitted the same way, naming the event they supersede.",
+        "required": [
+          "external_event_id",
+          "event_kind",
+          "child_external_id",
+          "occurred_at"
+        ],
+        "properties": {
+          "external_event_id": {
+            "type": "string",
+            "description": "YOUR stable identifier for this event. It is the replay identity: submitting the same id again returns the fact already recorded rather than creating a second one. Unique within your installation."
+          },
+          "event_kind": {
+            "type": "string",
+            "enum": [
+              "check_in",
+              "check_out",
+              "absence",
+              "room_transfer"
+            ],
+            "description": "What happened. `check_in` and `room_transfer` require the relevant room identifiers."
+          },
+          "child_external_id": {
+            "type": "string",
+            "description": "Your identifier for the child, as mapped for this installation. Alloy never creates a child from an identifier it does not know."
+          },
+          "room_external_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Your identifier for the room. Required for `check_in`."
+          },
+          "from_room_external_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Your identifier for the room being left. Used with `room_transfer`."
+          },
+          "to_room_external_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Your identifier for the room being entered. Used with `room_transfer`."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it physically happened. Must carry a timezone offset or Z."
+          },
+          "recorded_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When your system recorded it, if that differs from when it happened."
+          },
+          "corrects_external_event_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The `external_event_id` of an event you previously submitted and Alloy accepted. Required for a correction or reversal."
+          },
+          "correction_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "correction",
+              "reversal",
+              null
+            ],
+            "description": "`correction` restates the earlier fact with the values on this event. `reversal` voids it and asserts nothing in its place. Defaults to `correction` when `corrects_external_event_id` is present."
+          }
+        }
+      },
+      "AttendanceSubmissionResult": {
+        "type": "object",
+        "description": "What happened to one submitted event. Every event you send gets exactly one of these.",
+        "required": [
+          "external_event_id",
+          "outcome",
+          "attendance_event_id",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "external_event_id": {
+            "type": "string",
+            "description": "The identifier you supplied, so results can be matched to your batch in any order."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "replayed",
+              "pending_mapping",
+              "conflict",
+              "rejected"
+            ],
+            "description": "`accepted` — a canonical fact was recorded. `replayed` — you had already sent this event; the fact that exists is returned and nothing was created. `pending_mapping` — the event is stored but an identifier is not yet mapped, so it could not be attributed; submit it again once the mapping exists. `conflict` — this id was already accepted carrying different content. `rejected` — Alloy will not record this event; `code` says why."
+          },
+          "attendance_event_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The canonical fact, for `accepted` and `replayed`. Readable immediately through GET /api/v1/attendance-events."
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Stable machine-readable reason. Null when accepted or replayed."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One sentence describing what to do about it."
+          }
+        }
+      },
+      "AttendanceSubmission": {
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/AttendanceSubmissionEvent"
+            },
+            "description": "Up to 200 events. Each is judged on its own."
+          }
+        }
+      },
+      "AttendanceSubmissionResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttendanceSubmissionResult"
+            }
           }
         }
       }
