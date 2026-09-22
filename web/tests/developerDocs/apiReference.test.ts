@@ -108,7 +108,9 @@ describe("examples are derived from the schema, never invented", () => {
     it("every key in a generated example is a key the document declares", () => {
         const spec = JSON.parse(
             readFileSync(resolve(WEB, "lib/developerDocs/governedDocuments.generated.ts"), "utf8")
-                .match(/export const GOVERNED_OPENAPI_DOCUMENT: string = (".*");/s)![1]
+                // `[\s\S]` rather than the `s` flag: this program targets ES2017, where dotAll
+                // is not available, and the build config never typechecks tests so it cannot say so.
+                .match(/export const GOVERNED_OPENAPI_DOCUMENT: string = ("[\s\S]*");/)![1]
                 .replace(/^"/, '"'),
         ) as string;
         const document = JSON.parse(spec) as { components: { schemas: Record<string, unknown> } };

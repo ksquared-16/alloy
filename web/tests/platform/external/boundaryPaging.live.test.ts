@@ -65,7 +65,9 @@ function principal(orgId: string, boundary: ApplicationPrincipal["boundary"]): A
         producerKey: `boundary-paging:${run}`,
         grantedScopes: ["locations.read"],
         boundary,
-    } as ApplicationPrincipal;
+        // Through `unknown`: this literal is deliberately only the fields the resolver reads,
+        // so it does not structurally overlap the full principal and TypeScript is right to say so.
+    } as unknown as ApplicationPrincipal;
 }
 
 describeLive("boundary resolution pages to exhaustion", () => {
