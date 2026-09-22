@@ -43,8 +43,21 @@ export async function loadExpectationAgeGroups(
     const ageGroupByProgramCategoryId: Record<string, string | null> = {};
     const ageGroupByRoomLocationId: Record<string, string | null> = {};
 
-    // 1) Program category -> stable key (child placement-derived; canonical).
-    if (programCategoryIds.length > 0) {
+    /*
+     * THE TWO RESOLUTIONS ARE INDEPENDENT — SO THEY ARE ASKED TOGETHER.
+     *
+     * (1) reads `location_program_categories` for the placements' program categories. (2) reads
+     * `field_definitions` and then `field_values` for the placements' rooms. Neither consumes the
+     * other's result, yet they were awaited in series, adding a round trip to the Attendance
+     * critical path. Only the schedule changes: same queries, same filters, same org scoping,
+     * same precedence rules, same thrown errors.
+     *
+     * Each branch writes to its OWN output map, so concurrent completion cannot interleave a
+     * write — (1) only ever touches `ageGroupByProgramCategoryId` and (2) only
+     * `ageGroupByRoomLocationId`.
+     */
+    const programCategoryWork = (async () => {
+        if (programCategoryIds.length === 0) return;
         const { data, error } = await supabase
             .from("location_program_categories")
             .select("id, key")
@@ -55,10 +68,11 @@ export async function loadExpectationAgeGroups(
             const key = (row.key ?? "").trim();
             ageGroupByProgramCategoryId[row.id] = key || null;
         }
-    }
+    
+    })();
 
-    // 2) Room (classroom) configured program/age band from location field_values.
-    if (roomLocationIds.length > 0) {
+    const roomWork = (async () => {
+        if (roomLocationIds.length === 0) return;
         const { data: defs, error: defsError } = await supabase
             .from("field_definitions")
             .select("id, field_key")
@@ -102,7 +116,13 @@ export async function loadExpectationAgeGroups(
                 }
             }
         }
-    }
+    
+    })();
+
+    // Failure precedence as before: the program-category read threw first when both failed.
+    const [pcSettled, roomSettled] = await Promise.allSettled([programCategoryWork, roomWork]);
+    if (pcSettled.status === "rejected") throw pcSettled.reason;
+    if (roomSettled.status === "rejected") throw roomSettled.reason;
 
     return { ageGroupByProgramCategoryId, ageGroupByRoomLocationId };
 }
