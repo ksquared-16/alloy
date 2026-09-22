@@ -116,7 +116,7 @@ describe("links never send a reader somewhere they cannot go", () => {
 describe("the advertised surface is the implemented surface", () => {
     it("the operations shown are read from the governed OpenAPI document", () => {
         const operations = publicOperations();
-        expect(operations).toHaveLength(13);
+        expect(operations).toHaveLength(19);
         expect(operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
             "GET /api/v1/attendance-events",
             "GET /api/v1/children",
@@ -130,7 +130,13 @@ describe("the advertised surface is the implemented surface", () => {
             "GET /api/v1/schedule-days",
             "GET /api/v1/staff",
             "POST /api/v1/attendance-events",
+            "POST /api/v1/enrollments",
+            "POST /api/v1/enrollments/end",
             "POST /api/v1/oauth/token",
+            "POST /api/v1/placements",
+            "POST /api/v1/placements/move",
+            "POST /api/v1/schedule-assignments",
+            "POST /api/v1/schedule-assignments/change",
         ]);
         for (const operation of operations) {
             expect(operation.summary.length, `${operation.path} has a summary`).toBeGreaterThan(0);

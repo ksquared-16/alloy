@@ -32,7 +32,13 @@ describe("the reference is exactly the implemented surface", () => {
             "GET /api/v1/schedule-days",
             "GET /api/v1/staff",
             "POST /api/v1/attendance-events",
+            "POST /api/v1/enrollments",
+            "POST /api/v1/enrollments/end",
             "POST /api/v1/oauth/token",
+            "POST /api/v1/placements",
+            "POST /api/v1/placements/move",
+            "POST /api/v1/schedule-assignments",
+            "POST /api/v1/schedule-assignments/change",
         ]);
     });
 

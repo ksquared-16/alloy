@@ -13,7 +13,19 @@
  */
 
 import { externalCollectionRoute, uuidFilter } from "@/lib/platform/external/collectionRoute";
+import { externalOperationRoute } from "@/lib/platform/external/operationRoute";
 import { toPublicScheduleAssignment } from "@/lib/platform/external/resources/serviceStateResources";
+import {
+    createOrConverge,
+    requiredDate,
+    requiredId,
+    resolveEnrollmentInAuthority,
+    toScheduleResult,
+} from "@/lib/platform/external/resources/serviceStateOperations";
+import {
+    createInitialScheduleAssignment,
+    getOperationalScheduleAssignmentForAgreement,
+} from "@/lib/childcareOperational/scheduleAssignmentService";
 
 export const dynamic = "force-dynamic";
 
@@ -33,4 +45,62 @@ export const GET = externalCollectionRoute({
         };
     },
     toPublic: toPublicScheduleAssignment,
+});
+
+/**
+ * POST /api/v1/schedule-assignments — set the committed schedule for an enrollment.
+ *
+ * Converges on an existing operational assignment rather than creating a second. To CHANGE one,
+ * use `POST /api/v1/schedule-assignments/change`, which supersedes.
+ *
+ * The pattern is Alloy's, not the partner's: `schedule_pattern_id` names a recurrence the operator
+ * has configured. An integration chooses among patterns; it does not invent one.
+ */
+export const POST = externalOperationRoute({
+    route: "/api/v1/schedule-assignments",
+    operationId: "setScheduleAssignment",
+    subject: "The schedule assignment",
+    perform: async (body, ctx) => {
+        const enrollment = requiredId(body, "enrollment_id");
+        if (!enrollment.ok) return enrollment;
+        const pattern = requiredId(body, "schedule_pattern_id");
+        if (!pattern.ok) return pattern;
+        const startDate = requiredDate(body, "start_date");
+        if (!startDate.ok) return startDate;
+
+        const resolved = await resolveEnrollmentInAuthority(ctx, enrollment.value);
+        if (!resolved.ok) return resolved;
+
+        const existing = await getOperationalScheduleAssignmentForAgreement(
+            ctx.supabase,
+            ctx.organizationId,
+            resolved.value.agreementId,
+        );
+        if (existing) {
+            return { ok: true, status: 200, result: toScheduleResult(existing as unknown as Record<string, unknown>) };
+        }
+
+        const outcome = await createOrConverge(
+            () =>
+                createInitialScheduleAssignment(ctx.supabase, {
+                    orgId: ctx.organizationId,
+                    enrollmentAgreementId: resolved.value.agreementId,
+                    schedulePatternId: pattern.value,
+                    startDate: startDate.value,
+                    sourceKey: `external:${ctx.actorLabel}`,
+                    todayYmd: ctx.todayYmd,
+                }),
+            () =>
+                getOperationalScheduleAssignmentForAgreement(
+                    ctx.supabase,
+                    ctx.organizationId,
+                    resolved.value.agreementId,
+                ),
+        );
+        return {
+            ok: true,
+            status: outcome.created ? 201 : 200,
+            result: toScheduleResult(outcome.row as unknown as Record<string, unknown>),
+        };
+    },
 });

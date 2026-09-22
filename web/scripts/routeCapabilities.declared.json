@@ -5398,18 +5398,30 @@
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The named child must be independently visible under this installation's read authority and the named site must be inside the boundary; neither identifier is usable as a key. Converges on an existing operational agreement rather than creating a second. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService.createChildEnrollmentAgreement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
     "app/api/v1/placements/route.ts": {
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query. Room and site are published as Location ids from the same topology the Locations resource exposes."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Converges on an existing operational placement rather than duplicating it. The operation performs no domain logic of its own: it delegates to childPlacementService.createInitialChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
     "app/api/v1/schedule-assignments/route.ts": {
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. The authority filters subject_type to child inside the select, so staff schedules held in the same internal table are unreachable through this route."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Converges on an existing operational assignment rather than creating a second. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.createInitialScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
     "app/api/v1/schedule-days/route.ts": {
@@ -5422,6 +5434,24 @@
       "GET": {
         "status": "none",
         "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope staff.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. Visibility requires the employment's primary location to fall inside the boundary; an employment with no primary location is never returned. Contact columns are gated at the SQL source on staff.contact.read. Compensation, payroll, tax, HR and safeguarding authorities are never joined."
+      }
+    },
+    "app/api/v1/enrollments/end/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/placements/move/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits; the domain refuses in-place mutation of an effective-dated placement for every caller. The operation performs no domain logic of its own: it delegates to childPlacementService.supersedeChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-assignments/change/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     }
   },

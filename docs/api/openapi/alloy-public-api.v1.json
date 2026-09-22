@@ -984,6 +984,142 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "startEnrollment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Start an enrollment",
+        "description": "Enrolls a child at a site from a date. Requires the `enrollment.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**Safe to retry.** No idempotency key is needed: Alloy reads the current state before acting, so asking twice converges on one record rather than creating a second. A `200` means it was already in this state; a `201` means it changed.\n\nThe site must be inside your boundary, and you must have authority over the child \u2014 either the child is already visible to you, or you hold a correlation mapping for them (established with Alloy during onboarding). A mapping lets you enroll a child who is not yet in service, which is the usual case; it does not let you enroll them anywhere you cannot reach. An identifier for something you cannot reach returns `404`, the same as one that does not exist \u2014 Alloy will not confirm that a record exists outside your authority.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The enrollment to start.",
+                "properties": {
+                  "child_id": {
+                    "type": "string",
+                    "description": "Alloy's identifier for the child."
+                  },
+                  "site_id": {
+                    "type": "string",
+                    "description": "A Location id of type `site`."
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional. Defaults to Alloy's own rules."
+                  }
+                },
+                "required": [
+                  "child_id",
+                  "site_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentOperationResult"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/placements": {
@@ -1120,6 +1256,143 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "assignPlacement",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Assign a room placement",
+        "description": "Assigns the first room placement for an enrollment. Requires the `enrollment.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**Safe to retry.** No idempotency key is needed: Alloy reads the current state before acting, so asking twice converges on one record rather than creating a second. A `200` means it was already in this state; a `201` means it changed.\n\nTo **change** an existing placement use `POST /api/v1/placements/move`. Placement history is never rewritten in place.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The placement to assign.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "room_location_id": {
+                    "type": "string",
+                    "description": "A Location id of type `unit`."
+                  },
+                  "program_category_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "enrollment_id",
+                  "start_date"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementOperationResult"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/schedule-assignments": {
@@ -1228,6 +1501,140 @@
           },
           "403": {
             "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "setScheduleAssignment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Set a committed schedule",
+        "description": "Sets the committed schedule for an enrollment. Requires the `schedule.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**Safe to retry.** No idempotency key is needed: Alloy reads the current state before acting, so asking twice converges on one record rather than creating a second. A `200` means it was already in this state; a `201` means it changed.\n\n`schedule_pattern_id` names a recurrence the operator has configured \u2014 read the available patterns from `GET /api/v1/schedule-assignments`. An integration chooses among patterns; it does not invent one.\n\nTo **change** an existing schedule use `POST /api/v1/schedule-assignments/change`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "schedule.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The schedule to set.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string"
+                  },
+                  "schedule_pattern_id": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "enrollment_id",
+                  "schedule_pattern_id",
+                  "start_date"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOperationResult"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1454,6 +1861,403 @@
           },
           "403": {
             "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/enrollments/end": {
+      "post": {
+        "operationId": "endEnrollment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "End an enrollment",
+        "description": "Ends an enrollment. Requires the `enrollment.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**One intent, three outcomes, chosen by Alloy.** An enrollment that has not started is cancelled; one in service is marked ending on the date you give; one whose end date has passed is closed. You do not need to know which of those your request becomes \u2014 that is exactly the state machine a status edit would push onto you, and getting it wrong would leave a child enrolled.\n\nEnding an enrollment that has already ended returns `200` with the existing record, so a retry you could not confirm reaches the same place rather than a conflict you must interpret.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The enrollment to end.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string"
+                  },
+                  "end_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Optional. Supply it to schedule the ending; omit it to close an enrollment whose end date has passed."
+                  }
+                },
+                "required": [
+                  "enrollment_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/placements/move": {
+      "post": {
+        "operationId": "movePlacement",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Move a child's placement",
+        "description": "Moves a child to a different room from a date. Requires the `enrollment.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**This supersedes rather than edits.** Alloy writes a new placement naming the one it replaces and closes the prior one the day before the move. A copy you already synchronized is therefore never silently wrong \u2014 you receive the change through ordinary incremental synchronization, and the placement that applied last month still reads as it did.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The move.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "The first day in the new room."
+                  },
+                  "room_location_id": {
+                    "type": "string"
+                  },
+                  "program_category_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "enrollment_id",
+                  "start_date"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementOperationResult"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule-assignments/change": {
+      "post": {
+        "operationId": "changeScheduleAssignment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Change a committed schedule",
+        "description": "Changes a child's committed schedule from a date. Requires the `schedule.write` scope.\n\n**This is a named operation, not a field edit.** The public API has no `PUT`, `PATCH` or `DELETE` on any resource. Alloy performs the intent through the same authority its own surfaces use, so its validation and refusals are what you receive.\n\n**This supersedes rather than edits**, exactly as placement does: a new assignment naming the one it replaces, with the prior one closed the day before.\n\nIt never touches a generated schedule day. A day is a view of the commitment \u2014 changing a day means changing the assignment it came from, which is this operation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "schedule.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The change.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string"
+                  },
+                  "schedule_pattern_id": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "enrollment_id",
+                  "schedule_pattern_id",
+                  "start_date"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOperationResult"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2913,6 +3717,169 @@
           "data",
           "next_cursor",
           "sync_token"
+        ]
+      },
+      "EnrollmentOperationResult": {
+        "type": "object",
+        "description": "The enrollment as it now stands.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          }
+        },
+        "required": [
+          "id",
+          "child_id"
+        ]
+      },
+      "PlacementOperationResult": {
+        "type": "object",
+        "description": "The placement as it now stands.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enrollment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "program_category_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "supersedes_placement_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The placement this one replaces, when it is a move."
+          }
+        },
+        "required": [
+          "id",
+          "child_id"
+        ]
+      },
+      "ScheduleOperationResult": {
+        "type": "object",
+        "description": "The schedule assignment as it now stands.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enrollment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "schedule_pattern_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "supersedes_assignment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "child_id"
         ]
       }
     },

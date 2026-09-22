@@ -133,9 +133,12 @@ describe("the offline partner package", () => {
 
     it("asks the provider rather than assuming them", () => {
         const worksheet = read("06-mapping-worksheet.md");
-        // Every row offers the provider columns as UNKNOWN. If this count ever collapses, someone
-        // has filled the provider's side in from imagination.
-        const unknowns = worksheet.match(/UNKNOWN/g) ?? [];
+        /*
+         * Every provider column is explicitly unanswered. If this count ever collapses, someone has
+         * filled the provider's side in from imagination — which is the one thing the worksheet
+         * exists to avoid.
+         */
+        const unknowns = worksheet.match(/Provider confirmation required/g) ?? [];
         expect(unknowns.length, "the worksheet should be mostly unanswered on the provider side")
             .toBeGreaterThan(60);
         expect(worksheet).toContain("we have deliberately not guessed");

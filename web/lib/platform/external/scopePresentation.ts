@@ -87,6 +87,14 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Staff contact details",
         detail: "Read email and phone for staff already visible through staff access.",
     },
+    "enrollment.write": {
+        title: "Manage enrollment and placement",
+        detail: "Start and end enrollments, and assign or move a child's room, at authorized locations. This does not allow reading anything, creating children, or changing schedules.",
+    },
+    "schedule.write": {
+        title: "Manage schedules",
+        detail: "Set and change a child's committed schedule at authorized locations. This does not allow reading anything, or changing enrollment or placement.",
+    },
     "attendance.read": {
         title: "Attendance history",
         detail: "Read attendance history for visible children.",

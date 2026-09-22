@@ -69,7 +69,24 @@ Grouped by what the answer decides.
     you expect Alloy to supply?** Alloy does not expose any, under any
     permission, so a dependency here needs to be found now.
 
-## F. Operational
+## F. Lifecycle operations
+
+28. **Which of Alloy's governed operations do you need to perform?** Worksheet §7
+    lists all nine. A roster-mirroring integration may need none of them.
+29. **Do you expect to start or end enrollments**, or does the operator do that
+    in Alloy while you observe the result?
+30. **Do you expect to move a child's room**, or only to read where they are?
+31. **Do you expect to set or change schedules**, or only to read them?
+32. **Do any of your workflows assume you can delete something in Alloy?** There
+    is no deletion on this API for any resource — endings are archive, effective
+    end, supersession or reversal. If your design assumes a delete, we need to
+    find that now.
+33. **Do any of your workflows assume a field-level update** — setting a status,
+    patching a record? Alloy accepts named intents only, and we would rather map
+    your intent to an operation than have you discover the absence of `PATCH`
+    during implementation.
+
+## G. Operational
 
 24. **How many sites and rooms would a typical deployment have?** This affects
     nothing about correctness and everything about your sync design.

@@ -325,6 +325,87 @@ received has silently ceased to exist.
 
 ---
 
+## 9a. Reads, writes, and lifecycle operations
+
+Before you design a write, understand what Alloy offers and what it deliberately
+does not.
+
+### What a permission means
+
+- **`.read`** — permission to read that canonical resource. Nothing else.
+- **`.write`** — permission to invoke specific **named operations** on that
+  resource. It is not permission to read, and it is not a generic mutation right.
+- **No read implies a write, and no write implies a read.** An integration
+  granted `enrollment.write` can start and end enrollments and cannot read a
+  single one.
+
+### There is no CRUD contract
+
+The public API has **no `PUT`, no `PATCH` and no `DELETE`** on any resource, and
+none is planned. Creation, change and ending happen through named operations that
+express intent:
+
+| You want to | You call |
+| --- | --- |
+| Enroll a child | `POST /api/v1/enrollments` |
+| End an enrollment | `POST /api/v1/enrollments/end` |
+| Assign a room | `POST /api/v1/placements` |
+| Move a room | `POST /api/v1/placements/move` |
+| Set a schedule | `POST /api/v1/schedule-assignments` |
+| Change a schedule | `POST /api/v1/schedule-assignments/change` |
+| Record attendance | `POST /api/v1/attendance-events` |
+
+You never send `status_key` or an end date as a field edit. `POST .../end` is one
+intent with three possible canonical outcomes — cancel, mark ending, close — and
+Alloy chooses between them from the record's current state. That is deliberate:
+deciding wrongly which one applies would leave a child enrolled.
+
+### Why some resources have no write at all
+
+Not an oversight, and not a roadmap gap in most cases:
+
+| Resource | Why |
+| --- | --- |
+| **Locations** | Site and room topology is how an organization describes itself, and every other resource names a place using it. An operator configures it. |
+| **Children** | Creating a child asserts a new human being. Nothing in a create call distinguishes "new child" from "child you already have, spelled differently", and the cost of guessing wrong is a duplicate person. Identity-resolved intake is the right shape, and it does not exist yet. |
+| **Households** | A household is an account carrying financial responsibility this API does not expose at all. |
+| **Relationships** | A genuine gap rather than a decision. If it is built, pickup authority will remain a derived answer — an operation may grant the underlying role, never write the effective flag. |
+| **Staff** | Canonical authority exists; externalizing it is a separate decision, because onboarding a person is adjacent to compensation and eligibility authorities this API excludes. |
+| **Schedule days** | Derived. Changing a day means changing the assignment it came from. |
+
+### How things end — and why `DELETE` is missing
+
+**No resource on this API supports physical deletion.** This is a complete
+lifecycle, not a missing feature. Do not wait for `DELETE` endpoints.
+
+| Resource | How it ends |
+| --- | --- |
+| Children | archived — `status` becomes `inactive` |
+| Relationships | ended by status |
+| Enrollment | effective end — `end_date` is set, or it is cancelled before it starts |
+| Placements | **superseded** — a new placement names the one it replaces |
+| Schedule assignments | **superseded** |
+| Staff | effective end |
+| Attendance | **reversed** — a reversal fact supersedes the original |
+| Locations, Households | not deletable through this API |
+
+Supersession is why your mirror stays correct: the record you already stored is
+never rewritten or removed, so you learn about the change through ordinary
+incremental synchronization instead of diverging silently.
+
+### Answering the five questions for any resource
+
+For anything on this API you can determine, without asking Alloy:
+
+1. **Can I create it?** — is there a `POST` for it in the reference?
+2. **Can I change it?** — is there a named change operation (`/move`,
+   `/change`), or a correction fact?
+3. **How do I end it?** — the table above.
+4. **Can I delete it?** — no.
+5. **What permission do I need?** — the `x-required-scope` on the operation.
+
+---
+
 ## 10. Errors, limits, and what "no" means
 
 Every error has the same shape: a machine-readable `code`, a `type`, a

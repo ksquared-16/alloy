@@ -165,11 +165,15 @@ describe("a partner engineer, with only this package", () => {
     });
 
     it("14. knows which questions remain for their own side", () => {
-        expect(/UNKNOWN/.test(worksheet)).toBe(true);
+        expect(/Provider confirmation required/.test(worksheet)).toBe(true);
         expect(answers(["deliberately not guessed|have not assumed"], ALL)).toBe(true);
         // The hardest rows are called out rather than left to be discovered late.
         expect(answers(["what identifies a child"], ALL)).toBe(true);
         expect(answers(["stable across"], ALL)).toBe(true);
+
+        // And the lifecycle half: which operations exist, and which are refused by design.
+        expect(answers(["which of alloy's governed operations do you need"], ALL)).toBe(true);
+        expect(answers(["there is no deletion on this api|no `put`, no `patch` and no `delete`"], ALL)).toBe(true);
     });
 
     it("is answerable without ever leaving the package", () => {

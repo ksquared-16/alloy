@@ -149,6 +149,29 @@ export const PUBLIC_SCOPES = {
         summary: "Read committed schedule assignments and the derived dated schedule projection.",
         alloyAuthority: "public.list_external_schedule_assignments and public.project_external_schedule_days, boundary-enforced in SQL",
     },
+    "enrollment.write": {
+        scope: "enrollment.write",
+        access: "write",
+        summary: "Start and end enrollments, and assign or move room placements, for children at authorized locations.",
+        alloyAuthority: "enrollmentAgreementService and childPlacementService, through the external operation adapter",
+        /*
+         * ONE permission for one operator concept — "manage where this child is enrolled and which
+         * room they are in". A placement cannot exist without an agreement to hang from, so
+         * splitting these would ask an operator to choose between two halves of a single
+         * capability. Create, change and end share it for the same reason: an integration that may
+         * start an enrollment but not end one produces records nobody can close.
+         */
+        internalPermissionKeys: ["enrollment.manage"],
+    },
+    "schedule.write": {
+        scope: "schedule.write",
+        access: "write",
+        summary: "Set and change committed schedules for children at authorized locations.",
+        alloyAuthority: "scheduleAssignmentService, through the external operation adapter",
+        // Never reaches the dated projection: a generated day is a view of the commitment, so
+        // changing a day means changing the assignment it came from.
+        internalPermissionKeys: ["schedule.manage"],
+    },
     "staff.read": {
         scope: "staff.read",
         access: "read",
@@ -228,6 +251,32 @@ export const PUBLIC_OPERATIONS = {
         route: "/api/v1/schedule-days",
     },
     listStaff: { operationId: "listStaff", scope: "staff.read", route: "/api/v1/staff" },
+
+    /*
+     * GOVERNED OPERATIONS — named intents, never field mutation.
+     *
+     * Each delegates to the canonical service that already performs it internally. The public
+     * surface has no PUT, PATCH or DELETE anywhere, and these do not add one: a change is a
+     * supersession, and an ending is an ending.
+     */
+    startEnrollment: { operationId: "startEnrollment", scope: "enrollment.write", route: "/api/v1/enrollments" },
+    endEnrollment: {
+        operationId: "endEnrollment",
+        scope: "enrollment.write",
+        route: "/api/v1/enrollments/end",
+    },
+    assignPlacement: { operationId: "assignPlacement", scope: "enrollment.write", route: "/api/v1/placements" },
+    movePlacement: { operationId: "movePlacement", scope: "enrollment.write", route: "/api/v1/placements/move" },
+    setScheduleAssignment: {
+        operationId: "setScheduleAssignment",
+        scope: "schedule.write",
+        route: "/api/v1/schedule-assignments",
+    },
+    changeScheduleAssignment: {
+        operationId: "changeScheduleAssignment",
+        scope: "schedule.write",
+        route: "/api/v1/schedule-assignments/change",
+    },
 } as const satisfies Record<
     string,
     { operationId: string; scope: PublicScope | null; route: string }
@@ -268,7 +317,9 @@ export function requireOperationScope(
  * partner documentation publishes.
  */
 export function allPublicScopes(): PublicScopeDefinition[] {
-    return Object.values(PUBLIC_SCOPES).filter((d) => d.grantable !== false);
+    // `as const satisfies` narrows each entry to its own literal type, so the union does not carry
+    // the optional key. Read through the declared shape rather than the inferred one.
+    return (Object.values(PUBLIC_SCOPES) as PublicScopeDefinition[]).filter((d) => d.grantable !== false);
 }
 
 /**
@@ -279,7 +330,7 @@ export function allPublicScopes(): PublicScopeDefinition[] {
  * "unrecognised" state reserved for strings the platform genuinely cannot explain.
  */
 export function allKnownScopes(): PublicScopeDefinition[] {
-    return Object.values(PUBLIC_SCOPES);
+    return Object.values(PUBLIC_SCOPES) as PublicScopeDefinition[];
 }
 
 /**

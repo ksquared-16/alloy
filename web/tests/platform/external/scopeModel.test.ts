@@ -26,11 +26,13 @@ const GRANTABLE = [
     "attendance.write",
     "children.read",
     "enrollment.read",
+    "enrollment.write",
     "households.read",
     "locations.read",
     "relationships.contact.read",
     "relationships.read",
     "schedule.read",
+    "schedule.write",
     "staff.contact.read",
     "staff.read",
 ];
