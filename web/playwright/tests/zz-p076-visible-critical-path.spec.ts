@@ -211,6 +211,38 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
     await page.goto(URL_PATH, { waitUntil: "domcontentloaded", timeout: 120_000 });
     const domMs = Date.now() - nav0;
 
+    /*
+     * THE NAVIGATION'S OWN TIMELINE — so the interval between "server finished" and "first paint"
+     * is not a generic bucket.
+     *
+     * page_total says when the server stopped composing; FIRST_PAINT says when the operator saw an
+     * authoritative card. Everything between was previously reported as one ~650ms lump, which is
+     * 21% of the product metric and therefore exactly the kind of residual this programme keeps
+     * proving is not what it looks like. These are all on the page's own clock (origin
+     * navigationStart), the same clock the completion probe uses.
+     */
+    const navTiming = await page.evaluate(() => {
+        const n = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+        if (!n) return null;
+        const r = (v: number) => Math.round(v);
+        return {
+            requestStart: r(n.requestStart),
+            responseStart: r(n.responseStart),
+            responseEnd: r(n.responseEnd),
+            domInteractive: r(n.domInteractive),
+            domContentLoadedEventEnd: r(n.domContentLoadedEventEnd),
+            loadEventEnd: r(n.loadEventEnd),
+            encodedBodySize: n.encodedBodySize,
+            decodedBodySize: n.decodedBodySize,
+            /** TTFB and transfer, separated — transfer is the only one that is actually the wire. */
+            ttfbMs: r(n.responseStart - n.requestStart),
+            transferMs: r(n.responseEnd - n.responseStart),
+            /** Parse/execute to interactive, then hydration's own tail. */
+            toInteractiveMs: r(n.domInteractive - n.responseEnd),
+            interactiveToDclMs: r(n.domContentLoadedEventEnd - n.domInteractive),
+        };
+    });
+
     const QUIET_MS = Number(process.env.P076_QUIET_MS || 3000);
     let visibleCompleteMs = -1;
     for (let i = 0; i < 120; i++) {
@@ -514,6 +546,7 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
         label: LABEL, url: URL_PATH, deployedSha: buildInfo?.gitSha ?? null,
         wall: {
             documentMs: domMs,
+            navTiming,
             // V1, kept only so the artifact stays visible beside the answer that replaces it.
             visibleCompleteV1QuietWindowMs: visibleCompleteMs,
             quietWindowMs: QUIET_MS,
