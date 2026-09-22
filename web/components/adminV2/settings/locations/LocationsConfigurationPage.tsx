@@ -294,7 +294,12 @@ export default function LocationsConfigurationPage({
 
     // Canonical capacity rules drive coverage, room capacity standing and the
     // Add Room debt stop. One org-scoped read, shared by every surface below.
-    const { capacityRules, refresh: refreshCapacityRules } = useLocationOperationalRules();
+    const {
+        capacityRules,
+        ratioRules,
+        ratioRuleTiers,
+        refresh: refreshCapacityRules,
+    } = useLocationOperationalRules();
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
         selectedSite ?
@@ -643,6 +648,8 @@ export default function LocationsConfigurationPage({
                         excludeLocationId: selectedRoom?.id ?? null,
                     })}
                     capacityRules={capacityRules}
+                    ratioRules={ratioRules}
+                    ratioTiers={ratioRuleTiers}
                     todayYmd={operationalEnrollmentClientTodayYmd()}
                     onCapacityChanged={async () => {
                         await refreshCapacityRules();

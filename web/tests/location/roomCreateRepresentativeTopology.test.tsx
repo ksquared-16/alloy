@@ -332,11 +332,11 @@ describe("13. what was created is what the list explains", () => {
         const subtitleOf = (label: string) =>
             presentRoomTopology(rows.find((r) => r.label === label)!, rows).subtitle;
 
-        expect(subtitleOf("Room 1")).toBe("Physical space · North Campus");
-        expect(subtitleOf("Toddler 1")).toBe("Classroom · Room 1 · North Campus");
-        expect(subtitleOf("Toddler 2")).toBe("Classroom · Room 1 · North Campus");
-        expect(subtitleOf("Infant Room")).toBe("Classroom · North Campus");
-        expect(subtitleOf("Playground")).toBe("Physical space · North Campus");
+        expect(subtitleOf("Room 1")).toBe("Physical · North Campus");
+        expect(subtitleOf("Toddler 1")).toBe("Operational · Room 1 · North Campus");
+        expect(subtitleOf("Toddler 2")).toBe("Operational · Room 1 · North Campus");
+        expect(subtitleOf("Infant Room")).toBe("Operational · North Campus");
+        expect(subtitleOf("Playground")).toBe("Physical · North Campus");
     });
 
     it("leaves no blank subtitle, no em dash, and no unit called Room", async () => {
@@ -352,7 +352,7 @@ describe("13. what was created is what the list explains", () => {
             expect(s).not.toContain("undefined");
         }
         // The distinction the topology model exists for: not every unit is a Classroom.
-        expect(presentRoomTopology(rows.find((r) => r.label === "Room 1")!, rows).typeLabel).toBe("Physical space");
-        expect(presentRoomTopology(rows.find((r) => r.label === "Playground")!, rows).typeLabel).toBe("Physical space");
+        expect(presentRoomTopology(rows.find((r) => r.label === "Room 1")!, rows).typeLabel).toBe("Physical");
+        expect(presentRoomTopology(rows.find((r) => r.label === "Playground")!, rows).typeLabel).toBe("Physical");
     });
 });

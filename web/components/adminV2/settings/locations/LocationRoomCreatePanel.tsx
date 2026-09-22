@@ -61,7 +61,7 @@ export default function LocationRoomCreatePanel({
 
     // Only a classroom can sit inside a physical room, so a Type change away from
     // Classroom drops a selection that would no longer be meaningful — the payload
-    // must never carry an Inside the chosen Type cannot have.
+    // must never name a physical space the chosen Kind cannot have.
     const changeRoomType = (next: CanonicalUnitRole) => {
         setRoomType(next);
         if (!roleAcceptsInside(next)) setInsideId("");
@@ -111,7 +111,7 @@ export default function LocationRoomCreatePanel({
                         />
                     </label>
                     <label className="block max-w-md space-y-1">
-                        <span className="config-typo-field-label">Type</span>
+                        <span className="config-typo-field-label">Kind</span>
                         <select
                             value={roomType}
                             onChange={(event) => changeRoomType(event.target.value as CanonicalUnitRole)}
@@ -131,7 +131,7 @@ export default function LocationRoomCreatePanel({
 
                     {showsInside ?
                         <label className="block max-w-md space-y-1">
-                            <span className="config-typo-field-label">Inside</span>
+                            <span className="config-typo-field-label">Physical space</span>
                             <select
                                 value={insideId}
                                 onChange={(event) => setInsideId(event.target.value)}
@@ -180,7 +180,7 @@ export default function LocationRoomCreatePanel({
                 <>
                 <ConfigEditorSection
                     title="Programs supported"
-                    description="Programs offered at this location that this room can serve."
+                    description="Programs offered at this location that this space can serve."
                     testId="locations-room-create-programs"
                 >
                     {programOptions.length === 0 ?
@@ -208,7 +208,7 @@ export default function LocationRoomCreatePanel({
 
                 <ConfigEditorSection
                     title="Default schedule"
-                    description="Optional default Schedule Definition for this room."
+                    description="Optional default Schedule Definition for this space."
                     testId="locations-room-create-schedule"
                 >
                     <label className="block max-w-md space-y-1">

@@ -1,0 +1,174 @@
+{
+  "before": [
+    {
+      "id": "2f5c49bb-6ba4-4b86-91a8-66bc3ce6a578",
+      "room": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+      "kind": "licensed",
+      "cap": 10,
+      "start": "2026-09-20",
+      "end": null
+    },
+    {
+      "id": "e3ec06c9-ec9a-47a6-8e9e-2904aa63395e",
+      "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+      "kind": "licensed",
+      "cap": 10,
+      "start": "2026-09-19",
+      "end": null
+    },
+    {
+      "id": "444e6f70-940e-4d79-81c8-630d89321356",
+      "room": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+      "kind": "physical",
+      "cap": 8,
+      "start": "2026-09-19",
+      "end": null
+    },
+    {
+      "id": "afc5b822-1233-41c0-85eb-a26307718e78",
+      "room": "ba05df72-53db-4e56-89aa-d45d62a01027",
+      "kind": "physical",
+      "cap": 24,
+      "start": "2026-09-22",
+      "end": null
+    },
+    {
+      "id": "7fc74193-84f2-49ef-a75e-945924e17f35",
+      "room": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "kind": "operational",
+      "cap": 10,
+      "start": "2026-09-22",
+      "end": "2026-09-22"
+    },
+    {
+      "id": "8b78dbc7-f661-4b6b-b92b-5e2f2dd224ba",
+      "room": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "kind": "operational",
+      "cap": 12,
+      "start": "2026-09-22",
+      "end": null
+    }
+  ],
+  "steps": [
+    {
+      "step": "create_operational",
+      "label": "Toddler 1",
+      "status": 200,
+      "action": "create",
+      "ruleId": "69e50bc2-39e2-4f74-a3dd-99582899128d",
+      "kind": "operational",
+      "capacity": 10
+    },
+    {
+      "step": "create_operational",
+      "label": "Toddler 2",
+      "status": 200,
+      "action": "create",
+      "ruleId": "4d61c59a-a450-4f4b-bd2c-5c5a6a81503b",
+      "kind": "operational",
+      "capacity": 10
+    },
+    {
+      "step": "retire_licensed",
+      "label": "Toddler 1",
+      "ruleId": "2f5c49bb-6ba4-4b86-91a8-66bc3ce6a578",
+      "status": 200,
+      "effective_end": "2026-09-22"
+    },
+    {
+      "step": "retire_licensed",
+      "label": "Toddler 2",
+      "ruleId": "e3ec06c9-ec9a-47a6-8e9e-2904aa63395e",
+      "status": 200,
+      "effective_end": "2026-09-22"
+    }
+  ],
+  "after": [
+    {
+      "id": "2f5c49bb-6ba4-4b86-91a8-66bc3ce6a578",
+      "room": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+      "kind": "licensed",
+      "cap": 10,
+      "start": "2026-09-20",
+      "end": "2026-09-22",
+      "via": null
+    },
+    {
+      "id": "e3ec06c9-ec9a-47a6-8e9e-2904aa63395e",
+      "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+      "kind": "licensed",
+      "cap": 10,
+      "start": "2026-09-19",
+      "end": "2026-09-22",
+      "via": null
+    },
+    {
+      "id": "444e6f70-940e-4d79-81c8-630d89321356",
+      "room": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+      "kind": "physical",
+      "cap": 8,
+      "start": "2026-09-19",
+      "end": null,
+      "via": null
+    },
+    {
+      "id": "afc5b822-1233-41c0-85eb-a26307718e78",
+      "room": "ba05df72-53db-4e56-89aa-d45d62a01027",
+      "kind": "physical",
+      "cap": 24,
+      "start": "2026-09-22",
+      "end": null,
+      "via": "object_editor"
+    },
+    {
+      "id": "7fc74193-84f2-49ef-a75e-945924e17f35",
+      "room": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "kind": "operational",
+      "cap": 10,
+      "start": "2026-09-22",
+      "end": "2026-09-22",
+      "via": "object_editor"
+    },
+    {
+      "id": "8b78dbc7-f661-4b6b-b92b-5e2f2dd224ba",
+      "room": "92207313-d1cc-4141-b56b-118b3c3bc644",
+      "kind": "operational",
+      "cap": 12,
+      "start": "2026-09-22",
+      "end": null,
+      "via": "object_editor"
+    },
+    {
+      "id": "69e50bc2-39e2-4f74-a3dd-99582899128d",
+      "room": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+      "kind": "operational",
+      "cap": 10,
+      "start": "2026-09-22",
+      "end": null,
+      "via": "object_editor"
+    },
+    {
+      "id": "4d61c59a-a450-4f4b-bd2c-5c5a6a81503b",
+      "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+      "kind": "operational",
+      "cap": 10,
+      "start": "2026-09-22",
+      "end": null,
+      "via": "object_editor"
+    }
+  ],
+  "resolved": {
+    "Toddler 1": {
+      "binding": 10,
+      "operational": 10,
+      "licensed": 10,
+      "limitingFactor": "licensed"
+    },
+    "Toddler 2": {
+      "binding": 10,
+      "operational": 10,
+      "licensed": 10,
+      "limitingFactor": "licensed"
+    }
+  }
+}
