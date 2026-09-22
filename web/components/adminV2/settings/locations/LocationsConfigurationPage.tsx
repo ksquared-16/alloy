@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
 import { useLocationOperationalRules } from "@/components/adminV2/settings/locations/useLocationOperationalRules";
-import { siteAcceptsLegacyCapacityCapture } from "@/lib/locations/capacityAdoptionState";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -667,10 +666,28 @@ export default function LocationsConfigurationPage({
                                 programOptions={programOptionsForSite(selectedSite.id)}
                                 schedulePatterns={selectedSchedules}
                                 insideOptions={eligibleInsideOptions(roomRows, selectedSite.id)}
-                                acceptsLegacyCapacity={siteAcceptsLegacyCapacityCapture(selectedRooms, capacityRules)}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
+                                    // The space has to exist before a rule can point at it,
+                                    // so capacity is a second call rather than part of the
+                                    // payload. A failure here leaves a real space with no
+                                    // capacity — visibly empty on the object, and fixable
+                                    // by typing the number again.
+                                    if (input.capacity != null) {
+                                        await fetch("/api/admin/operational-config/capacity-rules", {
+                                            method: "POST",
+                                            credentials: "include",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                                action: "set_object_capacity",
+                                                room_location_id: newId,
+                                                unit_role: input.unit_role,
+                                                capacity: input.capacity,
+                                            }),
+                                        });
+                                        await refreshCapacityRules();
+                                    }
                                     setCreatingRoom(false);
                                     setSelectedRoomId(newId);
                                     navigate("rooms", newId);

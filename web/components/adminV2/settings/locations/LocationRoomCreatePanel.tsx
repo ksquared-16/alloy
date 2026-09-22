@@ -16,6 +16,10 @@ import type { SchedulePatternRow } from "@/lib/childcareOperational/fetchOperati
 import type { LocationRoomCreateInput } from "@/components/adminV2/settings/locations/useLocationsConfigurationSettings";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import {
+    ordinaryCapacityKindForRole,
+    parseOrdinaryCapacityInput,
+} from "@/lib/locations/objectCapacity";
+import {
     DEFAULT_ROOM_TYPE,
     ROOM_TYPE_OPTIONS,
     roleAcceptsInside,
@@ -31,7 +35,6 @@ export default function LocationRoomCreatePanel({
     programOptions,
     schedulePatterns,
     insideOptions,
-    acceptsLegacyCapacity,
     onCancel,
     onCreate,
 }: {
@@ -40,12 +43,6 @@ export default function LocationRoomCreatePanel({
     schedulePatterns: SchedulePatternRow[];
     /** Physical rooms at this site a classroom may be created inside. */
     insideOptions: InsideOption[];
-    /**
-     * False once this site has canonical capacity rules — its operators have
-     * reached the canonical path, so a new untyped number here would only be
-     * debt someone has to review later.
-     */
-    acceptsLegacyCapacity: boolean;
     onCancel: () => void;
     onCreate: (input: LocationRoomCreateInput) => Promise<void>;
 }) {
@@ -151,23 +148,22 @@ export default function LocationRoomCreatePanel({
                         </label>
                     :   null}
 
-                    {acceptsLegacyCapacity ?
-                        <label className="block max-w-36 space-y-1">
-                            <span className="config-typo-field-label">Capacity</span>
-                            <input
-                                type="number"
-                                min={0}
-                                value={capacity}
-                                onChange={(event) => setCapacity(event.target.value)}
-                                className="config-runtime-input"
-                                data-testid="locations-room-create-capacity"
-                            />
-                        </label>
-                    :   <p className="config-typo-sublabel" data-testid="locations-room-create-capacity-canonical">
-                            Capacity is set in Operational Rules, where it is recorded as physical, licensed
-                            or operational seats. Add the room first, then configure its capacity there.
+                    <label className="block max-w-36 space-y-1">
+                        <span className="config-typo-field-label">Capacity</span>
+                        <input
+                            type="number"
+                            min={0}
+                            value={capacity}
+                            onChange={(event) => setCapacity(event.target.value)}
+                            className="config-runtime-input"
+                            data-testid="locations-room-create-capacity"
+                        />
+                        <p className="config-typo-sublabel" data-testid="locations-room-create-capacity-hint">
+                            {ordinaryCapacityKindForRole(roomType) === "operational" ?
+                                "How many children this class takes. Optional."
+                            :   "How many people this space holds. Optional."}
                         </p>
-                    }
+                    </label>
                     <label className="flex items-center gap-2">
                         <input
                             type="checkbox"
@@ -251,13 +247,19 @@ export default function LocationRoomCreatePanel({
                                 setSaving(true);
                                 setError(null);
                                 try {
+                                    // NOT into metadata. A new space records its capacity
+                                    // as a typed canonical rule like every other edit does;
+                                    // writing the untyped legacy key here would mint the
+                                    // very debt the review flow exists to clear.
+                                    const parsedCapacity = parseOrdinaryCapacityInput(capacity);
+                                    if (!parsedCapacity.ok) throw new Error(parsedCapacity.message);
                                     const metadata = writeRoomProgramsAndScheduleMetadata({
                                         existing: {},
                                         supportedProgramKeys: showsProgramFields ? supportedKeys : [],
                                         schedulePatternId: showsProgramFields ? schedulePatternId || null : null,
-                                        capacity: acceptsLegacyCapacity ? capacity.trim() || null : null,
                                     });
                                     await onCreate({
+                                        capacity: parsedCapacity.value,
                                         label: label.trim(),
                                         is_active: active,
                                         metadata,

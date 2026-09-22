@@ -327,7 +327,10 @@ describe("classroom-only fields are offered only for a Classroom", () => {
         await save();
         expect(onCreate).toHaveBeenCalled();
         const md = onCreate.mock.calls[0][0].metadata as Record<string, unknown>;
-        expect(md.capacity).toBe("20");
+        // Capacity rides beside the metadata, not inside it: a new space records
+        // a typed canonical rule rather than minting untyped legacy debt.
+        expect(md.capacity).toBeUndefined();
+        expect(onCreate.mock.calls[0][0].capacity).toBe(20);
         expect(md.supported_program_keys).toEqual([]);
         expect(md.schedule_pattern_id).toBeUndefined();
     });

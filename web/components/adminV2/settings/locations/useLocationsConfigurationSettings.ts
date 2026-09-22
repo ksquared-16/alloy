@@ -54,6 +54,12 @@ export type LocationRoomCreateInput = {
     label: string;
     is_active: boolean;
     metadata: Record<string, unknown>;
+    /**
+     * Ordinary capacity, in seats, or null when left blank. It is NOT part of
+     * the locations payload — the caller writes it as a canonical rule once the
+     * new space has an id.
+     */
+    capacity?: number | null;
     /** Canonical topology role the operator chose through the Type control. */
     unit_role: CanonicalUnitRole;
     /**

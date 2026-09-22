@@ -144,8 +144,10 @@ describe("3-8, 19-20. the panel uses the canonical authoring authority", () => {
                 expect(src).not.toContain(`capacity_kind: ${kind}`);
             }
         }
-        // The page still authors nothing at all.
-        expect(page).not.toContain("operational-config/capacity-rules");
+        // The page writes capacity only for a space that did not exist yet, and
+        // only through the same derived action.
+        const pageCalls = page.match(/action: "[a-z_]*capacity[a-z_]*"/g) ?? [];
+        expect(pageCalls).toEqual(['action: "set_object_capacity"']);
         // And the panel's only capacity call is the derived, object-level one.
         const calls = roomDetail.match(/action: "[a-z_]*capacity[a-z_]*"/g) ?? [];
         expect(calls).toEqual(['action: "set_object_capacity"']);
