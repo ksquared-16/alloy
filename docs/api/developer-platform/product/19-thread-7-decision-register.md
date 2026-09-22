@@ -179,3 +179,38 @@ collection grammar, error types, rate limit policies and the public scope catalo
 **Assumed, not verified:** that no partner has stated a Financials requirement (absence of evidence);
 that 7 days is a reasonable idempotency retention (proposal, to be decided with 7.3); that a write
 rate budget lower than reads is correct (proposal). Each is flagged where it appears.
+
+
+---
+
+## 6. Classroom Coach readiness — after the Core Resource Expansion (2026-09-22)
+
+**The threshold is met.** Every row of the §2 table now reads *shipped*: Locations, Children,
+Relationships, Enrollment, Placement, Schedule, Attendance read and submit, and Staff — which the
+table rated only *desirable*. Alloy can now present a complete childcare operational model against
+real contracts rather than proposals, so the preliminary offline technical package can be prepared
+on request. **It has not been prepared**, per instruction.
+
+**What the package must state truthfully, and would be wrong to imply otherwise:**
+
+1. **Synchronization is polling and checkpoint based.** `updated_since` plus `since_token` over a
+   `(sort_key, id)` cursor. There are no webhooks and no push delivery in Core Resource V1, and
+   none is required: every Core Resource is `INCREMENTAL_SYNC_SUFFICIENT_FOR_V1`, proven by the
+   certification rather than assumed from the matrix.
+2. **Pickup authority is available only as computed effective authority.** `pickup_authorized` is
+   true or false, derived server-side, fails closed, and carries no reason. A provider that needs
+   to know *why* someone may not collect a child cannot learn it from this API, by design.
+3. **No safeguarding detail is exposed anywhere.** Not the restriction, not its kind, not its
+   dates, not its existence.
+4. **The dated schedule view is derived.** `/schedule-days` answers "who is expected on Tuesday"
+   from a bounded window and cannot be synchronised incrementally; a provider that needs change
+   detection subscribes to `/schedule-assignments`.
+5. **A child is visible through enrollment**, not organization membership — so a provider's record
+   count will be smaller than a naive expectation, and that is correct.
+
+**Remaining generic platform gaps** (none blocking the package): generic events/webhooks (7.8),
+Financials (7.9), and the latent 200-location cap in boundary resolution.
+
+**Provider-specific facts still needed** — unchanged, and none of them an Alloy contract question:
+the provider's own record identifiers and how they map, its sync cadence and direction, and whether
+it requires push delivery rather than polling.

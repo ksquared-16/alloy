@@ -158,8 +158,15 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after slices 7.1–7.4, then again after the Core Resource decision resolution
-(2026-09-22).** Attendance read shipped in 7.1 and Attendance submission in 7.4, which makes the
+**Updated after the Core Resource Expansion implementation batch (2026-09-22).** Groups 0–3 all
+certified: the six person-side triggers, People, Service state and Staff. The public surface is now
+**thirteen operations across nine resources**, all reads except the one attendance write. Both
+canonical gates — full `tsconfig.build.json` typecheck and production build — passed through the
+broker. Nothing pushed, promoted or deployed. Human Review walkthrough:
+`21-core-resource-human-review.md`.
+
+Earlier context, kept for lineage: **Updated after slices 7.1–7.4, then again after the Core
+Resource decision resolution (2026-09-22).** Attendance read shipped in 7.1 and Attendance submission in 7.4, which makes the
 public surface writable for the first time. That left no `READY` item — the decision batch has
 since cleared it. D-02/03/04/05/06/07/08/11 are resolved in
 `20-core-resource-decision-resolution.md`, which promotes **Children, Households, Relationships,
@@ -224,9 +231,9 @@ Dependency-ordered. The preliminary 7A–7H sequence is **not** preserved: it op
 | **7.2 (partial)** | **Exact sync law shipped**; archive representation decided, delivery blocked on D-08 | 7.1 | the D-08 trigger migration, when authorized | none | `sync_token` + `since_token` on every collection | sync procedure documented | 23 + 16 live specs across both collections | no | every collection resumes exactly |
 | **7.3** | **Shipped as law.** D-09 resolved from doctrine; `idempotency_conflict` + `authenticatedWrite` added; **no store built — none needed** | none | **no** | none | error + budget documented | — | 6 contract specs | no | any governed operation |
 | ~~7.4 Attendance operations~~ | **Shipped.** `POST /api/v1/attendance-events`, scope `attendance.write`; batch, per-item outcomes, replay-safe | 7.1, 7.3 | no | `attendance.write` bound to the new operation | +1 operation | reference auto-renders | 23 live + 16 contract specs | **yes** — first external write | partners author facts; a second write copies this pattern |
-| **7.5 People reads** | **Decisions resolved; ready.** Households → Children → Relationships | 7.2, **D-08 trigger repair** | **yes — 6 triggers, no backfill** | `children.read`, `children.contact.read`, `relationships.read`, `households.read` | +4 operations | people model guide | boundary, PII allow-list, archive | **yes** — PII surface | enrollment can reference children |
-| **7.6 Service state** | **Decisions resolved; ready.** Enrollment, Placement, canonical Schedule assignments **+ a derived day projection** | 7.2 only — **not** 7.5 | no | `enrollment.read`, `schedule.read` | +4 operations | enrollment guide | effective-dating, supersession, **`subject_type='child'` filter** | no | attendance can be interpreted against expectation |
-| **7.7 Staff** | **Decisions resolved; ready.** Person ⋈ Employment as an external projection | 7.2, **D-08 trigger repair for identity sync** | no | `staff.read`, `staff.contact.read` | +2 operations | short guide | boundary via primary location | no | ratio/roster consumers |
+| ~~7.5 People reads~~ | **Shipped.** `/children`, `/households`, `/relationships` with effective `pickup_authorized`. Households → Children → Relationships | 7.2, **D-08 trigger repair** | **yes — 6 triggers, no backfill** | `children.read`, `children.contact.read`, `relationships.read`, `households.read` | +4 operations | people model guide | boundary, PII allow-list, archive | **yes** — PII surface | enrollment can reference children |
+| ~~7.6 Service state~~ | **Shipped.** `/enrollments`, `/placements`, `/schedule-assignments`, and `/schedule-days` as a declared projection. Enrollment, Placement, canonical Schedule assignments **+ a derived day projection** | 7.2 only — **not** 7.5 | no | `enrollment.read`, `schedule.read` | +4 operations | enrollment guide | effective-dating, supersession, **`subject_type='child'` filter** | no | attendance can be interpreted against expectation |
+| ~~7.7 Staff~~ | **Shipped.** `/staff` as a composed projection over person and employment. Person ⋈ Employment as an external projection | 7.2, **D-08 trigger repair for identity sync** | no | `staff.read`, `staff.contact.read` | +2 operations | short guide | boundary via primary location | no | ratio/roster consumers |
 | **7.8 Events / webhooks** | Public event vocabulary + delivery | 7.5, 7.6, D-10 | yes | subscription management | event catalog | events guide | delivery, retry, replay, signature | **yes** — new product surface | `EVENT_REQUIRED` domains satisfied |
 | **7.9 Financials** | Charges + responsibility + balance view | 7.2, D-12 | possibly | new read scopes | +3 operations | financial model guide | responsibility split correctness | **yes** | later payment reads |
 | **7.10 Portal convergence** | Capability language, guides, examples | continuous | no | none | n/a | ongoing | parity gates | at product boundaries | the package in §6 |
