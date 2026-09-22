@@ -1,0 +1,60 @@
+{
+  "ids": [
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+    "79f8011d-a236-4054-bee7-af10f1dbc632"
+  ],
+  "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+  "period": "2026-09",
+  "applyStatus": 200,
+  "applyBody": {
+    "ok": true,
+    "data": {
+      "execution_result": {
+        "period_key": "2026-09",
+        "service_period": {
+          "start": "2026-09-01",
+          "end": "2026-09-30"
+        },
+        "applied": 0,
+        "unchanged": 7,
+        "alreadyPosted": 0,
+        "notEligible": 0,
+        "refused": 0,
+        "refused_outcomes": []
+      },
+      "affected_id": null
+    },
+    "correlation_id": "1419e0b5-02fa-4b49-a19d-e442cdd71039"
+  },
+  "chargeCount": 0,
+  "chargeStatuses": [],
+  "draftCharges": 0,
+  "reductionCount": 51,
+  "vmKeys": [
+    "account",
+    "period",
+    "payers",
+    "responsibility",
+    "expectedFunding",
+    "prepaid",
+    "heldDeposits",
+    "collectible",
+    "subjects",
+    "reductions",
+    "rows",
+    "reconciliation",
+    "reconciliationBySubject",
+    "pastDue",
+    "pastDueBySubject",
+    "ledgerPeriods",
+    "payments",
+    "chargeTemplates",
+    "unavailable",
+    "paymentSetup",
+    "paymentCapabilities",
+    "payerCandidates",
+    "achAvailable",
+    "openCollections",
+    "unavailableReason"
+  ]
+}

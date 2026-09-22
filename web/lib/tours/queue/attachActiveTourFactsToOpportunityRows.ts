@@ -147,3 +147,50 @@ export async function attachActiveTourFactsToOpportunityRows(params: {
         return rows;
     }
 }
+
+/** The raw active booking as the maintainer persists it. Wall date/time are NOT stored. */
+export type MaintainedTourFact = {
+    booking_id: string | null;
+    status_key: string | null;
+    start_at: string | null;
+    timezone: string | null;
+};
+
+/**
+ * The replacement for `attachActiveTourFactsToOpportunityRows` on the first-order navigation path:
+ * same output, zero reads.
+ *
+ * The booking now rides on the opportunity, maintained by the tour authority on every transition —
+ * including cancellation, which returns early from the integration and so clears this explicitly
+ * rather than relying on the metadata mirror. The wall date is still DERIVED here, by the same pure
+ * helper, because storing it would be a second copy of a fact that already exists.
+ *
+ * Synchronous on purpose: an async signature is what let a round trip hide inside the evaluated page.
+ */
+export function attachActiveTourFactsFromMaintainedFacts<T extends Record<string, unknown>>(
+    rows: readonly T[],
+): T[] {
+    if (!rows.length) return rows as T[];
+    return rows.map((row) => {
+        const raw = (row as Record<string, unknown>).maintained_operational_facts;
+        const facts =
+            raw && typeof raw === "object" && !Array.isArray(raw)
+                ? (raw as { tour?: MaintainedTourFact | null })
+                : null;
+        const tour = facts?.tour ?? null;
+        const startAt = typeof tour?.start_at === "string" ? tour.start_at : "";
+        if (!tour || !startAt) {
+            return mergeActiveTourFactOntoOpportunityRow(row as Record<string, unknown>, EMPTY_FACT) as T;
+        }
+        const wall = wallFromBooking(startAt, typeof tour.timezone === "string" ? tour.timezone : null);
+        return mergeActiveTourFactOntoOpportunityRow(row as Record<string, unknown>, {
+            has_active_tour: true,
+            tour_booking_id: typeof tour.booking_id === "string" ? tour.booking_id : null,
+            tour_status_key: typeof tour.status_key === "string" ? tour.status_key : null,
+            tour_start_at: startAt,
+            tour_timezone: typeof tour.timezone === "string" ? tour.timezone : null,
+            tour_date: wall.tour_date,
+            tour_time: wall.tour_time,
+        }) as T;
+    });
+}

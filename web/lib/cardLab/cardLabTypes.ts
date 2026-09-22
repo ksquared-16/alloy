@@ -228,6 +228,9 @@ export type LedgerEntry = {
     responsibleParty: string | null;
     /** An allocation exists and deliberately names no party. Rendered as a state, not as a blank. */
     responsibilityUnassigned: boolean;
+    /** Owed by the named party, and owed by nobody yet — a partially allocated obligation is both. */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     label: string;
     /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;
@@ -240,6 +243,36 @@ export type LedgerEntry = {
      * Carried rather than displayed. Without it the ledger can describe a posted charge and cannot
      * act on it, which is how `charge.reverse` ended up with no reachable operator path at all.
      */
+    /**
+     * ── WHY THIS REDUCTION EXISTS ────────────────────────────────────────────────────────────
+     *
+     * Present only where the row IS a reduction. The ledger could always show that money moved and
+     * not what decided it: a row read `Credit −$260.06` while the table that records the decision —
+     * which policy, on what basis, capped or not — was never read.
+     *
+     * `concept` is the operator's word for the row and is deliberately one of FOUR: a discount is a
+     * price decision under a policy, a credit is money owed back, an adjustment corrects an
+     * established position, and a reversal undoes a specific earlier one. They share infrastructure;
+     * they are not the same thing.
+     *
+     * Every field is a stored fact or an explicit absence. `recurrenceLabel` is empty when the model
+     * genuinely cannot say, rather than claiming "one-time".
+     */
+    /** `reversal` | `credit` | `replacement` — the correction's own record of what it is. */
+    correctionKind?: string | null;
+    reduction?: {
+        applicationId: string;
+        concept: "discount" | "credit" | "adjustment" | "reversal";
+        conceptLabel: string;
+        recurrenceLabel: string;
+        decidedBy: string;
+        basisSummary: string | null;
+        explanation: string | null;
+        sourceChargeId: string | null;
+        periodLabel: string | null;
+        reversesApplicationId: string | null;
+        reversedByApplicationId: string | null;
+    } | null;
     chargeId?: string | null;
     /**
      * WHICH LENS THIS ROW ANSWERS TO — decided by `ledgerLensOf` where the canonical row still
@@ -341,12 +374,43 @@ export type FinancialsPeriod = {
      * a due DATE ("Was due Aug 15"), and the balance is already `currentBalance`.
      */
     dueNow: string;
+    /**
+     * MONEY THE FAMILY HAS ALREADY GIVEN THAT IS NOT YET SPENT — and only the spendable part.
+     *
+     * `null` when there is none, which is the ordinary case and must stay SILENT: a "$0.00" prepaid
+     * metric on every account would be noise occupying a slot meant for a fact. Present only when
+     * the organisation actually holds this family's money.
+     *
+     * It is NOT subtracted from `currentBalance`. Current balance sums what was APPLIED, so held
+     * money does not pay anything down until it is allocated — which is why `owes $0 with $200
+     * prepaid` is two figures and never one `-$200`.
+     */
+    availablePrepaid: string | null;
+    /**
+     * Money received and RESTRICTED — a held deposit (Payments V1 · W4).
+     *
+     * A separate figure from `availablePrepaid` and never merged into it: one is money an operator
+     * may spend on an obligation now, the other is money the organisation is holding and may not.
+     * Combining them would offer a family's deposit for allocation.
+     *
+     * Like prepaid it is `null` when there is none, so zero stays silent, and like prepaid it is NOT
+     * subtracted from `currentBalance` — a family that owes $500 with $500 held still owes $500.
+     */
+    heldFunds: string | null;
     dueLabel: string;
 };
 
 /** The compact card's reduced content — the same read model, fewer questions answered. */
 export type FinancialsCompact = {
-    dueLine: string;
+    /**
+     * The headline, and ONLY when it says something the lines below do not.
+     *
+     * It used to be the balance whenever nothing was past due — while `lines` already carried
+     * "Current balance" with that same figure, so the card printed the number twice, once without a
+     * label. Null now means "the lines already say this"; the card renders no headline rather than a
+     * detached amount.
+     */
+    dueLine: string | null;
     lines: { label: string; value: string }[];
     /** Null when payment setup is unknown — the card then says nothing rather than claiming absence. */
     paymentLine: string | null;
@@ -360,6 +424,7 @@ export type FinancialsEvidence = {
     /** Subjects a charge may be for. Household is always present; children when they exist. */
     subjects: string[];
     period: FinancialsPeriod;
+    /** `age` is the DURATION alone ("1 day"); the surface supplies the words "past due". */
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
     payers: FinancialsPayer[];
@@ -369,7 +434,6 @@ export type FinancialsEvidence = {
         nextChargeLabel: string | null;
     };
     /** Quiet context line on the summary card — never a ledger reproduction. */
-    historyLine: string;
     /** Detail-only: forward-looking facts, and only where authoritative. */
     upcoming: { label: string; value: string; unowned?: boolean }[];
     /**
@@ -495,6 +559,18 @@ export type ChargeTemplateOption = {
     payerTargeting: "default_split" | "operator_selectable" | "single_payer" | "third_party";
     requiresSubject: boolean;
     requiresNote: boolean;
+    /**
+     * WHETHER CONFIRMING WILL WAIT FOR REVIEW, resolved by the server from the tenant's
+     * `posting_review` policy OR'd with the template's own flag.
+     *
+     * The command previews the act it will PERFORM. Before this existed the preview hardcoded
+     * "Creates a draft", which was true of every tenant when it was written and is not true of a
+     * tenant that has configured no review boundary — the operator was told the balance would not
+     * move, and it moved.
+     */
+    reviewRequired: boolean;
+    /** The code-owned charge category, for grain decisions. Optional: older payloads omit it. */
+    categoryKey?: string;
 };
 
 export type AddChargeSpecimen = {

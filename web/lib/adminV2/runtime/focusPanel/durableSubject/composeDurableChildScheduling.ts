@@ -41,7 +41,10 @@ import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational
 import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import { loadEditorPatternsForSite } from "@/lib/scheduling/editorPatterns";
 import { loadOrgAssignmentTypes } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
-import { loadSiteOperationalRooms } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
+import {
+    assignableClassrooms,
+    loadSiteOperationalRooms,
+} from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 import {
     resolveSiteConfig,
     type SchedulingProjectionFirstPaint,
@@ -87,7 +90,10 @@ export async function composeDurableChildScheduling(
             })),
             loadEditorPatternsForSite(supabase, orgId, siteLocationId).catch(() => []),
             loadOrgAssignmentTypes(supabase, orgId, { subjectType: "child" }).catch(() => []),
-            loadSiteOperationalRooms(supabase, orgId, siteLocationId).catch(() => []),
+            // Classroom picker: operational groups only.
+            loadSiteOperationalRooms(supabase, orgId, siteLocationId)
+                .then(assignableClassrooms)
+                .catch(() => []),
         ]);
 
     const projection = await loadSchedulingProjectionForChild(supabase, orgId, {

@@ -1,0 +1,61 @@
+{
+  "text": "⌘K / QS / Organization / financials / Financials / Tuition Plans, enrollment commitments, organization pricing, and location overrides. / Tuition / Catalog / Policies / Accounting / Simulator / Funding / Plans / Enrollment Commitments / Billing Frequencies / + New Tuition Plan / Tuition Plans / 7 Plans · Active / Search Tuition Plans / Status / Active / Archived / All / Infant / Active / Infant · Full Time / Monthly · $525–$1,850 / Part Time / Active / Infant · Part Time / Semi-Annual · / Needs GL / · / No prices / Preschool / Active / Preschool · Full Time / Monthly · $425–$1,550 / After School / Active / School Age · Full Time / Monthly · $175–$650 / Before & After / Active / School Age · Custom / Monthly · $250–$900 / Before School / Active / School Age · Before School / Monthly · $125–$450 / Full Day / Active / Toddler · Full Time / Monthly · $475–$1,700 / Tuition Plans / Select a Tuition Plan from the list, or create a new one. / New Tuition Plan / Financial Setup · foundations configured / Financial setup / GL Codes / Billing Frequencies / Enrollment Commitments / 1 Tuition Plan need accounting assignments. / Review GL Codes → / BOS / Operational Intelligence / Reset / Pin / Close / Attention / · No urgent issues / Here are some ways I can help / ▾ / Explain this configuration / Summarize the active state and working changes / Review configuration attention / Identify setup, publication, or assignment issues / Review unpublished changes / Explain what remains private to Organization / / commands · ↵ to send · ⇧↵ new line / BOS uses AI. Review for accuracy.",
+  "buttons": [
+    "QS",
+    "Tuition",
+    "Catalog",
+    "Policies",
+    "Accounting",
+    "Simulator",
+    "Funding",
+    "+ New Tuition Plan",
+    "Infant\nActive\nInfant · Full Time\nMonthly · $525–$1,850",
+    "Part Time\nActive\nInfant · Part Time\nSemi-Annual ·\nNeeds GL\n·\nNo prices",
+    "Preschool\nActive\nPreschool · Full Time\nMonthly · $425–$1,550",
+    "After School\nActive\nSchool Age · Full Time\nMonthly · $175–$650",
+    "Before & After\nActive\nSchool Age · Custom\nMonthly · $250–$900",
+    "Before School\nActive\nSchool Age · Before School\nMonthly · $125–$450",
+    "Full Day\nActive\nToddler · Full Time\nMonthly · $475–$1,700",
+    "New Tuition Plan",
+    "Reset",
+    "Pin",
+    "Close",
+    "Here are some ways I can help\n▾",
+    "Explain this configuration\nSummarize the active state and working changes",
+    "Review configuration attention\nIdentify setup, publication, or assignment issues",
+    "Review unpublished changes\nExplain what remains private to Organization"
+  ],
+  "selects": [
+    {
+      "id": "tuition-plans-nav-filter",
+      "options": [
+        "Active",
+        "Archived",
+        "All"
+      ]
+    },
+    {
+      "id": null,
+      "options": [
+        "Tuition Plans overview",
+        "Infant",
+        "Part Time",
+        "Preschool",
+        "After School",
+        "Before & After",
+        "Before School",
+        "Full Day"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "type": "search",
+      "id": "Search…"
+    },
+    {
+      "type": "search",
+      "id": "tuition-plans-nav-search"
+    }
+  ]
+}

@@ -1,0 +1,961 @@
+{
+  "productsStatus": 200,
+  "productsKeys": [
+    "products"
+  ],
+  "products": [
+    {
+      "id": "1173a3ff-b886-44b9-949f-217c5c1bf1ea",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "program_key": null,
+      "name": "Activity Fee",
+      "description": null,
+      "commercial_type": "fee",
+      "category_id": "d22e9580-80aa-45b3-89ce-a8379f12466b",
+      "amount_cents": 2500,
+      "cadence_key": null,
+      "revenue_category": null,
+      "revenue_category_id": "345c0a8b-12d7-4e82-ad7e-44a2484242f1",
+      "effective_start": "2026-07-25",
+      "effective_end": null,
+      "behavior": {
+        "required": false
+      },
+      "is_active": true,
+      "metadata": {},
+      "source_table": null,
+      "source_id": null,
+      "created_at": "2026-07-28T16:36:01.339135+00:00",
+      "updated_at": null
+    },
+    {
+      "id": "41cd1f66-74e1-47a0-9c4d-eb0cfe5be771",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "program_key": null,
+      "name": "Annual Supply Fee",
+      "description": null,
+      "commercial_type": "fee",
+      "category_id": "c9432be8-d64e-471a-96a6-94a9b17775bc",
+      "amount_cents": 20000,
+      "cadence_key": "annual",
+      "revenue_category": null,
+      "revenue_category_id": "c9ed71a2-3871-4299-ad31-9238af07b04d",
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "behavior": {
+        "required": true
+      },
+      "is_active": true,
+      "metadata": {},
+      "source_table": null,
+      "source_id": null,
+      "created_at": "2026-07-28T16:34:44.469717+00:00",
+      "updated_at": "2026-07-28T16:34:58.413+00:00"
+    },
+    {
+      "id": "0b390c17-b149-4b50-86c8-482dfc4809e7",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "program_key": null,
+      "name": "Enrollment Fee",
+      "description": null,
+      "commercial_type": "fee",
+      "category_id": "16caa300-9762-4d94-a9f3-d30951dd0398",
+      "amount_cents": 15000,
+      "cadence_key": null,
+      "revenue_category": null,
+      "revenue_category_id": "7cb681fa-123b-431e-bb05-afa55b07335e",
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "behavior": {
+        "required": true
+      },
+      "is_active": true,
+      "metadata": {},
+      "source_table": null,
+      "source_id": null,
+      "created_at": "2026-07-28T16:34:18.780854+00:00",
+      "updated_at": null
+    },
+    {
+      "id": "db9b27b3-dd22-46bc-a991-2e60b352fba6",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "program_key": null,
+      "name": "Registration Fee",
+      "description": null,
+      "commercial_type": "fee",
+      "category_id": "ad1b3ed0-7838-4238-89c1-c98f0084f9c8",
+      "amount_cents": 10000,
+      "cadence_key": "annual",
+      "revenue_category": null,
+      "revenue_category_id": "7cb681fa-123b-431e-bb05-afa55b07335e",
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "behavior": {
+        "required": true
+      },
+      "is_active": true,
+      "metadata": {},
+      "source_table": null,
+      "source_id": null,
+      "created_at": "2026-07-28T16:33:28.370029+00:00",
+      "updated_at": "2026-07-28T16:35:08.644+00:00"
+    }
+  ],
+  "ratesCount": 36,
+  "rates": [
+    {
+      "id": "cf1d14ae-85f1-4302-b8dc-18164901ec96",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "179cb544-e708-4ec1-9a46-c58ab8985e6f",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 42500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:42:59.838195+00:00",
+      "updated_at": "2026-07-28T22:42:59.786+00:00"
+    },
+    {
+      "id": "15e03719-95e2-4616-a94f-93537b2c4110",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "19955f0b-6103-4e7c-85ea-0ad121d69577",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 78000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:46:14.041787+00:00",
+      "updated_at": "2026-07-28T22:46:13.986+00:00"
+    },
+    {
+      "id": "541f17f7-5c96-4de9-bd7f-1b641aeab99f",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "249e1117-e804-4240-abb6-59df29dfc911",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 135000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:05.636833+00:00",
+      "updated_at": "2026-07-28T22:43:05.571+00:00"
+    },
+    {
+      "id": "fb760ba9-4cec-46bb-823d-313b06f26e5c",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "38a7ff7c-473d-4e97-ae57-efc568c01b75",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 45000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:46:09.601193+00:00",
+      "updated_at": "2026-07-28T22:46:09.547+00:00"
+    },
+    {
+      "id": "77eac724-9d18-49f3-9e29-2a740d29f891",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "3db29534-a4bf-49c3-9e8a-91a71045918d",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 150000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T22:41:41.718495+00:00",
+      "updated_at": "2026-07-28T22:41:41.658+00:00"
+    },
+    {
+      "id": "94a45def-9550-49ce-8982-715d4e05859b",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "492ee88e-9fc3-4eb3-a01a-3aa6012b3d7c",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 47500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T22:41:38.593468+00:00",
+      "updated_at": "2026-07-28T22:41:38.53+00:00"
+    },
+    {
+      "id": "bb179fa7-60c7-4e65-ae1e-3c504793f27d",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "50167b60-517d-46da-bc58-3ac0089f654e",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 65000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:40.126053+00:00",
+      "updated_at": "2026-07-28T22:44:40.071+00:00"
+    },
+    {
+      "id": "03ffcc89-9ac8-497e-b408-c352112443b5",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "5644ada0-9fe7-42e9-b29b-57705c9ad92a",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 25000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:46:07.881396+00:00",
+      "updated_at": "2026-07-28T22:46:07.825+00:00"
+    },
+    {
+      "id": "4f435fc1-b8d6-44ef-b085-9fbc25096137",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "5ee82b29-8447-4b1a-b467-b51e0772d0ef",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 52500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T19:06:10.642518+00:00",
+      "updated_at": "2026-07-28T19:06:10.554+00:00"
+    },
+    {
+      "id": "a4051016-0edb-422a-a052-e58dd8ff6d48",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "67929620-6d01-4aba-a2ad-c06838e16b08",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 22500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:55.248094+00:00",
+      "updated_at": "2026-07-28T22:43:55.188+00:00"
+    },
+    {
+      "id": "5e104056-69c4-43a1-9128-3ebda225b241",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "796c7633-ee90-473d-ad31-05cffbd65973",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 165000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T19:05:13.789039+00:00",
+      "updated_at": "2026-07-28T19:05:13.718+00:00"
+    },
+    {
+      "id": "b73019cc-4c37-4a94-9447-222aa4f095c7",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "796c7633-ee90-473d-ad31-05cffbd65973",
+      "cadence_key": "weekly",
+      "payer_type": "private_pay",
+      "rate_cents": 22500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-22T23:28:33.90383+00:00",
+      "updated_at": "2026-07-22T23:28:33.368+00:00"
+    },
+    {
+      "id": "386bef8a-cce8-4eee-8c95-b0287efc3ea8",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "7c0efd27-9f40-4e59-88ba-394e313a1475",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 87500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T22:41:39.591667+00:00",
+      "updated_at": "2026-07-28T22:41:39.533+00:00"
+    },
+    {
+      "id": "9e7d3752-62cb-494f-953c-74267fae7fe6",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "7e006455-c620-4e34-b22f-6280a917f41e",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 45000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:00.996971+00:00",
+      "updated_at": "2026-07-28T22:44:00.942+00:00"
+    },
+    {
+      "id": "1dccf3cc-4a48-4b9e-b0d8-4c510a3cda19",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "8a72585c-3791-4ea6-b2fe-88678542b1f4",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 77500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:02.058925+00:00",
+      "updated_at": "2026-07-28T22:43:01.763+00:00"
+    },
+    {
+      "id": "1b5d9d04-508c-42a1-9f29-59c81c8cf744",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "90404c9c-2b75-4cd6-8da6-c61a4d436da7",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 132500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T19:05:14.886216+00:00",
+      "updated_at": "2026-07-28T19:05:14.817+00:00"
+    },
+    {
+      "id": "df4fd2e9-1247-4b3d-87de-638fd154dea8",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "90404c9c-2b75-4cd6-8da6-c61a4d436da7",
+      "cadence_key": "weekly",
+      "payer_type": "private_pay",
+      "rate_cents": 21500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-22T23:28:35.41825+00:00",
+      "updated_at": "2026-07-22T23:28:34.921+00:00"
+    },
+    {
+      "id": "1a61d6f6-9482-4a5d-a2ca-c48c4a58521b",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "9280c199-8c1b-4cf6-9a6a-ab1eccc813b0",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 12500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:53.45846+00:00",
+      "updated_at": "2026-07-28T22:43:53.392+00:00"
+    },
+    {
+      "id": "8ecdd655-40d9-4879-b5d6-b1c9a7983dea",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "a025201c-4ece-4350-ab37-4e27bfeeee6b",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 120000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T22:41:40.765626+00:00",
+      "updated_at": "2026-07-28T22:41:40.688+00:00"
+    },
+    {
+      "id": "8e79fa77-3a92-4aad-bccb-4bd5c04a5759",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "af80847d-27a8-4038-806c-f6ad60e1b263",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 31500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:56.920577+00:00",
+      "updated_at": "2026-07-28T22:43:56.851+00:00"
+    },
+    {
+      "id": "caa94f66-d045-4ff3-985e-e467af914544",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "b57c8814-9b06-41d7-8142-0f7f6770dca3",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 107500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:04.050024+00:00",
+      "updated_at": "2026-07-28T22:43:03.984+00:00"
+    },
+    {
+      "id": "ba0e6684-307d-4420-915b-fddbb81d7dae",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "bdc85c07-fa40-45c6-a47a-f15ecde42f8a",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 56000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:38.429012+00:00",
+      "updated_at": "2026-07-28T22:44:38.376+00:00"
+    },
+    {
+      "id": "e49c6ecc-9a0f-4017-aafe-b5abacef5f64",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "ced18121-bc96-4e12-8154-f526ea532c86",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 32500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:35.014221+00:00",
+      "updated_at": "2026-07-28T22:44:34.958+00:00"
+    },
+    {
+      "id": "5892029b-9218-41d6-863b-59b7baba1b9b",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "d6d7e795-19f2-4796-b1fc-05e62fc03a1a",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 95000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T19:05:15.750822+00:00",
+      "updated_at": "2026-07-28T19:05:15.69+00:00"
+    },
+    {
+      "id": "88e822c2-d00b-4dcf-8f31-493ba8fe0634",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "d6d7e795-19f2-4796-b1fc-05e62fc03a1a",
+      "cadence_key": "weekly",
+      "payer_type": "private_pay",
+      "rate_cents": 20000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-22T23:28:36.81075+00:00",
+      "updated_at": "2026-07-22T23:28:36.315+00:00"
+    },
+    {
+      "id": "44cd16df-da2c-4409-bdcb-e7a6a5942192",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "dc6cd283-e61c-47da-93aa-8d1a2385d580",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 170000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-28T22:41:42.619674+00:00",
+      "updated_at": "2026-07-28T22:41:42.547+00:00"
+    },
+    {
+      "id": "859384bd-c93f-416f-bcd9-1ad6fed4c6a6",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 185000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-08-01",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {
+        "priceHistory": [
+          {
+            "rate_cents": 105000,
+            "recorded_at": "2026-07-28T19:05:11.717Z",
+            "effective_end": "2026-08-01",
+            "effective_start": null
+          }
+        ]
+      },
+      "created_at": "2026-07-01T21:28:50.39462+00:00",
+      "updated_at": "2026-07-28T19:05:12.554+00:00"
+    },
+    {
+      "id": "a84a33d2-d529-430c-8e3f-6b0080ebdc29",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 150000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": null,
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-01T21:31:19.673755+00:00",
+      "updated_at": "2026-07-01T21:31:19.475+00:00"
+    },
+    {
+      "id": "e1e60507-be43-4360-a7a6-ce3be955e909",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+      "cadence_key": "weekly",
+      "payer_type": "private_pay",
+      "rate_cents": 10000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": null,
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {},
+      "created_at": "2026-07-01T21:31:17.527172+00:00",
+      "updated_at": "2026-07-01T21:31:17.328+00:00"
+    },
+    {
+      "id": "caa0f919-c66e-43a2-9067-ab2f26a66529",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "e1b5e8e5-2284-4390-889b-beba3d013799",
+      "cadence_key": "weekly",
+      "payer_type": "private_pay",
+      "rate_cents": 25000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-22",
+      "effective_end": null,
+      "revenue_category_id": null,
+      "metadata": {
+        "priceHistory": [
+          {
+            "rate_cents": 25000,
+            "recorded_at": "2026-07-22T23:28:28.955Z",
+            "effective_end": "2026-07-22",
+            "effective_start": null
+          }
+        ]
+      },
+      "created_at": "2026-07-01T21:28:43.118508+00:00",
+      "updated_at": "2026-07-22T23:28:31.521+00:00"
+    },
+    {
+      "id": "2a1e4ae9-1ff1-43a9-a54b-46816229fdaf",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "eb757f7d-111b-4a44-b124-bc8a887b31e9",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 17500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:33.314191+00:00",
+      "updated_at": "2026-07-28T22:44:33.259+00:00"
+    },
+    {
+      "id": "507e1346-6053-4c10-933e-a442e2fd97ba",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "edaf474e-2646-4e6a-8cb4-389e964cafb3",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 155000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:07.331297+00:00",
+      "updated_at": "2026-07-28T22:43:07.269+00:00"
+    },
+    {
+      "id": "f745b671-35fc-401b-8430-5e7aa253dd14",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "f29e1848-71cf-459e-826e-706ebfadded4",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 45000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:44:36.812536+00:00",
+      "updated_at": "2026-07-28T22:44:36.754+00:00"
+    },
+    {
+      "id": "6d7de60e-ada2-40b3-96cc-ee3d0d29da4d",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "f587c605-90a5-49c9-a304-32b6a6d46d42",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 90000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:46:15.792971+00:00",
+      "updated_at": "2026-07-28T22:46:15.726+00:00"
+    },
+    {
+      "id": "ec0eab3e-95b4-4138-ae2d-46b473a4ca68",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "f5cdf034-9b67-4957-8bd0-18f31576a8d8",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 39000,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:43:58.854362+00:00",
+      "updated_at": "2026-07-28T22:43:58.801+00:00"
+    },
+    {
+      "id": "d92f3cf4-de9d-4fa3-a26c-1bd3c89af8ba",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "location_id": null,
+      "variant_id": "ff9bb311-ba73-49da-b222-b4574f32ac10",
+      "cadence_key": "monthly",
+      "payer_type": "private_pay",
+      "rate_cents": 62500,
+      "is_active": true,
+      "not_offered": false,
+      "effective_start": "2026-07-28",
+      "effective_end": null,
+      "revenue_category_id": "b9ca4b28-5bf0-4c3d-a080-fd1fa07383cb",
+      "metadata": {},
+      "created_at": "2026-07-28T22:46:11.43674+00:00",
+      "updated_at": "2026-07-28T22:46:11.379+00:00"
+    }
+  ],
+  "cadences": [
+    {
+      "id": "efc2b819-d208-4fac-a4b3-ee151d274af0",
+      "label": "Semi-Annual"
+    },
+    {
+      "id": "d1738daf-a2e5-4dda-9b8f-8dff1f648efa",
+      "label": "Weekly"
+    },
+    {
+      "id": "a6549d4b-2174-41e9-b0e6-516aa47866b1",
+      "label": "Bi-weekly"
+    },
+    {
+      "id": "2397b6e3-50f9-4cdb-88ab-2e0ea1006979",
+      "label": "Monthly"
+    },
+    {
+      "id": "5e56d04d-6866-4fc5-aa79-d7d2de56ac21",
+      "label": "Annual"
+    },
+    {
+      "id": "31e8bcf3-7cba-4c3b-ac72-0f3d150bd25b",
+      "label": "Daily"
+    },
+    {
+      "id": "2a468a89-2b5b-48d0-bef9-f9e67a3f3c9d",
+      "label": "Hourly"
+    },
+    {
+      "id": "c06a6bb6-8cfc-4570-b627-f4041b751212",
+      "label": "Per Session"
+    }
+  ],
+  "programs": [
+    {
+      "id": "4a77ea9e-8641-4d05-97dd-a4f91651b07a",
+      "key": "infant",
+      "label": "Infant",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": true
+    },
+    {
+      "id": "80723acb-4884-4da9-a862-b4748e19a8b4",
+      "key": "infant",
+      "label": "Infant",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "237c9769-3b78-4265-8836-3e4d09e86b34",
+      "key": "infant",
+      "label": "Infant",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": true
+    },
+    {
+      "id": "b9fa2703-3a3c-4ac6-a6b3-3e4e262527a2",
+      "key": "toddler",
+      "label": "Toddler",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": true
+    },
+    {
+      "id": "d65c987d-7d6b-4ac7-8647-f2c94d22fd8f",
+      "key": "toddler",
+      "label": "Toddler",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": true
+    },
+    {
+      "id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f",
+      "key": "toddler",
+      "label": "Toddler",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "923d7789-b86c-4f0d-bb04-8a9e58dceb83",
+      "key": "preschool",
+      "label": "Preschool",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": true
+    },
+    {
+      "id": "2147d374-8112-4e88-8342-b49c9b95fc7b",
+      "key": "preschool",
+      "label": "Preschool",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "cf8f7031-1657-46dd-8b59-df1abf9f4627",
+      "key": "preschool",
+      "label": "Preschool",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": true
+    },
+    {
+      "id": "5e6856e4-8b3d-4a6c-abea-ac7ad8b49c2c",
+      "key": "pre_k",
+      "label": "Pre-K",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "963a3bd0-3a98-499e-ac11-6384b8795030",
+      "key": "pre_k",
+      "label": "Pre-K",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": true
+    },
+    {
+      "id": "aed7556e-14bd-48bb-a9a2-4a94eb47c0ac",
+      "key": "pre_k",
+      "label": "Pre-K",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": true
+    },
+    {
+      "id": "8c794d51-1081-4a26-b77e-f13ed128e2ea",
+      "key": "kindergarten",
+      "label": "Kindergarten",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "31287001-09db-4d42-9d58-483767bd83c9",
+      "key": "school_age",
+      "label": "School Age",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": true
+    },
+    {
+      "id": "50a71b79-8be5-488f-b3bc-2d9102c77568",
+      "key": "school_age",
+      "label": "School Age",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": true
+    },
+    {
+      "id": "5e9e715a-eb8f-4534-bcfe-a8a74ed883d9",
+      "key": "school_age",
+      "label": "School Age",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": true
+    },
+    {
+      "id": "38472624-1193-4583-84dd-69ee79be4940",
+      "key": "stage4_ok3_w9k7sx",
+      "label": "Stage4 OK3 w9k7sx",
+      "loc": "ae34d822-60ef-4f82-81eb-8f3513059627",
+      "active": false
+    },
+    {
+      "id": "29b6d0c7-ca8f-4ff7-bf52-77552b5e7f61",
+      "key": "stage4_ok3_w9k7sx",
+      "label": "Stage4 OK3 w9k7sx",
+      "loc": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+      "active": false
+    },
+    {
+      "id": "3f087047-76da-43fa-b256-b704dd2debc0",
+      "key": "stage4_ok3_w9k7sx",
+      "label": "Stage4 OK3 w9k7sx",
+      "loc": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "active": false
+    }
+  ],
+  "locationCount": 20,
+  "locations": [
+    {
+      "id": "75f44c2c-21b4-4ef0-817f-5978624abc31",
+      "type": "unit"
+    },
+    {
+      "id": "96411dc0-7370-4072-81f6-921cce5b4d7b",
+      "type": "unit"
+    },
+    {
+      "id": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+      "type": "unit"
+    },
+    {
+      "id": "497b2e7b-e54c-4798-b4ff-a483a5230ac7",
+      "type": "unit"
+    },
+    {
+      "id": "f82c4f41-31ef-4294-b29d-6e890af04ab1",
+      "type": "unit"
+    },
+    {
+      "id": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+      "type": "unit"
+    },
+    {
+      "id": "4de42d04-86fc-4519-b5bd-f45eb8671429",
+      "type": "unit"
+    },
+    {
+      "id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "type": "site"
+    },
+    {
+      "id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+      "type": "unit"
+    },
+    {
+      "id": "5c9577ad-8bdf-4af5-8a1d-2646c5db3136",
+      "type": "unit"
+    },
+    {
+      "id": "1e141eb9-f2a3-4f4a-a4e8-13fe27159277",
+      "type": "unit"
+    },
+    {
+      "id": "aebc7673-5a79-4715-8b69-c82d9aefee0d",
+      "type": "unit"
+    }
+  ]
+}

@@ -236,12 +236,18 @@ describe("scenario readiness", () => {
          * surface that does not exist would invite a PASS resting on a database query.
          */
         /*
-         * 30 since Repair Pass 5F productized the accounting period's INSPECTION half — a calendar
-         * panel and the attributed period on a charge's detail — which turned its scenario from a
-         * recorded gap into something a human can actually drive. The gap that remains is the
-         * lifecycle action, and the scenario records it rather than the catalog hiding it.
+         * A COUNT, NOT A CEILING. This was 30 after Repair Pass 5F productized the accounting
+         * period's inspection half; 42 at the Core freeze, which added twelve walkthroughs for
+         * the recurring billing chain Section 7 certified and nobody had yet been asked to drive;
+         * and 44 at the 11B freeze — `payment_method_on_file`, which Payments W2 made walkable, and
+         * `discount_exception`, which 11B built.
+         *
+         * The number is asserted only so that a scenario cannot be QUIETLY dropped from the
+         * walkthrough set — losing one is a capability nobody is asked to accept. Raising it when
+         * scenarios are deliberately added is the correct maintenance; lowering it needs a reason
+         * written beside it.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(30);
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(44);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

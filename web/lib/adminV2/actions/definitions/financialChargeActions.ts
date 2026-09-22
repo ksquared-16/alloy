@@ -44,6 +44,8 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
+import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
+import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -149,6 +151,48 @@ function childIdFrom(
     const named = t(payload?.customer_member_id) || t(payload?.child_id);
     if (named) return named;
     return CHILD_GRAIN_ENTITY_TYPES.has(t(entityType)) ? t(entityId) : "";
+}
+
+/**
+ * ── THE CHILDREN THIS OPERATION NAMES ────────────────────────────────────────────────────────
+ *
+ * MULTIPLE CHILDREN IS AN OPERATION, NOT A GRAIN. Selecting Wrigley and Lennon for a $40 field trip
+ * creates TWO independent $40 child-attributed obligations — never one $80 household charge, never
+ * one row carrying two subject ids, and never one $40 charge shared between them. The stored world
+ * is exactly what it was; only the operator's gesture got wider.
+ *
+ * `customer_member_ids` is the plural form. The singular `customer_member_id` still works and still
+ * means the same thing, because every existing caller sends it and a surface that had to be
+ * upgraded to keep working would be a breaking change dressed as a feature.
+ *
+ * DE-DUPLICATED AND ORDER-PRESERVING: the same child named twice is one obligation, not two. An
+ * operator double-clicking a checkbox must not be able to bill a family twice, and the selection is
+ * the last place that is cheap to guarantee.
+ */
+function childIdsFrom(
+    payload: Record<string, unknown> | undefined,
+    entityId: string | undefined,
+    entityType?: string | undefined,
+): string[] {
+    /*
+     * ── "DIDN'T SAY" IS NOT "SAID HOUSEHOLD" ─────────────────────────────────────────────────
+     *
+     * `childIdFrom` falls back to the invocation entity, which is right for a caller acting FROM a
+     * child's record and says nothing about grain. But a surface where the operator deliberately
+     * chose Household has said something, and it was being overruled: the payload named no child,
+     * the entity was still the panel's child for ROUTING, and the charge came back attributed to
+     * that child. Measured: "Applies to · Household" produced a Certb-grain registration fee.
+     *
+     * `subjectMemberId: null` IS household grain rather than missing data — that is the doctrine
+     * the whole subject model rests on — so a caller needs a way to state it. Omitting the field
+     * cannot mean it, because omitting is exactly what a caller that has no opinion does.
+     */
+    if (t(payload?.subject_grain) === "household") return [];
+    const raw = payload?.customer_member_ids;
+    const many = Array.isArray(raw) ? raw.map((v) => t(v)).filter(Boolean) : [];
+    if (many.length) return [...new Set(many)];
+    const one = childIdFrom(payload, entityId, entityType);
+    return one ? [one] : [];
 }
 
 function todayYmd(): string {
@@ -261,6 +305,185 @@ function mapError(err: unknown, correlationId: string): ActionResult {
     };
 }
 
+/**
+ * ONE OPERATOR GESTURE, SEVERAL CHILD OBLIGATIONS — each through the canonical writer.
+ *
+ * This is deliberately a LOOP over the single-charge path, not a bulk write. Every obligation goes
+ * through `writeTemplateDraftCharge` and, where no review boundary applies, `postChildcareCharge` —
+ * the same two writers a single Add uses, so the resolution key, the review decision, the journal
+ * entry and the accounting attribution are all the ones that already existed. A bulk INSERT would
+ * be a second charge writer, and the charge spine exists precisely so there is only one.
+ *
+ * FAILURE IS REPORTED, NEVER HIDDEN. A child whose write fails does not fail the children that
+ * succeeded: those charges are real, and reporting the operation as failed would tell the operator
+ * that money which exists does not. The result names every child and what happened to it, and the
+ * same operation re-run converges on the existing charges rather than duplicating them.
+ */
+async function executeMultiChildAdd(args: {
+    supabase: SupabaseClient;
+    ctx: { orgId: string; userId?: string | null };
+    invocation: { entityType: string; entityId?: string };
+    payload: Record<string, unknown>;
+    subjects: Array<{ childId: string; subject: Extract<ChargeSubject, { ok: true }> }>;
+    correlationId: string;
+}): Promise<ActionResult> {
+    const { supabase, ctx, invocation, payload, subjects, correlationId } = args;
+    const today = t(payload.today) || todayYmd();
+
+    type PerChild = {
+        customer_member_id: string;
+        charge_id: string | null;
+        write_status: string;
+        resolution_key: string | null;
+        review_required: boolean;
+        posted: boolean;
+        error?: string;
+    };
+
+    const results: PerChild[] = [];
+    for (const { childId, subject } of subjects) {
+        try {
+            const written = await writeTemplateDraftCharge(supabase, ctx.orgId, {
+                templateId: t(payload.template_id),
+                ...billableSourceForSubject(subject),
+                eventDate: t(payload.event_date) || null,
+                servicePeriodStart: t(payload.service_period_start) || null,
+                /*
+                 * THE AMOUNT IS PER CHILD. It is passed to each write unchanged and is never divided
+                 * across the selection: a $40 field trip for two children is two $40 obligations,
+                 * because that is what the family owes. Splitting an entered amount would invent a
+                 * price nobody quoted.
+                 */
+                unitAmountCents: payload.amount_cents == null ? null : Number(payload.amount_cents),
+                today,
+                actorUserId: ctx.userId ?? null,
+            });
+
+            if (written.status === "not_writable") {
+                results.push({
+                    customer_member_id: childId,
+                    charge_id: null,
+                    write_status: written.status,
+                    resolution_key: null,
+                    review_required: false,
+                    posted: false,
+                    error: written.reason,
+                });
+                continue;
+            }
+
+            let posted = false;
+            let postFailed: string | null = null;
+            if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
+                try {
+                    const result = await postChildcareCharge(supabase, {
+                        orgId: ctx.orgId,
+                        chargeId: written.chargeId,
+                        actorUserId: ctx.userId ?? null,
+                    });
+                    posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
+                } catch (err) {
+                    // A failed post does NOT unmake the charge. It is written, it is a draft, and
+                    // the operator can post it from the row.
+                    postFailed = err instanceof Error ? err.message : String(err);
+                }
+            }
+
+            results.push({
+                customer_member_id: childId,
+                charge_id: written.chargeId,
+                write_status: written.status,
+                resolution_key: written.resolutionKey,
+                review_required: written.reviewRequired,
+                posted,
+                ...(postFailed ? { error: postFailed } : {}),
+            });
+        } catch (err) {
+            results.push({
+                customer_member_id: childId,
+                charge_id: null,
+                write_status: "error",
+                resolution_key: null,
+                review_required: false,
+                posted: false,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+
+    const created = results.filter((r) => r.charge_id);
+    const failed = results.filter((r) => !r.charge_id);
+
+    /*
+     * EVERY CHILD FAILED is an operation that did nothing, and saying "ok" would be false. One or
+     * more succeeding is a real, partial, retry-safe outcome and is reported as success carrying
+     * the failures — because the charges that exist must not be denied.
+     */
+    if (!created.length) {
+        return {
+            ok: false,
+            correlationId,
+            status: 409,
+            error: failed[0]?.error || "No charges could be created for the selected children.",
+        };
+    }
+
+    return {
+        ok: true,
+        correlationId,
+        result: {
+            actionKey: CHARGE_ADD_ACTION_KEY,
+            entityType: invocation.entityType,
+            entityId: subjects[0]!.childId || invocation.entityId || "",
+            affectedId: created[0]!.charge_id,
+            detail: {
+                multi_child: true,
+                children_selected: subjects.length,
+                charges_created: created.length,
+                charges_failed: failed.length,
+                // Per child, so the operator sees exactly which obligations exist.
+                per_child: results,
+            },
+        },
+    };
+}
+
+/**
+ * IS THIS CHARGE'S SUBJECT LEGAL FOR ITS CHARGE TYPE — asked BEFORE any money moves.
+ *
+ * `chargeCategorySemantics` is the code-owned authority on whose money a charge type can be, and
+ * until now nothing on the WRITE path consulted it: the grain rule was honoured only by the Focus
+ * Panel, which withheld the sibling checkboxes. Everything else — the household option in
+ * "Applies to", a governed invocation, a replayed payload — could author `tuition` at household
+ * grain, which the semantics module exists to call a contradiction.
+ *
+ * The check belongs here, beside the subject resolution loop that already runs before the first
+ * write, because a refusal discovered halfway through leaves a family half billed.
+ */
+async function refuseIllegalSubjectGrain(
+    supabase: SupabaseClient,
+    orgId: string,
+    templateId: string,
+    childIds: readonly string[],
+    correlationId: string,
+): Promise<ActionResult | null> {
+    if (!templateId) return null;
+    const template = (await listChargeTemplates(supabase, orgId)).find((x) => x.id === templateId);
+    // An unknown template is not this function's refusal to make; the writer says so with its own voice.
+    if (!template) return null;
+    // No child named IS household grain — the doctrine the whole subject model rests on.
+    if (subjectGrainIsLegal(template.charge_category, childIds[0] ?? null)) return null;
+    const grain = childIds.length ? "a child" : "the household";
+    return {
+        ok: false,
+        correlationId,
+        status: 409,
+        error: `"${template.label}" cannot be charged to ${grain}. This charge type is ${
+            childIds.length ? "household" : "child"
+        }-grained, and changing that would change what the charge means.`,
+    };
+}
+
 const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
@@ -319,10 +542,11 @@ const addCharge: RegisteredAction = {
      */
     async buildPreview({ supabase, ctx, payload, invocation }) {
         const childLabel = t(payload?.child_label) || "this child";
+        const selected = childIdsFrom(payload, invocation?.entityId, invocation?.entityType);
         const subject = await resolveChargeSubject(
             supabase as SupabaseClient,
             ctx.orgId,
-            childIdFrom(payload, invocation?.entityId, invocation?.entityType),
+            selected[0] ?? "",
             t(payload?.customer_id) || null,
         );
         if (!subject.ok) return { summary: subject.message, changes: [] };
@@ -346,13 +570,41 @@ const addCharge: RegisteredAction = {
                           style: "currency",
                           currency: intent.currencyCode || "USD",
                       })}`;
+            /*
+             * ── PER CHILD vs TOTAL, MADE IMPOSSIBLE TO MISREAD ───────────────────────────────
+             *
+             * The amount is the amount for EACH resulting obligation. Two children at $40 is $80
+             * created, not $40 split — and the preview says both numbers out loud, because "×2" and
+             * a total are the two facts an operator checks before confirming money.
+             *
+             * The labels come from the caller, which is the only place that knows the children's
+             * names; the COUNT comes from the resolved selection, so a preview can never claim a
+             * child the execution will not bill.
+             */
+            const labels = Array.isArray(payload?.child_labels)
+                ? (payload.child_labels as unknown[]).map((v) => t(v)).filter(Boolean)
+                : [];
+            const multi = selected.length > 1;
+            const totalCents = intent.amountCents == null ? null : intent.amountCents * selected.length;
+            const money = (cents: number) =>
+                (cents / 100).toLocaleString(undefined, {
+                    style: "currency",
+                    currency: intent.currencyCode || "USD",
+                });
+
             const changes = [
-                `Applies to · ${childLabel}`,
+                multi
+                    ? `Applies to · ${labels.length ? labels.join(", ") : `${selected.length} children`}`
+                    : `Applies to · ${childLabel}`,
+                multi && intent.amountCents != null ? `${money(intent.amountCents)} per child` : null,
+                multi ? `${selected.length} children selected` : null,
+                multi && totalCents != null ? `Total to create · ${money(totalCents)}` : null,
+                multi ? "Each child receives their own charge" : null,
                 intent.occursOn ? `Occurs ${intent.occursOn}` : null,
                 intent.billableOn ? `Billable ${intent.billableOn}` : null,
                 intent.lifecycleStatus === "scheduled" ? "Scheduled — a future billing context" : null,
             ].filter((v): v is string => Boolean(v));
-            return { summary: `${intent.templateKey} ${amount}`, changes };
+            return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
         } catch (err) {
             return {
                 summary: err instanceof Error ? err.message : "This charge cannot be previewed.",
@@ -366,17 +618,77 @@ const addCharge: RegisteredAction = {
         if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, CHARGE_WRITE_PERMISSION))) {
             return denied(correlationId, "Creating a charge", CHARGE_WRITE_PERMISSION, "charge_permission_required");
         }
+
+        /*
+         * ── ONE OPERATION, N INDEPENDENT OBLIGATIONS ─────────────────────────────────────────
+         *
+         * ── THE BATCH IDEMPOTENCY AUTHORITY IS THE ONE THAT ALREADY EXISTS ──
+         *
+         * There is deliberately NO new batch key, no batch table and no orchestration record.
+         * `writeTemplateDraftCharge` computes `tpl:<template>:<occurs_on>:<scope>` per charge, and
+         * `charges_resolution_key_unique` enforces it in the database, scoped to the billable
+         * source. Two children are two billable sources, so they are two keys — and re-running the
+         * identical operation converges on the SAME two charges rather than creating two more.
+         *
+         * That makes retry safe without inventing anything: a batch-level key would be a second
+         * idempotency authority answering a question the per-charge one already answers correctly,
+         * and the two would disagree the first time an operator retried a partially-succeeded batch
+         * with one child removed.
+         *
+         * ── WHY THERE IS NO ROLLBACK ──
+         *
+         * Because a rollback here would be a lie. Where the review boundary is absent these charges
+         * POST, and posted childcare money is immutable by database trigger — it is undone by a
+         * reversing entry, never by a DELETE. "Unwinding" a partially-succeeded batch would mean
+         * fabricating reversals for money the operator never saw, and the honest alternative is
+         * better: say exactly which children succeeded, leave those real, and let the retry
+         * converge. The operator is never lied to about what exists.
+         */
+        const childIds = childIdsFrom(payload, invocation.entityId, invocation.entityType);
+
+        /* The grain rule is checked BEFORE the first write, never after the second. */
+        const illegalGrain = await refuseIllegalSubjectGrain(
+            supabase as SupabaseClient, ctx.orgId, t(payload?.template_id), childIds, correlationId,
+        );
+        if (illegalGrain) return illegalGrain;
+
+        const subjects: Array<{ childId: string; subject: Extract<ChargeSubject, { ok: true }> }> = [];
         try {
-            const childId = childIdFrom(payload, invocation.entityId, invocation.entityType);
-            const subject = await resolveChargeSubject(
-                supabase as SupabaseClient,
-                ctx.orgId,
-                childId,
-                t(payload?.customer_id) || null,
-            );
-            if (!subject.ok) {
-                return { ok: false, correlationId, status: 409, error: subject.message };
+            /*
+             * EVERY SUBJECT RESOLVES BEFORE ANY CHARGE IS WRITTEN. A child that cannot be billed is
+             * a configuration answer, and discovering it halfway through leaves a family half
+             * billed for a trip the operator thought they had booked for two.
+             */
+            for (const childId of childIds.length ? childIds : [""]) {
+                const resolved = await resolveChargeSubject(
+                    supabase as SupabaseClient,
+                    ctx.orgId,
+                    childId,
+                    t(payload?.customer_id) || null,
+                );
+                if (!resolved.ok) {
+                    return { ok: false, correlationId, status: 409, error: resolved.message };
+                }
+                subjects.push({ childId, subject: resolved });
             }
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+
+        if (subjects.length > 1) {
+            return await executeMultiChildAdd({
+                supabase: supabase as SupabaseClient,
+                ctx,
+                invocation,
+                payload,
+                subjects,
+                correlationId,
+            });
+        }
+
+        try {
+            const childId = subjects[0]?.childId ?? "";
+            const subject = subjects[0]!.subject;
             const written = await writeTemplateDraftCharge(supabase as SupabaseClient, ctx.orgId, {
                 templateId: t(payload.template_id),
                 ...billableSourceForSubject(subject),
@@ -679,3 +991,13 @@ const reverseCharge: RegisteredAction = {
 };
 
 export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge, reverseCharge];
+
+/**
+ * Exposed for the multi-child operation's locks.
+ *
+ * The OPERATION — how many obligations one gesture produces and whose they are — is the thing worth
+ * testing, and it is not reachable through the registered action without standing up permission and
+ * subject resolution against a database. Those two have their own coverage; this exposes the
+ * orchestration between them and nothing else.
+ */
+export const __testables = { executeMultiChildAdd, childIdsFrom };

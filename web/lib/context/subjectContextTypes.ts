@@ -48,6 +48,33 @@ export type SubjectContextKind =
     | "placement"
     | "employment"
     /**
+     * The credentials a staff member holds, and what is required of them.
+     *
+     * A sibling of `employment`, not a section inside it. Both are true about the person, but they
+     * change on different clocks: employment changes when someone is hired, moved or ended; a
+     * qualification's standing changes by the passage of a date. An operator asking "is her CPR
+     * current" is asking a different question from "does she work here", and a context vocabulary
+     * that answered both with one entry would bury the expiring one.
+     */
+    | "qualifications"
+    /**
+     * When this staff member can work.
+     *
+     * A sibling of `employment` and `qualifications`, not a section of either.
+     * Whether Jane works here, what she is cleared to do, and when she can be asked
+     * are three facts about the same person that change independently.
+     */
+    | "availability"
+    /**
+     * Whether this staff member is operationally ready, and what needs attention.
+     *
+     * A sibling of the other three staff contexts, and the only one that owns no
+     * facts of its own — it reads the others. Listing it beside them is honest: an
+     * operator asking "can she work this week" is asking a different question from
+     * "what does she hold".
+     */
+    | "readiness"
+    /**
      * The record's OWN information — "Child", and eventually "Person".
      *
      * Listed BESIDE the other contexts rather than framing them. That is the whole correction: a
@@ -55,7 +82,18 @@ export type SubjectContextKind =
      * identity the frame and everything else an accessory. An operator opening Lennon is as likely
      * to want his schedule as his date of birth, and the chooser should not decide that for them.
      */
-    | "identity";
+    | "identity"
+    /**
+     * What this employment is paid, and since when.
+     *
+     * The only context in this union that depends on WHO IS ASKING. Every other one
+     * exists because the subject has the fact; this one also requires the caller to
+     * hold `staff.compensation.read`, and is absent otherwise — not disabled, not
+     * empty, absent. A greyed-out "Compensation" chip would tell an unauthorized
+     * operator that there is pay data and they are not trusted with it, which is a
+     * disclosure of a different kind.
+     */
+    | "compensation";
 
 /**
  * One configured Work View this subject ACTUALLY belongs to, and can actually compose in.

@@ -49,6 +49,19 @@ function mapCategoryRow(row: Record<string, unknown>): LocationProgramCategoryRo
 const CATEGORY_CACHE = processMap<string, { at: number; rows: LocationProgramCategoryRow[] }>("location_program_categories");
 const CATEGORY_TTL_MS = 90_000;
 
+/**
+ * Drop this org's categories so the next read is canonical.
+ *
+ * The TTL above was the ONLY freshness this cache had: a category published through the admin route
+ * stayed invisible to the provisioning answer for up to 90 seconds, and nothing said so. Waiting for
+ * a timer is not a correctness mechanism — it is a bounded wrong answer. Pass no org to clear every
+ * org, which is what a platform-scoped write requires.
+ */
+export function invalidateLocationProgramCategoriesCache(orgId?: string): void {
+    if (!orgId) { CATEGORY_CACHE.clear(); return; }
+    CATEGORY_CACHE.delete(orgId);
+}
+
 /** Server-side batch load for org location program categories (includes inactive for display). */
 export async function loadLocationProgramCategoriesForOrg(
     supabase: SupabaseClient,

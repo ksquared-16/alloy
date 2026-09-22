@@ -1,0 +1,126 @@
+[
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 to bill, 1 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 1,
+                "notDue": 1,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 145000,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "e0985b7e-c3e3-4f7d-b5c4-8d2557d5fcf7"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 to bill, 1 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 1,
+                "notDue": 1,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 145000,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "032864ec-1521-4f24-8616-6e5d9518c7d0"
+    }
+  }
+]

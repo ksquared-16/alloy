@@ -49,15 +49,24 @@ describe("the Manage Responsibility panel", () => {
     });
 
     /*
-     * THE GRAIN THE PANEL CLAIMS IS THE GRAIN IT WRITES.
+     * THE GRAIN THE PANEL CLAIMS IS THE GRAIN IT WRITES — now a CHOICE rather than a constant.
      *
-     * The operator is told "who contractually owes this ACCOUNT". The payload used to carry the
-     * child whose charge they happened to have open, which records a child-grain arrangement — so
-     * on a household with two children, the sibling's tuition stayed outside the arrangement the
-     * operator believed they had just made for the family.
+     * This once asserted `customer_member_id: null` outright, because the panel had silently been
+     * passing the child whose charge happened to be open: an operator believed they had arranged
+     * the family's responsibility and the sibling's tuition stayed outside it. Pinning it to null
+     * was the right fix for that defect and the wrong resting state, because the runtime prefers
+     * the MOST SPECIFIC arrangement and a child-grain one was therefore unauthorable.
+     *
+     * The rule that replaces it keeps the original guarantee: the grain is never an accident of
+     * which charge is open. It is the operator's stated scope, defaulting to the household.
      */
-    it("configures the account, not the child whose charge happens to be open", () => {
-        expect(panel, "an account-grain arrangement passes no child").toMatch(/customer_member_id: null/);
+    it("writes the scope the operator chose, defaulting to the household", () => {
+        expect(panel, "the scope is stated, not inherited from the open charge")
+            .toContain("arrangementMemberId: effectiveMemberId");
+        /* And both branches of that value are stated — the member select, or the scope choice. */
+        expect(panel).toMatch(/effectiveMemberId = administering[\s\S]{0,200}scope === "child" \? customerMemberId : null/);
+        expect(panel, "and the payload carries exactly that").toContain("customer_member_id: args.arrangementMemberId");
+        expect(panel, "household remains the default").toMatch(/useState<"household" \| "child">\("household"\)/);
     });
 
     /*

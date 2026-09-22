@@ -17,6 +17,7 @@
  * the operator is working on. That answer comes from the committed snapshot and nowhere else.
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -143,6 +144,22 @@ export type OperationalSubject = {
      * the answer did not resolve it (the cards reserve; the drawer VM fills them).
      */
     subjectIdentityTruth: SubjectIdentityTruth | null;
+/**
+ * THE AUTHORITATIVE PARTICIPATION, resolved once on the server and carried to the browser.
+ *
+ * IDENTITY, NOT PERMISSION. It is the member id and the OCM row that names it, and nothing else —
+ * no profile, no photo, no health facts, no authorization answer. Every producer that consumes it
+ * still resolves its own grants at request time.
+ *
+ * It exists because the server already knew this and the browser did not. Measured on deployed
+ * 41c67ec17: the document's producers ran Attendance (141ms) and Health (470ms) and put their
+ * answers in `operationalProjection`, but the browser decides card readiness from its OWN context,
+ * which had no participantScope — so those cards stayed reserved and remounted only when the
+ * drawer settled, ~3.5s later, to learn what the answer already carried.
+ */
+    resolvedParticipant: { participationId: string; customerMemberId: string } | null;
+    /** The answer's resolved tour signal; null means not established, not "no tour". */
+    resolvedTour: OperationalContextSignals["tour"] | null;
     /**
      * A — the published Summary composition for the committed scope, carried by the answer so the
      * committed panel presents the PUBLISHED composition immediately (no default-doc first frame, no
@@ -156,6 +173,8 @@ const EMPTY: OperationalSubject = {
     subjectId: null, attentionKind: "operational", entityType: null, subjectGrain: null, identitySeed: null, situation: null,
     decision: null, action: null, actionAbsence: null,
     stageWorkRuntime: null, operationalProjection: null, workIntentRuntime: null, subjectIdentityTruth: null,
+    resolvedParticipant: null,
+    resolvedTour: null,
     summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
@@ -173,6 +192,8 @@ export function OperationalSubjectProvider({
     operationalProjection,
     workIntentRuntime,
     subjectIdentityTruth,
+    resolvedParticipant,
+    resolvedTour,
     summaryDocSeed,
     subjectGrain,
     children,
@@ -190,6 +211,8 @@ export function OperationalSubjectProvider({
     operationalProjection?: FocusPanelOperationalProjection | null;
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
     subjectIdentityTruth?: SubjectIdentityTruth | null;
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    resolvedTour?: OperationalContextSignals["tour"] | null;
     summaryDocSeed?: FocusPanelSummaryDocProjection | null;
     children: ReactNode;
 }) {
@@ -212,9 +235,11 @@ export function OperationalSubjectProvider({
             operationalProjection: operationalProjection ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
             subjectIdentityTruth: subjectIdentityTruth ?? null,
+            resolvedParticipant: resolvedParticipant ?? null,
+            resolvedTour: resolvedTour ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, resolvedParticipant, resolvedTour, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

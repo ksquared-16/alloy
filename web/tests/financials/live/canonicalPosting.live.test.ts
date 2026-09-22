@@ -25,6 +25,8 @@ import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamily
 import { createCardCollection } from "@/lib/financials/payments/collectionAttempt";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
+import { ensureAccountingPeriodCovers, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
+import { runHex } from "./certificationPeriod";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -71,6 +73,19 @@ let connectedAccount = "";
 function signed(body: string): string {
     const t = Math.floor(Date.now() / 1000);
     return `t=${t},v1=${createHmac("sha256", whsec!).update(`${t}.${body}`).digest("hex")}`;
+}
+
+/*
+ * EVENT IDS THIS RUN OWNS.
+ *
+ * `provider_event_id` is unique per processor, and these cases deliberately reuse one id to prove
+ * delivery idempotency. Fixed literals made that identity permanent: an id left behind by an earlier
+ * run made the FIRST delivery of the next run a duplicate, and the assertion "expected 'duplicate'
+ * to be 'applied'" then reported the product declining money it had never been told about. The
+ * dedupe under test is within a run; the identity has to be too.
+ */
+function runEventId(name: string): string {
+    return `evt_${name}_${runHex()}`;
 }
 
 function successEvent(piId: string, amountCents: number, opts: { id?: string; currency?: string } = {}): string {
@@ -151,16 +166,29 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
     beforeAll(async () => {
         const client = supabase!;
         await clearAll(client);
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", {
-            headers: { Authorization: `Bearer ${secret}` },
-        });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        /*
+         * A REPORTING PERIOD FOR THE MONEY THIS RUN MAKES.
+         *
+         * The journal refuses an entry it cannot attribute, and that refusal is correct — money
+         * posts, only its explanation is skipped. So a suite that asserts the journal has to give
+         * the tenant a period covering today, which is an environment fact and not a product one.
+         * Measured 2026-09-19: the active calendar's last 2026 period ended on the 16th, and every
+         * "journals exactly once" assertion went red while every money assertion passed.
+         */
+        await ensureAccountingPeriodCovers(client, ORG, new Date().toISOString().slice(0, 10));
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
             readiness: readinessFromStripeAccount(acct as { charges_enabled?: boolean }),
             created_by: ACTOR, updated_by: ACTOR,
         });
+        /*
+         * An upsert that collides on the active-merchant index does NOTHING, so a readiness value
+         * an earlier run left behind survived a setup that looked like it reset one. The provider's
+         * own answer is written explicitly.
+         */
+        await restoreMerchantReadiness(client, ORG, readinessFromStripeAccount(acct as { charges_enabled?: boolean }));
     });
 
     afterAll(async () => { await clearAll(supabase!); });
@@ -215,7 +243,7 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
         const chargeId = await postCharge(client, 45_000);
         const created = await collect(client, chargeId, 45_000);
 
-        const firstBody = successEvent(created.providerTransactionId, 45_000, { id: "evt_f_dup_1" });
+        const firstBody = successEvent(created.providerTransactionId, 45_000, { id: runEventId("f_dup_1") });
         expect((await post(firstBody)).outcome).toBe("applied");
 
         // Same event again — Slice E's event idempotency.
@@ -223,7 +251,7 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
 
         // A DIFFERENT event id describing the SAME succeeded PaymentIntent. Event dedupe cannot stop
         // this one; only financial idempotency anchored on the attempt can.
-        const secondBody = successEvent(created.providerTransactionId, 45_000, { id: "evt_f_dup_2" });
+        const secondBody = successEvent(created.providerTransactionId, 45_000, { id: runEventId("f_dup_2") });
         const second = await post(secondBody);
         // Correctly a duplicate: the attempt is already succeeded AND already carries its receipt,
         // so there is nothing left to recognise. The guarantee under test is the receipt count
@@ -270,7 +298,7 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
         expect((await readChargeBalance(client, ORG, chargeId)).outstandingCents).toBe(52_000);
 
         // The same provider truth, replayed. It must RECOGNISE rather than decline as done.
-        const recovered = await post(successEvent(created.providerTransactionId, 52_000, { id: "evt_f_recover_1" }));
+        const recovered = await post(successEvent(created.providerTransactionId, 52_000, { id: runEventId("f_recover_1") }));
         expect(recovered.outcome, recovered.detail).toBe("applied");
         expect(recovered.detail).toMatch(/posted canonical payment/);
 
@@ -287,7 +315,7 @@ describeLive("Slice F — provider-confirmed success becomes canonical money, on
         expect((attempts ?? []).length, "recovery must not create a second collection").toBe(1);
 
         // Replaying again is now an ordinary duplicate.
-        const again = await post(successEvent(created.providerTransactionId, 52_000, { id: "evt_f_recover_2" }));
+        const again = await post(successEvent(created.providerTransactionId, 52_000, { id: runEventId("f_recover_2") }));
         expect(again.outcome).toBe("duplicate");
         const { data: after } = await client.from("payments").select("id")
             .eq("org_id", ORG).eq("processor_transaction_id", created.providerTransactionId);

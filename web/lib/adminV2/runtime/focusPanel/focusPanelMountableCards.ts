@@ -47,7 +47,31 @@ export type MountableCardSpec = {
 /** The answer named the participant this surface is about — enough to address a card-owned read. */
 export const PARTICIPANT_IDENTITY_TRUTH_KEYS = ["child.customer_member_id"] as const;
 
+/**
+ * IS THE PARTICIPANT KNOWN? — asked of both places the answer legitimately lives.
+ *
+ * This read only `child.customer_member_id` from truth, which is how a CHILD-grain answer names
+ * its subject. A family-grain opportunity never carries that key, so on the canonical shape the
+ * predicate was always false and Attendance and Health reserved until the drawer settled.
+ *
+ * Measured on deployed ad4f0f6d7, after the participant was transported to the browser: the
+ * document had resolved the participant, the browser had it in `participantScope`, the producers
+ * had already computed both cards' content — and both cells stayed reserved for a further ~3s,
+ * because the predicate that decides mountability never consulted the scope. The transport was
+ * correct and inert.
+ *
+ * The scope IS the authoritative answer to this question: it comes from the one OCM-backed
+ * resolver, and it is null unless exactly one member was resolved. So the predicate consults it
+ * directly rather than a `child.*` truth key being fabricated to satisfy it — that would put a
+ * child-grain binding on a family-grain subject, which every other reader of that key would then
+ * see.
+ *
+ * The truth-key path is KEPT, not replaced: a child-grain frame is told its subject directly and
+ * has no scope to resolve. Either representation answers the same question; neither invents one.
+ */
 function hasParticipantIdentity(context: OperationalContext): boolean {
+    const scoped = context.participantScope?.customerMemberId;
+    if (typeof scoped === "string" && scoped.trim()) return true;
     return hasAnyTruthKey(context, PARTICIPANT_IDENTITY_TRUTH_KEYS);
 }
 
@@ -65,12 +89,80 @@ function hasHouseholdIdentity(context: OperationalContext): boolean {
     return hasFinancialSubject(context);
 }
 
+/**
+ * PARTICIPATION RESOLVED, WITH OR WITHOUT A PARTICIPANT — the question the two scoped cards
+ * actually need answered.
+ *
+ * `hasParticipantIdentity` answers "can this card ADDRESS its own read". That is the right question
+ * for issuing a request and the WRONG one for mounting, and the difference was measured:
+ *
+ *   On a family with five children there is no sole participant, so the predicate was false, the
+ *   grid reserved the cell, and Attendance rendered "Resolving attendance…". It stayed that way
+ *   until the DRAWER VM landed ~4.4s later, at which point the settled producer — which admits
+ *   every card unconditionally — mounted it and it rendered "Select a child to see their day."
+ *
+ *   Measured on deployed a1ecf609 across four cold samples, that transition was the ONLY
+ *   authoritative change in WU-09 at drawer arrival, and semantic finality followed it by ~40ms.
+ *   The drawer supplied no truth for it. It only changed which producer was in charge.
+ *
+ * "There is no sole participant" IS the answer, and the answer already knows it:
+ * `composeProvisioningAnswerForRoute` resolves participation on EVERY path that has a subject —
+ * from the speculative early run when it matches, otherwise by a canonical await — and the panel
+ * carries `resolvedParticipant` and `summaryDocSeed` from the SAME answer object. So by the time
+ * this predicate runs, a null scope means RESOLVED-AND-NONE, never NOT-YET-RESOLVED.
+ *
+ * That distinction is the whole point. Collapsing it is how a known-empty gets presented as
+ * pending, and the cards then wait on a payload the collapsed census proved they never read.
+ *
+ * The card itself is already correct for both branches: it renders the honest empty state when it
+ * has no member and ISSUES NO REQUEST, so mounting without a participant cannot start a doomed
+ * read or state an authoritative-sounding empty about a specific child.
+ */
+function hasResolvedParticipation(context: OperationalContext): boolean {
+    // A participant that IS present is trivially resolved.
+    if (hasParticipantIdentity(context)) return true;
+    /*
+     * Otherwise: resolved-and-none. Guarded on the subject actually existing, so a context built
+     * before the answer — which the registry's own truth-only fixture exercises — still reserves
+     * rather than claiming an empty answer it has not got.
+     */
+    return hasAnyTruthKey(context, SUBJECT_IDENTITY_TRUTH_KEYS);
+}
+
 /** Present means a non-blank value. A key carrying `""` is an absent identity, not an empty one. */
 function hasAnyTruthKey(context: OperationalContext, keys: readonly string[]): boolean {
     return keys.some((key) => {
         const value = context.truth[key];
         return value != null && String(value).trim() !== "";
     });
+}
+
+
+/** The subject's own id, as the commit-critical context states it (`truth.id`). */
+export const SUBJECT_IDENTITY_TRUTH_KEYS = ["id"] as const;
+
+/**
+ * Billing Preview addresses an OPPORTUNITY, and it is the only thing it needs.
+ *
+ * `AssignmentTuitionCard` reads exactly `context.subject.type` and `context.subject.id`, then issues
+ * its own authenticated `loadFinancialConfig(opportunityId)`. It consumes no children, entity,
+ * shell, scheduling or activity output — so the drawer VM it currently waits for supplies it
+ * nothing. Measured: its dependency on settlement is accidental, caused solely by its absence here.
+ *
+ * THE GRAIN NARROWING IS NOT OPTIONAL. The card resolves `opportunityId` only when the subject IS an
+ * opportunity; on any other grain it holds null, never issues the request, and falls through to
+ * "No assignment on this record to price." Admitting it there would mount a card that cannot load
+ * and would state an authoritative-sounding empty as its first frame. That state exists today at
+ * settlement; mounting earlier must not make it arrive sooner or last longer.
+ *
+ * A context with no subject at all is admitted: the registry guard exercises predicates against a
+ * truth-only fixture by design, and the narrowing is a REFUSAL of a known-wrong grain, not a second
+ * identity requirement.
+ */
+function hasOpportunitySubjectIdentity(context: OperationalContext): boolean {
+    if (!hasAnyTruthKey(context, SUBJECT_IDENTITY_TRUTH_KEYS)) return false;
+    const subjectType = (context as { subject?: { type?: unknown } }).subject?.type;
+    return subjectType == null || subjectType === "opportunity";
 }
 
 export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
@@ -91,13 +183,13 @@ export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
     {
         key: "attendance",
         identityTruthKeys: PARTICIPANT_IDENTITY_TRUTH_KEYS,
-        identityKnowable: hasParticipantIdentity,
+        identityKnowable: hasResolvedParticipation,
         build: () => buildSelfFetchingCardShell("attendance", focusPanelCardCatalogLabel("attendance")),
     },
     {
         key: "health_safety",
         identityTruthKeys: PARTICIPANT_IDENTITY_TRUTH_KEYS,
-        identityKnowable: hasParticipantIdentity,
+        identityKnowable: hasResolvedParticipation,
         build: () => buildSelfFetchingCardShell("health_safety", focusPanelCardCatalogLabel("health_safety")),
     },
     /*
@@ -113,5 +205,16 @@ export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
         identityTruthKeys: HOUSEHOLD_IDENTITY_TRUTH_KEYS,
         identityKnowable: hasHouseholdIdentity,
         build: () => buildSelfFetchingCardShell("financials", focusPanelCardCatalogLabel("financials")),
+    },
+    /*
+     * Billing Preview — identity only, exactly like the three above. It mounts as its existing
+     * self-fetching shell and its own request begins; the card stays honestly pending until that
+     * request answers. Nothing about billing content is asserted here.
+     */
+    {
+        key: "billing_preview",
+        identityTruthKeys: SUBJECT_IDENTITY_TRUTH_KEYS,
+        identityKnowable: hasOpportunitySubjectIdentity,
+        build: () => buildSelfFetchingCardShell("billing_preview", focusPanelCardCatalogLabel("billing_preview")),
     },
 ];

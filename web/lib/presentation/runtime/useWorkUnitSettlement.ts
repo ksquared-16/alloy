@@ -42,6 +42,12 @@ import {
     workViewTotalKey,
     type WorkViewTotalTarget,
 } from "./useWorkViewTotals";
+import {
+    announceWorkViewTotalsOwner,
+    buildPublishedWorkViewTotalsSeed,
+    clearWorkViewTotalsPublication,
+    publishWorkViewTotals,
+} from "./workViewTotalsPublication";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { isKnownOipMetricKey } from "@/lib/metrics/registry";
@@ -126,7 +132,24 @@ export function useWorkUnitSettlement(
         () => (kpiKeySig ? (kpiKeySig.split("|") as OipMetricKey[]) : []),
         [kpiKeySig],
     );
-    const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({ siteId, workUnitId, keys: kpiKeys });
+    /*
+     * The document resolved these during its own composition, so the header KPI is no longer a
+     * post-hydration request. The seed states the scope it was resolved for and the hook ignores
+     * it unless that matches exactly — an org-wide seed must not answer for a site-filtered
+     * operator. Absent or `forbidden`/`unavailable` seeds fall through to the existing fetch.
+     */
+    const kpiSeed = useMemo(() => {
+        // `settleable` is a union; only the operational answer carries a seed.
+        const s = settleable && "headerKpis" in settleable ? settleable.headerKpis : null;
+        if (!s || s.status !== "ok" || !s.scopeKey) return null;
+        return { scopeKey: s.scopeKey, values: s.values };
+    }, [settleable]);
+    const { resolved: kpiValues, settled: kpiSettled } = useOperationalAnswers({
+        siteId,
+        workUnitId,
+        keys: kpiKeys,
+        seed: kpiSeed,
+    });
 
     // ── WORK VIEW COUNTS + QUEUE TOTAL (U-S6). Targets come STRAIGHT from D1's resolved locators. ──
     const targets = useMemo<WorkViewTotalTarget[]>(() => {
@@ -137,12 +160,94 @@ export function useWorkUnitSettlement(
             baseQueueKey: t.baseQueueKey,
         }));
     }, [locators]);
+    /*
+     * The Work View counts, resolved by the document during its own composition — the same shape
+     * the header KPI seed above already uses, and for the same reason.
+     *
+     * These counts are the product's completion owner. Measured deployed, this hook's request
+     * starts ~57ms AFTER the document lands, costs ~1.6s, and WU-03's final authoritative mutation
+     * follows ~11ms later, so FIRST_ORDER_VISIBLE_COMPLETE is essentially when that second trip
+     * returns. A matching seed removes the trip entirely.
+     *
+     * The seed states the identity it was resolved for and is ignored unless all of it matches —
+     * org, host work unit, site scope and the configured view signature. An unfiltered seed must
+     * never answer for a site-filtered operator, and absent or `unavailable` falls through to the
+     * canonical fetch exactly as before.
+     */
+    const workViewTotalsSeed = useMemo(() => {
+        // `settleable` is a union; the seed rides on the answer, so read it defensively.
+        return settleable && "workViewTotalsSeed" in settleable
+            ? (settleable.workViewTotalsSeed ?? null)
+            : null;
+    }, [settleable]);
+    /*
+     * CLAIM OWNERSHIP OF THIS ROUTE'S COUNTS IN RENDER PHASE, BEFORE ANY EFFECT RUNS.
+     *
+     * The persistent nav needs the same counts and must not ask for them again. It cannot read
+     * them out of the provisioning cache — that entry is consume-once and THIS surface has always
+     * already consumed it by the time the nav (which sits behind Suspense) commits. Measured
+     * deployed: the nav's peek hit 0 of 6.
+     *
+     * The same ordering is what makes this announcement work. Because this owner reliably commits
+     * first, declaring "an owner is here and will publish" during RENDER guarantees the nav sees
+     * it, so the nav can wait for a real answer instead of falling back — and, on a route with no
+     * owner at all, sees nothing and falls back immediately. No timeout, and no pending state that
+     * can strand the badges.
+     */
+    announceWorkViewTotalsOwner();
+
     const totalsState = useWorkViewTotalsState({
+        ownerLabel: "work-unit-settlement",
         targets,
         selectedSiteId: siteId,
         enabled: targets.length > 0,
         refreshToken: options?.refreshToken,
+        documentSeed: workViewTotalsSeed,
+        seedOrgId: settleable?.orgId ?? null,
+        seedHostWorkUnitId: workUnitId,
     });
+
+    const settlementOrgId = settleable?.orgId ?? null;
+    /*
+     * PUBLISH WHAT THIS OWNER RESOLVED — from whichever path produced it.
+     *
+     * Publishing only the document seed would leave the nav to fetch whenever the seed did not
+     * match, which is two logical fallback owners for one question. Publishing the RESOLVED totals
+     * means the canonical evaluator's single fetch, when it happens, IS the one canonical
+     * fallback, and the nav still issues nothing.
+     *
+     * Shaped as the existing `WorkViewTotalsSeed` so the nav validates it through the EXISTING
+     * matcher: no new semantics, no predicate re-implementation, and no authorization verdict
+     * travelling with the counts. `known: false` carries UNKNOWN across intact — a missing count
+     * must never arrive as a confident zero.
+     */
+    useEffect(() => {
+        if (!totalsState.settled) return;
+        if (targets.length === 0 || !settlementOrgId || !workUnitId) {
+            publishWorkViewTotals({
+                seed: null,
+                orgId: settlementOrgId,
+                hostWorkUnitId: workUnitId ?? null,
+            });
+            return;
+        }
+        publishWorkViewTotals({
+            seed: buildPublishedWorkViewTotalsSeed({
+                targets,
+                totals: totalsState.totals,
+                keyOf: workViewTotalKey,
+                orgId: settlementOrgId,
+                hostWorkUnitId: workUnitId,
+                selectedSiteId: siteId ?? null,
+            }),
+            orgId: settlementOrgId,
+            hostWorkUnitId: workUnitId,
+        });
+    }, [totalsState.settled, totalsState.totals, targets, settlementOrgId, workUnitId, siteId]);
+
+    // Leaving the route drops the claim, so an observer that runs before the next owner announces
+    // sees no owner and falls back rather than reusing this work unit's counts.
+    useEffect(() => clearWorkViewTotalsPublication, []);
 
     // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.
     const viewCounts = useMemo<Map<string, number | null>>(() => {

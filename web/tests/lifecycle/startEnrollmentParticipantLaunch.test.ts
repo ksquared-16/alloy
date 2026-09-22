@@ -12,6 +12,7 @@
  * weaker statement than the product makes.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, expect, it } from "vitest";
 
 import { startEnrollment } from "@/lib/records/startEnrollmentService";
@@ -314,7 +315,13 @@ function client(db: Record<string, Row[]>) {
         };
         return q;
     };
-    return { from } as never;
+    const rpc = (name: string, params: Record<string, unknown>) => {
+        // Creation initializes maintained facts inside its own transaction now.
+        const res = participationLifecycleRpcFake(name, params, (db.process_instances ?? []) as never);
+        if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+        return Promise.resolve(res);
+    };
+    return { from, rpc } as never;
 }
 
 async function startWithConfig(payload: unknown) {

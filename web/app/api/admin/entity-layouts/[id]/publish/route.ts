@@ -18,6 +18,7 @@ import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getLayoutById, publishLayout } from "@/lib/layout/entityLayoutsRepo";
 import { invalidateFocusPanelSummaryConfigRead } from "@/lib/adminV2/runtime/focusPanel/focusPanelSummaryConfigInvalidation";
+import { validateFocusPanelPublicationIntegrity } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublicationIntegrity";
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     if (!isLayoutV2ConfigEnabledServer()) {
@@ -45,6 +46,24 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         const parsed = parseLayoutDoc(record.doc, { inferSurfaceKey: true });
         if (!parsed.ok) {
             return NextResponse.json({ error: "Cannot publish invalid doc", details: parsed.errors }, { status: 400 });
+        }
+
+        /*
+         * RENDERABLE ALSO MEANS SELF-CONSISTENT.
+         *
+         * A Focus Panel Summary doc carries two records of one composition — `sections` and
+         * `metadata.focusPanelLayout` — and the runtime renders the second. A card authored visible
+         * in the first and absent from the second passes every structural check above and is then
+         * drawn by nothing, with no error anywhere. `billing_preview` sat in exactly that state for
+         * two published versions. Refusing the publication is what makes the document's own
+         * statement about itself true.
+         */
+        const integrity = validateFocusPanelPublicationIntegrity(parsed.doc);
+        if (!integrity.ok) {
+            return NextResponse.json(
+                { error: "Cannot publish a self-contradictory layout", details: integrity.errors },
+                { status: 400 },
+            );
         }
 
         const published = await publishLayout(supabase, id);

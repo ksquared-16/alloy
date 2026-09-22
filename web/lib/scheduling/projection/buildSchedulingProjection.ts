@@ -44,7 +44,7 @@ import type {
     SchedulingCalculationMeta,
     SchedulingProjection,
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
-import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
+import { resolveAssignmentTimes, uniformDailyInterval, type AssignmentTime } from "@/lib/assignmentTime/resolveAssignmentTime";
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -54,6 +54,19 @@ export function formatWeekdays(weekdays: number[]): string {
         .sort((a, b) => a - b)
         .map((d) => WEEKDAY_NAMES[d] ?? String(d))
         .join(", ");
+}
+
+/**
+ * The projection's single arrive/depart pair, from an Assignment's intervals. Null for
+ * unknown hours, a split day, or a week whose days differ — the projection cannot
+ * express those, and inventing one pair would misstate all three.
+ */
+function uniformDailyIntervalAsHours(
+    time: AssignmentTime | null
+): { arrive: string; depart: string } | null {
+    if (!time) return null;
+    const uniform = uniformDailyInterval(time);
+    return uniform ? { arrive: uniform.startTime, depart: uniform.endTime } : null;
 }
 
 const EMPTY_TYPE: AssignmentTypePresentation = {
@@ -682,12 +695,17 @@ export async function loadSchedulingProjectionForStaff(
         ),
     ]);
 
+    // Hours come from each Assignment's own intervals. The pattern still supplies
+    // recurrence and its label, but it no longer decides anybody's day.
+    const staffAssignmentTimes = await resolveAssignmentTimes(supabase, {
+        orgId,
+        assignmentIds: assignmentRows.map((r) => r.id),
+    });
+
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
         const pattern = patterns.get(row.schedule_pattern_id) ?? null;
-        const hours = readPatternDefaultHours(
-            (pattern?.metadata ?? null) as Record<string, unknown> | null
-        );
+        const hours = uniformDailyIntervalAsHours(staffAssignmentTimes.get(row.id) ?? null);
         // Assignment-owned room only. There is no placement fallback for staff, because a placement
         // is a child's occupancy record — a staff row states its own room or it has none.
         const roomId = row.room_location_id ?? null;
@@ -1013,6 +1031,13 @@ export async function loadSchedulingProjectionsForChildren(
     const siteName =
         params.siteName !== undefined ? params.siteName : (roomLabels.get(siteLocationId) ?? null);
 
+    // Assignment-owned hours for every row in the batch, resolved HERE because the
+    // stitch below is pure and must not reach the database per child.
+    const assignmentTimesById = await resolveAssignmentTimes(supabase, {
+        orgId,
+        assignmentIds: [...assignmentsByMember.values()].flat().map((r) => r.id),
+    });
+
     // ── Stitch. No I/O below this line: every child is built from the rows above by the same pure
     //    path the single-child owner has always used.
     for (const memberId of memberIds) {
@@ -1035,6 +1060,7 @@ export async function loadSchedulingProjectionsForChildren(
             programLabels,
             proposedMeta: processMetaByMember.get(memberId) ?? null,
             proposedPatternByType,
+            assignmentTimesById,
         });
         out.set(memberId, projection);
     }
@@ -1064,6 +1090,8 @@ type StitchChildSchedulingParams = {
     programLabels: Map<string, string | null>;
     proposedMeta: ProposedDraftMeta | null;
     proposedPatternByType: Map<string, SchedulePatternRow>;
+    /** Assignment-owned hours, resolved by the caller. Never derived from a pattern. */
+    assignmentTimesById: Map<string, AssignmentTime>;
 };
 
 function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): SchedulingProjection {
@@ -1096,7 +1124,7 @@ function stitchChildSchedulingProjection(p: StitchChildSchedulingParams): Schedu
     const assignments: AssignmentInput[] = [];
     for (const row of p.assignmentRows) {
         const pattern = p.patternsById.get(row.schedule_pattern_id) ?? null;
-        const hours = readPatternDefaultHours((pattern?.metadata ?? null) as Record<string, unknown> | null);
+        const hours = uniformDailyIntervalAsHours(p.assignmentTimesById.get(row.id) ?? null);
         const placement = placementForAssignment(p.placements, row);
         const roomId = row.room_location_id ?? placement?.room_location_id ?? null;
         const programId = row.program_category_id ?? placement?.program_category_id ?? null;

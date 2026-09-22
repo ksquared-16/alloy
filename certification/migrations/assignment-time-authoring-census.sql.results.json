@@ -1,0 +1,40 @@
+{
+  "trusted_host_action_id": "tha_03da6f34e0f839",
+  "query_hash": "a40fabbe3d93abe063ff27bd05bc3ae695ca64d79bbaba46cc0e0415cc632492",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T14:38:44.629Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_03da6f34e0f839",
+    "query_hash": "a40fabbe3d93abe063ff27bd05bc3ae695ca64d79bbaba46cc0e0415cc632492",
+    "authorization_id": "grnt_6c033e35da6c4a58",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T14:38:46.305Z",
+    "question_ids": [
+      "assignment_time_authoring"
+    ],
+    "questions": {
+      "assignment_time_authoring": {
+        "question_id": "assignment_time_authoring",
+        "row_count": null,
+        "rows": [
+          {
+            "function_present": 1,
+            "function_replaces_week": 1,
+            "ledger_has_version": 1,
+            "ledger_head": "20261014120000",
+            "child_assignments_with_known_hours": 0,
+            "observed_at": "2026-09-22 14:38:46.115514+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

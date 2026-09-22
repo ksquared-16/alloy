@@ -89,11 +89,27 @@ describe("Batch 0 — Financials configuration surfaces", () => {
 });
 
 describe("Batch 0 — Locations operational rule sections", () => {
-    it("Locations page no longer exposes Operational Rules as a section-first destination", () => {
+    it("Locations exposes Operational Rules as a CONCERN, not a section-first destination", () => {
+        // SUPERSEDED, deliberately. Commit 2c6f0f261 made this workspace
+        // object-centric and, in the same commit, flipped this assertion to pin
+        // the panel as unmounted. The word that mattered was "section-first": the
+        // IA changed, the capability did not — the sibling assertion below, that
+        // the panel exposes all four rule families, was left untouched and has
+        // passed ever since.
+        //
+        // What the migration never did was re-home the concern, so canonical
+        // capacity, ratio, operating-window and schedule authoring had NO operator
+        // path at all and could only be reached by a direct API call. Slice 12
+        // restores it through the concern registry.
+        //
+        // The still-valid half of the original assertion is preserved: the
+        // section-first mechanism must stay gone.
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(page).not.toContain("LocationOperationalRulesPanel");
         expect(page).not.toContain('section === "operational_rules"');
         expect(page).toContain("LOCATION_WORKSPACE_TABS");
+        // And the concern is now genuinely reachable.
+        expect(page).toContain("LocationOperationalRulesPanel");
+        expect(page).toMatch(/activeTab === "operational-rules"/);
     });
 
     it("operational rules panel exposes capacity, ratio, operating windows, schedule rules + resolved preview", () => {

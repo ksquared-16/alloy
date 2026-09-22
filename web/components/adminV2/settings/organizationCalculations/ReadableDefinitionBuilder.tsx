@@ -34,6 +34,7 @@ import {
 } from "@/lib/organizationCalculations/pivotBuilder";
 import type { ApprovedInputRef } from "@/lib/organizationCalculations/catalog";
 import { catalogLabelForRef } from "@/lib/organizationCalculations/catalog";
+import { buildRoomPickerOptions } from "@/lib/locations/roomPickerOptions";
 
 type RoomOption = { id: string; label: string; siteLabel: string };
 
@@ -155,15 +156,7 @@ export default function ReadableDefinitionBuilder({
                 };
                 if (locRes.ok) {
                     const locs = locJson.locations ?? [];
-                    const byId = new Map(locs.map((l) => [l.id, l]));
-                    const opts = locs
-                        .filter((l) => String(l.location_type ?? "").toLowerCase() === "unit")
-                        .map((l) => ({
-                            id: l.id,
-                            label: String(l.label ?? "").trim() || "Untitled room",
-                            siteLabel:
-                                String(byId.get(l.parent_location_id ?? "")?.label ?? "").trim() || "Site",
-                        }));
+                    const opts = buildRoomPickerOptions(locs);
                     setRooms(opts);
                     if (opts[0]) setRoomId(opts[0].id);
                 }

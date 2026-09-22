@@ -1,0 +1,40 @@
+{
+  "build": "1b952fc7a",
+  "date": "2027-04-01",
+  "steps": [
+    {
+      "name": "E_mounted_after_callout",
+      "marker": true,
+      "markerText": "Unavailable — called_out",
+      "explanation": [
+        "Expected children: 0",
+        "1 expected child has no recorded hours and is counted in no segment",
+        "Required staff: 0",
+        "Baseline staff: Certified Active-Located",
+        "Planned staff: Certified Active-Located",
+        "Certified Active-Located is planned here but unavailable during this interval",
+        "No children expected in this interval",
+        "Nothing has been observed for this date yet"
+      ]
+    },
+    {
+      "name": "F_replacement_candidates",
+      "candidates": [
+        {
+          "availability": "available",
+          "conflict": "true",
+          "text": "Plan Certified Active-Bare hereAvailablealready planned at the site this interva"
+        },
+        {
+          "availability": "unavailable",
+          "conflict": "true",
+          "text": "Plan Certified Starting-Soon hereUnavailable — slice6_qa_unavailablealready plan"
+        }
+      ]
+    },
+    {
+      "name": "console_errors",
+      "count": 0
+    }
+  ]
+}

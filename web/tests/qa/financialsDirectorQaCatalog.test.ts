@@ -8,7 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+    CATALOG_VERSION,
+    CORE_DEFERRALS,
     SCENARIOS,
+    SCENARIO_PROGRAM,
     WALKTHROUGH_SCENARIOS,
     scenarioByKey,
     MONEY_INVARIANTS,
@@ -105,11 +108,37 @@ describe("the Director QA scenario catalog", () => {
             s.doThis.join(" "),
             "a database query must still be refused as evidence, in the scenario itself",
         ).toMatch(/database/i);
+        /*
+         * ── THE DOCTRINE MOVED, AND THIS IS WHAT REPLACED IT ─────────────────────────────────
+         *
+         * This lock previously required the scenario to RECORD that opening and closing a period
+         * had no governed action. That was the honest limit for as long as it was true. Financials
+         * 11B built the lifecycle half — `billing.adopt_accounting_calendar` and
+         * `billing.close_accounting_period`, both behind `fin.write` — so the old assertion now
+         * requires the catalog to tell a tester a falsehood.
+         *
+         * What the lock protects is unchanged: a walkthrough must WALK what exists and RECORD what
+         * does not, and must never accept a database query as evidence. So the honesty requirement
+         * moves to the limit that is still real — a closed period cannot be reopened — and the
+         * capability that now exists must actually be walked, preview included.
+         */
         expect(
             s.doThis.join(" "),
-            "and the missing lifecycle action must be recorded rather than worked around",
-        ).toMatch(/no control to open or close a period/i);
-        expect(s.dispositionReason, "the reason states which half is missing").toMatch(/governed action/i);
+            "the lifecycle that now exists must be walked, not described",
+        ).toMatch(/close the earliest open period/i);
+        expect(
+            s.doThis.join(" "),
+            "closing states what it will do before it does it",
+        ).toMatch(/preview/i);
+        expect(
+            s.doThis.join(" "),
+            "and the limit that is still real is recorded rather than worked around",
+        ).toMatch(/cannot be REOPENED/i);
+        expect(
+            s.doThis.join(" "),
+            "a closed period defers rather than refusing, and the tester is asked to see it",
+        ).toMatch(/defers/i);
+        expect(s.dispositionReason, "the reason names both halves and what is still missing").toMatch(/Reopening is NOT supported/i);
 
         /* The two periods must never collapse into one scenario or one disposition. */
         expect(scenarioByKey("billing_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
@@ -139,5 +168,91 @@ describe("the Director QA scenario catalog", () => {
                 /takePaymentCard|takePaymentAch|achAvailable|merchant|provider configuration/i,
             );
         }
+    });
+});
+
+/**
+ * THE PROGRAM AXIS — added at the Core freeze, and locked for the same reason the keys are.
+ *
+ * A Core catalog whose Payments scenarios look runnable will be planned against, and the plan will
+ * be wrong. A scenario with no classification at all is worse: it is neither in Core's scope nor
+ * out of it, and nobody notices until someone tries to run it.
+ */
+describe("the program each scenario belongs to", () => {
+    it("classifies every scenario, and classifies nothing that does not exist", () => {
+        for (const s of SCENARIOS) {
+            expect(SCENARIO_PROGRAM[s.key], `${s.key} has no program classification`).toBeTruthy();
+        }
+        for (const key of Object.keys(SCENARIO_PROGRAM)) {
+            expect(scenarioByKey(key), `SCENARIO_PROGRAM names ${key}, which is not a scenario`).toBeTruthy();
+        }
+    });
+
+    /*
+     * THE PAYMENT PRIMITIVES STAY CORE. Payments EXTENDS them; it does not replace them, and moving
+     * them out would leave the next program with no foundation to build on and this catalog with no
+     * proof the foundation works.
+     */
+    it("keeps the payment foundation in Core", () => {
+        for (const key of [
+            "payment_receipt",
+            "actual_payer_is_not_responsibility",
+            "apply_payment",
+            "partial_unapplied",
+            "prepaid_available_and_applied",
+        ]) {
+            expect(SCENARIO_PROGRAM[key], `${key} is Core, not Payments`).toBe("CORE_RUNNABLE");
+        }
+    });
+
+    /* And the provider-dependent ones are not pretending to be runnable Core QA. */
+    it("moves provider-dependent scenarios to the Payments phase", () => {
+        for (const key of ["card_collection", "ach_processing", "provider_return", "refund"]) {
+            expect(SCENARIO_PROGRAM[key], `${key} needs Payments`).toBe("PAYMENTS_PHASE");
+        }
+    });
+
+    /*
+     * THE RECURRING CHAIN IS THE POINT OF THIS FREEZE. Section 7 certified it; if the catalog does
+     * not ASK a human to drive it, the certification is the only thing that ever will.
+     */
+    it("asks a human to drive the recurring billing chain Section 7 certified", () => {
+        for (const key of [
+            "billing_preview_reachable",
+            "accept_recurring_terms",
+            "recurring_preview_is_the_run",
+            "recurring_generation_bills_the_accepted_price",
+            "recurring_rerun_is_honest",
+            "recurring_term_lifecycle",
+            "recurring_discount_reduces_net",
+            "discount_rerun_and_veto",
+            "recurring_due_date",
+        ]) {
+            const s = scenarioByKey(key);
+            expect(s, `${key} is missing from the catalog`).toBeTruthy();
+            expect(s!.disposition, `${key} must be walked through by a human`).toBe("HUMAN_WALKTHROUGH");
+            expect(SCENARIO_PROGRAM[key]).toBe("CORE_RUNNABLE");
+        }
+    });
+
+    /* The three deferrals are stated in the catalog, not only in a certification document. */
+    it("states the three accepted Core deferrals in full", () => {
+        expect(CORE_DEFERRALS.map((d) => d.key)).toEqual([
+            "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED",
+            "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
+            "DEPOSIT_OPERATOR_PRODUCTIZATION_GAP",
+        ]);
+        for (const d of CORE_DEFERRALS) {
+            expect(d.statement.length, `${d.key} is too thin to weigh`).toBeGreaterThan(120);
+        }
+    });
+
+    /*
+     * A REWRITTEN QUESTION IS A NEW QUESTION. Results are persisted against the version they were
+     * given under, so a catalog that gained twelve scenarios must not still claim the old version.
+     */
+    it("carries a version later than the one the previous catalog published", () => {
+        expect(CATALOG_VERSION).not.toBe("2026-09-16.3");
+        expect(CATALOG_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}\.\d+$/);
     });
 });

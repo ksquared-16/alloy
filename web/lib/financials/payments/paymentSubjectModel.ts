@@ -31,14 +31,14 @@
  * ── WHAT IS CANONICAL TODAY, AND WHAT IS NOT ───────────────────────────────────────────────────
  *
  * Canonical, and read here: the org's provider merchant and its readiness
- * (`payment_provider_merchants`), and any stored payment methods (`customer_payment_methods`).
+ * (`payment_provider_merchants`), and any stored payment methods (`payment_methods`).
  * Canonical elsewhere: the payment itself, its actual payer, its method, its applications, refunds.
  *
- * NOT canonical anywhere: AUTOPAY. There is no table, no column and no writer — it appears only in
- * design fixtures and the concept catalog. It is therefore reported `unsupported` with that reason,
- * which is the truthful state, and is not invented here. The smallest canonical model it would need
- * is specified in the payment productization document; building an empty table with no writer and
- * no tokenization behind it would add schema without adding truth.
+ * CANONICAL SINCE W5: AUTOPAY. `payment_autopay_arrangements` is the authority, and this reads it.
+ * The previous note here said Autopay had "no table, no column and no writer" and was therefore
+ * reported `unsupported` — the truthful answer at the time, and the reason that constant is gone
+ * rather than edited. What replaced it is a measurement: an account either has an authorization or
+ * it does not, and "no Autopay" now means no row rather than no implementation.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -82,8 +82,62 @@ export type PaymentSetupState = {
     /** Adding, removing or replacing a stored payment method. */
     manageMethods: { state: PaymentCapabilityState; reason: string | null };
     autopay: { state: PaymentCapabilityState; reason: string | null };
-    /** Methods already on file for this household, if any. Identifiers only; never a secret. */
-    methodsOnFile: Array<{ id: string; brand: string | null; last4: string | null; isDefault: boolean }>;
+    /**
+     * The canonical arrangement, when one exists (Payments W5).
+     *
+     * Null means NO arrangement — which is a measurement now, not an absence of implementation.
+     * The `autopay` capability above still answers whether Autopay can be SET UP; this answers what
+     * is actually authorized today.
+     */
+    autopayArrangement: {
+        id: string;
+        status: "active" | "paused" | "revoked" | "failed";
+        payerEntityId: string;
+        paymentMethodId: string;
+        effectiveFrom: string;
+        effectiveTo: string | null;
+        maxAmountCents: number | null;
+        timingOffsetDays: number;
+        lastAttemptAt: string | null;
+        lastFailureReason: string | null;
+        /** The one sentence a compact surface shows. */
+        summaryLine: string;
+        /** True when an operator needs to do something. Drives the attention treatment. */
+        needsAttention: boolean;
+    } | null;
+    /**
+     * Methods already on file for this household, if any. Identifiers and safe display only; never
+     * a secret, and never a provider reference.
+     *
+     * Revoked methods are INCLUDED, carrying `usabilityState: "revoked"`. A surface that wants only
+     * the live ones filters; a surface that drops them silently cannot tell an operator who just
+     * removed a card that anything happened.
+     */
+    methodsOnFile: Array<{
+        id: string;
+        brand: string | null;
+        last4: string | null;
+        isDefault: boolean;
+        rail: "card" | "ach";
+        usabilityState: "usable" | "blocked" | "expired" | "revoked";
+        verificationState: "unverified" | "pending" | "verified" | "failed";
+        expMonth: number | null;
+        expYear: number | null;
+    }>;
+    /**
+     * The four questions an operator surface asks about stored methods, answered once here rather
+     * than re-derived by every caller.
+     */
+    methodSummary: {
+        hasUsableMethod: boolean;
+        usableRails: Array<"card" | "ach">;
+        defaultCardId: string | null;
+        defaultAchId: string | null;
+        /** A bank account the payer has added but the provider has not finished verifying. */
+        awaitingVerification: number;
+        /** Expired or blocked — on file, but it will not collect until it is replaced. */
+        needsReplacement: number;
+    };
     /** The org's merchant, as the provider last answered. Null when no merchant row exists. */
     merchant: { processor: string; readiness: string; achReadiness: string | null } | null;
     /**
@@ -179,13 +233,34 @@ export async function resolvePayerCandidates(
     };
 }
 
-const UNSUPPORTED_AUTOPAY =
-    "Alloy has no autopay model yet — no table, no column and no writer, so nothing about this "
-    + "account can be true or false. It is not switched off; it does not exist.";
-
-const UNSUPPORTED_MANAGE_METHODS =
-    "Storing a payment method needs provider tokenisation, which is not configured for this "
-    + "organisation. Card details are never handled by Alloy.";
+/**
+ * The one sentence a compact surface shows for an arrangement, and the attention verdict.
+ *
+ * "Needs attention" is deliberately narrow: only states an OPERATOR can act on. A paused
+ * arrangement is a decision somebody made, not a problem, so it reads as paused and nothing flashes.
+ */
+function autopayPresentation(row: {
+    status: string;
+    lastFailureReason: string | null;
+}): { summaryLine: string; needsAttention: boolean } {
+    if (row.status === "failed") {
+        return {
+            summaryLine: row.lastFailureReason?.trim() || "Autopay needs attention",
+            needsAttention: true,
+        };
+    }
+    if (row.status === "paused") return { summaryLine: "Autopay paused", needsAttention: false };
+    if (row.status === "revoked") return { summaryLine: "No Autopay", needsAttention: false };
+    /*
+     * An ACTIVE arrangement may still carry the last refusal — most often "amount due exceeds the
+     * Autopay authorization", which is the case an operator must see because nothing will collect
+     * until they act, and yet the arrangement is perfectly healthy.
+     */
+    if (row.lastFailureReason?.trim()) {
+        return { summaryLine: row.lastFailureReason.trim(), needsAttention: true };
+    }
+    return { summaryLine: "Autopay on", needsAttention: false };
+}
 
 export async function resolvePaymentSetup(
     supabase: SupabaseClient,
@@ -194,7 +269,7 @@ export async function resolvePaymentSetup(
     const orgId = t(args.orgId);
     const customerId = t(args.customerId);
 
-    const [merchantRow, methodRows] = await Promise.all([
+    const [merchantRow, methodRows, autopayRow] = await Promise.all([
         orgId
             ? supabase
                   .from("payment_provider_merchants")
@@ -205,13 +280,45 @@ export async function resolvePaymentSetup(
                   .maybeSingle()
                   .then((r) => (r.error ? null : (r.data as Record<string, unknown> | null)))
             : Promise.resolve(null),
-        customerId
+        /*
+         * ── THE CANONICAL METHOD READ ──────────────────────────────────────────────────────────
+         *
+         * This used to read `customer_payment_methods` filtered by customer ALONE — no org column
+         * existed to filter on, so the read was cross-tenant by construction. W2's table carries
+         * `org_id`, and this read now names it. That is not a tightening of an existing check; it
+         * is the first time this question could be asked safely at all.
+         */
+        customerId && orgId
             ? supabase
-                  .from("customer_payment_methods")
-                  .select("id, brand, last4, is_default")
+                  .from("payment_methods")
+                  .select(
+                      "id, display_brand, display_last4, display_exp_month, display_exp_year, "
+                      + "is_default, rail, usability_state, verification_state",
+                  )
+                  .eq("org_id", orgId)
                   .eq("customer_id", customerId)
-                  .then((r) => (r.error ? [] : ((r.data ?? []) as Array<Record<string, unknown>>)))
+                  .order("created_at", { ascending: false })
+                  .then((r) => (r.error ? [] : ((r.data ?? []) as unknown as Array<Record<string, unknown>>)))
             : Promise.resolve([] as Array<Record<string, unknown>>),
+        /*
+         * THE CANONICAL AUTOPAY READ (W5). Live statuses only: a revoked arrangement is history,
+         * and surfacing it would tell an operator Autopay exists when the payer withdrew it.
+         */
+        customerId && orgId
+            ? supabase
+                  .from("payment_autopay_arrangements")
+                  .select(
+                      "id, status, payer_entity_id, payment_method_id, effective_from, effective_to, "
+                      + "max_amount_cents, timing_offset_days, last_attempt_at, last_failure_reason",
+                  )
+                  .eq("org_id", orgId)
+                  .eq("customer_id", customerId)
+                  .in("status", ["active", "paused", "failed"])
+                  .order("authorized_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+                  .then((r) => (r.error ? null : (r.data as Record<string, unknown> | null)))
+            : Promise.resolve(null),
     ]);
 
     const readiness = t(merchantRow?.readiness) || null;
@@ -222,35 +329,119 @@ export async function resolvePaymentSetup(
 
     const methodsOnFile = methodRows.map((m) => ({
         id: t(m.id),
-        brand: t(m.brand) || null,
-        last4: t(m.last4) || null,
+        brand: t(m.display_brand) || null,
+        last4: t(m.display_last4) || null,
         isDefault: m.is_default === true,
+        rail: (t(m.rail) === "ach" ? "ach" : "card") as "card" | "ach",
+        usabilityState: (t(m.usability_state) || "usable") as PaymentSetupState["methodsOnFile"][number]["usabilityState"],
+        verificationState: (t(m.verification_state) || "unverified") as PaymentSetupState["methodsOnFile"][number]["verificationState"],
+        expMonth: m.display_exp_month != null ? Number(m.display_exp_month) : null,
+        expYear: m.display_exp_year != null ? Number(m.display_exp_year) : null,
     }));
+
+    const usable = methodsOnFile.filter((m) => m.usabilityState === "usable");
+    const methodSummary = {
+        hasUsableMethod: usable.length > 0,
+        usableRails: (["card", "ach"] as const).filter((r) => usable.some((m) => m.rail === r)),
+        defaultCardId: usable.find((m) => m.isDefault && m.rail === "card")?.id ?? null,
+        defaultAchId: usable.find((m) => m.isDefault && m.rail === "ach")?.id ?? null,
+        awaitingVerification: methodsOnFile.filter(
+            (m) => m.verificationState === "pending" && m.usabilityState !== "revoked",
+        ).length,
+        needsReplacement: methodsOnFile.filter(
+            (m) => m.usabilityState === "expired" || m.usabilityState === "blocked",
+        ).length,
+    };
 
     /* Cash, cheque and money order need no merchant. This is the capability that is always there. */
     const recordPayment = { state: "available" as PaymentCapabilityState, reason: null };
 
+    const autopayStatus = t(autopayRow?.status);
+    const autopayArrangement = autopayRow && autopayStatus
+        ? (() => {
+              const presentation = autopayPresentation({
+                  status: autopayStatus,
+                  lastFailureReason: t(autopayRow.last_failure_reason) || null,
+              });
+              return {
+                  id: t(autopayRow.id),
+                  status: autopayStatus as "active" | "paused" | "revoked" | "failed",
+                  payerEntityId: t(autopayRow.payer_entity_id),
+                  paymentMethodId: t(autopayRow.payment_method_id),
+                  effectiveFrom: t(autopayRow.effective_from),
+                  effectiveTo: t(autopayRow.effective_to) || null,
+                  maxAmountCents: autopayRow.max_amount_cents == null ? null : Number(autopayRow.max_amount_cents),
+                  timingOffsetDays: Number(autopayRow.timing_offset_days ?? 0),
+                  lastAttemptAt: t(autopayRow.last_attempt_at) || null,
+                  lastFailureReason: t(autopayRow.last_failure_reason) || null,
+                  ...presentation,
+              };
+          })()
+        : null;
+
+    /*
+     * The CAPABILITY answers "can Autopay be set up here", which needs a usable method and a
+     * merchant that can charge it. It is not the same question as "is Autopay on", which the
+     * arrangement above answers — an account can have Autopay active while the merchant is
+     * temporarily restricted, and a surface that conflated the two would offer to set up something
+     * already running.
+     */
+    const autopayCapability: { state: PaymentCapabilityState; reason: string | null } = !merchant
+        ? { state: "not_configured", reason: NO_MERCHANT }
+        : !methodSummary.hasUsableMethod
+          ? { state: "not_configured", reason: "No usable payment method is on file for this account." }
+          : { state: "available", reason: null };
+
     const card = merchantCapability(merchant?.readiness ?? null, "card");
-    const ach = merchant
-        ? achReadiness === "ready"
-            ? { state: "available" as PaymentCapabilityState, reason: null }
-            : {
-                  state: "not_configured" as PaymentCapabilityState,
-                  reason: achReadiness
-                      ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
-                      : "Bank debit has not been enabled on this organisation's merchant account.",
-              }
-        : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT };
+    /*
+     * ── A RAIL NEEDS THE MERCHANT BEFORE IT NEEDS ITSELF ────────────────────────────────────────
+     *
+     * `ach_readiness` answered this alone, which let a merchant that cannot accept a single charge
+     * report bank debit as `available` — its ACH capability said `ready` and nothing asked whether
+     * the account could collect at all. Collection refused it correctly; the operator had simply
+     * been told otherwise.
+     *
+     * So when merchant-level readiness does not permit collection, ACH reports the MERCHANT's state
+     * and the merchant's reason. That is the truthful answer: the blocker is the account, not the
+     * rail, and telling an operator "bank debit is not enabled" would send them to fix the wrong
+     * thing.
+     */
+    const ach = !merchant
+        ? { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT }
+        : card.state !== "available"
+            ? card
+            : achReadiness === "ready"
+                ? { state: "available" as PaymentCapabilityState, reason: null }
+                : {
+                      state: "not_configured" as PaymentCapabilityState,
+                      reason: achReadiness
+                          ? `The provider reports bank debit as ${achReadiness.replace(/_/g, " ")}.`
+                          : "Bank debit has not been enabled on this organisation's merchant account.",
+                  };
 
     return {
         recordPayment,
         takePaymentCard: card,
         takePaymentAch: ach,
-        manageMethods: { state: "unsupported", reason: UNSUPPORTED_MANAGE_METHODS },
-        autopay: { state: "unsupported", reason: UNSUPPORTED_AUTOPAY },
+        /*
+         * ── MANAGING METHODS IS NO LONGER UNSUPPORTED ──────────────────────────────────────────
+         *
+         * It reported `unsupported` truthfully for as long as Alloy had no canonical table and no
+         * writer. W2 gives it both, so the honest answer is now the ORGANISATION's: storing a method
+         * needs provider tokenisation, which needs a connected merchant. With one, this is
+         * `available` whether or not any method exists yet — having none is not an incapacity.
+         */
+        manageMethods: merchant
+            ? card.state === "available" || card.state === "pending"
+                ? { state: "available" as PaymentCapabilityState, reason: null }
+                : card
+            : { state: "not_configured" as PaymentCapabilityState, reason: NO_MERCHANT },
+        autopay: autopayCapability,
+        autopayArrangement,
         methodsOnFile,
+        methodSummary,
         merchant,
-        summaryLine: summarise(methodsOnFile, card.state),
+        summaryLine: summarise(methodsOnFile, methodSummary, card.state),
     };
 }
 
@@ -283,15 +474,27 @@ function merchantCapability(readiness: string | null, _rail: "card"): { state: P
  */
 function summarise(
     methods: PaymentSetupState["methodsOnFile"],
+    summary: PaymentSetupState["methodSummary"],
     cardState: PaymentCapabilityState,
 ): string | null {
-    const preferred = methods.find((m) => m.isDefault) ?? methods[0];
+    /*
+     * A COMPACT SURFACE GETS ONE TRUE SENTENCE, and the order matters.
+     *
+     * A usable method is the answer whenever there is one. Otherwise a method awaiting verification
+     * is more informative than silence — the family HAS given their bank details and somebody is
+     * waiting on a deposit, which is a different situation from having done nothing.
+     */
+    const usable = methods.filter((m) => m.usabilityState === "usable");
+    const preferred = usable.find((m) => m.isDefault) ?? usable[0];
     if (preferred) {
         const label = [preferred.brand, preferred.last4 ? `•••• ${preferred.last4}` : null]
             .filter(Boolean)
             .join(" ");
-        return label || "A payment method is on file";
+        if (label) return label;
+        return preferred.rail === "ach" ? "Bank account on file" : "Card on file";
     }
+    if (summary.awaitingVerification > 0) return "Bank account awaiting verification";
+    if (summary.needsReplacement > 0) return "Payment method needs attention";
     if (cardState === "available") return "No payment method on file";
     return null;
 }

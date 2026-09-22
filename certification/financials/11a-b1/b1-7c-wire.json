@@ -1,0 +1,184 @@
+[
+  {
+    "url": "/api/admin/queue-view-totals",
+    "status": 200,
+    "request": {
+      "targets": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads"
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2"
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3"
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5"
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6"
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7"
+        }
+      ],
+      "selectedSiteId": null
+    },
+    "response": {
+      "generatedAt": "2026-09-18T23:22:52.159Z",
+      "totals": [
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_leads",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+          "queueKey": "lifecycle_lead",
+          "workViewId": "new_work_view_6",
+          "count": 7,
+          "known": true
+        },
+        {
+          "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+          "queueKey": "lifecycle_qualification",
+          "workViewId": "new_work_view_2",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+          "queueKey": "lifecycle_tour",
+          "workViewId": "new_work_view_3",
+          "count": 3,
+          "known": true
+        },
+        {
+          "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+          "queueKey": "lifecycle_waitlist",
+          "workViewId": "new_work_view_4",
+          "count": 16,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_5",
+          "count": 0,
+          "known": true
+        },
+        {
+          "workUnitId": "dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+          "queueKey": "lifecycle_enrolled",
+          "workViewId": "new_work_view_7",
+          "count": 2,
+          "known": true
+        }
+      ]
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.configure_responsibility",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "effective_start": "2026-09-19",
+        "shares": [
+          {
+            "responsible_party_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amount_cents": 2500
+          }
+        ]
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 responsible party from 2026-09-19.",
+            "changes": [
+              "$25.00 · f06b6750-3db4-4968-824f-6aa6290efda0"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "6a9e18c2-9017-43a1-9788-0c6391bc09ea"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.configure_responsibility",
+      "entity_type": "child",
+      "entity_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+        "effective_start": "2026-09-19",
+        "shares": [
+          {
+            "responsible_party_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "method": "fixed",
+            "amount_cents": 2500
+          }
+        ]
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "arrangement_id": "fd525086-f5f6-4ea3-bc72-bff0b6087a7f",
+          "superseded_id": "6669d66c-6a59-4d95-b987-5247d05ccef4",
+          "shares": 1
+        },
+        "affected_id": "fd525086-f5f6-4ea3-bc72-bff0b6087a7f"
+      },
+      "correlation_id": "6e30cb51-4052-4161-9485-7305e772a4f3"
+    }
+  }
+]

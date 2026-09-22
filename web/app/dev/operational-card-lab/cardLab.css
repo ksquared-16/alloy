@@ -754,7 +754,9 @@
    * The order above IS the scan order — Date to Type to Child to GL to Amount to Status to
    * Responsibility — and every track is sized to what it carries rather than to what is left over.
    */
-  grid-template-columns: 78px 112px 104px 134px 84px 72px 110px minmax(80px, 0.85fr);
+  /* A narrow leading ACTIONS rail, then the eight column vocabulary — the lab shows the ledger
+     the product ships, or it is not a review surface. */
+  grid-template-columns: 46px 78px 112px 104px 178px 84px 72px 110px minmax(64px, 0.55fr);
   gap: 8px;
   align-items: baseline;
   min-height: 21px;
@@ -764,7 +766,7 @@
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
 /* Amount is the fifth column now that Description moved to the end. */
-.alloy-os-billingdetail__row > :nth-child(5) {
+.alloy-os-billingdetail__row > :nth-child(6) {
   text-align: right;
 }
 .alloy-os-billingdetail__subject {

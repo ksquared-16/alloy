@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { useAcknowledgeOnActive } from "@/lib/motion/useMotionAcknowledge";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 
 /**
@@ -141,7 +142,7 @@ export function WorkViewPillStrip({
     return (
         <div
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workViewPillStrip)}
-            data-alloy-section="WU.WORK_VIEW_PILLS"
+            {...alloySectionDomAttrs("WU-03")}
             role="tablist"
             aria-label="Work views"
             className="flex items-center gap-2 overflow-x-auto pb-0"

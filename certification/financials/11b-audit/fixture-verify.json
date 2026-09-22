@@ -1,0 +1,13 @@
+{
+  "assignments": [],
+  "arrangement": {
+    "effectiveStart": "2026-09-18",
+    "shares": [
+      {
+        "name": "Cert Certhouse",
+        "amountCents": 1800,
+        "method": "fixed"
+      }
+    ]
+  }
+}

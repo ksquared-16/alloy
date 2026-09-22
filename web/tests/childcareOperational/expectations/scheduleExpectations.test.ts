@@ -55,6 +55,7 @@ function placement(agreementId: string, partial: Partial<OperationalPlacementInp
 
 function assignment(agreementId: string, partial: Partial<OperationalAssignmentInput> = {}): OperationalAssignmentInput {
     return {
+        id: `asg-${agreementId}`,
         enrollment_agreement_id: agreementId,
         schedule_pattern_id: PATTERN.id,
         start_date: "2026-01-01",
@@ -69,6 +70,7 @@ function proposedAssignment(
     partial: Partial<OperationalProposedAssignmentInput> = {}
 ): OperationalProposedAssignmentInput {
     return {
+        id: `asg-proposed-${customerMemberId}`,
         customer_member_id: customerMemberId,
         site_location_id: SITE,
         room_location_id: ROOM,

@@ -19,7 +19,7 @@
  * The measured chain, from the deployed build, is recorded in `p09a-chain.json`.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const CSS = readFileSync(join(process.cwd(), "app/adminV2/components/alloyOsRuntime.css"), "utf8");
@@ -86,6 +86,27 @@ describe("the solved height reaches the visible card", () => {
         expect(classCount(".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell")).toBe(2);
     });
 
+    it("THE GATE IT WAS MISSING: nothing later in the sheet takes the stretch back", () => {
+        /*
+         * The rule above existed and did not apply. `.alloy-os-focus-panel-grid--composed
+         * .alloy-os-focus-panel-grid__cell` sets `align-items: flex-start` at the SAME specificity
+         * and was written later, so the cascade handed the decision to file order and the card sat
+         * at its natural height inside a cell that already carried the band — measured: cell 285,
+         * card 262, computed flex-start.
+         *
+         * Asserting the rule's text could never catch that, which is this file's own lesson applied
+         * to itself. So the order is asserted too: the solved-grid contract must have the last word.
+         */
+        const gate = ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell";
+        const lanes = ".alloy-os-focus-panel-grid--composed .alloy-os-focus-panel-grid__cell";
+        const lastGate = CSS.lastIndexOf(`\n${gate} {`);
+        const lastLanes = CSS.lastIndexOf(`\n${lanes} {`);
+        expect(lastGate, "the stretch contract is declared").toBeGreaterThan(-1);
+        expect(lastLanes, "the lanes rule is declared").toBeGreaterThan(-1);
+        expect(lastGate, "and it is declared after the equal-specificity rule that contradicts it")
+            .toBeGreaterThan(lastLanes);
+    });
+
     it("the wrapper still carries the solved height, and the intrinsic node still resolves against it", () => {
         expect(ruleFor(".alloy-os-fp-card-intrinsic")).toMatch(/min-height:\s*100%/);
         expect(GRID).toContain("height: `${boxOf.height}px`");
@@ -112,10 +133,27 @@ describe("no height is named, so any solved H propagates", () => {
             .toMatch(/align-items:\s*stretch/);                          // 3. cell -> card
     });
 
-    it("the solver itself is untouched — it was never the defect", () => {
-        const solver = readFileSync(
-            join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"), "utf8");
-        expect(solver).toContain("if (band.areas.some((area) => !intrinsic.has(area.card))) continue;");
+    it("THE EQUALISING SOLVER IS GONE, AND MAY NOT COME BACK", () => {
+        /*
+         * This used to assert that the band solver was "untouched — it was never the defect".
+         * That was true of the propagation repair and is no longer the contract: cross-column
+         * height equalisation was retired outright (card-format doctrine §6), because a card in
+         * columns 1-3 was being drawn at the height of a card in columns 9-12.
+         *
+         * A deleted module cannot be asserted about, so what is locked here is its ABSENCE —
+         * including the import graph, so it cannot be quietly reintroduced beside the engine.
+         */
+        for (const gone of ["focusPanelRowHeights.ts", "focusPanelVisualBands.ts"]) {
+            expect(
+                existsSync(join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition", gone)),
+                `${gone} was retired; reintroducing it re-opens cross-column equalisation`,
+            ).toBe(false);
+        }
+        const stack = readFileSync(
+            join(process.cwd(), "components/admin/focusPanel/useColumnAwareStack.ts"), "utf8");
+        // The placement authority must hand the engine MEASUREMENTS, never a substituted height.
+        expect(stack).toMatch(/resolveColumnAwareLayout\(\{\s*layout,\s*heights:\s*intrinsic/);
+        expect(stack).not.toMatch(/import .*solveRowHeights/);
     });
 });
 
@@ -167,45 +205,70 @@ describe("the card's own content is unchanged", () => {
  */
 describe("the painted card consumes the band — the last hop", () => {
     const BP = readFileSync(join(process.cwd(), "components/operationalCards/ProcessCard.tsx"), "utf8");
-    const PROC_WRAPPER = ".alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process";
-    const PROC_CARD = `${PROC_WRAPPER} > .alloy-os-ucard`;
+    const HEALTH = readFileSync(join(process.cwd(), "components/admin/focusPanel/cards/HealthSafetyCard.tsx"), "utf8");
+    const CHAIN = ".alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)";
+    const CHAIN_GROWTH = `${CHAIN},\n.alloy-os-fp-card-intrinsic .alloy-os-ucard`;
 
-    it("THE PREMISE: Business Process really does wrap its UniversalCard, and is the only card that does", () => {
-        // If this ever stops being true the defect is gone and so is the reason for the repair —
-        // the reader should learn that here rather than from a mystery rule that matches nothing.
-        const wrapperAt = BP.indexOf('className="alloy-os-process" data-process-card="true"');
-        expect(wrapperAt, "ProcessCard renders the alloy-os-process wrapper").toBeGreaterThan(-1);
-        expect(BP.indexOf("<UniversalCard"), "…and UniversalCard is rendered inside it").toBeGreaterThan(wrapperAt);
+    it("THE PREMISE, CORRECTED: Business Process is NOT the only card that wraps its UniversalCard", () => {
+        /*
+         * The rule this replaces was scoped to `.alloy-os-process` on a premise written directly
+         * above it: "For every other card that child IS the painted article.alloy-os-ucard". The
+         * premise was false when it was written, and THIS TEST IS WHERE IT SHOULD HAVE BEEN CAUGHT —
+         * the old version of it asserted only that ProcessCard wraps, while its own title claimed
+         * ProcessCard was the only card that does. A claim stated in a test name and never asserted
+         * is not a claim.
+         *
+         * Measured on deployed dced5ba79 at 1440: health_safety band 640px, painted article 141.8px.
+         */
+        const bpWrapper = BP.indexOf('className="alloy-os-process" data-process-card="true"');
+        expect(bpWrapper, "ProcessCard wraps").toBeGreaterThan(-1);
+        expect(BP.indexOf("<UniversalCard"), "…with UniversalCard inside it").toBeGreaterThan(bpWrapper);
+
+        // Health & Safety wraps too — twice — which is the shape the per-card rule could not reach.
+        const healthWrapper = HEALTH.indexOf('className="alloy-os-health"');
+        expect(healthWrapper, "HealthSafetyCard also wraps").toBeGreaterThan(-1);
+        expect(HEALTH.indexOf("<UniversalCard"), "…with UniversalCard inside it").toBeGreaterThan(healthWrapper);
     });
 
-    it("THE GATE: the wrapper is made to pass the height on, rather than left a block box", () => {
-        const rule = ruleFor(PROC_WRAPPER);
-        expect(rule, "the propagation rule must exist").not.toBe("");
-        // A block container does not hand its height to a child; that is the whole defect.
+    it("THE GATE: the propagation is stated over the CHAIN, not over a named card", () => {
+        // A rule naming one card can only ever fix one card; the next wrapper reopens the defect.
+        const rule = ruleFor(CHAIN);
+        expect(rule, "the chain propagation rule must exist").not.toBe("");
         expect(rule).toMatch(/display:\s*flex/);
         expect(rule).toMatch(/flex-direction:\s*column/);
     });
 
-    it("THE GATE: the painted card is made to TAKE the height, not merely be allowed to", () => {
-        const rule = ruleFor(PROC_CARD);
+    it("THE GATE: the painted card is made to TAKE the height, at any wrapping depth", () => {
+        const rule = ruleFor(CHAIN_GROWTH);
         expect(rule, "the consumption rule must exist").not.toBe("");
         // In a column flex container height is the MAIN axis, so `align-items: stretch` would do
         // nothing here — growth is what consumes the band.
         expect(rule).toMatch(/flex:\s*1\s+1\s+auto/);
     });
 
+    it("no card name survives in the propagation rule, so no future wrapper is left out", () => {
+        for (const sel of [CHAIN, CHAIN_GROWTH]) {
+            const rule = ruleFor(sel);
+            expect(rule).not.toMatch(/alloy-os-process|alloy-os-health|alloy-os-financials|alloy-os-billing/);
+        }
+        // And the per-card rule it replaced is gone rather than left to rot beside it.
+        expect(CSS).not.toContain(".alloy-os-focus-panel-grid__cell > .alloy-os-process {");
+    });
+
     it("no pixel value is named, so any solved H propagates — 299, 325 or otherwise", () => {
-        for (const rule of [ruleFor(PROC_WRAPPER), ruleFor(PROC_CARD)]) {
+        for (const rule of [ruleFor(CHAIN), ruleFor(CHAIN_GROWTH)]) {
             expect(rule).not.toMatch(/\d+px/);
             expect(rule).not.toMatch(/299|325/);
         }
     });
 
     it("the repair is scoped to the solved grid — lanes, stack, standalone and the lab are untouched", () => {
-        // Both new selectors are rooted at the intrinsic node, which only the solved-grid branch
-        // renders. A bare `.alloy-os-process` rule would reach ProcessCard everywhere it mounts.
-        for (const sel of [PROC_WRAPPER, PROC_CARD]) {
-            expect(sel.startsWith(".alloy-os-fp-card-intrinsic >")).toBe(true);
+        // EVERY selector in the chain rule is rooted at the intrinsic node, which only the
+        // solved-grid branch renders. This matters more now than it did for the per-card rule:
+        // `*:has(.alloy-os-ucard)` is deliberately broad, so the root is the only thing keeping it
+        // off the lanes, stack, standalone and design-lab mounts, where cards keep natural height.
+        for (const sel of [CHAIN, ...CHAIN_GROWTH.split(",\n")]) {
+            expect(sel.trim().startsWith(".alloy-os-fp-card-intrinsic ")).toBe(true);
         }
         const bare = CSS.indexOf("\n.alloy-os-process {");
         expect(bare, "no unscoped .alloy-os-process rule may exist").toBe(-1);
@@ -217,14 +280,15 @@ describe("the painted card consumes the band — the last hop", () => {
         expect(BP).not.toMatch(/h-full|height:\s*["']100%|minHeight/);
     });
 
-    it("the solver and the cell-stretch rule are untouched by this repair", () => {
-        // Contract one and contract two keep their own owners. This slice changed neither.
+    it("the cell-stretch rule is untouched by this repair, and still has a job to do", () => {
+        /*
+         * The solver half of this assertion went with the solver. The cell-stretch half stands:
+         * the wrapper is now the card's OWN intrinsic height rather than an equalised band, so
+         * the chain must still deliver that height to the painted article — the propagation is
+         * what makes "painted height == intrinsic height" true rather than merely intended.
+         */
         expect(winningAlignItemsForSolvedGridCell().value).toBe("stretch");
-        const solver = readFileSync(
-            join(process.cwd(), "lib/adminV2/runtime/focusPanel/composition/focusPanelRowHeights.ts"),
-            "utf8",
-        );
-        expect(solver).not.toContain("alloy-os-process");
+        expect(ruleFor(CHAIN)).toMatch(/display:\s*flex/);
     });
 
     it("a browser gate owns the rectangle, and it identifies the card by PAINT, not by selector", () => {

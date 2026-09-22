@@ -22,6 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { participantScopeFromChildSubjectTruth } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
+import type { OperationalParticipantScope, OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -69,6 +70,31 @@ export type FocusPanelWorkModeFromAnswerInput = {
      */
     subjectIdentityTruth: SubjectIdentityTruth | null;
     /**
+     * THE AUTHORITATIVE PARTICIPATION, resolved by the caller from `process_instances`.
+     *
+     * The commit frame could only ever learn its child from `child.*` keys in
+     * `subjectIdentityTruth`, which a FAMILY-grain opportunity does not carry. So participantScope
+     * was null there, and the two participant-keyed producers reported `unavailable` on every
+     * measured sample while the drawer round trip re-learned the same fact. Passed in rather than
+     * resolved here because the resolver queries the database and this module is reachable from a
+     * client component — the same rule the drawer route already follows. Absent leaves every prior
+     * path untouched.
+     */
+    resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    /**
+     * THE TOUR SIGNAL THE ANSWER RESOLVED — optional, and its ABSENCE is meaningful.
+     *
+     * Present  => the answer ran the canonical booking projection and this IS the answer, including
+     *             a legitimate "no tour" (`scheduled: false`).
+     * Absent   => the answer did not resolve it (no subject, or the read failed). The signal stays
+     *             settlement-owned and the surface claims nothing.
+     *
+     * That distinction is the whole point: collapsing "read failed" into `scheduled: false` would
+     * publish a KNOWN_ZERO the answer never established, and the collapsed Business Process card
+     * would then state "no activity" it does not know — UNKNOWN != ZERO.
+     */
+    resolvedTour?: OperationalContextSignals["tour"] | null;
+    /**
      * R2 — the SUBJECT GRAIN as resolved ONCE by the provisioning answer. Never re-derived here.
      *
      * This replaces two literals below (`grain: "case"`, `subject.type: "opportunity"`) that were simply
@@ -80,9 +106,40 @@ export type FocusPanelWorkModeFromAnswerInput = {
      * always supplies this field, so no child surface can reach the family default by omission.
      */
     subjectGrain?: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
+    /**
+     * The configured lifecycle rail, computed server-side by the canonical pure builder where the
+     * department configuration already lives. Empty when no process is configured — an unstaged
+     * context stays a real answer.
+     */
+    businessProcessStages?: ReadonlyArray<{ key: string; label: string; support?: readonly string[] }> | null;
+    /** The configured process name ("Enrollment"), not the generic card title. */
+    businessProcessName?: string | null;
 };
 
 /** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
+/**
+ * The authoritative participation as a commit-frame scope.
+ *
+ * Identity only: the commit frame holds no candidate rows to borrow a name or photo from, and
+ * inventing either would put one child's presentation on another's card. The two producers this
+ * unblocks — Attendance and Health — read `customerMemberId` and nothing else, so identity is the
+ * whole requirement.
+ */
+function scopeFromResolvedParticipantForCommit(
+    resolved: { participationId: string; customerMemberId: string } | null,
+): OperationalParticipantScope | null {
+    if (!resolved) return null;
+    return {
+        participationId: resolved.participationId,
+        customerMemberId: resolved.customerMemberId,
+        personId: null,
+        displayName: null,
+        imageUrl: null,
+        stageKey: null,
+        stageLabel: null,
+    };
+}
+
 export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeFromAnswerInput): OperationalContext {
     const nextActionLabel = input.primaryAction?.label ?? null;
     return {
@@ -97,8 +154,20 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             key: input.situation?.stageKey ?? null,
             label: input.situation?.stageLabel ?? input.statusLabel ?? null,
             stageKey: input.situation?.stageKey ?? null,
-            // No configured process rail on this producer — an unstaged context is a real answer.
-            stages: [],
+            /*
+             * THE CONFIGURED RAIL IS NOT A SETTLEMENT FACT.
+             *
+             * This was `stages: []` on the stated grounds that the rail arrives with the drawer.
+             * Measured on deployed staging, that deferral cost ~2,974ms: the card showed the
+             * generic "Business Process" with no timeline until settlement, and withholding the
+             * drawer left it permanently wrong rather than late.
+             *
+             * The rail is department CONFIGURATION run through a pure builder, so the composer —
+             * which already holds that configuration — answers it at commit. An unstaged context
+             * still yields an empty rail, which remains a real answer.
+             */
+            stages: input.businessProcessStages ? [...input.businessProcessStages] : [],
+            ...(input.businessProcessName ? { name: input.businessProcessName } : {}),
         },
         perspective: input.perspective
             ? { missionLabel: input.perspective.defaultMission ?? input.perspective.label ?? null }
@@ -116,9 +185,17 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
          * `child.process_instance_id` are present — a scope that cannot be identified is not returned.
          * On any other grain it yields null and the card reserves exactly as before.
          */
-        participantScope: participantScopeFromChildSubjectTruth({
-            ...(input.subjectIdentityTruth ?? {}),
-        }),
+        /*
+         * A STATED CHILD SUBJECT STILL WINS. A child-grain frame has been told its subject
+         * directly and needs no resolution; only when it has not is the authoritative
+         * single-participant answer consulted. Same precedence as the settled context, so the two
+         * frames cannot disagree about which child the panel is about.
+         */
+        participantScope:
+            participantScopeFromChildSubjectTruth({
+                ...(input.subjectIdentityTruth ?? {}),
+            })
+            ?? scopeFromResolvedParticipantForCommit(input.resolvedParticipant ?? null),
         truth: {
             id: input.subjectId,
             ...(input.statusKey ? { status_key: input.statusKey } : {}),
@@ -136,7 +213,13 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel },
             // Settlement-owned signals — honest empty (reserved), never fabricated.
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
+            /*
+             * Resolved by the ANSWER when it could be; otherwise the honest settlement-owned empty.
+             * `?? NULL` here is not a default for a failed read — the composer omits the field
+             * entirely in that case, which is what keeps absent distinguishable from "no tour".
+             */
+            tour: input.resolvedTour
+                ?? { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
             billing: NULL_BILLING_SIGNAL,
         },

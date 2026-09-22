@@ -9,6 +9,7 @@
  * because a field-by-field check only ever proves the fields someone remembered to list.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { executeParticipantDecisionForChild } from "@/lib/lifecycle/executeParticipantDecisionForChild";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -182,6 +183,17 @@ function makeWorld(): World {
 /** Chainable in-memory Supabase over the three tables the seam touches. */
 function makeSupabase(world: World, opts?: { failStageMove?: boolean }) {
     return {
+        rpc(name: string, params: Record<string, unknown>) {
+            // Lifecycle truth moved from a table UPDATE to update_participation_and_maintain_facts.
+            // Injected failure must stay reachable through the RPC, or the compensation cases pass
+            // while proving nothing.
+            if (opts?.failStageMove && params.p_set_stage_key === true) {
+                return Promise.resolve({ data: null, error: { message: "simulated stage move failure" } });
+            }
+            const res = participationLifecycleRpcFake(name, params, world.process_instances as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
         from(table: string) {
             if (table === "departments") {
                 const chain: Record<string, unknown> = {};

@@ -96,6 +96,60 @@ const CM_SELECT =
 const PI_SELECT =
     "id, org_id, process_key, subject_type, subject_id, context_id, stage_key, state, close_reason_key, metadata, updated_at, created_at";
 
+/**
+ * PER-ACQUISITION INSTRUMENTATION. Diagnostic only — nothing here is read by a predicate, and an
+ * absent trace changes no answer. It exists because "the child lenses cost 1.5s" is not a finding:
+ * which leg, at what cardinality, repeated how many times, is.
+ *
+ * IT OUTLIVED THE REPAIR IT WAS BUILT FOR, AND THAT IS THE POINT. The shared-acquisition experiment
+ * this instrumentation shipped alongside was retired for making the frame 316ms SLOWER. It is what
+ * proved that: the accumulated `child_counts` of 1,637ms was a SUM OF CONCURRENT WORK whose real
+ * wall was one ~567ms lens, so de-duplicating three already-overlapping reads into one serial
+ * prefix could only lose. Without a per-lens number beside the aggregate, that is invisible.
+ */
+export type ChildGrainTrace = {
+    piMs: number;
+    piRows: number;
+    refsMs: number;
+    ocmMs: number;
+    oppMs: number;
+    cmMs: number;
+    catMs: number;
+    contextIds: number;
+    subjectIds: number;
+    catIds: number;
+    ocmRows: number;
+    oppRows: number;
+    cmRows: number;
+    catRows: number;
+    /** The bounded backstop: 0ms and 0 ids whenever the speculative read already held everything. */
+    backstopMs: number;
+    backstopIds: number;
+    backstopRows: number;
+};
+
+export function emptyChildGrainTrace(): ChildGrainTrace {
+    return {
+        piMs: 0,
+        piRows: 0,
+        refsMs: 0,
+        ocmMs: 0,
+        oppMs: 0,
+        cmMs: 0,
+        catMs: 0,
+        contextIds: 0,
+        subjectIds: 0,
+        catIds: 0,
+        ocmRows: 0,
+        oppRows: 0,
+        cmRows: 0,
+        catRows: 0,
+        backstopMs: 0,
+        backstopIds: 0,
+        backstopRows: 0,
+    };
+}
+
 type ResolvedRefs = {
     oppById: Map<string, Record<string, unknown>>;
     cmById: Map<string, Record<string, unknown>>;
@@ -122,7 +176,10 @@ async function resolveTrackRowRefs(params: {
     orgId: string;
     workUnitId: string;
     piRows: readonly PiRow[];
+    trace?: ChildGrainTrace;
 }): Promise<ResolvedRefs> {
+    const trace = params.trace;
+    const tRefs = Date.now();
     const contextIds = [...new Set(params.piRows.map((p) => p.context_id).filter((v): v is string => !!v))];
     const subjectIds = [...new Set(params.piRows.map((p) => p.subject_id).filter(Boolean))];
     const programCatIds = [
@@ -161,39 +218,100 @@ async function resolveTrackRowRefs(params: {
     const cmById = new Map<string, Record<string, unknown>>();
     const catById = new Map<string, { key?: string | null; label?: string | null }>();
 
-    const contextChain = (async () => {
-        if (contextIds.length) {
-            const { data, error } = await withDbTiming("member.ocm_resolve", { n: contextIds.length }, async () =>
-                params.supabase
-                    .from("opportunity_customer_members")
-                    .select("id, opportunity_id")
-                    .eq("org_id", params.orgId)
-                    .in("id", contextIds));
-            if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
-            for (const r of data ?? []) {
-                const row = r as { id: string; opportunity_id: string | null };
-                // A context-free participation has no Opportunity. That is an ordinary answer, and it
-                // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
-                if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
-            }
+    /*
+     * THE OCM -> OPPORTUNITY CHAIN IS A LATENCY CHAIN, NOT A SEMANTIC ONE.
+     *
+     * Measured on deployed 486ea3eb9 over 23 cold samples, the binding child lens spends
+     * PI 217ms -> ocm 170ms -> opportunities 153ms, and this leg is round-trip bound: it sends
+     * ~308 context ids to `opportunity_customer_members` and gets ONE row back, then sends the
+     * resolved ids to `opportunities` and gets three. Three reads of 329, 1 and 3 rows all cost
+     * 150-220ms, so the cost is the trip, not the payload.
+     *
+     * Only ONE of those ~308 context ids is actually an OCM id. The rest are already opportunity
+     * ids, and for those the second read could have been issued at the same time as the first —
+     * it was waiting on a mapping that, for 307 of 308 ids, is the identity.
+     *
+     * So the raw lookup is issued SPECULATIVELY, concurrently with the OCM resolve, and a bounded
+     * BACKSTOP read afterwards fetches only what OCM resolved to something not already held.
+     *
+     * WHAT THE SPECULATIVE READ IS NOT ALLOWED TO DO. It must not become a second authority on
+     * which opportunity a context has. It only POPULATES the map; `resolveContextOpportunity`
+     * still asks `opportunityIdByContextId.get(context_id) ?? context_id`, so where OCM resolves a
+     * context the OCM answer is the one looked up and the speculative entry is never consulted.
+     * An opportunity existing at a context id therefore cannot imply membership, and a raw lookup
+     * that misses cannot suppress an OCM-derived opportunity — the backstop closes exactly that
+     * case. Acquisition timing changes; the answer does not.
+     */
+    const ocmRead = (async () => {
+        if (!contextIds.length) return;
+        const tOcm = Date.now();
+        const { data, error } = await withDbTiming("member.ocm_resolve", { n: contextIds.length }, async () =>
+            params.supabase
+                .from("opportunity_customer_members")
+                .select("id, opportunity_id")
+                .eq("org_id", params.orgId)
+                .in("id", contextIds));
+        if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
+        if (trace) {
+            trace.ocmMs = Date.now() - tOcm;
+            trace.ocmRows = (data ?? []).length;
         }
-        const resolvedOpportunityIds = [
-            ...new Set(contextIds.map((id) => opportunityIdByContextId.get(id) ?? id)),
-        ];
-
-        if (resolvedOpportunityIds.length) {
-            const { data, error } = await withDbTiming("member.opportunities", { n: resolvedOpportunityIds.length }, async () =>
-                params.supabase
-                    .from("opportunities")
-                    .select(OPP_SELECT)
-                    .eq("org_id", params.orgId)
-                    .in("id", resolvedOpportunityIds));
-            if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
-            for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+        for (const r of data ?? []) {
+            const row = r as { id: string; opportunity_id: string | null };
+            // A context-free participation has no Opportunity. That is an ordinary answer, and it
+            // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
+            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
         }
     })();
 
+    const speculativeOppRead = (async () => {
+        if (!contextIds.length) return;
+        const tOpp = Date.now();
+        const { data, error } = await withDbTiming("member.opportunities_speculative", { n: contextIds.length }, async () =>
+            params.supabase
+                .from("opportunities")
+                .select(OPP_SELECT)
+                .eq("org_id", params.orgId)
+                .in("id", contextIds));
+        if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
+        if (trace) {
+            trace.oppMs = Date.now() - tOpp;
+            trace.oppRows = (data ?? []).length;
+        }
+        for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+    })();
+
+    const contextChain = (async () => {
+        await Promise.all([ocmRead, speculativeOppRead]);
+        /*
+         * THE BACKSTOP. Every opportunity OCM resolved that the speculative read did not already
+         * fetch — normally none, because a context id that is an OCM id is rare. One bounded read,
+         * and only when there is something to fetch.
+         */
+        const missing = [
+            ...new Set(
+                [...opportunityIdByContextId.values()].filter((id) => id && !oppById.has(id)),
+            ),
+        ];
+        if (!missing.length) return;
+        const tBack = Date.now();
+        const { data, error } = await withDbTiming("member.opportunities_backstop", { n: missing.length }, async () =>
+            params.supabase
+                .from("opportunities")
+                .select(OPP_SELECT)
+                .eq("org_id", params.orgId)
+                .in("id", missing));
+        if (error) throw new Error(`process-instance opportunity backstop failed: ${error.message}`);
+        if (trace) {
+            trace.backstopMs = Date.now() - tBack;
+            trace.backstopIds = missing.length;
+            trace.backstopRows = (data ?? []).length;
+        }
+        for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+    })();
+
     const cmRead = (async () => {
+        const tCm = Date.now();
         if (subjectIds.length) {
             const { data, error } = await withDbTiming("member.customer_members", { n: subjectIds.length }, async () =>
                 params.supabase
@@ -202,11 +320,16 @@ async function resolveTrackRowRefs(params: {
                     .eq("org_id", params.orgId)
                     .in("id", subjectIds));
             if (error) throw new Error(`process-instance customer_member resolve failed: ${error.message}`);
+            if (trace) {
+                trace.cmMs = Date.now() - tCm;
+                trace.cmRows = (data ?? []).length;
+            }
             for (const c of data ?? []) cmById.set(String((c as { id: string }).id), c as Record<string, unknown>);
         }
     })();
 
     const catRead = (async () => {
+        const tCat = Date.now();
         if (programCatIds.length) {
             const { data } = await withDbTiming("member.program_categories", { n: programCatIds.length }, async () =>
                 params.supabase
@@ -214,6 +337,10 @@ async function resolveTrackRowRefs(params: {
                     .select("id, key, label")
                     .eq("org_id", params.orgId)
                     .in("id", programCatIds));
+            if (trace) {
+                trace.catMs = Date.now() - tCat;
+                trace.catRows = (data ?? []).length;
+            }
             for (const c of data ?? []) {
                 const rec = c as { id: string; key?: string | null; label?: string | null };
                 catById.set(String(rec.id), { key: rec.key, label: rec.label });
@@ -223,6 +350,13 @@ async function resolveTrackRowRefs(params: {
 
     // A failure in any leg must surface exactly as it did when they ran in sequence.
     await Promise.all([contextChain, cmRead, catRead]);
+
+    if (trace) {
+        trace.refsMs = Date.now() - tRefs;
+        trace.contextIds = contextIds.length;
+        trace.subjectIds = subjectIds.length;
+        trace.catIds = programCatIds.length;
+    }
 
     return { oppById, cmById, catById, opportunityIdByContextId };
 }
@@ -261,6 +395,7 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     orgId: string;
     workUnitId: string;
     stageKey: string;
+    trace?: ChildGrainTrace;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
     const stageKey = params.stageKey.trim();
     if (!stageKey) return [];
@@ -269,6 +404,7 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     // engine/metrics use. Fetch instances at this stage OR with no own stage (riding the family
     // track); the in-code filter below keeps only those whose effective stage matches this lane, so
     // a freshly-created child (null stage) surfaces in its household's stage lane (e.g. Lead).
+    const tPi = Date.now();
     const { data: piData, error: piErr } = await withDbTiming("member.process_instances", { stage: stageKey }, async () =>
         params.supabase
             .from("process_instances")
@@ -278,9 +414,12 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
             .or(`stage_key.eq.${stageKey},stage_key.is.null`));
     if (piErr) throw new Error(`process_instances enrollment-track query failed: ${piErr.message}`);
     const piRows = (piData ?? []) as PiRow[];
+    if (params.trace) {
+        params.trace.piMs += Date.now() - tPi;
+        params.trace.piRows += piRows.length;
+    }
     if (!piRows.length) return [];
-
-    const refs = await resolveTrackRowRefs({ ...params, piRows });
+    const refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
 
     const rows: OcmEnrollmentTrackQueryRow[] = [];
     for (const pi of piRows) {
@@ -318,7 +457,9 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
     supabase: SupabaseClient;
     orgId: string;
     workUnitId: string;
+    trace?: ChildGrainTrace;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
+    const tPi = Date.now();
     const { data: piData, error: piErr } = await params.supabase
         .from("process_instances")
         .select(PI_SELECT)
@@ -326,9 +467,12 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
         .eq("process_key", ENROLLMENT_PROCESS_KEY);
     if (piErr) throw new Error(`process_instances enrollment-participation query failed: ${piErr.message}`);
     const piRows = (piData ?? []) as PiRow[];
+    if (params.trace) {
+        params.trace.piMs += Date.now() - tPi;
+        params.trace.piRows += piRows.length;
+    }
     if (!piRows.length) return [];
-
-    const refs = await resolveTrackRowRefs({ ...params, piRows });
+    const refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
 
     // In-scope instances only (context opportunity resolved in-org), then the
     // Definition's own liveness gate over the canonical participant shape.

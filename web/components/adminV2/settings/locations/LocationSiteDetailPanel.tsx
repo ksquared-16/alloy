@@ -12,6 +12,7 @@ import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import { formatCapacityCoverage } from "@/lib/locations/capacityAdoptionState";
 
 function metadataString(metadata: unknown, key: string): string {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return "";
@@ -20,12 +21,12 @@ function metadataString(metadata: unknown, key: string): string {
 
 export default function LocationSiteDetailPanel({
     site,
-    capacitySummary,
+    capacityCoverage,
     canMutate,
     onSave,
 }: {
     site: LocationHierarchyRow | null;
-    capacitySummary: number;
+    capacityCoverage: { total: number; confirmed: number; needsReview: number; unset: number };
     canMutate: boolean;
     onSave: (id: string, body: Record<string, unknown>) => Promise<void>;
 }) {
@@ -162,12 +163,16 @@ export default function LocationSiteDetailPanel({
                     :   null}
                 </label>
 
-                <div>
-                    <span className="config-typo-field-label">Capacity summary</span>
+                <div data-testid="locations-site-capacity-coverage">
+                    <span className="config-typo-field-label">Capacity coverage</span>
                     <p className="config-typo-sublabel mt-1">
-                        {capacitySummary > 0 ?
-                            `${capacitySummary} seats across active rooms`
-                        :   "No room capacity configured yet"}
+                        {/*
+                          * Not a seat total. Canonical doctrine defines no site-level
+                          * seat aggregate — capacity is room-scoped, kind-specific and
+                          * effective-dated — and the sum this replaces added a physical
+                          * room's seats to the classrooms inside it.
+                          */}
+                        {formatCapacityCoverage(capacityCoverage)}
                     </p>
                 </div>
 

@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
 import { createChildcareDraftCharge, recalculateDraftCharge } from "@/lib/financials/childcareChargeService";
+import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import {
     reductionKey,
@@ -70,8 +71,22 @@ export async function applyFinancialReductions(
         actorUserId?: string | null;
         /** Narrow the run to one household. Absent, every household with gross tuition in the period. */
         customerIds?: readonly string[] | null;
+        /**
+         * PREVIEW RUNS THE SAME PLAN AND WRITES NOTHING.
+         *
+         * `billing.apply_discounts` used to preview by listing the policies IN FORCE — "1 discount
+         * policy in force for 2026-09" — and say nothing about money. An operator confirmed a run
+         * that then created six reductions worth $237.50 without having been told the figure.
+         *
+         * The fix is a mode on THIS function rather than a second planner beside it. Every read,
+         * every eligibility fact, every policy evaluation and every already-posted check is the same
+         * code in both modes; only the writes are skipped. A preview computed by a different
+         * function is a promise about someone else's work.
+         */
+        mode?: "preview" | "execute";
     },
 ): Promise<ReductionRunResult> {
+    const dryRun = args.mode === "preview";
     const periodKey = args.periodKey.trim();
     const period = billingPeriodBounds(periodKey);
 
@@ -102,15 +117,43 @@ export async function applyFinancialReductions(
     const { data: agreementRows, error: agreementError } = agreementIds.length
         ? await supabase
               .from("child_enrollment_agreements")
-              .select("id, customer_id, customer_member_id")
+              /* The commercial relationship, so an exception scoped to it can be found. */
+              .select("id, customer_id, customer_member_id, opportunity_customer_member_id")
               .eq("org_id", args.orgId)
               .in("id", agreementIds)
         : { data: [], error: null };
     if (agreementError) throw new Error(`agreement read failed: ${agreementError.message}`);
     const subjectByAgreement = new Map(
-        ((agreementRows ?? []) as Array<{ id: string; customer_id: string | null; customer_member_id: string | null }>)
-            .map((a) => [a.id, a]),
+        ((agreementRows ?? []) as Array<{
+            id: string;
+            customer_id: string | null;
+            customer_member_id: string | null;
+            opportunity_customer_member_id: string | null;
+        }>).map((a) => [a.id, a]),
     );
+    /*
+     * ── WHAT EACH RELATIONSHIP IS EXCEPTED FROM ───────────────────────────────────────────────
+     *
+     * Read once per relationship for this period, from the ONE exception authority, and handed to
+     * the same resolver the forecast calls. That shared call is what makes a forecast trustworthy:
+     * if the two consulted different sources, a surface could promise a discount this path would
+     * then withhold, and nobody could say which was right.
+     *
+     * Dated at the period's start, the same date the eligibility facts are resolved for.
+     */
+    const excludedByRelationship = new Map<string, string[]>();
+    for (const [, a] of subjectByAgreement) {
+        const ocmId = a.opportunity_customer_member_id;
+        if (!ocmId || excludedByRelationship.has(ocmId)) continue;
+        excludedByRelationship.set(
+            ocmId,
+            await readExcludedPolicyIds(supabase, {
+                orgId: args.orgId,
+                opportunityCustomerMemberId: ocmId,
+                onDate: period.start,
+            }),
+        );
+    }
 
     const scope = args.customerIds?.length ? new Set(args.customerIds) : null;
     const eligibilityByCustomer = new Map<string, Awaited<ReturnType<typeof resolveHouseholdEligibility>>>();
@@ -159,6 +202,9 @@ export async function applyFinancialReductions(
             },
             policies,
             facts,
+            excludedPolicyIds: subject?.opportunity_customer_member_id
+                ? (excludedByRelationship.get(subject.opportunity_customer_member_id) ?? [])
+                : [],
         });
 
         if (decision.kind === "not_eligible") {
@@ -177,6 +223,7 @@ export async function applyFinancialReductions(
         }
 
         const written = await persistReductions(supabase, {
+            dryRun,
             orgId: args.orgId,
             actorUserId: args.actorUserId ?? null,
             charge,
@@ -214,6 +261,8 @@ export async function applyFinancialReductions(
 async function persistReductions(
     supabase: SupabaseClient,
     args: {
+        /** True → resolve and report exactly as the run would, and write nothing. */
+        dryRun: boolean;
         orgId: string;
         actorUserId: string | null;
         charge: GrossChargeRow;
@@ -264,6 +313,16 @@ async function persistReductions(
         }
         // A DRAFT reduction reconciles in place — the same rule Charge Resolution already applies
         // to a draft whose inputs moved.
+        if (args.dryRun) {
+            return {
+                kind: "applied",
+                chargeId: row.id,
+                sourceChargeId: args.charge.id,
+                customerMemberId: args.customerMemberId,
+                amountCents: total,
+                policyIds: args.reductions.map((r) => r.policyId),
+            };
+        }
         await recalculateDraftCharge(supabase, {
             orgId: args.orgId,
             chargeId: row.id,
@@ -278,6 +337,19 @@ async function persistReductions(
         return {
             kind: "applied",
             chargeId: row.id,
+            sourceChargeId: args.charge.id,
+            customerMemberId: args.customerMemberId,
+            amountCents: total,
+            policyIds: args.reductions.map((r) => r.policyId),
+        };
+    }
+
+    if (args.dryRun) {
+        // No charge exists yet, so there is no id to report — the money and the policies are the
+        // answer a confirmation needs.
+        return {
+            kind: "applied",
+            chargeId: "",
             sourceChargeId: args.charge.id,
             customerMemberId: args.customerMemberId,
             amountCents: total,

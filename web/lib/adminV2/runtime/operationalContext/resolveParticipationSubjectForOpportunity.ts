@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+
 /**
  * RESOLVE THE ATTENTION PARTICIPATION TO ITS AUTHORITATIVE MEMBER — scoped to one opportunity.
  *
@@ -79,4 +80,76 @@ export async function resolveParticipationSubjectForOpportunity(args: {
     if (!customerMemberId) return null;
 
     return { participationId, customerMemberId };
+}
+
+/**
+ * THE SOLE ENROLLED CHILD OF ONE OPPORTUNITY — for the frame that has no participation to name.
+ *
+ * ── WHY THIS EXISTS ──
+ *
+ * The resolver above answers "which member is THIS participation?" and needs the caller to name
+ * one. The document/commit frame cannot: on a family-grain opportunity nothing has selected a
+ * child yet, so `attentionSubjectId` is absent and that resolver correctly returns null. The
+ * consequence was measured — the document's card producers run, but Attendance and Health report
+ * `unavailable` on every sample because `participantScope` is null, and the panel has to wait for
+ * a second round trip to learn something the database already knew.
+ *
+ * So this asks the other question: does this opportunity have exactly ONE member? One indexed read
+ * on `opportunity_customer_members`, scoped to the same org and the same opportunity as the
+ * resolver above. The body below says why that table and not `process_instances`.
+ *
+ * ── REFUSES TO GUESS ──
+ *
+ * Exactly one child participation resolves. Two or more is AMBIGUOUS and resolves to nothing:
+ * picking the first would attribute one child's attendance and health to another, and those are
+ * the two cards where that is least acceptable. Zero resolves to nothing. This is the same
+ * precedence `resolveParticipantScope` applies to candidates from truth — stated here against the
+ * authoritative table instead of against intake metadata, which is exactly where #1075 went wrong.
+ */
+export async function resolveSoleEnrollmentParticipantForOpportunity(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+    opportunityId: string;
+}): Promise<{ participationId: string; customerMemberId: string } | null> {
+    const orgId = args.orgId?.trim() ?? "";
+    const opportunityId = args.opportunityId?.trim() ?? "";
+    if (!orgId || !opportunityId) return null;
+
+    /*
+     * `opportunity_customer_members`, NOT `process_instances` — and the first deployed attempt at
+     * this proved why the distinction is not academic.
+     *
+     * It read `process_instances`, on the reasonable-looking grounds that participation is
+     * authoritative there. On a LEAD there are no process instances at all: the children shell's
+     * own overlay says so in as many words — "No process instances yet (legacy lead) -> OCM remains
+     * the participation source". So the resolver returned null on every sample, Attendance and
+     * Health stayed `unavailable`, and the only measured effect was the read's own cost.
+     *
+     * The OCM join is the source the children shell actually uses for this shape, keyed directly by
+     * org + opportunity, and it carries both halves of the contract: `customer_member_id` is the
+     * member, `id` is the participation candidate. That is the same pair
+     * `participantCandidatesFromTruth` maps out of `_inquiry_children`, read from the table those
+     * rows are built from rather than from intake metadata — which is the part #1075 got wrong.
+     *
+     * One indexed read. The producers this unblocks consume `customerMemberId` and nothing else, so
+     * an enrolled case resolving its participation id through `process_instances` instead changes
+     * nothing they can observe.
+     */
+    const { data, error } = await args.supabase
+        .from("opportunity_customer_members")
+        .select("id, customer_member_id")
+        .eq("org_id", orgId)
+        .eq("opportunity_id", opportunityId);
+    if (error || !Array.isArray(data)) return null;
+
+    const candidates = data
+        .map((r) => ({
+            participationId: String((r as { id?: unknown }).id ?? "").trim(),
+            customerMemberId: String((r as { customer_member_id?: unknown }).customer_member_id ?? "").trim(),
+        }))
+        .filter((c) => c.participationId && c.customerMemberId);
+
+    // Exactly one, or nothing. Two children resolving to the first would attribute one child's
+    // attendance and health to another — the two cards where that is least acceptable.
+    return candidates.length === 1 ? candidates[0]! : null;
 }

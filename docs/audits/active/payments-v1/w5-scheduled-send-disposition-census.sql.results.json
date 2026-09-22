@@ -1,0 +1,47 @@
+{
+  "trusted_host_action_id": "tha_a70ff53a2a9c4f",
+  "query_hash": "eb6d1deb001155d6eff61580614e8f02ff10c9fdede3831eb190ed40b96b6aa9",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T14:12:53.079Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_a70ff53a2a9c4f",
+    "query_hash": "eb6d1deb001155d6eff61580614e8f02ff10c9fdede3831eb190ed40b96b6aa9",
+    "authorization_id": "grnt_8280f229b6d4409f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T14:12:54.694Z",
+    "question_ids": [
+      "w5_send_disposition"
+    ],
+    "questions": {
+      "w5_send_disposition": {
+        "question_id": "w5_send_disposition",
+        "row_count": null,
+        "rows": [
+          {
+            "by_status": {
+              "canceled": 10,
+              "pending": 1
+            },
+            "sent_count": 0,
+            "canceled_count": 10,
+            "failed_count": 0,
+            "with_message_id": 0,
+            "claim_token_ever_set": 0,
+            "left_pending_after_due": 0,
+            "left_pending_before_due": 10,
+            "newest_scheduled_for": "2026-08-17 15:00:00+00",
+            "newest_updated_at": "2026-08-13 17:59:07.144577+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -10,8 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Banknote } from "lucide-react";
 import CommercialSimulatorPanel from "@/components/adminV2/commercial/CommercialSimulatorPanel";
 import TuitionPlansConfigurationPage from "@/components/adminV2/settings/financials/tuitionPlans/TuitionPlansConfigurationPage";
-import GlCodesConfigurationPage from "@/components/adminV2/settings/financials/accounting/GlCodesConfigurationPage";
-import AccountingPostingPanels from "@/components/adminV2/settings/financials/accounting/AccountingPostingPanels";
+import AccountingWorkspace from "@/components/adminV2/settings/financials/accounting/AccountingWorkspace";
 import CatalogConfigurationPage from "@/components/adminV2/settings/financials/catalog/CatalogConfigurationPage";
 import PoliciesConfigurationPage from "@/components/adminV2/settings/financials/policies/PoliciesConfigurationPage";
 import {
@@ -19,6 +18,7 @@ import {
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import PaymentsProviderChapter from "@/components/adminV2/settings/financials/PaymentsProviderChapter";
 import {
     FINANCIALS_WORKSPACE_CHAPTER_META,
     FINANCIALS_WORKSPACE_CHAPTERS,
@@ -174,13 +174,18 @@ export default function FinancialsWorkspaceSurface({
                     </div>
                 : chapter === "accounting" ?
                     <div data-testid="financials-chapter-accounting">
-                        <GlCodesConfigurationPage />
                         {/*
-                         * WHERE money posts and WHEN it posts, beneath the accounts themselves.
-                         * Both were canonical, both were enforced, and neither had a screen — see
-                         * the note on `AccountingPostingPanels`.
+                         * TWO TOOLS, ONE AT A TIME. These were stacked vertically — the whole GL
+                         * configuration and then the whole calendar — so an operator who came to
+                         * close a period scrolled past every account to reach it. The workspace
+                         * selects between them using the canonical rail grammar; neither tool's
+                         * semantics or copy changed.
                          */}
-                        <AccountingPostingPanels />
+                        <AccountingWorkspace />
+                    </div>
+                : chapter === "payments" ?
+                    <div data-testid="financials-chapter-payments-host">
+                        <PaymentsProviderChapter />
                     </div>
                 : chapter === "policies" ?
                     <div data-testid="financials-chapter-policies">

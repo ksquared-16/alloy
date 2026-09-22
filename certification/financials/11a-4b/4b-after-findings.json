@@ -1,0 +1,26 @@
+[
+  {
+    "id": "4B-SUBJ",
+    "what": "the $18 obligation keeps its child and identity",
+    "ok": true,
+    "observed": "chargeId=f089a3f4-85a1-44b6-bb94-50588a581b00 cells=[\"Sep 2, 2026\",\"Consumable fee\",\"Certa Certhouse\",\"4030 · Supply Fees\",\"$18.00\",\"posted\",\"Unassigned\",\"Materials\"]"
+  },
+  {
+    "id": "4B-RESP",
+    "what": "the $18 obligation's responsibility state after assignment",
+    "ok": true,
+    "observed": "unassigned (\"Unassigned\") — sibling 04fe2205 is not-allocated"
+  },
+  {
+    "id": "4B-FILT",
+    "what": "the Responsible Party filter offers the assigned party",
+    "ok": false,
+    "observed": "no responsible-party options rendered"
+  },
+  {
+    "id": "4B-WS",
+    "what": "the Workspace states the SAME responsibility truth for the same charge",
+    "ok": true,
+    "observed": "rows=58 states={\"not-allocated\":57,\"unassigned\":1} target=unassigned (\"Unassigned\")"
+  }
+]

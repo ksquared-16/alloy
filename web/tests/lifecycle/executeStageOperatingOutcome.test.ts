@@ -194,6 +194,9 @@ describe("executeStageOperatingOutcome", () => {
         } as unknown as Parameters<typeof executeStageOperatingOutcome>[0]["plan"];
         // Department configures lead + tour only — qualification is NOT a stage.
         const supabase = {
+            // The lifecycle write is an RPC now; these cases assert WHICH outcome ran, not the
+            // row write, so a successful lifecycle result is the faithful stand-in.
+            rpc: async () => ({ data: { ok: true }, error: null }),
             from: withConfiguredDept(() => ({
                 select: vi.fn().mockReturnThis(),
                 eq: vi.fn().mockReturnThis(),
@@ -226,6 +229,9 @@ describe("executeStageOperatingOutcome", () => {
             single: vi.fn(async () => ({ data: {}, error: null })),
         });
         const supabase = {
+            // The lifecycle write is an RPC now; these cases assert WHICH outcome ran, not the
+            // row write, so a successful lifecycle result is the faithful stand-in.
+            rpc: async () => ({ data: { ok: true }, error: null }),
             from: vi.fn(withConfiguredDept(() => genericChain())),
         };
 
@@ -355,6 +361,9 @@ describe("executeStageOperatingOutcome", () => {
         const updateSpy = vi.fn().mockReturnThis();
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
+            // The lifecycle write is an RPC now; these cases assert WHICH outcome ran, not the
+            // row write, so a successful lifecycle result is the faithful stand-in.
+            rpc: async () => ({ data: { ok: true }, error: null }),
             from: vi.fn(withConfiguredDept(() => ({
                 select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "lead" }),
                 update: (...args: unknown[]) => {
@@ -410,6 +419,9 @@ describe("executeStageOperatingOutcome", () => {
         const updateSpy = vi.fn().mockReturnThis();
         const eqSpy = vi.fn().mockReturnThis();
         const supabase = {
+            // The lifecycle write is an RPC now; these cases assert WHICH outcome ran, not the
+            // row write, so a successful lifecycle result is the faithful stand-in.
+            rpc: async () => ({ data: { ok: true }, error: null }),
             from: vi.fn(withConfiguredDept(() => ({
                 select: priorValueRead({ status_key: "open", close_reason_key: null, stage_key: "tour" }),
                 update: (...args: unknown[]) => {

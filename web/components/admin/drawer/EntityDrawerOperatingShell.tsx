@@ -18,7 +18,6 @@ import {
     entityDrawerAccentColor,
     type EntityDrawerOperatingEntity,
 } from "@/lib/admin/drawer/entityDrawerOperatingModel";
-import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 
 export type EntityDrawerOperatingShellProps = {
     entity: EntityDrawerOperatingEntity;
@@ -104,7 +103,6 @@ export default function EntityDrawerOperatingShell({
                     className="flex min-h-0 flex-col gap-2 bg-white"
                     data-entity-drawer-scroll-body="true"
                     {...(focusPanelPresentation ? { "data-alloy-os-focus-panel": "true" } : {})}
-                    {...(focusPanelPresentation ? alloySectionDomAttrs("WU-07") : {})}
                 >
                     {showSummaryStrip ?
                         <div

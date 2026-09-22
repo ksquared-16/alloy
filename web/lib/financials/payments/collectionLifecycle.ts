@@ -129,3 +129,59 @@ export function lifecycleLabel(state: CollectionLifecycleState, rail: Collection
 export function meansSettledCash(state: CollectionLifecycleState): boolean {
     return state === "received";
 }
+
+/**
+ * WHAT AN OPERATOR READS ABOUT A COLLECTION IN PROGRESS (Payments V1 · W3).
+ *
+ * Two short lines: what is happening, and what it is happening to. Both are composed HERE rather
+ * than in a component, so the Focus Panel, the workspace and any future surface say the same thing —
+ * and so no component is tempted to ask the provider for display metadata it can read off the
+ * canonical Payment Method Reference.
+ *
+ * ── THE DATE IS A PROJECTION AND READS LIKE ONE ──
+ *
+ * "Processing · Expected Sep 24" says when the money is expected. It never says "Received", because
+ * the only thing that means money is canonical recognition. When the provider offered no date the
+ * line simply omits it — an absent expectation is not a reason to invent one, and the ACH label
+ * already says settlement takes a few days without promising which.
+ */
+export function collectionPresentation(input: {
+    state: CollectionLifecycleState;
+    rail: CollectionRail;
+    /** `payment_collection_attempts.expected_settlement_on`. Projection only. */
+    expectedSettlementOn?: string | null;
+    /** Safe display from the canonical Payment Method Reference. Never a provider reference. */
+    methodBrand?: string | null;
+    methodLast4?: string | null;
+}): { statusLine: string; methodLine: string | null } {
+    const base = lifecycleLabel(input.state, input.rail);
+
+    /*
+     * A date is only meaningful while the money is still on its way. Once it is received, returned,
+     * failed or canceled, what was once expected is a distraction from what happened.
+     */
+    const dateIsUseful = input.state === "processing" || input.state === "finalizing";
+    const expected = dateIsUseful ? formatExpected(input.expectedSettlementOn) : null;
+
+    const statusLine = expected
+        ? `${input.rail === "ach" ? "Processing" : base} · Expected ${expected}`
+        : base;
+
+    const name = input.methodBrand?.trim() || null;
+    const last4 = input.methodLast4?.trim() || null;
+    const methodLine = name || last4
+        ? `${name ?? (input.rail === "ach" ? "Bank account" : "Card")}${last4 ? ` •••• ${last4}` : ""}`
+        : null;
+
+    return { statusLine, methodLine };
+}
+
+/** `2026-09-24` → `Sep 24`. Parsed as a plain day, never shifted by the reader's timezone. */
+function formatExpected(value?: string | null): string | null {
+    const raw = (value ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+    const [y, m, d] = raw.split("-").map(Number);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (!months[m - 1] || !Number.isFinite(d) || !Number.isFinite(y)) return null;
+    return `${months[m - 1]} ${d}`;
+}

@@ -7,6 +7,10 @@ import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import EmploymentCard from "@/components/admin/focusPanel/cards/EmploymentCard";
+import StaffAvailabilityCard from "@/components/admin/focusPanel/cards/StaffAvailabilityCard";
+import StaffCompensationCard from "@/components/admin/focusPanel/cards/StaffCompensationCard";
+import StaffReadinessCard from "@/components/admin/focusPanel/cards/StaffReadinessCard";
+import StaffQualificationsCard from "@/components/admin/focusPanel/cards/StaffQualificationsCard";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
@@ -187,6 +191,44 @@ export default function FocusPanelCardRenderer({
     if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Qualifications reads its own state for the person's OPEN employment. A separate component
+    // because it is a separate question on a separate clock — see the card key's comment.
+    // Availability answers a third question on a third clock — its own component.
+    // Readiness is a projection over the other three — its own component, because
+    // it fetches a server-side verdict rather than deriving one locally.
+    // Compensation is the one restricted card: it renders nothing on a 403, so the
+    // branch is unconditional here and the decision lives in the card and the
+    // context layer rather than being spread across a third place.
+    if (model.key === "staff_compensation") {
+        return (
+            <StaffCompensationCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    if (model.key === "staff_readiness") {
+        return (
+            <StaffReadinessCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    if (model.key === "staff_availability") {
+        return (
+            <StaffAvailabilityCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
+    }
+    if (model.key === "staff_qualifications") {
+        return (
+            <StaffQualificationsCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
         );
     }
     // Health & Safety reads ONE child's composed health record, permission-gated server-side.

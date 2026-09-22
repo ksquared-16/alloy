@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
-import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { resolveParticipationSubjectForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
@@ -16,8 +15,21 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * Legacy alias:   /api/admin/v2/view-models/drawer/opportunity/[id] (next.config rewrite)
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    /*
+     * THE ROUTE'S OWN PHASES.
+     *
+     * compose_ms covers a median 2,288ms of a 3,698ms endpoint wall. Network accounts for ~384ms,
+     * leaving ~935ms — 25% of the endpoint — inside this handler but outside the composer, and
+     * that block carries most of the run-to-run variance. Everything in it is here: the gate, the
+     * org assertion, the participant resolve and the card producers, which run AFTER compose and
+     * are first-order for Attendance and Health. Without this split the largest unexplained cost
+     * on the settlement path can only be guessed at, and this programme has already spent slices
+     * on a guess. Four Date.now() reads and three headers; no new timing framework.
+     */
     const routeT0 = Date.now();
+    const routePhases: Record<string, number> = {};
     const gate = await loadAdminRouteGate();
+    routePhases.gate_ms = Date.now() - routeT0;
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
     const { id: opportunityId } = await context.params;
@@ -26,7 +38,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const supabase = createAdminClient();
+    const tAssert = Date.now();
     const oppOrg = await assertRowOrg(supabase, "opportunities", opportunityId, gate.orgId);
+    routePhases.assert_row_org_ms = Date.now() - tAssert;
     if (!oppOrg.ok) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -41,6 +55,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     try {
         const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
 
+        /*
+         * TWO STAGES, ONE COMPOSE.
+         *
+         * The producers below need exactly two fields — customerMemberId and displayName — and both
+         * are settled once the children shell has run, a median 1,355ms before the view model is
+         * finished. They used to wait for all of it. Now stage one hands over those two fields, the
+         * producers start, and the remaining composition runs alongside them; both are joined
+         * before the response is assembled, so the response itself is unchanged.
+         */
         const result = await composeOpportunityDrawerViewModel({
             supabase,
             gate,
@@ -90,13 +113,49 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
              * It runs HERE rather than inside the composer because it queries the database and the
              * composer is reachable from a client component, exactly as the producers below are.
              */
-            resolvedParticipant: await resolveParticipationSubjectForOpportunity({
-                supabase,
-                orgId: gate.orgId,
-                opportunityId: opportunityId.trim(),
-                participationId: attentionSubjectId,
-            }),
+            resolvedParticipant: await (async () => {
+                const t = Date.now();
+                const r = await resolveParticipationSubjectForOpportunity({
+                    supabase,
+                    orgId: gate.orgId,
+                    opportunityId: opportunityId.trim(),
+                    participationId: attentionSubjectId,
+                });
+                routePhases.participant_resolve_ms = Date.now() - t;
+                return r;
+            })(),
         });
+
+        /*
+         * START THE PRODUCERS, DO NOT AWAIT THEM YET.
+         *
+         * Awaiting stage one costs only what the children shell already costs. The producers then
+         * run against the remaining compose rather than after it. `access` is the route's own
+         * resolved authority, exactly as before — the grants come from `loadAdminRouteGate` at the
+         * top of this handler, so starting earlier cannot outrun authorization.
+         */
+        /*
+         * THE DRAWER NO LONGER PRODUCES FIRST-ORDER CARD TRUTH.
+         *
+         * These producers ran here AND in the document, with the same authority against the same
+         * subject, and measured on f67114ca4 the second run owned nothing: Financials arrived as
+         * an identical rerender and Attendance/Health as recomputations of answers the document
+         * had already made. The duplicate cost a median 772ms on the settlement path.
+         *
+         * It could not simply be deleted before now. The settled operational context substituted
+         * its own `operational_projection` wholesale, so removing this run would have left
+         * `cards` absent at settlement — which the contract defines as "provisioning", not "no
+         * attendance" — and the cards would have blanked. The browser now states that the
+         * DOCUMENT owns first-order producer truth for the navigation
+         * (`firstOrderProducerCards`), so there is nothing left for this run to be the source of.
+         *
+         * The endpoint keeps everything else: the view model, `businessProcess` and `currentWork`
+         * projections, and all second-order enrichment. Only the duplicate first-order producer
+         * execution is retired.
+         */
+        routePhases.participant_contract_ready_ms = Date.now() - routeT0;
+
+        routePhases.full_compose_end_ms = Date.now() - routeT0;
 
         if (!result.ok) {
             logDrawerVmRuntimeServer("compose_skip", {
@@ -138,34 +197,29 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
          * disagree about the subject. Producer failure is bounded by `Promise.allSettled` inside the
          * producer module: an Attendance outage costs the operator Attendance, not the drawer.
          */
-        const settledContext = result.operationalContext ?? null;
-        const projection = result.viewModel.workspace.operational_projection ?? null;
-        const viewModel =
-            settledContext && projection
-                ? {
-                      ...result.viewModel,
-                      workspace: {
-                          ...result.viewModel.workspace,
-                          operational_projection: {
-                              ...projection,
-                              cards: await projectFocusPanelCardProducers({
-                                  supabase,
-                                  orgId: gate.orgId,
-                                  context: settledContext,
-                                  // The route's OWN resolved authority — the same canonical bundle
-                                  // the health endpoint reads, never anything the browser sent.
-                                  access: gate.access,
-                              }),
-                          },
-                      },
-                  }
-                : result.viewModel;
+        /*
+         * JOIN. The producers ran ONCE, started early; this is where their answer is folded in.
+         * The guard is unchanged apart from requiring the producers' own result, so a frame that
+         * produced no cards before produces none now.
+         *
+         * `tProducers` is NOT declared here any more: it is stamped where the producers actually
+         * start, above. Keeping staging's declaration would have measured the join, not the work.
+         */
+        /*
+         * No producer join: the document owns first-order card truth for this navigation, so the
+         * settled projection ships WITHOUT `cards` and the browser keeps the document's.
+         */
+        const viewModel = result.viewModel;
+        // `card_producers_ms` is deliberately NOT reported any more: this route runs no producers,
+        // and emitting a zero would read as "they were free" rather than "they are gone".
+        routePhases.full_compose_end_ms = Date.now() - routeT0;
 
         return NextResponse.json(viewModel, {
             headers: {
                 "X-Alloy-Drawer-VM-Structure-Settled": "true",
                 "X-Alloy-Drawer-VM-Generation": result.viewModel.generation,
                 "X-Alloy-Drawer-VM-Compose-Ms": String(result.viewModel.timing.compose_ms),
+                "X-Alloy-Drawer-VM-Route-Phases": JSON.stringify(routePhases),
                 "X-Alloy-Server-Duration": String(Date.now() - routeT0),
             },
         });

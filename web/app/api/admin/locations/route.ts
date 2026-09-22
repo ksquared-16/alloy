@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { canonicalUnitRoleFromStorage } from "@/lib/location/canonicalLocationModel";
+import { assertTopologyMutationSafe } from "@/lib/location/topologyMutationAuthority";
+import { topologyRefusalResponse } from "@/lib/location/topologyRefusalResponse";
 import {
     enrichHierarchyUnitsWithProgramCategories,
     UNIT_PROGRAM_CATEGORY_FIELD_KEYS,
@@ -86,6 +89,22 @@ export async function GET(request: NextRequest) {
             parent_location_id: hierarchy
                 ? ((r.parent_location_id as string | null | undefined) ?? null)
                 : undefined,
+            // The canonical topology role, on the same `hierarchy` gate as the
+            // structural parent it belongs with — a role only means something
+            // alongside the tree, and a flat dropdown has no use for it.
+            //
+            // EFFECTIVE, not raw storage. `canonicalUnitRoleFromStorage` is the
+            // single owner of the NULL-compatibility rule, so a historical unit
+            // answers `operational_group` here exactly as it does in the DB
+            // (`location_unit_role()`), in the provider, and in every predicate.
+            // Handing the surface a raw NULL would make every component that
+            // touches a room rediscover that rule, and they would drift.
+            // A site or an address answers null: they are not role-bearing.
+            //
+            // The PUBLIC API (`/api/v1/locations`) deliberately keeps exposing the
+            // RAW nullable column — an external partner reads storage, not our
+            // compatibility reading of it. These two contracts differ on purpose.
+            unit_role: hierarchy ? canonicalUnitRoleFromStorage(r.location_type, r.unit_role) : undefined,
             metadata: hierarchy
                 ? (r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
                     ? r.metadata
@@ -203,50 +222,21 @@ export async function POST(request: NextRequest) {
         typeof body.parent_location_id === "string" && body.parent_location_id.trim()
             ? body.parent_location_id.trim()
             : null;
-    if (location_type === "unit" && !parent_location_id) {
-        return NextResponse.json({ error: "parent_location_id is required for room units" }, { status: 400 });
-    }
-    // A unit may hang off a site, or off a physical space that itself hangs off a
-    // site (Room 1 containing Toddler 1 / Toddler 2). Anything deeper, or nested
-    // under a group or a shared space, is refused here and again by the DB.
     const unit_role =
         typeof body.unit_role === "string" && body.unit_role.trim() ? body.unit_role.trim() : null;
-    if (unit_role && !["physical_space", "operational_group", "shared_space"].includes(unit_role)) {
-        return NextResponse.json({ error: "Invalid unit_role" }, { status: 400 });
-    }
-    if (unit_role && location_type !== "unit") {
-        return NextResponse.json({ error: "unit_role applies only to a unit" }, { status: 400 });
-    }
-    if (parent_location_id) {
-        const { data: parent } = await supabase
-            .from("locations")
-            .select("id, location_type, parent_location_id, unit_role")
-            .eq("id", parent_location_id)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-        const parentType = String(parent?.location_type ?? "").trim();
-        if (!parent || (parentType !== "site" && parentType !== "unit")) {
-            return NextResponse.json(
-                { error: "Parent location must be a site or a physical space in this organization" },
-                { status: 400 }
-            );
-        }
-        if (parentType === "unit") {
-            const parentRole = String(parent.unit_role ?? "operational_group").trim();
-            if (parentRole !== "physical_space") {
-                return NextResponse.json(
-                    { error: "A room may only be nested inside a physical space" },
-                    { status: 400 }
-                );
-            }
-            if ((unit_role ?? "operational_group") === "physical_space") {
-                return NextResponse.json(
-                    { error: "A physical space may not be nested inside another physical space" },
-                    { status: 400 }
-                );
-            }
-        }
-    }
+
+    // Topology legality is NOT this route's to own. The canonical authority
+    // answers for create and for update alike, so the two verbs cannot drift —
+    // and the DB trigger still backstops whatever races past this preflight.
+    const topology = await assertTopologyMutationSafe(supabase, ctx.orgId, {
+        candidate: {
+            id: null,
+            locationType: location_type,
+            unitRole: unit_role,
+            parentLocationId: parent_location_id,
+        },
+    });
+    if (!topology.ok) return topologyRefusalResponse(topology);
 
     const is_primary = customer_id ? !!body.is_primary : false;
     const is_active = body.is_active !== false;

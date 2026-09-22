@@ -1,0 +1,112 @@
+{
+  "preview": {
+    "mode": "preview",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 to bill, 1 not due, 0 refused for monthly 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "cadence_key": "monthly",
+              "service_period": {
+                "start": "2026-09-01",
+                "end": "2026-09-30"
+              },
+              "counts": {
+                "generated": 1,
+                "unchanged": 0,
+                "notDue": 1,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 145000,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "d5a12e17-62f8-4edd-aeeb-79670b442650"
+    }
+  },
+  "run1": {
+    "mode": "execute",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "cadence_key": "monthly",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 1,
+          "unchanged": 0,
+          "alreadyPosted": 0,
+          "notDue": 1,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+      },
+      "correlation_id": "2bb62cf7-1e93-4715-baee-6da0e3508259"
+    }
+  },
+  "run2": {
+    "mode": "execute",
+    "status": 200,
+    "body": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "cadence_key": "monthly",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 0,
+          "unchanged": 1,
+          "alreadyPosted": 0,
+          "notDue": 1,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": null
+      },
+      "correlation_id": "7d590347-d4d4-4f05-bfe1-a200ae993ffd"
+    }
+  }
+}

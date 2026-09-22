@@ -107,7 +107,13 @@ function pastDueFor(
     return {
         amount: money(pastDue.amountCents, currency),
         oldest: oldest ?? "—",
-        age: `${pastDue.agingDays} ${pastDue.agingDays === 1 ? "day" : "days"} past due`,
+        /*
+         * THE DURATION, NOT THE VERDICT. This baked "past due" into a field called `age`, and the
+         * only surface that renders it already says "past due" itself — so the compact card read
+         * "$75.00 past due · 1 day past due", which is the same judgement twice and overran a
+         * nowrap line into an ellipsis. The phrase is said once, by the sentence that owns it.
+         */
+        age: `${pastDue.agingDays} ${pastDue.agingDays === 1 ? "day" : "days"}`,
         note: null,
     };
 }
@@ -167,9 +173,18 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         // Lab-only specimen label; never rendered inside the card.
         caseLabel: "",
         compact: {
-            dueLine:
-                pastDue ? `${pastDue.amount} past due`
-                :   money(reconciliation.balanceCents, currency),
+            /*
+             * A HEADLINE MUST EARN ITS SLOT.
+             *
+             * Past due is a distinct CONDITION — a figure with a deadline attached — so it keeps the
+             * prominent line. An ordinary balance is not: `lines` states it immediately below as
+             * "Current balance", and printing it again above, unlabelled, said the same fact twice
+             * and made $0.00 sit over "Current balance $0.00".
+             *
+             * Null, not an empty string: the card asks whether there is a headline, rather than
+             * rendering a blank one. The arithmetic is untouched — this only decides what is shown.
+             */
+            dueLine: pastDue ? `${pastDue.amount} past due` : null,
             lines: [
                 { label: "Responsibility", value: money(reconciliation.responsibilityCents, currency) },
                 { label: "Current balance", value: money(reconciliation.balanceCents, currency) },
@@ -195,11 +210,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
              * household's stored methods, and returns null when there is genuinely nothing
              * established to say. Silence still means unknown; it simply is not the only answer.
              *
-             * HEALTHY MEANS A METHOD IS ON FILE, which is what this line reports. It is deliberately
-             * not autopay — see the payment band below.
+             * HEALTHY MEANS A USABLE METHOD IS ON FILE, which is what this line reports. It is
+             * deliberately not autopay — see the payment band below.
+             *
+             * It asks `methodSummary` rather than counting `methodsOnFile`, because that list now
+             * INCLUDES revoked methods so a surface can say "removed" rather than silently dropping
+             * them. Counting its length would report a household whose only card was removed as
+             * healthy — and a bank account still awaiting verification as ready to charge.
              */
             paymentLine: vm.paymentSetup ?? null,
-            paymentHealthy: (vm.paymentCapabilities?.methodsOnFile.length ?? 0) > 0,
+            paymentHealthy: vm.paymentCapabilities?.methodSummary.hasUsableMethod === true,
         },
         subjects: vm.subjects.map((s) => s.displayName).filter((n): n is string => Boolean(n)),
         period: {
@@ -254,6 +274,40 @@ export function adaptFinancialsVmToFinancialsCard(input: {
             /* The SAME canonical figure `collectibleNow` reads, stated unconditionally. See the
                field's note in `cardLabTypes`: one authority, two rendering policies. */
             dueNow: money(vm.collectible.currentlyCollectibleCents, currency),
+            /*
+             * ZERO IS SILENCE. The metric appears only when the organisation actually holds
+             * spendable money for this family — the information-density rule the rest of this strip
+             * already follows, and the reason Autopay was dropped from it rather than rendered as a
+             * permanent "not available".
+             *
+             * PENDING MONEY IS NOT SHOWN HERE. It is reported by the authority and deliberately not
+             * offered: a receipt that has not cleared is money the platform was told about, and
+             * putting it in a figure labelled "available" would invite an operator to spend it.
+             */
+            /*
+             * OPTIONAL-CHAINED DELIBERATELY. `prepaid` is a new read-model field, and during a
+             * deploy this adapter can be handed a payload produced by a server that predates it —
+             * the card is client-rendered against a cached `/api/admin/financials/card` response.
+             * Crashing the whole card over a missing prepaid figure would take out Balance, Due and
+             * Past due to avoid omitting a line that is usually absent anyway.
+             */
+            availablePrepaid:
+                (vm.prepaid?.availableCents ?? 0) > 0 ? money(vm.prepaid!.availableCents, currency) : null,
+            /*
+             * HELD MONEY IS ITS OWN FIGURE (Payments V1 · W4), and never merged into the one above.
+             *
+             * "$200 available prepaid" and "$500 held" are different facts about a family: the first
+             * is money an operator may spend on an obligation right now, the second is money the
+             * organisation is holding and may not. One combined number would offer the deposit.
+             *
+             * It is also NOT netted into Current Balance — a family that owes $500 and has $500 held
+             * still owes $500. Zero stays silent, like every other metric in this strip, and
+             * `heldSupported` guards the difference between "nothing held" and "cannot tell".
+             */
+            heldFunds:
+                vm.prepaid?.heldSupported && (vm.prepaid?.heldCents ?? 0) > 0
+                    ? money(vm.prepaid!.heldCents, currency)
+                    : null,
             dueLabel,
         },
         pastDue,
@@ -262,30 +316,19 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         payers,
         payment: {
             /*
-             * AUTOPAY IS NOT A PAYMENT METHOD, and this used to say it was: it read the payment
-             * setup line — a hardcoded null at the time — into the autopay slot, so a family with a
-             * card on file would have been labelled as having autopay, and every family was labelled
-             * as not having it. Two different questions had one answer.
+             * AUTOPAY IS NOT A PAYMENT METHOD, and this once said it was: it read the payment setup
+             * line — a hardcoded null at the time — into the autopay slot, so a family with a card
+             * on file would have been labelled as having autopay. Two different questions had one
+             * answer.
              *
-             * There is no canonical autopay anywhere in the platform: no table, no column, no
-             * writer. `resolvePaymentSetup` reports that as `unsupported` with the reason, and the
-             * label here is that reason's short form — never a state derived from something else.
+             * W5 gave the second question its own authority. This is now the canonical arrangement's
+             * own sentence and never a state derived from a stored method, because storing a card is
+             * still not consent to charge it.
              */
-            autopayLabel: null,
-            autopayHealthy: false,
+            autopayLabel: vm.autopayLine ?? null,
+            autopayHealthy: vm.autopayHealthy === true,
             nextChargeLabel: null,
         },
-        /*
-         * ONE quiet line of context. When nothing is past due the specimen prints it under
-         * "Nothing past due", so it has to say something true about the account rather than repeat
-         * the balance already shown two inches away.
-         */
-        historyLine:
-            reconciliation.scheduledCents > 0 ?
-                `${money(reconciliation.scheduledCents, currency)} scheduled this period`
-            : reconciliation.paymentsCents > 0 ?
-                `Payments received · ${money(reconciliation.paymentsCents, currency)}`
-            :   `No payments recorded this period`,
         upcoming: [],
         /*
          * THE RECEIPTS, AND WHAT EACH IS ANSWERING.
@@ -303,7 +346,16 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 paymentId: p.paymentId,
                 receivedLabel: money(p.amountCents, p.currencyCode || currency),
                 payerLabel: p.payerLabel ?? null,
-                receivedOn: p.receivedAt,
+                /*
+                 * THROUGH THE CANONICAL FORMATTER, like every other date on the surface.
+                 *
+                 * This passed `receivedAt` RAW while every sibling field went through
+                 * `displayDate`. `receivedAt` is a timestamp, so the Payments lens rendered a full
+                 * ISO string into a 78px Date column — the garbled, overlapping date on an
+                 * otherwise ordinary ledger row, and the reason that lens looked like a different
+                 * renderer rather than the same one.
+                 */
+                receivedOn: displayDate(p.receivedAt),
                 method: p.method || null,
                 appliedLabel: money(p.appliedCents, p.currencyCode || currency),
                 unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
@@ -406,6 +458,31 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             source: row.categoryLabel,
             responsibleParty: row.responsiblePartyName,
             responsibilityUnassigned: row.responsibilityUnassigned,
+            /* So a reversal can be named a Reversal rather than falling through to its category. */
+            correctionKind: row.correctionKind,
+            /* PARTIAL is a state, not an inference: both halves travel with the name. */
+            responsibilityAssignedCents: row.responsibilityAssignedCents,
+            responsibilityUnassignedCents: row.responsibilityUnassignedCents,
+            /*
+             * The decision behind the money, formatted once here so both deep surfaces state the
+             * same thing. This adapter decides nothing about the reduction — `reductionProvenance`
+             * already read it; this only turns the period into the operator's words.
+             */
+            reduction: row.reduction
+                ? {
+                      applicationId: row.reduction.applicationId,
+                      concept: row.reduction.concept,
+                      conceptLabel: row.reduction.conceptLabel,
+                      recurrenceLabel: row.reduction.recurrenceLabel,
+                      decidedBy: row.reduction.decidedBy,
+                      basisSummary: row.reduction.basisSummary,
+                      explanation: row.reduction.explanation,
+                      sourceChargeId: row.reduction.sourceChargeId,
+                      periodLabel: row.reduction.periodKey ? billingPeriodLabel(row.reduction.periodKey) : null,
+                      reversesApplicationId: row.reduction.reversesApplicationId,
+                      reversedByApplicationId: row.reduction.reversedByApplicationId,
+                  }
+                : null,
             /* Borrowed, not restated — the one classifier both Financials surfaces filter by. */
             lens: ledgerLensOf(row),
             /*
@@ -453,6 +530,14 @@ export function adaptChargeTemplateOption(
         payerTargeting: "default_split",
         requiresSubject: true,
         requiresNote: tpl.amountStrategy !== "fixed",
+        /* The server's answer, carried across unchanged. This adapter formats; it decides nothing. */
+        reviewRequired: tpl.reviewRequired,
+        /*
+         * The category, so the command can honour the CODE-OWNED grain rule: a template whose
+         * category does not permit child grain must not offer a child selection at all. Carried,
+         * never interpreted here.
+         */
+        categoryKey: tpl.categoryKey,
     };
 }
 
@@ -568,6 +653,8 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
             paymentsReceived: dash,
             currentBalance: dash,
             dueNow: dash,
+            availablePrepaid: null,
+            heldFunds: null,
             dueLabel: "",
         },
         /*
@@ -578,7 +665,6 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         ledger: [],
         payers: [],
         payment: { autopayLabel: null, autopayHealthy: false, nextChargeLabel: null },
-        historyLine: "",
         upcoming: [],
         payments: [],
         adjustments: [],

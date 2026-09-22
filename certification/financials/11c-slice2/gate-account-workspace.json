@@ -1,0 +1,25 @@
+{
+  "beforeRowClick": {
+    "rows": 11,
+    "lenses": [
+      "all",
+      "charges",
+      "credits",
+      "funding",
+      "payments"
+    ],
+    "nativeSelects": 0,
+    "alloyControls": 5
+  },
+  "rowsPerLens": {
+    "all": 79,
+    "charges": 23,
+    "credits": 56,
+    "funding": 0,
+    "payments": 0
+  },
+  "after": {
+    "nativeSelects": 0,
+    "alloyControls": 2
+  }
+}

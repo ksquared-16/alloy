@@ -58,6 +58,7 @@ import {
     WS_QUEUE_TOOLBAR_CHROME,
 } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
+import { FinancialCommandHost } from "@/components/financials/FinancialCommandChannel";
 import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
@@ -585,6 +586,13 @@ export default function FinancialsAccounts({
                              * and the command has nothing to take away from it. The shared border
                              * is drawn here and suppressed on the card, so it still reads as one.
                              */}
+                            {/*
+                              * ONE COMMAND HOST AROUND BOTH SIBLINGS. The card owns the Financials
+                              * command shell; the ledger beneath it owns the rows. The channel lets
+                              * a row raise the card's command instead of the workspace growing a
+                              * second Reverse, Adjust and Post of its own.
+                              */}
+                            <FinancialCommandHost>
                             <div className="alloy-accounts-account-card alloy-accounts-command-host"
                                 data-financials-account-card="true"
                                 data-financials-command-host="true">
@@ -603,6 +611,7 @@ export default function FinancialsAccounts({
                                     currencyCode={selectedAccount?.currencyCode}
                                 />
                             </div>
+                            </FinancialCommandHost>
                         </div>
                     </div>
                 )}

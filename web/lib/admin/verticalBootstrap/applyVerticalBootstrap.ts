@@ -6,6 +6,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { prepareQueueDefinitionPatch } from "@/lib/agent/v0/applyWorkUnitQueueDefinitionUpdate";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 import { parseVerticalBootstrapPayload } from "@/lib/admin/verticalBootstrap/parseVerticalBootstrapPayload";
@@ -317,5 +318,8 @@ export async function applyVerticalBootstrap(
         summary.work_units_updated += 1;
     }
 
+    // Vertical bootstrap authors status definitions for the org; the caches in front of them must
+    // not keep serving the pre-bootstrap (often empty) set.
+    revalidateEffectiveStatusDefinitionsCache(orgId);
     return { ok: true, summary };
 }

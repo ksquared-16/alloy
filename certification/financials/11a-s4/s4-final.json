@@ -1,0 +1,35 @@
+{
+  "id": "6005cf5f-24e8-4fd2-a624-0bc83496b977",
+  "findings": [
+    {
+      "id": "6-1",
+      "what": "an obligation inside the arrangement in force is unallocated and offers Resolve",
+      "ok": true,
+      "observed": "[\"Sep 18, 2026\",\"Late pickup\",\"Certa Certhouse\",\"4040 · Late Pickup Fees\",\"$25.00\",\"posted\"]"
+    },
+    {
+      "id": "14-6",
+      "what": "the obligation is resolved and names its responsible party",
+      "ok": false,
+      "observed": "state=not-allocated party=\"Not allocated\""
+    },
+    {
+      "id": "14-12",
+      "what": "the child it is for is unchanged",
+      "ok": true,
+      "observed": "before=\"Certa Certhouse\" after=\"Certa Certhouse\""
+    },
+    {
+      "id": "14-14",
+      "what": "a resolved obligation offers Reallocate, not Resolve",
+      "ok": false,
+      "observed": "[\"reverse\",\"adjust\",\"resolveResponsibility\"]"
+    },
+    {
+      "id": "14-8",
+      "what": "the Responsible Party filter appears now that it divides the cohort",
+      "ok": false,
+      "observed": "[\"financials-filter-subject\",\"financials-filter-period\"]"
+    }
+  ]
+}

@@ -17,6 +17,7 @@
  * What still holds and is still asserted: the child is resolved from the SUBJECT, siblings are
  * never touched, and `move_to_stage` does not mirror `stage_key` onto OCM.
  */
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -62,6 +63,12 @@ const GUARD_DEPT_METADATA = {
 /** Minimal chainable Supabase mock over in-memory process_instances + OCM bridge rows. */
 function makeSupabase(state: { process_instances: PiRow[]; ocm: OcmRow[] }) {
     return {
+        rpc(name: string, params: Record<string, unknown>) {
+            // Lifecycle truth is written by the RPC now, not by a table UPDATE.
+            const res = participationLifecycleRpcFake(name, params, state.process_instances as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
         from(table: string) {
             if (table === "departments") {
                 const chain: Record<string, unknown> = {};

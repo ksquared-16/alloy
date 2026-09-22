@@ -21,6 +21,7 @@
  * starting stage.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -280,7 +281,13 @@ describe("first child-grain transition, through applyStageOutcomeRuleTarget", ()
 
     function makeSupabase(state: { process_instances: PiRow[]; ocm: OcmRow[] }) {
         return {
-            from(table: string) {
+            rpc(name: string, params: Record<string, unknown>) {
+            // Lifecycle truth is written by the RPC now, not by a table UPDATE.
+            const res = participationLifecycleRpcFake(name, params, state.process_instances as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
+        from(table: string) {
                 if (table === "departments") {
                     const chain: Record<string, unknown> = {};
                     chain.select = () => chain;

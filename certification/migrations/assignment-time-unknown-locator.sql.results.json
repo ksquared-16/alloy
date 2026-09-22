@@ -1,0 +1,71 @@
+{
+  "trusted_host_action_id": "tha_e00b5f86340461",
+  "query_hash": "3154e263ac8baa7a9bd85a55550300cd800ce59f508c8708a2ee30b377f9247e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:53:25.602Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e00b5f86340461",
+    "query_hash": "3154e263ac8baa7a9bd85a55550300cd800ce59f508c8708a2ee30b377f9247e",
+    "authorization_id": "grnt_071be6d91c80438d",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:53:27.608Z",
+    "question_ids": [
+      "unkloc"
+    ],
+    "questions": {
+      "unkloc": {
+        "question_id": "unkloc",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "assignment_id": "e10dcea5-0edb-4a6b-bd53-2b9d98e5da96",
+                "subject_type": "child",
+                "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "room": null,
+                "member": "e408fa51-7261-43c4-8e60-555d17fc9888",
+                "status": "active",
+                "start": "2026-08-26",
+                "end": "open",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              {
+                "assignment_id": "9d81581a-256e-42d6-a717-23a89a10a087",
+                "subject_type": "child",
+                "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "room": null,
+                "member": "46105cd4-6030-417d-a7cb-faf409071c0d",
+                "status": "active",
+                "start": "2026-08-26",
+                "end": "open",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            ],
+            "observed_at": "2026-09-21 21:53:27.600469+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

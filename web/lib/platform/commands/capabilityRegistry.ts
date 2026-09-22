@@ -40,6 +40,17 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "employment.end",
     "staff_presence.record",
     "staff_presence.correct",
+    "assignment.set_time",
+    "staff_coverage.plan",
+    "staff_coverage.change",
+    "staff_coverage.correct",
+    "staff_coverage.cancel",
+    "staff_qualification.record",
+    "staff_qualification.verify",
+    "staff_qualification.attach_evidence",
+    "staff_availability.set_recurring",
+    "staff_availability.add_exception",
+    "staff_availability.cancel_exception",
     "attendance.check_in",
     "attendance.check_out",
     "attendance.move",
@@ -56,6 +67,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "enrollment.requirement_exception.revoke",
     "billing.generate_tuition",
     "billing.apply_discounts",
+    "billing.except_commercial_policy",
+    "billing.end_commercial_policy_exception",
     "billing.adjust_account",
     "billing.reverse_adjustment",
     "billing.configure_responsibility",
@@ -80,6 +93,19 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "payment.collect_card",
     "payment.reverse_application",
     "payment.apply_to_charge",
+    "provider.connect",
+    "provider.refresh_readiness",
+    "provider.disconnect",
+    "payment_method.add",
+    "payment_method.set_default",
+    "payment_method.revoke",
+    "payment.recognize",
+    "deposit.hold",
+    "deposit.release",
+    "autopay.enroll",
+    "autopay.pause",
+    "autopay.resume",
+    "autopay.revoke",
     "health_fact.add",
     "health_fact.edit",
     "health_fact.end",
@@ -177,6 +203,91 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // ── Health ─────────────────────────────────────────────────────────────
     // Three operator intents over the one canonical Health mutation seam. Each refuses without
     // `health.manage` (D-H6) — route admission is not authorization for structured health data.
+    /*
+     * ── AUTOPAY — `fin.write`, because it administers HOW an account pays ──
+     *
+     * Setting up Autopay is payment-method administration, which `fin.write` already means and
+     * `ops` already holds. There is deliberately no `fin.autopay`, and deliberately no
+     * `autopay.collect`: scheduled execution enters through the registered handler
+     * `payments.autopay.evaluate` and nowhere else, so every collection carries the scheduled-work
+     * occurrence identity that makes it idempotent.
+     *
+     * None of the four moves money. They decide whether a future collection is authorized.
+     */
+    def({
+        capabilityKey: "autopay.enroll",
+        canonicalCommandKey: "autopay.enroll",
+        operatorLabel: "Set up Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "autopay.enroll",
+        implementationStatus: "production",
+        reason:
+            "Records a payer's standing authorization to collect what is owed automatically. A "
+            + "saved payment method is NOT this: storing an instrument says it may be charged when "
+            + "the family asks, and this says it may be charged when they have not. The amount is "
+            + "resolved from Financials at execution time, so there is no Autopay balance.",
+    }),
+    def({
+        capabilityKey: "autopay.pause",
+        canonicalCommandKey: "autopay.pause",
+        operatorLabel: "Pause Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "autopay.pause",
+        implementationStatus: "production",
+        reason:
+            "Stops future automatic collection while keeping the authorization. A collection "
+            + "already with the provider continues, because money in flight has its own truth and a "
+            + "pause cannot reach back into a submitted debit.",
+    }),
+    def({
+        capabilityKey: "autopay.resume",
+        canonicalCommandKey: "autopay.resume",
+        operatorLabel: "Resume Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "autopay.resume",
+        implementationStatus: "production",
+        reason:
+            "Restores future eligibility under the existing authorization, after rechecking the "
+            + "payment method. Periods missed while paused are NOT collected retrospectively — a "
+            + "pause is not a deferral, and inventing catch-up charges would be a term the payer "
+            + "never agreed to.",
+    }),
+    def({
+        capabilityKey: "autopay.revoke",
+        canonicalCommandKey: "autopay.revoke",
+        operatorLabel: "Turn off Autopay",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "autopay.revoke",
+        implementationStatus: "production",
+        reason:
+            "Ends the authorization permanently. A withdrawn consent is never reactivated, so "
+            + "restarting Autopay records a NEW arrangement with its own authorization time and the "
+            + "original remains readable exactly as it was given.",
+    }),
     def({
         capabilityKey: "health_fact.add",
         canonicalCommandKey: "health_fact.add",
@@ -243,6 +354,45 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             "Records the recommended tuition as an effective-dated pricing term on the assignment. "
             + "The server re-reads the assignment and re-resolves before writing, so a resolution "
             + "that has gone stale is refused rather than committed.",
+    }),
+    // ── Commercial policy exceptions ───────────────────────────────────────
+    // Not a discount and not a switch. The operator says a policy does not apply to one
+    // relationship, from a date, because of something; what that costs is decided later, by
+    // eligibility, when an obligation is actually evaluated.
+    def({
+        capabilityKey: "billing.except_commercial_policy",
+        canonicalCommandKey: "billing.except_commercial_policy",
+        operatorLabel: "Exclude this policy",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.except_commercial_policy",
+        implementationStatus: "production",
+        reason:
+            "Records an effective-dated exception against a commercial policy for one assignment, "
+            + "with a required reason. It writes no charge and no reduction: later eligibility reads "
+            + "it, so obligations already posted keep the terms they were posted under.",
+    }),
+    def({
+        capabilityKey: "billing.end_commercial_policy_exception",
+        canonicalCommandKey: "billing.end_commercial_policy_exception",
+        operatorLabel: "End this exception",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.end_commercial_policy_exception",
+        implementationStatus: "production",
+        reason:
+            "Closes an exception with an end date so the policy may apply again to later "
+            + "obligations. The exception is kept, never deleted — the record says when it stopped.",
     }),
     def({
         capabilityKey: "enrollment.pricing.override",
@@ -646,6 +796,208 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // go and get it. It creates no receipt — a canonical payment appears only when the provider
     // confirms and Thread 8 recognises it, which is why the capability is a collection and not a
     // payment.
+    /*
+     * BECOMING A MERCHANT — organisation-grain configuration, not a payment.
+     *
+     * These three decide WHERE a family's money settles; every other financial capability decides
+     * what happens to money once that is already chosen. That is why they carry `fin.provider` rather
+     * than `fin.write`, and why they are configuration rather than an operator's daily work.
+     */
+    def({
+        capabilityKey: "provider.connect",
+        canonicalCommandKey: "provider.connect",
+        operatorLabel: "Connect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.connect",
+        implementationStatus: "production",
+        reason:
+            "Creates the organisation's own provider account and records the canonical merchant "
+            + "association, then hands the operator the provider's hosted setup. Idempotent: an "
+            + "unfinished merchant is RESUMED rather than duplicated, and a ready one is refused. "
+            + "Alloy never sees or stores the provider's identity verification data.",
+    }),
+    def({
+        capabilityKey: "provider.refresh_readiness",
+        canonicalCommandKey: "provider.refresh_readiness",
+        operatorLabel: "Refresh provider status",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "provider.refresh_readiness",
+        implementationStatus: "production",
+        reason:
+            "Asks the provider what this organisation can currently accept and records the answer "
+            + "through the single readiness write authority. Returning from provider setup proves "
+            + "nothing on its own, so this is what the return calls.",
+    }),
+    def({
+        capabilityKey: "provider.disconnect",
+        canonicalCommandKey: "provider.disconnect",
+        operatorLabel: "Disconnect payment provider",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The capability vocabulary is not the action's: an action says "destructive", a capability
+        // says how hard the confirmation is. Withdrawing an organisation's ability to take payments
+        // earns a strong one.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "provider.disconnect",
+        implementationStatus: "production",
+        reason:
+            "Withdraws the merchant association from FUTURE collection. Deletes nothing: not the "
+            + "provider's account, which belongs to the organisation, and not the payments, attempts "
+            + "or provider evidence already recorded. Historical rows keep naming the account that "
+            + "actually collected them.",
+    }),
+    /*
+     * ── PAYMENT METHOD ADMINISTRATION — `fin.write`, and deliberately not `fin.provider` ──
+     *
+     * The provider capabilities above decide WHERE an organisation's money settles. These three
+     * decide which instrument one family pays with, once that is already chosen. That is ordinary
+     * front-desk work, so they carry the key `ops` already holds.
+     */
+    def({
+        capabilityKey: "payment_method.add",
+        canonicalCommandKey: "payment_method.add",
+        operatorLabel: "Add payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.add",
+        implementationStatus: "production",
+        reason:
+            "Opens the provider's own secure collection for a card or bank account, then persists a "
+            + "canonical reference read back from the provider on the server. Nothing is stored "
+            + "until an instrument actually exists, and a bank account awaiting verification is "
+            + "recorded as pending rather than offered as usable. Alloy never receives a card "
+            + "number, a CVC, or an account and routing number.",
+    }),
+    def({
+        capabilityKey: "payment_method.set_default",
+        canonicalCommandKey: "payment_method.set_default",
+        operatorLabel: "Set as default",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.set_default",
+        implementationStatus: "production",
+        reason:
+            "Moves the default within one account and one rail, atomically in the database, so the "
+            + "account is never briefly left with two defaults or none. Card and bank defaults are "
+            + "independent, and a method that cannot be used cannot be made the default.",
+    }),
+    def({
+        capabilityKey: "payment_method.revoke",
+        canonicalCommandKey: "payment_method.revoke",
+        operatorLabel: "Remove payment method",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        // The action says "destructive"; the capability says how hard the confirmation is.
+        confirmationPolicy: "strong_confirm",
+        registeredActionKey: "payment_method.revoke",
+        implementationStatus: "production",
+        reason:
+            "Withdraws a stored instrument from FUTURE collection. Deletes nothing: payments already "
+            + "made with it keep naming it. Any default status is removed and nothing is promoted in "
+            + "its place, because a family's money must not silently move to a method nobody chose.",
+    }),
+    /*
+     * ── RECOGNITION IS THE COLLECTING AUTHORITY FINISHING ITS OWN WORK ──
+     *
+     * It carries `fin.write` rather than a key of its own because it decides nothing new: the money
+     * already moved, the organisation already authorised the collection, and this only completes
+     * Alloy's record of it.
+     */
+    def({
+        capabilityKey: "payment.recognize",
+        canonicalCommandKey: "payment.recognize",
+        operatorLabel: "Recognize payment",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment.recognize",
+        implementationStatus: "production",
+        reason:
+            "Re-invokes the single canonical recognition boundary for a collection the provider "
+            + "already settled but Alloy never recorded. Verifies settlement against the PROVIDER "
+            + "rather than Alloy's cached state, and is idempotent: an attempt already recognised "
+            + "returns its existing receipt instead of minting a second one. It cannot create a "
+            + "payment directly, invent provider success, or rewrite amount, payer or responsibility.",
+    }),
+    /*
+     * ── HELD DEPOSITS — `fin.adjust`, because they decide what may be SPENT, not what is OWED ──
+     *
+     * Holding moves no money and changes no balance. What it changes is whether an operator may
+     * settle an obligation with a particular receipt, which is the authority `fin.adjust` exists to
+     * separate from ordinary billing. There is deliberately no `fin.deposit`.
+     */
+    def({
+        capabilityKey: "deposit.hold",
+        canonicalCommandKey: "deposit.hold",
+        operatorLabel: "Hold funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.hold",
+        implementationStatus: "production",
+        reason:
+            "Restricts part of an existing canonical Payment so it is not offered as available "
+            + "prepaid money. Creates no receipt, allocation, journal entry or obligation delta, and "
+            + "does not move Current Balance. The refundable terms are SNAPSHOT at creation, so a "
+            + "later policy change cannot retroactively alter what the family was told.",
+    }),
+    def({
+        capabilityKey: "deposit.release",
+        canonicalCommandKey: "deposit.release",
+        operatorLabel: "Release funds",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "deposit.release",
+        implementationStatus: "production",
+        reason:
+            "Stops restricting held money so it becomes ordinary available prepaid money. It is not "
+            + "a refund, not an application and not a change to responsibility. The hold is an "
+            + "immutable lot: a partial release appends a disposition and what was originally held "
+            + "remains on the record.",
+    }),
     def({
         capabilityKey: "payment.collect_card",
         canonicalCommandKey: "payment.collect_card",
@@ -902,6 +1254,182 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason:
             "Staff Presence Phase 4. Correction/reversal by reference — the original fact is never mutated.",
+    }),
+    def({
+        capabilityKey: "assignment.set_time",
+        canonicalCommandKey: "assignment.set_time",
+        operatorLabel: "Set assignment hours",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "assignment.set_time",
+        implementationStatus: "production",
+        reason:
+            "Assignment Time authoring. Hours could previously only be seeded from a pattern when an assignment was created, uniformly across every weekday, so an operator could not give an assignment hours afterwards, change them, or work different hours on different days.",
+    }),
+    def({
+        capabilityKey: "staff_coverage.plan",
+        canonicalCommandKey: "staff_coverage.plan",
+        operatorLabel: "Plan coverage",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_coverage.plan",
+        implementationStatus: "production",
+        reason:
+            "Coverage Slice 3. Plans where a staff member works on one specific day. Does not touch the durable assignment, and does not yet count toward staffing sufficiency.",
+    }),
+    def({
+        capabilityKey: "staff_coverage.change",
+        canonicalCommandKey: "staff_coverage.change",
+        operatorLabel: "Change coverage",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_coverage.change",
+        implementationStatus: "production",
+        reason:
+            "Coverage Slice 3. The plan changed. Retires the prior allocation and writes its replacement in one transaction; the prior stays in history.",
+    }),
+    def({
+        capabilityKey: "staff_coverage.correct",
+        canonicalCommandKey: "staff_coverage.correct",
+        operatorLabel: "Correct coverage",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_coverage.correct",
+        implementationStatus: "production",
+        reason:
+            "Coverage Slice 3. The plan was recorded wrong. Same mechanism as a change, recorded as a correction so the two stay distinguishable in the audit.",
+    }),
+    def({
+        capabilityKey: "staff_coverage.cancel",
+        canonicalCommandKey: "staff_coverage.cancel",
+        operatorLabel: "Cancel coverage",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_coverage.cancel",
+        implementationStatus: "production",
+        reason:
+            "Coverage Slice 3. Withdraws a planned allocation with nothing replacing it. The row stays in history as cancelled.",
+    }),
+    def({
+        capabilityKey: "staff_availability.set_recurring",
+        canonicalCommandKey: "staff_availability.set_recurring",
+        operatorLabel: "Set availability",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_availability.set_recurring",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 4. Sets when an employment CAN work, as a weekly pattern effective from a date. The previous pattern is end-dated and kept, so past scheduling context stays knowable. Availability is not a schedule and creates none.",
+    }),
+    def({
+        capabilityKey: "staff_availability.add_exception",
+        canonicalCommandKey: "staff_availability.add_exception",
+        operatorLabel: "Add availability exception",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_availability.add_exception",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 4. Records that one date differs from the usual pattern. It is availability configuration, not an absence event — presence remains the authority for what actually happened.",
+    }),
+    def({
+        capabilityKey: "staff_availability.cancel_exception",
+        canonicalCommandKey: "staff_availability.cancel_exception",
+        operatorLabel: "Cancel availability exception",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_availability.cancel_exception",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 4. Withdraws a dated exception so the usual pattern applies again. Deactivates rather than deletes, because the exception explains why a past schedule looked as it did.",
+    }),
+    def({
+        capabilityKey: "staff_qualification.record",
+        canonicalCommandKey: "staff_qualification.record",
+        operatorLabel: "Record qualification",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_qualification.record",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 3. Records a qualification an employment holds, with its own dates. Renewal is the same command carrying the row it replaces, so history is kept rather than overwritten. Expiration is derived against the organization's day and is never stored.",
+    }),
+    def({
+        capabilityKey: "staff_qualification.verify",
+        canonicalCommandKey: "staff_qualification.verify",
+        operatorLabel: "Verify qualification",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_qualification.verify",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 3. Records that an operator checked the credential, or rejected it. Confirmed rather than silent, because verification is an assertion about a real document that someone is accountable for.",
+    }),
+    def({
+        capabilityKey: "staff_qualification.attach_evidence",
+        canonicalCommandKey: "staff_qualification.attach_evidence",
+        operatorLabel: "Attach qualification evidence",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_qualification.attach_evidence",
+        implementationStatus: "production",
+        reason:
+            "Staff & Workforce V2 Slice 3. References an existing canonical document as support for a qualification. It never copies bytes — Forms and Documents keep ownership of the artifact.",
     }),
     def({
         capabilityKey: "staff.add",

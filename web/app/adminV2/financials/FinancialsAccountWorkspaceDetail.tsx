@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Settings2 } from "lucide-react";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 
 import { money, moneyExact, shortDate } from "@/app/adminV2/financials/financialsFormat";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import {
     FinancialsLedgerPeriod,
+    RowAction,
     type FinancialsLedgerRowView,
 } from "@/components/operationalCards/FinancialsLedger";
+import { financialRowConceptLabel } from "@/lib/financials/reductions/reductionProvenance";
+import { financialResponsibilityEligibility, financialTransactionEligibility } from "@/lib/financials/commands/financialTransactionCommands";
+import { useFinancialCommandChannel } from "@/components/financials/FinancialCommandChannel";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import {
     ACCOUNT_LENSES,
@@ -18,6 +24,7 @@ import {
     hasChoice,
     lensCounts,
     payerOptions,
+    responsiblePartyOptions,
     periodOptions,
     subjectOptions,
     type AccountLens,
@@ -99,16 +106,87 @@ export default function FinancialsAccountWorkspaceDetail({
     const [vm, setVm] = useState<Vm | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [lens, setLens] = useState<AccountLens>("all");
+    /*
+     * The account card above this ledger owns the Financials command shell. A row asks it; this
+     * surface performs nothing — there is no financial mutation anywhere in this file.
+     */
     const [subject, setSubject] = useState<string | null>(null);
     const [periodKey, setPeriodKey] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
+    const [responsibleParty, setResponsibleParty] = useState<string | null>(null);
+    /*
+     * ── TWO CONTROLS, TWO QUESTIONS ───────────────────────────────────────────────────────────
+     *
+     * The Responsible party dropdown FILTERS the ledger: show me the rows this person owes. The
+     * gear CONFIGURES: decide who owes, from a date. They sit next to each other because an
+     * operator asking the first often wants the second, and they stay separate controls because
+     * folding configuration into a filter would make selecting a name a money decision.
+     *
+     * `manageOpen` is the card's own depth state. Nothing about the ledger below changes while it
+     * is open, so dismissing it lands back on exactly the account, lens, filters and scroll the
+     * operator left.
+     */
+    const [manageOpen, setManageOpen] = useState(false);
+    /* The gear that opened the card, so dismissing it returns focus there and not to <body>. */
+    const manageGearRef = useRef<HTMLButtonElement | null>(null);
+    const closeManage = useCallback(() => {
+        setManageOpen(false);
+        manageGearRef.current?.focus();
+    }, []);
+    const [scopeMembers, setScopeMembers] = useState<{ customerMemberId: string; label: string }[]>([]);
+    useEffect(() => {
+        /* Canonical household membership, read when the operator asks to administer — not on every
+           account open, because the ledger does not need it. */
+        if (!manageOpen || !customerId || scopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((b: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && b?.members) setScopeMembers(b.members);
+            })
+            .catch(() => {
+                /* The card still administers the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [manageOpen, customerId, scopeMembers.length]);
 
     /* The account still selected. Every response is checked against it before it is allowed to land. */
     const wantedRef = useRef(customerId);
 
-    useEffect(() => {
+    /*
+     * ── RE-READING IS NOT SWITCHING ACCOUNTS ──────────────────────────────────────────────────
+     *
+     * Opening a different account clears the lens and every filter, because the previous family's
+     * view means nothing here. Re-reading the SAME account after a command must not: an operator
+     * who configured responsibility while looking at October under one child expects October and
+     * that child still selected when the card closes. The fetch is therefore separate from the
+     * reset, and only the account change performs both.
+     */
+    const reload = useCallback(async () => {
         const wanted = customerId;
         wantedRef.current = wanted;
+        try {
+            const res = await fetch(`/api/admin/financials/card?customer_id=${wanted}`, { cache: "no-store" });
+            const json = (await res.json()) as { vm?: Vm; error?: string };
+            if (wantedRef.current !== wanted) return;
+            /*
+             * A FAILED READ IS NOT A ZERO BALANCE. The surface says it could not look rather
+             * than rendering an account that owes nothing — the two are different answers and
+             * only one of them is safe to act on.
+             */
+            if (!res.ok || !json.vm) { setError(json.error ?? `The account could not be read (${res.status}).`); return; }
+            setVm(json.vm);
+        } catch (e) {
+            if (wantedRef.current !== wanted) return;
+            setError(e instanceof Error ? e.message : "The account could not be read.");
+        }
+    }, [customerId]);
+
+    useEffect(() => {
         /* The previous account's money must not sit under this one's name for even a frame. */
         setVm(null);
         setError(null);
@@ -116,24 +194,10 @@ export default function FinancialsAccountWorkspaceDetail({
         setSubject(null);
         setPeriodKey(null);
         setPayer(null);
-        void (async () => {
-            try {
-                const res = await fetch(`/api/admin/financials/card?customer_id=${wanted}`, { cache: "no-store" });
-                const json = (await res.json()) as { vm?: Vm; error?: string };
-                if (wantedRef.current !== wanted) return;
-                /*
-                 * A FAILED READ IS NOT A ZERO BALANCE. The surface says it could not look rather
-                 * than rendering an account that owes nothing — the two are different answers and
-                 * only one of them is safe to act on.
-                 */
-                if (!res.ok || !json.vm) { setError(json.error ?? `The account could not be read (${res.status}).`); return; }
-                setVm(json.vm);
-            } catch (e) {
-                if (wantedRef.current !== wanted) return;
-                setError(e instanceof Error ? e.message : "The account could not be read.");
-            }
-        })();
-    }, [customerId]);
+        setManageOpen(false);
+        setScopeMembers([]);
+        void reload();
+    }, [customerId, reload]);
 
     const rows = useMemo(() => (vm?.rows ?? []) as Row[], [vm]);
     const payments = useMemo(() => (vm?.payments ?? []) as Row[], [vm]);
@@ -141,17 +205,19 @@ export default function FinancialsAccountWorkspaceDetail({
     const subjects = useMemo(() => subjectOptions(rows as never), [rows]);
     const periods = useMemo(() => periodOptions(rows as never), [rows]);
     const payers = useMemo(() => payerOptions(payments as never), [payments]);
+    /* Who is OBLIGATED — a different question from whose child it is, and from who paid. */
+    const responsibleParties = useMemo(() => responsiblePartyOptions(rows as never), [rows]);
     const counts = useMemo(
-        () => lensCounts(rows as never, payments as never, { subject, periodKey }),
-        [rows, payments, subject, periodKey],
+        () => lensCounts(rows as never, payments as never, { subject, periodKey, responsibleParty }),
+        [rows, payments, subject, periodKey, responsibleParty],
     );
 
     const ledger = useMemo(
         () =>
-            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey })
+            filterLedger(rows as never, { ...NO_FILTER, lens, subject, periodKey, responsibleParty })
                 .slice()
                 .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? ""))),
-        [rows, lens, subject, periodKey],
+        [rows, lens, subject, periodKey, responsibleParty],
     );
     const visiblePayments = useMemo(
         () => filterPayments(payments as never, { payerLabel: payer }) as unknown as Row[],
@@ -283,6 +349,43 @@ export default function FinancialsAccountWorkspaceDetail({
                                 options={periods}
                             />
                         ) : null}
+                        {/*
+                          * WHO OWES IT — offered beside the subject, never instead of it. A row can
+                          * concern Ana while responsibility belongs to a parent; those are two
+                          * questions and the ledger answers them from two authorities.
+                          *
+                          * Hidden under the Payments lens for the same reason the subject filter is:
+                          * a receipt is not an obligation, and responsibility is a fact about the
+                          * obligation. Payer is the question there, and it already has the control.
+                          */}
+                        {!loading && lens !== "payments" && hasChoice(responsibleParties) ? (
+                            <Filter
+                                testId="responsible-party"
+                                value={responsibleParty ?? ""}
+                                onChange={(v) => setResponsibleParty(v || null)}
+                                placeholder="Anyone responsible"
+                                options={responsibleParties}
+                            />
+                        ) : null}
+                        {/*
+                          * MANAGE, beside FILTER. Quiet: an icon at the filters' own size, in the
+                          * filters' own row, with no fill and no border — it must not turn the
+                          * filter row into a command footer. Its accessible name says what it
+                          * does, because an icon shape is not a sentence.
+                          */}
+                        {!loading && lens !== "payments" ? (
+                            <button
+                                type="button"
+                                ref={manageGearRef}
+                                onClick={() => setManageOpen(true)}
+                                aria-label="Manage responsibility"
+                                title="Manage responsibility — who contractually owes, from a date"
+                                data-financials-manage-responsibility="gear"
+                                className="inline-flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded text-alloy-midnight/45 transition hover:bg-alloy-stone/15 hover:text-alloy-bend-pine focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/40"
+                            >
+                                <Settings2 aria-hidden size={14} strokeWidth={1.9} />
+                            </button>
+                        ) : null}
                         {!loading && lens === "payments" && hasChoice(payers) ? (
                             <Filter
                                 testId="payer"
@@ -294,6 +397,57 @@ export default function FinancialsAccountWorkspaceDetail({
                         ) : null}
                     </span>
                 </div>
+
+                {/*
+                  * ── THE DEPTH CARD, ABOVE THE ACTIVITY AND INSIDE THIS SURFACE ──────────────
+                  *
+                  * Not a route, not a second modal system, and not a replacement for the ledger:
+                  * it opens in place, directly under the controls it was raised from, and the
+                  * account, lens, filters, period expansion and scroll beneath it are untouched.
+                  * Dismissal is therefore not a restoration — there is nothing to restore, which
+                  * is the only way to be certain the operator lands where they left.
+                  *
+                  * The panel is the one that already exists. `memberOptions` is what turns it
+                  * from "this charge's child" into account administration; the writer, the
+                  * preview and the refusal path are unchanged.
+                  */}
+                {/*
+                  * ── ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT ─────────────────────────────
+                  *
+                  * MEASURED: Escape closed the whole Financials surface. The workspace modal
+                  * listens for it, and a depth card that does not answer first hands its own
+                  * dismissal to its host — so an operator closing a panel lost the account, the
+                  * lens, the filters and their place in the ledger.
+                  *
+                  * The card is the innermost open thing, so it answers and stops there.
+                  */}
+                {manageOpen ? (
+                    <div
+                        className="px-0.5 pt-2"
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            closeManage();
+                        }}
+                    >
+                        <FinancialsResponsibilityPanel
+                            customerId={customerId}
+                            customerMemberId={null}
+                            subjectLabel={householdName}
+                            parties={(vm?.responsibility?.parties ?? []) as { personId: string | null; name: string }[]}
+                            memberOptions={scopeMembers}
+                            hostedOpen={manageOpen}
+                            onHostedClose={closeManage}
+                            onCommitted={async () => {
+                                /* Committed truth is re-read; the card does not report its own success. */
+                                await reload();
+                                setManageOpen(false);
+                            }}
+                        />
+                    </div>
+                ) : null}
 
                 {/* THE SCROLL REGION BEGINS HERE — with the activity, never with the controls. */}
                 <div className="min-h-0 flex-1 overflow-y-auto pt-0.5" data-financials-activity-scroll="true">
@@ -401,6 +555,44 @@ export default function FinancialsAccountWorkspaceDetail({
  * about money — the exact thing `accountLenses` refuses to do. A number on screen is either
  * canonical or it is a row count, never a subtotal invented by a presentation layer.
  */
+/*
+ * ── PROVENANCE, READ THE SAME WAY ON BOTH SURFACES ─────────────────────────────────────────────
+ *
+ * The projection already decided what this reduction is and how its number was reached; these only
+ * reach into the row for it. The preview is the same short line the Focus Panel's detail card
+ * builds — basis, recurrence, and the sentence somebody wrote — because a row that meant one thing
+ * here and another there would be exactly the semantic fork the convergence forbids.
+ */
+type RowReduction = {
+    conceptLabel?: string;
+    basisSummary?: string | null;
+    recurrenceLabel?: string;
+    explanation?: string | null;
+};
+
+function reductionOf(row: Record<string, unknown>): RowReduction | null {
+    const r = row.reduction as RowReduction | null | undefined;
+    return r ?? null;
+}
+
+function reductionPreviewOf(row: Record<string, unknown>): string | null {
+    const r = reductionOf(row);
+    if (!r) return null;
+    const label = row.description == null ? "" : String(row.description);
+    /* Same rule as the Focus Panel: an explanation that already carries the basis is not repeated. */
+    const basis = r.basisSummary ?? null;
+    const explanation =
+        basis && r.explanation && String(r.explanation).includes(basis) ? null : r.explanation;
+    const parts = [basis, r.recurrenceLabel || null, explanation].filter(
+        (v): v is string => Boolean(v && String(v).trim()),
+    );
+    if (!parts.length) return label || null;
+    /* Same rule as the Focus Panel: the TYPE column already states the concept. */
+    const concept = String(r.conceptLabel ?? "");
+    const redundant = label.toLowerCase() === concept.toLowerCase();
+    return (redundant ? parts : [label, ...parts]).filter(Boolean).join(" · ");
+}
+
 function LedgerPeriods({
     rows,
     cur,
@@ -411,6 +603,12 @@ function LedgerPeriods({
     /** period key → the server's own total for that period, when the view is unfiltered. */
     canonicalTotals: Map<string, number> | null;
 }) {
+    /*
+     * The channel is context, so the component that renders the rows reads it directly rather than
+     * having it threaded down as a prop. Null outside a command host, and the rows then offer none.
+     */
+    const channel = useFinancialCommandChannel();
+    const commandRequest = channel ? channel.request : null;
     const groups = useMemo(() => {
         const byKey = new Map<string, Row[]>();
         for (const row of rows) {
@@ -439,7 +637,10 @@ function LedgerPeriods({
                                 : `${groupRows.length} ${groupRows.length === 1 ? "entry" : "entries"}`
                         }
                         open
-                        rows={groupRows.map((row) => ledgerRowFromWorkspaceRow(row, cur))}
+                        rows={groupRows.map((row) => ({
+                            ...ledgerRowFromWorkspaceRow(row, cur),
+                            actions: workspaceRowActions(row, commandRequest),
+                        }))}
                     />
                 );
             })}
@@ -454,6 +655,98 @@ function LedgerPeriods({
  * correction lineage the read model already decided becomes the row's title rather than a column of
  * its own; and the outstanding note appears only when money has been applied to the charge.
  */
+/**
+ * ── THE SAME ACTIONS, RAISED THROUGH THE CARD THAT OWNS THEM ───────────────────────────────────
+ *
+ * Eligibility is the read model's answer via the shared `financialTransactionEligibility`, the icons
+ * are the shared `RowAction`, and the command is raised on the channel the account card registered
+ * against. Nothing here writes, previews, or decides what a charge may do — this file contains no
+ * financial mutation at all, which is the point.
+ */
+function workspaceRowActions(
+    row: Row,
+    request: ((r: {
+        kind: "adjust" | "reverse" | "post" | "resolveResponsibility" | "reallocateResponsibility";
+        chargeId: string; label: string;
+    }) => void) | null,
+) {
+    const chargeId = row.chargeId ? String(row.chargeId) : null;
+    if (!request || !chargeId) return undefined;
+    const label = String(row.description ?? row.categoryLabel ?? chargeId);
+    const eligible = financialTransactionEligibility({
+        chargeId,
+        offersPost: Boolean(row.offersPost),
+        offersReverse: Boolean(row.offersReverse),
+    });
+    /*
+     * WHO OWES IT — the same shared rule the Focus Panel applies, read from the same row fields.
+     * The workspace does not decide this and does not perform it: it asks on the channel, and the
+     * account card raises the canonical command. A workspace-only resolve would be the second
+     * writer this whole architecture exists to prevent.
+     */
+    const responsibility = financialResponsibilityEligibility({
+        chargeId,
+        /*
+         * A reduction is not an obligation — its responsibility belongs to the charge it reduces.
+         * The Focus Panel derives this the same way, from the same reduction fact, so neither host
+         * can end up offering to divide a discount while the other refuses.
+         */
+        responsibilityApplies: !reductionOf(row),
+        responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
+    });
+    if (!eligible.post && !eligible.reverse && !eligible.adjust
+        && !responsibility.resolve && !responsibility.reallocate) return undefined;
+    return (
+        <>
+            {eligible.post ? (
+                <RowAction
+                    kind="post"
+                    command="charge.post"
+                    chargeId={chargeId}
+                    title={`Post ${label} — it becomes owed`}
+                    onClick={() => request({ kind: "post", chargeId, label })}
+                />
+            ) : null}
+            {eligible.reverse ? (
+                <RowAction
+                    kind="reverse"
+                    command="charge.reverse"
+                    chargeId={chargeId}
+                    title={`Reverse ${label} — unwind a charge that should never have stood`}
+                    onClick={() => request({ kind: "reverse", chargeId, label })}
+                />
+            ) : null}
+            {eligible.adjust ? (
+                <RowAction
+                    kind="adjust"
+                    command="billing.adjust_account"
+                    chargeId={chargeId}
+                    title={`Adjust ${label} — it stands, and something reduces it`}
+                    onClick={() => request({ kind: "adjust", chargeId, label })}
+                />
+            ) : null}
+            {responsibility.resolve ? (
+                <RowAction
+                    kind="resolveResponsibility"
+                    command="billing.resolve_responsibility"
+                    chargeId={chargeId}
+                    title={`Resolve who owes ${label} — divide it under the arrangement in force`}
+                    onClick={() => request({ kind: "resolveResponsibility", chargeId, label })}
+                />
+            ) : null}
+            {responsibility.reallocate ? (
+                <RowAction
+                    kind="reallocateResponsibility"
+                    command="billing.reallocate_responsibility"
+                    chargeId={chargeId}
+                    title={`Reallocate ${label} — move what one party owes to another`}
+                    onClick={() => request({ kind: "reallocateResponsibility", chargeId, label })}
+                />
+            ) : null}
+        </>
+    );
+}
+
 function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowView {
     const glCode = row.glCode ? String(row.glCode) : "";
     const glName = row.glAccountName ? String(row.glAccountName) : "";
@@ -464,9 +757,20 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
     return {
         key: String(row.chargeId),
         when: shortDate(row.date as string | null),
-        type: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        /*
+         * THE SAME MEANING THE FOCUS PANEL STATES. `reduction.conceptLabel` is the canonical answer
+         * to what this row IS — Discount, Credit, Adjustment or Reversal — and the category is only
+         * how the money posts. Two surfaces showing one account must not disagree about whether a
+         * row is a discount, so both read the same projected field.
+         */
+        /* Same order as the Focus Panel, from the same shared rule: a reversal is a Reversal. */
+        type: financialRowConceptLabel({
+            correctionKind: row.correctionKind ? String(row.correctionKind) : null,
+            reductionConceptLabel: reductionOf(row)?.conceptLabel ?? null,
+            categoryLabel: String(row.categoryLabel ?? row.categoryKey ?? "—"),
+        }),
         child: String(row.subjectName ?? "Household"),
-        description: String(row.description ?? "—"),
+        description: reductionPreviewOf(row) ?? String(row.description ?? "—"),
         glLabel: glCode ? (glName ? `${glCode} · ${glName}` : glCode) : null,
         amount: moneyExact(n(row.amountCents), cur),
         amountNote:
@@ -476,6 +780,9 @@ function ledgerRowFromWorkspaceRow(row: Row, cur: string): FinancialsLedgerRowVi
         status: String(row.lifecycleStatus ?? row.status ?? "—"),
         responsibleParty: row.responsiblePartyName ? String(row.responsiblePartyName) : null,
         responsibilityUnassigned: Boolean(row.responsibilityUnassigned),
+        /* Same projection, same two halves — neither host infers PARTIAL for itself. */
+        responsibilityAssignedCents: Number(row.responsibilityAssignedCents ?? 0),
+        responsibilityUnassignedCents: Number(row.responsibilityUnassignedCents ?? 0),
         /* History that no longer counts — a business state, never the amount's sign. */
         tone: row.lifecycleStatus === "reversed" ? "muted" : undefined,
         title: corrected ?? undefined,

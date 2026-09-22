@@ -327,8 +327,20 @@ describeLive("tuition generation — the certification matrix, live", () => {
         const a = await run("2027-09");
         const b = await run("2027-09");
         const c = await run("2027-09");
-        for (const r of [a, b, c]) expect(r.counts.generated).toBe(1);
-        const ids = new Set([a, b, c].map((r) => (r.outcomes[0]!.kind === "generated" ? r.outcomes[0]!.chargeId : null)));
+        /*
+         * The FIRST window bills; the ones behind it converge. Each still reports exactly one
+         * outcome for the period and each names the SAME charge — which is the convergence being
+         * asserted — but only the first one did any billing, and the counts now say which.
+         */
+        expect(a.counts.generated, "the first window bills").toBe(1);
+        for (const r of [b, c]) {
+            expect(r.counts.generated, "an overlapping window bills nothing again").toBe(0);
+            expect(r.counts.unchanged, "it converges on what already stood").toBe(1);
+        }
+        const ids = new Set([a, b, c].map((r) => {
+            const o = r.outcomes[0]!;
+            return o.kind === "generated" || o.kind === "unchanged" ? o.chargeId : null;
+        }));
         expect(ids.size, "every window found the same charge").toBe(1);
         expect(await chargesOn("2027-09-01")).toHaveLength(1);
     }, 120_000);

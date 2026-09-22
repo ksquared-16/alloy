@@ -43,6 +43,8 @@ function row(over: Partial<FinancialsLedgerRow>): FinancialsLedgerRow {
         responsiblePartyName: null,
         responsibilityUnassigned: false,
         source: "Template",
+        // Ordinary charges carry no reduction provenance; only reduction rows do.
+        reduction: null,
         ...over,
     };
 }

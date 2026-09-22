@@ -349,6 +349,8 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         paymentsReceived: "−$1,665",
         currentBalance: "$0",
         dueNow: "$0",
+        availablePrepaid: null,
+        heldFunds: null,
         dueLabel: "Next charge Sep 1",
     },
     pastDue: null,
@@ -364,7 +366,6 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $1,665" },
-    historyLine: "Last payment · $1,665 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
@@ -400,12 +401,14 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         paymentsReceived: "−$925",
         currentBalance: "$255",
         dueNow: "$560",
+        availablePrepaid: null,
+        heldFunds: null,
         dueLabel: "Was due Aug 15",
     },
     pastDue: {
         amount: "$255",
         oldest: "Aug 15",
-        age: "10 days past due",
+        age: "10 days",
         note: "Visa •••• 4242 declined Aug 16",
     },
     ledger: [
@@ -426,7 +429,6 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         autopayHealthy: false,
         nextChargeLabel: "Retry after payment method update",
     },
-    historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
@@ -457,6 +459,8 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         paymentsReceived: "−$925",
         currentBalance: "$40",
         dueNow: "$40",
+        availablePrepaid: null,
+        heldFunds: null,
         dueLabel: "Due Sep 1",
     },
     pastDue: null,
@@ -473,7 +477,6 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance", funding: true },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $965" },
-    historyLine: "Last payment · $925 · Aug 20",
     // Lab specimens exercise layout, not money: no receipts unless a case is about them.
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
@@ -591,11 +594,11 @@ export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
  * `responsibility` decides who is billed. The card hardcodes none of it.
  */
 export const CHARGE_TEMPLATES: ChargeTemplateOption[] = [
-    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: true, requiresNote: true },
-    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", occursOn: "When configured (now)", billableOn: "Immediately", responsibility: "Household", allowsDateOverride: false, payerTargeting: "default_split", requiresSubject: true, requiresNote: false },
-    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: false, payerTargeting: "operator_selectable", requiresSubject: true, requiresNote: false },
-    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, occursOn: "When configured (now)", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: false, requiresNote: true },
-    { key: "agency_placement", label: "Agency placement fee", amountStrategy: "fixed", amount: "$250.00", occursOn: "Service period start", billableOn: "Next billing cycle", responsibility: "Agency", allowsDateOverride: false, payerTargeting: "third_party", requiresSubject: true, requiresNote: false },
+    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: true, requiresNote: true, reviewRequired: true },
+    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", occursOn: "When configured (now)", billableOn: "Immediately", responsibility: "Household", allowsDateOverride: false, payerTargeting: "default_split", requiresSubject: true, requiresNote: false, reviewRequired: false },
+    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: false, payerTargeting: "operator_selectable", requiresSubject: true, requiresNote: false, reviewRequired: false },
+    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, occursOn: "When configured (now)", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: false, requiresNote: true, reviewRequired: true },
+    { key: "agency_placement", label: "Agency placement fee", amountStrategy: "fixed", amount: "$250.00", occursOn: "Service period start", billableOn: "Next billing cycle", responsibility: "Agency", allowsDateOverride: false, payerTargeting: "third_party", requiresSubject: true, requiresNote: false, reviewRequired: false },
 ];
 
 /**

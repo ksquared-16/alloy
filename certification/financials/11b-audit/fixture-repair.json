@@ -1,0 +1,137 @@
+{
+  "family": {
+    "customerId": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "assignments": [
+      "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "79f8011d-a236-4054-bee7-af10f1dbc632"
+    ]
+  },
+  "before": {
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48": {
+      "outcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -14500,
+        "explanation": "discount · 10% of $1450.00"
+      },
+      "rows": 7,
+      "liveOrApplicable": 1
+    },
+    "79f8011d-a236-4054-bee7-af10f1dbc632": {
+      "outcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -1850,
+        "explanation": "discount · 10% of $185.00"
+      },
+      "rows": 14,
+      "liveOrApplicable": 0
+    }
+  },
+  "retiredCount": 1,
+  "after": {
+    "cf044308-3ee4-47ab-a8fb-205eb172aa48": {
+      "outcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -14500,
+        "explanation": "discount · 10% of $1450.00"
+      },
+      "rows": 8,
+      "liveOrApplicable": 0,
+      "residueVisible": false
+    },
+    "79f8011d-a236-4054-bee7-af10f1dbc632": {
+      "outcome": {
+        "kind": "expected",
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "policyKind": "discount",
+        "label": "discount",
+        "amountCents": -1850,
+        "explanation": "discount · 10% of $185.00"
+      },
+      "rows": 14,
+      "liveOrApplicable": 0,
+      "residueVisible": false
+    }
+  },
+  "candidates": [
+    {
+      "personId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+      "name": "Cert Certhouse",
+      "holdsShare": false
+    }
+  ],
+  "arrangement": {
+    "requested": {
+      "grain": "household",
+      "partyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+      "method": "fixed",
+      "amountCents": 50000,
+      "effectiveStart": "2026-09-01"
+    },
+    "status": 400,
+    "ok": false,
+    "error": {
+      "code": "ACTION_BLOCKED",
+      "message": "An arrangement already in force starts on or after this date. Supersede it from a later date.",
+      "details": {
+        "blockers": [
+          {
+            "code": "predecessor_starts_later",
+            "message": "An arrangement already in force starts on or after this date. Supersede it from a later date."
+          }
+        ]
+      }
+    }
+  },
+  "readBack": {
+    "arrangementRoute": {
+      "status": 200,
+      "body": {
+        "requestedScope": {
+          "grain": "household"
+        },
+        "arrangement": {
+          "id": "30d94536-691b-465a-933d-288b5249301c",
+          "customerMemberId": null,
+          "effectiveStart": "2026-09-18",
+          "effectiveEnd": null,
+          "shares": [
+            {
+              "id": "e6f5c92c-d3ae-4e59-9c24-da6c40d3251c",
+              "responsiblePartyId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+              "method": "fixed",
+              "amountCents": 1800,
+              "percentBasisPoints": null,
+              "name": "Cert Certhouse",
+              "expectedFunding": []
+            }
+          ]
+        },
+        "authoredAtRequestedScope": true
+      }
+    },
+    "vmResponsibility": {
+      "parties": [
+        {
+          "personId": "f06b6750-3db4-4968-824f-6aa6290efda0",
+          "name": "Cert Certhouse",
+          "assignedCents": 3600,
+          "attributedCents": 0,
+          "remainingCents": 3600
+        }
+      ],
+      "unassignedCents": 13200,
+      "allocatedCents": 3600,
+      "hasUnresolvedCharges": true
+    },
+    "prepaidAvailableCents": 12500
+  }
+}

@@ -76,6 +76,18 @@ export const LOCATION_CONCERN_REGISTRY: readonly LocationConcernDefinition[] = [
         keepAlive: false,
     },
     {
+        key: "operational-rules",
+        label: "Operational Rules",
+        // Capacity, ratio, operating windows and schedule rules are org-scoped
+        // canonical config read in one bundle, not part of the locations
+        // collection — so this concern owns its own cache rather than reusing
+        // the collection strategy, exactly like Tours and Placement.
+        supportsItemId: false,
+        dataStrategy: "concern-cache",
+        prefetch: "intent",
+        keepAlive: true,
+    },
+    {
         key: "tours",
         label: "Tours",
         supportsItemId: false,

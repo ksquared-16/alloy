@@ -15,6 +15,7 @@
  * These exercise the real resolver and the real writers against a double, not the source text.
  */
 
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -46,6 +47,11 @@ function fakeClient(seed: Pi[]) {
     const rows: Pi[] = seed.map((r) => ({ ...r }));
     const api = {
         rows,
+        rpc(name: string, params: Record<string, unknown>) {
+            const res = participationLifecycleRpcFake(name, params, rows as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
         from() {
             const filters: Array<(r: Pi) => boolean> = [];
             let patch: Record<string, unknown> | null = null;

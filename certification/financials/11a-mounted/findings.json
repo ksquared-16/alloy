@@ -1,0 +1,156 @@
+{
+  "candidate": "dcb91fd13",
+  "base": "http://127.0.0.1:3112",
+  "findings": [
+    {
+      "id": "A1",
+      "what": "production runtime on the hosted project",
+      "observed": "nodeEnv=production ref=ikaxilmwmrmbagoidedu",
+      "ok": true
+    },
+    {
+      "id": "B1",
+      "what": "the Policies chapter renders its own copy",
+      "observed": "chapter copy present",
+      "ok": true
+    },
+    {
+      "id": "B2",
+      "what": "the New Policy authoring form opens",
+      "observed": "opened",
+      "ok": true
+    },
+    {
+      "id": "B·Proration",
+      "what": "ACTIVE policy type \"Proration\" is offered to the operator",
+      "observed": "absent — options: Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment",
+      "ok": false
+    },
+    {
+      "id": "B·Billing cadence",
+      "what": "ACTIVE policy type \"Billing cadence\" is offered to the operator",
+      "observed": "absent — options: Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment",
+      "ok": false
+    },
+    {
+      "id": "B·Due date",
+      "what": "ACTIVE policy type \"Due date\" is offered to the operator",
+      "observed": "absent — options: Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment",
+      "ok": false
+    },
+    {
+      "id": "B·Deposit",
+      "what": "ACTIVE policy type \"Deposit\" is offered to the operator",
+      "observed": "absent — options: Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment",
+      "ok": false
+    },
+    {
+      "id": "B·Posting review",
+      "what": "ACTIVE policy type \"Posting review\" is offered to the operator",
+      "observed": "absent — options: Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment",
+      "ok": false
+    },
+    {
+      "id": "B·not-Write off",
+      "what": "DB-only inert type \"Write off\" is NOT offered",
+      "observed": "absent",
+      "ok": true
+    },
+    {
+      "id": "B·not-Withdrawal",
+      "what": "DB-only inert type \"Withdrawal\" is NOT offered",
+      "observed": "absent",
+      "ok": true
+    },
+    {
+      "id": "B·not-Adjustment approval",
+      "what": "DB-only inert type \"Adjustment approval\" is NOT offered",
+      "observed": "absent",
+      "ok": true
+    },
+    {
+      "id": "B·not-Draft expiration",
+      "what": "DB-only inert type \"Draft expiration\" is NOT offered",
+      "observed": "absent",
+      "ok": true
+    },
+    {
+      "id": "B3",
+      "what": "the four due-date strategies are offered",
+      "observed": "0/4 · none",
+      "ok": false
+    },
+    {
+      "id": "C1",
+      "what": "the Financials card mounts on the work-unit lane",
+      "observed": "1 card(s)",
+      "ok": true
+    },
+    {
+      "id": "C2",
+      "what": "compact offers Payment, Add and Details",
+      "observed": "Payment/Add/Details present in the mounted card",
+      "ok": true
+    },
+    {
+      "id": "C3",
+      "what": "compact prepaid indicator obeys zero-is-silence",
+      "observed": "absent — this account holds no available funds",
+      "ok": true
+    },
+    {
+      "id": "C4",
+      "what": "Details opens",
+      "observed": "opened",
+      "ok": true
+    },
+    {
+      "id": "C5",
+      "what": "Details states Current balance, Due and Past due as separate figures",
+      "observed": "Current balance · Due · Past due · Responsibility · Paid",
+      "ok": true
+    },
+    {
+      "id": "C6",
+      "what": "Details prepaid figure obeys the same rule",
+      "observed": "absent — no available funds on this account",
+      "ok": true
+    },
+    {
+      "id": "C7",
+      "what": "filters render only where they divide the cohort",
+      "observed": "subject=not offered period=not offered",
+      "ok": true
+    },
+    {
+      "id": "D1",
+      "what": "Add charge opens",
+      "observed": "surface rendered",
+      "ok": true
+    },
+    {
+      "id": "D2",
+      "what": "Add offers MULTI-CHILD selection to the operator",
+      "observed": "checkboxes=1 multiSelect=0 singleSelects=2",
+      "ok": true
+    },
+    {
+      "id": "D3",
+      "what": "the preview states per-child economics",
+      "observed": "absent — single-subject surface",
+      "ok": false
+    },
+    {
+      "id": "E1",
+      "what": "the Financials workspace opens from the shell",
+      "observed": "opened",
+      "ok": true
+    },
+    {
+      "id": "E2",
+      "what": "it presents Accounts",
+      "observed": "Accounts present",
+      "ok": true
+    }
+  ]
+}

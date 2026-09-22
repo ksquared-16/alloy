@@ -13,6 +13,7 @@
  * OCM, which is still not done. Reading the participation to write the state it owns is the state
  * landing where it lives.
  */
+import { participationLifecycleRpcFake } from "../support/participationLifecycleRpcFake";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Event emission uses createAdminClient internally → mock it and assert invocation instead.
@@ -61,6 +62,12 @@ function makeSupabase(process_instances: PiRow[]) {
     let ocmAccess = 0;
     let ocmWrites = 0;
     const client = {
+        rpc(name: string, params: Record<string, unknown>) {
+            // Lifecycle truth moved from a table UPDATE to update_participation_and_maintain_facts.
+            const res = participationLifecycleRpcFake(name, params, process_instances as never);
+            if (!res) throw new Error(`unexpected rpc in this fake: ${name}`);
+            return Promise.resolve(res);
+        },
         from(table: string) {
             if (table === "departments") {
                 const chain: Record<string, unknown> = {};

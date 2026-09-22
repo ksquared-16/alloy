@@ -239,14 +239,49 @@ export async function materializeEnrollmentFromProcessInstance(
         enrollment_agreement_id: agreementId,
         materialized_at: nowIso,
     };
-    const patch: Record<string, unknown> = { metadata: nextMeta, updated_at: nowIso };
-    if (pi.state !== "enrolled") patch.state = "enrolled";
+    /*
+     * ── ONE COMMIT, TWO CONCERNS, NEITHER OWNING THE OTHER ──
+     *
+     * This was a single bare UPDATE carrying provenance metadata AND lifecycle truth. That made it a
+     * second lifecycle writer: it moved `state` and `stage_key` without passing through
+     * `update_participation_and_maintain_facts`, so once Step 2 maintains an opportunity fact inside
+     * that RPC, a materialized child would have kept a stale pre-enrollment stage forever.
+     *
+     * Splitting it into "RPC for lifecycle, then UPDATE for metadata" would have been worse: it would
+     * make the system LESS atomic to route it through a command, allowing "metadata says materialized,
+     * lifecycle still pre-enrollment" to become committed truth.
+     *
+     * So the domain operation keeps its own transaction, and that transaction delegates the lifecycle
+     * half to the single authority. The lifecycle command is not widened into metadata CRUD, the
+     * provenance stamp stays with the domain that owns it, and both still commit or neither does.
+     */
     const completedStage = trimOrNull(input.completedStageKey);
-    if (completedStage && pi.stage_key !== completedStage) {
-        patch.stage_key = completedStage;
-        patch.stage_entered_at = nowIso;
+    const movesStage = Boolean(completedStage) && pi.stage_key !== completedStage;
+    const { data: matData, error: matErr } = await supabase.rpc(
+        "materialize_participation_and_stamp_provenance",
+        {
+            p_org_id: input.orgId,
+            p_participation_id: pi.id,
+            p_metadata: nextMeta,
+            p_set_stage_key: movesStage,
+            p_stage_key: movesStage ? completedStage : null,
+            p_set_state: pi.state !== "enrolled",
+            p_state: pi.state !== "enrolled" ? "enrolled" : null,
+        },
+    );
+    if (matErr) {
+        return { ...base, ok: false, error: matErr.message, trio, agreement_id: agreementId };
     }
-    await supabase.from(PROCESS_INSTANCES_TABLE).update(patch).eq("id", pi.id).eq("org_id", input.orgId);
+    const matResult = (matData ?? {}) as { ok?: boolean; error?: string };
+    if (matResult.ok !== true) {
+        return {
+            ...base,
+            ok: false,
+            error: matResult.error ?? "record_not_found_or_stale",
+            trio,
+            agreement_id: agreementId,
+        };
+    }
 
     return { ...base, ok: true, agreement_id: agreementId, trio };
 }

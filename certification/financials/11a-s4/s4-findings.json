@@ -1,0 +1,32 @@
+[
+  {
+    "id": "14-2",
+    "what": "an eligible obligation offers Resolve responsibility",
+    "ok": true,
+    "observed": "8 rows offer it; first=[\"Sep 14, 2026\",\"Late pickup\",\"Certa Certhouse\",\"4040 · Late Pickup Fees\",\"$25.00\",\"posted\",\"Not allocated\",\"Late pickup\"]"
+  },
+  {
+    "id": "14-2b",
+    "what": "never both, and never on a reduction",
+    "ok": true,
+    "observed": "both=0 reductionsOffering=0"
+  },
+  {
+    "id": "14-3",
+    "what": "Resolve opens as the canonical command shell",
+    "ok": true,
+    "observed": "{\"overlay\":\"responsibility\",\"mode\":\"resolve\",\"child\":\"Certa Certhouse\",\"current\":\"Unassigned\",\"effect\":\"This divides the obligation between the parties named by the arrangement in force for its service date. Where no arr"
+  },
+  {
+    "id": "14-4",
+    "what": "the applicable arrangement / allocatable net is shown by the ACTION's preview",
+    "ok": true,
+    "observed": "preview=$18.00 to divide. / Gross $18.00 / Reductions $0.00 error=null"
+  },
+  {
+    "id": "14-1",
+    "what": "the historical Sep 2 obligation is NOT retroactively divided under the Sep 18 arrangement",
+    "ok": true,
+    "observed": "state=unassigned (\"Unassigned\") cells=[\"Sep 2, 2026\",\"Consumable fee\",\"Certa Certhouse\",\"4030 · Supply Fees\",\"$18.00\",\"posted\",\"Unassigned\",\"Materials\"]"
+  }
+]

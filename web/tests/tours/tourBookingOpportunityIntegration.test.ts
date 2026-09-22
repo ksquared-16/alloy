@@ -60,6 +60,10 @@ function makeSupabase(opp: {
         then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
     };
     const supabase = {
+        // Every tour transition now refreshes the maintained active-tour fact the evaluated page
+        // reads instead of the bookings table. Cancel calls it directly, before its early return.
+        rpc: (_name: string, _params: Record<string, unknown>) =>
+            Promise.resolve({ data: { ok: true }, error: null }),
         from: vi.fn((table: string) => {
             if (table === "opportunities") {
                 return {

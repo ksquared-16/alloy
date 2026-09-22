@@ -13,6 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isOperationalGroupRole } from "@/lib/location/canonicalLocationModel";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
@@ -79,4 +80,27 @@ export async function loadSiteOperationalRooms(
             };
         })
         .sort((a, b) => (a.roomName ?? "").localeCompare(b.roomName ?? ""));
+}
+
+/**
+ * The rooms a CLASSROOM/GROUP question may offer.
+ *
+ * `loadSiteOperationalRooms` deliberately returns every unit — resolving the set
+ * correctly and narrowing it are different decisions, and Attendance needs the
+ * wide set. This is the narrowing, expressed once for the Staff/Scheduling
+ * consumer family rather than as `room.unitRole === "operational_group"` repeated
+ * through four call sites.
+ *
+ * It answers a CONSUMER question. It is not a topology authority: the role it
+ * reads was resolved by the canonical provider, and the predicate is the shared
+ * domain one.
+ *
+ * A historical unit with no stored role arrives here already reading as
+ * `operational_group`, so a tenant whose rooms all predate Topology V1 keeps
+ * every classroom option it had.
+ */
+export function assignableClassrooms(
+    rooms: readonly SiteOperationalRoom[]
+): SiteOperationalRoom[] {
+    return rooms.filter((room) => isOperationalGroupRole(room.unitRole));
 }

@@ -313,6 +313,37 @@ export function consumeFreshProvisioning(
 }
 
 /**
+ * OBSERVE AN ANSWER WITHOUT CLAIMING IT (P0-7.6 — the Sidebar's Work View counts).
+ *
+ * `consumeFreshProvisioning` DELETES on read, and that is load-bearing: one logical answer per
+ * navigation, consumed once by the surface that owns the route. The header below documents what
+ * happens when a consume misses — the surface waits 4.7s for an answer it already had.
+ *
+ * The persistent left nav needs the SAME answer's Work View counts, and it is not the route's
+ * owner. If it consumed, it would steal the answer from the surface and cause exactly that
+ * defect. So it observes instead.
+ *
+ * This is deliberately the smallest possible addition: the SAME cache, the SAME key, the SAME
+ * freshness window, the SAME stored promise. It does not delete, does not re-stamp `startedAt`,
+ * does not mutate the entry, and adds no second source of truth. An expired entry is reported as
+ * absent and left for the existing paths to evict, so a peek can never resurrect stale truth nor
+ * extend anyone's TTL.
+ *
+ * Observation must not change what the owner later consumes: peek-then-consume returns the same
+ * value, consume-then-peek returns nothing, and any number of peeks leaves consume unaffected.
+ */
+export function peekFreshProvisioning(
+    url: string,
+    now: number = Date.now(),
+): Promise<ProvisioningAnswer> | null {
+    const entry = cache.get(url);
+    if (!entry) return null;
+    // Freshness is READ, never refreshed, and eviction stays with the consuming paths.
+    if (!isFresh(entry, now)) return null;
+    return entry.promise;
+}
+
+/**
  * CONSUME A ROUTE'S ANSWER, WITH THE SERVER SEED REACHABLE (P0-7.6 / Slice 11).
  *
  * ── THE DIVERGENCE THIS EXISTS TO CLOSE ──

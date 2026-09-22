@@ -30,8 +30,99 @@
  * can say which rows are placed by inference rather than by declaration.
  */
 
-/** A calendar month. The grain every operator-facing billing period uses today. */
-export type BillingPeriodKey = string; // "YYYY-MM"
+/**
+ * ── A BILLING PERIOD IS A COMMERCIAL INTERVAL, NOT A DISPLAY STRING ────────────────────────────
+ *
+ * It was `YYYY-MM` and nothing else, and that was wrong for every organisation not billing monthly.
+ * Cadence is configurable — `weekly | biweekly | monthly | annual | daily | hourly | per_session`,
+ * seeded per org as `commercial_billing_cadence` — while period IDENTITY was always a calendar
+ * month. The consequence was not a cosmetic one: because the tuition occurrence key is
+ * `cev:tuition:<assignmentId>:<periodKey>`, a WEEKLY organisation generating a four-week span
+ * produced ONE charge, and the second, third and fourth weeks collided with the first on the
+ * `consumption_events` unique index. The idempotency guarantee worked perfectly — over the wrong
+ * grain — so the failure was silent and looked like correct deduplication.
+ *
+ * The repair is not `YYYY-WW`. Weeks are not ISO weeks here: a commercial period is tiled from the
+ * organisation's own ANCHOR (the accepted term's effective start), so one tenant's week may run
+ * Monday–Sunday and another's Thursday–Wednesday, and neither is wrong.
+ *
+ * ── THE KEY CARRIES THE BOUNDARIES ────────────────────────────────────────────────────────────
+ *
+ * `YYYY-MM` is KEPT, exactly, for monthly. It is what every existing charge's resolution key, every
+ * stored `service_period`, every ledger grouping and every `<input type="month">` already holds, and
+ * changing it would restate history. A monthly commercial period IS the calendar month.
+ *
+ * Every other cadence is `<start>~<end>`, both inclusive `YYYY-MM-DD`. Self-describing, sorts by
+ * start date, parses without knowing the cadence that produced it, and needs no lookup table — so
+ * there is no second period store and no row to fall out of sync with the interval it names.
+ */
+export type BillingPeriodKey = string; // "YYYY-MM" (monthly) | "YYYY-MM-DD~YYYY-MM-DD"
+
+/**
+ * The cadences that define a commercial INTERVAL.
+ *
+ * `hourly` and `per_session` are deliberately absent: they price a unit of usage, not a period, so
+ * asking them for period boundaries is a category error. A caller billing those bills occurrences,
+ * not periods, and `isPeriodBillableCadence` is how it finds out before assuming.
+ */
+export type BillingCadence = "daily" | "weekly" | "biweekly" | "monthly" | "annual";
+
+const CADENCE_STRIDE_DAYS: Partial<Record<BillingCadence, number>> = {
+    daily: 1,
+    weekly: 7,
+    biweekly: 14,
+};
+
+export function isPeriodBillableCadence(cadence: string): cadence is BillingCadence {
+    return cadence === "daily" || cadence === "weekly" || cadence === "biweekly"
+        || cadence === "monthly" || cadence === "annual";
+}
+
+/**
+ * ── WHAT A CONFIGURED BILLING FREQUENCY ACTUALLY RECURS AS ─────────────────────────────────────
+ *
+ * There are two levels and they are joined by a string. LEVEL 1 is CONFIGURATION: an organisation
+ * authors billing frequencies in the `billing_cadences` option set, and the authoring surface mints
+ * the key from whatever label was typed. LEVEL 2 is DERIVATION: this module turns an accepted term's
+ * cadence key plus the agreement anchor into actual period INSTANCES — and it only knows the five
+ * cadences above.
+ *
+ * Nothing validates the join. An organisation can author "Fortnightly", attach it to a tuition
+ * plan, have an assignment accept a term on it, and then get silence: no billing period on the
+ * assignment, and a generation run that correctly refuses — `isPeriodBillableCadence` is false — but
+ * says so only in a run outcome nobody was watching. The money is safe; the configuration surface
+ * was the thing that never mentioned it.
+ *
+ * This states, from the derivation authority itself, what the configured frequency will produce.
+ * It invents no cadence and decides no policy: it reports what `billingPeriodFor` already does, so
+ * the configuration screen cannot drift from the periods the platform actually derives.
+ */
+export type BillingRecurrence = {
+    /** True when this cadence has an interval the platform can derive periods for. */
+    billable: boolean;
+    /** How it recurs, in operator words — or why it produces no periods. */
+    recurrence: string;
+};
+
+export function billingRecurrenceFor(cadenceKey: string): BillingRecurrence {
+    const cadence = (cadenceKey ?? "").trim();
+    if (!isPeriodBillableCadence(cadence)) {
+        return {
+            billable: false,
+            recurrence: "No recurring periods — nothing is billed on a schedule for this frequency",
+        };
+    }
+    if (cadence === "monthly") return { billable: true, recurrence: "Each calendar month" };
+    if (cadence === "annual") return { billable: true, recurrence: "Each year from the agreement anchor" };
+    const stride = CADENCE_STRIDE_DAYS[cadence] ?? 7;
+    return {
+        billable: true,
+        recurrence:
+            stride === 1 ?
+                "Every day from the agreement anchor"
+            :   `Every ${stride} days from the agreement anchor`,
+    };
+}
 
 export type BillingPeriod = {
     key: BillingPeriodKey;
@@ -65,34 +156,178 @@ function ymdOf(value: unknown): string | null {
 }
 
 /** The period a single financial row belongs to, and the date that decided it. */
-export function placeInBillingPeriod(row: {
-    billable_on?: unknown;
-    occurs_on?: unknown;
-    service_date?: unknown;
-    created_at?: unknown;
-}): BillingPeriodPlacement {
+export function placeInBillingPeriod(
+    row: {
+        billable_on?: unknown;
+        occurs_on?: unknown;
+        service_date?: unknown;
+        created_at?: unknown;
+    },
+    /*
+     * The organisation's commercial grain, when the caller knows it.
+     *
+     * OPTIONAL AND MONTHLY BY DEFAULT, deliberately. Every existing caller groups by calendar month
+     * and must keep doing so — a ledger that silently regrouped would restate history it did not
+     * generate. A caller that knows its org bills weekly passes the cadence and anchor, and the
+     * ledger then groups on the same boundaries generation used.
+     */
+    grain?: { cadence: BillingCadence; anchor: string } | null,
+): BillingPeriodPlacement {
+    const place = (ymd: string): string =>
+        grain && grain.cadence !== "monthly"
+            ? billingPeriodFor(grain.cadence, grain.anchor, ymd).key
+            : ymd.slice(0, 7);
     const declared = ymdOf(row.billable_on);
-    if (declared) return { key: declared.slice(0, 7), basis: "billable_on" };
+    if (declared) return { key: place(declared), basis: "billable_on" };
     const occurs = ymdOf(row.occurs_on);
-    if (occurs) return { key: occurs.slice(0, 7), basis: "occurs_on" };
+    if (occurs) return { key: place(occurs), basis: "occurs_on" };
     const service = ymdOf(row.service_date);
-    if (service) return { key: service.slice(0, 7), basis: "service_date" };
+    if (service) return { key: place(service), basis: "service_date" };
     const created = ymdOf(row.created_at);
-    if (created) return { key: created.slice(0, 7), basis: "created_at" };
+    if (created) return { key: place(created), basis: "created_at" };
     // A row with no usable date is REPORTED, never quietly dropped into the current period.
     return { key: null, basis: "unplaceable" };
 }
 
+const MONTHS_SHORT = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/** Whole days between two `YYYY-MM-DD`, inclusive of both ends. */
+function inclusiveDays(startYmd: string, endYmd: string): number {
+    const a = Date.parse(`${startYmd}T00:00:00Z`);
+    const b = Date.parse(`${endYmd}T00:00:00Z`);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+    return Math.round((b - a) / 86_400_000) + 1;
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+    return new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * THE OPERATOR'S NAME FOR AN INTERVAL, derived from its BOUNDARIES — never from its key.
+ *
+ * "Sep 21–27, 2026" when it stays in one month, "Sep 21–Oct 4, 2026" when it crosses one, and the
+ * year written on both sides only when the period crosses a new year, because "Dec 28–Jan 3, 2027"
+ * would silently date the December end to the wrong year.
+ */
+function intervalLabel(start: string, end: string): string {
+    const [sy, sm, sd] = start.split("-").map(Number);
+    const [ey, em, ed] = end.split("-").map(Number);
+    const sMon = MONTHS_SHORT[sm - 1] ?? String(sm);
+    const eMon = MONTHS_SHORT[em - 1] ?? String(em);
+    if (sy !== ey) return `${sMon} ${sd}, ${sy}–${eMon} ${ed}, ${ey}`;
+    if (sm !== em) return `${sMon} ${sd}–${eMon} ${ed}, ${ey}`;
+    return `${sMon} ${sd}–${ed}, ${ey}`;
+}
+
+/** Is this key the calendar-month form? */
+function isMonthKey(key: string): boolean {
+    return /^\d{4}-\d{2}$/.test(key);
+}
+
+/**
+ * The interval a key names — both forms, without being told which.
+ *
+ * An UNPARSEABLE key is returned as a zero-width period carrying the key as its own label rather
+ * than being guessed at. A period this function does not recognise is a fact about the data, and
+ * renaming it would hide that.
+ */
 export function billingPeriodFromKey(key: BillingPeriodKey): BillingPeriod {
-    const [yearRaw, monthRaw] = key.split("-");
-    const year = Number(yearRaw);
-    const month = Number(monthRaw);
-    const start = `${key}-01`;
-    // Day 0 of the following month is the last day of this one — no month-length table, and February
-    // is correct in leap years without a special case.
-    const endDate = new Date(Date.UTC(year, month, 0));
-    const end = endDate.toISOString().slice(0, 10);
-    return { key, start, end, label: `${MONTHS[month - 1] ?? key} ${year}` };
+    if (isMonthKey(key)) {
+        const [yearRaw, monthRaw] = key.split("-");
+        const year = Number(yearRaw);
+        const month = Number(monthRaw);
+        const start = `${key}-01`;
+        // Day 0 of the following month is the last day of this one — no month-length table, and
+        // February is correct in leap years without a special case.
+        const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+        return { key, start, end, label: `${MONTHS[month - 1] ?? key} ${year}` };
+    }
+    const m = /^(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})$/.exec(key);
+    if (m) {
+        const [, start, end] = m;
+        return { key, start: start!, end: end!, label: intervalLabel(start!, end!) };
+    }
+    return { key, start: key, end: key, label: key };
+}
+
+/** The identity of an interval. Monthly keeps `YYYY-MM`; everything else carries its boundaries. */
+export function billingPeriodKeyFor(cadence: BillingCadence, start: string, end: string): BillingPeriodKey {
+    return cadence === "monthly" ? start.slice(0, 7) : `${start}~${end}`;
+}
+
+/**
+ * THE COMMERCIAL PERIOD CONTAINING A DAY, for a cadence anchored where the organisation anchors it.
+ *
+ * ── WHY THE ANCHOR, AND NOT A CALENDAR ────────────────────────────────────────────────────────
+ *
+ * A weekly period is not an ISO week. It is "the week this agreement bills on", tiled from the
+ * accepted term's effective start, so one tenant's week runs Mon–Sun and another's Thu–Wed and
+ * neither is wrong. Deriving it from a calendar would impose a boundary no customer agreed to, and
+ * would move every family's period the first time somebody changed the calendar.
+ *
+ * MONTHLY ignores the anchor deliberately: a monthly commercial period IS the calendar month. That
+ * is existing doctrine, it is what every stored `YYYY-MM` already means, and anchoring it would
+ * restate history.
+ *
+ * Tiling is arithmetic on whole days, computed in both directions from the anchor, so a date BEFORE
+ * the anchor lands in a negative-index period rather than falling outside every period.
+ */
+export function billingPeriodFor(
+    cadence: BillingCadence,
+    anchorYmd: string,
+    containingYmd: string,
+): BillingPeriod {
+    if (cadence === "monthly") return billingPeriodFromKey(containingYmd.slice(0, 7));
+
+    if (cadence === "annual") {
+        const [ay, am, ad] = anchorYmd.split("-").map(Number);
+        const [cy] = containingYmd.split("-").map(Number);
+        // Which anniversary block the day falls in — the anniversary itself opens the next one.
+        let index = cy! - ay!;
+        const anniversaryThisYear = `${String(cy).padStart(4, "0")}-${String(am).padStart(2, "0")}-${String(ad).padStart(2, "0")}`;
+        if (containingYmd < anniversaryThisYear) index -= 1;
+        const start = `${String(ay! + index).padStart(4, "0")}-${String(am).padStart(2, "0")}-${String(ad).padStart(2, "0")}`;
+        const nextStart = `${String(ay! + index + 1).padStart(4, "0")}-${String(am).padStart(2, "0")}-${String(ad).padStart(2, "0")}`;
+        const end = addDaysYmd(nextStart, -1);
+        return { key: billingPeriodKeyFor(cadence, start, end), start, end, label: intervalLabel(start, end) };
+    }
+
+    const stride = CADENCE_STRIDE_DAYS[cadence] ?? 7;
+    const offset = inclusiveDays(anchorYmd, containingYmd) - 1; // days from anchor, signed
+    const index = Math.floor(offset / stride);
+    const start = addDaysYmd(anchorYmd, index * stride);
+    const end = addDaysYmd(start, stride - 1);
+    return { key: billingPeriodKeyFor(cadence, start, end), start, end, label: intervalLabel(start, end) };
+}
+
+/**
+ * Every commercial period that overlaps `[fromYmd, toYmd]`, in order.
+ *
+ * This is what a generation RUN bills: a weekly organisation asked for September gets the four or
+ * five weekly periods that touch it, each one its own obligation with its own identity, rather than
+ * one September. Bounded at 750 periods so a malformed span cannot spin.
+ */
+export function billingPeriodsBetween(
+    cadence: BillingCadence,
+    anchorYmd: string,
+    fromYmd: string,
+    toYmd: string,
+): BillingPeriod[] {
+    const out: BillingPeriod[] = [];
+    if (toYmd < fromYmd) return out;
+    let cursor = billingPeriodFor(cadence, anchorYmd, fromYmd);
+    for (let guard = 0; guard < 750; guard += 1) {
+        if (cursor.start > toYmd) break;
+        out.push(cursor);
+        const next = billingPeriodFor(cadence, anchorYmd, addDaysYmd(cursor.end, 1));
+        if (next.start <= cursor.start) break; // never advance backwards
+        cursor = next;
+    }
+    return out;
 }
 
 /**
@@ -114,8 +349,50 @@ export function billingPeriodFromKey(key: BillingPeriodKey): BillingPeriod {
  */
 export function billingPeriodLabel(key: string | null | undefined): string {
     const raw = typeof key === "string" ? key.trim() : "";
-    if (!/^\d{4}-\d{2}$/.test(raw)) return raw;
+    if (!raw) return raw;
+    // Both forms, and an unrecognised key comes back unchanged through `billingPeriodFromKey`.
     return billingPeriodFromKey(raw).label;
+}
+
+/**
+ * THE PERIOD AN ASSIGNMENT IS IN, AND THE ONE AFTER IT — a READ, for a surface to state.
+ *
+ * ── WHY THIS LIVES HERE ──────────────────────────────────────────────────────────────────────
+ *
+ * A billing period is DERIVED: accepted term + cadence + the agreement anchor. The Assignment
+ * Tuition card owns the accepted cadence and could not say which period the assignment was in,
+ * which left three operator questions unanswered on the one surface that should know them. The
+ * answer is a read presentation, and the calculation belongs beside the other period functions —
+ * a component that worked out its own boundaries would be a second period model.
+ *
+ * ── WHAT IT REFUSES ──────────────────────────────────────────────────────────────────────────
+ *
+ * No accepted term, no cadence with an interval, or a term that has already ended → `null`. A
+ * surface must not fabricate a period for an assignment that has no commercial cadence, and a
+ * usage-priced cadence has no interval to state.
+ *
+ * This is NOT the accounting period. That is attributed at write time against the accounting
+ * calendar and is a different question with a different owner.
+ */
+export function acceptedTermBillingPeriods(
+    term: { cadenceKey?: string | null; effectiveStart?: string | null; effectiveEnd?: string | null } | null | undefined,
+    todayYmd: string,
+): { current: BillingPeriod; next: BillingPeriod } | null {
+    const cadence = (term?.cadenceKey ?? "").trim();
+    const anchor = (term?.effectiveStart ?? "").trim();
+    if (!term || !anchor || !isPeriodBillableCadence(cadence)) return null;
+
+    /*
+     * BEFORE IT BEGINS, THE FIRST PERIOD IS THE ANSWER. A term accepted for next month should say
+     * which period it starts in rather than describing a period it does not cover.
+     */
+    const from = todayYmd < anchor ? anchor : todayYmd;
+    const end = (term.effectiveEnd ?? "").trim();
+    if (end && end < from) return null;
+
+    const current = billingPeriodFor(cadence, anchor, from);
+    const next = billingPeriodFor(cadence, anchor, addDaysYmd(current.end, 1));
+    return { current, next };
 }
 
 /** The period a given day falls in. */

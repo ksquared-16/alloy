@@ -46,6 +46,7 @@ import {
 } from "@/components/presentation/runtimeLabels";
 import { WorkViewList } from "./WorkViewList";
 import { useWorkUnitEntryGesture } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { ProcessCardGlyph } from "./ProcessCardGlyph";
 import {
     WS_KPI_CARD_CHROME,
@@ -244,7 +245,7 @@ export function ProcessSummaryCard({
     return (
         <article
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.processTile)}
-            data-alloy-section="WS.PROCESS_SUMMARY_CARD"
+            {...alloySectionDomAttrs("WS-06")}
             data-process-id={process.id}
             data-process-accent={identity.accent ?? "none"}
             data-process-metric-presentation={identity.metricPresentation}

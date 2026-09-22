@@ -1,0 +1,32 @@
+{
+  "insight": "2 of 2 agreed",
+  "assignments": [
+    {
+      "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "member": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "state": "recommended",
+      "accepted": "accepted",
+      "stale": "false",
+      "resolution": "b2e43fd1",
+      "child": "Certb Certhouse",
+      "term": "2a23f980-26d3-499a-b5bb-394e5c657499",
+      "acceptedState": "accepted",
+      "acceptedAmount": "$1,450.00/monthly",
+      "acceptedLine": "$1,450.00/monthly accepted, effective 2026-09-01"
+    },
+    {
+      "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "member": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "state": "recommended",
+      "accepted": "accepted",
+      "stale": "false",
+      "resolution": "2f92ec30",
+      "child": "Certa Certhouse",
+      "term": "19baf6ca-aded-4afa-afcf-9a14f4f8273f",
+      "acceptedState": "accepted",
+      "acceptedAmount": "$185.00/weekly",
+      "acceptedLine": "$185.00/weekly accepted, effective 2026-09-01"
+    }
+  ],
+  "text": "TUITION\n\n2 of 2 agreed\n\nCertb Certhouse\nProgram · preschool\nAttendance · full_time\nSchedule · — days a week\nEffective · 2026-09-01\n\n$1,450.00/monthly accepted, effective 2026-09-01\n\nRecommended\n\n$1,450.00/monthly\nProgram · Preschool\nAttendance · full_time\nSchedule · any\nBilled · monthly\nOrganisation default\nEffective 2026-07-01\nAccept tuition\nCerta Certhouse\nProgram · school_age\nAttendance · custom\nSchedule · — days a week\nEffective · 2026-09-01\n\n$185.00/weekly accepted, effective 2026-09-01\n\nRecommended\n\n$185.00/weekly\nProgram · Before & After\nAttendance · custom\nSchedule · any\nBilled · weekly\nOrganisation default\nEffective 2026-09-01\nAccept tuition\nDetails →"
+}

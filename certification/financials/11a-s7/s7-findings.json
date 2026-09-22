@@ -1,0 +1,26 @@
+[
+  {
+    "id": "7A",
+    "what": "a partially allocated obligation is marked PARTIAL and shows the unowned remainder",
+    "ok": true,
+    "observed": "state=partial text=\"Cert Certhouse · $57.00 unassigned\" title=\"Cert Certhouse $18.00 · Unassigned $57.00\""
+  },
+  {
+    "id": "7B-1",
+    "what": "the household obligation offers Resolve",
+    "ok": true,
+    "observed": "child=\"Household\" actions=[\"reverse\",\"adjust\",\"resolveResponsibility\"]"
+  },
+  {
+    "id": "7B-2",
+    "what": "the household obligation is no longer refused as un-allocatable",
+    "ok": true,
+    "observed": "error=null"
+  },
+  {
+    "id": "7F",
+    "what": "the four inert types are withdrawn and the consuming six remain",
+    "ok": true,
+    "observed": "inertStillShown=[] active=[\"Proration\",\"Billing cadence\",\"Posting review\",\"Due date\",\"Vacation credit\",\"Grace period\"]"
+  }
+]

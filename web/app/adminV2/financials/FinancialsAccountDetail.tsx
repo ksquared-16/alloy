@@ -117,15 +117,32 @@ export default function FinancialsAccountDetail({
         [dismissNonce],
     );
 
-    /* ESC, matching the platform: the same return-to-base the Focus Panel gives a focused card. */
+    /*
+     * ESC, matching the platform: the same return-to-base the Focus Panel gives a focused card.
+     *
+     * ── AND IT MUST GO NO FURTHER ───────────────────────────────────────────────────────────────
+     *
+     * This closed the command and let the key keep travelling, so the workspace shell's own Escape
+     * handler ran too and tore down the whole account detail. Measured in Financials → Accounts:
+     * open a row's Adjust, press Escape, and the command closed AND the selected account, the lens
+     * and the filters all went with it — the operator was returned to an empty pane having asked
+     * only to back out of one command.
+     *
+     * Registered in the CAPTURE phase so the stop actually precedes the shell's listener rather
+     * than racing it. With no command open nothing is consumed and Escape still means what the
+     * workspace says it means.
+     */
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== "Escape") return;
             const open = hostRef.current?.querySelector("[data-financials-overlay]");
-            if (open) dismiss();
+            if (!open) return;
+            e.preventDefault();
+            e.stopPropagation();
+            dismiss();
         };
-        document.addEventListener("keydown", onKey);
-        return () => document.removeEventListener("keydown", onKey);
+        document.addEventListener("keydown", onKey, { capture: true });
+        return () => document.removeEventListener("keydown", onKey, { capture: true });
     }, [dismiss]);
 
     return (

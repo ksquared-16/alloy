@@ -1,0 +1,121 @@
+{
+  "requests": [
+    "GET /api/admin/workspace/site-filter",
+    "GET /api/admin/communications/unread-count",
+    "GET /api/admin/operational-tasks?scope=workspace&summary=true",
+    "GET /api/admin/lifecycle-catalog",
+    "GET /api/admin/work-units",
+    "GET /api/admin/departments",
+    "GET /api/admin/entity-labels",
+    "GET /api/admin/ai/workflow-assist/capabilities",
+    "GET /api/admin/ai/config-layout-assist/capabilities",
+    "GET /api/admin/status-options?entity_type=opportunities",
+    "GET /api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5",
+    "POST /api/admin/queue-view-totals",
+    "GET /api/admin/verticals",
+    "GET /api/admin/queues/stage-membership-ack?keys=93667019-bd28-49b5-a688-acc9bb1e0a19%3A18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3%3Achild%3A46105cd4-6030-417d-a7cb-faf409071c0d%3Aenrolled%3A2026-08-27T22%3A52%3A37.442Z%2C93667019-bd28-49b5-a688-acc9bb1e0a19%3A18b7fc4f-cca1-49d8-9f5b-25871bd5bdf3%3Achild%3Ae408fa51-7261-43c4-8e60-555d17fc9888%3Aenrolled%3A2026-08-27T22%3A52%3A36.854Z",
+    "GET /api/admin/entity-layouts/focus-panel-summary?workViewId=new_work_view_7&stageKey=enrolled",
+    "GET /api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a852-b11b8888a6cd",
+    "GET /api/admin/metrics/resolve?keys=enrollment.lead_count%2Cops.needs_attention_count%2Cops.work_overdue_count&window=rolling_30d&work_unit_id=dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+    "GET /api/admin/actions/right-rail-bundle?department_id=3933ac47-077a-4de8-aaac-8aed48d80413&work_unit_id=dd5b3a23-376b-4c9f-9236-ae555b44a1b3",
+    "GET /api/admin/queue-row-layout/queue-row-3933ac47-077a-4de8-aaac-8aed48d80413-42be9074-443f-4047-bece-d68cd1d22788?processKey=enrollment",
+    "GET /api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/lifecycle-builder",
+    "GET /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&composer_channel=email",
+    "GET /api/admin/communications/threads?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=40",
+    "GET /api/admin/communications/bindings",
+    "GET /api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/operational-tasks?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/communications/conversations",
+    "GET /api/admin/locations?hierarchy=1",
+    "GET /api/admin/option-sets/childcare_program_type",
+    "GET /api/admin/location-program-categories?include_inactive=true",
+    "GET /api/admin/option-sets/person_gender",
+    "GET /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "GET /api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+    "GET /api/admin/activity?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=100",
+    "GET /api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&thread_id=6e75a85c-1d6f-4fab-a0cf-6e67f4c30259"
+  ],
+  "financial": [],
+  "dom": {
+    "cardHosts": [
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-tier": "work",
+        "data-card-role": "active-work",
+        "data-card-archetype": "action",
+        "data-system5-card": "true",
+        "data-universal-card-span": "row",
+        "data-universal-card-key": "business_process"
+      },
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-tier": "context",
+        "data-card-role": "context",
+        "data-card-archetype": "status",
+        "data-system5-card": "true",
+        "data-universal-card-span": "row",
+        "data-universal-card-key": "financials"
+      },
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-modal": "record",
+        "data-universal-card-tier": "reference",
+        "data-card-role": "reference",
+        "data-card-archetype": "collection",
+        "data-system5-card": "true",
+        "data-universal-card-span": "2",
+        "data-universal-card-key": "children"
+      },
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-modal": "record",
+        "data-universal-card-tier": "reference",
+        "data-card-role": "reference",
+        "data-card-archetype": "profile",
+        "data-system5-card": "true",
+        "data-universal-card-span": "2",
+        "data-universal-card-key": "household"
+      },
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-tier": "work",
+        "data-card-role": "active-work",
+        "data-card-archetype": "timeline",
+        "data-system5-card": "true",
+        "data-universal-card-span": "row",
+        "data-universal-card-key": "attendance"
+      },
+      {
+        "tag": "article",
+        "data-universal-card": "true",
+        "data-universal-card-density": "compact",
+        "data-universal-card-tier": "context",
+        "data-card-role": "context",
+        "data-card-archetype": "status",
+        "data-system5-card": "true",
+        "data-universal-card-span": "1",
+        "data-universal-card-key": "health_safety"
+      }
+    ],
+    "subjectish": [],
+    "url": "/workspace/work-unit/enrolled-children",
+    "tuitionHost": [
+      {
+        "tag": "div",
+        "data-assignment-tuition": "true",
+        "data-tuition-count": "0"
+      }
+    ]
+  }
+}

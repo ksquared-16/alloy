@@ -1,0 +1,145 @@
+{
+  "controls": [
+    {
+      "tag": "BUTTON",
+      "name": "QS",
+      "disabled": false
+    },
+    {
+      "tag": "A",
+      "name": "Organization",
+      "disabled": false
+    },
+    {
+      "tag": "A",
+      "name": "Organization",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Tuition",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Catalog",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Policies",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Payments",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Accounting",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Simulator",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Open Funding",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Reset",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Pin",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Close",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Here are some ways I can help▾",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Explain this configurationSummarize the ",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Review configuration attentionIdentify s",
+      "disabled": false
+    },
+    {
+      "tag": "BUTTON",
+      "name": "Review unpublished changesExplain what r",
+      "disabled": false
+    }
+  ],
+  "chapters": {
+    "Policies": {
+      "affordance": "Open Policies",
+      "url": "http://127.0.0.1:3012/organization/financials?chapter=policies",
+      "reached": true,
+      "body": {
+        "headings": [
+          "Financials",
+          "Discounts & commercial policies",
+          "Policies",
+          "Financial execution policies",
+          "Financial Policies",
+          "Resolved (org default)",
+          "Due date · Org default"
+        ],
+        "accountingPanel": false,
+        "closeControls": 0,
+        "mentionsDiscount": true,
+        "mentionsBillingFrequency": false
+      }
+    },
+    "Tuition": {
+      "affordance": "Open Tuition",
+      "url": "http://127.0.0.1:3012/organization/financials?chapter=tuition",
+      "reached": true,
+      "body": {
+        "headings": [
+          "Financials",
+          "Tuition Plans",
+          "Tuition Plans",
+          "Financial setup"
+        ],
+        "accountingPanel": false,
+        "closeControls": 0,
+        "mentionsDiscount": false,
+        "mentionsBillingFrequency": true
+      }
+    },
+    "Accounting": {
+      "affordance": "Open Accounting",
+      "url": "http://127.0.0.1:3012/organization/financials?chapter=accounting",
+      "reached": true,
+      "body": {
+        "headings": [
+          "Financials",
+          "GL Codes",
+          "Where each charge category posts",
+          "Accounting calendar"
+        ],
+        "accountingPanel": true,
+        "closeControls": 11,
+        "mentionsDiscount": true,
+        "mentionsBillingFrequency": false
+      }
+    }
+  }
+}

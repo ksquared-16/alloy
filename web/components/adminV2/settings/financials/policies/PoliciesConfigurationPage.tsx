@@ -37,6 +37,7 @@ import {
     writeLocationIdsMetadata,
 } from "@/lib/financials/applicability/locationApplicability";
 import { summarizeLocationApplicability } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
+import FinancialPoliciesConfigurationPanel from "@/components/adminV2/settings/financials/FinancialPoliciesConfigurationPanel";
 
 type PolicyTab = "overview" | "rules" | "applies_to";
 
@@ -129,22 +130,43 @@ export default function PoliciesConfigurationPage({
 
     const selected = policies.find((row) => row.id === selectedId) ?? null;
 
-    const scopeLabel = useMemo(() => {
-        if (!selected) return "—";
-        if (selected.scope_type === "program" && selected.program_key) {
-            return programs.find((p) => p.key === selected.program_key)?.label ?? selected.program_key;
-        }
-        if (selected.scope_type === "location" && selected.location_id) {
-            return locations.find((l) => l.id === selected.location_id)?.name ?? "Location";
-        }
-        if (selected.scope_type === "offering" && selected.offering_id) {
-            return offerings.find((o) => o.id === selected.offering_id)?.label ?? "Tuition Plan";
-        }
-        if (selected.scope_type === "variant" && selected.variant_id) {
-            return variants.find((v) => v.id === selected.variant_id)?.label ?? "Enrollment Commitment";
-        }
-        return SCOPE_LABEL[selected.scope_type] ?? "Configured scope";
-    }, [selected, programs, locations, offerings, variants]);
+    /* What the policy DOES, from the one helper that knows — the Rules tab reads the same call. */
+    const valueSummary = useMemo(
+        () =>
+            selected ?
+                commercialPolicyValueSummary(selected.policy_type as CommercialPolicyType, selected.value)
+            :   "",
+        [selected],
+    );
+
+    /*
+     * WHAT A POLICY APPLIES TO — one derivation, two call sites.
+     *
+     * This was bound to the SELECTED policy, so "what does it apply to?" could only be answered
+     * after opening one. It is the fourth of the five facts an operator needs BEFORE selecting,
+     * and the only one the row was missing. Lifting it to take a row rather than read `selected`
+     * lets the summary state it without a second scope formatter existing.
+     */
+    const scopeLabelFor = useCallback(
+        (row: CommercialPolicyApiRow | null): string => {
+            if (!row) return "—";
+            if (row.scope_type === "program" && row.program_key) {
+                return programs.find((p) => p.key === row.program_key)?.label ?? row.program_key;
+            }
+            if (row.scope_type === "location" && row.location_id) {
+                return locations.find((l) => l.id === row.location_id)?.name ?? "Location";
+            }
+            if (row.scope_type === "offering" && row.offering_id) {
+                return offerings.find((o) => o.id === row.offering_id)?.label ?? "Tuition Plan";
+            }
+            if (row.scope_type === "variant" && row.variant_id) {
+                return variants.find((v) => v.id === row.variant_id)?.label ?? "Enrollment Commitment";
+            }
+            return SCOPE_LABEL[row.scope_type] ?? "Configured scope";
+        },
+        [programs, locations, offerings, variants],
+    );
+    const scopeLabel = useMemo(() => scopeLabelFor(selected), [scopeLabelFor, selected]);
 
     const locationsSummary = useMemo(() => {
         if (!selected) return "—";
@@ -253,6 +275,29 @@ export default function PoliciesConfigurationPage({
                 </p>
             :   null}
 
+            {/*
+             * ── NAME THE SUBSECTION AN OPERATOR IS LOOKING FOR ────────────────────────────────
+             *
+             * This chapter holds two different authorities and only the second one said so. The
+             * commercial list was headed "Policies" — the chapter's own name — while the panel
+             * below it was explicitly "Financial execution policies", so an operator looking for
+             * DISCOUNTS saw a page about policies and nothing that used the word. The engine is
+             * exactly where it belongs and is reachable; the page simply never named it.
+             *
+             * The repair is a heading, in the same grammar the execution panel already uses, so
+             * the chapter reads as two clearly separated subsections. No route is added, no form
+             * is duplicated, and nothing moves — two places owning one policy would be a far worse
+             * answer to "it is hard to find" than a missing title.
+             */}
+            <div className="mb-3" data-testid="commercial-policies-heading">
+                <h2 className="text-sm font-semibold text-alloy-midnight">Discounts &amp; commercial policies</h2>
+                <p className="mt-1 max-w-xl text-sm text-alloy-midnight/55">
+                    Discounts, sibling and employee rules and waivers — what reduces a family&apos;s price, who
+                    qualifies, and from when. These modify commercial pricing; the execution policies below decide
+                    how billing runs.
+                </p>
+            </div>
+
             <ConfigurationShell testId="policies-configuration-shell">
                 {loading ?
                     <ConfigurationEmptyState testId="policies-loading" title="Loading Policies" description="Fetching policy rules." />
@@ -301,7 +346,20 @@ export default function PoliciesConfigurationPage({
                                                     {policyCategoryLabel(row.policy_type)} · {policyTypeLabel(row.policy_type)}
                                                 </span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
+                                                    {commercialPolicyValueSummary(
+                                                        row.policy_type as CommercialPolicyType,
+                                                        row.value,
+                                                    ) ?
+                                                        `${commercialPolicyValueSummary(row.policy_type as CommercialPolicyType, row.value)} · `
+                                                    :   ""}
                                                     {row.is_active ? "Active" : "Inactive"}
+                                                    {/*
+                                                      * WHAT IT APPLIES TO — the one fact of the
+                                                      * five that the summary did not state, so an
+                                                      * operator had to open a policy to learn its
+                                                      * scope. Same derivation the detail uses.
+                                                      */}
+                                                    {` · ${scopeLabelFor(row)}`}
                                                     {row.effective_start && row.effective_start !== "2000-01-01"
                                                         ? ` · from ${row.effective_start}`
                                                         : ""}
@@ -377,6 +435,27 @@ export default function PoliciesConfigurationPage({
                                                     ?.description ?? "Financial policy rule."}
                                             </p>
                                             <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+                                                {/*
+                                                 * ── THE HEADLINE FACT, ON THE PAGE THAT OPENS ────────────────────
+                                                 *
+                                                 * Selecting a policy opens `overview`, and overview stated Category,
+                                                 * Type, Status, Applied to, Locations and Effective — everything ABOUT
+                                                 * the discount except what it reduces and by how much. "10% off
+                                                 * everything" sat one tab away, so an operator could read the whole
+                                                 * front page of a discount and still not know its rate.
+                                                 *
+                                                 * Same authority as the Rules tab. No second formatter.
+                                                 */}
+                                                {valueSummary ?
+                                                    <div className="sm:col-span-2">
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            What it does
+                                                        </dt>
+                                                        <dd className="mt-0.5 font-medium" data-testid="policy-overview-rule">
+                                                            {valueSummary}
+                                                        </dd>
+                                                    </div>
+                                                :   null}
                                                 <div>
                                                     <dt className="text-[11px] font-medium text-alloy-midnight/40">Category</dt>
                                                     <dd className="mt-0.5">{policyCategoryLabel(selected.policy_type)}</dd>
@@ -441,6 +520,47 @@ export default function PoliciesConfigurationPage({
                     </div>
                 }
             </ConfigurationShell>
+
+            {/*
+             * ── THE SECOND POLICY FAMILY, ON THE SURFACE THAT CLAIMS TO OWN IT ────────────────
+             *
+             * This chapter authored COMMERCIAL policies only — percentage and fixed discounts
+             * scoped to programs and plans. `financial_policies` is a different authority: it owns
+             * proration, posting review, billing cadence, deposit and due date, and it is what
+             * generation and the charge lifecycle actually resolve.
+             *
+             * It had a panel and no route. `/adminV2/settings/financials` redirects here, so
+             * `FinancialPoliciesConfigurationPanel` had become unreachable — which meant a
+             * `due_date` policy an organisation must set in order to state its own payment terms
+             * could be stored by the database and authored by nobody. Mounted proof found it; no
+             * amount of reading the registry would have, because the registry-driven form was
+             * correct and simply not rendered anywhere.
+             *
+             * SCOPE OPTIONS ARE DELIBERATELY EMPTY HERE. The panel narrows a policy to a location,
+             * service or rate plan when given those lists, and this chapter does not load them. The
+             * ORG scope — which is what "how does this organisation run financials" means, and the
+             * scope every one of these policy types is primarily authored at — works fully. Wiring
+             * the narrower scopes is a known, bounded follow-up rather than a reason to keep the
+             * whole authority unreachable.
+             */}
+            <section className="mt-8" data-testid="financial-execution-policies">
+                <div className="mb-3">
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Financial execution policies</h2>
+                    <p className="mt-1 max-w-xl text-sm text-alloy-midnight/55">
+                        How this organisation runs billing: proration, billing cadence, when payment is due, posting
+                        review and deposits. These are resolved by charge generation and the charge lifecycle —
+                        distinct from the commercial discount rules above.
+                    </p>
+                </div>
+                <FinancialPoliciesConfigurationPanel
+                    canMutate
+                    todayYmd={new Date().toISOString().slice(0, 10)}
+                    locationOptions={[]}
+                    serviceOptions={[]}
+                    ratePlanOptions={[]}
+                    labelFor={() => undefined}
+                />
+            </section>
 
             {form ?
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-alloy-midnight/25 p-4" role="dialog" aria-modal="true">

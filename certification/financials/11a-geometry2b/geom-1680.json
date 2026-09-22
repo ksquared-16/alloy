@@ -1,0 +1,26 @@
+{
+  "summary": {
+    "saysAggregate": true,
+    "leakedProvenance": false,
+    "clippedLabels": []
+  },
+  "ledger": {
+    "desc": {
+      "n": 40,
+      "maxW": 103,
+      "clipped": 36
+    },
+    "gl": {
+      "n": 40,
+      "maxW": 178,
+      "clipped": 0
+    },
+    "type": {
+      "n": 40,
+      "maxW": 112,
+      "clipped": 0
+    },
+    "rowCount": 198,
+    "collisions": 12
+  }
+}

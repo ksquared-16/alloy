@@ -28,6 +28,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { healthClock, recordHealthSpans } from "@/lib/perf/routeTimingDiagnostic";
 
 import {
     evaluateHealthAccess,
@@ -114,7 +115,15 @@ export type HealthSafetyCardVM = {
 };
 
 /** Requirement keys whose evidence is a document of the matching `doc_type`. */
-const DOCUMENT_BACKED_REQUIREMENTS: ReadonlyArray<{ key: string; label: string; docType: string }> = [
+/**
+ * The requirement set, and the document type that satisfies each one.
+ *
+ * EXPORTED so there is ONE owner of this rule. The A′ first-order composer answers "how many of
+ * this child's requirements are satisfied?" without building the whole card, and a second copy of
+ * this list would let the two surfaces disagree about what a requirement IS — the card saying three
+ * of four while the first-order face said two of three, with both honest about their own list.
+ */
+export const DOCUMENT_BACKED_REQUIREMENTS: ReadonlyArray<{ key: string; label: string; docType: string }> = [
     { key: "physical", label: "Physical / health assessment", docType: "physical" },
     { key: "immunization", label: "Immunization record", docType: "immunization_record" },
     { key: "health_care_plan", label: "Health care plan", docType: "health_care_plan" },
@@ -212,29 +221,37 @@ export async function buildHealthSafetyCardVM(
         },
     ];
 
+    const hClock = healthClock();
     const [factsResult, profileResult, documentsResult, contactsResult] = await Promise.allSettled([
-        resolveActiveHealthFacts(supabase, {
+        hClock.time("health_facts_ms", () => resolveActiveHealthFacts(supabase, {
             orgId: args.orgId,
             subjectEntityId: memberId,
             subjectEntityType: "customer_member",
             access: args.access,
-        }),
-        import("@/lib/completion/loadCustomerMemberProfileFields").then((m) =>
-            m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId]),
+        })),
+        hClock.time("health_profile_ms", () =>
+            import("@/lib/completion/loadCustomerMemberProfileFields").then((m) =>
+                m.loadCustomerMemberProfileFieldsByMemberId(supabase, args.orgId, [memberId]),
+            ),
         ),
-        supabase
-            .from("documents")
-            .select("id, doc_type, title, status, created_at")
-            .eq("org_id", args.orgId)
-            .eq("entity_type", "customer_member")
-            .eq("entity_id", memberId),
-        supabase
-            .from("person_child_relationships")
-            .select("person_id, relationship_type, priority, status")
-            .eq("org_id", args.orgId)
-            .eq("customer_member_id", memberId)
-            .eq("status", "active"),
+        hClock.time("health_documents_ms", () =>
+            supabase
+                .from("documents")
+                .select("id, doc_type, title, status, created_at")
+                .eq("org_id", args.orgId)
+                .eq("entity_type", "customer_member")
+                .eq("entity_id", memberId),
+        ),
+        hClock.time("health_contacts_ms", () =>
+            supabase
+                .from("person_child_relationships")
+                .select("person_id, relationship_type, priority, status")
+                .eq("org_id", args.orgId)
+                .eq("customer_member_id", memberId)
+                .eq("status", "active"),
+        ),
     ]);
+    recordHealthSpans(hClock.spans());
 
     if (factsResult.status === "rejected") {
         /*

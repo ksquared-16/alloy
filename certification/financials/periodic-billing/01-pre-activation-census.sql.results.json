@@ -1,0 +1,124 @@
+{
+  "trusted_host_action_id": "tha_e959747c9aaf5f",
+  "query_hash": "c47e2004ebe8b43c418b7f5e653b1f2b03067418807eb9daf554d2586b060e56",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T00:11:52.644Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_e959747c9aaf5f",
+    "query_hash": "c47e2004ebe8b43c418b7f5e653b1f2b03067418807eb9daf554d2586b060e56",
+    "authorization_id": "grnt_e24d9501450443fa",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T00:11:54.427Z",
+    "question_ids": [
+      "orgs",
+      "humanqa_org",
+      "schedules",
+      "clock",
+      "terms_by_org"
+    ],
+    "questions": {
+      "orgs": {
+        "question_id": "orgs",
+        "row_count": null,
+        "rows": [
+          {
+            "org_count": 3,
+            "orgs": [
+              {
+                "id": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "name": "Alloy Bend"
+              },
+              {
+                "id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "name": "Firefly Early Learning"
+              },
+              {
+                "id": "0bbaad43-1235-401e-88ea-62e0881e950a",
+                "name": "W-17 self-test"
+              }
+            ]
+          }
+        ]
+      },
+      "humanqa_org": {
+        "question_id": "humanqa_org",
+        "row_count": null,
+        "rows": [
+          {
+            "certa_ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+            "certb_ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+            "org_of_certa": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "org_of_certb": "93667019-bd28-49b5-a688-acc9bb1e0a19"
+          }
+        ]
+      },
+      "schedules": {
+        "question_id": "schedules",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 1,
+            "by_handler": [
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "n": 1,
+                "active": 1
+              }
+            ],
+            "periodic_billing_rows": 1,
+            "periodic_billing_labels": [
+              {
+                "id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+                "org_id": null,
+                "label": "clock_activation_certification",
+                "recurrence": "one_time",
+                "is_active": true,
+                "next_due_at": null
+              }
+            ]
+          }
+        ]
+      },
+      "clock": {
+        "question_id": "clock",
+        "row_count": null,
+        "rows": [
+          {
+            "wake_count": 58,
+            "last_wake_at": "2026-09-22 00:10:00.782658+00",
+            "cron_job_active": true,
+            "cron_schedule": "*/5 * * * *",
+            "observed_at": "2026-09-22 00:11:54.342063+00"
+          }
+        ]
+      },
+      "terms_by_org": {
+        "question_id": "terms_by_org",
+        "row_count": null,
+        "rows": [
+          {
+            "live_tuition_terms": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "terms": 2,
+                "assignments": 2,
+                "cadences": [
+                  "monthly",
+                  "weekly"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

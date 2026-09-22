@@ -13,6 +13,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 
 import { resolveCollectionMerchant, type MerchantRefusal } from "./providerMerchant";
+import {
+    materializeMethodForMerchant,
+    resolveCollectionMethod,
+    type PaymentMethodRecord,
+} from "./paymentMethodService";
 
 export type CreateCardCollectionInput = {
     /** From the authenticated session. The only tenancy input; never from the request body. */
@@ -30,6 +35,18 @@ export type CreateCardCollectionInput = {
      * same charge for the same amount are correctly two different intents rather than one.
      */
     rail?: "card" | "ach";
+    /**
+     * A STORED METHOD to charge, by its canonical Alloy id (Payments W2).
+     *
+     * Absent means the payer is present and will confirm in the browser, which is every caller
+     * written before W2 and is unchanged. Present means collect from an instrument already on file:
+     * the same attempt, the same PaymentIntent call, the same direct charge and the same canonical
+     * posting — only the provider is additionally told WHICH method and to confirm now.
+     *
+     * It is a canonical id, never a provider reference. A caller cannot name a Stripe PaymentMethod
+     * here, so a browser cannot charge an instrument Alloy has not recorded.
+     */
+    paymentMethodId?: string | null;
 };
 
 export type CollectionRefusalReason =
@@ -40,7 +57,15 @@ export type CollectionRefusalReason =
     | "charge_not_collectible"
     | "amount_exceeds_collectible"
     | "invalid_amount"
-    | "currency_mismatch";
+    | "currency_mismatch"
+    /* W2 — a stored method was named but may not be used. */
+    | "method_not_found"
+    | "method_not_usable"
+    | "method_wrong_account"
+    | "method_rail_mismatch"
+    | "method_unavailable_at_provider"
+    /* W3 — the stored method's owner is not the payer this attempt claims. */
+    | "method_payer_mismatch";
 
 export type CreateCardCollectionResult =
     | {
@@ -54,6 +79,11 @@ export type CreateCardCollectionResult =
           currency: string;
           /** True when this intent already existed — a retry, not a second charge. */
           reused: boolean;
+          /**
+           * The canonical stored method this charge used, when one was named. Null for a
+           * present-payer collection. Never a provider reference.
+           */
+          paymentMethodId?: string | null;
       }
     | { ok: false; reason: CollectionRefusalReason; message: string };
 
@@ -66,6 +96,31 @@ export type CreateCardCollectionResult =
  * the family's card. The day is included for the same reason Thread 8's own key includes it: paying
  * the same amount against the same charge tomorrow is a real second payment, not a retry.
  */
+/**
+ * The ACCOUNT a charge settles against, whichever way its billable source names it.
+ *
+ * Returns "" only when the source genuinely cannot be mapped to an account — in which case the
+ * stored-method scope check has nothing to compare and the method's own org scope is the boundary
+ * that remains. That is a narrower guarantee, and it is why this resolves rather than guesses.
+ */
+async function resolveChargeAccount(
+    supabase: SupabaseClient,
+    orgId: string,
+    source: { billable_source_type: string; billable_source_id: string },
+): Promise<string> {
+    if (source.billable_source_type === "customer") return t(source.billable_source_id);
+    if (source.billable_source_type === "enrollment_agreement") {
+        const { data } = await supabase
+            .from("child_enrollment_agreements")
+            .select("customer_id")
+            .eq("org_id", orgId)
+            .eq("id", source.billable_source_id)
+            .maybeSingle();
+        return t((data as { customer_id?: unknown } | null)?.customer_id);
+    }
+    return "";
+}
+
 export function deriveIntentKey(input: {
     chargeId: string;
     amountCents: number;
@@ -75,6 +130,8 @@ export function deriveIntentKey(input: {
     const day = input.day ?? new Date().toISOString().slice(0, 10);
     return ["collect", input.chargeId, String(input.amountCents), input.rail, day].join(":");
 }
+
+const t = (v: unknown): string => (v != null ? String(v).trim() : "");
 
 type StripeCall = (
     path: string,
@@ -258,6 +315,100 @@ export async function createCardCollection(
         };
     }
 
+    /*
+     * ── 3b·W2. THE STORED METHOD, IF ONE WAS NAMED ───────────────────────────────────────────────
+     *
+     * Resolved against the CANONICAL table before anything is created, so a method that is revoked,
+     * expired, awaiting verification or scoped to another family refuses here rather than at Stripe
+     * — after the operator has been told a collection is under way.
+     *
+     * The clone happens immediately before the PaymentIntent and is never stored: Stripe consumes a
+     * clone with the charge it serves. For a bank account the mandate travels with it, which is only
+     * true because the authorization was taken on the platform without `on_behalf_of`.
+     */
+    let storedMethod: PaymentMethodRecord | null = null;
+    let clonedMethodRef: string | null = null;
+    if (t(input.paymentMethodId)) {
+        /*
+         * WHICH ACCOUNT THIS OBLIGATION BELONGS TO — resolved, not assumed.
+         *
+         * A charge's billable source is a `customer` for household-level obligations and an
+         * `enrollment_agreement` for a child's. Only the first names the account directly, and an
+         * earlier draft of this treated the second as "no account", which silently skipped the scope
+         * check on the SHAPE production actually uses most. The agreement carries `customer_id`, so
+         * it is looked up rather than given up on.
+         */
+        const accountCustomerId = await resolveChargeAccount(supabase, input.orgId, source);
+        const resolution = await resolveCollectionMethod(supabase, {
+            orgId: input.orgId,
+            methodId: t(input.paymentMethodId),
+            customerId: accountCustomerId,
+        });
+        if (!resolution.ok) {
+            return {
+                ok: false,
+                reason:
+                    resolution.reason === "not_found"
+                        ? "method_not_found"
+                        : resolution.reason === "wrong_account"
+                            ? "method_wrong_account"
+                            : "method_not_usable",
+                message: resolution.message,
+            };
+        }
+        storedMethod = resolution.method;
+
+        /* Asking a bank method to settle a card collection is a different rail and a different cost. */
+        if (storedMethod.rail !== rail) {
+            return {
+                ok: false,
+                reason: "method_rail_mismatch",
+                message:
+                    storedMethod.rail === "ach"
+                        ? "That stored method is a bank account, not a card."
+                        : "That stored method is a card, not a bank account.",
+            };
+        }
+
+        /*
+         * ── THE PAYER INVARIANT (W3) ─────────────────────────────────────────────────────────────
+         *
+         * A stored method is OWNED by a payer. If the caller also names a payer, the two must agree:
+         * charging Person B's card while recording Person A as the payer would put a receipt in the
+         * ledger that says money came from someone it did not come from, and no later correction can
+         * tell the two apart.
+         *
+         * Delegated use — B's card knowingly paying on A's behalf — is a real thing and the approved
+         * domain does not model it yet, so it is REFUSED rather than silently permitted.
+         *
+         * This does not touch responsibility. Person B may own the card, pay with it, and owe
+         * nothing; who owes is Thread 6's and is not written here.
+         */
+        if (
+            t(input.payerPersonId)
+            && storedMethod.payerEntityType === "person"
+            && storedMethod.payerEntityId !== t(input.payerPersonId)
+        ) {
+            return {
+                ok: false,
+                reason: "method_payer_mismatch",
+                message:
+                    "That payment method belongs to a different payer. Collect with a method the named payer owns, "
+                    + "or record the payment against its owner.",
+            };
+        }
+
+        const materialized = await materializeMethodForMerchant(storedMethod, merchant.providerAccountRef);
+        if (!materialized.ok) {
+            return {
+                ok: false,
+                reason: "method_unavailable_at_provider",
+                message: `That stored payment method could not be used with this merchant: ${materialized.message}`,
+            };
+        }
+        clonedMethodRef = materialized.clonedMethodRef;
+    }
+
     const intentKey = deriveIntentKey({
         chargeId: input.chargeId,
         amountCents: input.requestedAmountCents,
@@ -282,10 +433,28 @@ export async function createCardCollection(
             billable_source_type: source.billable_source_type,
             billable_source_id: source.billable_source_id,
             charge_id: input.chargeId,
-            payer_person_id: input.payerPersonId ?? null,
+            /*
+             * WHO ACTUALLY PAID. When a stored method is used and the caller named no payer, the
+             * payer is the person whose instrument it was — that is the whole point of recording
+             * ownership on the method. It is evidence, not authority: it never rewrites who is
+             * RESPONSIBLE for the obligation, which is exactly the distinction this program keeps.
+             *
+             * A caller who names a payer wins, and an agency-owned method contributes nothing here
+             * because `payer_person_id` is a person.
+             */
+            payer_person_id:
+                t(input.payerPersonId)
+                || (storedMethod?.payerEntityType === "person" ? storedMethod.payerEntityId : null)
+                || null,
             currency,
             requested_amount_cents: input.requestedAmountCents,
             intent_key: intentKey,
+            /*
+             * W3 PROVENANCE. Which stored instrument this attempt used — durable, and never nulled
+             * or repointed when the method is later revoked or replaced. The attempt names what
+             * actually happened.
+             */
+            payment_method_id: storedMethod?.id ?? null,
             processor_state: "initiated",
             created_by: input.actorUserId ?? null,
             updated_by: input.actorUserId ?? null,
@@ -376,6 +545,26 @@ export async function createCardCollection(
             ...(rail === "ach"
                 ? { "payment_method_types[]": "us_bank_account" }
                 : { "automatic_payment_methods[enabled]": "true" }),
+            /*
+             * A STORED METHOD IS CONFIRMED HERE, not in the browser — there is no payer present to
+             * confirm it. `off_session` is the truthful statement of that, and it is what the setup
+             * declared when the method was saved.
+             *
+             * This is the same call, in the same function, on the same connected account. There is
+             * no second PaymentIntent path: the only difference is three parameters.
+             */
+            ...(clonedMethodRef
+                ? { payment_method: clonedMethodRef, off_session: "true", confirm: "true" }
+                : {}),
+            /*
+             * W3 — ask for the provider's own expected settlement date in the SAME call.
+             *
+             * `balance_transaction.available_on` is Stripe's statement of when the net funds become
+             * available. It is the only date here that is the provider's rather than Alloy's guess,
+             * which is why the projection maps it and nothing else. A card charge normally has no
+             * meaningful one, and null is the correct answer there.
+             */
+            "expand[]": "latest_charge.balance_transaction",
             // Correlation only. Tenancy is resolved from the connected account through
             // payment_provider_merchants; metadata is never read as authority.
             "metadata[alloy_attempt_id]": attemptId,
@@ -398,6 +587,7 @@ export async function createCardCollection(
         client_secret?: string;
         status?: string;
         next_action?: { type?: string } | null;
+        latest_charge?: { balance_transaction?: { available_on?: number } | string | null } | string | null;
     };
     const providerTransactionId = String(intent.id ?? "");
     const clientSecret = String(intent.client_secret ?? "");
@@ -418,6 +608,8 @@ export async function createCardCollection(
             provider_transaction_id: providerTransactionId,
             processor_state: providerState,
             provider_action_type: providerActionType,
+            /* Projection only. Null when the provider offered no date — see the column comment. */
+            expected_settlement_on: expectedSettlementFromIntent(intent),
             processor_state_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             updated_by: input.actorUserId ?? null,
@@ -433,6 +625,7 @@ export async function createCardCollection(
         amountCents: input.requestedAmountCents,
         currency,
         reused: reused || Boolean(existingTxn),
+        paymentMethodId: storedMethod?.id ?? null,
     };
 }
 
@@ -443,6 +636,30 @@ export async function createCardCollection(
  * emphatically not cash. Anything unrecognised also folds into `processing` rather than defaulting
  * to a terminal state — an unknown provider status must never be read as success.
  */
+/**
+ * THE PROVIDER'S OWN EXPECTED SETTLEMENT DATE, or null.
+ *
+ * Read from `latest_charge.balance_transaction.available_on`, which Stripe defines as the date the
+ * transaction's net funds become available. Returned as a DAY, because that is what an operator
+ * tells a family and what the column stores — a moment would imply a precision the rail does not
+ * have.
+ *
+ * Null whenever the provider did not supply one, which includes every card charge that settles
+ * immediately and any response where the charge was not expanded. **Null is a correct answer, not a
+ * missing one**, and nothing financial reads this either way.
+ */
+export function expectedSettlementFromIntent(intent: {
+    latest_charge?: { balance_transaction?: { available_on?: number } | string | null } | string | null;
+}): string | null {
+    const charge = intent.latest_charge;
+    if (!charge || typeof charge === "string") return null;
+    const bt = charge.balance_transaction;
+    if (!bt || typeof bt === "string") return null;
+    const availableOn = bt.available_on;
+    if (!Number.isFinite(availableOn) || Number(availableOn) <= 0) return null;
+    return new Date(Number(availableOn) * 1000).toISOString().slice(0, 10);
+}
+
 export function mapStripeStatus(status: string | undefined): string {
     switch (status) {
         case "requires_payment_method":

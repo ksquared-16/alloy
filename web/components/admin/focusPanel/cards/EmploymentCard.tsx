@@ -191,7 +191,13 @@ function PersonEmployment({ person }: { person: OperationalEmploymentPerson }) {
                     <Field label="Primary location" value={current.primary_location_label} />
                     <Field label="Start date" value={formatYmd(current.start_date)} />
                     {current.end_date ? <Field label="Last day" value={formatYmd(current.end_date)} /> : null}
-                    <Field label="Employee ID" value={current.external_employee_id} />
+                    {/* Operator terminology. The physical column is still
+                        external_employee_id; only the label is productized, because a
+                        destructive rename would buy wording at every consumer's expense.
+                        Badge Number sits beside it as a SEPARATE identifier — it is
+                        scanned and readable, never a login PIN. */}
+                    <Field label="Employee Number" value={current.external_employee_id} />
+                    <Field label="Badge Number" value={current.badge_number} />
                 </div>
             ) : null}
 

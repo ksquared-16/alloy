@@ -1,0 +1,157 @@
+{
+  "trusted_host_action_id": "tha_26d35d78460b2d",
+  "query_hash": "60eaa106eb6765d706fb9a29dbabcc7f109b470ab64eac12b967f4ffdbfb36d8",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:48:24.626Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_26d35d78460b2d",
+    "query_hash": "60eaa106eb6765d706fb9a29dbabcc7f109b470ab64eac12b967f4ffdbfb36d8",
+    "authorization_id": "grnt_c4db1525d9f74d65",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:48:26.198Z",
+    "question_ids": [
+      "qaspec"
+    ],
+    "questions": {
+      "qaspec": {
+        "question_id": "qaspec",
+        "row_count": null,
+        "rows": [
+          {
+            "known_hours_specimens": [
+              {
+                "assignment_id": "1102abc8-95cb-4934-8265-2b21d6e19850",
+                "subject_type": "staff",
+                "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                "room": null,
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "hours": [
+                  "08:30:00-16:00:00"
+                ]
+              },
+              {
+                "assignment_id": "b9fdb090-d3f7-4e79-8db5-be491ef6cf82",
+                "subject_type": "staff",
+                "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                "room": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "hours": [
+                  "08:30:00-16:00:00"
+                ]
+              },
+              {
+                "assignment_id": "75f8c3b7-a6af-44f8-a175-c81b9f388107",
+                "subject_type": "staff",
+                "person_id": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+                "room": null,
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "hours": [
+                  "08:30:00-16:00:00"
+                ]
+              },
+              {
+                "assignment_id": "dee41608-f1ec-4ef1-b854-651e5c672960",
+                "subject_type": "staff",
+                "person_id": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+                "room": null,
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ],
+                "hours": [
+                  "08:30:00-16:00:00"
+                ]
+              }
+            ],
+            "unknown_hours_specimens": [
+              {
+                "assignment_id": "e10dcea5-0edb-4a6b-bd53-2b9d98e5da96",
+                "subject_type": "child",
+                "person_id": null,
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              {
+                "assignment_id": "9d81581a-256e-42d6-a717-23a89a10a087",
+                "subject_type": "child",
+                "person_id": null,
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            ],
+            "staff_shapes": [
+              {
+                "assignment_id": "1102abc8-95cb-4934-8265-2b21d6e19850",
+                "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                "has_room": false,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+              },
+              {
+                "assignment_id": "b9fdb090-d3f7-4e79-8db5-be491ef6cf82",
+                "person_id": "98b6c801-6298-4c6f-b401-8ea86697c47f",
+                "has_room": true,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+              },
+              {
+                "assignment_id": "75f8c3b7-a6af-44f8-a175-c81b9f388107",
+                "person_id": "51d1b1fd-5d08-48a6-a93f-511d08bbbea4",
+                "has_room": false,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+              },
+              {
+                "assignment_id": "dee41608-f1ec-4ef1-b854-651e5c672960",
+                "person_id": "66ca494c-9df4-464b-b47f-a98a12bb1c6e",
+                "has_room": false,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2"
+              }
+            ],
+            "child_assignments": [
+              "e10dcea5-0edb-4a6b-bd53-2b9d98e5da96",
+              "9d81581a-256e-42d6-a717-23a89a10a087"
+            ],
+            "observed_at": "2026-09-21 21:48:26.175675+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "scheduleOptions": {
+    "set": {
+      "id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "set_key": "childcare_schedule_type",
+      "label": "Schedule type (childcare)",
+      "sort_order": 210,
+      "config": {
+        "version": 1,
+        "mode": "static"
+      },
+      "created_at": "2026-04-23T22:09:11.605729+00:00",
+      "updated_at": null
+    },
+    "items": [
+      {
+        "id": "06162043-be4b-4ac5-956b-e5bc76faa2f4",
+        "option_set_id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+        "item_key": "full_time",
+        "label": "Full time",
+        "sort_order": 10,
+        "metadata": {},
+        "created_at": "2026-04-23T22:09:11.605729+00:00",
+        "updated_at": null
+      },
+      {
+        "id": "6723f55b-3204-4c07-adbb-cc3fa329cee3",
+        "option_set_id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+        "item_key": "part_time",
+        "label": "Part time",
+        "sort_order": 20,
+        "metadata": {},
+        "created_at": "2026-04-23T22:09:11.605729+00:00",
+        "updated_at": null
+      },
+      {
+        "id": "8903b889-6f73-48d2-a92e-ea46c96d1c75",
+        "option_set_id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+        "item_key": "drop_in",
+        "label": "Drop-in",
+        "sort_order": 30,
+        "metadata": {},
+        "created_at": "2026-04-23T22:09:11.605729+00:00",
+        "updated_at": null
+      },
+      {
+        "id": "0ec70af0-1357-4d3d-8d85-61580e1a86bd",
+        "option_set_id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+        "item_key": "before_school",
+        "label": "Before school",
+        "sort_order": 40,
+        "metadata": {},
+        "created_at": "2026-04-23T22:09:11.605729+00:00",
+        "updated_at": null
+      },
+      {
+        "id": "3f0d2369-9400-4b74-85db-0ef8007daf17",
+        "option_set_id": "091d2763-511e-42de-92d5-3aba9cd9c412",
+        "item_key": "after_school",
+        "label": "After school",
+        "sort_order": 50,
+        "metadata": {},
+        "created_at": "2026-04-23T22:09:11.605729+00:00",
+        "updated_at": null
+      }
+    ],
+    "usage_blockers": [
+      {
+        "kind": "field_definition",
+        "id": "850da427-9deb-434d-95ac-07c55f6d3055",
+        "entity_type": "opportunity",
+        "field_key": "schedule_type"
+      },
+      {
+        "kind": "field_definition",
+        "id": "0901debf-3a0f-4ab8-82fd-8cd877566205",
+        "entity_type": "inquiry_child",
+        "field_key": "schedule_type"
+      },
+      {
+        "kind": "field_definition",
+        "id": "bed8f032-56e9-416f-892e-16bb1303e38e",
+        "entity_type": "location",
+        "field_key": "room_schedule_type"
+      }
+    ]
+  },
+  "linkA": {
+    "url": "/api/admin/opportunity-customer-members",
+    "status": 200,
+    "body": {
+      "id": "79f8011d-a236-4054-bee7-af10f1dbc632",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "opportunity_id": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+      "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+      "program_category_id": null,
+      "schedule_type": null,
+      "start_date": null,
+      "outcome_status_key": null,
+      "notes": null,
+      "updated_at": null
+    }
+  },
+  "linkB": {
+    "url": "/api/admin/opportunity-customer-members",
+    "status": 200,
+    "body": {
+      "id": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "opportunity_id": "e56e72d5-c7bc-41ff-8d34-f5d34fd4160a",
+      "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "program_category_id": null,
+      "schedule_type": null,
+      "start_date": null,
+      "outcome_status_key": null,
+      "notes": null,
+      "updated_at": null
+    }
+  },
+  "ocmA": "79f8011d-a236-4054-bee7-af10f1dbc632",
+  "ocmB": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+  "patchAStatus": 400,
+  "patchAError": {
+    "error": "Select a child site before program or room/cohort.",
+    "placement_scope_issues": [
+      {
+        "code": "program_without_site",
+        "message": "Select a child site before program or room/cohort."
+      }
+    ]
+  },
+  "patchBStatus": 400,
+  "patchBError": {
+    "error": "Select a child site before program or room/cohort.",
+    "placement_scope_issues": [
+      {
+        "code": "program_without_site",
+        "message": "Select a child site before program or room/cohort."
+      }
+    ]
+  },
+  "weekly": {
+    "status": 201,
+    "body": {
+      "rate": {
+        "id": "5532489d-eed3-4080-9477-f47a94fde1c6",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "ee157cff-3546-4172-b591-984b96fbec10",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 18500,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-09-01",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-09-19T01:56:23.258891+00:00",
+        "updated_at": "2026-09-19T01:56:23.131+00:00"
+      }
+    }
+  },
+  "monthly": {
+    "status": 201,
+    "body": {
+      "rate": {
+        "id": "96a67825-18ac-4b53-a1e2-f4686c28e7c6",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": null,
+        "variant_id": "d484dcc8-87e3-4e83-b02c-48e2846161d4",
+        "cadence_key": "monthly",
+        "payer_type": "private_pay",
+        "rate_cents": 145000,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-07-01",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {},
+        "created_at": "2026-09-19T01:56:23.443655+00:00",
+        "updated_at": "2026-09-19T01:56:23.318+00:00"
+      }
+    }
+  },
+  "cfgStatus": 200,
+  "enrollmentCount": 0,
+  "assignmentCount": 0,
+  "assignments": []
+}

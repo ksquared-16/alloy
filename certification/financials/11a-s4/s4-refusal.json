@@ -1,0 +1,5 @@
+{
+  "overlay": "responsibility",
+  "mode": "resolve",
+  "error": "fixed 50000 over net 2500"
+}

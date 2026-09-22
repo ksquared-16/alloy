@@ -1,0 +1,110 @@
+{
+  "trusted_host_action_id": "tha_0e601eea31b4bb",
+  "query_hash": "5e9928d986bbbcd567247e90b6cb090c4f5e31b01213b0f03ada24990158bb72",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T03:25:37.404Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0e601eea31b4bb",
+    "query_hash": "5e9928d986bbbcd567247e90b6cb090c4f5e31b01213b0f03ada24990158bb72",
+    "authorization_id": "grnt_0fa72c2a3b844f6a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T03:25:38.542Z",
+    "question_ids": [
+      "staffing_projection_after"
+    ],
+    "questions": {
+      "staffing_projection_after": {
+        "question_id": "staffing_projection_after",
+        "row_count": null,
+        "rows": [
+          {
+            "schedule_assignments_staff": 3,
+            "schedule_assignments_child": 3,
+            "assignment_weekday_intervals": 35,
+            "assignment_interval_digest": "78f931788a4c6ed15fde5658289a965e",
+            "participation_by_type": [
+              {
+                "id": "110edcb1-4712-4fc1-9146-7fdd05a33a02",
+                "participation": "none"
+              },
+              {
+                "id": "17810c09-24f8-4e9e-8183-02d932e95825",
+                "participation": "none"
+              },
+              {
+                "id": "45a3a9e4-1ad2-4e1d-bbc5-d49a0f88d6d4",
+                "participation": "demand"
+              },
+              {
+                "id": "4826274a-ef47-453e-b200-31aa6706e758",
+                "participation": "demand"
+              },
+              {
+                "id": "523ad040-2161-4c34-8e25-08c7e6753b54",
+                "participation": "demand"
+              },
+              {
+                "id": "68cd4f46-d060-4488-875e-825c1762890d",
+                "participation": "demand"
+              },
+              {
+                "id": "6e259c71-5595-4054-8acf-00707eb8b000",
+                "participation": "none"
+              },
+              {
+                "id": "6e2dae3d-1b19-4315-9845-33f01b1214cd",
+                "participation": "none"
+              },
+              {
+                "id": "82e19d17-fc02-4301-b343-cacd2a3242ed",
+                "participation": "none"
+              },
+              {
+                "id": "8782ec47-857d-4e5c-9c12-c73a6c48923c",
+                "participation": "none"
+              },
+              {
+                "id": "a5e08d1c-3cbf-4238-b84c-24719931591c",
+                "participation": "demand"
+              },
+              {
+                "id": "bd45276f-3969-44a5-8f31-5bc6594aa6fe",
+                "participation": "demand"
+              },
+              {
+                "id": "db2b7df9-ccbc-4377-ac40-3ad57b928d70",
+                "participation": "supply"
+              },
+              {
+                "id": "e1497c5c-bba3-4bb3-a0fd-9debdcb09850",
+                "participation": "demand"
+              },
+              {
+                "id": "f161e528-0bfd-490a-9d68-9d1d0173ab76",
+                "participation": "demand"
+              }
+            ],
+            "coverage_total": 13,
+            "coverage_effective": 0,
+            "coverage_digest": "096dc840880ac623eec9deb80d588fb1",
+            "availability_windows": 7,
+            "availability_exceptions": 7,
+            "presence_events": 5,
+            "attendance_events": 29,
+            "enrollment_agreements": 14,
+            "projection_tables_created": 0,
+            "observed_at": "2026-09-22 03:25:38.417671+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

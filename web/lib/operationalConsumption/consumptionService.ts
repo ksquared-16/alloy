@@ -450,6 +450,12 @@ function scheduleSimulateArgs(fact: OperationalFactDto, template: ChargeTemplate
         templateId: template.id,
         agreementId: agreementIdFromFact(fact),
         resolvedAmountCents: rateAmount,
+        /*
+         * The accepted term's own amount, unmultiplied. `acceptedPricing` is attached only on the
+         * recurring path and the generator has ALREADY applied proration to it, so the figure here
+         * is what this family owes for this period — not a unit rate awaiting a multiplier.
+         */
+        acceptedAmountCents: fact.acceptedPricing?.amountCents ?? null,
         servicePeriodStart: periodStart,
         eventDate: fact.eventDate ?? fact.occursOn ?? today,
         today,
@@ -876,6 +882,8 @@ async function resolveDirective(
                     chargeTemplateId: cp.intent.templateId,
                     serviceId: cp.intent.serviceId,
                     amountCents: cp.intent.amountCents,
+                    // Kept so the draft WRITE resolves from the agreement, not from the template.
+                    acceptedAmountCents: accepted?.amountCents ?? null,
                     currencyCode: cp.intent.currencyCode,
                     responsibilityKey: cp.intent.responsibilityKey ?? dEventType?.default_responsibility_key ?? "household",
                     occursOn: cp.intent.occursOn,
@@ -1643,6 +1651,9 @@ export async function draftConsumption(
                 templateId: obligation.chargeTemplateId,
                 agreementId,
                 resolvedAmountCents: obligation.amountCents,
+                // THE SECOND PASS. Without this the write re-resolves the template and a `fixed`
+                // amount silently reinstates itself over the price the family accepted.
+                acceptedAmountCents: obligation.acceptedAmountCents ?? null,
                 servicePeriodStart: obligation.periodStart,
                 eventDate: obligation.occursOn,
                 today,

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { billingRecurrenceFor } from "@/lib/financials/billingPeriod";
+import { previewBillingPeriods } from "@/lib/financials/tuitionPlans/billingPeriodPreview";
 import { MoreHorizontal, Plus } from "lucide-react";
 import {
     ConfigurationPrimaryButton,
@@ -87,6 +89,36 @@ function BillingFrequencyDialog({
                             data-testid="billing-frequency-interval"
                         />
                     </label>
+                    {/*
+                     * ── WHAT THE NAME ACTUALLY DECIDES ───────────────────────────────────────
+                     *
+                     * AUDITED, and this is the finding. The form has three fields and none of them
+                     * is a redundant requirement — but the NAME is not merely a label: it becomes
+                     * the cadence key, through `billingFrequencyItemKeyFromLabel`, and that key is
+                     * what `billingRecurrenceFor` and the period authority consume. "Weekly" makes
+                     * a frequency the platform can derive periods for; "Semi-Annual" makes one it
+                     * cannot, and until now the operator learned which only by saving and reading
+                     * the list.
+                     *
+                     * So the consequence is stated while they type, from the same authority the
+                     * list and generation use. It derives nothing of its own and is not a field:
+                     * nothing here is persisted, and there is nothing to edit.
+                     */}
+                    {name.trim() ? (
+                        (() => {
+                            const cadenceKey = billingFrequencyItemKeyFromLabel(name) || "custom_frequency";
+                            const rec = billingRecurrenceFor(cadenceKey);
+                            return (
+                                <p
+                                    className={`text-[11px] ${rec.billable ? "text-alloy-midnight/55" : "text-alloy-ember"}`}
+                                    data-testid="billing-frequency-consequence"
+                                    data-billing-frequency-billable={rec.billable ? "true" : "false"}
+                                >
+                                    {rec.recurrence}
+                                </p>
+                            );
+                        })()
+                    ) : null}
                 </div>
                 <div className="mt-5 flex justify-end gap-2">
                     <ConfigurationSecondaryButton disabled={busy} onClick={onCancel}>
@@ -118,6 +150,18 @@ export function TuitionBillingFrequenciesPanel({
     snapshot: TuitionPlansSnapshot;
     onReload: () => void;
 }) {
+    /*
+     * The preview reasons from a STATED anchor and a STATED day rather than reading the clock inside
+     * the render: a configuration screen should show the same intervals to two operators looking at
+     * it a second apart, and a test should be able to ask what it shows.
+     *
+     * The anchor is the first of the current month — a plain, explainable stand-in for "an agreement
+     * that started at the beginning of this month", because no real agreement is in hand on a
+     * configuration screen. The intervals themselves are still the period authority's.
+     */
+    const previewTodayYmd = new Date().toISOString().slice(0, 10);
+    const previewAnchorYmd = `${previewTodayYmd.slice(0, 7)}-01`;
+
     const [cadences, setCadences] = useState(snapshot.cadences);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -200,14 +244,59 @@ export function TuitionBillingFrequenciesPanel({
         }
     };
 
+    /*
+     * WHETHER RECURRING TUITION IS BILLED AUTOMATICALLY — this tenant's answer, not the build's.
+     *
+     * A productized handler means the scheduler CAN wake Financials. An organization with no
+     * schedule is still billed by an operator pressing Generate Tuition, so the copy below is
+     * gated on the tenant's own state. Claiming automation because a deploy happened would tell
+     * every such operator something false about their own money.
+     *
+     * Unknown is a third state and is shown as nothing: a failed read must not be rendered as
+     * "not automatic", which is a claim this surface has not earned.
+     */
+    const [automatic, setAutomatic] = useState<{ active: boolean; nextAt: string | null } | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        void fetch("/api/admin/financials/periodic-billing-status", { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { automatic_billing_active?: boolean; next_evaluation_at?: string | null } | null) => {
+                if (cancelled || !j) return;
+                setAutomatic({ active: Boolean(j.automatic_billing_active), nextAt: j.next_evaluation_at ?? null });
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
+
     return (
         <div className="space-y-3" data-testid="tuition-billing-frequencies-panel">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <h2 className="config-typo-workspace-title text-lg text-alloy-midnight">Billing Frequencies</h2>
-                    <p className="mt-1 text-sm text-alloy-midnight/55">
-                        How often tuition is billed — used as the primary frequency on Tuition Plans.
+                    {/*
+                     * TWO LEVELS, NAMED. A frequency is the RULE; the periods it produces are
+                     * instances an assignment's accepted term and its anchor derive — nobody
+                     * authors "Sep 15–21" here. And the accounting calendar is a different
+                     * interval entirely, which is why it is named as elsewhere rather than
+                     * implied by silence.
+                     */}
+                    <p className="mt-1 max-w-2xl text-sm text-alloy-midnight/55">
+                        How often tuition recurs. A frequency is the rule; the billing periods it
+                        produces are derived from each assignment&apos;s accepted term and start
+                        date — you never author individual periods here. The accounting calendar is
+                        configured separately, under Accounting.
                     </p>
+                    {automatic ? (
+                        <p
+                            className={`mt-1.5 text-[12px] ${automatic.active ? "text-alloy-midnight/60" : "text-alloy-ember"}`}
+                            data-testid="periodic-billing-automation-status"
+                            data-periodic-billing-active={automatic.active ? "true" : "false"}
+                        >
+                            {automatic.active
+                                ? "Recurring tuition is billed automatically for this organization. Generate Tuition remains available for periods automation left outstanding."
+                                : "Recurring tuition is NOT billed automatically for this organization — an operator runs Generate Tuition for each period."}
+                        </p>
+                    ) : null}
                 </div>
                 <ConfigurationPrimaryButton
                     className="gap-1"
@@ -234,7 +323,22 @@ export function TuitionBillingFrequenciesPanel({
                         <tr className="border-b border-alloy-stone/20 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">
                             <th className="px-4 py-2.5">Name</th>
                             <th className="px-4 py-2.5">Description</th>
-                            <th className="px-4 py-2.5">Cadence</th>
+                            {/*
+                             * "Cadence" showed `cadenceLabel`, which is the description the
+                             * operator typed — or, failing that, the name they typed — echoed back
+                             * beside the Description column that already held it. It told them
+                             * nothing the platform knows. This states what the period authority
+                             * will actually derive from this frequency.
+                             */}
+                            <th className="px-4 py-2.5">Recurrence</th>
+                            {/*
+                             * WHAT COMMERCIAL PERIOD DOES THAT CREATE? Recurrence says how often;
+                             * this says what interval it actually produces, derived by the same
+                             * authority generation and the Assignment read-back use. Configuration
+                             * that explains only the cadence leaves the operator to infer the
+                             * period, which is the gap this column closes.
+                             */}
+                            <th className="px-4 py-2.5">Billing period</th>
                             <th className="px-4 py-2.5">Active</th>
                             <th className="px-4 py-2.5">Plans using</th>
                             <th className="px-4 py-2.5 w-12"><span className="sr-only">More</span></th>
@@ -243,13 +347,13 @@ export function TuitionBillingFrequenciesPanel({
                     <tbody>
                         {loading && rows.length === 0 ?
                             <tr>
-                                <td colSpan={6} className="px-4 py-6 text-alloy-midnight/50">
+                                <td colSpan={7} className="px-4 py-6 text-alloy-midnight/50">
                                     Loading…
                                 </td>
                             </tr>
                         : rows.length === 0 ?
                             <tr>
-                                <td colSpan={6} className="px-4 py-6 text-alloy-midnight/50">
+                                <td colSpan={7} className="px-4 py-6 text-alloy-midnight/50">
                                     No billing frequencies configured yet.
                                 </td>
                             </tr>
@@ -261,7 +365,59 @@ export function TuitionBillingFrequenciesPanel({
                                 >
                                     <td className="px-4 py-3 font-medium text-alloy-midnight">{row.name}</td>
                                     <td className="px-4 py-3 text-alloy-midnight/60">{row.description ?? "—"}</td>
-                                    <td className="px-4 py-3 text-alloy-midnight/60">{row.cadenceLabel}</td>
+                                    {(() => {
+                                        const rec = billingRecurrenceFor(row.itemKey);
+                                        return (
+                                            <td
+                                                className={`px-4 py-3 ${
+                                                    rec.billable ? "text-alloy-midnight/60" : "text-alloy-ember"
+                                                }`}
+                                                data-billing-recurrence={row.itemKey}
+                                                data-billing-recurrence-billable={rec.billable ? "true" : "false"}
+                                            >
+                                                {rec.recurrence}
+                                            </td>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        /*
+                                         * READ-ONLY PREVIEW, from `billingPeriodFor` — never
+                                         * described in prose. An unsupported cadence gets no
+                                         * interval rather than a plausible invented one, which is
+                                         * the same answer generation gives when it refuses the run.
+                                         */
+                                        const preview = previewBillingPeriods({
+                                            cadenceKey: row.itemKey,
+                                            anchorYmd: previewAnchorYmd,
+                                            todayYmd: previewTodayYmd,
+                                        });
+                                        return (
+                                            <td
+                                                className="px-4 py-3 text-alloy-midnight/60"
+                                                data-billing-period-preview={row.itemKey}
+                                                data-billing-period-preview-billable={preview.billable ? "true" : "false"}
+                                            >
+                                                {preview.current ?
+                                                    <span className="flex flex-col gap-0.5">
+                                                        <span data-billing-period-current>
+                                                            Current · {preview.current.label}
+                                                        </span>
+                                                        {preview.next ?
+                                                            <span
+                                                                className="text-alloy-midnight/45"
+                                                                data-billing-period-next
+                                                            >
+                                                                Next · {preview.next.label}
+                                                            </span>
+                                                        :   null}
+                                                    </span>
+                                                :   <span className="text-alloy-ember" data-billing-period-none>
+                                                        No billing periods
+                                                    </span>
+                                                }
+                                            </td>
+                                        );
+                                    })()}
                                     <td className="px-4 py-3">
                                         <span
                                             className={`text-[11px] font-semibold ${

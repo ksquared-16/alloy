@@ -30,7 +30,7 @@
 export type OperationsMode = "work" | "studio";
 
 /** WORK — running the operating day, and the durable population underneath it. */
-export type OperationsWorkSection = "roster" | "attendance" | "staff" | "children";
+export type OperationsWorkSection = "roster" | "calendar" | "attendance" | "staff" | "children";
 
 /**
  * STUDIO — configuring what the day is made of.
@@ -39,7 +39,7 @@ export type OperationsWorkSection = "roster" | "attendance" | "staff" | "childre
  * the tabs: it was never shown in the Assignments Studio either, and a link naming it resolves to
  * the section that actually exists rather than dead-ending.
  */
-export type OperationsStudioSection = "types" | "patterns" | "validation" | "templates";
+export type OperationsStudioSection = "types" | "patterns" | "validation" | "qualifications" | "templates";
 
 export type OperationsSection = OperationsWorkSection | OperationsStudioSection;
 
@@ -50,6 +50,10 @@ export const OPERATIONS_MODES = [
 
 export const OPERATIONS_WORK_TABS: { key: OperationsWorkSection; label: string }[] = [
     { key: "roster", label: "Roster" },
+    // Roster answers WHO is here; Calendar answers WHEN and WHERE. Two lenses over
+    // the same certified truth, which is why Calendar is a section beside Roster
+    // rather than a workspace of its own.
+    { key: "calendar", label: "Calendar" },
     { key: "attendance", label: "Attendance" },
     { key: "staff", label: "Staff" },
     { key: "children", label: "Children" },
@@ -59,17 +63,22 @@ export const OPERATIONS_STUDIO_TABS: { key: OperationsStudioSection; label: stri
     { key: "types", label: "Assignment Categories" },
     { key: "patterns", label: "Patterns" },
     { key: "validation", label: "Validation" },
+    // Staff qualification vocabulary and the policy authored against it. Studio is "configuring
+    // what the day is made of", and who may work a shift is part of what the day is made of.
+    { key: "qualifications", label: "Qualifications" },
 ];
 
 /** Which mode a section belongs to — drives mode inference on deep navigation. */
 export const OPERATIONS_SECTION_MODE: Record<OperationsSection, OperationsMode> = {
     roster: "work",
+    calendar: "work",
     attendance: "work",
     staff: "work",
     children: "work",
     types: "studio",
     patterns: "studio",
     validation: "studio",
+    qualifications: "studio",
     templates: "studio",
 };
 
@@ -85,6 +94,7 @@ export function resolveOperationsWorkSection(
 ): OperationsWorkSection | null {
     if (!raw) return null;
     if (raw === "attendance") return "attendance";
+    if (raw === "calendar") return "calendar";
     if (raw === "roster" || raw === "daily_roster") return "roster";
     if (raw === "staff" || raw === "children") return raw;
     return null;
@@ -100,7 +110,9 @@ export function resolveOperationsStudioSection(
     raw: string | null | undefined,
 ): Exclude<OperationsStudioSection, "templates"> | null {
     if (!raw) return null;
-    if (raw === "types" || raw === "patterns" || raw === "validation") return raw;
+    if (raw === "types" || raw === "patterns" || raw === "validation" || raw === "qualifications") {
+        return raw;
+    }
     if (raw === "templates") return "patterns";
     return null;
 }

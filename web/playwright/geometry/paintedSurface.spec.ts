@@ -102,6 +102,79 @@ async function read(page: Page, cardKey: string): Promise<Reading> {
     }, cardKey);
 }
 
+/**
+ * THE INTERNAL COMPOSITION OF ONE CARD — where the surplus band height actually went.
+ *
+ * Every number is taken from the same settled layout as `read()` above, so a failure can be read
+ * against the band in the same breath.
+ */
+type Rhythm = {
+    band: number;
+    card: number;
+    body: number;
+    /** `.alloy-os-ucard__body`'s content box bottom — the inside of its bottom padding. */
+    bodyInnerBottom: number;
+    primaryBottom: number;
+    footerTop: number;
+    footerBottom: number;
+    cardBottom: number;
+    /** Distance from the footer's bottom edge to the card's — the anchoring claim. */
+    footerToCardBottom: number;
+    /** Surplus that opened BETWEEN the primary region and the footer. */
+    gapAbove: number;
+    footerPosition: string;
+};
+
+async function readRhythm(page: Page, cardKey: string): Promise<Rhythm> {
+    return page.evaluate((key) => {
+        const area = document.querySelector(`[data-fp-grid-area="${key}"]`)!;
+        const card = document.querySelector(`[data-universal-card-key="${key}"]`)!;
+        const body = card.querySelector(":scope > .alloy-os-ucard__body")!;
+        const primary = card.querySelector("[data-rhythm-primary]")!;
+        const footer = card.querySelector("[data-rhythm-footer]")!;
+        const r = (el: Element) => el.getBoundingClientRect();
+        const cs = getComputedStyle(body);
+        const bodyInnerBottom = r(body).bottom - (parseFloat(cs.paddingBottom) || 0);
+        const n = (v: number) => +v.toFixed(2);
+        return {
+            band: n(r(area).height),
+            card: n(r(card).height),
+            body: n(r(body).height),
+            bodyInnerBottom: n(bodyInnerBottom),
+            primaryBottom: n(r(primary).bottom),
+            footerTop: n(r(footer).top),
+            footerBottom: n(r(footer).bottom),
+            cardBottom: n(r(card).bottom),
+            footerToCardBottom: n(r(card).bottom - r(footer).bottom),
+            gapAbove: n(r(footer).top - r(primary).bottom),
+            footerPosition: getComputedStyle(footer).position,
+        } as Rhythm;
+    }, cardKey);
+}
+
+/**
+ * THE INTRINSIC READ, PERFORMED THE WAY THE PRODUCT PERFORMS IT.
+ *
+ * `FocusPanelCardGrid` takes the wrapper's assigned height away for one synchronous read, which
+ * leaves `.alloy-os-fp-card-intrinsic`'s `min-height: 100%` with no definite parent to resolve
+ * against, so it collapses to the card's own content height. This reproduces that exactly —
+ * including the restore — so the spec measures X with the same instrument the solver uses.
+ */
+async function readIntrinsicNaturalHeight(page: Page, cardKey: string): Promise<number> {
+    return page.evaluate((key) => {
+        const area = document.querySelector(`[data-fp-grid-area="${key}"]`) as HTMLElement;
+        const intrinsic = area.querySelector(".alloy-os-fp-card-intrinsic") as HTMLElement;
+        const assigned = area.style.height;
+        area.style.height = "";
+        // Forced synchronous reflow — the read must see the neutralised wrapper, not the old boxes.
+        void intrinsic.getBoundingClientRect().height;
+        const natural = +intrinsic.getBoundingClientRect().height.toFixed(2);
+        area.style.height = assigned;
+        void intrinsic.getBoundingClientRect().height;
+        return natural;
+    }, cardKey);
+}
+
 async function setSolvedHeight(page: Page, h: number, contentHeight?: number): Promise<void> {
     // `setContent` resolves on `load`; React commits the effect that publishes `__paint` after it.
     // Waiting for the contract rather than for a duration keeps this deterministic under parallel
@@ -215,5 +288,136 @@ test.describe("the solved height reaches the painted surface, at whatever H the 
         await setSolvedHeight(page, 200, 900);
         const bp = await read(page, "business_process");
         expect(Math.abs(bp.painted.height - 200)).toBeLessThanOrEqual(TOLERANCE);
+    });
+});
+
+/**
+ * ── INTERNAL VERTICAL RHYTHM — what the card DOES with the band it now consumes ──
+ *
+ * The suites above end at "the painted card is the band's height". That was the whole repair, and
+ * it left the second half of the problem untouched: a card whose content is far shorter than its
+ * band filled the rectangle and then stacked everything at the top, leaving the remainder as one
+ * blank block. Measured on deployed `dced5ba79` at 1440:
+ *
+ *     health_safety   band 640px   painted article 141.8px
+ *
+ * — the card was not even reaching its band there, because the propagation rule named
+ * `.alloy-os-process` and Health & Safety wraps twice. Both halves are certified here: the band
+ * reaches a card that wraps at ANY depth, and the surplus then lands between semantic regions.
+ *
+ * The contract, in the card-format doctrine's words: OUTER COMPOSITION OWNS ASSIGNED HEIGHT, CARD
+ * CONTENT OWNS NATURAL MINIMUM HEIGHT, SURPLUS IS DISTRIBUTED BETWEEN SEMANTIC REGIONS, and
+ * ASSIGNED HEIGHT MUST NOT CONTAMINATE INTRINSIC MEASUREMENT.
+ */
+test.describe("surplus band height becomes space between semantic regions", () => {
+    /** Body padding-bottom (8px) plus the card's 1px border — the "normal card padding" bound. */
+    const PADDING_BOUND = 12;
+
+    for (const key of ["rhythm_body_footer", "rhythm_shell_footer"]) {
+        test(`THE GATE: ${key} — a sparse card leaves its footer on the bottom edge`, async ({ page }) => {
+            // Band far taller than the content: 640px band, 40px of primary content.
+            await setSolvedHeight(page, 640, 40);
+            const r = await readRhythm(page, key);
+
+            // The card consumes the band — including through two nested wrappers, for the
+            // body-footer cell, which is the shape a per-card rule could not reach.
+            expect(Math.abs(r.card - 640), `card is ${r.card}px inside a 640px band`).toBeLessThanOrEqual(TOLERANCE);
+
+            // THE CLAIM: the footer sits on the card's bottom edge, within normal card padding.
+            expect(
+                r.footerToCardBottom,
+                `footer bottom is ${r.footerToCardBottom}px above the card bottom`,
+            ).toBeLessThanOrEqual(PADDING_BOUND);
+
+            // …and the surplus is what put it there: a large gap opened ABOVE the footer. Before
+            // this repair the same measurement read ~0 with the remainder below everything.
+            expect(r.gapAbove, `only ${r.gapAbove}px of surplus opened above the footer`).toBeGreaterThan(400);
+
+            // Normal flow, not a trick. An absolutely-positioned footer would satisfy the
+            // coordinates above while breaking growth, so the mechanism is asserted too.
+            expect(r.footerPosition).toBe("static");
+        });
+
+        test(`${key} — growth collapses the surplus and the footer stays AFTER the content`, async ({ page }) => {
+            await setSolvedHeight(page, 640, 40);
+            const sparse = await readRhythm(page, key);
+            expect(sparse.gapAbove).toBeGreaterThan(400);
+
+            // Same band, content grown to fill it: the flexible space must give way to content
+            // rather than the two overlapping.
+            await setSolvedHeight(page, 640, 520);
+            const full = await readRhythm(page, key);
+            expect(full.gapAbove, "surplus must collapse as content grows").toBeLessThan(sparse.gapAbove);
+            expect(full.footerTop, "footer must remain after the primary region").toBeGreaterThanOrEqual(
+                full.primaryBottom - TOLERANCE,
+            );
+            expect(full.card, "the band still owns the outer height").toBeCloseTo(640, -0.5);
+        });
+    }
+
+    test("inline content is NOT stretched to fill the surplus — only the space between regions grows", async ({ page }) => {
+        await setSolvedHeight(page, 240, 40);
+        const tight = await readRhythm(page, "rhythm_body_footer");
+        await setSolvedHeight(page, 640, 40);
+        const roomy = await readRhythm(page, "rhythm_body_footer");
+
+        // The authored 40px primary and 24px footer keep their heights across a 400px band change.
+        const primaryTight = tight.primaryBottom - (tight.footerTop - tight.gapAbove - 40);
+        expect(Math.abs(roomy.footerBottom - roomy.footerTop - 24)).toBeLessThanOrEqual(TOLERANCE);
+        expect(Math.abs(tight.footerBottom - tight.footerTop - 24)).toBeLessThanOrEqual(TOLERANCE);
+        expect(primaryTight).toBeGreaterThan(0);
+        // All 400px of the difference went between the regions, none into them.
+        expect(roomy.gapAbove - tight.gapAbove).toBeGreaterThan(380);
+    });
+});
+
+/**
+ * ── THE FEEDBACK LOOP THIS REPAIR MUST NOT REOPEN ──
+ *
+ * A card that consumes its assigned height must not then REPORT that height as its natural content
+ * height: the solver would assign the reported number, the card would consume it, report it again,
+ * and the row would ratchet open. PR #989's overlap and the band-fill repairs both live in this
+ * family, which is why the intrinsic node exists separately from the assigned wrapper at all.
+ *
+ * The gate is the round trip: measure X with the wrapper neutralised, assign Y > X, confirm the
+ * painted card really is Y, then measure again — and get X back, not Y.
+ */
+test.describe("assigned height does not contaminate intrinsic measurement", () => {
+    for (const key of ["rhythm_body_footer", "rhythm_shell_footer", "business_process"]) {
+        test(`THE GATE: ${key} — X → assign Y → still X`, async ({ page }) => {
+            await setSolvedHeight(page, 240, 40);
+            const X = await readIntrinsicNaturalHeight(page, key);
+            expect(X, "natural content height must be a real measurement").toBeGreaterThan(0);
+
+            const Y = 640;
+            expect(Y, "the scenario requires Y > X or it proves nothing").toBeGreaterThan(X);
+
+            await setSolvedHeight(page, Y, 40);
+            // `read()` rather than `readRhythm()`: this loop deliberately includes
+            // `business_process`, which is a plain SolvedCell with no rhythm regions to read. The
+            // claim here is about the card's height and the measurement, not its internal layout.
+            const painted = await read(page, key);
+            expect(
+                Math.abs(painted.painted.height - Y),
+                "the card must really be consuming Y",
+            ).toBeLessThanOrEqual(TOLERANCE);
+
+            const again = await readIntrinsicNaturalHeight(page, key);
+            expect(
+                again,
+                `intrinsic measured ${again}px after a ${Y}px band — natural height is ${X}px`,
+            ).toBeCloseTo(X, -0.5);
+            expect(again, "the assigned height must not have been learned as content").toBeLessThan(Y - 100);
+        });
+    }
+
+    test("a second assignment does not ratchet the natural height upward", async ({ page }) => {
+        await setSolvedHeight(page, 240, 40);
+        const first = await readIntrinsicNaturalHeight(page, "rhythm_body_footer");
+        for (const H of [320, 480, 640, 900]) {
+            await setSolvedHeight(page, H, 40);
+            const measured = await readIntrinsicNaturalHeight(page, "rhythm_body_footer");
+            expect(measured, `after a ${H}px band the natural height became ${measured}px`).toBeCloseTo(first, -0.5);
+        }
     });
 });

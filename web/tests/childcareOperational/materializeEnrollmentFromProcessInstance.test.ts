@@ -54,12 +54,23 @@ function mockSupabase(cfg: { processInstance?: Rec | null; candidate?: Rec | nul
      * a source of operational facts unless the legacy flag says so. Fact reads are told apart by
      * what they SELECT — the anchor lookup asks only for ids.
      */
-    const captured: { piUpdate: Rec | null; ocmAccess: number; ocmAnchorReads: number } = {
+    const captured: { piUpdate: Rec | null; piRpc: { name: string; params: Rec } | null; ocmAccess: number; ocmAnchorReads: number } = {
         piUpdate: null,
+        piRpc: null,
         ocmAccess: 0,
         ocmAnchorReads: 0,
     };
     const client = {
+        /*
+         * Lifecycle + provenance are one transaction in the database now
+         * (materialize_participation_and_stamp_provenance), not a bare UPDATE from here. Capturing the
+         * call keeps these assertions asking the same question — what does the materializer write? —
+         * against the shape it actually writes.
+         */
+        rpc(name: string, params: Rec) {
+            captured.piRpc = { name, params };
+            return Promise.resolve({ data: { ok: true }, error: null });
+        },
         from(table: string) {
             let op: "select" | "update" = "select";
             let cols = "*";
@@ -180,16 +191,27 @@ describe("materializeEnrollmentFromProcessInstance", () => {
         const originalMeta = { site_location_id: "site-1", program_category_id: "prog-1" };
         const { client, captured } = mockSupabase({ processInstance: pi({ metadata: { ...originalMeta } }) });
         await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG, completedStageKey: "enrolled" });
-        const patch = captured.piUpdate!;
-        const newMeta = patch.metadata as Rec;
+        const call = captured.piRpc!;
+        expect(call.name).toBe("materialize_participation_and_stamp_provenance");
+        const newMeta = call.params.p_metadata as Rec;
         // The ONLY keys the materializer adds to metadata are provenance pointers (not operational facts).
         const added = Object.keys(newMeta).filter((k) => !(k in originalMeta));
         expect(added.sort()).toEqual(["enrollment_agreement_id", "materialized_at"]);
         expect(newMeta.enrollment_agreement_id).toBe("agr-1");
-        // Top-level patch is journey-only: metadata + updated_at + terminal state/stage. No fact columns.
-        expect(Object.keys(patch).sort()).toEqual(["metadata", "stage_key", "state", "updated_at"]);
-        expect(patch.state).toBe("enrolled");
-        expect(patch.stage_key).toBe("enrolled");
+        /*
+         * Journey-only, and now structurally so: the transaction takes metadata plus the two supplied
+         * lifecycle fields and has no parameter through which a fact column could be reached at all.
+         */
+        expect(Object.keys(call.params).sort()).toEqual([
+            "p_metadata", "p_org_id", "p_participation_id",
+            "p_set_stage_key", "p_set_state", "p_stage_key", "p_state",
+        ]);
+        expect(call.params.p_set_state).toBe(true);
+        expect(call.params.p_state).toBe("enrolled");
+        expect(call.params.p_set_stage_key).toBe(true);
+        expect(call.params.p_stage_key).toBe("enrolled");
+        // The direct table write it replaced must NOT come back beside it.
+        expect(captured.piUpdate, "materialization wrote process_instances directly again").toBeNull();
     });
 
     it("is idempotent — reused agreement still returns ok and re-stamps provenance", async () => {
@@ -204,7 +226,7 @@ describe("materializeEnrollmentFromProcessInstance", () => {
         const res = await materializeEnrollmentFromProcessInstance(client, { processInstanceId: "pi-1", orgId: ORG });
         expect(res.ok).toBe(true);
         expect(res.agreement_id).toBe("agr-existing");
-        expect((captured.piUpdate!.metadata as Rec).enrollment_agreement_id).toBe("agr-existing");
+        expect((captured.piRpc!.params.p_metadata as Rec).enrollment_agreement_id).toBe("agr-existing");
     });
 
     it("scope wrapper resolves the instance id then materializes; null when none", async () => {

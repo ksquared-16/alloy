@@ -32,15 +32,35 @@
  * than invented. Payer SPLITS belong to Processing and are not modelled here at all.
  */
 
-import { readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import {
+    deriveAccountChargeLedgerRows, reversalBySourceChargeId,
+    type AccountChargeLedgerRow,
+} from "@/lib/financials/account/accountChargeLedger";
+import { railCollectionAvailable } from "@/lib/financials/payments/providerMerchant";
 import { resolveHouseholdPaymentViews, type PaymentView } from "@/lib/financials/paymentApplicationView";
+import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
+import { heldCentsFor, readHoldsForPayments, type HeldDeposit } from "@/lib/financials/prepaid/heldDeposits";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+/*
+ * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
+ * the one that governs a given service. The pair is what makes `posting_review` a configured fact
+ * rather than a template's private opinion, and a restore that brought back only the reader left
+ * the resolver called but undeclared.
+ */
+import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
+import {
+    reductionProvenanceByChargeId,
+    type ReductionPolicyWindow,
+    type ReductionProvenance,
+} from "@/lib/financials/reductions/reductionProvenance";
 import {
     resolvePayerCandidates,
     resolvePaymentSetup,
@@ -241,8 +261,23 @@ export type FinancialsLedgerRow = {
     responsiblePartyName: string | null;
     /** An allocation exists for this charge and deliberately names no party. */
     responsibilityUnassigned: boolean;
+    /*
+     * Owed by a named party on this obligation, and owed by nobody yet — both are true at once.
+     * Optional because a row that has never been through allocation simply has neither; the
+     * projection always supplies them, and absent reads as zero everywhere they are used.
+     */
+    responsibilityAssignedCents?: number;
+    responsibilityUnassignedCents?: number;
     /** Where the row came from — template key, or the manual service. */
     source: string | null;
+    /**
+     * WHY THIS REDUCTION EXISTS, where the row IS one.
+     *
+     * Null on an ordinary charge. Present on a discount, credit, adjustment or reversal, carrying
+     * the decision behind the money — which policy, on what basis, one-time or ongoing, and what it
+     * reverses. Derived once by `reductionProvenance` so both deep surfaces state the same meaning.
+     */
+    reduction: ReductionProvenance | null;
 };
 
 export type FinancialsReconciliation = {
@@ -288,6 +323,15 @@ export type FinancialsChargeTemplateOption = {
     /** Present only for `fixed` templates; anything else is priced by resolution. */
     amountCents: number | null;
     currencyCode: string;
+    /**
+     * WHETHER CONFIRMING THIS TEMPLATE WILL WAIT FOR REVIEW.
+     *
+     * The tenant's `posting_review` Financial Policy resolved for this template's service, OR'd with
+     * the template's own `review_required` — the same disjunction `resolveChargeFromTemplate` applies
+     * when it writes. It is carried here so the command can PREVIEW the act it will perform rather
+     * than describing a mechanism that may not apply.
+     */
+    reviewRequired: boolean;
     occursOnStrategy: string;
     billableOnStrategy: string;
 };
@@ -340,6 +384,13 @@ export type FinancialsCardVM = {
      * nobody had ever computed. It now comes from `resolvePaymentSetup`, which looks.
      */
     paymentSetup: string | null;
+    /**
+     * The Autopay sentence, from the canonical arrangement (W5). Null means NO arrangement, which
+     * is a measurement — it used to be listed as a platform unavailability because nothing could
+     * answer the question at all.
+     */
+    autopayLine: string | null;
+    autopayHealthy: boolean;
     /**
      * WHAT THIS ORGANISATION CAN ACTUALLY DO WITH MONEY, per capability, with a reason when it
      * cannot. `unsupported` (Alloy has no implementation) and `not_configured` (it has one and this
@@ -426,6 +477,36 @@ export type FinancialsCardVM = {
      * when an agency short-pays, the difference is a decision somebody owes, not a bill the family
      * silently inherits.
      */
+    /**
+     * MONEY THIS ACCOUNT HOLDS THAT IS NOT YET SPENT — and only the part that may be spent.
+     *
+     * Projected by `resolveAccountPrepaidPosition`, which is the authority; nothing here computes
+     * it. UNAPPLIED IS NOT AVAILABLE: a pending receipt is money the platform has been told about,
+     * not money it has, so it is reported separately and never offered.
+     *
+     * `heldSupported: false` means the platform CANNOT TELL a restricted deposit from ordinary
+     * prepaid money. A surface must not render that as "$0 held" — an absent capability is not a
+     * zero measurement, and claiming it would let an operator spend a refundable deposit believing
+     * none was held.
+     *
+     * Since W4 the authority reports `true`, so a zero IS a measurement. The false branch remains
+     * because the empty VM below still uses it: a card that has not read yet has not measured
+     * anything, and that is the same claim.
+     */
+    prepaid: {
+        availableCents: number;
+        pendingCents: number;
+        heldCents: number;
+        heldSupported: boolean;
+    };
+    /**
+     * The held deposits behind `prepaid.heldCents` (Payments V1 · W4).
+     *
+     * Summary needs only the total; DETAILS owns administration and needs the lots — what was
+     * originally held, what became of it, under which terms, and since when. Empty until a hold
+     * exists, which is why Summary can render from the total alone.
+     */
+    heldDeposits: HeldDeposit[];
     collectible: {
         outstandingCents: number;
         expectedSubsidyCents: number;
@@ -440,6 +521,21 @@ export type FinancialsCardVM = {
 
 /** No id can equal this, so an empty source list selects nothing rather than everything. */
 const NO_SOURCE_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
+/*
+ * THE EXPLICIT BOUNDS, stated rather than inherited from a server default.
+ *
+ * These are not the PostgREST page size — `readAllPages` pages past that. They are the point at
+ * which this reader refuses to answer at all, because beyond them a single account's balance would
+ * cost an unbounded number of round trips. They are deliberately far above any real childcare
+ * account: the largest on the certification tenant holds 2,821 charges after months of generated
+ * tuition, and a bound is only useful if reaching it means something has gone wrong rather than
+ * something has grown.
+ *
+ * Reaching one is reported as an unavailability, never as a smaller number.
+ */
+const ACCOUNT_CHARGE_SCAN_CAP = 25_000;
+const ACCOUNT_PAYMENT_SCAN_CAP = 25_000;
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -470,6 +566,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         expectedFunding: [],
+        prepaid: { availableCents: 0, pendingCents: 0, heldCents: 0, heldSupported: false },
+        heldDeposits: [],
         collectible: {
             outstandingCents: 0,
             expectedSubsidyCents: 0,
@@ -490,6 +588,8 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         chargeTemplates: [],
         unavailable: [],
         paymentSetup: null,
+        autopayLine: null,
+        autopayHealthy: false,
         paymentCapabilities: null,
         payerCandidates: [],
         achAvailable: false,
@@ -507,10 +607,6 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
  */
 function platformUnavailabilities(): FinancialsUnavailable[] {
     return [
-        {
-            fact: "autopay",
-            reason: "no canonical autopay truth exists — the concept appears only in design fixtures",
-        },
         {
             fact: "payer_split",
             reason: "responsibility splits are owned by Processing, not by Financials configuration",
@@ -552,14 +648,18 @@ export async function readResponsibility(
     payers: FinancialsCardVM["payers"];
     expectedFunding: FinancialsCardVM["expectedFunding"];
     /** The same allocations, indexed by charge, so a ledger row can name who owes it. */
-    responsibilityByCharge: Map<string, { name: string | null; unassigned: boolean }>;
+    responsibilityByCharge: Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>;
 }> {
     const empty = {
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
         payers: [],
         expectedFunding: [],
         /* No allocations read means no row can name a responsible party. It never means nobody owes. */
-        responsibilityByCharge: new Map<string, { name: string | null; unassigned: boolean }>(),
+        responsibilityByCharge: new Map<string, {
+            name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+        }>(),
     };
     if (chargeIds.length === 0) return empty;
 
@@ -660,14 +760,37 @@ export async function readResponsibility(
      * SPLIT rather than as one of them — picking a winner would be this projection deciding a
      * responsibility question the allocations deliberately left as two.
      */
-    const byCharge = new Map<string, { names: Set<string>; unassigned: boolean }>();
+    const byCharge = new Map<string, {
+        names: Set<string>; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>();
     for (const a of allocations) {
-        const entry = byCharge.get(a.charge_id) ?? { names: new Set<string>(), unassigned: false };
-        if (a.is_unassigned || !a.responsible_party_id) entry.unassigned = true;
-        else entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+        const entry = byCharge.get(a.charge_id)
+            ?? { names: new Set<string>(), unassigned: false, assignedCents: 0, unassignedCents: 0 };
+        const amount = Number(a.assigned_amount_cents) || 0;
+        if (a.is_unassigned || !a.responsible_party_id) {
+            entry.unassigned = true;
+            entry.unassignedCents += amount;
+        } else {
+            entry.names.add(nameById.get(a.responsible_party_id) ?? "Responsible party");
+            entry.assignedCents += amount;
+        }
         byCharge.set(a.charge_id, entry);
     }
-    const responsibilityByCharge = new Map<string, { name: string | null; unassigned: boolean }>(
+    /*
+     * ── A NAME AND A REMAINDER ARE BOTH TRUE AT ONCE ───────────────────────────────────────────
+     *
+     * A $75.00 obligation resolved under an arrangement naming one $18.00 fixed share produces TWO
+     * allocations: $18.00 owed by a person and $57.00 owed by nobody. This map carried only
+     * `{name, unassigned}`, the surfaces rendered the name, and an operator read a partially
+     * allocated obligation as fully owned by the person named. The $57.00 was invisible.
+     *
+     * The amounts travel with the name so a surface can say PARTIAL without recomputing anything.
+     * They are sums of the allocations already in hand — no second read, and no second opinion
+     * about what is owed.
+     */
+    const responsibilityByCharge = new Map<string, {
+        name: string | null; unassigned: boolean; assignedCents: number; unassignedCents: number;
+    }>(
         [...byCharge].map(([chargeId, entry]) => [
             chargeId,
             {
@@ -676,6 +799,8 @@ export async function readResponsibility(
                     : entry.names.size > 1 ? "Split"
                     : null,
                 unassigned: entry.unassigned,
+                assignedCents: entry.assignedCents,
+                unassignedCents: entry.unassignedCents,
             },
         ]),
     );
@@ -749,22 +874,43 @@ async function readAccountPayments(
                 .eq("status", "active")
                 .in("charge_id", batch) as never,
         ).then((data) => ({ data, error: null })),
-        supabase
-            .from("payments")
-            .select(
-                "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
-                + "processor, received_at, posted_at, reference_number, notes",
-            )
-            .eq("org_id", orgId)
-            /*
-             * The TYPE as well as the id. A billable source id is only unique within its kind, and
-             * an account read that matched on the id alone would claim a job payment that happened
-             * to share a uuid. The applications read below is what picks up a job-era payment
-             * legitimately applied to one of this account's charges.
-             */
-            .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-            .in("billable_source_id", sourceIds)
-            .order("received_at", { ascending: false }),
+        /*
+         * PAGED, for the reason the charges read is: an account's receipts are a cohort, not a
+         * page, and a receipt the server did not return reads here as money the family never paid.
+         * `received_at` is not unique — a day of recorded cheques shares a timestamp — so the order
+         * ends in `id` or paging could drop one.
+         */
+        readAllPages<Record<string, unknown>>(
+            "account payments",
+            ACCOUNT_PAYMENT_SCAN_CAP,
+            (fromIndex, toIndex) =>
+                supabase
+                    .from("payments")
+                    .select(
+                        "id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, "
+                        + "processor, received_at, posted_at, reference_number, notes",
+                    )
+                    .eq("org_id", orgId)
+                    /*
+                     * The TYPE as well as the id. A billable source id is only unique within its kind, and
+                     * an account read that matched on the id alone would claim a job payment that happened
+                     * to share a uuid. The applications read below is what picks up a job-era payment
+                     * legitimately applied to one of this account's charges.
+                     */
+                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                    .in("billable_source_id", sourceIds)
+                    .order("received_at", { ascending: false })
+                    .order("id", { ascending: true })
+                    .range(fromIndex, toIndex) as never,
+        ).then(({ rows, truncated }) => {
+            if (truncated) {
+                throw new Error(
+                    `this account holds more than ${ACCOUNT_PAYMENT_SCAN_CAP.toLocaleString()} receipts, `
+                    + "which is more than one balance read may carry",
+                );
+            }
+            return { data: rows, error: null as { message: string } | null };
+        }),
     ]);
 
     /*
@@ -797,12 +943,21 @@ async function readAccountPayments(
         ),
     ];
     if (unknownPaymentIds.length) {
-        const { data: extra } = await supabase
-            .from("payments")
-            .select("id, status")
-            .eq("org_id", orgId)
-            .in("id", unknownPaymentIds);
-        for (const r of (extra ?? []) as unknown as Array<Record<string, unknown>>) {
+        /*
+         * Batched for the same reason the applications read is: this id list comes from the
+         * applications and grows with the account, and an over-long URI would be discarded exactly
+         * where a payment's status decides whether it counts.
+         */
+        const extra = await readInBatches<Record<string, unknown>>(
+            "statuses of payments named by applications",
+            unknownPaymentIds,
+            (batch) => supabase
+                .from("payments")
+                .select("id, status")
+                .eq("org_id", orgId)
+                .in("id", batch) as never,
+        );
+        for (const r of extra as unknown as Array<Record<string, unknown>>) {
             statusByPaymentId.set(t(r.id), t(r.status).toLowerCase());
         }
     }
@@ -855,6 +1010,14 @@ type FinancialsBuildArgs = {
     customerMemberId?: string | null;
     /** Operating day; defaults to today. Certification pins it. */
     today?: string | null;
+    /**
+     * Server-Timing phase marker, supplied by the route that is already measuring itself.
+     *
+     * Optional and defaulted to a no-op at the single consumption site, so a caller that is not
+     * instrumenting — every test, and the workspace path — passes nothing and measures nothing.
+     * The build does NOT create its own timing authority: it writes into the route's.
+     */
+    mark?: (phase: string) => void;
 };
 
 type FinancialsBuildClock = ReturnType<typeof financialsClock>;
@@ -888,6 +1051,7 @@ async function buildFinancialsCardVMInner(
     args: FinancialsBuildArgs,
     clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
+    const mark = args.mark ?? (() => {});
     const today = t(args.today) || ymdToday();
     const period = billingPeriodForDate(today);
     const vm = baseVm(period);
@@ -922,7 +1086,14 @@ async function buildFinancialsCardVMInner(
                 .from("financial_charge_templates")
                 .select(
                     "id, label, charge_category, amount_strategy, amount_cents, currency_code, "
-                    + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end",
+                    /*
+                 * `review_required` and `service_id` are read because the CARD has to be able to
+                 * say what confirming Add will actually do. Without them the command could only
+                 * assume, and it assumed the old universal-draft behaviour — telling an operator
+                 * a charge would wait for review on a tenant that posts it immediately.
+                 */
+                + "occurs_on_strategy, billable_on_strategy, trigger_type, is_active, effective_start, effective_end, "
+                + "review_required, service_id",
                 )
                 .eq("org_id", args.orgId)
                 .eq("is_active", true)
@@ -966,7 +1137,8 @@ async function buildFinancialsCardVMInner(
         .time("merchant_ms", () =>
             supabase
                 .from("payment_provider_merchants")
-                .select("ach_readiness")
+                /* BOTH readiness facts: the rail rule needs merchant-level readiness first. */
+                .select("readiness, ach_readiness")
                 .eq("org_id", args.orgId)
                 .eq("processor", "stripe")
                 .eq("is_active", true)
@@ -1053,21 +1225,101 @@ async function buildFinancialsCardVMInner(
          * and what the household itself owes — the pre-enrolment fees that have no agreement to hang
          * off. `billable_source_type` already carries the distinction; nothing new is invented here.
          */
+        /*
+         * PAGED, because a long-lived account outgrows one PostgREST response.
+         *
+         * This read asked for an account's whole charge history in one query and got the server's
+         * first 1,000 rows — silently, with no error and nothing on screen to say so. The balance,
+         * past due and collectible below were then computed from part of a ledger. Measured on the
+         * certification tenant: 2,821 charges on the account, 1,000 read, and the Financials
+         * Workspace — which already paged — reporting a different figure for the same family.
+         *
+         * `readAllPages` is the Workspace's own loop, so both surfaces now walk the cohort the same
+         * way. The order ends in `id` because paging over a non-unique key can repeat or skip rows
+         * across page boundaries, and a repeated charge is money counted twice.
+         */
         clock.time("charges_ms", () =>
-            supabase
-                .from("charges")
-                .select(
-                    "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
-                    + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
-                )
-                .eq("org_id", args.orgId)
-                .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL]),
+            readAllPages<Record<string, unknown>>(
+                "account charges",
+                ACCOUNT_CHARGE_SCAN_CAP,
+                (fromIndex, toIndex) =>
+                    supabase
+                        .from("charges")
+                        .select(
+                            "id, billable_source_type, billable_source_id, source_charge_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
+                            + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
+                        )
+                        .eq("org_id", args.orgId)
+                        .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL])
+                        .order("id", { ascending: true })
+                        .range(fromIndex, toIndex) as never,
+            ).then(({ rows, truncated }) =>
+                /*
+                 * A BALANCE IS NOT ALLOWED TO BE PARTIAL. The workspace may report "there is more
+                 * than this scan carried" because it answers an operational question across an
+                 * organisation. This answers one family's account, where a number derived from part
+                 * of the ledger is not incomplete — it is wrong. So the cap failing is an
+                 * unavailability, which the card already knows how to say.
+                 */
+                truncated
+                    ? {
+                          data: null,
+                          error: {
+                              message:
+                                  `this account holds more than ${ACCOUNT_CHARGE_SCAN_CAP.toLocaleString()} charges, `
+                                  + "which is more than one balance read may carry",
+                          },
+                      }
+                    : { data: rows, error: null },
+            ),
         ).catch((e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } })),
         configRead,
     ]);
     const memberRows = (memberResult as { data: unknown }).data;
     const [glMappingResult, glAccountResult, templateResult] = configResult as Array<{ data: unknown }>;
     vm.reductions = reductions;
+
+    /*
+     * ── THE POLICIES THOSE REDUCTIONS NAME ────────────────────────────────────────────────────
+     *
+     * Read ONLY for the ids the applications actually carry, so an account with no policy-produced
+     * reductions asks nothing. The window is what makes "ongoing" a fact rather than a guess: a
+     * policy still active with an open end recurs, one whose window closed does not, and an
+     * application whose policy cannot be found reports `unknown` rather than inventing "one-time".
+     */
+    const policyIds = [...new Set(reductions.map((r) => r.commercialPolicyId).filter((v): v is string => !!v))];
+    const policyWindows = new Map<string, ReductionPolicyWindow>();
+    if (policyIds.length) {
+        const { data: policyRows } = await supabase
+            .from("commercial_policies")
+            .select("id, effective_start, effective_end, is_active")
+            .eq("org_id", args.orgId)
+            .in("id", policyIds);
+        for (const p of (policyRows ?? []) as unknown as Array<Record<string, unknown>>) {
+            policyWindows.set(t(p.id), {
+                id: t(p.id),
+                effectiveStart: t(p.effective_start) || null,
+                effectiveEnd: t(p.effective_end) || null,
+                isActive: p.is_active !== false,
+            });
+        }
+    }
+    const provenanceByCharge = reductionProvenanceByChargeId(
+        reductions,
+        policyWindows,
+        today,
+        /*
+         * The basis phrase needs a formatted figure and the VM has no formatter — `money` belongs to
+         * the adapter, which runs later. A local one here keeps the layers where they are; it states
+         * cents in the account's currency and decides nothing about the amount.
+         */
+        (cents) =>
+            (cents / 100).toLocaleString(undefined, {
+                style: "currency",
+                // The reductions' own currency; they are stored with one and it is the row's.
+                currency: reductions[0]?.currencyCode || "USD",
+            }),
+    );
     const nameByMember = new Map(
         ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [
             t(m.id),
@@ -1079,8 +1331,34 @@ async function buildFinancialsCardVMInner(
     // `vm.payers` is filled from PERSISTED RESPONSIBILITY once the charges are known — see below.
     // The `payer` contact role is no longer what makes somebody a payer on this card.
     vm.payers = [];
-    // A household with no enrolment still HAS an account. Financials answers for it.
-    vm.subjects = agreements.map((a) => ({
+    /*
+     * ── ONE SUBJECT PER CHILD, NOT PER AGREEMENT ──────────────────────────────────────────────
+     *
+     * A household with no enrolment still HAS an account, and Financials answers for it. But this
+     * mapped AGREEMENTS, and a child with more than one — a closed enrolment beside a live one,
+     * or a second placement — became two subjects carrying the same name.
+     *
+     * MEASURED: two children, four entries. Every surface reading `vm.subjects` inherited it. The
+     * Add target rendered four checkboxes, and before the unified control the "Applies to" select
+     * listed each child twice. The defect predates the control; the control made it visible.
+     *
+     * A subject is a CHILD. The agreement carried alongside is the billable source, so an ACTIVE
+     * one is preferred where a child has several — an open agreement is what a new charge belongs
+     * to, and a closed one still owns its history without being what an operator bills against
+     * today. Insertion order is preserved so the list does not reshuffle.
+     */
+    const subjectByMember = new Map<string, { id: string; customer_member_id: string; status: string }>();
+    for (const a of agreements) {
+        const held = subjectByMember.get(a.customer_member_id);
+        if (!held) {
+            subjectByMember.set(a.customer_member_id, a);
+            continue;
+        }
+        const heldActive = (held.status ?? "").trim().toLowerCase() === "active";
+        const thisActive = (a.status ?? "").trim().toLowerCase() === "active";
+        if (!heldActive && thisActive) subjectByMember.set(a.customer_member_id, a);
+    }
+    vm.subjects = [...subjectByMember.values()].map((a) => ({
         customerMemberId: a.customer_member_id,
         agreementId: a.id,
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
@@ -1144,17 +1422,24 @@ async function buildFinancialsCardVMInner(
      * `status <> 'void'` and `correction_kind = 'reversal'` are the same predicate the database's
      * unique index uses, so the card and the constraint agree on what a live reversal is.
      */
-    const reversalBySource = new Map<string, string>();
-    for (const c of charges) {
-        const sourceId = t(c.source_charge_id);
-        const kind = t(((c.metadata ?? {}) as Record<string, unknown>).correction_kind);
-        if (sourceId && kind === "reversal" && t(c.status) !== "void") {
-            reversalBySource.set(sourceId, t(c.id));
-        }
-    }
+    const reversalBySource = reversalBySourceChargeId(charges);
+
+    /*
+     * THE RECONCILIATION-RELEVANT DERIVATIONS COME FROM THEIR CANONICAL OWNER.
+     *
+     * Period, category and lifecycle used to be decided here, inline, and the first-order runtime
+     * could reach `reconcileRows` but not these — so a second consumer would have had to re-derive
+     * what a period is and when a draft is "scheduled". They now come from
+     * `deriveAccountChargeLedgerRows`, which both surfaces call, and this mapper layers its
+     * PRESENTATION on top: GL account, template label, subject name, reduction provenance.
+     */
+    const canonicalByChargeId = new Map(
+        deriveAccountChargeLedgerRows(charges, today).map((r) => [r.chargeId, r]),
+    );
 
     const rows: FinancialsLedgerRow[] = charges.map((c) => {
-        const categoryKey = t(c.charge_category) || t(c.charge_type) || "one_time";
+        const canonical = canonicalByChargeId.get(t(c.id))!;
+        const categoryKey = canonical.categoryKey;
         const metadata = (c.metadata ?? {}) as Record<string, unknown>;
         const mappingKey =
             t(metadata.gl_mapping_key)
@@ -1162,7 +1447,7 @@ async function buildFinancialsCardVMInner(
             || "";
         const account = mappingKey ? accountByMappingKey.get(mappingKey) ?? null : null;
         const placement = placeInBillingPeriod(c);
-        const status = t(c.status);
+        const status = canonical.status;
         const billableOn = t(c.billable_on) || null;
         const agreementId = t(c.billable_source_id);
         const subjectMemberId = memberByAgreement.get(agreementId) ?? null;
@@ -1173,7 +1458,7 @@ async function buildFinancialsCardVMInner(
         return {
             chargeId: t(c.id),
             date: billableOn ?? t(c.occurs_on) ?? t(c.service_date) ?? null,
-            periodKey: placement.key,
+            periodKey: canonical.periodKey,
             periodBasis: placement.basis,
             subjectMemberId,
             subjectName: subjectMemberId ? nameByMember.get(subjectMemberId) ?? null : null,
@@ -1183,16 +1468,7 @@ async function buildFinancialsCardVMInner(
             amountCents,
             currencyCode: t(c.currency_code) || "USD",
             status,
-            lifecycleStatus:
-                status === "void"
-                    ? "void"
-                    : status !== "draft"
-                      ? reversedByChargeId
-                          ? "reversed"
-                          : "posted"
-                      : billableOn && billableOn > today
-                        ? "scheduled"
-                        : "draft",
+            lifecycleStatus: canonical.lifecycleStatus,
             correctsChargeId,
             correctionKind,
             reversedByChargeId,
@@ -1205,18 +1481,27 @@ async function buildFinancialsCardVMInner(
             appliedCents: 0,
             outstandingCents: amountCents,
             offersPayment: false,
-            dueDate: t(c.due_date) || null,
+            dueDate: canonical.dueDate,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
             /* Filled in below, once the responsibility read has answered. Absent until then. */
             responsiblePartyName: null,
             responsibilityUnassigned: false,
+            responsibilityAssignedCents: 0,
+            responsibilityUnassignedCents: 0,
             /*
              * PROVENANCE, not a key. `metadata.charge_template_key` is `field_trip`; the operator
              * configured that template and already sees its LABEL in the description, so this column
              * says HOW the row came to exist rather than repeating an identifier.
              */
             source: t(metadata.source) === "charge_template" ? "Template" : t(metadata.source) ? "Import" : "Manual",
+            /*
+             * The decision behind this row, when the row is a reduction. Looked up by the charge the
+             * application wrote, which is exactly how a reduction reaches the ledger in the first
+             * place. Null for an ordinary charge, and null for a reduction with no application
+             * record — an absence stated rather than a shape invented.
+             */
+            reduction: provenanceByCharge.get(t(c.id)) ?? null,
         };
     });
     // Newest first inside a period; the ledger reads downward through time.
@@ -1317,6 +1602,9 @@ async function buildFinancialsCardVMInner(
         const owned = responsibilityRead.responsibilityByCharge.get(row.chargeId);
         row.responsiblePartyName = owned?.name ?? null;
         row.responsibilityUnassigned = owned?.unassigned ?? false;
+        /* Both halves, so a surface can state PARTIAL from canonical truth rather than infer it. */
+        row.responsibilityAssignedCents = owned?.assignedCents ?? 0;
+        row.responsibilityUnassignedCents = owned?.unassignedCents ?? 0;
     }
 
     /*
@@ -1346,6 +1634,18 @@ async function buildFinancialsCardVMInner(
      * The filter is the same distinction `reconcileRows` already makes: gross is what is owed, and
      * funding, discounts, adjustments and corrections are things that happen TO it.
      */
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * The resolver is unchanged and is still the only authority on a family's collectible position;
+     * what changed is that the account no longer waits for each charge in turn. Measured on the
+     * mounted card via Server-Timing: this phase was 1206ms of a 3157ms response — 38% of the whole
+     * Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * Nothing here caches a financial figure or answers the question a second way. The charges are
+     * independent of each other, the sums are addition, and a refusal still contributes nothing.
+     * Concurrency is bounded so a long period cannot open an unbounded number of connections.
+     */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
     const collectibleRows = rows.filter(
         (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
@@ -1353,24 +1653,46 @@ async function buildFinancialsCardVMInner(
     // How many round trips this loop makes. A duration alone cannot tell one slow read from N reads,
     // and those two facts want opposite repairs.
     clock.count("collectible_calls", collectibleRows.length);
-    for (const row of collectibleRows) {
-        try {
-            const position = await clock.time("collectible_ms", () =>
-                resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }),
-            );
+    /*
+     * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
+     *
+     * Staging parallelised the phases around this one and left this loop serial. Measured on the
+     * mounted card through Server-Timing before that change: 1206ms of a 3157ms response — 38% of
+     * the whole Details wait — because one round trip per posted obligation ran end to end.
+     *
+     * The resolver is untouched and is still the only authority on a family's collectible position.
+     * The charges are independent of one another, the sums are addition, and a refusal still
+     * contributes nothing. Only the waiting is concurrent, and it is bounded so a long period
+     * cannot open an unbounded number of connections. The diagnostics above are staging's and are
+     * kept: the call count is exactly what distinguishes one slow read from N reads.
+     */
+    const COLLECTIBLE_CONCURRENCY = 8;
+    for (let i = 0; i < collectibleRows.length; i += COLLECTIBLE_CONCURRENCY) {
+        const positions = await clock.time("collectible_ms", () =>
+            Promise.all(
+                collectibleRows.slice(i, i + COLLECTIBLE_CONCURRENCY).map((row) =>
+                    resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }).catch(
+                        () => null,
+                    ),
+                ),
+            ),
+        );
+        for (const position of positions) {
+            if (!position) {
+                // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
+                // contributes nothing rather than failing the account — the same rule every other
+                // read on this card follows.
+                continue;
+            }
             collectible.outstandingCents += position.outstandingCents;
             collectible.expectedSubsidyCents += position.expectedSubsidyCents;
             collectible.submittedClaimSuppressionCents += position.submittedClaimSuppressionCents;
             collectible.actualSubsidyReceivedCents += position.actualSubsidyReceivedCents;
             collectible.unresolvedVarianceCents += position.unresolvedVarianceCents;
             collectible.currentlyCollectibleCents += position.currentlyCollectibleCents;
-        } catch {
-            // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
-            // contributes nothing rather than failing the account — the same rule every other read
-            // on this card follows. Reduction rows no longer reach here: they are excluded above,
-            // by what they ARE, rather than being silently absorbed by a refusal.
         }
     }
+    mark("collectible");
     vm.collectible = collectible;
     vm.responsibility = responsibilityRead.responsibility;
     vm.payers = responsibilityRead.payers;
@@ -1417,6 +1739,36 @@ async function buildFinancialsCardVMInner(
                     applications: view.applications,
                 };
             });
+
+            /*
+             * THE PREPAID POSITION, FROM THE AUTHORITY THAT OWNS IT.
+             *
+             * Asked here rather than derived in a component: a card that summed unapplied cents
+             * itself would be a second answer to "what may this family spend", and it would get the
+             * PENDING case wrong — which is the one that can offer money that never arrives.
+             */
+            /*
+             * HELD MONEY (Payments V1 · W4), read here and passed IN.
+             *
+             * `availableFunds` sums what canonical authorities report and computes no money of its
+             * own, so it is told how much of each receipt is restricted rather than reading it. A
+             * failed holds read leaves the map empty, which reports held money as zero — the
+             * conservative direction is arguable either way, and this one is chosen because the
+             * alternative is refusing to show a family's prepaid position at all because a
+             * restriction could not be counted. The holds themselves travel to Details separately.
+             */
+            const holds = await readHoldsForPayments(supabase, {
+                orgId: args.orgId,
+                paymentIds: views.map((v) => v.paymentId),
+            });
+            const heldByPayment: Record<string, number> = {};
+            for (const v of views) {
+                const held = heldCentsFor(v.paymentId, holds);
+                if (held > 0) heldByPayment[v.paymentId] = held;
+            }
+            vm.prepaid = resolveAccountPrepaidPosition(views, heldByPayment);
+            /* Details owns held-money administration and needs the lots, not just the total. */
+            vm.heldDeposits = holds.filter((h) => h.remainingCents > 0 || h.dispositions.length > 0);
         }
     } catch (e) {
         /*
@@ -1495,6 +1847,21 @@ async function buildFinancialsCardVMInner(
     });
 
     // ── ADD CHARGE OPTIONS: the tenant's own templates, effective today ──────────────────────────
+    /*
+     * ── THE REVIEW BOUNDARY, RESOLVED ONCE FOR EVERY TEMPLATE ON OFFER ──────────────────────────
+     *
+     * One read of the tenant's financial policies, then a per-service resolution, because
+     * `posting_review` may be scoped to a service. This is the same authority the writer consults;
+     * consulting it here means the command can state what confirming will do instead of assuming.
+     */
+    mark("payments");
+    const financialPolicies = await listFinancialPolicies(supabase, args.orgId).catch(() => []);
+    mark("policies");
+    const reviewPolicyForService = (serviceId: string | null) => {
+        const r = resolveFinancialPolicy(financialPolicies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+        return r.resolved ? r.policy.value.required === true : false;
+    };
+
     vm.chargeTemplates = ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>)
         .filter((row) => {
             const start = t(row.effective_start);
@@ -1512,6 +1879,8 @@ async function buildFinancialsCardVMInner(
             currencyCode: t(row.currency_code) || "USD",
             occursOnStrategy: t(row.occurs_on_strategy),
             billableOnStrategy: t(row.billable_on_strategy),
+            reviewRequired:
+                reviewPolicyForService(t(row.service_id) || null) || row.review_required === true,
         }));
 
     /*
@@ -1524,7 +1893,21 @@ async function buildFinancialsCardVMInner(
      * about this merchant".
      */
     const { data: merchantRow } = await merchantRead;
-    vm.achAvailable = (merchantRow as { ach_readiness: string | null } | null)?.ach_readiness === "ready";
+    /*
+     * BOTH readiness facts, through the one rule.
+     *
+     * This read `ach_readiness === "ready"` alone, so a merchant that could not accept a single
+     * charge — onboarding unfinished, or restricted by Stripe — still offered the bank rail on the
+     * card. `railCollectionAvailable` asks merchant-level readiness first, in the same order the
+     * collection path does.
+     */
+    const merchantReadiness = merchantRow as { readiness: string | null; ach_readiness: string | null } | null;
+    vm.achAvailable = railCollectionAvailable(
+        merchantReadiness
+            ? { readiness: merchantReadiness.readiness, achReadiness: merchantReadiness.ach_readiness }
+            : null,
+        "ach",
+    );
 
     /*
      * ── PAYMENT SETUP, AND WHO COULD HAVE PAID — derived, where a literal used to sit ───────────
@@ -1541,6 +1924,13 @@ async function buildFinancialsCardVMInner(
     const setup = await setupP;
     vm.paymentCapabilities = setup;
     vm.paymentSetup = setup?.summaryLine ?? null;
+    /*
+     * "Healthy" means ON AND NOT ASKING FOR ANYTHING. A paused arrangement is a decision somebody
+     * made rather than a problem, so it is neither healthy nor an alarm — it simply reads as paused.
+     */
+    vm.autopayLine = setup?.autopayArrangement?.summaryLine ?? null;
+    vm.autopayHealthy = setup?.autopayArrangement?.status === "active"
+        && setup.autopayArrangement.needsAttention === false;
 
     vm.payerCandidates = (await payersP).candidates;
 
@@ -1642,7 +2032,15 @@ export function isPostedMoney(lifecycleStatus: FinancialsLedgerRow["lifecycleSta
  * which is a different statement from "we cannot say" and is the honest one now that we can.
  */
 export function reconcileRows(
-    rows: readonly FinancialsLedgerRow[],
+    /*
+     * The CANONICAL reconciliation input, not this card's presentation row.
+     *
+     * `FinancialsLedgerRow` structurally satisfies `AccountChargeLedgerRow`, so this card keeps
+     * passing its own richer rows unchanged while the first-order runtime passes the narrow ones
+     * its reader produces. One implementation of the arithmetic, two shapes of caller — rather
+     * than a second reconciliation written against a second row type.
+     */
+    rows: readonly AccountChargeLedgerRow[],
     periodKey: string,
     _today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
@@ -1704,11 +2102,11 @@ export function reconcileRows(
  * record; how much is outstanding is read from them.
  */
 export function pastDueFor(
-    rows: readonly FinancialsLedgerRow[],
+    rows: readonly AccountChargeLedgerRow[],
     today: string,
     appliedByChargeId: ReadonlyMap<string, number> = new Map(),
 ): FinancialsPastDue | null {
-    const outstanding = (r: FinancialsLedgerRow): number =>
+    const outstanding = (r: AccountChargeLedgerRow): number =>
         r.amountCents - (appliedByChargeId.get(r.chargeId) ?? 0);
     const overdue = rows.filter(
         (r) =>

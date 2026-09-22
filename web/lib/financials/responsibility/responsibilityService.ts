@@ -23,6 +23,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { pickGoverningArrangement } from "@/lib/financials/responsibility/arrangementSpecificity";
 
 import { AllocatableNetError, resolveAllocatableNet, type AllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import {
@@ -71,24 +72,36 @@ export async function readArrangementInForce(
         .eq("state", "active");
     if (error) throw new ResponsibilityError("db_error", error.message);
 
-    const candidates = ((data ?? []) as Array<{
+    /*
+     * Applicability, dating and specificity all come from the shared rule. They used to be three
+     * filters and a comparator written out here, and `readAccountArrangement` — the other reader of
+     * this same model — had none of them, which is how one household produced two answers.
+     */
+    const rows = ((data ?? []) as Array<{
         id: string;
         customer_id: string;
         customer_member_id: string | null;
         effective_start: string;
         effective_end: string | null;
-    }>)
-        .filter((a) => a.customer_member_id === null || a.customer_member_id === args.customerMemberId)
-        .filter((a) => a.effective_start <= args.onDate)
-        .filter((a) => !a.effective_end || a.effective_end >= args.onDate);
-    if (candidates.length === 0) return null;
-
-    candidates.sort((a, b) => {
-        const specificity = Number(b.customer_member_id !== null) - Number(a.customer_member_id !== null);
-        if (specificity !== 0) return specificity;
-        return a.effective_start < b.effective_start ? 1 : -1;
+    }>).map((a) => ({
+        id: a.id,
+        customerId: a.customer_id,
+        customerMemberId: a.customer_member_id,
+        effectiveStart: a.effective_start,
+        effectiveEnd: a.effective_end,
+    }));
+    const picked = pickGoverningArrangement(rows, {
+        customerMemberId: args.customerMemberId,
+        onDate: args.onDate,
     });
-    const winner = candidates[0]!;
+    if (!picked) return null;
+    const winner = {
+        id: picked.id,
+        customer_id: picked.customerId,
+        customer_member_id: picked.customerMemberId,
+        effective_start: picked.effectiveStart,
+        effective_end: picked.effectiveEnd,
+    };
 
     const { data: shareRows, error: shareError } = await supabase
         .from("financial_responsibility_shares")

@@ -17,7 +17,10 @@ import { buildScheduleExpectations } from "@/lib/childcareOperational/expectatio
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/roomConfigResolvers";
-import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
+import {
+    operationalGroupRooms,
+    resolveRoomsForLocation,
+} from "@/lib/location/canonicalRoomProvider";
 import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
 import {
     buildStaffSupply,
@@ -171,7 +174,14 @@ export async function buildRosterReadModel(
         return { date: addDaysYmd(weekStart, offset), weekday };
     });
 
-    const rooms = await resolveRoomsForLocation(supabase, input.orgId, input.siteLocationId);
+    // A roster row carries occupancy, required staff, capacity and ratio breach —
+    // all of which are facts about an operational GROUP. A physical room is the
+    // licensed shell that contains groups, and a shared space is somewhere a child
+    // may be without belonging to it; giving either a ratio roster would invent a
+    // staffing obligation for a location that never had one.
+    const rooms = operationalGroupRooms(
+        await resolveRoomsForLocation(supabase, input.orgId, input.siteLocationId)
+    );
     if (rooms.length === 0) {
         return {
             siteLocationId: input.siteLocationId,

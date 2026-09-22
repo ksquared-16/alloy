@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "keys": [
+    "policies"
+  ],
+  "count": 2,
+  "byType": {
+    "due_date": 2
+  },
+  "dueDate": [
+    {
+      "id": "99f9511b-487d-431f-bce3-01e71d359b6e",
+      "type": "due_date",
+      "label": "QA due date — on invoice",
+      "service": null,
+      "location": null,
+      "ratePlan": null,
+      "active": true,
+      "from": "2026-09-18",
+      "to": null,
+      "value": {
+        "strategy": "on_invoice",
+        "offset_days": 0
+      }
+    },
+    {
+      "id": "71d6b7ed-7e05-4833-876a-8ea06ccdf1ca",
+      "type": "due_date",
+      "label": "QA due date — 10 days after invoice",
+      "service": null,
+      "location": null,
+      "ratePlan": null,
+      "active": true,
+      "from": "2026-09-19",
+      "to": null,
+      "value": {
+        "strategy": "days_after_invoice",
+        "offset_days": 10
+      }
+    }
+  ]
+}

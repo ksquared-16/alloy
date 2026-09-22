@@ -263,9 +263,15 @@ export default function ProcessCard({
                     Two bands became one. The rail already says who is where, so the left half
                     carries only what the rail cannot: a scoped child with its own action, or the
                     fact that everyone is together. The right half spends NO height on activity —
-                    the list is revealed on demand, never printed onto the card face. */}
+                    the list is revealed on demand, never printed onto the card face.
+
+                    This row is CARD-LEVEL, so it carries the shared `alloy-os-ucard__body-footer`
+                    primitive: when the band assigns more height than the card needs, the surplus
+                    opens ABOVE this row rather than below the whole card. The command region above
+                    is deliberately untouched — commands belong to the work they act on, not to the
+                    bottom of the card. See docs/platform/experience/focus-panel-card-format.md §5. */}
                 {scopedChild || (aligned && evidence.participantsLabel) || evidence.activity.length ? (
-                    <div className="alloy-os-process__foot">
+                    <div className="alloy-os-process__foot alloy-os-ucard__body-footer">
                         <div className="alloy-os-process__foot-left">
                             {scopedChild ? (
                                 <div className="alloy-os-process__scoped">
@@ -307,7 +313,26 @@ export default function ProcessCard({
 
                         {/* 4 · ACTIVITY ON DEMAND — zero rows on the card face. Omitted entirely when
                             there is none: a trigger that opens an empty menu is a broken promise. */}
-                        <div className="alloy-os-process__foot-right">
+                        {/*
+                          * DECLARED STAGE-2, because the product contract already says so.
+                          *
+                          * `firstOrderWorkUnitProjection` names its exclusions outright — "nested
+                          * surfaces, Recent activity, payment applications, rails, expanded
+                          * contacts, avatars, drawer content" — and `business_process` declares six
+                          * firstOrderFields, none of which is activity. The card face carries zero
+                          * activity rows; this is an affordance that opens detail on demand, and
+                          * its count exists only so the trigger is not a broken promise.
+                          *
+                          * Measured on deployed 03f93ec6f: the count's text arrived with the drawer
+                          * in 20 of 20 samples and, being an authoritative content change inside a
+                          * blocking region, it was deciding FIRST_ORDER_VISIBLE_COMPLETE. A field
+                          * the contract calls Stage-2 must not do that.
+                          *
+                          * This marks the affordance as enrichment. It does NOT hide the count, and
+                          * it does not change when the count appears — only whether its arrival is
+                          * allowed to claim the first-order surface had not finished.
+                          */}
+                        <div className="alloy-os-process__foot-right" data-alloy-stage2-enrichment="true">
                             {evidence.activity.length ? (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

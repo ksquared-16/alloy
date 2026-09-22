@@ -129,7 +129,28 @@ export async function buildAssignmentTuitionView(
         asOf: args.asOf ?? null,
         cadenceKey: args.cadenceKey ?? null,
     });
-    if (!read.ok) return null;
+    if (!read.ok) {
+        /*
+         * A DATABASE FAILURE IS NOT "THIS CHILD HAS NO ASSIGNMENT".
+         *
+         * Returning null for every failure collapsed two unrelated answers into one, and the
+         * callers then collapsed them again: `buildOpportunityTuitionViews` drops a null view, so
+         * an opportunity whose assignments all failed to read answered 200 with `assignments: []`,
+         * and `/enrollment/assignment-quote` answered 404 `no_assignment_for_child` — the same
+         * words it uses for a child who genuinely has none.
+         *
+         * Measured: two assignments created through the registered route, found by that route's own
+         * (org, opportunity, child) filter on a second call, and still reported as absent by every
+         * pricing surface. Nothing in the product said why.
+         *
+         * `assignment_not_found` stays null — that is a real business answer. A `db_error` throws
+         * and carries the database's own message.
+         */
+        if (read.code === "db_error") {
+            throw new Error(`buildAssignmentTuitionView: reading assignment facts failed — ${read.message}`);
+        }
+        return null;
+    }
 
     const exported =
         args.exported
@@ -176,11 +197,27 @@ export async function buildOpportunityTuitionViews(
     supabase: SupabaseClient,
     args: { orgId: string; opportunityId: string; asOf?: string | null },
 ): Promise<AssignmentTuitionView[]> {
-    const { data: ocmRows } = await supabase
+    /*
+     * THE ERROR IS NOT DISCARDED, AND THAT IS THE POINT.
+     *
+     * This read `const { data } = await …` and then returned `[]` for `data ?? []`, so a FAILED
+     * query and an opportunity with no assignments were the same answer from outside: the route
+     * replied 200 with `{"enrollments": [], "assignments": []}` either way, and the card rendered
+     * "No assignment on this record to price." A fixture whose assignment rows demonstrably existed
+     * — the Children card was listing them by id — read as a family with no children enrolled, and
+     * there was no way to tell the two apart without changing this line.
+     *
+     * A read that failed is not an empty result. It throws, the route answers 500, and the card
+     * shows its load error, which is the truth.
+     */
+    const { data: ocmRows, error: ocmError } = await supabase
         .from("opportunity_customer_members")
         .select("id, customer_member_id, customer_members(first_name, last_name)")
         .eq("org_id", args.orgId)
         .eq("opportunity_id", args.opportunityId);
+    if (ocmError) {
+        throw new Error(`buildOpportunityTuitionViews: reading assignments failed — ${ocmError.message}`);
+    }
 
     const rows = (ocmRows ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) return [];

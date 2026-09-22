@@ -2431,9 +2431,41 @@ html[data-alloy-os-runtime="on"]
   color: var(--alloy-os-text-secondary, #4b5563);
 }
 
+/*
+ * THE BODY ABSORBS SURPLUS BAND HEIGHT — the card's half of internal vertical rhythm.
+ *
+ * The shell is already `flex-direction: column`, but nothing in it grew, so a card given more height
+ * than its content needs left the surplus BELOW the footer: the footer's border-top floated in the
+ * middle of the card with white beneath it. Growing the body instead puts the surplus between the
+ * body's content and the footer, which is where a reader expects a card to breathe.
+ *
+ * A column body is also what lets a body-resident card-level footer anchor (`__body-footer`). It
+ * changes no card's rendering on its own: every card's regions measured identically before and after
+ * on deployed `dced5ba79`, at 1180/1440/1680.
+ */
 .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0 12px 8px;
   font-size: 12px;
+}
+
+/*
+ * A CARD-LEVEL FOOTER THAT LIVES INSIDE THE BODY.
+ *
+ * Some cards cannot use `<footer>`: Business Process carries its foot row inside the body, and the
+ * timeline archetype hides the shell footer outright. `margin-top: auto` in the column body gives
+ * them the same anchoring the shell footer gets from the body's growth — in normal flow, with no
+ * spacer, no min-height and no absolute positioning.
+ *
+ * ONLY card-level content may carry this. Actions that belong to a particular row, stage or member
+ * stay with what they act on; moving them down to fill space would make the card lie about what the
+ * control applies to.
+ */
+.alloy-os-ucard__body-footer {
+  margin-top: auto;
 }
 
 .alloy-os-ucard--expanded .alloy-os-ucard__body {
@@ -3376,13 +3408,42 @@ html[data-alloy-os-runtime-split="true"]
   padding: 0;
   margin: 0;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
-  -webkit-backdrop-filter: blur(6px) saturate(0.92) brightness(1.03);
+  /*
+   * ── THE SCRIM HAS TO ACTUALLY SUBORDINATE ────────────────────────────────────────────────────
+   *
+   * At 0.78 a fifth of the surface beneath still reads through, and measured on the mounted panel
+   * that is enough for underlying Work content to compete with the focused card: a PAYMENT heading,
+   * its amount and a Record-payment control sat beside the Financials Details card, legible and
+   * apparently operable. Hit-testing was never the problem — the scrim covers those points and
+   * takes the click — it simply did not look like it did, which is worse than either extreme: the
+   * operator reads a live control that is already inert.
+   *
+   * This is the composition, not a selector aimed at one section, so every underlying surface is
+   * subordinated by the same rule. The background stays contextually present as shape and colour —
+   * 8% of it still shows and the blur keeps the layout legible as layout — but its text and its
+   * actions stop competing with the surface that has the operator's attention.
+   */
+  background: rgba(255, 255, 255, 0.92);
+  /*
+   * NO `-webkit-` TWIN HERE, DELIBERATELY. The two declarations were collapsed by the CSS minifier
+   * into the PREFIXED one alone — the built sheet shipped `-webkit-backdrop-filter` and no standard
+   * property at all — and the browser reports no support for the prefixed form. So the scrim's blur
+   * has never actually rendered: not at 6px before this pass, and not at 10px after it. Measured on
+   * the built chunk and confirmed against `CSS.supports`.
+   *
+   * The same collapse applies to every other backdrop-filter rule in this sheet. Those are outside
+   * this pass and are RECORDED rather than swept up here.
+   */
+  backdrop-filter: blur(10px) saturate(0.88) brightness(1.02);
   animation: alloy-os-fp-scrim-in var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 @keyframes alloy-os-fp-scrim-in {
-  from { opacity: 0; }
+  /*
+   * NOT FROM ZERO. The scrim is what separates the focused surface from the canvas, so it has to
+   * be doing that in the first frame; starting transparent left the background fully legible for
+   * the whole depth duration, which is precisely when the focused card is arriving.
+   */
+  from { opacity: 0.88; }
   to { opacity: 1; }
 }
 
@@ -3394,9 +3455,11 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"]) {
   opacity: 0.64;
   filter: saturate(0.78) brightness(1.01);
-  transition:
-    opacity var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease),
-    filter var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease);
+  /*
+   * Subordinated at once, for the same reason the scrim is: a base card that recedes over 240ms is
+   * at full strength while the focused surface is arriving on top of it.
+   */
+  transition: none;
   pointer-events: none;
 }
 
@@ -3455,7 +3518,23 @@ html[data-alloy-os-runtime-split="true"]
     0 56px 110px -44px rgba(15, 23, 42, 0.5),
     0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
-  animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
+  /*
+   * ── THE FOCUSED CARD COMMITS; THE SCRIM DOES THE TRANSITION ────────────────────────────────
+   *
+   * `alloy-os-fp-card-zoom` flew the card from its cell: `opacity: 0.4` and a translate of the
+   * measured offset, resolving over the depth duration. Measured on Financials → Details at
+   * 1680x1050: the card appeared at x=246 with opacity 0.400 and arrived at x=525 opacity 1.000
+   * some 240ms later, translating ~280px while half-transparent. Its final anatomy — five metrics,
+   * five lenses, the ledger head, 42 rows — was present in that very first frame, so nothing was
+   * still loading; it was legible content sliding under its own translucency, with the legitimate
+   * Enrollment card showing through it. Operators read that as one presentation being replaced by
+   * another, and reported it as a double render.
+   *
+   * A focused surface is a destination, not a journey. It commits at its final geometry and full
+   * opacity on the first frame; the SCRIM is what communicates the change of depth, and it now
+   * subordinates the background immediately rather than fading in alongside a translucent card.
+   */
+  animation: none;
 }
 
 /*
@@ -5296,46 +5375,87 @@ html[data-alloy-os-runtime-split="true"]
   align-items: stretch;
 }
 
-/* ── AND THE HEIGHT REACHES THE PAINTED CARD (P0-7.5, the last layer) ──
+/* ── AND THE HEIGHT REACHES THE PAINTED CARD, AT WHATEVER DEPTH IT WRAPS (P0-7.5, then §5) ──
  *
- * The rule above stretches the CELL's direct child. For every other card that child IS the painted
- * `article.alloy-os-ucard`, so the band height lands on the surface the operator sees. Business
- * Process is the one card that wraps: `ProcessCard` renders
- * `<div class="alloy-os-process" data-process-card="true">` AROUND its `UniversalCard`, so the
- * chain is cell → .alloy-os-process → article.
+ * The rule above stretches the CELL's direct child. That child is not always the painted
+ * `article.alloy-os-ucard`: several cards wrap it in one or two plain `<div>`s, and a block
+ * container does not hand its own height to its child. The article — `display:flex; flex:0 1 auto`
+ * from the `.alloy-os-ucard` base — then keeps its CONTENT height and the band shows through.
  *
- * `.alloy-os-process` has no base rule anywhere, so it is a plain block box. A block container does
- * not pass its own height to its child, and the article — `display:flex; flex:0 1 auto` from the
- * `.alloy-os-ucard` base — kept its CONTENT height. Measured on deployed f30e3bb0f: cell 299px,
- * .alloy-os-process 299px, painted article 231.77px. 67.23px of the panel ground showed beneath a
- * white, bordered card. Financials reads 299.19px on the same band because it has no wrapper.
+ * This has now been measured twice, and the second time is why the rule is written over the chain:
  *
- * So the defect was never the solver, the wrapper, or the cascade — all three were already correct
- * and stayed correct. It was the last hop, and it is the third distinct contract in this chain:
+ *   P0-7.5, deployed f30e3bb0f   cell 299px    .alloy-os-process 299px   painted article 231.77px
+ *   §5,     deployed dced5ba79   band 640px    .alloy-os-health  640px   painted article 141.80px
+ *
+ * The first repair named `.alloy-os-process`, on a premise written into this very comment: "for
+ * every other card that child IS the painted article". That was false when it was written. Health &
+ * Safety wraps TWICE (`div.alloy-os-health > div.alloy-os-health > article`) and Financials wraps
+ * too (`div.alloy-os-financials > div.alloy-os-billing > article`) — Financials merely sits on a
+ * band its content already fills, so it never showed. A rule naming one card can only ever fix one
+ * card, and the next wrapper reopens the defect somewhere else. So the propagation is stated over
+ * the CHAIN: every ancestor of the painted card, inside the solved-grid branch, becomes a column
+ * that hands its height on, and the card takes it. `:has()` is what makes that expressible without
+ * enumerating wrappers, or asking cards to stop wrapping.
+ *
+ * The defect was never the solver, the wrapper, or the cascade — all three were correct and stayed
+ * correct. It is the last hop, and it is the third distinct contract in this chain:
  *
  *     the solver produces H  →  the cell applies H  →  the painted card CONSUMES H
  *
  * Each is certified separately, because each has now been green while a later one was broken.
  *
- * Flex column rather than `height: 100%`: the wrapper's height here is a stretched flex cross-size,
+ * Flex growth rather than `height: 100%`: the wrapper's height here is a stretched flex cross-size,
  * and resolving a percentage against it is the fragile spelling of the same intent. `flex: 1 1 auto`
- * says what is meant — take the space the band already assigned. `min-height: 0` on both keeps a
- * tall card scrollable inside the band instead of overflowing the solved row.
+ * says what is meant — take the space the band already assigned. `min-height: 0` keeps a tall card
+ * scrollable inside the band instead of overflowing the solved row.
  *
- * NO HEIGHT IS NAMED. The card inherits whatever H the solver chose, 299 or otherwise.
+ * INTRINSIC MEASUREMENT IS UNAFFECTED, and that is a property of growth rather than a hope: the read
+ * takes the wrapper's height away, so the intrinsic node collapses to content height, and flex-grow
+ * cannot grow a child past a container that is itself content-sized. A percentage resolved against
+ * the assigned band is the spelling that WOULD feed back, and there is none in this chain.
+ *
+ * NO HEIGHT IS NAMED. The card inherits whatever H the solver chose, 299, 640 or otherwise.
  *
  * Scoped to `.alloy-os-fp-card-intrinsic` — rendered ONLY by the solved-grid branch — so the lanes,
- * stack, standalone and design-lab paths keep ProcessCard's natural height untouched.
+ * stack, standalone and design-lab paths keep every card's natural height untouched. That scope
+ * matters more here than it did for the per-card rule, because `*:has(.alloy-os-ucard)` is
+ * deliberately broad; the root is the only thing holding it to the solved grid.
  */
-.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process {
+.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard) {
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
-.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process > .alloy-os-ucard {
+.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard),
+.alloy-os-fp-card-intrinsic .alloy-os-ucard {
   flex: 1 1 auto;
   min-height: 0;
 }
+/*
+ * ── AND THE SAME, FOR EVERY CARD, AT ANY WRAPPER DEPTH ──
+ *
+ * The rule above is correct and names ONE card. Measured on the mounted work-unit lane, the cards
+ * it does not name were short by exactly the room their own bands had already reserved: Attendance
+ * cell 171 / card 162, Health & Safety cell 205 / card 196 — together the 18px by which the stacked
+ * column failed to reach Children.
+ *
+ * The cause is that cards render different numbers of placement wrappers (Process one, these two)
+ * and every version of this repair so far enumerated levels. So depth is not counted here: whatever
+ * directly wraps a card takes the room, and the card takes it too. No card is named, no height is
+ * invented — 100% of a box the solver sized — internal content stays intrinsic, and elevated cells
+ * are excluded because a focused card is sized by the depth layer rather than by its resting band.
+ *
+ * Measured after: 1680 attendance 171 + gap 10 + health 205 = 386 = Children 386; 1280 162 + 10 +
+ * 255 = 427 = 427; Enrollment = Financials at 304/304 and 337/337.
+ */
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  :has(> .alloy-os-ucard),
+.alloy-os-fp-card-intrinsic
+  > .alloy-os-focus-panel-grid__cell:not([data-fp-elevated="true"])
+  .alloy-os-ucard {
+  height: 100%;
+}
+
 
 /* ── Row-based Experience Builder ── */
 .alloy-os-rlb {

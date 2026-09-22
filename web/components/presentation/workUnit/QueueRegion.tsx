@@ -29,6 +29,7 @@ import {
 } from "@/lib/presentation/runtime/queueRowFilter";
 import { WS_QUEUE_TOOLBAR_CHROME } from "@/components/workspace/workspaceTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
 import { useFocusPanelOpen } from "./FocusPanelOpenContext";
@@ -231,8 +232,30 @@ export function QueueRegion({
             .join(",");
     }, [queue.rows, principalUserId, orgId]);
 
+    /*
+     * THE ANSWER MAY ALREADY STATE THIS — ASK ONLY WHEN IT DOES NOT.
+     *
+     * Measured on the canonical six-card baseline (n=11, SHA 786a96eb1): this hydrate was the
+     * product's completion owner. WU-05 set FIRST_ORDER_VISIBLE_COMPLETE in 11 of 11, its
+     * completion-setting mutation was the removal of an unread dot, and the round trip below
+     * measured 592ms (P50) — the dominant interval after the document landed.
+     *
+     * The document now resolves `personal_seen` during composition, from the same canonical
+     * resolver this endpoint uses. When every row carries it the first frame is already correct,
+     * so there is nothing to correct and nothing to ask.
+     *
+     * The test is ALL rows, not any: a partially-answered page still needs the network to settle
+     * the rest, and a row without a verdict falls back to "unseen" — which must be corrected, not
+     * left standing. Absent, unavailable or partial all keep the original behaviour intact.
+     */
+    const serverResolvedAllPersonalSeen = useMemo(() => {
+        if (!queue.rows.length) return false;
+        return queue.rows.every((row) => row.context?.personal_seen != null);
+    }, [queue.rows]);
+
     // Hydrate personal seen for visible occurrence keys (stale refresh cannot revive cleared dots).
     useEffect(() => {
+        if (serverResolvedAllPersonalSeen) return;
         if (!ackOccurrenceKeys) return;
         let cancelled = false;
         void (async () => {
@@ -252,7 +275,7 @@ export function QueueRegion({
         return () => {
             cancelled = true;
         };
-    }, [ackOccurrenceKeys]);
+    }, [ackOccurrenceKeys, serverResolvedAllPersonalSeen]);
     const holdActive = queue.loading && queue.rows.length > 0;
     const rowsForList = queueRowsForListDuringHold({
         queueRows: queue.rows,
@@ -365,6 +388,7 @@ export function QueueRegion({
                     className={`shrink-0 px-3 py-2 pb-3 ${WS_QUEUE_TOOLBAR_CHROME}`}
                     data-queue-region-header
                     data-queue-region-controls
+                    {...alloySectionDomAttrs("WU-04")}
                 >
                     <QueueFilterControls
                         facets={facets}
@@ -378,7 +402,16 @@ export function QueueRegion({
                 </div>
             ) : null}
 
-            <div ref={queueScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5" data-queue-panel-body>
+            <div
+                ref={queueScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5"
+                data-queue-panel-body
+                /* The queue body is ONE element in one of two registered states: the rows
+                   themselves (WU-05) or everything that stands in for them — cold load,
+                   empty, no cohort, refusal (WU-06). Derived from the render state this
+                   component already computes; no new state, no wrapper. */
+                {...alloySectionDomAttrs(renderState === "rows" ? "WU-05" : "WU-06")}
+            >
                 {renderState === "error" ? (
                     /* A refusal names WHAT KIND of problem it is. Before this, a tenant configuration
                        problem and a missing record were the same anonymous red sentence, so an operator

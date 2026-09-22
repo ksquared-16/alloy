@@ -48,6 +48,7 @@ import {
 } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import { MOTION_SETTLE } from "@/lib/motion/motionTokens";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import FocusPanelCompactHeader from "@/components/admin/focusPanel/FocusPanelCompactHeader";
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
 import { AlloyThinkingLabel } from "@/components/admin/workspace/AlloyThinkingLabel";
@@ -733,6 +734,8 @@ export function InlineOpportunityFocusPanel() {
                       // or still settling.
                       actionAbsence: operational.actionAbsence,
                       subjectIdentityTruth: operational.subjectIdentityTruth,
+                      resolvedParticipant: operational.resolvedParticipant ?? null,
+                      resolvedTour: operational.resolvedTour ?? null,
                       // R2 — the answer's resolved grain, carried by the single subject owner.
                       // The panel forwards it; it never decides it.
                       subjectGrain: operational.subjectGrain,
@@ -748,6 +751,8 @@ export function InlineOpportunityFocusPanel() {
             operational.action,
             operational.actionAbsence,
             operational.subjectIdentityTruth,
+            operational.resolvedParticipant,
+            operational.resolvedTour,
             operational.subjectGrain,
         ],
     );
@@ -768,6 +773,7 @@ export function InlineOpportunityFocusPanel() {
         >
             <section
                 data-inline-focus-panel="true"
+                {...alloySectionDomAttrs("WU-07")}
                 data-inline-focus-panel-mode={focusPanelMode}
                 data-inline-focus-panel-subject={selectedSubjectId ?? undefined}
                 // OPERATIONAL truth from the committed snapshot — NOT the Settlement fetch.

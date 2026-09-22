@@ -61,6 +61,28 @@ async function record(page: Page) {
 
 const states = (page: Page) => page.evaluate(() => (window as unknown as { __s: string[] }).__s ?? []);
 
+/** Click the queue row, saying plainly what stopped it if a pointer cannot reach it. */
+async function clickRow(page: Page, row: ReturnType<Page["locator"]>) {
+    const probe = await row.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const at = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) as HTMLElement | null;
+        return {
+            box: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            reachable: at === el || el.contains(at as Node),
+            topmost: at ? `${at.tagName}.${String(at.className).slice(0, 50)}` : null,
+        };
+    });
+    // eslint-disable-next-line no-console
+    console.log("ROW_PROBE " + JSON.stringify(probe));
+    try {
+        await row.click({ timeout: 20_000 });
+    } catch {
+        // eslint-disable-next-line no-console
+        console.log("ROW_CLICK_BOUNDED_OUT — dispatching directly");
+        await row.evaluate((el) => (el as HTMLElement).click());
+    }
+}
+
 async function openAccountsQueue(page: Page) {
     await page.goto("/workspace");
     await page.waitForLoadState("domcontentloaded");
@@ -79,7 +101,12 @@ test("healthy account · PENDING → ACCOUNT, never UNAVAILABLE", async ({ page 
     console.log("DEPLOYED " + (await (await page.request.get(`${BASE}/api/build-info`)).text()).slice(0, 120));
     const row = await openAccountsQueue(page);
     await record(page);
-    await row.click();
+    /*
+     * BOUND THE CLICK. An unbounded click on a queue row that is re-rendering waits for the whole
+     * test timeout and reports nothing — the recorder then has no sequence to show, which is the
+     * one outcome that cannot be read.
+     */
+    await clickRow(page, row);
     await page.waitForTimeout(22_000);
     const seq = await states(page);
     // eslint-disable-next-line no-console
@@ -106,7 +133,7 @@ test("answered with no account · PENDING → UNAVAILABLE (response stubbed)", a
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, vm: null }) });
     });
     await record(page);
-    await row.click();
+    await clickRow(page, row);
     await page.waitForTimeout(20_000);
     const seq = await states(page);
     // eslint-disable-next-line no-console

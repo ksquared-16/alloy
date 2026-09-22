@@ -1,0 +1,141 @@
+{
+  "trusted_host_action_id": "tha_6d15272a1d44da",
+  "query_hash": "9d3e1bab42ad06465fdab7ab251d32144f2e9bbd250d9a18da240d6ef7c62e0c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T13:43:00.436Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_6d15272a1d44da",
+    "query_hash": "9d3e1bab42ad06465fdab7ab251d32144f2e9bbd250d9a18da240d6ef7c62e0c",
+    "authorization_id": "grnt_e4ef85c9dc674988",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T13:43:02.052Z",
+    "question_ids": [
+      "slice6_qa_facts"
+    ],
+    "questions": {
+      "slice6_qa_facts": {
+        "question_id": "slice6_qa_facts",
+        "row_count": null,
+        "rows": [
+          {
+            "availability_exceptions": [
+              {
+                "id": "14424df8-78ed-425b-a029-6ec487dfa6d9",
+                "employment_id": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "kind": "unavailable",
+                "reason": "called_out",
+                "active": true
+              },
+              {
+                "id": "ac1dfebc-deaf-4bec-a271-2d38b7a56bb5",
+                "employment_id": "092ccb30-7348-4fbb-a862-1e4c546a708c",
+                "kind": "unavailable",
+                "reason": "slice6_qa_unavailable",
+                "active": true
+              },
+              {
+                "id": "ad520cad-3abe-45ae-8e52-896a937a2640",
+                "employment_id": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "kind": "available",
+                "reason": "slice6_qa_available",
+                "active": true
+              }
+            ],
+            "coverage_on_date": [
+              {
+                "id": "dd5ab616-43aa-4527-9543-7427a4688b62",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "superseded",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "reason": null
+              },
+              {
+                "id": "7bb4dbea-2461-43f8-b0f5-884b3009ca8b",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "cancelled",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "reason": "qa_cleanup_slice3"
+              },
+              {
+                "id": "518940f2-75dd-4a6d-b919-1c47a8557dd7",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "cancelled",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "reason": "qa_cleanup_slice3"
+              },
+              {
+                "id": "7f7cca70-dd68-463f-b05c-535b429eb9cc",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "superseded",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "reason": "qa_revision"
+              },
+              {
+                "id": "3a049c58-9a3f-43f4-9ed7-358f7abbabce",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "cancelled",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "reason": "qa_cleanup"
+              },
+              {
+                "id": "91024000-08bd-439a-b0c2-77db02e4e838",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "cancelled",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "reason": "qa_cleanup_slice3"
+              },
+              {
+                "id": "d7a1c108-251b-4b65-b8c7-5f71e2529c3b",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "cancelled",
+                "start": "13:00:00",
+                "end": "14:00:00",
+                "reason": "qa_cleanup_slice3"
+              },
+              {
+                "id": "affce297-6fec-40dc-b17e-91d3cf903ec9",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "cancelled",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "reason": "slice5_mounted_qa"
+              },
+              {
+                "id": "c7611528-4059-481a-9794-ccc750c0f16e",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "cancelled",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "reason": "slice5_mounted_qa"
+              },
+              {
+                "id": "f9b169c6-2b2c-42aa-9be9-a35a32668b61",
+                "employment": "5abb0bdb-f986-4c8e-b70f-6b7168c62dce",
+                "state": "active",
+                "start": "16:00:00",
+                "end": "17:00:00",
+                "reason": "operations_calendar_gap"
+              }
+            ],
+            "coverage_effective_anywhere": 1,
+            "observed_at": "2026-09-22 13:43:01.979025+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

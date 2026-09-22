@@ -27,6 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPeriodBillableCadence } from "@/lib/financials/billingPeriod";
 
 import { composeCommercialExport } from "@/lib/commercial/execution/export/composeCommercialExport";
 import {
@@ -79,6 +80,7 @@ export type PricingCommitRefusalCode =
     | "override_reason_required"
     | "override_matches_recommendation"
     | "term_already_accepted"
+    | "cadence_not_billable"
     | "db_error";
 
 export type PricingCommitResult =
@@ -169,6 +171,37 @@ async function insertTerm(
     const { read, resolution, option } = args;
     const effectiveStart = read.facts.asOf;
 
+    /*
+     * ── A TERM THE PLATFORM CANNOT BILL IS NOT A TERM ─────────────────────────────────────────
+     *
+     * `cadence_key` is free text: no CHECK, no enum, no foreign key. The platform seeds no
+     * cadences either — `billing_cadences` is authored by the organisation, and the authoring
+     * surface mints the key from whatever label was typed. So nothing between a typed label and
+     * this INSERT has ever asked whether the recurrence engine can derive periods for it.
+     *
+     * Measured in this tenant: "Semi-Annual" is authored and active, and
+     * `isPeriodBillableCadence` does not know it. Accepting a term on it would have written a
+     * commercial agreement the platform can never generate an obligation for — generation refuses
+     * such a cadence, correctly, but it refuses in a run outcome long after the family agreed.
+     *
+     * The refusal belongs here, where the agreement is made. Usage-priced cadences (`hourly`,
+     * `per_session`) reach the same answer for the same reason: they price a unit, not an
+     * interval, and a recurring term is the wrong shape for them.
+     *
+     * This does not delete or hide anything already authored. It declines to create NEW commercial
+     * truth the platform cannot execute.
+     */
+    if (!isPeriodBillableCadence(option.cadenceKey)) {
+        return {
+            ok: false,
+            code: "cadence_not_billable",
+            message:
+                `Tuition cannot be accepted on the "${option.cadenceKey}" billing frequency: the platform `
+                + "cannot derive billing periods for it, so nothing would ever be generated. Choose a "
+                + "frequency with a recurrence, or correct the frequency in Financials configuration.",
+        };
+    }
+
     // A live term already standing for this assignment on this date.
     const { data: liveRows, error: liveError } = await supabase
         .from("enrollment_pricing_terms")
@@ -190,7 +223,42 @@ async function insertTerm(
             && live.amount_cents === option.amount.amountCents
             && live.state === args.state
             && t(live.override_reason) === t(args.overrideReason);
-        if (equivalent) return { ok: true, term: live, idempotent: true, resolution };
+        if (equivalent) {
+            /*
+             * THE AGREEMENT IS LEARNED LATER, AND A NULL IS NOT A POINTER.
+             *
+             * `enrollment_agreement_id` is stamped from the assignment at accept time, and this
+             * action exists "from the moment an assignment is proposed — long before any enrollment
+             * agreement". So the ordinary order is: price the child, then enrol them. Every term
+             * accepted in that order was written with a null agreement, and this retry branch
+             * returned the row untouched, so it could never acquire one — while
+             * `generateTuitionCharges` refuses a term with no agreement as `assignment_not_enrolled`.
+             *
+             * A child priced before enrolment could therefore never be billed, and no operator
+             * gesture could fix it: re-accepting is idempotent and there is no re-stamp.
+             *
+             * Measured: two assignments, both enrolled through the enrollment-decision authority
+             * AFTER acceptance, both still reported `assignment_not_enrolled` by the generator, and
+             * re-accepting returned `idempotent: true` with the same null.
+             *
+             * Filling a null is not re-pointing — the row said nothing, and now it says what the
+             * assignment says. A term that already names an agreement is never moved.
+             */
+            if (!t(live.enrollment_agreement_id) && t(read.subject.enrollmentAgreementId)) {
+                const { data: stamped } = await supabase
+                    .from("enrollment_pricing_terms")
+                    .update({ enrollment_agreement_id: read.subject.enrollmentAgreementId })
+                    .eq("id", live.id)
+                    .eq("org_id", args.orgId)
+                    .is("enrollment_agreement_id", null)
+                    .select("*")
+                    .maybeSingle();
+                if (stamped) {
+                    return { ok: true, term: stamped as EnrollmentPricingTermRow, idempotent: true, resolution };
+                }
+            }
+            return { ok: true, term: live, idempotent: true, resolution };
+        }
         if (!args.supersede) {
             return {
                 ok: false,

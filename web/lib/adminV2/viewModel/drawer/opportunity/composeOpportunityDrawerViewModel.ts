@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjection";
-import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import {
+    buildOperationalContext,
+    canonicalParticipantScopeFromTruth,
+    type ParticipantCardProducerContract,
+} from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 
 /** A title the projection can name the subject by; never a fabricated one. */
@@ -99,6 +103,22 @@ export async function composeOpportunityDrawerViewModel(
         currentStageLabel,
     } = shared;
     Object.assign(phases, shared.phases_ms);
+
+    /*
+     * THE EARLY PARTICIPANT CONTRACT — published here, and here is why here.
+     *
+     * `record` carries `_inquiry_children` with `customer_member_id` and the enrollment
+     * participation already applied: the children shell is complete once the shared deps resolve.
+     * Everything still ahead — the initial/deferred modules, status and department, the projection
+     * — measured a median 1,355ms, and the producers measure 763ms, so publishing at this boundary
+     * is enough to hide them entirely. Reaching deeper into the shell to publish before the photo
+     * projection would widen the window to ~2,090ms and buy nothing, at the cost of threading a
+     * publisher through a second module.
+     *
+     * The verdict comes from the canonical owner, not a local re-derivation, so the contract and
+     * the settled scope built at the end of this function cannot disagree.
+     */
+    phases.participant_contract_ready_ms = Date.now() - composeStart;
 
     // S4.4 — the Tier-2 Initial Panel composition (Module A): readiness, first-paint deps, above-fold
     // render model, first-paint contract, header, registry actions, and Tier-2 summaries. Mutates the

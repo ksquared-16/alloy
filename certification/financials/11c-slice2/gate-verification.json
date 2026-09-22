@@ -1,0 +1,16 @@
+{
+  "chargesSection": {
+    "sectionRendered": 1,
+    "bulkCadence": 0,
+    "bulkAnything": 0,
+    "siteSelectorText": "Financials\n\nAll sites · operational\n\nSite\nAll sites\n▾\nClose\nWork\nStudio\nOverview\nAccounts\nCharges\nPayments\nSubsidy\nActivity\n\nCHARGES\n\n21Awaiting posting\n\n—\n\n1Households\n\n—\n\nGenerate a period's tuition\nAwaiting posting21\nPosted61\nCerthouse Family\n$25.00\nLate pickup · Certa Certhouse · August 2026 · South Campus\nCerthouse Family\n$185.00\nTuition · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$40.00\nDiscount · Certa Certhouse · September 2026 · South Campus\nCerthouse Family\n-$145.00\nDiscount · Certb Certhouse · September 2026 · North Campus\nCerthouse Family\n-$18.50\nDiscount · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$18.50\nDiscount · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n$185.00\nTuition · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$0.01\nCredit · Certa Certhouse · September 2026 · South Campus\nCerthouse Family\n-$0.01\nCredit · Certa Certhouse · September 2026 · South Campus\nCerthouse Family\n-$12.34\nCredit · Certb Certhouse · September 2026 · South Campus\nCerthouse Family\n-$12.34\nCredit · Certb Certhouse · September 2026 · South Campus\nCerthouse Family\n-$7.77\nCredit · Certb Certhouse · September 2026 · South Campus\nCerthouse Family\n-$7.77\nCredit · Certb Certhouse · September 2026 · South Campus\nCerthouse Family\n$185.00\nTuition · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$18.50\nDiscount · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$18.50\nDiscount · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n$185.00\nTuition · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n$185.00\nTuition · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n-$18.50\nDiscount · Certa Certhouse · September 2026 · North Campus\nCerthouse Family\n$1,450.00\nTuition · Certb Certhouse · October 2026 · North Campus\nCerthouse Family\n$40.00\nOne-time charge · Certb Certhouse · November 2026 · South Campus\nSelect financial work\n\nChoose a draft charge to see the household's canonical financial detail.",
+    "bodyMentionsBulk": false,
+    "queueRows": 21
+  },
+  "chargeDetail": {
+    "detailNodes": 0,
+    "arrangementShares": 0,
+    "fundingType": 0,
+    "bodyMentionsExpectedFunding": true
+  }
+}

@@ -35,6 +35,9 @@
  * Pure. No I/O, no clock, no Supabase.
  */
 
+import { formatMoneyFromCents } from "@/lib/adminFormatters";
+import { chargeCategorySemantics } from "@/lib/financials/chargeCategorySemantics";
+
 /** How a benefit is expressed — the authoring vocabulary of the policy registry. */
 export type ReductionBasis = "percentage" | "amount";
 
@@ -101,7 +104,24 @@ export type NotEligibleReason =
     | "not_enough_siblings"
     | "rank_not_covered"
     | "not_an_employee_household"
-    | "category_not_covered";
+    | "category_not_covered"
+    /**
+     * THE OTHER HALF OF THE INTERSECTION. The discount policy would have covered this charge, and
+     * the CATEGORY refuses. Told apart from `category_not_covered` — which means the policy did not
+     * name this category — because the two are different conversations with an operator: one is
+     * "your policy does not cover this", the other is "this kind of charge cannot be discounted".
+     */
+    | "category_not_discountable"
+    /**
+     * THE POLICY WOULD HAVE APPLIED, AND THIS COMMERCIAL RELATIONSHIP IS EXCLUDED FROM IT.
+     *
+     * Deliberately distinct from every other reason here. The others describe a family or a
+     * charge that the policy does not reach; this one describes a policy an operator has
+     * intentionally, attributably set aside for one relationship over an effective window.
+     * Collapsing it into `category_not_covered` would tell an operator their configuration is
+     * wrong when somebody on their team decided this on purpose and said why.
+     */
+    | "excluded_by_exception";
 
 export type RefusalReason =
     | "unreadable_basis"
@@ -174,6 +194,27 @@ function evaluateOne(
 ): AppliedReduction | { skip: NotEligibleReason } | { refuse: RefusalReason; detail: string } {
     if (!coversCategory(policy.params, gross.categoryKey)) return { skip: "category_not_covered" };
 
+    /*
+     * ── THE CATEGORY'S OWN SAY ──────────────────────────────────────────────────────────────
+     *
+     * Eligibility is an INTERSECTION and this is the half that was missing:
+     *
+     *     applies only if  the discount policy permits this charge
+     *                AND   the charge category permits discounting
+     *
+     * Until now only the policy had a vote, so a policy authored as `applies_to: "fees"` reached
+     * every non-tuition category — including `discount`, `credit` and `adjustment`, where a
+     * reduction of a reduction is not something any reconciliation can explain.
+     *
+     * Note what this deliberately does NOT encode: business opinion. `late_pickup` IS discountable
+     * here. An organisation that never discounts late fees says so through its policy's own
+     * `applies_to`; hard-coding that belief would take the decision away from every tenant that
+     * disagrees. Only incoherence is refused.
+     */
+    if (!chargeCategorySemantics(gross.categoryKey).discountable) {
+        return { skip: "category_not_discountable" };
+    }
+
     // ── A WAIVER IS NOT A PERCENTAGE. It removes the charge, and says so in one place.
     if (policy.kind === "waiver") {
         return {
@@ -219,7 +260,14 @@ function evaluateOne(
     const cap = num(policy.params.max_benefit_cents);
     const capped = cap != null && cap >= 0 && raw > cap;
     const amount = capped ? cap! : raw;
-    const shown = basis === "percentage" ? `${value}%` : `$${(value / 100).toFixed(2)}`;
+    /*
+     * ONE MONEY FORMAT PER LINE. `toFixed(2)` prints 145000 cents as "$1450.00" while every
+     * surface that renders this explanation formats its own amounts through Intl — so the
+     * Financials Details line read "Expected $145.00 · … 10% of $1450.00", two conventions for
+     * the same currency, side by side. MEASURED on deployed f160bb907. The canonical formatter
+     * is the one the rest of admin already uses.
+     */
+    const shown = basis === "percentage" ? `${value}%` : formatMoneyFromCents(value);
     return {
         policyId: policy.id,
         policyKind: policy.kind,
@@ -229,8 +277,8 @@ function evaluateOne(
         amountCents: -amount,
         capped,
         explanation:
-            `${policy.label ?? policy.kind} · ${shown} of $${(gross.amountCents / 100).toFixed(2)}`
-            + (capped ? `, capped at $${(amount / 100).toFixed(2)}` : ""),
+            `${policy.label ?? policy.kind} · ${shown} of ${formatMoneyFromCents(gross.amountCents)}`
+            + (capped ? `, capped at ${formatMoneyFromCents(amount)}` : ""),
     };
 }
 
@@ -246,8 +294,26 @@ export function resolveFinancialReductions(args: {
     gross: GrossObligation;
     policies: readonly ReductionPolicy[];
     facts: EligibilityFacts;
+    /**
+     * Policies this commercial relationship is excluded from, resolved by
+     * `commercialPolicyExceptionService` for the obligation's own date. Empty or omitted is the
+     * ordinary case.
+     *
+     * ── WHY HERE AND NOT A FILTER OUTSIDE ─────────────────────────────────────────────────────
+     *
+     * A caller could simply drop excluded policies before calling, and the arithmetic would be
+     * right — but the ANSWER would be wrong: the resolver would report `no_policy_configured`,
+     * telling an operator nothing is set up when in fact something is set up and deliberately
+     * excepted. The exclusion is an eligibility fact, so it is evaluated where eligibility is
+     * decided, and it produces its own reason.
+     *
+     * This is the SAME function the forecast and `applyFinancialReductions` both call, so a
+     * forecast cannot promise a discount the application path will withhold.
+     */
+    excludedPolicyIds?: readonly string[];
 }): ReductionDecision {
     const { gross, policies, facts } = args;
+    const excluded = new Set(args.excludedPolicyIds ?? []);
     if (gross.amountCents <= 0) {
         return { kind: "refused", reason: "negative_gross", detail: `gross ${gross.amountCents}`, policyId: null };
     }
@@ -265,17 +331,28 @@ export function resolveFinancialReductions(args: {
         const forKind = policies.filter((p) => p.kind === kind);
         if (forKind.length === 0) continue;
         sawAny = true;
-        if (forKind.length > 1) {
+        /*
+         * An excepted policy is SEEN and then set aside, which is why `sawAny` is already true:
+         * "there is a policy and you are excluded from it" and "there is no policy" are different
+         * answers and only one of them is about a decision somebody made.
+         */
+        if (forKind.every((p) => excluded.has(p.id))) {
+            firstSkip = firstSkip ?? "excluded_by_exception";
+            continue;
+        }
+        const contenders = forKind.filter((p) => !excluded.has(p.id));
+        if (contenders.length > 1) {
             return {
                 kind: "refused",
                 reason: "unreadable_basis",
-                detail: `${forKind.length} active ${kind} policies for one scope; the winner is not expressed`,
-                policyId: forKind[0]!.id,
+                detail: `${contenders.length} active ${kind} policies for one scope; the winner is not expressed`,
+                policyId: contenders[0]!.id,
             };
         }
-        const result = evaluateOne(forKind[0]!, gross, facts);
+        const eligibleOfKind = forKind.filter((p) => !excluded.has(p.id));
+        const result = evaluateOne(eligibleOfKind[0]!, gross, facts);
         if ("refuse" in result) {
-            return { kind: "refused", reason: result.refuse, detail: result.detail, policyId: forKind[0]!.id };
+            return { kind: "refused", reason: result.refuse, detail: result.detail, policyId: eligibleOfKind[0]!.id };
         }
         if ("skip" in result) {
             firstSkip = firstSkip ?? result.skip;

@@ -31,6 +31,7 @@
  * on this surface.
  */
 import { useCallback, useEffect, useState } from "react";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 
@@ -315,23 +316,22 @@ export default function FinancialsExpectedFundingPanel({
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
                 Kind of funding
-                <select
+                <AlloySelect
+                    testId="financials-funding-type"
+                    aria-label="Funding source type"
+                    density="compact"
+                    allowEmpty={false}
+                    className="mt-0.5"
                     value={sourceType}
-                    onChange={(e) => {
-                        setSourceType(e.target.value);
+                    options={(types.length > 0
+                        ? types
+                        : [{ key: sourceType, label: sourceType, requiresCanonicalSource: true }]
+                    ).map((t) => ({ value: t.key, label: t.label }))}
+                    onChange={(next) => {
+                        setSourceType(next);
                         setPreview(null);
                     }}
-                    data-financials-funding-type="true"
-                    className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs"
-                >
-                    {(types.length > 0 ? types : [{ key: sourceType, label: sourceType, requiresCanonicalSource: true }]).map(
-                        (t) => (
-                            <option key={t.key} value={t.key}>
-                                {t.label}
-                            </option>
-                        ),
-                    )}
-                </select>
+                />
             </label>
 
             {needsAgency ? (
@@ -348,23 +348,22 @@ export default function FinancialsExpectedFundingPanel({
                             before expecting government money.
                         </p>
                     ) : (
-                        <select
+                        <AlloySelect
+                            testId="financials-funding-agency"
+                            aria-label="Funding agency"
+                            density="compact"
+                            className="mt-0.5"
+                            placeholder="Choose an agency…"
                             value={agencyId}
-                            onChange={(e) => {
-                                setAgencyId(e.target.value);
+                            options={agencies.map((a) => ({
+                                value: a.id,
+                                label: `${a.name}${a.jurisdiction ? ` · ${a.jurisdiction}` : ""}`,
+                            }))}
+                            onChange={(next) => {
+                                setAgencyId(next);
                                 setPreview(null);
                             }}
-                            data-financials-funding-agency="true"
-                            className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs"
-                        >
-                            <option value="">Choose an agency…</option>
-                            {agencies.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                    {a.name}
-                                    {a.jurisdiction ? ` · ${a.jurisdiction}` : ""}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     )}
                 </label>
             ) : (

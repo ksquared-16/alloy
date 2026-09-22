@@ -22,6 +22,7 @@ import { createCardCollection } from "@/lib/financials/payments/collectionAttemp
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
+import { ensureAccountingPeriodCovers, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
 
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
@@ -168,14 +169,29 @@ describeLive("Slice G — Stripe refunds become canonical reversals, once", () =
     beforeAll(async () => {
         const client = supabase!;
         await clearAll(client);
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        /*
+         * A REPORTING PERIOD FOR THE MONEY THIS RUN MAKES.
+         *
+         * The journal refuses an entry it cannot attribute, and that refusal is correct — money
+         * posts, only its explanation is skipped. So a suite that asserts the journal has to give
+         * the tenant a period covering today, which is an environment fact and not a product one.
+         * Measured 2026-09-19: the active calendar's last 2026 period ended on the 16th, and every
+         * "journals exactly once" assertion went red while every money assertion passed.
+         */
+        await ensureAccountingPeriodCovers(client, ORG, new Date().toISOString().slice(0, 10));
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
         await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
             readiness: readinessFromStripeAccount(acct as { charges_enabled?: boolean }),
             created_by: ACTOR, updated_by: ACTOR,
         });
+        /*
+         * An upsert that collides on the active-merchant index does NOTHING, so a readiness value
+         * an earlier run left behind survived a setup that looked like it reset one. The provider's
+         * own answer is written explicitly.
+         */
+        await restoreMerchantReadiness(client, ORG, readinessFromStripeAccount(acct as { charges_enabled?: boolean }));
     });
 
     afterAll(async () => { await clearAll(supabase!); });

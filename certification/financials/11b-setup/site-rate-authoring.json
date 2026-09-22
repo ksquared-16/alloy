@@ -1,0 +1,30 @@
+{
+  "step": "created",
+  "created": {
+    "status": 201,
+    "body": {
+      "rate": {
+        "id": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+        "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+        "location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "variant_id": "ee157cff-3546-4172-b591-984b96fbec10",
+        "cadence_key": "weekly",
+        "payer_type": "private_pay",
+        "rate_cents": 19500,
+        "is_active": true,
+        "not_offered": false,
+        "effective_start": "2026-09-01",
+        "effective_end": null,
+        "revenue_category_id": null,
+        "metadata": {
+          "note": "Site rate for the North Campus school-age weekly variant",
+          "authored_for": "financials-11b-slice-a"
+        },
+        "created_at": "2026-09-20T10:57:33.794166+00:00",
+        "updated_at": "2026-09-20T10:57:33.731+00:00"
+      }
+    }
+  },
+  "listStatus": 200,
+  "listCount": 38
+}

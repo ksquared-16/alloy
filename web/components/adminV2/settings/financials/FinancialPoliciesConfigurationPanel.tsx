@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-    FINANCIAL_POLICY_TYPES,
+    OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES,
     POLICY_SCOPE_LABEL,
     POLICY_TYPE_REGISTRY,
     policyValueSummary,
@@ -99,7 +99,8 @@ export default function FinancialPoliciesConfigurationPanel({
                 What resolves at org scope today. A more specific Location / Service / Rate Plan policy overrides it.
             </p>
             <ul className="space-y-0.5">
-                {FINANCIAL_POLICY_TYPES.map((t) => {
+                {/* The resolved-today panel lists what an operator can actually act on. */}
+                {OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES.map((t) => {
                     const r = resolveFinancialPolicy(policies, t, {}, todayYmd);
                     return (
                         <li key={t} className="flex items-center justify-between gap-3 text-[13px]" data-testid={`financials-policies-resolved-${t}`}>

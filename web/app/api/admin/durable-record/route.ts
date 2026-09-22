@@ -18,6 +18,7 @@ import {
 import { encodeDurableRecordModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableRecordModelWire";
 import { resolveAttentionTarget } from "@/lib/workUnits/operatorFocusTarget";
 import { loadSubjectContexts } from "@/lib/context/loadSubjectContexts";
+import { COMPENSATION_READ_PERMISSION_KEY } from "@/lib/access/compensationAuthority";
 import { durableRecordContextOptions } from "@/lib/context/durableRecordContextOptions";
 import { durableRecordRelatedWork } from "@/lib/context/durableRecordRelatedWork";
 
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
                 grain: "person",
                 id: subjectId,
                 personId: subjectId,
+                canReadCompensation: (ctx.permissionKeys ?? []).includes(COMPENSATION_READ_PERMISSION_KEY),
             });
             const personContexts = enumerated.options;
 
@@ -222,6 +224,10 @@ export async function GET(request: NextRequest) {
             grain: "child",
             id: subjectId,
             personId: composed.subject.personId,
+            // A child has no employment and therefore no compensation. Passed
+            // explicitly as false rather than omitted, so the field is never a
+            // question of what a default happened to be.
+            canReadCompensation: false,
         });
         const contexts = enumerated.options;
 
@@ -305,6 +311,8 @@ async function contextOptionsFor(input: {
     grain: "child" | "person";
     id: string;
     personId: string | null;
+    /** Resolved from the caller's capabilities, never assumed. */
+    canReadCompensation: boolean;
 }) {
     try {
         const contexts = await loadSubjectContexts({
@@ -312,6 +320,7 @@ async function contextOptionsFor(input: {
             orgId: input.orgId,
             dimensions: input.dimensions,
             subject: { grain: input.grain, id: input.id, personId: input.personId },
+            canReadCompensation: input.canReadCompensation,
         });
         // Two projections of ONE enumeration: what may be SELECTED on the record, and where related
         // work may NAVIGATE. Both read the same `SubjectContext[]`, so they cannot disagree about

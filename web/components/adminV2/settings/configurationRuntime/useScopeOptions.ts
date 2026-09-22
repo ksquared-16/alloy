@@ -4,13 +4,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { scopeOptionLabel } from "@/lib/locations/topologyPresentation";
+import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import type { ScopeOptions } from "@/components/adminV2/settings/configurationRuntime/ScopePicker";
 
 /**
- * Loads org-scoped scope options — sites, programs, rooms — with human labels,
- * for the Operational Configuration scope picker (Phase 4). Shared by Financials
- * (rate plans) and Locations (operational rules) so both author scope the same
- * way. Read-only: it issues GETs only.
+ * Loads scope options — sites, programs, rooms — with human labels, for the
+ * Operational Configuration scope picker (Phase 4). Shared by Financials (rate
+ * plans) and Locations (operational rules) so both author scope the same way.
+ * Read-only: it issues GETs only.
+ *
+ * SCOPE IS DECLARED BY THE CALLER, never guessed from route state here. Passing
+ * `{ siteId }` narrows the OPTIONS to that campus, for a surface mounted inside
+ * one — Locations → North Campus → Operational Rules should not casually offer
+ * South Campus rooms. Omitting it leaves the org-wide behaviour every other
+ * caller relies on exactly as it was.
+ *
+ * Two things deliberately stay org-wide even when narrowed:
+ *  - `labelFor`, because a rule already scoped to another site or to the org
+ *    still needs its badge to read as something other than an opaque id.
+ *  - `ageGroupOptions`, because an age group is a program-category KEY — a shared
+ *    vocabulary rather than a scope target.
  *
  * Provides three things:
  *  - `options`: labeled, site-disambiguated dropdown options for the ScopePicker.
@@ -34,7 +48,18 @@ export type ScopeOptionsState = {
     refresh: () => Promise<void>;
 };
 
-export function useScopeOptions(): ScopeOptionsState {
+export type UseScopeOptionsInput = {
+    /**
+     * Narrow `options` to one campus. Membership is resolved by CANONICAL
+     * ANCESTRY, so a classroom nested inside a physical room still belongs to its
+     * site — comparing a room's direct parent against the site id instead would
+     * drop exactly the rooms this workstream exists to support.
+     */
+    siteId?: string | null;
+};
+
+export function useScopeOptions(input: UseScopeOptionsInput = {}): ScopeOptionsState {
+    const siteId = String(input.siteId ?? "").trim() || null;
     const [sites, setSites] = useState<LocationHierarchyRow[]>([]);
     const [rooms, setRooms] = useState<LocationHierarchyRow[]>([]);
     const [programs, setPrograms] = useState<LocationProgramCategoryRow[]>([]);
@@ -73,23 +98,38 @@ export function useScopeOptions(): ScopeOptionsState {
     }, [sites]);
 
     const options: ScopeOptions = useMemo(() => {
-        const siteOpts = sites
+        // Site-level rule authoring survives narrowing: the ACTIVE site stays
+        // selectable, other campuses do not. Organization scope is not in these
+        // options at all — the picker offers it independently — so a canonical
+        // org-wide rule remains authorable from here.
+        const scopedSites = siteId ? sites.filter((s) => s.id === siteId) : sites;
+        // Programs are owned by a site through `location_program_categories.location_id`.
+        // Site is read from that relation, never inferred from a label or a room.
+        const scopedPrograms = siteId ? programs.filter((p) => p.location_id === siteId) : programs;
+        // Rooms by canonical ancestry, through the shared walk.
+        const scopedRooms = siteId ? rowsBelongingToSite(rooms, siteId) : rooms;
+
+        const siteOpts = scopedSites
             .map((s) => ({ id: s.id, label: siteName(s.label) }))
             .sort((a, b) => a.label.localeCompare(b.label));
-        const programOpts = programs
+        const programOpts = scopedPrograms
             .map((p) => ({
                 id: p.id,
                 label: `${p.label} · ${siteLabelById.get(p.location_id) ?? "—"}`,
             }))
             .sort((a, b) => a.label.localeCompare(b.label));
-        const roomOpts = rooms
-            .map((r) => ({
-                id: r.id,
-                label: `${(r.label ?? "").trim() || "Untitled room"} · ${r.parent_location_id ? siteLabelById.get(r.parent_location_id) ?? "—" : "—"}`,
-            }))
+        // Site by canonical ancestry, not by "the parent is the site". A nested
+        // classroom used to render `Toddler 1 · —` here, because its parent is a
+        // physical room and the map only holds sites. This surface keeps its own
+        // smaller `name · site` grammar on purpose — the repair is the resolution,
+        // not the shape.
+        const roomOpts = scopedRooms
+            // Labels still resolve against the FULL set, so a room's campus is
+            // named by canonical ancestry rather than by whatever survived the filter.
+            .map((r) => ({ id: r.id, label: scopeOptionLabel(r, [...sites, ...rooms]) }))
             .sort((a, b) => a.label.localeCompare(b.label));
         return { sites: siteOpts, programs: programOpts, rooms: roomOpts };
-    }, [sites, programs, rooms, siteLabelById]);
+    }, [sites, programs, rooms, siteLabelById, siteId]);
 
     // Short labels (no site suffix) for scope badges.
     const shortLabelById = useMemo(() => {

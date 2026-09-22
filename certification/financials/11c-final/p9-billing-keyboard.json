@@ -1,0 +1,42 @@
+{
+  "toNew": {
+    "found": true,
+    "steps": 32,
+    "at": {
+      "tag": "BUTTON",
+      "role": null,
+      "testId": "billing-frequency-new",
+      "name": "New Frequency",
+      "focusVisible": true,
+      "ring": "none 1px rgb(247, 250, 253) | box-shadow:rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0"
+    }
+  },
+  "controls": {
+    "nativeSelects": 0,
+    "alloySelects": 0,
+    "interval": true,
+    "consequence": null,
+    "billable": null
+  },
+  "semiAnnual": {
+    "consequence": "No recurring periods — nothing is billed on a schedule for this frequency",
+    "billable": "false"
+  },
+  "afterDismiss": {
+    "before": true,
+    "escapeDismissed": false,
+    "cancelUsed": true,
+    "cancelReachable": true,
+    "cancelSteps": 3,
+    "afterEscape": true,
+    "final": false,
+    "focus": {
+      "tag": "BODY",
+      "role": null,
+      "testId": null,
+      "name": "STAGING — NOT PRODUCTION ⌘K QS Organization financials Finan",
+      "focusVisible": false,
+      "ring": "none 3px rgb(24, 39, 58) | box-shadow:none"
+    }
+  }
+}

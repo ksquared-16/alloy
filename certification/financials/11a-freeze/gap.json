@@ -1,0 +1,201 @@
+{
+  "detail": {
+    "buttons": [
+      "9+",
+      "6",
+      "All locations ▾",
+      "QS",
+      "Actions (2) ▶",
+      "New 3",
+      "Active Pipeline 0",
+      "Registration 3",
+      "Waitlist 16",
+      "Tours 0",
+      "All 7",
+      "Enrolled children 2",
+      "Filters",
+      "▼ PRESCHOOL 1",
+      "▼ SCHOOL AGE 1",
+      "Manage ▾",
+      "Work",
+      "Activity",
+      "Recent activity 4 ▾",
+      "Payment",
+      "Add",
+      "All 78",
+      "Charges 22",
+      "Credits & adjustments 56",
+      "Funding 0",
+      "Payments 2",
+      "Everyone ▾",
+      "All periods ▾",
+      "Anyone responsible ▾",
+      "DECEMBER 2026 Balance $0.00",
+      "OCTOBER 2026 Balance $80.00",
+      "SEPTEMBER 2026 Balance $648.87",
+      "AUGUST 2026 Balance $100.00",
+      "Refund",
+      "Record payment →",
+      "Certa Certhouse",
+      "custom →",
+      "Certb Certhouse",
+      "full_time →",
+      "View children →"
+    ],
+    "selects": [],
+    "lensMarkers": [
+      {
+        "lens": null,
+        "text": "New 3"
+      },
+      {
+        "lens": null,
+        "text": "Active Pipeline 0"
+      },
+      {
+        "lens": null,
+        "text": "Registration 3"
+      },
+      {
+        "lens": null,
+        "text": "Waitlist 16"
+      },
+      {
+        "lens": null,
+        "text": "Tours 0"
+      },
+      {
+        "lens": null,
+        "text": "All 7"
+      },
+      {
+        "lens": null,
+        "text": "Enrolled children 2"
+      },
+      {
+        "lens": null,
+        "text": "Work"
+      },
+      {
+        "lens": null,
+        "text": "Activity"
+      },
+      {
+        "lens": "all",
+        "text": "All 78"
+      },
+      {
+        "lens": "charges",
+        "text": "Charges 22"
+      },
+      {
+        "lens": "credits",
+        "text": "Credits & adjustments 56"
+      },
+      {
+        "lens": "funding",
+        "text": "Funding 0"
+      },
+      {
+        "lens": "payments",
+        "text": "Payments 2"
+      }
+    ],
+    "testids": [
+      "work-unit-queue-record-filter-bar",
+      "wu-record-filter-search",
+      "wu-record-filter-more-toggle",
+      "available-prepaid",
+      "financials-filter-subject",
+      "financials-filter-period",
+      "financials-filter-responsible-party"
+    ]
+  },
+  "before": {
+    "text": "STAGING — NOT PRODUCTION / ⌘K / QS / Organization / financials / Financials / How operational events affect financial execution. / Tuition / Catalog / Policies / Accounting / Simulator / Funding / Policies are named rules that modify commercial pricing and billing behavior. Commercial products reference them — they do not embed duplicated logic. Prefer names like “Registration Fee Waiver,” not “Registration Fee Policy.” / New Policy / Policies / 1 policies / Sibling discount (QA specimen) / Pricing · Discount / Active · from 2026-01-01 / Select a policy / Discount, deposit, and billing rules configured for your organization. / Financial execution policies / How this organisation runs billing: proration, billing cadence, when payment is due, posting review and deposits. These are resolved by charge generation and the charge lifecycle — distinct from the commercial discount rules above. / Financial Policies / How should the or",
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "New Policy",
+      "Sibling discount (QA specimen) Pricing · Discount Active · from 2026-01-01",
+      "New policy",
+      "Create future version",
+      "Retire",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working changes",
+      "Review configuration attention Identify setup, publication, or assignment issues",
+      "Review unpublished changes Explain what remains private to Organization"
+    ]
+  },
+  "form": {
+    "selects": [
+      {
+        "testid": null,
+        "name": null,
+        "options": [
+          "Select…",
+          "Percentage off",
+          "Fixed amount off"
+        ]
+      },
+      {
+        "testid": null,
+        "name": null,
+        "options": [
+          "Select…",
+          "Tuition only",
+          "Fees & add-ons",
+          "Everything"
+        ]
+      },
+      {
+        "testid": "policy-editor-scope",
+        "name": null,
+        "options": [
+          "Whole organization",
+          "One program",
+          "One Tuition Plan",
+          "One Enrollment Commitment"
+        ]
+      }
+    ],
+    "buttons": [
+      "QS",
+      "Tuition",
+      "Catalog",
+      "Policies",
+      "Accounting",
+      "Simulator",
+      "Funding",
+      "New Policy",
+      "Sibling discount (QA specimen) Pricing · Discount Active · from 2026-01-01",
+      "New policy",
+      "Create future version",
+      "Retire",
+      "Discount",
+      "Sibling discount",
+      "Proration",
+      "Eligibility",
+      "Approval required",
+      "Waiver",
+      "Create policy",
+      "Cancel",
+      "Reset",
+      "Pin",
+      "Close",
+      "Here are some ways I can help ▾",
+      "Explain this configuration Summarize the active state and working changes",
+      "Review configuration attention Identify setup, publication, or assignment issues",
+      "Review unpublished changes Explain what remains private to Organization"
+    ],
+    "text": "STAGING — NOT PRODUCTION / ⌘K / QS / Organization / financials / Financials / How operational events affect financial execution. / Tuition / Catalog / Policies / Accounting / Simulator / Funding / Policies are named rules that modify commercial pricing and billing behavior. Commercial products reference them — they do not embed duplicated logic. Prefer names like “Registration Fee Waiver,” not “Registration Fee Policy.” / New Policy / Policies / 1 policies / Sibling discount (QA specimen) / Pricing · Discount / Active · from 2026-01-01 / Select a policy / Discount, deposit, and billing rules configured for your organization. / Financial execution policies / How this organisation runs billing: proration, billing cadence, when payment is due, posting review and deposits. These are resolved by charge generation and the charge lifecycle — distinct from the commercial discount rules above. / Financial Policies / How should the or"
+  }
+}

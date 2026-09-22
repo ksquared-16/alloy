@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 import { fetchEffectiveStatusDefinitionsDirect } from "@/lib/admin/statusDefinitionsResolve";
 import { runStatusDefinitionsInventory } from "@/lib/admin/statusDefinitionsInventory";
 import {
@@ -115,6 +116,11 @@ async function upsertApprovedStatuses(
         }
     }
 
+    if (inserted > 0 || updated > 0) {
+        // A reseed rewrites org status definitions wholesale; without a bump the process LRU and the
+        // Next Data Cache keep answering with the pre-reseed set.
+        revalidateEffectiveStatusDefinitionsCache(orgId);
+    }
     return { upserted: approved.length, inserted, updated };
 }
 

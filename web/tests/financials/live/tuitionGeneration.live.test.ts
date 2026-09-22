@@ -268,8 +268,15 @@ describeLive("tuition generation — accepted term to draft charge, live", () =>
             opportunityCustomerMemberIds: [ocmId],
             today: `${PERIOD}-01`,
         });
-        expect(retry.counts.generated).toBe(1);
-        expect(retry.outcomes[0]!.kind === "generated" && retry.outcomes[0]!.chargeId).toBe(generated.chargeId);
+        /*
+         * THE RETRY CONVERGES, AND SAYS SO. This asserted `generated: 1` a second time, which was
+         * the behaviour before the Core freeze and was misleading in exactly the way that mattered:
+         * the ledger held one charge and the result told an operator it had billed the family
+         * again. `unchanged` is now its own outcome, and the retry reports zero newly generated.
+         */
+        expect(retry.counts.generated, "a retry generates nothing").toBe(0);
+        expect(retry.counts.unchanged, "and says the obligation already stood").toBe(1);
+        expect(retry.outcomes[0]!.kind === "unchanged" && retry.outcomes[0]!.chargeId).toBe(generated.chargeId);
         expect(await chargesForPeriod()).toHaveLength(1);
         const { count: eventCount } = await supabase
             .from("consumption_events")

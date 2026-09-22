@@ -1,0 +1,100 @@
+[
+  {
+    "sec": "S6",
+    "id": "tuition",
+    "what": "chapter \"tuition\" renders its own operator surface",
+    "ok": true,
+    "observed": "textLen=1441 headings=3 controls=23"
+  },
+  {
+    "sec": "S6",
+    "id": "catalog",
+    "what": "chapter \"catalog\" renders its own operator surface",
+    "ok": false,
+    "observed": "textLen=1007 headings=2 controls=19"
+  },
+  {
+    "sec": "S6",
+    "id": "policies",
+    "what": "chapter \"policies\" renders its own operator surface",
+    "ok": true,
+    "observed": "textLen=1975 headings=5 controls=17"
+  },
+  {
+    "sec": "S6",
+    "id": "accounting",
+    "what": "chapter \"accounting\" renders its own operator surface",
+    "ok": true,
+    "observed": "textLen=2160 headings=4 controls=30"
+  },
+  {
+    "sec": "S6",
+    "id": "simulator",
+    "what": "chapter \"simulator\" renders its own operator surface",
+    "ok": true,
+    "observed": "textLen=1232 headings=3 controls=15"
+  },
+  {
+    "sec": "S6",
+    "id": "funding",
+    "what": "chapter \"funding\" renders its own operator surface",
+    "ok": false,
+    "observed": "textLen=867 headings=2 controls=14"
+  },
+  {
+    "sec": "S6",
+    "id": "types",
+    "what": "the policy type vocabulary is offered to the operator",
+    "ok": true,
+    "observed": "Select… | Percentage off | Fixed amount off | Select… | Tuition only | Fees & add-ons | Everything | Whole organization | One program | One Tuition Plan | One Enrollment Commitment"
+  },
+  {
+    "sec": "S5",
+    "id": "FP-1",
+    "what": "Focus Panel Details is the deep surface",
+    "ok": true,
+    "observed": "overlay=detail"
+  },
+  {
+    "sec": "S5",
+    "id": "FP-2",
+    "what": "row actions are present on the ledger",
+    "ok": true,
+    "observed": "[\"reverse\",\"adjust\",\"post\"]"
+  },
+  {
+    "sec": "S4",
+    "id": "4A-FP",
+    "what": "Manage responsibility is reachable from Focus Panel Details",
+    "ok": false,
+    "observed": "absent — responsibility is REPORTED here (true) but not administered"
+  },
+  {
+    "sec": "S5",
+    "id": "WS-0",
+    "what": "Workspace Accounts reaches an account",
+    "ok": true,
+    "observed": "Certhouse Family opened"
+  },
+  {
+    "sec": "S3",
+    "id": "3F-1",
+    "what": "Workspace offers Add on the account",
+    "ok": true,
+    "observed": "Add"
+  },
+  {
+    "sec": "S4",
+    "id": "4A-WS",
+    "what": "Manage responsibility is reachable from Workspace Accounts",
+    "ok": false,
+    "observed": "not at the account level"
+  },
+  {
+    "sec": "S4",
+    "id": "4A-WSC",
+    "what": "Manage responsibility is reachable from a Workspace charge",
+    "ok": false,
+    "observed": "absent on the charge detail too"
+  }
+]

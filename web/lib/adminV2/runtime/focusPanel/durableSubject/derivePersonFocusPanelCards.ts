@@ -131,6 +131,133 @@ function buildPersonEmploymentPresentation(
     };
 }
 
+/**
+ * THE QUALIFICATIONS CARD MODEL — a content-free shell.
+ *
+ * Unlike the Staff card, this one carries no facts: the component addresses its own read from the
+ * employment id in the operational context and resolves standing against the ORGANISATION's day,
+ * server-side. Deriving any of that here would be a second resolver for one answer, and a stored
+ * count would be wrong the moment a credential expired overnight.
+ *
+ * `visible: false` when the person has never worked here, matching the Staff card: a qualification
+ * hangs off an employment, so with no employment there is nothing for the card to be about. The
+ * readiness contract turns that into `not_applicable`, which keeps the configured cell and renders
+ * its muted treatment rather than asserting an absence.
+ *
+ * ── WHY THIS EXISTS AT ALL ──
+ *
+ * Declaring the card for the `person` grain and placing it on the person composition was not
+ * enough. This module is a THIRD gate: it builds models only for keys it has a branch for, so a
+ * card that is declared and placed but not derived composes nothing and the panel renders it as if
+ * it had never been added. That is exactly what shipped, and mounted QA on deployed staging is what
+ * caught it.
+ */
+export function derivePersonQualificationsCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_qualifications";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Qualifications",
+        // The component replaces this the moment its own read resolves. It is phrased as a pending
+        // state rather than an answer, because an absent read is not "nothing held".
+        insight: employment ? "Reading qualifications…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
+/**
+ * THE AVAILABILITY CARD MODEL — a content-free shell, like Qualifications.
+ *
+ * The component addresses its own read and resolves the answer against the
+ * organisation's day server-side. Deriving a summary here would be a second
+ * resolver for one question, and it would be stale the morning an exception took
+ * effect.
+ */
+export function derivePersonAvailabilityCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_availability";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Availability",
+        insight: employment ? "Reading availability…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
+/**
+ * THE READINESS CARD MODEL — a shell, like the two before it.
+ *
+ * The component evaluates server-side against the organisation's day. A verdict
+ * derived here would be a second readiness answer beside the engine's, and the two
+ * would disagree the moment a credential lapsed overnight.
+ */
+export function derivePersonReadinessCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_readiness";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Readiness",
+        insight: employment ? "Evaluating readiness…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
+/**
+ * COMPENSATION — what this employment is paid.
+ *
+ * Visible when there is an employment, like its siblings. Whether the OPERATOR may
+ * see it is not decided here: the context layer withholds the compensation context
+ * from a caller without the capability, and the card itself renders nothing on a
+ * 403. Deciding visibility in three places would be three places to get it wrong;
+ * this one answers only "does this person have an employment to be paid for".
+ */
+export function derivePersonCompensationCard(
+    signal: OperationalEmploymentSignal | null,
+): FocusPanelCardModel {
+    const key: FocusPanelCardKey = "staff_compensation";
+    const lead = signal?.primary ?? signal?.people[0] ?? null;
+    const employment = lead?.employment ?? null;
+    return {
+        key,
+        archetype: system5ArchetypeForCard(key),
+        iconName: system5IconForCard(key),
+        title: cardTitle(key) ?? "Compensation",
+        insight: employment ? "Reading compensation…" : "This person has never worked here",
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        primaryAction: null,
+        visible: Boolean(employment),
+    };
+}
+
 export type DerivePersonFocusPanelCardsInput = {
     employment: OperationalEmploymentSignal | null;
 };
@@ -150,6 +277,27 @@ export function derivePersonFocusPanelCards(
     }
     if (cardAppliesToGrain("employment", "person")) {
         cards.set("employment", derivePersonEmploymentCard(input.employment));
+    }
+    // Qualifications is a separate question on a separate clock, so it is a separate model rather
+    // than a section inside Staff. The registry is still the gate — this only phrases a key it
+    // already declares for `person`.
+    if (cardAppliesToGrain("staff_qualifications", "person")) {
+        cards.set("staff_qualifications", derivePersonQualificationsCard(input.employment));
+    }
+    // When they can work is a third question on a third clock — a separate model,
+    // gated by the registry exactly as the other two are.
+    if (cardAppliesToGrain("staff_availability", "person")) {
+        cards.set("staff_availability", derivePersonAvailabilityCard(input.employment));
+    }
+    // Readiness is derived FROM the three above; it is still gated by the registry.
+    if (cardAppliesToGrain("staff_readiness", "person")) {
+        cards.set("staff_readiness", derivePersonReadinessCard(input.employment));
+    }
+    // AFTER readiness, matching registry order: the family census reads this map's
+    // insertion sequence, and a producer that emitted cards in a different order
+    // than the registry declares would make the two disagree about the family.
+    if (cardAppliesToGrain("staff_compensation", "person")) {
+        cards.set("staff_compensation", derivePersonCompensationCard(input.employment));
     }
     return cards;
 }

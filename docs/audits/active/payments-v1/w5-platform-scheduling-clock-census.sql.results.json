@@ -1,0 +1,50 @@
+{
+  "trusted_host_action_id": "tha_9c8a4952669a00",
+  "query_hash": "bd6fb3936240e5ac63270fd8a6c8ac4e3e4d0f1551b01d58cd283c930aefb244",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T14:12:14.069Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9c8a4952669a00",
+    "query_hash": "bd6fb3936240e5ac63270fd8a6c8ac4e3e4d0f1551b01d58cd283c930aefb244",
+    "authorization_id": "grnt_140998743bd24eba",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T14:12:15.842Z",
+    "question_ids": [
+      "w5_platform_clock"
+    ],
+    "questions": {
+      "w5_platform_clock": {
+        "question_id": "w5_platform_clock",
+        "row_count": null,
+        "rows": [
+          {
+            "sched_sends_table_exists": true,
+            "sched_sends_total": 11,
+            "sched_sends_pending": 1,
+            "sched_sends_pending_overdue": 1,
+            "sched_sends_ever_claimed": 0,
+            "sched_sends_ever_left_pending": 10,
+            "sched_sends_oldest_overdue_days": 37,
+            "recurrence_plans_exists": true,
+            "recurrence_plans_total": 0,
+            "recurrence_plans_active": 0,
+            "recurrence_plans_overdue": 0,
+            "autopay_table_absent": true,
+            "payments_intact": true,
+            "payment_methods_intact_w2": true,
+            "attempts_intact_w3": true,
+            "holds_intact_w4": true
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

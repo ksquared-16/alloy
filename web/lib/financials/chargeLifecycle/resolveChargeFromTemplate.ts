@@ -49,12 +49,42 @@ export type ChargeResolutionContext = {
     servicePeriodStart?: string | null;
     /** Amount resolved by Rate Resolution for a rate_derived template (cents). */
     resolvedAmountCents?: number | null;
+    /**
+     * THE AGREED COMMERCIAL AMOUNT — an accepted `enrollment_pricing_terms` row, in cents.
+     *
+     * This is not a rate hint like `resolvedAmountCents`. It is the number a named family accepted
+     * for a named child on a named date, recorded by `enrollment.pricing.accept`, and it OUTRANKS
+     * `amount_strategy` — including `fixed`.
+     *
+     * ── WHY IT HAD TO BE A SEPARATE FIELD ────────────────────────────────────────────────────
+     *
+     * The accepted amount used to arrive as `resolvedAmountCents`, indistinguishable from a
+     * catalog-derived rate, and `resolveAmount` returned the template's own `amount_cents` for a
+     * `fixed` template. On the certification tenant that meant an accepted $185.00/week and an
+     * accepted $1,450.00/month were both billed as $400.00 — the template's configured figure —
+     * silently, on every generated obligation.
+     *
+     * A number cannot carry its own authority. This field is the authority: present means "a
+     * commercial contract already decided this", and nothing configured downstream may overrule it.
+     *
+     * Absent — which is every non-recurring charge, every manual Add, every fee with no accepted
+     * term — leaves `amount_strategy` exactly as it was.
+     */
+    acceptedAmountCents?: number | null;
     /** Quantity for a usage_derived template. */
     quantity?: number | null;
     /** Unit amount (cents) for a usage_derived template, if known. */
     unitAmountCents?: number | null;
     /** Posting-review policy resolution (OR'd with the template's review flag). */
     reviewRequiredByPolicy?: boolean;
+    /**
+     * Due date, already resolved from the organisation's `due_date` policy by the caller.
+     *
+     * Passed in rather than resolved here for the same reason `reviewRequiredByPolicy` is: this
+     * function is PURE and reads no policies. `null`/absent means the organisation has configured no
+     * due-date rule, and the charge keeps whatever due date it would have had — never "due today".
+     */
+    dueDate?: string | null;
     /** Stable scope discriminator for the idempotency key (e.g. agreement id, "org"). */
     scopeKey?: string | null;
 };
@@ -71,6 +101,8 @@ export type ChargeIntent = {
     currencyCode: string;
     occursOn: string | null;
     billableOn: string | null;
+    /** When payment is expected, from the org's `due_date` policy. Null = no configured rule. */
+    dueDate: string | null;
     glMappingKey: string | null;
     responsibilityKey: string | null;
     reviewRequired: boolean;
@@ -94,6 +126,7 @@ function notEligible(template: ChargeTemplateRow, reason: string, resolutionKey:
         currencyCode: template.currency_code,
         occursOn: null,
         billableOn: null,
+        dueDate: null,
         glMappingKey: template.default_gl_mapping_key,
         responsibilityKey: template.default_responsibility_key,
         reviewRequired: template.review_required,
@@ -117,6 +150,19 @@ function resolveOccursOn(template: ChargeTemplateRow, ctx: ChargeResolutionConte
 }
 
 function resolveAmount(template: ChargeTemplateRow, ctx: ChargeResolutionContext): number | null {
+    /*
+     * AN ACCEPTED COMMERCIAL TERM IS NOT ONE OPINION AMONG SEVERAL.
+     *
+     * A charge template says HOW tuition posts — its category, its GL mapping, when it occurs, when
+     * it becomes billable, whether it needs review. It does not get a second opinion about WHAT
+     * THIS CHILD AGREED TO PAY. Where an accepted term exists it is the amount, whatever strategy
+     * the template carries, because the alternative is billing a family a number nobody agreed to.
+     *
+     * `consumptionService` already states this doctrine for the catalog: an accepted term means the
+     * catalog lookup "is SKIPPED ENTIRELY — not consulted and overridden, skipped". The template
+     * was the one layer that had not been told.
+     */
+    if (ctx.acceptedAmountCents != null) return ctx.acceptedAmountCents;
     switch (template.amount_strategy) {
         case "fixed":
             return template.amount_cents ?? null;
@@ -180,6 +226,12 @@ export function resolveChargeFromTemplate(template: ChargeTemplateRow, ctx: Char
         currencyCode: template.currency_code,
         occursOn,
         billableOn,
+        /*
+         * The invoice date and the due date are SEPARATE facts. This carries whatever the
+         * organisation's policy resolved — and null when it has configured none, so the charge
+         * keeps today's behaviour rather than acquiring a collections deadline nobody set.
+         */
+        dueDate: ctx.dueDate ?? null,
         glMappingKey: template.default_gl_mapping_key,
         responsibilityKey: template.default_responsibility_key,
         reviewRequired: template.review_required || ctx.reviewRequiredByPolicy === true,

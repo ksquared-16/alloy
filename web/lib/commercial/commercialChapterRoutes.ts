@@ -15,6 +15,12 @@ export const FINANCIALS_WORKSPACE_CHAPTERS = [
     "tuition",
     "catalog",
     "policies",
+    /*
+     * Payments V1 · W1. Configuration, and it belongs here rather than in a settings product of its
+     * own: taking money is the fourth layer of the same financial lifecycle tuition, catalog and
+     * policies configure, and the Core→Payments contract designates this chapter by name.
+     */
+    "payments",
     "accounting",
     "simulator",
     "funding",
@@ -34,6 +40,7 @@ const LEGACY_CHAPTER_ALIASES: Record<string, FinancialsWorkspaceChapter | "progr
     fees: "catalog",
     catalog: "catalog",
     policies: "policies",
+    payments: "payments",
     accounting: "accounting",
     simulator: "simulator",
     funding: "funding",
@@ -61,6 +68,10 @@ export const FINANCIALS_WORKSPACE_CHAPTER_META: Record<
     policies: {
         label: "Policies",
         description: "How operational events affect financial execution.",
+    },
+    payments: {
+        label: "Payments",
+        description: "Connect a payment provider so this organization can accept card and bank payments.",
     },
     simulator: {
         label: "Simulator",

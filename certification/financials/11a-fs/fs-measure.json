@@ -1,0 +1,60 @@
+{
+  "layoutCalls": [
+    {
+      "url": "/api/admin/entity-layouts/focus-panel-summary?workViewId=new_work_view_7&stageKey=enrolled",
+      "status": 200,
+      "publishedVersion": 160,
+      "id": "3bc7f601-ceec-4cd6-937b-e26fcea4ddfc",
+      "cards": [
+        {
+          "card": "business_process",
+          "visibility": null
+        },
+        {
+          "card": "financials",
+          "visibility": null
+        },
+        {
+          "card": "children",
+          "visibility": null
+        },
+        {
+          "card": "household",
+          "visibility": null
+        },
+        {
+          "card": "health_safety",
+          "visibility": null
+        },
+        {
+          "card": "attendance",
+          "visibility": null
+        },
+        {
+          "card": "scheduling",
+          "visibility": "linked"
+        },
+        {
+          "card": "billing_preview",
+          "visibility": "visible"
+        },
+        {
+          "card": "milestones",
+          "visibility": "linked"
+        }
+      ]
+    }
+  ],
+  "observed": {
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "tracer": null,
+    "subject": null
+  }
+}

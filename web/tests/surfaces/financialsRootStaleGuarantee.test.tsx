@@ -143,8 +143,28 @@ describe("the root lifecycle's Financials stale guarantee", () => {
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("A → B → C leaves C's account showing, with no request at any step", async () => {
-        const fetchSpy = vi.fn();
+    it("A → B → C leaves C's account showing, through rapid subject movement", async () => {
+        /*
+         * ── THIS GUARANTEE CHANGED SHAPE, DELIBERATELY ────────────────────────────────────────
+         *
+         * It used to assert that NO request was issued for the initial account, and that was the
+         * stronger claim: with the account arriving inside the provisioning answer there was no
+         * second runner, so the race could not exist. That is no longer true, and the change was
+         * asked for rather than stumbled into — Details opened instantly and then sat on "Reading
+         * this account's activity…", because the deep ledger read only began on the click. It now
+         * begins while the compact card is on screen, which is the sanctioned idle-prefetch
+         * doctrine `focusPanelActivityPrewarm` already states for mode switching.
+         *
+         * So the second runner is back, and the safety is defensive again rather than structural.
+         * What must still hold — and what this now proves — is the fact the file was always really
+         * about: through rapid subject movement, the account on screen is the CURRENT subject's.
+         * `requestSeq` makes a superseded response unable to land, and a projection change clears
+         * both the view model and the completed-read marker, so a prewarm issued under A can only
+         * be discarded. It can never become B's ledger.
+         *
+         * The count of requests is no longer the invariant; whose account is showing is.
+         */
+        const fetchSpy = vi.fn(() => new Promise(() => {}));
         vi.stubGlobal("fetch", fetchSpy);
 
         await render(contextFor(HOUSEHOLD.A));
@@ -152,9 +172,6 @@ describe("the root lifecycle's Financials stale guarantee", () => {
         await render(contextFor(HOUSEHOLD.C));
 
         expect(shownAccount()).toBe(HOUSEHOLD.C);
-        // The old failure needed a slow A to overwrite C. With the account arriving inside the
-        // answer, no such request is ever issued.
-        expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     /*
@@ -171,7 +188,9 @@ describe("the root lifecycle's Financials stale guarantee", () => {
      * where it was already earned: `requestSeq` was introduced with its own reproduction, and this
      * change does not weaken it.
      *
-     * The INITIAL account is what moved, and its guarantee is now structural rather than defensive:
-     * the two tests above hold it.
+     * The INITIAL account's guarantee was structural while no initial request existed. The deep-read
+     * prewarm reintroduced the second runner on purpose, so it is defensive again — `requestSeq`
+     * plus a projection change that clears the completed-read marker — and the tests above hold the
+     * fact that survives either way: the account on screen belongs to the current subject.
      */
 });

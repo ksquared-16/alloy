@@ -178,7 +178,30 @@ describe("the orchestrator's blast-radius promise survives", () => {
     });
 
     it("one card can still never cost the operator the panel", () => {
-        // The preamble that must not throw is still guarded.
-        expect(CODE).toMatch(/try \{[\s\S]{0,120}resolveFinancialSubjectId\(context\)[\s\S]{0,60}catch/);
+        /*
+         * THE GUARD MOVED WITH THE DERIVATION, AND THAT IS THE POINT.
+         *
+         * The producers no longer scan truth for the household id: the drawer route starts them
+         * before a context exists, so the caller resolves it and states it. That relocated the
+         * throw risk from the producers — where it cost one card — onto the compose path, where it
+         * would have cost the whole drawer. So the same invariant is asserted at both places the
+         * scan now happens, rather than deleted along with the line it used to describe.
+         */
+        const CONTRACT = readFileSync(
+            join(process.cwd(), "lib/adminV2/runtime/operationalContext/buildOperationalContext.ts"),
+            "utf8",
+        );
+        expect(CONTRACT).toMatch(
+            /try \{[\s\S]{0,120}resolveFinancialSubjectIdFromTruth\(truth\)[\s\S]{0,80}catch/,
+        );
+        const COMMIT = readFileSync(
+            join(process.cwd(), "lib/runtime/provisioning/composeProvisioningAnswerForRoute.ts"),
+            "utf8",
+        );
+        expect(COMMIT).toMatch(
+            /try \{[\s\S]{0,160}resolveFinancialSubjectId\(commitContext\)[\s\S]{0,80}catch/,
+        );
+        // And the producers must not have quietly regrown their own scan.
+        expect(CODE).not.toContain("resolveFinancialSubjectId(context)");
     });
 });

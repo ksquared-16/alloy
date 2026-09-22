@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    AssignmentTimeRejectedError,
+    setAssignmentTime,
+} from "@/lib/assignmentTime/setAssignmentTime";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
@@ -455,11 +459,14 @@ export async function GET(request: NextRequest) {
             const programs = ((programRows ?? []) as { key: string; label: string | null; is_active: boolean }[])
                 .filter((p) => p.is_active)
                 .map((p) => ({ key: p.key, label: p.label?.trim() || p.key }));
-            const { loadSiteOperationalRooms } = await import(
+            const { loadSiteOperationalRooms, assignableClassrooms } = await import(
                 "@/lib/operationalAssignments/loadSiteOperationalRooms"
             );
-            const operationalRooms = await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(
-                () => []
+            // The Scheduling room picker asks WHICH CLASSROOM, so it may offer only
+            // operational groups. A physical room is the licensed shell and a shared
+            // space is somewhere a child may be without belonging to it.
+            const operationalRooms = assignableClassrooms(
+                await loadSiteOperationalRooms(supabase, ctx.orgId, siteLocationId).catch(() => [])
             );
             return NextResponse.json({
                 view,
@@ -772,7 +779,78 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
         return NextResponse.json({ error: result.error, correlationId: result.correlationId }, { status: result.status });
     }
+
+    /*
+     * ── THE HOURS THE OPERATOR JUST TYPED, WRITTEN WHERE THEY ARE READ ──
+     *
+     * This card has always collected daily hours, and a per-weekday override beside
+     * them. They were recorded as schedule metadata and read back to the same card,
+     * which made them look saved — while `assignment_weekday_intervals`, the
+     * authority every temporal reader consults, kept whatever the pattern trigger
+     * had seeded. Hours could therefore be entered, echoed, and still arrive at the
+     * staffing projection as unknown.
+     *
+     * So the same submission now also writes Assignment Time, through its own
+     * function, in one statement. A failure here is reported rather than swallowed:
+     * a schedule saved with hours that silently did not persist is the exact
+     * failure this repair exists to end.
+     */
+    const createdAssignmentId = String(
+        (result.result as { affectedId?: unknown } | undefined)?.affectedId ?? ""
+    ).trim();
+    const authored = assignmentTimeDaysFromRequest(body.weekdays, body.times);
+    if (createdAssignmentId && authored.length > 0) {
+        try {
+            await setAssignmentTime(supabase, {
+                assignmentId: createdAssignmentId,
+                days: authored,
+                actorUserId: ctx.userId,
+            });
+        } catch (e) {
+            const message =
+                e instanceof AssignmentTimeRejectedError ? e.message : "The schedule saved, but its hours did not.";
+            return NextResponse.json(
+                { error: message, code: "assignment_time_failed", result: result.result },
+                { status: 422 }
+            );
+        }
+    }
+
     return NextResponse.json({ ok: true, result: result.result });
+}
+
+/**
+ * The weekdays and hours a schedule submission is asking for, as Assignment Time.
+ *
+ * A per-weekday entry wins over the default for that day, which is what the card's
+ * own override means. A weekday with no usable hours is still returned, carrying
+ * UNKNOWN — it recurs, and saying nothing about it would lose the recurrence.
+ */
+export function assignmentTimeDaysFromRequest(
+    rawWeekdays: unknown,
+    rawTimes: unknown
+): { weekday: number; startTime: string | null; endTime: string | null }[] {
+    const weekdays = Array.isArray(rawWeekdays)
+        ? (rawWeekdays as unknown[]).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+        : [];
+    if (weekdays.length === 0) return [];
+
+    const times = (rawTimes ?? {}) as { default?: unknown; perDay?: unknown };
+    const fallback = (times.default ?? null) as { arrive?: unknown; depart?: unknown } | null;
+    const perDay = (times.perDay ?? {}) as Record<string, { arrive?: unknown; depart?: unknown } | undefined>;
+
+    const hhmm = (v: unknown): string | null => {
+        const s = String(v ?? "").trim();
+        return /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(s) ? s : null;
+    };
+
+    return [...new Set(weekdays)].sort((a, b) => a - b).map((weekday) => {
+        const own = perDay[String(weekday)];
+        const arrive = hhmm(own?.arrive) ?? hhmm(fallback?.arrive);
+        const depart = hhmm(own?.depart) ?? hhmm(fallback?.depart);
+        const known = arrive != null && depart != null && depart > arrive;
+        return { weekday, startTime: known ? arrive : null, endTime: known ? depart : null };
+    });
 }
 
 /** Resolve a pattern's `schedule_type_key` (the schedule type the proposed schedule sets). */

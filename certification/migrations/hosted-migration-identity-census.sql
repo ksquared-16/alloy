@@ -1,4 +1,7 @@
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
+-- RE-MEASURED after the W4 merge: the apply was refused production_precondition_refused, which in
+-- W3 meant the promotion pipeline had already applied it. Verifying rather than assuming.
+--
 --
 --
 -- A SECOND MEASUREMENT IN ONE RUN NEEDS A DIFFERENT QUESTION, AND THAT IS A

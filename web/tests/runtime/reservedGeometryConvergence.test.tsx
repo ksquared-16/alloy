@@ -303,23 +303,83 @@ describe("reserved geometry — adopter wiring", () => {
         }
     });
 
-    it("Financials keeps its own certified Slice 4 geometry on both of its roots", () => {
+    /**
+     * ── THE DOCTRINE THIS LOCK USED TO ENCODE, AND WHY IT CHANGED ────────────────────────────
+     *
+     * This lock pinned the literal `data-financials-reserved={reservingAccount ? "true" :
+     * undefined}`. It went red when the guard was narrowed to `reservesFootprint`, and stayed red
+     * for several programmes as EXTERNAL_FINANCIALS_TEST_DEBT, each correctly declining to make it
+     * green without deciding whose truth had moved.
+     *
+     * It was the LOCK that was wrong, and measurably so. Slice 4's certified doctrine is an EFFECT
+     * — the card must not collapse to a one-line body and must not jump when the read lands. This
+     * lock pinned a MECHANISM instead, so the one change that improved the effect broke it:
+     *
+     *   Financials → Accounts → selected account committed at 120px and SHRANK to 93px when the
+     *   read landed. 120px is FOCUS_PANEL_RESERVED_MIN_HEIGHT exactly, so the shift was the floor,
+     *   not the data. The account variant's pending frame is `AccountSummaryPending` — the same
+     *   three-stat strip and the same two commands as the resolved summary — so it was already the
+     *   right shape and 27px shorter than the floor reserving for it.
+     *
+     * A floor is for a collapse. The Focus Panel variant's pending state IS a collapse (three
+     * skeleton labels in an `__empty` block), so it keeps the floor. The account variant commits
+     * its anatomy up front, so it holds its own geometry.
+     *
+     * The lock is therefore rewritten to the effect rather than the mechanism: the card reserves
+     * exactly when it says it is loading, one expression drives both the attribute and the style,
+     * and the floor lands only where a collapse is possible. A literal is asserted only where the
+     * literal IS the effect — the two roots, and the account identity on them.
+     */
+    it("Financials reserves exactly when it can collapse, and never over a committed frame", () => {
         // Deliberately NOT refactored onto the hook: reopening a certified repair to make it look
         // like its successors buys nothing and risks the thing that is already proven.
         const code = strip(read("FinancialsCard.tsx"));
         expect([...code.matchAll(/ref=\{shellRef\}/g)].length).toBe(2);
         expect(code).toMatch(/loadedHeightRef/);
+
         /*
-         * WS1 reconciliation. The reserve was `!vm`, when the only way to have no vm was to be
-         * loading one. The root lifecycle gave this card three further vm-less answers — a permission
-         * refusal, no resolvable subject, no account — each a settled sentence entitled to its own
-         * size. So the reserve is exactly the condition under which the card says "Loading the
-         * account…", and staging's new answers stay answers.
+         * ── THE RESERVE IS THE LOADING SENTENCE ──────────────────────────────────────────────
+         *
+         * The defect class this replaces the literal with: a new vm-less answer added to the
+         * loading branch and not to the reserve (or the other way round), so the card either says
+         * "Loading the account…" in a collapsed body, or holds a floor over a settled sentence.
+         * `awaitingFirstAnswer` was exactly such an addition, and it is why this is a set
+         * comparison rather than a pinned string.
          */
-        expect(code).toMatch(
-            /const reservingAccount = !vm && !deniedRead && \(loading \|\| subjectStillResolving \|\| provisioningAccount\)/,
-        );
-        expect(code).toMatch(/data-financials-reserved=\{reservingAccount \? "true" : undefined\}/);
+        const reserve = /const reservingAccount =\s*!vm && !deniedRead && \(([^)]*)\)/.exec(code);
+        expect(reserve, "the reserve condition is still stated in one place").toBeTruthy();
+        const sentence = /deniedRead \? \([\s\S]*?\) : ([a-zA-Z|\s]*?) \? \(/.exec(code);
+        expect(sentence, "the loading branch is still stated in one place").toBeTruthy();
+        const terms = (x: string) => x.split("||").map((t) => t.trim()).filter(Boolean).sort();
+        expect(terms(sentence![1]), "the card reserves under exactly the conditions it says it is loading under")
+            .toEqual(terms(reserve![1]));
+
+        /*
+         * ── ONE EXPRESSION DRIVES THE ATTRIBUTE AND THE STYLE ────────────────────────────────
+         *
+         * A card that reports `data-financials-reserved="true"` while applying no minHeight — or
+         * applies one without saying so — is unmeasurable: every proof of this doctrine reads the
+         * attribute and believes it.
+         */
+        const attr = /data-financials-reserved=\{(\w+) \? "true" : undefined\}/.exec(code);
+        const style = /style=\{\s*(\w+)\s*\?\s*\{ minHeight:/.exec(code);
+        expect(attr, "the reserve is still declared on the root").toBeTruthy();
+        expect(style, "and still applied as a minHeight").toBeTruthy();
+        expect(attr![1], "the attribute and the floor are the same decision").toBe(style![1]);
+
+        /*
+         * ── THE FLOOR LANDS ONLY WHERE A COLLAPSE IS POSSIBLE ────────────────────────────────
+         *
+         * Two halves, and both are required: the floor must exclude the variant whose pending
+         * frame is already committed, AND that variant must actually render the committed frame.
+         * Excluding it while it renders the one-line loader would reintroduce the collapse this
+         * whole slice exists to prevent.
+         */
+        const floor = new RegExp(`const ${attr![1]} = reservingAccount && summaryVariant !== "account"`);
+        expect(code, "the committed variant is not given a floor").toMatch(floor);
+        expect(code, "and it is committed — the resolved anatomy, not a one-line loader")
+            .toMatch(/summaryVariant === "account" \? \(\s*<AccountSummaryPending \/>/);
+
         // Staging's account identity survives on the same root.
         expect(code).toMatch(/data-financials-account=\{vm\?\.account\?\.customerId \?\? undefined\}/);
     });

@@ -27,6 +27,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { setFocusPanelCardParticipation } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardReadinessTiming";
+import { chainDiag } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import {
@@ -589,6 +590,21 @@ export default function OpportunityFocusPanelModeGrid({
     );
     useEffect(() => {
         setFocusPanelCardParticipation(model.subject.id, placedCardKeys);
+        /*
+         * SUMMARY_COMMIT_START / SUMMARY_COMMIT_END.
+         *
+         * Recorded inside the effect that ALREADY reports participation, so no hook, scheduler or
+         * layout effect is introduced and paint is not touched. This effect runs after React has
+         * mutated the DOM for this composition, which is the commit that produces WU-09's
+         * authoritative burst — so it brackets the commit rather than estimating it.
+         */
+        const d = chainDiag();
+        if (d && typeof performance !== "undefined") {
+            const at = performance.now();
+            if (d.commitStartAt == null) d.commitStartAt = at;
+            d.commitEndAt = at;
+            d.placedCardCount = placedCardKeys.length;
+        }
     }, [model.subject.id, placedCardKeys]);
 
     const focusTargets = useMemo(() => {

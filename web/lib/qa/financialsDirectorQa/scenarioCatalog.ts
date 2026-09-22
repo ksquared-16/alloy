@@ -35,10 +35,30 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-16.3";
+export const CATALOG_VERSION = "2026-09-20.3";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
+
+/**
+ * WHICH PROGRAM OWNS THIS SCENARIO — a second axis, and deliberately not the first one.
+ *
+ * `disposition` says HOW a scenario is proven: a human drives it, a suite certified it, the
+ * environment cannot reach it. `program` says WHOSE it is. They are independent, and collapsing
+ * them is how a Payments scenario ends up sitting in a Core catalog looking runnable: "deferred on
+ * environment evidence" and "belongs to the next program" are different sentences, and a reader
+ * planning Core acceptance needs the second one.
+ *
+ *   CORE_RUNNABLE            a human can drive it today against the certified Core product
+ *   PAYMENTS_PHASE           it needs the Payments productization that has not been built
+ *   DEFERRED_PRODUCTIZATION  the capability is real and correct, with no operator surface in Core
+ *   RETIRED                  it no longer describes this product, named so its absence is not silent
+ */
+export type ScenarioProgram =
+    | "CORE_RUNNABLE"
+    | "PAYMENTS_PHASE"
+    | "DEFERRED_PRODUCTIZATION"
+    | "RETIRED";
 
 export type ScenarioDisposition =
     | "HUMAN_WALKTHROUGH"
@@ -132,12 +152,20 @@ export const MONEY_INVARIANTS = Object.freeze({
     MOVE_IS_NON_ATOMIC: "Move Payment is deliberately not atomic. If the reversal succeeds and the reapplication fails, the cash stays unapplied and recovery is Apply Payment. Nothing fabricates a rollback.",
     REDUCTION_FLOOR: "A reduction may take an obligation to exactly zero and not one cent further.",
     POSTED_MONEY_IS_IMMUTABLE: "Posted money is never edited or deleted. A correction is appended beside it and the original stays readable.",
+    AUTOPAY_IS_CONSENT_NOT_A_BALANCE: "A saved payment method is not Autopay. Autopay is a payer's standing authorization, recorded once with its payer, method, period, amount policy and any ceiling, and never edited afterwards \u2014 changing the payer or the method is a NEW authorization. What it collects is resolved from Financials at the moment of collection, every time, so a family who has already paid is charged nothing.",
+    AUTOPAY_NEVER_COLLECTS_THE_MAXIMUM: "An authorized maximum is a REFUSAL THRESHOLD, not a cap. When the amount due exceeds it, Autopay collects NOTHING and says why. Collecting the maximum would be a payment plan the payer never agreed to.",
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
     BILLING_PERIOD_IS_DERIVED: "A billing period is DERIVED from the date a charge is billable on — `billable_on`, then `occurs_on`, `service_date`, `created_at`. There is no billing-period table and no billing-period setting: the period is a consequence of the charge, and a row with no usable date is reported as unplaced rather than swept into the current month.",
     ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact. A CLOSED period does not refuse the entry: it DEFERS it to the earliest later open period and records the date it was deferred from, so the work is never lost and the closed books are never reopened. The write is refused only when there is no later open period to carry it \u2014 a calendar that has run out, not a closed month.",
     REVIEW_IS_CONFIGURED_NOT_ASSUMED: "Whether a new charge waits for review is the tenant's configured answer \u2014 the posting_review Financial Policy, OR a charge template that marks itself review_required \u2014 not a property of having used a manual command. An organization that has configured no review boundary must not be made to confirm the same intent twice.",
+    ACCEPTED_PRICE_IS_GROSS: "The amount a family accepted is the gross obligation. A charge template describes HOW tuition posts — its category, its GL account, when it occurs and when it is billable — and has no second opinion about WHAT THIS CHILD AGREED TO PAY. A generated obligation carrying the template's configured figure instead of the accepted one is billing a number nobody agreed to.",
+    PREVIEW_IS_THE_OPERATION: "A preview is a promise about the act that follows it. The billing frequency and the period an operator previewed are the billing frequency and the period Confirm runs, and the money a preview states is the money the run produces.",
+    EXISTING_IS_NOT_GENERATED: "A rerun that creates nothing has generated nothing. An obligation that already stood and still agrees is converged, and reporting it as billed again tells an operator they have charged a family twice.",
+    REDUCTION_IS_A_SECOND_CONSEQUENCE: "A discount never rewrites the gross. Gross stays the accepted price, the reduction is written beside it with its own policy, basis and provenance, and the net is what falls out. Gross − Reduction = Net, and each of the three is stated by the surface that owns it.",
+    BILLING_FREQUENCY_IS_OPERATOR_INTENT: "One account can hold a weekly term for one child and a monthly term for another, so a month alone is not an instruction. The operator names the billing frequency, and a run bills only the terms on that cadence.",
+    PUBLISHED_LAYOUT_IS_THE_RENDERED_ONE: "A published Focus Panel document carries an authored card list and an explicit layout, and the runtime renders the explicit layout. A card authored visible and absent from that layout would be drawn by nothing, so the publication is refused rather than silently rendered short.",
     POSTED_IS_NOT_PERIOD_CLOSED: "Posting makes an obligation real. Closing an accounting period ends bookkeeping for a span of time. A posted charge is not a closed period, a closed period posts nothing, and neither word may be used for the other.",
 });
 
@@ -664,7 +692,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure.",
         dispositionReason:
-            "NO PAYMENT PROVIDER IS CONFIGURED ON THIS TENANT. The canonical account read reports takePaymentCard as not_configured, because no active merchant row exists for this organisation, so there is no merchant to collect against and no test-mode credential to use. Deferred rather than out of scope: the product has payment.collect_card, and this becomes a walkthrough as soon as a test-mode merchant exists. Real card details must never be used.",
+            "PROVIDER CONFIGURATION NOW EXISTS — the reason this was deferred no longer holds. Payments V1 W1 built the operator act: /organization/financials -> Payments connects a provider, and the certification tenant's account read reports takePaymentCard available with a ready merchant. What remains is this scenario's own walkthrough, which has not been driven by a human. Do not mark it PASS because configuration exists. Real card details must never be used.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -682,7 +710,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
         dispositionReason:
-            "NOT AVAILABLE ON THIS TENANT: the canonical account read reports achAvailable false and takePaymentAch as not_configured. There is nothing to initiate and nothing to await. Deferred, with the settlement distinction recorded here so it is not lost.",
+            "AVAILABLE NOW, AND UNWALKED. Measured on the certification tenant after Payments V1 W1: the account read reports achAvailable true and takePaymentAch available, because the connected merchant carries the bank rail. The settlement distinction this scenario exists to prove — initiation is not settlement — still requires a human walkthrough, which has not happened.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -700,7 +728,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "One is a bank reversing itself; the other is a decision a person made and must answer for. Showing them as the same event destroys the audit trail for both.",
         dispositionReason:
-            "Depends on the same absent provider configuration as card and ACH. The operator-refund half IS covered, as scenario 19.",
+            "The provider configuration it depended on now exists (Payments V1 W1), and provider returns are certified at the service layer. What is unwalked is the operator-facing half: seeing a return render as Returned rather than Refunded. The operator-refund half IS covered, as scenario 19.",
         requires: [],
         navigate: [],
         doThis: [],
@@ -708,6 +736,61 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         expectUnchanged: [],
         invariant: MONEY_INVARIANTS.PROVIDER_RETURN_IS_NOT_A_REFUND,
         failSymptoms: [],
+    }),
+    /*
+     * ADDED BY PAYMENTS V1 · W2. The catalog was silent about stored methods because, until W2,
+     * Alloy had no canonical table for one and no writer — `manageMethods` reported `unsupported`
+     * and there was genuinely nothing for a human to walk. There is now.
+     */
+    S({
+        key: "payment_method_on_file",
+        order: 52,
+        title: "Putting a payment method on file, and taking it off",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Save a card or bank account for a family, choose the default, and remove one without losing payment history.",
+        whyItMatters:
+            "This is how a family stops re-entering a card every month, and how an operator answers \"which card are we charging?\" on the phone. Getting removal wrong is worse than not having the feature: a deleted method would take the reference out from under every payment that named it, and a silently promoted replacement would move a family's money to an instrument nobody chose.",
+        dispositionReason:
+            "WALKABLE NOW. Payments V1 W2 built the canonical Payment Method Reference, mounted it in Focus Panel -> Financials -> Details, and certified the lifecycle against the real provider — including that a platform method clones onto the connected merchant. What has NOT happened is a human driving it end to end in a browser, which is what this scenario is for. Use Stripe test instruments only; real card or bank details must never be used.",
+        /*
+         * The closed precondition set has no "provider is connected" check, and inventing one would
+         * add a financial predicate to satisfy a QA entry. The posted obligation IS checkable, and
+         * the provider requirement is stated in the navigation instead, where a human reads it.
+         */
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "the family owes something to collect against" }],
+        navigate: [
+            "Confirm this organization has a connected provider first: Settings -> Financials -> Payments must read Ready.",
+            "Open the family in the Focus Panel.",
+            "Open the Financials card, then Details.",
+            "Find the Payment methods section beneath the ledger.",
+        ],
+        doThis: [
+            "Choose Add card and complete the provider's own fields with a test card.",
+            "Add a second card, then use Set as default on it.",
+            "Add a bank account and read the authorization text shown above the submit.",
+            "Remove the default card and confirm.",
+        ],
+        expectChanges: [
+            "The first card appears with its brand, last four and expiry, and reads Ready.",
+            "Setting the second card as default moves Default onto it and off the first, with no moment where both or neither shows it.",
+            "The bank account appears separately; if the bank needs deposits to verify, it reads Verification required and is NOT offered as ready.",
+            "The bank default and the card default are independent of each other.",
+            "After removal the card is gone from the live list and the section says a removed method is kept for payment history.",
+        ],
+        expectUnchanged: [
+            "The ledger, the balance, and every figure on the account.",
+            "Who is responsible for paying — adding someone else's card never moves responsibility.",
+            "Any payment already made with the removed card still names it.",
+        ],
+        invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
+        failSymptoms: [
+            "A full card number, a CVC, or a routing number appearing anywhere on the surface.",
+            "A bank account awaiting verification offered as ready to charge.",
+            "Two defaults for the same rail, or a default silently appearing on another card after you removed one.",
+            "Remove deleting the row outright, so a past payment no longer names the method it used.",
+            "Raw provider words on the surface — PaymentMethod, SetupIntent, us_bank_account, mandate, or an id beginning pm_.",
+            "Add payment method opening a panel with nowhere to type the details.",
+        ],
     }),
     S({
         key: "subsidy_processing",
@@ -785,9 +868,9 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose:
             "Confirm an operator can see the accounting calendar, which period is open, and which accounting period a posted charge was attributed to — and that it is visibly a different thing from the billing period.",
         whyItMatters:
-            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period and refuses a write into a closed one — so the enforcement is real. What does not exist is any way for a human being to look at it.",
+            "The accounting period is what a finance team closes a month against, and closing it is the act that makes a month's figures final. The platform already enforces it — `financial_accounting_calendars` and `financial_accounting_periods` are canonical, and the `attribute_financial_journal_entry` BEFORE INSERT trigger decides each entry's period — so the enforcement is real. What it does with a CLOSED period is defer, not refuse: an entry effective inside one is attributed to the earliest later OPEN period and stamped with where it came from, because a reporting boundary must not be able to stop a family being charged. It refuses only when there is no later open period to defer to.",
         dispositionReason:
-            "The INSPECTION half is productized as of Repair Pass 5F and is walked through below. The LIFECYCLE half is not: opening and closing a period has no governed action anywhere in the platform, so a tester can see a period's open/closed status and cannot change it. That limit is recorded rather than hidden — see the final step — and it is the one thing this scenario cannot accept.",
+            "The INSPECTION half was productized in Repair Pass 5F. The LIFECYCLE half is productized as of Financials 11B: `billing.adopt_accounting_calendar` materialises a calendar-month calendar and its twelve periods, and `billing.close_accounting_period` closes one behind a preview that states how many entries stay attributed and where later ones will defer. Both require `fin.write`. Reopening is NOT supported in V1 and no control offers it.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted charge whose period can be read" }],
         navigate: [
             "Organization → Financials → Accounting: the GL codes list, then the Accounting calendar panel beneath it.",
@@ -800,22 +883,813 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Open a POSTED charge's detail in the Accounts workspace and read the Posting block: Billing period, Accounting period, GL account.",
             "Confirm Billing period and Accounting period are shown as TWO SEPARATE facts and are not the same control. They may name the same month and still be different answers.",
             "Open a DRAFT charge's detail. Confirm the accounting period reads that it has not posted to a period yet, rather than showing a period it has not reached.",
-            "LIMIT TO RECORD, not to work around: there is no control to open or close a period. Confirm none is offered, and that the panel says so. Do not close a period in the database to test it.",
+            "Adopt a calendar if the organization has none: the panel offers it, and adopting materialises the twelve calendar-month periods in one act. Read them back before going on.",
+            "Close the earliest OPEN period from the panel. Read the preview FIRST: it states how many entries stay attributed to that period and where entries effective inside it will go afterwards. Confirm the preview appears before anything is closed.",
+            "Confirm a closed period DEFERS rather than refuses: post a charge effective inside the closed period and confirm it is attributed to the next open period and says where it came from — a reporting boundary must not be able to stop a family being charged.",
+            "LIMIT TO RECORD, not to work around: a closed period cannot be REOPENED. Confirm no control offers it. Do not reopen one in the database to test it.",
         ],
-        expectChanges: [],
+        expectChanges: [
+            "The period you closed reads Closed, and is no longer the one a new entry effective inside it is attributed to.",
+            "A calendar, and twelve periods, where the organization had none — if you adopted one.",
+        ],
         expectUnchanged: [
             "The accounting period on a posted charge — it was decided when the entry was written and nothing on these screens may move it.",
+            "Entries already attributed to the period you closed. Closing states a boundary; it does not re-attribute history.",
             "The billing period, which is derived from the charge's own dates and is unaffected by anything on the accounting calendar.",
         ],
         invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
         failSymptoms: [
             "Any surface implying an entry's accounting period can be edited after the entry was written.",
-            "A closed period accepting a write.",
+            "A closed period REFUSING a charge outright while a later period is open — the doctrine is deferral, and a refusal here stops a family being billed for a reporting reason.",
+            "Closing a period without first stating what it will do.",
+            "Any control offering to reopen a closed period.",
             "This scenario being marked PASS on the strength of a database inspection.",
             "Billing period and accounting period presented as one field, or one used as a label for the other.",
             "A posted charge showing no accounting period, or a draft showing one.",
             "More than one period marked Current, or none while a period covers today.",
             "An organization with no calendar rendering an empty table rather than saying it has none.",
+        ],
+    }),
+    S({
+        key: "billing_preview_reachable",
+        order: 40,
+        title: "Recurring tuition terms are reachable from the child the operator is working in",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove an ordinary operator can reach the card that accepts a child's recurring tuition terms, from the panel they actually work in, without being told where it is.",
+        whyItMatters:
+            "For two published versions this card was authored onto the panel and drawn by nothing, because a published layout carries an authored card list AND an explicit layout and only the second decides what renders. No operator on this tenant could establish a child's recurring price, and nothing anywhere reported an error. Reachability is the whole capability: a pricing surface nobody can find prices nothing.",
+        requires: [{ kind: "account_state", check: "has_billable_enrollment", describe: "an enrolled child with an assignment to price" }],
+        navigate: ["Workspace → the enrolled-children work unit → select an enrolled child → the Focus Panel Summary."],
+        doThis: [
+            "Read the panel without scrolling past it. Find the Tuition card.",
+            "Confirm it appears ONCE. Two cards with the same question is a publication defect, not a display quirk.",
+            "Confirm it names the child you selected, and the program and schedule that child is actually on.",
+            "Confirm the other cards on the panel are the ones that were there before — nothing displaced, nothing missing.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "Every other card on the panel, in its place and with its content.",
+            "The Financials card, which answers a different question and must not have moved or changed.",
+        ],
+        invariant: MONEY_INVARIANTS.PUBLISHED_LAYOUT_IS_THE_RENDERED_ONE,
+        failSymptoms: [
+            "No Tuition card at all — the layout was published without it.",
+            "Two Tuition cards.",
+            "A Tuition card naming a different child than the one selected.",
+            "The card reading that there is no assignment to price on a child who plainly has one.",
+        ],
+    }),
+    S({
+        key: "accept_recurring_terms",
+        order: 41,
+        title: "Accepting the authored price, and reading it back",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove an operator accepts the price the organisation authored — not a number they typed — and that the acceptance is still there when they come back.",
+        whyItMatters:
+            "An accepted term is a contract fact: it is what the family agreed to, and everything billed afterwards is computed from it. If an operator could type an amount here, tuition would stop being a commercial decision and become whatever the last person entered. And an acceptance that does not read back has not been recorded, whatever the screen said at the time.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "billing_preview_reachable" }],
+        navigate: ["Workspace → enrolled-children → an enrolled child → Focus Panel Summary → the Tuition card."],
+        doThis: [
+            "Read what the card recommends: the amount, the billing frequency, and the reasons it lists for that option — program, attendance, schedule, effective date.",
+            "Confirm there is nowhere to type an amount. The operator chooses an authored option; they do not price it.",
+            "Accept the recommendation.",
+            "Confirm the card now states the accepted amount, its cadence and its effective date.",
+            "Navigate away, come back, and read it again.",
+        ],
+        expectChanges: [
+            "The card states an accepted term with its amount, cadence and effective date.",
+            "The card's summary line moves to say how many of the family's assignments are agreed.",
+        ],
+        expectUnchanged: [
+            "The balance, and everything on the Financials card. Accepting a price creates no charge — that is a later, separate act.",
+            "The recommended option itself, which is still shown beside the acceptance.",
+        ],
+        invariant: MONEY_INVARIANTS.ACCEPTED_PRICE_IS_GROSS,
+        failSymptoms: [
+            "Any field that accepts a typed amount.",
+            "An acceptance that disappears on reload — the card was optimistic and nothing was written.",
+            "The balance moving when a price is accepted.",
+            "An accepted amount that is not one of the authored options.",
+        ],
+    }),
+    S({
+        key: "recurring_preview_is_the_run",
+        order: 42,
+        title: "The generation preview is the run that follows it",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove the billing frequency and period an operator previews are the billing frequency and period Confirm executes, and that the money agrees.",
+        whyItMatters:
+            "One account can hold a weekly term for one child and a monthly term for another. A preview that quietly ran monthly while Confirm generated five weekly obligations was measured on this product — the operator confirmed one operation and got another. A preview is a promise, and this is the step that holds it to that.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "accept_recurring_terms" }],
+        navigate: ["Workspace → Financials → Charges → Generate a period's tuition."],
+        doThis: [
+            "Confirm the panel asks for a Billing frequency as well as a Service period. A month alone is not an instruction.",
+            "Choose Monthly and the current service period. Preview the run. Write down the count and the amount it states.",
+            "Change the Billing frequency to Weekly WITHOUT previewing again. Confirm the previous preview is cleared rather than left standing — it described a different operation.",
+            "Preview Weekly. Write down its count and amount, and read the periods it names.",
+            "Confirm the weekly preview names each week separately, and that a week crossing into the next month is named as ONE period, not split.",
+        ],
+        expectChanges: ["The preview's counts and total change when the billing frequency changes."],
+        expectUnchanged: [
+            "Every charge on the account. A preview writes nothing.",
+            "The accepted terms.",
+        ],
+        invariant: MONEY_INVARIANTS.PREVIEW_IS_THE_OPERATION,
+        failSymptoms: [
+            "No billing-frequency control — a month-only preview that can execute another cadence.",
+            "A preview that survives a change of frequency and is still offered for confirmation.",
+            "A weekly preview reporting one monthly figure.",
+            "A week that spans a month boundary appearing as two periods.",
+        ],
+    }),
+    S({
+        key: "recurring_generation_bills_the_accepted_price",
+        order: 43,
+        title: "What is generated is what was accepted",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove a generated recurring obligation carries the accepted commercial price, in the period it belongs to, for the right child.",
+        whyItMatters:
+            "This is the step where a commercial agreement becomes money a family owes. It was measured billing the charge template's configured figure instead of the accepted price — every generated obligation the same wrong number, silently. A tester who checks only that a charge appeared would not have caught it; this scenario checks the amount against what was agreed.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "recurring_preview_is_the_run" }],
+        navigate: ["Workspace → Financials → Charges → Generate a period's tuition, then the Charges list."],
+        doThis: [
+            "Confirm the weekly run for the current period, and read the result line: how many were newly generated, and how many already existed.",
+            "Open one generated tuition charge. Read the Gross charge.",
+            "Compare it to the amount accepted on the Tuition card for that child. They must be the same number.",
+            "Read the child named on the charge, the Billing period, the Service date and the Invoice date.",
+            "Repeat for the monthly child, whose accepted amount is different.",
+        ],
+        expectChanges: [
+            "One draft tuition obligation per eligible billing period, at the accepted amount.",
+            "The account's tuition total rises by the generated amounts.",
+        ],
+        expectUnchanged: [
+            "The accepted terms themselves — generation reads them and does not rewrite them.",
+            "Any obligation belonging to a child whose term is on a different cadence.",
+        ],
+        invariant: MONEY_INVARIANTS.ACCEPTED_PRICE_IS_GROSS,
+        failSymptoms: [
+            "A generated amount that matches neither accepted term — most likely a charge template's configured figure.",
+            "Weekly and monthly children both billed the same amount.",
+            "A charge attributed to the wrong child, or to the household when a child was priced.",
+        ],
+    }),
+    S({
+        key: "recurring_rerun_is_honest",
+        order: 44,
+        title: "Running the period again bills nothing again, and says so",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove a second run over the same period creates no second obligation, and that the result distinguishes what it generated from what already stood.",
+        whyItMatters:
+            "Operators rerun. They rerun after adding a child, after fixing a rate, or because they are not sure the first run took. A billing system that duplicates on rerun bills families twice; one that converges silently but reports the work as freshly generated tells the operator they have. Both are failures, and only one of them shows up in the ledger.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "recurring_generation_bills_the_accepted_price" }],
+        navigate: ["Workspace → Financials → Charges → Generate a period's tuition."],
+        doThis: [
+            "Count the tuition charges for the period before you start.",
+            "Run the SAME billing frequency and period again.",
+            "Read the result line. It must say nothing was newly generated and that the existing obligations already existed.",
+            "Count the tuition charges again.",
+        ],
+        expectChanges: ["Nothing. The counts before and after are identical."],
+        expectUnchanged: [
+            "The number of tuition charges.",
+            "Each charge's amount, dates, child and billing period.",
+            "The account balance.",
+        ],
+        invariant: MONEY_INVARIANTS.EXISTING_IS_NOT_GENERATED,
+        failSymptoms: [
+            "A second set of tuition charges for the same weeks.",
+            "A result line reporting the same count as newly generated on the second run.",
+            "The balance moving on a rerun.",
+        ],
+    }),
+    S({
+        key: "recurring_term_lifecycle",
+        order: 45,
+        title: "A term that has not begun bills nothing",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove generation respects a term's effective dating: a period before the term starts produces no obligation, and the refusal says which reason it is.",
+        whyItMatters:
+            "Effective dating is how a price change is made without rewriting history. If generation ignored it, a rate accepted for September would bill August retroactively, and a family would receive an invoice for a month at a price nobody had agreed to at the time.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "accept_recurring_terms" }],
+        navigate: ["Workspace → Financials → Charges → Generate a period's tuition."],
+        doThis: [
+            "Set the Service period to a month BEFORE the accepted term's effective date. Keep the same billing frequency.",
+            "Preview the run.",
+            "Read the exceptions. Confirm the reason names the term as not yet effective, and is not a generic 'nothing to bill'.",
+            "Confirm nothing is offered to confirm.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "Every charge on the account. Nothing is generated for a period the term does not cover.",
+        ],
+        invariant: MONEY_INVARIANTS.BILLING_FREQUENCY_IS_OPERATOR_INTENT,
+        failSymptoms: [
+            "Obligations generated for a period before the term began.",
+            "A silent zero with no stated reason, which cannot be told from a misconfiguration.",
+            "'Not yet effective' and 'already ended' reported as the same reason.",
+        ],
+    }),
+    S({
+        key: "recurring_discount_reduces_net",
+        order: 46,
+        title: "A discount reduces the net and never the accepted price",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove the organisation's authored discount policy reaches a generated recurring obligation, that gross stays the accepted price, and that the reduction says which policy produced it.",
+        whyItMatters:
+            "Gross and net answer different questions: gross is what was agreed, net is what is owed after the organisation's own rules. A system that discounts by lowering the gross loses the agreement; one that cannot discount a generated obligation at all forces an operator to apply policy by hand, one family at a time, and to remember to.",
+        requires: [
+            { kind: "scenario_passed", scenarioKey: "recurring_generation_bills_the_accepted_price" },
+            { kind: "account_state", check: "has_obligation_with_room_to_reduce", describe: "a generated obligation the authored policy can reduce" },
+        ],
+        navigate: [
+            "Organization → Financials → Policies: read the authored discount policy, its basis and its effective window.",
+            "Workspace → Financials → Charges: apply the period's discounts, then open a generated tuition charge.",
+        ],
+        doThis: [
+            "Read the discount policy: its kind, its basis and value, and the dates it is in force.",
+            "Preview the discount run for the period. Confirm it states how many obligations would be reduced AND by how much — not merely which policies exist.",
+            "Confirm the run.",
+            "Open a generated tuition charge and read Gross charge, Reductions and Net obligation as three separate figures.",
+            "Open the account's Details and find the discount row. Read what it says the reduction was taken on, and which child it belongs to.",
+        ],
+        expectChanges: [
+            "A reduction appears against the obligation, and the net falls by it.",
+            "A discount row appears in the credits and adjustments ledger, naming its policy basis.",
+        ],
+        expectUnchanged: [
+            "The gross charge — still the accepted price, to the cent.",
+            "The accepted term.",
+            "Responsibility. A discount changes what is owed, not who owes it.",
+        ],
+        invariant: MONEY_INVARIANTS.REDUCTION_IS_A_SECOND_CONSEQUENCE,
+        failSymptoms: [
+            "The gross falling to the discounted figure — the agreement has been overwritten.",
+            "A discount preview that names policies and no money.",
+            "A reduction with no policy, basis or base recorded against it.",
+            "The reduction shown as a Credit or an Adjustment rather than a Discount.",
+        ],
+    }),
+    S({
+        key: "discount_rerun_and_veto",
+        order: 47,
+        title: "Discounts do not stack on rerun, and a category that refuses one is refused",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove re-running the discount authority applies nothing a second time, and that a charge whose category cannot be discounted does not receive one.",
+        whyItMatters:
+            "A discount that stacks on rerun gives money away quietly and repeatedly. And a reduction of a reduction is something no reconciliation can explain — which is why the category refuses it regardless of what a policy says it applies to.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "recurring_discount_reduces_net" }],
+        navigate: ["Workspace → Financials → Charges, and the account's Details ledger."],
+        doThis: [
+            "Note each discounted obligation's gross, reduction and net.",
+            "Run the period's discounts again.",
+            "Read the result: nothing newly applied, the existing reductions unchanged.",
+            "Re-read the same three figures on one obligation.",
+            "In the ledger, confirm no discount row has been written against another discount or against a credit.",
+        ],
+        expectChanges: ["Nothing."],
+        expectUnchanged: [
+            "Every gross, reduction and net.",
+            "The number of discount rows in the ledger.",
+        ],
+        invariant: MONEY_INVARIANTS.REDUCTION_IS_A_SECOND_CONSEQUENCE,
+        failSymptoms: [
+            "A second reduction against the same obligation.",
+            "A net that falls again on a rerun.",
+            "A discount written against a discount or a credit row.",
+        ],
+    }),
+    /*
+     * ADDED BY FINANCIALS 11B. A configured discount that does not apply to ONE family was
+     * previously inexpressible: deleting the policy took it from everyone, and never configuring it
+     * took it from the tenant. The third thing — a dated, reasoned exclusion scoped to one
+     * commercial relationship — is what this walks.
+     */
+    S({
+        key: "discount_exception",
+        /* After the payments-era scenarios; the discount chain it belongs to sits at 45-47. */
+        order: 53,
+        title: "A discount policy that does not apply to one family, from a date, for a reason",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove an operator can exclude one configured discount policy for one assignment, must say why, sees the forecast change, and that money already posted is untouched.",
+        whyItMatters:
+            "An exception is a statement about APPLICABILITY, not about money: what the exclusion is worth is decided by eligibility when an obligation is evaluated, which is why the same authority answers the Assignment forecast and the ledger. The shape it must never take is a per-assignment on/off switch — a switch has no reason, so nobody can say why six months on; no dates, so it silently rewrites what was true last period; and it would make the assignment a second place commercial policy is decided, which is how a surface and a ledger come to disagree.",
+        requires: [
+            { kind: "account_state", check: "has_posted_obligation", describe: "an assignment with an accepted tuition term and a discount policy that applies to it" },
+        ],
+        navigate: [
+            "Workspace → the enrolled child's work unit → the children card's row action → the child's own panel → Assignment → the tuition section.",
+        ],
+        doThis: [
+            "Read the DISCOUNTS block BEFORE doing anything: note which policy is expected to apply and the figure beside it. Write both down.",
+            "Use Add exception beside that policy. Confirm the commit is refused while the reason is empty — an exception to commercial policy that cannot say why is not a decision.",
+            "Read the preview. Confirm it says the policy will not apply and that anything already posted is unaffected, and confirm it quotes NO figure.",
+            "Type a real reason and record the exception.",
+            "Read the DISCOUNTS block again. Confirm it now reads that the policy is excluded for this assignment, with your reason, and that the previously expected figure is gone.",
+            "Confirm it does NOT read that no discount policies are configured — the policy exists and is correct, and saying otherwise sends the next operator looking for configuration that is not missing.",
+            "Generate or preview the next period's tuition and confirm the excluded policy writes no reduction on the draft.",
+            "Open a charge that was POSTED BEFORE the exception. Confirm its reduction is exactly as it was.",
+            "End the exception. Confirm the policy may apply again to later obligations, and that the ended exception is still listed with its dates rather than disappearing.",
+            "LIMIT TO RECORD, not to work around: there is no toggle, no on/off, and nothing that deletes an exception. Confirm none is offered.",
+        ],
+        expectChanges: [
+            "The Assignment discount forecast, from an expected reduction to an excluded policy with a reason.",
+            "Draft obligations resolved after the exception starts — the excluded policy writes no reduction on them.",
+        ],
+        expectUnchanged: [
+            "Every reduction already posted. An exception changes what eligibility decides next; it never rewrites what was decided.",
+            "The accepted tuition. An exception is not a repricing, and the gross does not move.",
+            "Every other family. The exclusion is scoped to one commercial relationship, and the policy stays configured for everyone else.",
+        ],
+        invariant: MONEY_INVARIANTS.REDUCTION_IS_A_SECOND_CONSEQUENCE,
+        failSymptoms: [
+            "An on/off switch, a checkbox, or anything that reads as a setting this assignment owns.",
+            "The exclusion being recordable with no reason.",
+            "The forecast reading 'no discount policies configured' for an excluded policy.",
+            "A figure promised in the exception preview — the consequence is decided by eligibility, not here.",
+            "A posted reduction changing because an exception was recorded.",
+            "An ended or superseded exception disappearing rather than remaining answerable.",
+            "The exclusion reaching another child, another family, or another policy.",
+        ],
+    }),
+    S({
+        key: "recurring_due_date",
+        order: 48,
+        title: "A generated obligation carries the organisation's own payment terms",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove a generated recurring charge takes its Due Date from the configured due-date policy, and that Invoice date and Due date are two distinct facts.",
+        whyItMatters:
+            "When payment is expected is a term of business, configured once and applied consistently. A charge with no due date cannot be chased, and a due date that quietly equalled today would make every new obligation instantly overdue.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "recurring_generation_bills_the_accepted_price" }],
+        navigate: [
+            "Organization → Financials → Policies: read the due-date policy, its strategy, its offset and the date it takes effect.",
+            "Workspace → Financials → Charges → a generated tuition charge's detail.",
+        ],
+        doThis: [
+            "Read the due-date policy's strategy and offset, and the date from which it is in force.",
+            "Open a generated obligation and read Invoice date and Due date as separate fields.",
+            "Check the arithmetic against the policy's strategy.",
+            "Confirm an obligation whose invoice date falls BEFORE any policy takes effect says it has no configured terms, rather than inventing a date.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["The amount, the child, and the billing period."],
+        invariant: MONEY_INVARIANTS.BILLING_PERIOD_IS_DERIVED,
+        failSymptoms: [
+            "Due date equal to today on every charge.",
+            "Invoice date and Due date rendered as one field.",
+            "A due date on a charge invoiced before any policy was in force.",
+            "A configured policy that never reaches a charge that already stood as a draft.",
+        ],
+    }),
+    S({
+        key: "prepaid_available_and_applied",
+        order: 49,
+        title: "Money held for a family, and what happens when it is applied",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove available prepaid is shown when it exists, stays out of the balance, is offered only when it is genuinely available, and moves the right two numbers when applied.",
+        whyItMatters:
+            "Unapplied money is the family's, held by the organisation. Netting it into the balance would tell an operator a family owes less than they do; offering money that has not cleared would apply funds that may never arrive. Both are the kind of error that is found months later in a reconciliation.",
+        requires: [{ kind: "account_state", check: "has_unapplied_money", describe: "an account holding unapplied money" }],
+        navigate: ["Workspace → Financials → Accounts → an account with unapplied money, then its Details."],
+        doThis: [
+            "Read Available and Balance as two separate figures. Confirm the balance is not reduced by the available money.",
+            "Open an account with NO unapplied money and confirm no Available line is rendered at all — zero is silence, not a displayed zero.",
+            "Back on the funded account, apply some of the available money to an obligation.",
+            "Read Available, Paid and the obligation's outstanding amount afterwards.",
+        ],
+        expectChanges: [
+            "Available falls by exactly the amount applied.",
+            "The obligation's outstanding amount falls by the same amount, and Paid rises by it.",
+        ],
+        expectUnchanged: [
+            "The payer on the original receipt. Applying money does not change who sent it.",
+            "Responsibility on the obligation. Settlement does not rewrite who owes.",
+            "Any money that has not cleared — it must not have been offered.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "A balance that already includes the available money.",
+            "An 'Available $0.00' line on an account with none.",
+            "Pending or failed money offered for application.",
+            "The responsible party changing because a payment was applied.",
+        ],
+    }),
+    S({
+        key: "child_responsibility_and_partial",
+        order: 50,
+        title: "A child-grain arrangement, and an obligation only partly divided",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove responsibility can be arranged for one child rather than the whole account, that a more specific arrangement wins, and that an obligation not fully divided says so.",
+        whyItMatters:
+            "Families split differently per child — one parent covers one child's care, both split another's. And a partly divided obligation is the dangerous case: an operator who cannot see that $57.00 is unassigned will think the whole charge has an owner.",
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted obligation to arrange" }],
+        navigate: ["Workspace → Financials → Accounts → a household with more than one child → a charge detail → Manage responsibility."],
+        doThis: [
+            "On a child-grain charge, confirm the arrangement offers both the household and that child as scopes, and that the household is the default.",
+            "Arrange a FIXED share for one responsible party that is deliberately LESS than the whole charge.",
+            "Read what the charge now says about the remainder.",
+            "Confirm the Details ledger states the same partial state, and that the Responsible Party filter can narrow to that party.",
+            "Confirm an older obligation from before the arrangement's effective date is unchanged.",
+        ],
+        expectChanges: [
+            "The charge names a responsible party and states the amount still unassigned.",
+        ],
+        expectUnchanged: [
+            "The charge's amount, child, dates and period. Responsibility moves no money.",
+            "Obligations dated before the arrangement took effect.",
+        ],
+        invariant: MONEY_INVARIANTS.RESPONSIBILITY_MOVES_NO_CASH,
+        failSymptoms: [
+            "A partially divided charge presented as fully assigned.",
+            "An arrangement rewriting obligations from before its effective date.",
+            "A child-grain arrangement changing the charge's amount or attribution.",
+        ],
+    }),
+    S({
+        key: "organization_financial_configuration",
+        order: 51,
+        title: "The configuration an operator can actually reach, and the policies deliberately withheld",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose:
+            "Prove the organisation's financial configuration is reachable and complete for the capabilities Core supports, and that policy types nothing consumes are NOT offered.",
+        whyItMatters:
+            "A configuration control for a policy nothing resolves is worse than an absent one, because it looks like a capability: an operator configures it, believes the organisation now behaves that way, and nothing happens. Withholding those is a deliberate product decision, and this step checks it held.",
+        requires: [],
+        navigate: ["Organization → Financials, through every chapter: Tuition, Catalog, Policies, Accounting, Simulator, Funding."],
+        doThis: [
+            "Tuition: confirm Tuition Plans, Enrolment Commitments and Billing Frequencies are all reachable, and that the frequency list includes the cadences the organisation bills on.",
+            "Policies: open the authoring form and read the policy TYPES offered. Confirm the ones the runtime actually consumes are there — proration, billing cadence, due date, deposit, posting review.",
+            "Confirm the types nothing consumes are NOT offered.",
+            "Due date: confirm all four strategies are offered, and that a policy carries an effective date.",
+            "Accounting: confirm GL codes and the accounting calendar are reachable.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["Every account and charge. This is configuration, not money."],
+        invariant: MONEY_INVARIANTS.REVIEW_IS_CONFIGURED_NOT_ASSUMED,
+        failSymptoms: [
+            "A policy type offered that nothing resolves.",
+            "A missing billing frequency for a cadence the organisation bills.",
+            "A due-date policy with no effective date.",
+            "A chapter that renders a shell with no content.",
+        ],
+    }),
+    S({
+        key: "autopay_enrollment",
+        order: 61,
+        title: "Setting up Autopay is an explicit authorization, and a saved card alone is not one",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove that storing a payment method does not switch Autopay on, and that enrolling records who authorized what.",
+        whyItMatters:
+            "This is the first capability in the product that takes a family's money with nobody present. If storing a card implied consent, every family who ever saved one would be enrolled without being asked.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With a usable card on file and no Autopay, read the section: it must say there is no Autopay on this account.",
+            "Press Set up Autopay. Choose the payer, the method, the start date, and leave the maximum empty.",
+            "Confirm the terms, then read the section back.",
+        ],
+        expectChanges: [
+            "The section states Autopay on, and names the payer and the method that were authorized.",
+        ],
+        expectUnchanged: [
+            "Every figure on the card. Authorizing future collection moves no money today.",
+            "The stored payment methods list, which is unchanged by enrolling.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Autopay reported as on before anything was authorized.",
+            "A Set up Autopay control offered when no usable method is on file.",
+            "Any balance or Due figure changing when the authorization is recorded.",
+        ],
+    }),
+    S({
+        key: "autopay_card_collection",
+        order: 62,
+        title: "Autopay collects what is currently owed on a card, exactly once",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a scheduled Autopay run raises an ordinary card collection for the amount actually due.",
+        whyItMatters:
+            "Autopay must reuse the ordinary collection path. A separate Autopay payment writer would be a second way money enters the platform, free to disagree with the first about the payer, the rail or the recognition.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active and a posted charge due today, let the scheduled run execute.",
+            "Read the Payments history for the account.",
+            "Read the receipt: payer, method, rail and amount.",
+        ],
+        expectChanges: [
+            "Exactly one collection attempt, for the amount due and no more.",
+            "The receipt carries the authorized payer and the authorized method.",
+        ],
+        expectUnchanged: [
+            "What the family OWES. Collection settles an obligation; it does not create or change one.",
+            "Responsibility. Who pays is not who owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Two attempts for one obligation.",
+            "An amount that is not what was due.",
+            "A receipt with no payer, or a different payer from the one authorized.",
+        ],
+    }),
+    S({
+        key: "autopay_bank_processing",
+        order: 63,
+        title: "A bank debit in flight is not money yet",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove an ACH Autopay collection reads as processing, and does not reduce what is owed until it settles.",
+        whyItMatters:
+            "Bank money takes days. Treating a submitted debit as received would tell an operator a family had paid when the money can still be returned.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay on a bank account, let a scheduled run execute.",
+            "Read the collection immediately, then after settlement.",
+        ],
+        expectChanges: [
+            "The collection appears as processing, with an expected settlement date.",
+            "After settlement, exactly one Payment exists for it.",
+        ],
+        expectUnchanged: [
+            "Current balance and Due, while the debit is still processing. Nothing has arrived yet.",
+            "The number of Payments: settlement completes the one attempt, it does not add a second.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "A balance that drops the moment the debit is submitted.",
+            "Two Payments for one settled debit.",
+            "A processing collection shown with no expected date.",
+        ],
+    }),
+    S({
+        key: "autopay_failure",
+        order: 64,
+        title: "A declined Autopay collection is visible, and is not retried as an infrastructure fault",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a refused collection is recorded against the arrangement and surfaced, without the platform hammering the card.",
+        whyItMatters:
+            "A decline is a money event, not a broken server. Retrying it on infrastructure cadence would re-present a declined card within the minute and could incur fees on the family.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active and a collection that the provider refuses, let a scheduled run execute.",
+            "Read the Autopay section and the account history.",
+        ],
+        expectChanges: [
+            "The Autopay section shows the arrangement needs attention, with the reason.",
+            "One attempt is recorded, not many.",
+        ],
+        expectUnchanged: [
+            "The authorization itself, which is still on file and has not been withdrawn.",
+            "What the family owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "Repeated attempts within minutes.",
+            "A decline reported as a system error.",
+            "The arrangement silently disappearing.",
+        ],
+    }),
+    S({
+        key: "autopay_retry",
+        order: 65,
+        title: "Autopay retries are bounded, and bank retries are spaced",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a failed Autopay collection is retried within limits and then stops.",
+        whyItMatters:
+            "Unbounded retries hammer a family's account. Re-presenting a bank debit too soon incurs a second return fee on money that never had time to settle.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "After a failed Autopay collection, observe the following scheduled runs.",
+            "Read the attempt history and the arrangement state.",
+        ],
+        expectChanges: [
+            "At most two retries after the first attempt.",
+            "For a bank account, at least three business days between attempts.",
+            "After the retries are spent, the arrangement reads as failed and stops attempting.",
+        ],
+        expectUnchanged: [
+            "What the family owes, throughout.",
+            "The original authorization record, which is never rewritten by a retry.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A third retry.",
+            "Two bank attempts on consecutive days.",
+            "Attempts continuing after the arrangement has failed.",
+        ],
+    }),
+    S({
+        key: "autopay_pause",
+        order: 66,
+        title: "Pausing stops the next collection and does not reach into money already in flight",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a pause prevents new collections while leaving a submitted collection alone.",
+        whyItMatters:
+            "A pause is an instruction about the future. Pretending it reverses a debit already with the bank would be a claim the bank does not share.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, press Pause.",
+            "Let a scheduled run occur and read the account.",
+            "If a collection was already in flight, read its state too.",
+        ],
+        expectChanges: [
+            "The section reads Autopay paused.",
+            "No new collection is created by the scheduled run.",
+        ],
+        expectUnchanged: [
+            "Any collection already with the provider, which continues on provider truth.",
+            "The authorization, which is kept so resuming needs no new consent.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A new collection appearing while paused.",
+            "An in-flight collection cancelled by the pause.",
+            "The authorization discarded rather than held.",
+        ],
+    }),
+    S({
+        key: "autopay_resume",
+        order: 67,
+        title: "Resuming restores future collection and invents no catch-up",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove a resume makes Autopay live again without collecting for the periods it missed.",
+        whyItMatters:
+            "Periods that passed while paused were deliberately not collected. Charging for them on resume would turn a pause into a deferral the payer never agreed to, and could take several periods at once.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay paused across at least one due date, press Resume.",
+            "Let the next scheduled run occur and read what was collected.",
+        ],
+        expectChanges: [
+            "The section reads Autopay on again.",
+            "Only what is currently due is collected.",
+        ],
+        expectUnchanged: [
+            "The missed periods, which are NOT collected retrospectively.",
+            "What the family owes, which the pause never changed.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A catch-up collection covering the paused periods.",
+            "Several collections at once on resume.",
+            "A resume succeeding onto a payment method that is no longer usable.",
+        ],
+    }),
+    S({
+        key: "autopay_revoke",
+        order: 68,
+        title: "Turning Autopay off is permanent for that authorization",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove revoking ends collection for good, and that restarting records a new authorization.",
+        whyItMatters:
+            "Consent that could be switched back on by an operator would mean a payer who withdrew permission could have it restored without being asked. Restarting must be a new decision with its own record.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, press Turn off Autopay and confirm.",
+            "Let a scheduled run occur.",
+            "Then set Autopay up again and read the authorization date.",
+        ],
+        expectChanges: [
+            "The section reads that there is no Autopay, and no collection is created.",
+            "Setting up again produces a NEW authorization with today's date.",
+        ],
+        expectUnchanged: [
+            "Any collection already with the provider.",
+            "The original authorization record, which stays readable as it was given.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A revoked arrangement returning to active.",
+            "A restart reusing the original authorization date.",
+            "Collection continuing after revocation.",
+        ],
+    }),
+    S({
+        key: "autopay_method_invalidated",
+        order: 69,
+        title: "A dead payment method ends the Autopay that stood on it, with no silent fallback",
+        disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
+        purpose:
+            "Prove that removing or invalidating the authorized method fails the arrangement rather than switching to another card.",
+        whyItMatters:
+            "The payer authorized ONE instrument. Charging a different card on file would be collecting under a consent nobody gave. Leaving the arrangement active would mean the card says Autopay is on while every run refuses.",
+        dispositionReason:
+            "Certified deterministically and against the real scheduled-work runtime in Payments V1 W5. Human acceptance is W7 and is deliberately not claimed here.",
+        requires: [],
+        navigate: [
+            "Open /workspace.",
+            "Click Financials in the left sidebar.",
+            "Open the Accounts tab.",
+            "Select the demo household.",
+            "Open the Financials Details card and find the Autopay section, directly below Payment methods.",
+        ],
+        doThis: [
+            "With Autopay active, remove the authorized payment method, or let a bank return invalidate it.",
+            "Read the Autopay section.",
+            "Confirm whether any other method on file was used.",
+        ],
+        expectChanges: [
+            "The arrangement reads as needing attention and stops collecting.",
+            "The reason names the payment method.",
+        ],
+        expectUnchanged: [
+            "Every other stored payment method, none of which is used as a substitute.",
+            "What the family owes.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A collection on a method the payer did not authorize.",
+            "Autopay still reading as on after its method was removed.",
+            "The arrangement silently deleted rather than shown as needing attention.",
         ],
     }),
 ]);
@@ -826,3 +1700,135 @@ export const WALKTHROUGH_SCENARIOS = SCENARIOS.filter((s) => s.disposition === "
 export function scenarioByKey(key: string): Scenario | undefined {
     return SCENARIOS.find((s) => s.key === key);
 }
+
+/**
+ * WHICH PROGRAM OWNS EACH SCENARIO — stated per key, because a classification that is derived is a
+ * classification nobody decided.
+ *
+ * Read with `disposition`, never instead of it. `refund` is a HUMAN_WALKTHROUGH that belongs to
+ * PAYMENTS_PHASE: it is written, it is drivable in principle, and the product it needs does not
+ * exist yet. `subsidy_processing` is RETIRED from THIS catalog and not from the platform — Core's
+ * boundary with Subsidy is still walked through by `subsidy_exclusion`, and the processing
+ * scenarios belong to the Subsidy program's own acceptance, not to a Core list that can never run
+ * them.
+ */
+export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Object.freeze({
+    // ── Foundation, charges, corrections: the Core product, drivable today ──────────────────
+    financial_subject: "CORE_RUNNABLE",
+    add_charge_honours_review_boundary: "CORE_RUNNABLE",
+    draft_moves_nothing: "CORE_RUNNABLE",
+    post_charge: "CORE_RUNNABLE",
+    charge_detail_attribution: "CORE_RUNNABLE",
+    manage_responsibility: "CORE_RUNNABLE",
+    responsibility_supersession: "CORE_RUNNABLE",
+    expected_funding: "CORE_RUNNABLE",
+    expected_funding_correction: "CORE_RUNNABLE",
+    adjustment_draft: "CORE_RUNNABLE",
+    adjustment_post: "CORE_RUNNABLE",
+    reduction_zero_bound: "CORE_RUNNABLE",
+    reverse_adjustment: "CORE_RUNNABLE",
+    reverse_charge: "CORE_RUNNABLE",
+    cross_surface_consistency: "CORE_RUNNABLE",
+    reload_switch_viewport: "CORE_RUNNABLE",
+    overview_smoke: "CORE_RUNNABLE",
+    tuition_chain: "CORE_RUNNABLE",
+    discount_vs_adjustment: "CORE_RUNNABLE",
+    multi_child_attribution: "CORE_RUNNABLE",
+    subsidy_exclusion: "CORE_RUNNABLE",
+    billing_period: "CORE_RUNNABLE",
+
+    // ── The payment primitives Payments EXTENDS. These are Core and stay Core ───────────────
+    payment_receipt: "CORE_RUNNABLE",
+    actual_payer_is_not_responsibility: "CORE_RUNNABLE",
+    apply_payment: "CORE_RUNNABLE",
+    partial_unapplied: "CORE_RUNNABLE",
+    move_payment: "CORE_RUNNABLE",
+    failed_reapply_recovery: "CORE_RUNNABLE",
+
+    // ── Certified this thread, and now walkable ─────────────────────────────────────────────
+    billing_preview_reachable: "CORE_RUNNABLE",
+    accept_recurring_terms: "CORE_RUNNABLE",
+    recurring_preview_is_the_run: "CORE_RUNNABLE",
+    recurring_generation_bills_the_accepted_price: "CORE_RUNNABLE",
+    recurring_rerun_is_honest: "CORE_RUNNABLE",
+    recurring_term_lifecycle: "CORE_RUNNABLE",
+    recurring_discount_reduces_net: "CORE_RUNNABLE",
+    discount_rerun_and_veto: "CORE_RUNNABLE",
+    recurring_due_date: "CORE_RUNNABLE",
+    prepaid_available_and_applied: "CORE_RUNNABLE",
+    child_responsibility_and_partial: "CORE_RUNNABLE",
+    organization_financial_configuration: "CORE_RUNNABLE",
+    /*
+     * PROMOTION-GATED AT THE MOMENT OF WRITING. The runtime is built and deterministically
+     * certified, and the table it reads does not exist on the deployed database until the 11B
+     * candidate is merged and its migration applied. Classified CORE_RUNNABLE because that is what
+     * it is in the product being frozen here; the mounted proof that makes it walkable is item A-K
+     * of certification/financials/11b-discounts/PROMOTION-GATED-PROOFS.md.
+     */
+    discount_exception: "CORE_RUNNABLE",
+
+    // ── The next program ───────────────────────────────────────────────────────────────────
+    card_collection: "PAYMENTS_PHASE",
+    ach_processing: "PAYMENTS_PHASE",
+    provider_return: "PAYMENTS_PHASE",
+    refund: "PAYMENTS_PHASE",
+    /* Shipped by W2, and unlike the four above it is walkable rather than waiting on the program. */
+    payment_method_on_file: "PAYMENTS_PHASE",
+
+    /*
+     * AUTOPAY, shipped by W5. Walkable rather than waiting: the authorization, the surface and the
+     * scheduled execution all exist. Human acceptance is W7, which is why every one of these is
+     * AUTOMATED_CERTIFIED_HUMAN_PENDING and none is a PASS.
+     */
+    autopay_enrollment: "PAYMENTS_PHASE",
+    autopay_card_collection: "PAYMENTS_PHASE",
+    autopay_bank_processing: "PAYMENTS_PHASE",
+    autopay_failure: "PAYMENTS_PHASE",
+    autopay_retry: "PAYMENTS_PHASE",
+    autopay_pause: "PAYMENTS_PHASE",
+    autopay_resume: "PAYMENTS_PHASE",
+    autopay_revoke: "PAYMENTS_PHASE",
+    autopay_method_invalidated: "PAYMENTS_PHASE",
+
+    /*
+     * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"
+     * deferral: the inspection half shipped in Repair Pass 5F and the lifecycle half — adopt and
+     * close, both behind `fin.write`, closing behind a preview — shipped in 11B. Reopening is still
+     * unsupported, and that is recorded in the scenario rather than deferring the whole capability.
+     */
+    accounting_period: "CORE_RUNNABLE",
+
+    // ── Another program's acceptance, not this list's ───────────────────────────────────────
+    subsidy_processing: "RETIRED",
+});
+
+export function scenarioProgram(key: string): ScenarioProgram | undefined {
+    return SCENARIO_PROGRAM[key];
+}
+
+/** What a Director can actually drive against the certified Core product today. */
+export const CORE_RUNNABLE_SCENARIOS = SCENARIOS.filter((s) => SCENARIO_PROGRAM[s.key] === "CORE_RUNNABLE");
+
+/**
+ * THE THREE ACCEPTED CORE DEFERRALS, in the words the certification uses.
+ *
+ * These are NOT Core QA failures and must never be counted as one. Each names a capability whose
+ * authority is real and proven, and whose operator surface is deliberately not in Core.
+ */
+export const CORE_DEFERRALS = Object.freeze([
+    {
+        key: "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED",
+        statement:
+            "A FIXED responsibility share is operator-authorable end to end. Percentage and remainder share methods exist in the arrangement authority and are enforced there, and no operator surface authors them in Core. An operator can divide an obligation by amount today; dividing it by proportion is a Payments-era surface.",
+    },
+    {
+        key: "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
+        statement:
+            "Canonical provenance exists for every reduction — the policy that decided it, the basis, the base it was taken on, whether a cap bound it — and the ledger states a concise preview of it beside the row. There is no deep row-inspection surface in Core that opens a single ledger row into its full decision record.",
+    },
+    {
+        key: "DEPOSIT_OPERATOR_PRODUCTIZATION_GAP",
+        statement:
+            "The deposit policy type and the deposit model foundation exist and are configurable. The HELD DEPOSIT LIFECYCLE — taking a deposit, holding it, applying it and releasing it — belongs to Payments and has no operator surface in Core.",
+    },
+]);

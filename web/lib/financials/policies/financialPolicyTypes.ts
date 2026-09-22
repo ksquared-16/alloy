@@ -57,8 +57,52 @@ export const FINANCIAL_POLICY_TYPES = [
      * what lets policy answer the commercial question.
      */
     "vacation_credit",
+    /*
+     * WHEN PAYMENT IS EXPECTED. The one date in the billing chain that had no configured rule:
+     * `billable_on_strategy` already configures when a charge is ISSUED, and `grace_period`
+     * configures how long AFTER due before lateness applies, but the due date itself was supplied
+     * by whichever caller happened to create the charge. An organisation could not state its own
+     * terms, and recurring generation had no rule to follow.
+     */
+    "due_date",
 ] as const;
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
+
+/**
+ * ── WHAT AN OPERATOR MAY AUTHOR TODAY — the types something actually CONSUMES ────────────────
+ *
+ * CONFIGURABLE IS NOT CAPABILITY. Four of the types above are resolvable, storable and offered by
+ * the configuration surface, and NOTHING in the runtime reads them: `late_fee`, `nsf_fee`,
+ * `refund` and `deposit` have no `resolveFinancialPolicy` call site anywhere. An operator
+ * configuring one is being invited to state terms the product will ignore — worse than an absent
+ * control, because it looks like a capability and will be believed.
+ *
+ * Every type here was traced to a real consumer:
+ *   proration        → generateTuitionCharges, previewTuitionGeneration, consumptionService
+ *   billing_cadence  → consumptionService
+ *   grace_period     → consumptionService
+ *   posting_review   → chargeLifecycleService (the write path), buildFinancialsCardVM
+ *   vacation_credit  → policyReductionService
+ *   due_date         → chargeLifecycleService, since the wiring that made it real
+ *
+ * The full list above is UNTOUCHED: the schema still permits every type, the registry still
+ * describes them, the validator still accepts them, and historical rows still resolve. This governs
+ * only what the authoring surface OFFERS, so the four can be restored the day they gain a consumer.
+ */
+export const OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES = [
+    "proration",
+    "billing_cadence",
+    "grace_period",
+    "posting_review",
+    "vacation_credit",
+    "due_date",
+] as const satisfies readonly FinancialPolicyType[];
+
+/** Offered by the configuration surface, or held back until a runtime consumer exists. */
+export function isOperatorAuthorablePolicyType(value: string): boolean {
+    return (OPERATOR_AUTHORABLE_FINANCIAL_POLICY_TYPES as readonly string[]).includes(value);
+}
+
 
 /**
  * The closed commercial positions on a vacation absence. `no_credit` is stated
@@ -86,6 +130,40 @@ const CADENCES = [
     { value: "weekly", label: "Weekly" },
     { value: "term", label: "Term" },
 ];
+
+/**
+ * HOW A DUE DATE IS REACHED — four strategies, and the reason there are only four.
+ *
+ * Each one is expressible from a date the charge already carries, so none of them needs a new
+ * column or a new authority:
+ *
+ *   on_invoice               due = the invoice/bill date (`billable_on`)
+ *   days_after_invoice       due = billable_on + N          — the `offset_days` grammar templates
+ *                                                             already use for billable_on itself
+ *   on_period_start          due = the commercial period's first day
+ *   days_after_period_start  due = period start + N
+ *
+ * ── WHAT WAS EVALUATED AND DELIBERATELY LEFT OUT ──
+ *
+ * "Fixed day of the month" — due on the 1st, due on the 15th. It reads as the obvious fifth option
+ * and it is a month-shaped idea: it has no meaning for a weekly or biweekly organisation, whose
+ * period may not contain a 15th at all, and it would silently mean something different for every
+ * cadence. `days_after_period_start` expresses the same intent for EVERY cadence — "due on the
+ * first day of the period" is offset 0 — so adding it would be a second way to say one thing, with
+ * one of the two wrong for most tenants.
+ *
+ * "Days BEFORE the period starts" — expressible as a negative offset, and refused for now because a
+ * due date preceding the invoice date is a term nobody in this domain has asked for and would make
+ * past-due arithmetic answer questions about money not yet billed.
+ */
+export const DUE_DATE_STRATEGIES = [
+    { value: "on_invoice", label: "On the invoice date" },
+    { value: "days_after_invoice", label: "Days after the invoice date" },
+    { value: "on_period_start", label: "On the first day of the billing period" },
+    { value: "days_after_period_start", label: "Days after the billing period starts" },
+];
+
+export type DueDateStrategy = "on_invoice" | "days_after_invoice" | "on_period_start" | "days_after_period_start";
 
 /** The registry: one definition per policy type, with its typed value fields. */
 export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = {
@@ -136,6 +214,15 @@ export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = 
         label: "Refund policy",
         description: "Window in which a charge may be refunded.",
         fields: [{ key: "window_days", label: "Refund window", control: "number", suffix: "days" }],
+    },
+    due_date: {
+        key: "due_date",
+        label: "Due date",
+        description: "When payment is expected, relative to the invoice date or the billing period.",
+        fields: [
+            { key: "strategy", label: "Due", control: "select", options: DUE_DATE_STRATEGIES },
+            { key: "offset_days", label: "Offset", control: "number", suffix: "days" },
+        ],
     },
     posting_review: {
         key: "posting_review",

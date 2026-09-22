@@ -29,6 +29,12 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     children: "wide",
     employment: "wide",
     staff: "wide",
+    // Wide for the same reason `children` is: two columns is what a list of items with a
+    // status each needs before the status wraps under the label.
+    staff_qualifications: "wide",
+    staff_availability: "wide",
+    staff_readiness: "wide",
+    staff_compensation: "wide",
     attendance: "wide",
     financials: "wide",
     health_safety: "wide",
@@ -89,6 +95,13 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     employment: "Users",
     // One employee, not a group — the case chip keeps Users, the person card takes the singular.
     staff: "User",
+    // The credential glyph, not a person: the subject of this card is the qualification.
+    staff_qualifications: "BadgeCheck",
+    // The clock glyph: the subject is when, not who.
+    staff_availability: "CalendarClock",
+    // Reuses the readiness glyph the platform already associates with the question.
+    staff_readiness: "ShieldCheck",
+    staff_compensation: "DollarSign",
     attendance: "Clock",
     financials: "DollarSign",
     health_safety: "HeartPulse",

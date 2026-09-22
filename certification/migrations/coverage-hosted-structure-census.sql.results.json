@@ -1,0 +1,112 @@
+{
+  "trusted_host_action_id": "tha_80724e2dc4d268",
+  "query_hash": "e344a5c115989a2fc853932b822c4eda9242f7663e292aa3d01fb731852f1b7f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T23:28:30.673Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_80724e2dc4d268",
+    "query_hash": "e344a5c115989a2fc853932b822c4eda9242f7663e292aa3d01fb731852f1b7f",
+    "authorization_id": "grnt_5d917a1301fd4a4b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T23:28:32.110Z",
+    "question_ids": [
+      "coverage_structure"
+    ],
+    "questions": {
+      "coverage_structure": {
+        "question_id": "coverage_structure",
+        "row_count": null,
+        "rows": [
+          {
+            "table_present": 1,
+            "rls_enabled": true,
+            "policies": [
+              "staff_coverage_allocations_mutate_ops",
+              "staff_coverage_allocations_select_org"
+            ],
+            "foreign_keys": [
+              "staff_coverage_allocations_employment_id_fkey",
+              "staff_coverage_allocations_employment_org_fk",
+              "staff_coverage_allocations_lineage_root_id_fkey",
+              "staff_coverage_allocations_org_id_fkey",
+              "staff_coverage_allocations_room_location_id_fkey",
+              "staff_coverage_allocations_room_org_fk",
+              "staff_coverage_allocations_site_location_id_fkey",
+              "staff_coverage_allocations_site_org_fk",
+              "staff_coverage_allocations_supersedes_coverage_id_fkey"
+            ],
+            "check_constraints": [
+              "staff_coverage_allocations_cancel_shape",
+              "staff_coverage_allocations_lifecycle_check",
+              "staff_coverage_allocations_no_self_supersede",
+              "staff_coverage_allocations_source_key_nonempty",
+              "staff_coverage_allocations_time_order",
+              "staff_coverage_allocations_transition_check"
+            ],
+            "exclusion_constraints": [
+              {
+                "name": "staff_coverage_allocations_no_overlap",
+                "def": "EXCLUDE USING gist (employment_id WITH =, service_date WITH =, int4range((((EXTRACT(hour FROM start_time) * (60)::numeric) + EXTRACT(minute FROM start_time)))::integer, (((EXTRACT(hour FROM end_time) * (60)::numeric) + EXTRACT(minute FROM end_time)))::integer) WITH &&) WHERE ((lifecycle_state = 'active'::text))"
+              }
+            ],
+            "indexes": [
+              "staff_coverage_allocations_employment_date_idx",
+              "staff_coverage_allocations_lineage_idx",
+              "staff_coverage_allocations_no_overlap",
+              "staff_coverage_allocations_pkey",
+              "staff_coverage_allocations_room_date_idx",
+              "staff_coverage_allocations_site_date_idx"
+            ],
+            "triggers": [
+              "validate_staff_coverage_place"
+            ],
+            "place_trigger_body": 1,
+            "site_as_room_guard": 1,
+            "lifecycle_columns": [
+              "cancelled_at",
+              "cancelled_by",
+              "created_by",
+              "lifecycle_state",
+              "lineage_root_id",
+              "source_key",
+              "supersedes_coverage_id",
+              "transition_type"
+            ],
+            "grants_non_service": [
+              {
+                "grantee": "authenticated",
+                "priv": "INSERT"
+              },
+              {
+                "grantee": "authenticated",
+                "priv": "SELECT"
+              },
+              {
+                "grantee": "authenticated",
+                "priv": "UPDATE"
+              }
+            ],
+            "rpcs": [
+              "staff_coverage_cancel",
+              "staff_coverage_effective_for_employment",
+              "staff_coverage_effective_for_site",
+              "staff_coverage_plan",
+              "staff_coverage_supersede"
+            ],
+            "supersede_retires_first": 1,
+            "ledger_versions": [],
+            "observed_at": "2026-09-21 23:28:31.987293+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

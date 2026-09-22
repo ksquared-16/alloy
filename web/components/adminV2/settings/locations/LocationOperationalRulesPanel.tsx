@@ -145,9 +145,12 @@ function ResolvedPreviewCard({
  */
 export default function LocationOperationalRulesPanel({
     siteLabelById,
+    siteId = null,
     canMutate = false,
 }: {
     siteLabelById: Map<string, string>;
+    /** The campus this panel is mounted inside; narrows the authoring choices. */
+    siteId?: string | null;
     canMutate?: boolean;
 }) {
     const today = todayYmd();
@@ -161,7 +164,7 @@ export default function LocationOperationalRulesPanel({
         scheduleRules,
         refresh,
     } = useLocationOperationalRules();
-    const { options: scopeOptions, labelFor, ageGroupOptions } = useScopeOptions();
+    const { options: scopeOptions, labelFor, ageGroupOptions } = useScopeOptions({ siteId });
     const authoring = useLocationRuleAuthoring(refresh);
 
     const sites = Array.from(siteLabelById.entries())

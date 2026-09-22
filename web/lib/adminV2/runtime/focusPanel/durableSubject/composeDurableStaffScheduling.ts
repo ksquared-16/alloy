@@ -40,7 +40,10 @@ import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational
 import { loadSchedulingProjectionForStaff } from "@/lib/scheduling/projection/buildSchedulingProjection";
 import { loadEditorPatternsForSite } from "@/lib/scheduling/editorPatterns";
 import { loadOrgAssignmentTypes } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
-import { loadSiteOperationalRooms } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
+import {
+    assignableClassrooms,
+    loadSiteOperationalRooms,
+} from "@/lib/operationalAssignments/loadSiteOperationalRooms";
 import {
     resolveSiteConfig,
     type SchedulingProjectionFirstPaint,
@@ -82,7 +85,10 @@ export async function composeDurableStaffScheduling(
             // not a filter this module invents — it reads `subject_types`, which the assignment-type
             // configuration already carries, so Studio remains the single authority over the list.
             loadOrgAssignmentTypes(supabase, orgId, { subjectType: "staff" }).catch(() => []),
-            loadSiteOperationalRooms(supabase, orgId, siteLocationId).catch(() => []),
+            // Classroom picker: operational groups only.
+            loadSiteOperationalRooms(supabase, orgId, siteLocationId)
+                .then(assignableClassrooms)
+                .catch(() => []),
         ]);
 
     const projection = await loadSchedulingProjectionForStaff(supabase, orgId, {

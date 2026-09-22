@@ -5,9 +5,20 @@ import { logAdminAudit } from "@/lib/adminAuth";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import {
+    assertTopologyMutationSafe,
+    candidateFromPatch,
+    isTopologyUnchanged,
+} from "@/lib/location/topologyMutationAuthority";
+import { topologyRefusalResponse } from "@/lib/location/topologyRefusalResponse";
 
 const ALLOWED_KEYS = [
     "label",
+    // Topology transport. These are gated by the canonical mutation authority
+    // below and by `validate_location_hierarchy()` underneath it; no operator
+    // surface offers them yet (Slice 3 is integrity, not UX).
+    "unit_role",
+    "parent_location_id",
     "location_type",
     "location_type_id",
     "is_primary",
@@ -129,6 +140,17 @@ export async function PATCH(
             updates[key] = typeof v === "string" ? v.trim() || null : null;
             continue;
         }
+        if (key === "unit_role") {
+            const v = body.unit_role;
+            updates.unit_role = v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
+        if (key === "parent_location_id") {
+            const v = body.parent_location_id;
+            updates.parent_location_id =
+                v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
         if (key === "location_type") {
             // Partial PATCH: never write null/empty — location_type is NOT NULL in many DBs; omit = leave unchanged.
             const raw = body[key];
@@ -174,6 +196,31 @@ export async function PATCH(
     if (updates.status_key !== undefined) {
         const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "locations", updates.status_key as string | null);
         if (!chk.ok) return NextResponse.json({ error: chk.message }, { status: 400 });
+    }
+
+    // Topology safety, through the SAME authority POST uses. The candidate is the
+    // row as it would stand AFTER this patch, never the patch itself — so an
+    // ordinary rename cannot be refused by a rule it never engaged, and a topology
+    // change is judged against the tree and the dependents it would actually leave.
+    const currentTopology = {
+        locationType: ((existing as { location_type?: string | null }).location_type ?? null),
+        unitRole: ((existing as { unit_role?: string | null }).unit_role ?? null),
+        parentLocationId: ((existing as { parent_location_id?: string | null }).parent_location_id ?? null),
+    };
+    const candidate = candidateFromPatch(
+        { id, ...currentTopology },
+        {
+            locationType: updates.location_type as string | undefined,
+            unitRole: updates.unit_role as string | null | undefined,
+            parentLocationId: updates.parent_location_id as string | null | undefined,
+        }
+    );
+    if (!isTopologyUnchanged(currentTopology, candidate)) {
+        const topology = await assertTopologyMutationSafe(supabase, ctx.orgId, {
+            candidate,
+            current: currentTopology,
+        });
+        if (!topology.ok) return topologyRefusalResponse(topology);
     }
 
     const systemKeys = [...ALLOWED_KEYS, "customer_id", "org_id", "vendor_id"] as const;

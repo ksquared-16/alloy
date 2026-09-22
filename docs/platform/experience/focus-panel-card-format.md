@@ -11,6 +11,11 @@ last_reviewed: 2026-09-15
 
 ## 1 · Row rhythm — cards sharing a row share a height
 
+> **SUPERSEDED by [§6](#6--intrinsic-height-column-flow--the-equal-band-contract-retired).** Cards
+> sharing a row no longer share a height. This section is kept because the rules it records about
+> the grid coming from **/surfaces** still hold, and because the reasoning that led to equal-height
+> rhythm is worth reading beside the measurement that retired it.
+
 The Focus Panel grid is configured in **/surfaces**. The rendered panel must match that
 configuration's shape, which means:
 
@@ -154,8 +159,11 @@ A source guard proves the markup was typed. It cannot prove the operator sees it
 
 ## 4 · Assigned height — the published composition owns card geometry
 
-> Added once implemented. This replaces the earlier note that equal-height rhythm was
-> unresolved on the composed canvas.
+> **PARTLY SUPERSEDED by [§6](#6--intrinsic-height-column-flow--the-equal-band-contract-retired).**
+> The composition no longer assigns a card a height at all: §4.3–§4.5 (bands, chains, the band
+> solver) are retired and their modules deleted. What survives, and is now load-bearing, is
+> §4.6 — the intrinsic node kept separate from the assigned wrapper, and the four rules that keep
+> the measurement honest.
 
 **Cards own their content. The published Focus Panel composition owns their geometry.**
 
@@ -319,3 +327,276 @@ Its binding is proven by planting each shipped defect and watching it fail:
 A scenario asserting that cards in **different** bands stay independent sits alongside them, so an
 implementation that simply equalised everything fails too. Between them, neither wrong
 implementation this work shipped can pass.
+
+---
+
+## 5 · Internal vertical rhythm — what a card does with the height it is given
+
+§4 ends at *"the painted card is the band's height"*. That is the outer half. This section owns the
+inner half, and it is a **frozen contract**:
+
+> **OUTER COMPOSITION OWNS ASSIGNED HEIGHT.**
+> **CARD CONTENT OWNS NATURAL MINIMUM HEIGHT.**
+> **SURPLUS HEIGHT IS DISTRIBUTED BETWEEN SEMANTIC REGIONS.**
+> **CARD-LEVEL FOOTERS MAY ANCHOR TO THE BOTTOM.**
+> **INLINE ACTIONS REMAIN WITH THE CONTENT THEY ACT ON.**
+> **TEXT AND CONTROLS DO NOT STRETCH.**
+> **ASSIGNED HEIGHT MUST NOT CONTAMINATE INTRINSIC MEASUREMENT.**
+
+Cards sharing a band have very different intrinsic heights, and that is legitimate: Financials
+Compact carries more summary content than a Process card whose stage has no configured work. The
+answer is never to invent Process content or densify Financials. It is to let the shorter card
+spend its surplus deliberately.
+
+### 5.1 The defect, measured
+
+Two separate faults produced one symptom — *a short card floating at the top of a tall box*.
+
+**Fault 1 — the band did not reach the card at all.** §4.6's propagation rule was written as
+`.alloy-os-fp-card-intrinsic > .alloy-os-focus-panel-grid__cell > .alloy-os-process`, on a premise
+stated in its own comment: *"For every other card that child IS the painted `article.alloy-os-ucard`"*.
+That premise was false when written. Measured on deployed `dced5ba79` at 1440:
+
+| card | wrapper chain | band | painted card |
+| --- | --- | --- | --- |
+| `business_process` | `.alloy-os-process` *(flex column — the card this rule named)* | 234px | 234px |
+| **`health_safety`** | `div.alloy-os-health` → `div.alloy-os-health` → `article` *(both **block**)* | **640px** | **141.8px** |
+| `financials` | `div.alloy-os-financials` → `div.alloy-os-billing` → `article` *(both **block**)* | 131px | 130.9px |
+
+A block container does not hand its height to its child, so Health & Safety lost **498.2px** into a
+transparent wrapper. Financials has the same shape and never showed it, because its band happens to
+be the height its content already needs — it was one composition away from the same defect.
+
+**A rule naming one card can only ever fix one card.** The propagation is now stated over the
+*chain* — `.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)` — so any wrapper, at any depth, and
+any card added later, passes the height on.
+
+**Fault 2 — the card had nowhere to put the surplus.** `.alloy-os-ucard` was already
+`flex-direction: column`, but nothing inside it grew, so free space collected *after the last
+child*: the footer's `border-top` floated mid-card with white beneath it. `.alloy-os-ucard__body`
+now grows, which puts the surplus between the body's content and the footer.
+
+### 5.2 The shared primitive
+
+One owner, no per-card rules:
+
+| | |
+| --- | --- |
+| **height delivery** | `.alloy-os-fp-card-intrinsic *:has(.alloy-os-ucard)` — every ancestor of the painted card becomes a column and grows; the card grows with it |
+| **surplus absorption** | `.alloy-os-ucard__body` — `display: flex; flex-direction: column; flex: 1 1 auto` |
+| **body-resident footer** | `.alloy-os-ucard__body-footer` — `margin-top: auto` |
+
+Normal flow only. **No** `position: absolute`, no spacer heights, no `min-height` floors, no
+`height: 100%` anywhere in the chain — growth says *take the room the band already assigned*, while
+a percentage would resolve against the assigned band and feed it back (§5.4).
+
+Two footer spellings exist because Alloy has two, and both must anchor. Most cards pass
+`footerAction` and get the real `<footer class="alloy-os-ucard__footer">`, which the body's growth
+pushes to the bottom edge. Business Process carries its foot row *inside* the body, and the
+`timeline` archetype hides the shell footer outright — those use `__body-footer`.
+
+**Only card-level content may anchor.** Process command buttons stay in
+`.alloy-os-process__work`, attached to the work they act on; `Record outcome` stays with its stage;
+Attendance's `Check in` / `Mark absent` stay with the attendance state; Household member actions
+stay on their member. Moving a control down to fill space makes the card lie about what it applies
+to. Only *card-level* navigation and activity settle — Process's `Recent activity` foot row,
+`View children →`, `View health details →`.
+
+### 5.3 Card anatomy, as rendered
+
+Audited on deployed `dced5ba79`. `HEADER` is the shell's own and is omitted.
+
+| card | archetype | primary | supporting / actions | semantic footer | anchors via |
+| --- | --- | --- | --- | --- | --- |
+| Business Process | `action` | lifecycle rail, stage/current-work | `__work` commands, Record outcome | `__foot` — participants + Recent activity | `__body-footer` |
+| Financials Compact | `status` | responsibility, balance, past-due | — | `__footer` — Payment / Add / Details | body growth |
+| Attendance | `timeline` | attendance state | Check in / Mark absent *(stay with state)* | **none** — shell footer is `display: none` | *n/a* |
+| Children | `collection` | child rows | — | `__footer` — `View children →` | body growth |
+| Health & Safety | `status` | status / attention rows | — | `__footer` — `View health details →` | body growth |
+| Household | `profile` | summary regions | member-level actions *(stay on the member)* | `__footer` — card-level nav | body growth |
+| Current Work | *(see §2)* | current work | command rail | `Recent activity` context region — **identified, not yet anchored** | *(none)* |
+
+Attendance has **no** card-level footer, so it anchors nothing — its surplus stays below its
+content, which is correct. A card with nothing to anchor is not given something to anchor.
+
+Current Work is audited but **not changed** in this slice. It passes `footerAction = null`, so it has
+no shell footer, and its `Recent activity` region sits inside a wider context block alongside
+`Also in progress` — anchoring part of that block is a composition decision, not a mechanical one.
+It is also superseded by the Process card on the focused surface
+([`process-card-supersedes-current-work`]), so the change could not be verified against a rendered
+surface here. Identified as the footer candidate; left as debt rather than applied unmeasured.
+
+Sparse states — `loading`, `empty`, `unavailable`, `forbidden`, `error` — keep the same anatomy and
+are **not** vertically centred. Space existing is not a reason to move a message to the middle of a
+card; an empty Health card and a populated one must read as the same card.
+
+### 5.4 Intrinsic measurement is unaffected — and why that is structural
+
+The danger this repair had to avoid is §4.6's loop in a third spelling: a card that consumes its
+assigned height must not then *report* that height as its natural content height, or the solver
+would assign it, the card would consume it, report it again, and the row would ratchet open.
+
+It cannot, and that is a property of `flex-grow` rather than a hope. The measurement neutralizes
+the wrapper's height (§4.6 rule 1), which leaves `.alloy-os-fp-card-intrinsic` content-sized — and
+**a flex child cannot grow past a container that is itself content-sized**. Nothing in the chain
+resolves a percentage against the assigned band, which is the spelling that *would* feed back.
+
+The gate is the round trip: measure `X` with the wrapper neutralized, assign `Y > X`, confirm the
+painted card really is `Y`, measure again, and get `X` back — then repeat at 320/480/640/900px and
+confirm `X` never moves.
+
+### 5.5 Certification
+
+Extends the existing painted-surface gate rather than adding a harness.
+
+| claim | owner |
+| --- | --- |
+| the chain rule exists, names no card, names no pixel, stays scoped to the solved grid | `web/tests/surfaces/focusPanelBandFillRuntimePath.test.ts` |
+| sparse card anchors its footer; growth collapses the surplus; content is not stretched | `web/playwright/geometry/paintedSurface.spec.ts` |
+| `X → assign Y → still X`, and no ratchet across four bands | *(same spec)* |
+
+The jsdom suite's premise test is now the corrected one. Its previous version was titled *"Business
+Process really does wrap its UniversalCard, **and is the only card that does**"* and asserted only
+the first half — **a claim stated in a test name and never asserted is not a claim**, and that is
+precisely the hole the 498px passed through.
+
+Binding proven by planting each defect and watching the right gate fail:
+
+| planted defect | result |
+| --- | --- |
+| `margin-top: auto` removed from `__body-footer` | 3 fail — sparse anchor, growth, no-stretch *(shell-footer cases correctly still pass — different mechanism)* |
+| `__body-footer` forced `position: absolute; bottom: 0` | 2 fail — the `position: static` gate and no-stretch |
+| assigned height applied to the intrinsic node instead of the wrapper | 4 fail — every `X → Y → X` gate and the ratchet test |
+
+---
+
+## 6 · Intrinsic-height column flow — the equal-band contract, retired
+
+This supersedes [§1](#1--row-rhythm--cards-sharing-a-row-share-a-height) and the band half of
+[§4](#4--assigned-height--the-published-composition-owns-card-geometry). It is a **material
+doctrine change**, recorded rather than quietly folded in.
+
+### 6.1 The previous contract, and why it is gone
+
+> **PREVIOUS:** cards sharing a derived *visual band* were drawn to a common height. A shorter
+> card stretched to its neighbour's height, and that stretch was the pass condition of the
+> browser gate.
+
+The reasoning was sound for the composition it was designed against — two cards, deliberately
+paired, looking ragged when their bottoms disagreed. It does not survive a canvas where operators
+compose arbitrary spans, because **"the row" is not something the operator authored.** Bands were
+*derived* from overlapping `rowStart` extents, so cards that had nothing to do with each other
+were made to agree on a bottom edge.
+
+Measured on deployed `d0870c58c`, the real published composition, at 1440:
+
+| card | columns | content needs | was drawn | manufactured |
+| --- | --- | --- | --- | --- |
+| `business_process` | 1–8 | 227px | 402px | **+175px** |
+| `financials` | 9–12 | 402px | 402px | — |
+| `children` | 1–8 | 534px | 534px | — |
+| `household` | 9–12 | 419px | 419px | — |
+| **`health_safety`** | **1–3** | **178px** | **419px** | **+241px** |
+| `attendance` | 4–12 | 124px | 124px | — |
+
+Health occupies **columns 1–3**. The 419px it was drawn at is Household's height, in **columns
+9–12** — a card it shares no column with, whose content has no relationship to it. 410px of the
+panel, 30% of its total height, was empty for no authored reason.
+
+### 6.2 The new contract
+
+> **HORIZONTAL PLACEMENT IS AUTHORED.**
+> **VERTICAL HEIGHT IS INTRINSIC.**
+> **VERTICAL POSITION IS COLUMN-AWARE FLOW.**
+>
+> **CARDS ONLY WAIT FOR CARDS WHOSE COLUMNS THEY OVERLAP.**
+> **SIDE-BY-SIDE CARDS DO NOT NEED EQUAL BOTTOMS.**
+> **AUTHORED ORDER OUTRANKS PACKING DENSITY.**
+
+`colStart` and `colSpan` are exact and the runtime never touches them: the engine decides Y, never
+X. A card whose columns are free begins immediately after the card above it *in its own columns* —
+a skyline, constrained by the authored column grid.
+
+### 6.3 What actually changed — one substitution, removed
+
+The engine was never wrong. `resolveColumnAwareLayout` has always been a column-aware skyline over
+measured heights; it was being **handed numbers that were not measurements**. `useColumnAwareStack`
+ran `solveRowHeights` and substituted the equalised band height for each card's measured one
+immediately before placing it.
+
+Deleting that substitution is the whole behavioural change. With it went its two modules —
+`focusPanelRowHeights.ts` and `focusPanelVisualBands.ts` — and the unit suite that certified them.
+That suite was **green throughout**, testing a solver the runtime had every right to stop
+consuming: the same certification hole this canvas has now hit at four layers, and the reason the
+browser gate exists.
+
+### 6.4 `rowStart` / `rowSpan`
+
+No schema change, and none was needed — the migration had already happened:
+
+| field | meaning |
+| --- | --- |
+| `rowStart` | **ordering** — the sequence a card takes within the columns it occupies (`packOrder`) |
+| `rowSpan` | **authoring metadata** — it prescribes no height and reserves no space |
+
+Published layouts keep rendering unchanged. Card height is runtime content truth and is never
+persisted: no `masonryRow`, no `visualBandId`, no `runtimeHeight`, no `pixelHeight`.
+
+### 6.5 What the change produced, on the real composition
+
+Simulated with the real engine before implementation, then certified in a browser after:
+
+| card | current top → proposed | current height → proposed |
+| --- | --- | --- |
+| `business_process` | 0 → 0 | 402 → **227** |
+| `financials` | 0 → 0 | 402 → 402 |
+| `children` | 412 → **237** | 534 → 534 |
+| `household` | 412 → 412 | 419 → 419 |
+| `health_safety` | 956 → **781** | 419 → **178** |
+| `attendance` | 956 → **841** | 124 → 124 |
+
+Total panel height **1375 → 965px** at 1440 (−410), 1391 → 1011 at 1180, 1183 → 957 at 1680.
+
+Household does **not** rise: it spans 9–12 and must clear Financials, which it does by exactly one
+gap. That is the model working, not a missed optimisation. One gap survives — columns 4–8 between
+Children's bottom and Attendance's top — because Attendance spans 4–12 and must clear Household in
+9–12. It is an unavoidable consequence of the authored spans, and closing it would mean moving a
+card horizontally, which the runtime may not do.
+
+### 6.6 What §5 still means
+
+[§5](#5--internal-vertical-rhythm--what-a-card-does-with-the-height-it-is-given) is **kept, not
+reverted.** The propagation chain still delivers the wrapper's height to the painted card — the
+wrapper is now the card's own intrinsic height, so propagation is what makes *painted height ==
+intrinsic height* true rather than merely intended. The measurement contract (neutralise the
+wrapper, read the intrinsic node) matters more than before, because the number it reports is now
+the number that gets drawn.
+
+What §5 may no longer justify is manufactured surplus. A card with 220px of content is not
+stretched to 350px because of a neighbour; the composition no longer creates that surplus at all.
+Semantic footers still anchor small, legitimate surplus internal to a single card.
+
+### 6.7 Certification
+
+The equal-band assertions were **rewritten, not preserved** — `Process bottom == Financials bottom`
+is precisely what was retired.
+
+| invariant | owner |
+| --- | --- |
+| authored columns exact; painted height == intrinsic; no overlap among column-sharing cards; disjoint-column cards may overlap vertically; a card clears only its own columns; spanning cards clear all of theirs; growth and shrink reflow; authored order beats density; no horizontal overflow; deterministic cold reload | `web/playwright/geometry/focusPanelGeometry.spec.ts` |
+| the equaliser stays deleted, and the stack keeps handing the engine measurements | `web/tests/surfaces/focusPanelBandFillRuntimePath.test.ts` |
+
+Binding proven by planting each defect and watching the right fixtures fail:
+
+| planted defect | result |
+| --- | --- |
+| every card takes the tallest height (global row max) | 18 fail — headline, regression fixture, three tracks, growth, shrink, loading→ready |
+| a spanning card considers only its first column | 9 fail — D, F, the regression fixture, loading→ready |
+| a card inherits the height of the card placed before it | 6 fail — three tracks, the regression fixture |
+| placement is not recomputed when content changes | 7 fail — both dynamic fixtures |
+| cards reordered for denser packing | 8+ fail — including the authored-order guard |
+
+The reorder control is worth a note: planted in `useColumnAwareStack` it changed **nothing**,
+because `resolveColumnAwareLayout` calls `packOrder` internally and re-sorts. A plant that stays
+green is a no-op, not a passing test — the control only bound once planted inside `packOrder`, and
+finding that is what revealed there was no authored-order assertion at all. One was added.

@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "keys": [
+    "policies",
+    "types"
+  ],
+  "count": 1,
+  "rows": [
+    {
+      "id": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+      "label": "Sibling discount (QA specimen)",
+      "value": {
+        "basis": "percentage",
+        "value": 10,
+        "applies_to": "all"
+      },
+      "active": true,
+      "from": "2026-01-01",
+      "to": null,
+      "metadata": {}
+    }
+  ]
+}

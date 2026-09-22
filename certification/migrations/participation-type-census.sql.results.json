@@ -1,0 +1,324 @@
+{
+  "trusted_host_action_id": "tha_0c97c93a7ab5fa",
+  "query_hash": "5c8821e584cebac24edec27a127a7e08ae0493223a748fac5baa33515a05bfda",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:56:26.542Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0c97c93a7ab5fa",
+    "query_hash": "5c8821e584cebac24edec27a127a7e08ae0493223a748fac5baa33515a05bfda",
+    "authorization_id": "grnt_007206ec1e0a4b54",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:56:29.053Z",
+    "question_ids": [
+      "ptcensus"
+    ],
+    "questions": {
+      "ptcensus": {
+        "question_id": "ptcensus",
+        "row_count": null,
+        "rows": [
+          {
+            "types": [
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "after_care",
+                "label": "After Care",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "after_care",
+                "label": "After Care",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "before_care",
+                "label": "Before Care",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "before_care",
+                "label": "Before Care",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "enrichment",
+                "label": "Enrichment",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "enrichment",
+                "label": "Enrichment",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "homeroom_br1u0",
+                "label": "Homeroom",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "primary_classroom",
+                "label": "Primary Classroom",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "primary_classroom",
+                "label": "Primary Classroom",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "demand",
+                "billing": "eligible",
+                "attendance": "expected",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "recurring_service",
+                "label": "Recurring Service",
+                "subject_types": [
+                  "child",
+                  "staff"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 4,
+                "assignments_child": 0,
+                "assignments_staff": 4,
+                "assignments_active": 3,
+                "staff_capable": true,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "recurring_service",
+                "label": "Recurring Service",
+                "subject_types": [
+                  "child",
+                  "staff"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": true,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "therapy",
+                "label": "Therapy",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "therapy",
+                "label": "Therapy",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+                "key": "transportation",
+                "label": "Transportation",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              },
+              {
+                "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "key": "transportation",
+                "label": "Transportation",
+                "subject_types": [
+                  "child"
+                ],
+                "active": true,
+                "participation": "none",
+                "billing": "none",
+                "attendance": "none",
+                "assignments_total": 0,
+                "assignments_child": 0,
+                "assignments_staff": 0,
+                "assignments_active": 0,
+                "staff_capable": false,
+                "child_capable": true
+              }
+            ],
+            "totals": {
+              "types_total": 15,
+              "types_active": 15,
+              "staff_capable_active": 2,
+              "staff_capable_none": 2,
+              "staff_capable_supply": 0,
+              "child_capable_active": 15,
+              "child_capable_demand": 8,
+              "child_capable_none": 7,
+              "mixed_subject_types": 2,
+              "orgs_with_types": 2
+            },
+            "child_assignments_on_none_types": 0,
+            "staff_assignments_on_none_types": 3,
+            "assignments_without_type": 2,
+            "observed_at": "2026-09-21 21:56:29.044899+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

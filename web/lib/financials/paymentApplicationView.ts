@@ -29,6 +29,7 @@ import {
     readPaymentRefundedCents,
     readPaymentUnappliedCents,
 } from "@/lib/financials/childcarePaymentService";
+import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 
 export type PaymentApplicationView = {
     allocationId: string;
@@ -45,6 +46,14 @@ export type PaymentApplicationView = {
 
 export type PaymentView = {
     paymentId: string;
+    /**
+     * The receipt's canonical state — `posted` or `pending`.
+     *
+     * Exposed because AVAILABILITY depends on it and was previously unanswerable from this view. A
+     * pending receipt is money the platform has been told about, not money it has: counting it as
+     * available prepaid would offer an operator funds that may never arrive.
+     */
+    status: string;
     amountCents: number;
     currency: string;
     receivedAt: string | null;
@@ -86,6 +95,12 @@ const PAYMENT_VIEW_COLUMNS =
  * Refund rows are excluded: an outbound payment carrying `refunds_payment_id` is money going back, not
  * a receipt to allocate, and showing it as one would invite an operator to "move" it.
  */
+/*
+ * The point at which this reader refuses rather than answering from part of the cohort. Far above
+ * any real tenant's receipt history; reaching it means something is wrong, not large.
+ */
+const HOUSEHOLD_VIEW_SCAN_CAP = 25_000;
+
 export async function resolveHouseholdPaymentViews(
     supabase: SupabaseClient,
     input: { orgId: string; customerId: string },
@@ -94,14 +109,49 @@ export async function resolveHouseholdPaymentViews(
     const customerId = input.customerId?.trim();
     if (!orgId || !customerId) return [];
 
-    const { data: paymentRows, error: paymentError } = await supabase
-        .from("payments")
-        .select(PAYMENT_VIEW_COLUMNS)
-        .eq("org_id", orgId)
-        .eq("direction", "inbound")
-        .is("refunds_payment_id", null)
-        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES]);
-    if (paymentError) return [];
+    /*
+     * PAGED, AND ORDERED — the defect this read carried was not subtle, only quiet.
+     *
+     * It asked for every inbound childcare receipt in the ORGANISATION and filtered to the
+     * household afterwards, in one unpaged, unordered query. PostgREST answers at most 1,000 rows,
+     * so on a tenant with more receipts than that the server returned an arbitrary page and this
+     * household's payment was present or absent depending on which rows came back. It surfaced as a
+     * receipt the composition could not see — money a family had paid, missing from the surface
+     * that explains where their money went.
+     *
+     * Ordering by `id` is what makes paging a sequence rather than a sample.
+     *
+     * The org-wide shape is left as it was: narrowing this to the household's own billable sources
+     * first is a real improvement and a different change, and it is recorded rather than smuggled
+     * in beside a correctness repair.
+     */
+    let paymentRows: unknown[];
+    try {
+        const { rows, truncated } = await readAllPages<Record<string, unknown>>(
+            "household payment views",
+            HOUSEHOLD_VIEW_SCAN_CAP,
+            (fromIndex, toIndex) =>
+                supabase
+                    .from("payments")
+                    .select(PAYMENT_VIEW_COLUMNS)
+                    .eq("org_id", orgId)
+                    .eq("direction", "inbound")
+                    .is("refunds_payment_id", null)
+                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                    .order("id", { ascending: true })
+                    .range(fromIndex, toIndex) as never,
+        );
+        /*
+         * An account's receipts may not be answered from part of the cohort: a missing one reads as
+         * money never paid. The caller renders an empty list as "no receipts", so the honest answer
+         * when the bound is reached is the same as when the read fails — nothing, rather than a
+         * plausible subset.
+         */
+        if (truncated) return [];
+        paymentRows = rows;
+    } catch {
+        return [];
+    }
 
     /* Household is resolved from the billable source, memoised — a family's receipts share sources. */
     const householdBySource = new Map<string, string | null>();
@@ -124,12 +174,17 @@ export async function resolveHouseholdPaymentViews(
     if (!mine.length) return [];
 
     const paymentIds = mine.map((p) => p.id);
-    const { data: allocRows } = await supabase
-        .from("payment_allocations")
-        .select("id, payment_id, charge_id, allocated_amount_cents, status, allocated_at, reversed_at, reversal_reason")
-        .eq("org_id", orgId)
-        .in("payment_id", paymentIds);
-    const allocations = (allocRows ?? []) as Array<{
+    /* Batched: this id list grows with the account and would otherwise overflow the request URI. */
+    const allocRows = await readInBatches<Record<string, unknown>>(
+        "applications of these receipts",
+        paymentIds,
+        (batch) => supabase
+            .from("payment_allocations")
+            .select("id, payment_id, charge_id, allocated_amount_cents, status, allocated_at, reversed_at, reversal_reason")
+            .eq("org_id", orgId)
+            .in("payment_id", batch) as never,
+    );
+    const allocations = (allocRows ?? []) as unknown as Array<{
         id: string;
         payment_id: string;
         charge_id: string | null;
@@ -143,12 +198,16 @@ export async function resolveHouseholdPaymentViews(
     const chargeIds = [...new Set(allocations.map((a) => a.charge_id).filter(Boolean))] as string[];
     const chargeById = new Map<string, { description: string | null; charge_category: string | null; service_date: string | null }>();
     if (chargeIds.length) {
-        const { data: chargeRows } = await supabase
-            .from("charges")
-            .select("id, description, charge_category, service_date")
-            .eq("org_id", orgId)
-            .in("id", chargeIds);
-        for (const c of (chargeRows ?? []) as Array<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>) {
+        const chargeRows = await readInBatches<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>(
+            "charges these applications name",
+            chargeIds,
+            (batch) => supabase
+                .from("charges")
+                .select("id, description, charge_category, service_date")
+                .eq("org_id", orgId)
+                .in("id", batch) as never,
+        );
+        for (const c of chargeRows) {
             chargeById.set(c.id, c);
         }
     }
@@ -157,12 +216,16 @@ export async function resolveHouseholdPaymentViews(
     const payerIds = [...new Set(mine.map((p) => p.customer_id).filter(Boolean))] as string[];
     const payerById = new Map<string, string>();
     if (payerIds.length) {
-        const { data: customerRows } = await supabase
-            .from("customers")
-            .select("id, name")
-            .eq("org_id", orgId)
-            .in("id", payerIds);
-        for (const c of (customerRows ?? []) as Array<{ id: string; name: string | null }>) {
+        const customerRows = await readInBatches<{ id: string; name: string | null }>(
+            "households these receipts were taken against",
+            payerIds,
+            (batch) => supabase
+                .from("customers")
+                .select("id, name")
+                .eq("org_id", orgId)
+                .in("id", batch) as never,
+        );
+        for (const c of customerRows) {
             if (c.name) payerById.set(c.id, c.name);
         }
     }
@@ -174,6 +237,7 @@ export async function resolveHouseholdPaymentViews(
         const unappliedCents = await readPaymentUnappliedCents(supabase, orgId, p.id, amountCents);
         views.push({
             paymentId: p.id,
+            status: p.status,
             amountCents,
             currency: p.currency ?? "USD",
             receivedAt: p.received_at,

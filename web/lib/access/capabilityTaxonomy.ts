@@ -97,6 +97,16 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
      * navigation says, what the workspace is called, and what the refusal message names.
      */
     { key: "financials", label: "Financials", description: "The financial workspace — accounts, charges, payments, adjustments, responsibility and subsidy.", order: 58 },
+    /*
+     * WORKFORCE is its own area, not a corner of Financials.
+     *
+     * Financials answers what the organization earns and owes. Compensation answers
+     * what it pays one employee, and the two audiences barely overlap: a bookkeeper
+     * reconciling tuition has no business reading salaries, and filing pay under
+     * Financials would have handed them the payroll file by accident. Its own area
+     * means granting it is a deliberate act with a legible name.
+     */
+    { key: "workforce", label: "Workforce", description: "Staff employment terms, including compensation. Separate from Financials: what the organization pays one person is not what it earns and owes.", order: 59 },
     { key: "billing", label: "Billing (legacy)", description: "The superseded billing capability pair. Retained because the catalog still seeds it; nothing consults it.", order: 60 },
     /*
      * Enrollment now holds FOUR authorities, and they are two different kinds.
@@ -186,6 +196,7 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     billing: "billing",
     enrollment: "enrollment",
     financials: "financials",
+    workforce: "workforce",
     communications: "communications",
     documents: "documents",
     forms: "forms",

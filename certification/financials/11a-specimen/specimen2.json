@@ -1,0 +1,33 @@
+{
+  "templates": [
+    {
+      "id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+      "label": "Field trip",
+      "category": "one_time",
+      "amount": 4000,
+      "strategy": "fixed"
+    },
+    {
+      "id": "315d8b1d-9d1c-4613-97aa-22658a0cdb52",
+      "label": "Late pickup",
+      "category": "late_pickup",
+      "amount": 2500,
+      "strategy": "fixed"
+    },
+    {
+      "id": "27055d7e-72a3-441a-a4dd-ae01fbf1f421",
+      "label": "Materials",
+      "category": "consumable_fee",
+      "amount": 1800,
+      "strategy": "fixed"
+    },
+    {
+      "id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+      "label": "Registration fee",
+      "category": "fee",
+      "amount": 7500,
+      "strategy": "fixed"
+    }
+  ],
+  "tuitionTemplate": null
+}

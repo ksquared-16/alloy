@@ -29,6 +29,8 @@ import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
 import { readinessFromStripeAccount } from "@/lib/financials/payments/providerMerchant";
 import { handleStripeWebhook } from "@/lib/financials/payments/stripeWebhook";
 
+import { resolveAuthorizedActor, restoreMerchantReadiness, governedTestAccount } from "./certEnvironment";
+
 function readTrusted(key: string): string | null {
     if (process.env[key]) return process.env[key] as string;
     try {
@@ -62,7 +64,14 @@ const supabase: SupabaseClient | null = env
 const describeLive = env && secret && whsec ? describe : describe.skip;
 
 let connectedAccount = "";
-const ctx = { orgId: ORG, userId: ACTOR } as never;
+/** What the provider says this merchant can do, read once and used to put back what is borrowed. */
+let providerReadiness = "";
+/*
+ * The principal the actions are invoked as. Resolved in `beforeAll` from the tenant's own roles —
+ * `ACTOR` remains the provenance stamp on rows this suite writes, which is a different thing from
+ * an authority to act.
+ */
+let ctx = { orgId: ORG, userId: ACTOR } as never;
 const invocation = { entityType: "child", entityId: "fc500000-0000-4000-8000-0000000c0002" } as never;
 const action = (key: string) => financialPaymentActions.find((a) => a.actionKey === key)!;
 
@@ -151,16 +160,37 @@ describeLive("Slice H — the Financials payment actions, live", () => {
     beforeAll(async () => {
         const client = supabase!;
         await clearAll(client);
-        const res = await fetch("https://api.stripe.com/v1/accounts?limit=1", { headers: { Authorization: `Bearer ${secret}` } });
-        const acct = ((await res.json()) as { data: Array<Record<string, unknown>> }).data[0];
+        const acct = await governedTestAccount(secret!);
         connectedAccount = String(acct.id);
+        /* The PROVIDER's answer, remembered, so anything this suite borrows can be put back to it. */
+        providerReadiness = readinessFromStripeAccount(acct as { charges_enabled?: boolean });
         await client.from("payment_provider_merchants").upsert({
             org_id: ORG, processor: "stripe", provider_account_ref: connectedAccount,
-            readiness: readinessFromStripeAccount(acct as { charges_enabled?: boolean }),
+            readiness: providerReadiness,
             created_by: ACTOR, updated_by: ACTOR,
         });
+        /*
+         * An upsert that collides does nothing, which is how a merchant left non-ready by an earlier
+         * run survived a beforeAll that looked like it reset one. The provider's answer is written
+         * explicitly.
+         */
+        await restoreMerchantReadiness(client, ORG, providerReadiness);
+        /*
+         * THE PRINCIPAL THESE CASES ACT AS. The registered actions enforce `fin.write` and
+         * `fin.adjust` through the ordinary grant resolution, so the suite has to be somebody who
+         * actually holds them — otherwise every case refuses on permission before reaching the
+         * behaviour under test, which certifies nothing about the behaviour.
+         */
+        ctx = { orgId: ORG, userId: await resolveAuthorizedActor(client, ORG) } as never;
     });
-    afterAll(async () => { await clearAll(supabase!); });
+    afterAll(async () => {
+        /*
+         * UNCONDITIONAL. The readiness case below borrows shared state; if it throws, this is what
+         * stops every later collection on this stack being refused by a value this suite left behind.
+         */
+        if (providerReadiness) await restoreMerchantReadiness(supabase!, ORG, providerReadiness);
+        await clearAll(supabase!);
+    });
 
     it("registers a rail-first collect action that never leaks processor vocabulary into operator copy", () => {
         const collect = action(PAYMENT_COLLECT_CARD_ACTION_KEY);
@@ -180,23 +210,33 @@ describeLive("Slice H — the Financials payment actions, live", () => {
         const chargeId = await postCharge(client, 20_000);
         await client.from("payment_provider_merchants").update({ readiness: "onboarding_incomplete" }).eq("org_id", ORG);
 
-        const eligibility = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).resolveEligibility!({
-            supabase: client, ctx, payload: { charge_id: chargeId }, invocation,
-        } as never);
-        expect(eligibility.eligible).toBe(false);
-        const blocker = eligibility.blockers[0];
-        expect(blocker.code, "the readiness state is carried, not flattened").toBe("merchant_onboarding_incomplete");
-        expect(blocker.message).toMatch(/onboarding/i);
-        expect(blocker.message, "never a generic failure").not.toMatch(/payment failed/i);
-        expect(JSON.stringify(eligibility), "no platform account is named").not.toMatch(/acct_/);
+        /*
+         * BORROWED IN A `try`, RETURNED IN A `finally`.
+         *
+         * This block previously restored readiness on its last line, so the first failing assertion
+         * left the SHARED merchant non-ready and every collection in every later suite was refused —
+         * a red that reads exactly like a product regression and is this suite's litter. Measured on
+         * 2026-09-19: one failure here turned twelve suites into four.
+         */
+        try {
+            const eligibility = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).resolveEligibility!({
+                supabase: client, ctx, payload: { charge_id: chargeId }, invocation,
+            } as never);
+            expect(eligibility.eligible).toBe(false);
+            const blocker = eligibility.blockers[0];
+            expect(blocker.code, "the readiness state is carried, not flattened").toBe("merchant_onboarding_incomplete");
+            expect(blocker.message).toMatch(/onboarding/i);
+            expect(blocker.message, "never a generic failure").not.toMatch(/payment failed/i);
+            expect(JSON.stringify(eligibility), "no platform account is named").not.toMatch(/acct_/);
 
-        // Executing anyway — hidden UI is not authorization — still refuses.
-        const executed = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).execute({
-            supabase: client, ctx, invocation, payload: { charge_id: chargeId },
-        } as never);
-        expect(executed.ok, "direct invocation is refused server-side").toBe(false);
-
-        await client.from("payment_provider_merchants").update({ readiness: "ready" }).eq("org_id", ORG);
+            // Executing anyway — hidden UI is not authorization — still refuses.
+            const executed = await action(PAYMENT_COLLECT_CARD_ACTION_KEY).execute({
+                supabase: client, ctx, invocation, payload: { charge_id: chargeId },
+            } as never);
+            expect(executed.ok, "direct invocation is refused server-side").toBe(false);
+        } finally {
+            await restoreMerchantReadiness(client, ORG, providerReadiness);
+        }
     });
 
     it("collects by card, recognises canonically, and leaves the balance untouched until it does", async () => {

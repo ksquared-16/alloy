@@ -26,6 +26,8 @@ import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definition
 import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
 import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
 import { staffAddAction } from "@/lib/adminV2/actions/definitions/staffAddAction";
+import { STAFF_AVAILABILITY_ACTIONS } from "@/lib/adminV2/actions/definitions/staffAvailabilityActions";
+import { STAFF_QUALIFICATION_ACTIONS } from "@/lib/adminV2/actions/definitions/staffQualificationActions";
 import { childAddAction } from "@/lib/adminV2/actions/definitions/childAddAction";
 import {
     enrollmentDirectAction,
@@ -39,8 +41,11 @@ import {
     staffPresenceCorrectAction,
     staffPresenceRecordAction,
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
+import { ASSIGNMENT_TIME_ACTIONS } from "@/lib/adminV2/actions/definitions/assignmentTimeActions";
+import { STAFF_COVERAGE_ACTIONS } from "@/lib/adminV2/actions/definitions/staffCoverageActions";
 import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 import { serviceDayExceptionActions } from "@/lib/adminV2/actions/definitions/serviceDayExceptionActions";
+import { commercialPolicyExceptionActions } from "@/lib/adminV2/actions/definitions/commercialPolicyExceptionActions";
 import { enrollmentPricingActions } from "@/lib/adminV2/actions/definitions/enrollmentPricingActions";
 import { financialChargeActions } from "@/lib/adminV2/actions/definitions/financialChargeActions";
 import { financialReductionActions } from "@/lib/adminV2/actions/definitions/financialReductionActions";
@@ -48,6 +53,11 @@ import { financialResponsibilityActions } from "@/lib/adminV2/actions/definition
 import { financialSubsidyActions } from "@/lib/adminV2/actions/definitions/financialSubsidyActions";
 import { tuitionGenerationActions } from "@/lib/adminV2/actions/definitions/tuitionGenerationActions";
 import { financialPaymentActions } from "@/lib/adminV2/actions/definitions/financialPaymentActions";
+import { paymentMethodActions } from "@/lib/adminV2/actions/definitions/paymentMethodActions";
+import { autopayActions } from "@/lib/adminV2/actions/definitions/autopayActions";
+import { depositHoldActions } from "@/lib/adminV2/actions/definitions/depositHoldActions";
+import { paymentRecognitionActions } from "@/lib/adminV2/actions/definitions/paymentRecognitionActions";
+import { providerInstallationActions } from "@/lib/adminV2/actions/definitions/providerInstallationActions";
 import { healthFactActions } from "@/lib/adminV2/actions/definitions/healthFactActions";
 import { enrollmentRequirementExceptionActions } from "@/lib/adminV2/actions/definitions/enrollmentRequirementExceptionActions";
 import { stageWorkStartAction } from "@/lib/adminV2/actions/definitions/stageWorkStartAction";
@@ -66,6 +76,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     assignmentDeleteProposedAction,
     assignmentChangeRoomAction,
     staffAddAction,
+    ...STAFF_QUALIFICATION_ACTIONS,
+    ...STAFF_AVAILABILITY_ACTIONS,
     childAddAction,
     enrollmentStartAction,
     enrollmentDirectAction,
@@ -73,9 +85,13 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     employmentEndAction,
     staffPresenceRecordAction,
     staffPresenceCorrectAction,
+    // Coverage: plan / change / correct / cancel a day-specific Staff allocation.
+    ...ASSIGNMENT_TIME_ACTIONS,
+    ...STAFF_COVERAGE_ACTIONS,
     // Child attendance: five operator intents over the existing invariant-owning services.
     ...childAttendanceActions,
     ...serviceDayExceptionActions,
+    ...commercialPolicyExceptionActions,
     ...enrollmentPricingActions,
     ...financialChargeActions,
     ...tuitionGenerationActions,
@@ -83,6 +99,12 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     ...financialResponsibilityActions,
     ...financialSubsidyActions,
     ...financialPaymentActions,
+    // Payments W1: the act of becoming a merchant — connect, refresh, disconnect.
+    ...providerInstallationActions,
+    ...paymentMethodActions,
+    ...paymentRecognitionActions,
+    ...depositHoldActions,
+    ...autopayActions,
     ...healthFactActions,
     // Governed requirement exception: make one requirement non-blocking, and put it back.
     ...enrollmentRequirementExceptionActions,

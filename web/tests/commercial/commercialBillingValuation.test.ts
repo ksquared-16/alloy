@@ -80,7 +80,8 @@ describe("getCommercialTuitionValuation — the pricing seam", () => {
     });
 
     it("applies a Commercial discount policy (policy-adjusted valuation)", () => {
-        const policy: CommercialPolicyDef = { id: "disc", kind: "discount", scopeType: "org", scope: { locationId: null, programKey: null, offeringId: null, variantId: null }, effective: { start: null, end: null }, params: { basis: "percentage", value: 10, applies_to: "tuition" }, isActive: true };
+        /* `label: null` — this fixture's policy was never named, which is a real state and now a stated one. */
+        const policy: CommercialPolicyDef = { id: "disc", kind: "discount", scopeType: "org", scope: { locationId: null, programKey: null, offeringId: null, variantId: null }, effective: { start: null, end: null }, label: null, params: { basis: "percentage", value: 10, applies_to: "tuition" }, isActive: true };
         const exp = { ...base(), policies: [policy] };
         const v = getCommercialTuitionValuation(exp, { programKey: "toddler", scheduleBasis: "five_day", locationId: null, asOf: "2026-09-01" });
         expect(v).toMatchObject({ resolved: true, amountCents: 162000, policyAdjusted: true });

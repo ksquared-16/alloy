@@ -1,5 +1,6 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { CardAuthoring } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardAuthoring";
+import type { CardFirstOrderFields } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardFirstOrderConcern";
 import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
     declarationAppliesToGrain,
@@ -73,7 +74,13 @@ export type CardDefinition = CardIdentity &
     Partial<CardLifecycle> &
     Partial<CardGrainApplicability> &
     Partial<CardSupersession> &
-    Partial<CardAuthoring>;
+    Partial<CardAuthoring> &
+    /*
+     * FIRST-ORDER concern (owned by `focusPanelCardFirstOrderConcern`, read by the A′ compiler).
+     * Folded in as its own optional slice, per the DESIGN LAW above — the registry does not learn
+     * what a semantic key means, only that a card declares some.
+     */
+    Partial<CardFirstOrderFields>;
 
 /**
  * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
@@ -100,7 +107,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * retired card's name. The runtime card already renders its configured process name; this is
      * the identity an operator picks it by.
      */
-    { key: "business_process", title: "Business Process", ownsWorkCompletion: true },
+    {
+        key: "business_process", title: "Business Process", ownsWorkCompletion: true,
+        firstOrderFields: [
+            "process.name", "process.stage_count", "process.current_stage_key",
+            "process.current_stage_label", "process.stage_position", "process.stage_entered_at",
+        ],
+    },
     /**
      * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
      * durable Household surface exist at all. Silence would have left it case-only by the
@@ -112,7 +125,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * them" from `customer_persons` alone, with no case involved. Same card, same renderer, same
      * model builder — only the producer of the record differs.
      */
-    { key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"] },
+    {
+        key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"],
+        firstOrderFields: [
+            "household.label", "household.updated_at", "person.primary_contact_name",
+            "person.primary_contact_line", "record.location_label", "children.count",
+        ],
+    },
     /**
      * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads the canonical child
      * collection — on a case, one enrollment's projection of a family's children — while a durable
@@ -138,7 +157,10 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * collection, so the card composes from real truth rather than from a case borrowed for the
      * occasion. `ChildrenCard` reads `context.grain` and opens on that member — see its docblock.
      */
-    { key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    {
+        key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: ["children.count", "children.enrolling_count"],
+    },
     /**
      * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
      *
@@ -171,7 +193,47 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * (when and where are they scheduled), and is deliberately NOT folded in here.
      */
     { key: "staff", title: "Staff", grains: ["person"] },
-    { key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"] },
+    /*
+     * QUALIFICATIONS — "what does this Staff member hold, what needs attention, and what is
+     * required of them?"
+     *
+     * Person grain only, and not because employment is person-owned: because there is no other
+     * grain where the question is even askable. A case panel composes employment for a linked
+     * contact as DISPLAY, and a credential's expiry is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. The canvas-elevation concern is for cards that
+     * own the operating day; a qualification is a durable fact with dates, and elevating it would
+     * put a credential on the same plane as attendance.
+     */
+    { key: "staff_qualifications", title: "Qualifications", grains: ["person"] },
+    /*
+     * AVAILABILITY — "when can this Staff member work?"
+     *
+     * Person grain, and like Qualifications it is askable nowhere else: a case
+     * panel shows a linked contact's employment as display, and when that person
+     * can work is not a family's business.
+     *
+     * It does NOT declare `ownsOperationalTruth`. Canvas elevation is for cards
+     * that own the operating day; availability is a standing intent, and elevating
+     * it would put "could work Tuesdays" on the same plane as who is here now.
+     */
+    { key: "staff_availability", title: "Availability", grains: ["person"] },
+    /*
+     * STAFF READINESS — "is this Staff member ready, and what needs attention?"
+     *
+     * Person grain. It does NOT declare `ownsOperationalTruth`, and that is the
+     * whole point: readiness owns nothing. Every input belongs to another card, and
+     * elevating a derived answer to canvas truth would invite someone to edit it.
+     */
+    { key: "staff_readiness", title: "Readiness", grains: ["person"] },
+    { key: "staff_compensation", title: "Compensation", grains: ["person"] },
+    {
+        key: "attendance", ownsOperationalTruth: true, title: "Attendance", grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "attendance.state", "attendance.date", "attendance.expected_room_label",
+            "attendance.unavailable_reason",
+        ],
+    },
     /*
      * FINANCIALS — "what is owed, what happened, and what can I do about it".
      *
@@ -184,7 +246,15 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * child-grain panel scopes the same account to one subject rather than answering a different
      * question.
      */
-    { key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    {
+        key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"],
+        firstOrderFields: [
+            "financials.prepaid_available_cents", "financials.prepaid_pending_cents",
+            "financials.prepaid_held_cents", "financials.billing_period_key",
+            "financials.responsibility_cents", "financials.balance_cents",
+            "financials.past_due_cents",
+        ],
+    },
     /*
      * HEALTH & SAFETY — "what do I need to know to care for this child safely right now?"
      *
@@ -198,7 +268,13 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * CHILD GRAIN ONLY, deliberately. Health is about a person, and a case panel covering several
      * children has no single health subject — the card refuses rather than choosing one.
      */
-    { key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"] },
+    {
+        key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"],
+        firstOrderFields: [
+            "health.profile_fact_count", "health.requirements_satisfied",
+            "health.requirements_total", "health.emergency_contact_count",
+        ],
+    },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *
@@ -218,7 +294,24 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "communications", title: "Communications", ownsOperationalTruth: true },
     { key: "documents", title: "Documents", ownsOperationalTruth: true },
     { key: "attention", title: "Why Now" },
-    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true },
+    /*
+     * BILLING PREVIEW — "is this enrolment priced, and on what terms?"
+     *
+     * ── WHY IT NOW DECLARES THE CHILD GRAIN ──────────────────────────────────────────────────
+     *
+     * It declared none, so it fell to the case-only default and was omitted from every child-grain
+     * panel. The consequence was not cosmetic: this card owns acceptance of recurring tuition terms
+     * through `enrollment.pricing.accept`, so an operator working an ENROLLED CHILD — which is
+     * where enrolment pricing is actually decided — had no path to establish or change that child's
+     * recurring terms at all. Recurring billing had no operator entry point.
+     *
+     * It composes truthfully at both grains for the same reason Financials and Assignments do: the
+     * assignments belong to the household's enrolment, and a child-grain panel scopes that same
+     * truth to one subject rather than answering a different question. Where a record has no
+     * assignment it says "No assignment on this record to price." rather than rendering an empty
+     * shell, which is the bar this declaration is held to.
+     */
+    { key: "billing_preview", title: "Billing Preview", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
     { key: "required_information", title: "Required Information" },
     { key: "current_mission", title: "Current Mission" },
     { key: "timeline", title: "Timeline" },

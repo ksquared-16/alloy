@@ -1,0 +1,51 @@
+{
+  "detailsBefore": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 0
+  },
+  "adjustment": {
+    "adjustment-agreement": {
+      "canonical": true,
+      "options": [
+        "Certa Certhouse",
+        "Certb Certhouse"
+      ]
+    },
+    "adjustment-source-charge": {
+      "canonical": true,
+      "options": [
+        "Choose the charge this is about…",
+        "Field trip · 2026-10-01 · $40.00 outstanding",
+        "Materials · 2026-09-25 · $18.00 outstanding"
+      ]
+    },
+    "adjustment-category": {
+      "canonical": true,
+      "options": [
+        "Credit — lowers what the family owes",
+        "Adjustment — either direction"
+      ]
+    },
+    "directionUnderCredit": 0,
+    "nativeSelects": 0
+  },
+  "afterAdjustmentEscape": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 0
+  },
+  "payment": {
+    "methodCanonical": true,
+    "payerCanonical": true,
+    "disabled": [
+      "Bank account — not enabled for this organization"
+    ],
+    "nativeSelects": 0
+  },
+  "afterPaymentEscape": {
+    "detailsOpen": 1,
+    "rows": 116,
+    "panel": 0
+  }
+}

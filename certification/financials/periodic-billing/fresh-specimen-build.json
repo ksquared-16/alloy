@@ -1,0 +1,17 @@
+{
+  "steps": [
+    {
+      "step": "create_lead",
+      "status": 200,
+      "opportunityId": "7aa18e83-eea7-432c-af4b-684a1cef9386",
+      "body": "{\"ok\":true,\"data\":{\"execution_result\":{\"mode\":\"committed\",\"processing_case_id\":\"37f20e87-113c-46e7-a409-43d995552fd2\",\"readiness\":\"committed\",\"idempotency_key\":\"9046d036a5566d46a00a30db50aa437c29b784b2a332dd25bd312cb3ddb2b23d\",\"work_unit_id\":\"587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37\",\"work_unit_key\":\"lifecycle_wu_lead\",\"work_view_id\":\"new_leads\",\"work_view_route_key\":\"new\",\"status_key\":\"open\",\"stage_key\":\"lead\",\"opportunity_id\":\"7aa18e83-eea7-432c-af4b-684a1cef9386\"},\"affected_id\":\"7aa18e83-eea7-432"
+    },
+    {
+      "step": "opportunity",
+      "status": 405,
+      "customerId": null,
+      "body": "\"\""
+    }
+  ],
+  "stopped": "no customer id"
+}

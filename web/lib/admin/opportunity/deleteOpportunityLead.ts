@@ -347,9 +347,10 @@ export async function executeOpportunityLeadDeletionGraph(
         deletableCustomer,
         orgId
     );
-    deleted.customer_payment_methods = await deleteByInHeadCount(
+    /* Payments V1 · W2: the canonical stored methods replaced customer_payment_methods. */
+    deleted.payment_methods = await deleteByInHeadCount(
         supabase,
-        "customer_payment_methods",
+        "payment_methods",
         "customer_id",
         deletableCustomer
     );

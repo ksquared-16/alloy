@@ -1,0 +1,35 @@
+{
+  "resolved": [],
+  "findings": [
+    {
+      "id": "12-1",
+      "what": "one Add produced N independent obligations, one per child",
+      "ok": false,
+      "observed": "0 new rows · children=[]"
+    },
+    {
+      "id": "12-2",
+      "what": "no household responsibility was manufactured from one gesture",
+      "ok": true,
+      "observed": "[]"
+    },
+    {
+      "id": "14-6",
+      "what": "each resolved obligation names its party",
+      "ok": false,
+      "observed": "resolved=0 named=0 parties=[]"
+    },
+    {
+      "id": "12-3",
+      "what": "the two children's obligations resolved independently, each keeping its own child",
+      "ok": false,
+      "observed": "[]"
+    },
+    {
+      "id": "14-8",
+      "what": "the Responsible Party filter appears once it divides the cohort",
+      "ok": false,
+      "observed": "[\"financials-filter-subject\",\"financials-filter-period\"]"
+    }
+  ]
+}

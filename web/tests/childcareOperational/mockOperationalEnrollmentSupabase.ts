@@ -500,6 +500,14 @@ export function createOperationalEnrollmentMockSupabase(
         const filters: Filter[] = [];
         let orderCol: string | null = null;
         let orderAsc = true;
+        /*
+         * `.range()` — the server's own paging, which the financial readers now use because a single
+         * PostgREST response is capped at 1,000 rows. A mock without it made every paged read throw,
+         * and the caller's own fail-closed handling then reported "no receipts" for a household that
+         * had them.
+         */
+        let rangeFrom: number | null = null;
+        let rangeTo: number | null = null;
         let limitN: number | null = null;
         let pendingInsert: Row | Row[] | null = null;
         let pendingUpdate: Row | null = null;
@@ -596,6 +604,12 @@ export function createOperationalEnrollmentMockSupabase(
             return chain;
         });
 
+        chain.range = vi.fn((from: number, to: number) => {
+            rangeFrom = from;
+            rangeTo = to;
+            return chain;
+        });
+
         chain.maybeSingle = vi.fn(async () => {
             /*
              * `maybeSingle` after a MUTATION returns what the mutation touched — and NULL, not an
@@ -627,6 +641,7 @@ export function createOperationalEnrollmentMockSupabase(
                 });
             }
             if (limitN != null) sorted = sorted.slice(0, limitN);
+            if (rangeFrom != null) sorted = sorted.slice(rangeFrom, (rangeTo ?? sorted.length) + 1);
             return { data: sorted[0] ?? null, error: null };
         });
 
@@ -696,6 +711,8 @@ export function createOperationalEnrollmentMockSupabase(
                 });
             }
             if (limitN != null) sorted = sorted.slice(0, limitN);
+            // Inclusive bounds, exactly as PostgREST treats a Range header.
+            if (rangeFrom != null) sorted = sorted.slice(rangeFrom, (rangeTo ?? sorted.length) + 1);
             return Promise.resolve(onFulfilled({ data: clone(sorted), error: null }));
         };
 

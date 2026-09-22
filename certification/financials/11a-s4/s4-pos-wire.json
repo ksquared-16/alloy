@@ -1,0 +1,65 @@
+[
+  {
+    "request": {
+      "action_key": "billing.resolve_responsibility",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "preview",
+      "payload": {
+        "charge_id": "907d1b64-09d5-4926-bed0-63d044c15441"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "$75.00 to divide.",
+            "changes": [
+              "Gross $75.00",
+              "Reductions $0.00"
+            ]
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "5139bdb2-632f-4663-bb2b-85ab6baa1ac9"
+    }
+  },
+  {
+    "request": {
+      "action_key": "billing.resolve_responsibility",
+      "entity_type": "child",
+      "entity_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "charge_id": "907d1b64-09d5-4926-bed0-63d044c15441"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "kind": "resolved",
+          "chargeId": "907d1b64-09d5-4926-bed0-63d044c15441",
+          "arrangementId": "30d94536-691b-465a-933d-288b5249301c",
+          "allocations": 2,
+          "unassignedCents": 5700,
+          "netCents": 7500
+        },
+        "affected_id": "907d1b64-09d5-4926-bed0-63d044c15441"
+      },
+      "correlation_id": "1f0781c1-0e31-4a1f-8d0f-d173801d6a8f"
+    }
+  }
+]

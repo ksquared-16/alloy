@@ -52,6 +52,8 @@ function chargeIntent(over: Partial<ChargeIntent> = {}): ChargeIntent {
         currencyCode: "USD",
         occursOn: TODAY,
         billableOn: TODAY,
+        // No due-date policy in this fixture — null is "leave it as it was", not "due today".
+        dueDate: null,
         glMappingKey: "fee_revenue",
         responsibilityKey: null,
         reviewRequired: false,

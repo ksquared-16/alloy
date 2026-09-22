@@ -33,6 +33,10 @@
  * Identity alone is not operational: without current business state AND a truthful primary
  * action the answer does not claim `operational`.
  */
+import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
+import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
+import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     computeOperationalProjection,
@@ -73,12 +77,14 @@ import {
 import { applyCanonicalWorkViewSort } from "./canonicalWorkViewSort";
 import {
     resolveOperationalPresentation,
+    resolveWorkUnitHeaderConfigFromRecords,
+    operationalKpiSlotsFromHeaderConfig,
     listWorkUnitHeaderLayoutRecords,
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
-import { attachActiveTourFactsToOpportunityRows } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
+import { attachEffectiveStagesFromMaintainedFacts } from "@/lib/process/definitions/enrollment/maintainedParticipantFacts";
+import { attachActiveTourFactsFromMaintainedFacts } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -155,6 +161,18 @@ import { projectFocusPanelOperational } from "@/lib/adminV2/runtime/focusPanel/f
  * sees this; only a real render does.
  */
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
+import { attachOpportunityInquiryChildrenShell } from "@/lib/admin/opportunityEntityRecord";
+/*
+ * TYPE-ONLY, DELIBERATELY. The header KPI resolution runs the analytics authorization gate, which
+ * reaches `next/headers`; this composer is reachable from a client component, so a VALUE import
+ * here puts that module in the browser graph and the production build fails — which it did. The
+ * implementation is injected by the route instead (`req.resolveHeaderKpis`), exactly as the drawer
+ * route owns its producers for the same reason. A type import is erased at build.
+ */
+import type { WorkUnitHeaderKpiSeed } from "@/lib/runtime/provisioning/workUnitHeaderKpiResolution";
+
+/** Mirrors WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS; kept here so the composer imports no value from it. */
+const WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS = 150;
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 
 /** U-P3: bounded to ONE page. The answer may never be unbounded. */
@@ -286,7 +304,20 @@ export type FocusPanelSummaryDocProjection = {
     doc?: LayoutDoc | null;
 };
 
-export type ProvisioningAnswer =
+/**
+ * The configured Work View counts, resolved server-side so WU-03 needs no second round trip.
+ *
+ * Carried on EVERY terminal, not just the operational one: a non-operational answer still renders
+ * the pill strip's reserved geometry, and the route assigns this without narrowing. Absent or
+ * `unavailable` means the client issues its canonical fallback exactly as before — an absent seed
+ * is NOT an authoritative empty, and never a zero.
+ */
+export type ProvisioningAnswerCountSeed = {
+    workViewTotalsSeed?: import("./workViewTotalsSeedContract").WorkViewTotalsSeed | null;
+};
+
+export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
+    (
     | {
           terminal: "operational";
           /** U-P1 authorization + canonical identifiers. */
@@ -377,6 +408,33 @@ export type ProvisioningAnswer =
           focusPanelOperationalProjection: FocusPanelOperationalProjection | null;
           /** A — commit-critical subject identity truth bindings, domain-declared + opaque to the platform (see {@link SubjectIdentityTruth}). */
           subjectIdentityTruth: SubjectIdentityTruth | null;
+          /** Configured lifecycle rail, computed server-side by the canonical pure builder. */
+          businessProcessStages?: ReadonlyArray<{ key: string; label: string; support?: readonly string[] }>;
+          /** Configured process name ("Enrollment"), not the generic card title. */
+          businessProcessName?: string | null;
+      /**
+       * THE AUTHORITATIVE PARTICIPATION, resolved once on the server and carried to the browser.
+       *
+       * IDENTITY, NOT PERMISSION. It is the member id and the OCM row that names it, and nothing else —
+       * no profile, no photo, no health facts, no authorization answer. Every producer that consumes it
+       * still resolves its own grants at request time.
+       *
+       * It exists because the server already knew this and the browser did not. Measured on deployed
+       * 41c67ec17: the document's producers ran Attendance (141ms) and Health (470ms) and put their
+       * answers in `operationalProjection`, but the browser decides card readiness from its OWN context,
+       * which had no participantScope — so those cards stayed reserved and remounted only when the
+       * drawer settled, ~3.5s later, to learn what the answer already carried.
+       */
+      resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+      /**
+       * The tour signal the ANSWER resolved, or null when it did not.
+       *
+       * Null is NOT "no tour" — it is "not established". The collapsed Business Process card's
+       * activity preview falls back to a scheduled tour, so publishing an unestablished empty here
+       * would state an authoritative "no activity" the answer never computed.
+       */
+      resolvedTour?: OperationalContextSignals["tour"] | null;
+
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
           /**
@@ -393,6 +451,12 @@ export type ProvisioningAnswer =
           settlement: SettlementLocators;
           /** B — resolved right-rail Actions, committed WITH the surface (count at commit, no flash). */
           actionsProjection: WorkUnitActionsProjection;
+          /**
+           * Header KPI values resolved during THIS composition, or null when they did not land
+           * inside the join grace. Null means "resolve as before" — never zero, never stale. The
+           * seed states the scope it was resolved for; a client on a different scope ignores it.
+           */
+          headerKpis: WorkUnitHeaderKpiSeed | null;
           timings: ProvisioningTimings;
       }
     | {
@@ -494,7 +558,7 @@ export type ProvisioningAnswer =
      * membership is what forces every consumer to decide, via exhaustiveness, what it renders when no
      * cohort is selected.
      */
-    | ContextualFocusAnswer;
+    | ContextualFocusAnswer);
 
 export type ProvisioningErrorCode =
     | "unauthorized"
@@ -573,6 +637,55 @@ export type ProvisioningRequest = {
      * still valid — its rows simply carry no avatar and present initials.
      */
     documentActor?: DocumentActor | null;
+    /*
+     * INJECTED BY THE ROUTE. Resolves the header KPI values for the published key set during this
+     * composition. Injected rather than imported because its authorization gate reaches
+     * `next/headers` and this module is in a client-reachable graph. Absent (any non-route caller)
+     * simply means the client resolves them as before.
+     */
+    /**
+     * EARLY SUBJECT NOTIFICATION — the route starts its own subject-scoped reads sooner.
+     *
+     * `composeProvisioningAnswerForRoute` has exactly three serial awaits: route identity (~170ms),
+     * this composition (~742ms), then the card producers (~858ms). Measured on deployed d1b8f1319
+     * those sum to the 2,022ms document wall, and nothing the operator can read crosses the wire
+     * until the last of them finishes — even though the response itself opens at ~32ms.
+     *
+     * The producers' own participant read only needs the SUBJECT, which is resolved here, before
+     * the ~616ms children shell runs. Announcing it lets the route overlap that read with the rest
+     * of composition instead of queueing it behind the whole answer.
+     *
+     * Announcement only: no value is returned into composition, so the answer cannot come to depend
+     * on route-side work and the two cannot deadlock. A throwing listener must never fail the
+     * document, so the call site swallows.
+     */
+    onSubjectResolved?: (args: { subjectId: string; orgId: string; customerId: string | null }) => void;
+    /**
+     * THE CONFIGURED COUNT LOCATIONS, ANNOUNCED AS SOON AS THEY ARE AUTHORITATIVE.
+     *
+     * WU-03's lane counts are the product's completion owner, and today the browser asks for them
+     * in a SECOND round trip that cannot start until the document has finished. Everything that
+     * request needs to begin is known here, well before composition ends: the configuration-derived
+     * count locations, the department's work units, and the one department metadata layer that
+     * publishes their Work View configuration.
+     *
+     * Announced rather than awaited, for the same reason the subject is: the composer must not
+     * grow a dependency on counts, and the route must be free to start them beside composition.
+     * A listener is an optimisation and may never cost the document its answer, so the call site
+     * swallows.
+     */
+    onWorkViewCountTargetsResolved?: (args: {
+        orgId: string;
+        hostWorkUnitId: string;
+        departmentId: string;
+        departmentMetadata: unknown;
+        countTargets: ReadonlyArray<{ workViewId: string; hostWorkUnitId: string; baseQueueKey: string }>;
+        deptWorkUnits: ReadonlyArray<{ id: string; is_active?: boolean | null; department_id?: string | null }>;
+    }) => void;
+    resolveHeaderKpis?: (args: {
+        workUnitId: string;
+        kpiSlots: ReadonlyArray<{ sourceKey?: string | null }>;
+    }) => Promise<WorkUnitHeaderKpiSeed | null>;
     /**
      * The actor's mutate access, resolved ONCE by the caller's route gate.
      *
@@ -721,6 +834,36 @@ export async function composeWorkUnitProvisioningAnswer(
     /** Diagnostic only — how long one named step inside composition took. */
     const spans: Record<string, number> = {};
     const markSpan = (name: string, startedAt: number) => { spans[name] = Math.round(now() - startedAt); };
+    /*
+     * INTERVALS, NOT DURATIONS — because a duration inventory cannot reconcile a wall.
+     *
+     * `composition_ms` correlates 0.99 with the compose wall, yet every span named inside it is
+     * either fully overlapped (document_children tail 0, header_kpi join wait 0, work_view_seed
+     * join wait 0) or small (records ~125, location ~133). Summing the phases gives ~1,259ms
+     * against a ~644ms wall, so they overlap and must not be added. About 500ms of the critical
+     * path was therefore unattributed, and no compute target could be modelled against it.
+     *
+     * A duration says how long something took; it cannot say whether anyone WAITED for it. This
+     * records the three facts that separate concurrent work from critical-path work:
+     *   `<name>_at_ms`    when the join was reached, as an offset from composition start
+     *   `<name>_wait_ms`  what the join actually cost once we got there — the WALL contribution
+     *   `<name>_done_ms`  when it resolved, so the joins form an ordered timeline
+     * Work that finished before its join contributes 0 to the wall no matter how long it ran, and
+     * consecutive `_at_ms` values expose any serial gap the joins themselves do not explain.
+     *
+     * DIAGNOSTIC ONLY: nothing here awaits anything the composition did not already await, and the
+     * rejection path is re-thrown rather than observed, so a timed promise fails exactly as before.
+     */
+    const joinWait = async <T,>(name: string, promise: Promise<T>): Promise<T> => {
+        const at = now();
+        spans[`${name}_at_ms`] = Math.round(at - t0);
+        try {
+            return await promise;
+        } finally {
+            spans[`${name}_wait_ms`] = Math.round(now() - at);
+            spans[`${name}_done_ms`] = Math.round(now() - t0);
+        }
+    };
     // A refusal carries whatever navigational frame was ALREADY resolved when it happened, so the
     // operator keeps a way out. `frame` is threaded explicitly rather than captured from an outer
     // mutable: the lens set does not exist for the early failures, and a closure would silently offer
@@ -960,6 +1103,26 @@ export async function composeWorkUnitProvisioningAnswer(
               deptWorkUnits,
           })
         : SETTLEMENT_LOCATORS_UNAVAILABLE;
+    /*
+     * The earliest point at which every seed input is authoritative. Composition still has the
+     * children shell, the projection and the commit-critical reads ahead of it, so a listener that
+     * starts here overlaps most of what remains instead of queueing behind all of it.
+     */
+    if (settlement.status === "resolved" && wuRow.department_id) {
+        try {
+            req.onWorkViewCountTargetsResolved?.({
+                orgId: req.orgId,
+                hostWorkUnitId: workUnit.id,
+                departmentId: String(wuRow.department_id),
+                departmentMetadata: deptRow?.metadata ?? null,
+                countTargets: settlement.workViewCountTargets,
+                deptWorkUnits,
+            });
+        } catch {
+            // A listener is an optimisation. It may never cost the document its answer.
+        }
+    }
+
     // Rows + child membership follow the active lens's Settlement count host when it differs from the
     // surface slug. Shell identity (`workUnit`) stays the open unit so pill LENS switches do not remount.
     const populationWorkUnitId = resolveProvisioningPopulationWorkUnitId({
@@ -998,6 +1161,44 @@ export async function composeWorkUnitProvisioningAnswer(
     // enrichment branch below, and await it at the join. Still ONE atomic answer — internal read reordering.
     const tPres = now();
     const queueRowSurfaceId = queueRowSurfaceIdForDepartment(String(wuRow.department_id), deptRow?.metadata);
+    /*
+     * THE HEADER CONFIG READ, SPLIT OUT — ONE read, two consumers.
+     *
+     * It used to sit inside the presentation branch beside the queue-row layout read. Both run
+     * concurrently, but the queue-row read is the dominant cost (~700ms vs ~335ms) and the branch
+     * only resolves once BOTH have landed and composed. The KPI resolve chained off that, so it
+     * began ~1,000ms into composition, finished ~2,400-3,000ms, and missed the document's join at
+     * ~2,300-2,700ms — measured on #1091, binding in only 1 of 8 samples.
+     *
+     * Splitting it lets the KPI start when the header config alone is ready. This is the SAME read
+     * — `presentationPromise` awaits this promise rather than issuing its own — so the config read
+     * count is unchanged at one, and the derivation both consumers apply is the same exported
+     * function, so their key sets cannot diverge.
+     */
+    const tHeaderConfig = now();
+    const headerLayoutRecordsPromise = cachedConfigRead(`hdr:${req.orgId}:`, () =>
+        listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
+    )
+        .then((r) => {
+            markSpan("header_config_ready_ms", tHeaderConfig);
+            return r;
+        })
+        .catch(() => null);
+    void headerLayoutRecordsPromise.catch(() => {});
+
+    /*
+     * THE PRESENTATION BRANCH'S OWN DURATION (P0-7.6 — is cohort enrichment on the critical path?).
+     *
+     * `presentation_ms` is measured at the JOIN, so it spans this branch AND the projection +
+     * enrichment that run concurrently with it: the comment at that join says the enrichment cost
+     * is hidden underneath it. That makes the branch durations unrecoverable from it, and with
+     * them the only fact that decides whether cohort enrichment is on the critical path at all —
+     * a 486 ms enrichment behind a 590 ms presentation branch costs nothing to remove, and behind
+     * a 200 ms one it costs nearly all of it. Maintained truth must not be argued from a number
+     * that cannot tell those apart.
+     */
+    const tPresBranch = now();
+    let presentationBranchMs: number | null = null;
     const presentationPromise = (async () => {
         // The queue-row layout and the header layout are INDEPENDENT DB reads — fetch them concurrently,
         // then compose (compose is in-memory). Collapses the two sequential ~700ms + ~335ms reads into one.
@@ -1015,9 +1216,8 @@ export async function composeWorkUnitProvisioningAnswer(
                     workViewId: activeView.id,
                 }),
             ),
-            cachedConfigRead(`hdr:${req.orgId}:`, () =>
-                listWorkUnitHeaderLayoutRecords(req.supabase, req.orgId),
-            ).catch(() => null),
+            // THE SAME read the KPI seed consumes — not a second one.
+            headerLayoutRecordsPromise,
         ]);
         return resolveOperationalPresentation({
             supabase: req.supabase,
@@ -1036,7 +1236,48 @@ export async function composeWorkUnitProvisioningAnswer(
     })();
     // Early-return safety (grain/records/subject fails never await it): keep the promise handled. The real
     // await at the assembly join re-sees any rejection so a genuine failure still surfaces 1:1.
-    void presentationPromise.catch(() => {});
+    void presentationPromise
+        .then(() => {
+            // `then`, not `finally`: a rejected branch did not produce a presentation, and timing
+            // the failure would put a duration for work that never completed beside durations for
+            // work that did.
+            presentationBranchMs = Math.round(now() - tPresBranch);
+        })
+        .catch(() => {});
+
+    /*
+     * THE HEADER KPI ANSWER, STARTED AS SOON AS ITS CONFIG EXISTS.
+     *
+     * These three numerals are the Work Unit's COMPLETION OWNER. Measured on deployed staging the
+     * client hook that fetches them starts ~50ms AFTER the document lands and finishes ~1.2-1.9s
+     * later, holding V2.1 to ~5.6-5.8s while the cards themselves finish at ~4.74s. Nothing about
+     * the work needs hydration: org, work unit, site scope, the key set and the authorization
+     * bundle all exist here.
+     *
+     * It chains off the presentation branch because the KEY SET is published header config, which
+     * that branch already reads — so this adds no read of its own. It is deliberately NOT awaited
+     * inline: the join below takes what is ready and never blocks the document behind the rest.
+     */
+    const tHeaderKpi = now();
+    const headerKpiPromise: Promise<WorkUnitHeaderKpiSeed | null> = headerLayoutRecordsPromise
+        .then((records) => {
+            // The SAME derivation the presentation branch applies, over the SAME records. A second
+            // derivation could pick a different published variant, and the seed's key set would
+            // stop matching the client's — which fails silently as "seed ignored", not as an error.
+            const { headerConfig } = resolveWorkUnitHeaderConfigFromRecords(records, {
+                businessProcessKey: process.key,
+                workViewId: activeView.id,
+            });
+            const kpiSlots = operationalKpiSlotsFromHeaderConfig(headerConfig);
+            markSpan("header_kpi_start_ms", tHeaderKpi);
+            return req.resolveHeaderKpis?.({ workUnitId: workUnit.id, kpiSlots }) ?? null;
+        })
+        .then((seed) => {
+            markSpan("header_kpi_execution_elapsed_ms", tHeaderKpi);
+            return seed;
+        })
+        .catch(() => null);
+    void headerKpiPromise.catch(() => {});
 
     // ── B: COMMIT-CRITICAL ACTIONS PROJECTION — resolve the right-rail action set CONCURRENTLY with the
     // presentation branch (it depends only on org + department + work unit, all known here). The SAME
@@ -1196,20 +1437,25 @@ export async function composeWorkUnitProvisioningAnswer(
         // opportunity_stage predicates use `_effective_participant_stage_keys`, not raw
         // `opportunities.stage_key`. Without this, families remain in Lead after every
         // child has diverged to Waitlist.
-        const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: (baseRows ?? []) as Array<Record<string, unknown>>,
-            logLabel: "provisioning",
-        });
-        // Active Tour facts before Work View predicates — family-grain Tours lenses filter on
-        // operational booking truth (`has_active_tour`), not stage_key alone.
-        const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            rows: baseWithEpp,
-            logLabel: "provisioning",
-        });
+        /*
+         * ── TWO ROUND TRIPS RETIRED, NOT HIDDEN ──
+         *
+         * These were two awaited database enrichments between the records read and the evaluator, so
+         * the evaluated page cost THREE serial round trips for one page of rows. Both were already
+         * PURE derivations that simply had nowhere to get their rows from.
+         *
+         * The rows now arrive WITH the opportunity — `maintained_operational_facts`, maintained
+         * transactionally by the authority that changes each fact — so the derivations stay exactly
+         * where they were and the reads are gone. Not cached, not prefetched, not parallelised: gone.
+         *
+         * Both calls are SYNCHRONOUS, and that is the enforcement. An async signature is what let a
+         * round trip hide in the middle of this path; a pure function cannot grow one without
+         * changing shape.
+         */
+        const baseWithEpp = attachEffectiveStagesFromMaintainedFacts(
+            (baseRows ?? []) as Array<Record<string, unknown>>,
+        );
+        const baseWithTourFacts = attachActiveTourFactsFromMaintainedFacts(baseWithEpp);
         const projection = computeOperationalProjection({
             baseRows: baseWithTourFacts as OperationalProjectionRow[],
             workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
@@ -1268,6 +1514,9 @@ export async function composeWorkUnitProvisioningAnswer(
                   return enrichOperationalProjectionRows({
                       supabase: req.supabase,
                       orgId: req.orgId,
+                      // Personal seen is per-operator; without it the rows carry no verdict.
+                      currentUserId: req.currentUserId ?? null,
+                      onPhase: (name, ms) => { spans[name] = ms; },
                       rows: familyPage as unknown as EnrichableProjectionRow[],
                       queue: {
                           key: activeView.id,
@@ -1285,6 +1534,9 @@ export async function composeWorkUnitProvisioningAnswer(
             : (enrichOperationalProjectionRows({
                   supabase: req.supabase,
                   orgId: req.orgId,
+                  // Personal seen is per-operator; without it the rows carry no verdict.
+                  currentUserId: req.currentUserId ?? null,
+                  onPhase: (name, ms) => { spans[name] = ms; },
                   rows: page as unknown as EnrichableProjectionRow[],
                   queue: {
                       key: activeView.id,
@@ -1307,6 +1559,10 @@ export async function composeWorkUnitProvisioningAnswer(
     if (page.length === 0) {
         const presentation = await presentationPromise;
         timings.presentation_ms = now() - tPres;
+        // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
+        // `timings.spans` here would write to undefined and then be overwritten by that assignment.
+        // The `.then` above was attached BEFORE this await, so it has already run when we get here.
+        if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
         const actionsProjection = await actionsProjectionPromise;
         timings.composition_ms = now() - tComp;
         timings.total_ms = now() - t0;
@@ -1457,6 +1713,10 @@ export async function composeWorkUnitProvisioningAnswer(
         // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
         const presentation = await presentationPromise;
         timings.presentation_ms = now() - tPres;
+        // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
+        // `timings.spans` here would write to undefined and then be overwritten by that assignment.
+        // The `.then` above was attached BEFORE this await, so it has already run when we get here.
+        if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
 
         // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
         // Canonical config owner = the matched published variant (not a second Work View authority).
@@ -1559,6 +1819,143 @@ export async function composeWorkUnitProvisioningAnswer(
         childSubjectRow ??
         page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
         familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
+
+    /*
+     * THE SITE LOOKUP STARTS HERE AND IS AWAITED AT THE COMMIT BOUNDARY.
+     *
+     * It was a serial `await` in the bindings block at the very TAIL of composition — after
+     * presentation, the children shell, waitlist, inquiry and avatar had all finished. There was
+     * no remaining work to overlap with, so its whole wall landed on the document: measured
+     * 1,949ms -> 3,061ms, about +1,112ms, which is the regression this repair exists to remove.
+     *
+     * Started here it runs ALONGSIDE the children shell and the child-grain branches below, which
+     * is the same shape those already use ("started here, awaited at the commit boundary"). The
+     * inputs are authoritative at this point: `req.orgId` came from the route gate and the subject
+     * row is resolved, so concurrency cannot let the read outrun the request's authority.
+     *
+     * ONE promise, ONE resolved answer, consumed by both the rail annotation and Children. It is
+     * never awaited early and never published before it is authoritative.
+     */
+    /*
+     * The family row for a child surface, resolved from the membership set already in hand —
+     * `enriched` is not in scope this early, and reaching for it would mean moving a read rather
+     * than moving a wait. `familyMembership` carries the same opportunity rows, so the location id
+     * it yields is the same one the late binding resolves; the join below re-checks rather than
+     * assuming.
+     */
+    const wave3RecordEarly = ((childSubjectRow?.contextId != null
+        ? ((familyMembership.find(
+              (r) => String((r as Record<string, unknown>).id) === childSubjectRow.contextId,
+          ) ?? null) as Record<string, unknown> | null)
+        : null) ?? (subjectRow as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+    const wave3EarlyLocation = resolveOpportunityLeadLocationFields(wave3RecordEarly);
+    const tWave3Location = now();
+    const wave3LocationPromise: Promise<string | null> =
+        wave3EarlyLocation.locationLabel
+            ? Promise.resolve(wave3EarlyLocation.locationLabel)
+            : wave3EarlyLocation.locationId
+              ? resolveLocationById(req.supabase, req.orgId, wave3EarlyLocation.locationId)
+                    .then((loc) => {
+                        markSpan("location_lookup_ms", tWave3Location);
+                        return loc ? canonicalLocationDisplay(loc) : null;
+                    })
+                    /*
+                     * An outage is not an answer. Null here means UNKNOWN, and the binding below
+                     * omits the key rather than writing a label — so nothing claims the record has
+                     * no site, and the drawer still corrects it later.
+                     */
+                    .catch(() => {
+                        markSpan("location_lookup_failed_ms", tWave3Location);
+                        return null;
+                    })
+              : Promise.resolve(null);
+
+    /*
+     * SUBJECT AND HOUSEHOLD ANNOUNCED HERE — everything the card producers actually need.
+     *
+     * Measured on deployed d1b8f1319 the route runs three awaits in series: route identity ~170ms,
+     * this composition ~742ms, then the card producers ~858ms. Nothing the operator can read
+     * crosses the wire until the last finishes, even though the response opens at ~32ms.
+     *
+     * The producers do NOT need the composed answer. Their input type is already a narrowed Pick
+     * carrying `participantScope` alone, and `financialSubjectId` is passed as a scalar — both
+     * shaped that way so the drawer route could start them before its view model existed. The only
+     * reason this route waits is that it happens to build them from the finished answer.
+     *
+     * Announcing the subject AND the household customer id here — after the subject row resolves
+     * and before the ~616ms children shell — gives the route both halves of that contract.
+     *
+     * `customerId` is the FIRST key of HOUSEHOLD_IDENTITY_TRUTH_KEYS ("customer.id"), so it is the
+     * same answer `resolveFinancialSubjectIdFromTruth` will reach. It is announced as a candidate,
+     * never as the decision: on a child surface the final value can fall back to the family row,
+     * so the route re-checks it against the composed truth before using anything derived from it.
+     */
+    if (chosen.entityId) {
+        try {
+            req.onSubjectResolved?.({
+                subjectId: String(chosen.entityId),
+                orgId: req.orgId,
+                customerId:
+                    strOrNull((subjectRow as Record<string, unknown> | null)?.customer_id) ?? null,
+            });
+        } catch {
+            // A listener is an optimisation. It may never cost the document its answer.
+        }
+    }
+
+    /*
+     * THE AUTHORITATIVE CHILDREN ANSWER — started here, awaited at the commit boundary.
+     *
+     * Children was the last blocking area that genuinely required the second round trip. Its card
+     * cannot be served from intake metadata: the headline count is
+     * `rows.filter((r) => r.outcome_status_key !== "declined")`, and `outcome_status_key` exists
+     * only in the OCM join and the enrollment overlay. Metadata would produce a WRONG count, not a
+     * partial one, which is why the cheap transport was rejected.
+     *
+     * So the document runs THE SAME owner the drawer runs — `attachOpportunityInquiryChildrenShell`
+     * — against the same org and the same opportunity. One authority, one row mapping, no second
+     * definition of what a Children row means.
+     *
+     * NO NEW COLUMNS RIDE ON THIS. The first attempt added `program_type, schedule_type` to the
+     * population select because the shell reads them as the opportunity-level defaults a child row
+     * falls back to. Neither column exists on `opportunities` — the deployed answer became
+     * "records unavailable: column opportunities.program_type does not exist" and staging lost
+     * every card. They are vestigial on the DRAWER path too: `OPPORTUNITY_CANONICAL_ADMIN_SELECT`
+     * does not carry them either, so `oppDefaultProgramType` has always resolved to null in
+     * production and the child's own `program_type` is what actually renders. Passing the host we
+     * already have reproduces the drawer's answer exactly, which is the point of one owner.
+     *
+     * A COPY, not the subject row: the shell writes `_inquiry_children` onto the host it is given,
+     * and the page rows must not acquire a key the row contract does not define.
+     */
+    const t_document_children = now();
+    const childrenHost: Record<string, unknown> = { ...(subjectRow as Record<string, unknown>) };
+    const documentChildrenP: Promise<unknown[] | null> = attachOpportunityInquiryChildrenShell(
+        req.supabase as never,
+        req.orgId,
+        childrenHost,
+        /*
+         * The SAME actor the answer already uses for row avatars. Photo URLs are documents minted
+         * per actor per request, so without it the children carry no `resolved_photo_url` and fall
+         * back to initials — a DIFFERENT visible answer, not a missing one.
+         */
+        req.documentActor ?? null,
+    )
+        .then(() => {
+            markSpan("document_children_ms", t_document_children);
+            return Array.isArray(childrenHost._inquiry_children)
+                ? (childrenHost._inquiry_children as unknown[])
+                : null;
+        })
+        /*
+         * Bounded and TRUTHFUL. A rejection resolves to null, which leaves the contract ABSENT, and
+         * the card reads absent as "not loaded". It must never resolve to `[]`, which is the
+         * authoritative answer "this family has no children".
+         */
+        .catch(() => {
+            markSpan("document_children_failed_ms", t_document_children);
+            return null;
+        });
 
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
@@ -1769,10 +2166,10 @@ export async function composeWorkUnitProvisioningAnswer(
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
     // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
-    const { enriched, rows, presentation } = await cohortRowsOnce();
+    const { enriched, rows, presentation } = await joinWait("cohort_rows", cohortRowsOnce());
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
-    const actionsProjection = await actionsProjectionPromise;
-    let focusPanelStageWork = await focusPanelStageWorkPromise;
+    const actionsProjection = await joinWait("actions_projection", actionsProjectionPromise);
+    let focusPanelStageWork = await joinWait("focus_panel_stage_work", focusPanelStageWorkPromise);
 
     // Mixed context Mission: keep the primary stage-work slice, then append each additional
     // Mission stage's primary template as secondary items (sync from already-loaded dept metadata —
@@ -1851,6 +2248,115 @@ export async function composeWorkUnitProvisioningAnswer(
             | null
             | undefined
     );
+    /*
+     * WAVE-3 FIRST-ORDER TRUTH, CARRIED INSTEAD OF WAITED FOR.
+     *
+     * Measured on deployed staging: business_process, children and household all made their first
+     * CORRECT visible statement ~2,974ms after the first card wave, and only when the drawer
+     * arrived. Withholding the drawer left them permanently wrong rather than merely late —
+     * children read "—" for a site the row already named, and household showed a contact it could
+     * not act on. That is not enrichment arriving late; it is first-order truth owned by the wrong
+     * frame.
+     *
+     * Every value below was ALREADY READ by this composer. `workUnitProcessPopulation` selects
+     * `updated_at`, `location_id` and `primary_person_id` on the opportunity, and the row carries
+     * its resolved `_location_name`. Nothing here adds a query, a projection or a second owner:
+     * `resolveOpportunityLeadLocationFields` is the canonical location resolver the drawer itself
+     * uses, so the two frames cannot disagree about the site.
+     *
+     * The household record precedence matches `identityContactSource` directly above — a child
+     * surface reads the FAMILY row, because household truth is family-grain even when the subject
+     * is a participant.
+     */
+    const wave3Record = (familyEnrichedForChild
+        ?? (subjectRow as Record<string, unknown> | null)
+        ?? {}) as Record<string, unknown>;
+    const wave3LeadLocation = resolveOpportunityLeadLocationFields(wave3Record);
+    /*
+     * THE SITE LABEL — THE LAST WAVE-3 FIRST-ORDER DEPENDENCY.
+     *
+     * Deployed measurement of the previous slice: business_process and household converged, and
+     * the ENTIRE remaining late wave was four mutations carrying ONE fact — "North Campus". The
+     * Tour stage annotation gained it and Children swapped "— / Inherited from lead" for it, both
+     * from the drawer, both at ~5.2s.
+     *
+     * My previous classification of this field as "already present" was WRONG and the measurement
+     * caught it. `_location_name` is CONSUMED in the document path but PRODUCED on the drawer's:
+     * `opportunityEntityRecord` reads the locations row and derives the label there. The document
+     * row carries `location_id`, a uuid, and no label — so `resolveOpportunityLeadLocationFields`
+     * correctly returned empty and the conditional spread correctly omitted the key rather than
+     * fabricating a site.
+     *
+     * So this is the one authorized new read, and it is ONE read feeding BOTH consumers: the same
+     * resolved label becomes the rail's annotation and Children's location. `resolveLocationById`
+     * is the canonical provider — a single indexed lookup scoped to `org_id`, which is the
+     * authority this composer already holds. No permission verdict is transported and no second
+     * location owner is created; `canonicalLocationDisplay` is the platform's own label rule.
+     *
+     * FAILURE SEMANTICS. A THROW is an outage, not an answer: the label stays null and no key is
+     * written, so nothing claims the record has no site. A null RESULT is authoritative absence —
+     * the row genuinely has no location — and the card's existing empty state is then correct.
+     * Neither path ever writes an empty-string label, which would render as a real blank site.
+     */
+    // JOIN. The lookup started beside the children shell; this is only the wait it did not already
+    // cover. `location_join_wait_ms` is what the join actually cost — the number to hold honest.
+    const tWave3LocationJoin = now();
+    const wave3LocationId = wave3LeadLocation.locationId || null;
+    /*
+     * The early start was keyed to the row available before the children branches ran. If the
+     * authoritative record resolved to a DIFFERENT location, the speculative answer is not this
+     * record's and must not be shown — so it is discarded and the canonical lookup runs for the
+     * real id. Same owner, same display rule; the speculation is an optimisation, never a source.
+     */
+    let wave3LocationLabel: string | null =
+        wave3EarlyLocation.locationId === wave3LocationId ? await wave3LocationPromise : null;
+    if (wave3LocationLabel == null && wave3LocationId && wave3EarlyLocation.locationId !== wave3LocationId) {
+        try {
+            const late = await resolveLocationById(req.supabase, req.orgId, wave3LocationId);
+            wave3LocationLabel = late ? canonicalLocationDisplay(late) : null;
+        } catch {
+            wave3LocationLabel = null;
+        }
+    }
+    markSpan("location_join_wait_ms", tWave3LocationJoin);
+    const wave3UpdatedAt = strOrNull(wave3Record.updated_at);
+    /*
+     * IDENTITY, NOT A PERMISSION VERDICT. The Household contact renders as plain text until it has
+     * an editable person id — `isEditableHouseholdPersonId` rejects empty and the "primary" /
+     * "secondary:" sentinels — so the missing id, not the missing authority, is what kept the
+     * affordance drawer-bound. `canMutate` is still evaluated at the request boundary from the
+     * operator's own roles and is NOT carried here.
+     */
+    const wave3PrimaryPersonId = strOrNull(wave3Record.primary_person_id);
+    /*
+     * THE LIFECYCLE RAIL, COMPUTED WHERE ITS CONFIGURATION ALREADY LIVES.
+     *
+     * `buildOpportunityWorkspaceLifecycleRail` is a PURE function — no I/O — and this composer
+     * already holds every input it needs: `deptRow.metadata` was read for the lens set, and the
+     * subject record is in hand. Its own contract states the split this relies on: "the stages are
+     * configuration, the annotations are truth."
+     *
+     * It is computed HERE, server-side, rather than plumbing `departmentMetadata` to the browser.
+     * The rail is the answer; the department's whole configuration document is not, and shipping
+     * it to the client to recompute the same value would be both larger and a second owner.
+     *
+     * `statusDefs: []` is deliberate. That argument exists only to resolve a status key to a stage
+     * for the rail's own `current_stage_key`, and the commit context already carries the record's
+     * stage as `situation.stageKey` — which is what the card's "current" marker reads. Passing an
+     * empty list therefore drops nothing the card uses and avoids a read for an answer we have.
+     */
+    const wave3Rail = buildOpportunityWorkspaceLifecycleRail({
+        departmentMetadata: deptRow?.metadata,
+        statusKey: null,
+        statusDefs: [],
+        record: wave3Record,
+        annotationLabels: {
+            locationLabel: wave3LocationLabel,
+            ownerLabel: null,
+        },
+    });
+    const wave3ProcessName = strOrNull((process as { name?: unknown } | null)?.name)
+        ?? strOrNull((process as { label?: unknown } | null)?.label);
     const primaryContactName = strOrNull(identityContactSource.display_name);
     const primaryContactPhone = strOrNull(identityContactSource.phone);
     const primaryContactEmail = strOrNull(identityContactSource.email);
@@ -1918,6 +2424,11 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactName ? { "person.primary_contact_name": primaryContactName } : {}),
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
+        // Wave-3 first-order truth (see above): all already read, none newly queried.
+        ...(wave3LocationLabel ? { _location_label: wave3LocationLabel } : {}),
+        ...(wave3LeadLocation.locationId ? { _location_id: wave3LeadLocation.locationId } : {}),
+        ...(wave3UpdatedAt ? { updated_at: wave3UpdatedAt } : {}),
+        ...(wave3PrimaryPersonId ? { primary_person_id: wave3PrimaryPersonId } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
         // Context Mission metadata (family grain) — presentation may aggregate participant count;
         // never invents stage labels (keys only; labels come from stage records / runtime).
@@ -1965,10 +2476,48 @@ export async function composeWorkUnitProvisioningAnswer(
           ? subjectIdentityTruthBindings
           : null;
 
+    /*
+     * AWAITED HERE — before the commit-critical context is built, which is the whole point.
+     *
+     * The first attempt awaited this AFTER `buildCommitCriticalOperationalContext` and folded the
+     * rows only into the answer payload. Even had it run, the COMMIT context would still have
+     * carried the children-less bag, the commit predicate would still have been false, and the
+     * card would still have waited for the drawer — the slice would have measured as a no-op. It
+     * also never used the folded value at all: the variable was declared and dropped.
+     *
+     * Everything above this line ran while the chain was in flight, so what the await costs is the
+     * INCREMENTAL tail past the existing critical work, not the chain's ~706ms serial length.
+     * `document_children_ms` is the chain; `document_children_tail_ms` is what this slice actually
+     * added.
+     */
+    const t_children_join = now();
+    const documentChildren = await documentChildrenP;
+    markSpan("document_children_tail_ms", t_children_join);
+
+    /*
+     * INTO THE IDENTITY BAG, BY THE DOMAIN COMPOSER — not named by the platform builder.
+     *
+     * The platform work-mode builder forwards `subjectIdentityTruth` OPAQUELY and may not mention
+     * a domain truth key; the boundary gate says so and rejected the first attempt, which named
+     * `_inquiry_children` in the builder. The DOMAIN owns which keys exist, so the rows join the
+     * bag here and reach commit truth through the path every other domain binding uses.
+     *
+     * `_inquiry_children` is deliberate: that IS the canonical representation at this boundary.
+     * The shell writes exactly that key, the card's normalizer reads exactly that key, and the
+     * commit predicate already tests it. A different name would be a second representation of one
+     * truth.
+     *
+     * Folded ONLY when rows actually came back. Absent leaves the predicate false and the card
+     * reserves exactly as before, so "not loaded" stays distinct from the authoritative `[]`.
+     */
+    const subjectIdentityTruthWithChildren: SubjectIdentityTruth | null = documentChildren
+        ? { ...(subjectIdentityTruth ?? {}), _inquiry_children: documentChildren }
+        : subjectIdentityTruth;
+
     // A — the published Summary composition for the committed scope. Selected with the SAME axes the
     // client doc provider sends (`workViewId` + committed stage; Business Process / status stay
     // wildcard), so the carried doc and any later client re-fetch resolve identically.
-    const summaryLayoutRows = await focusPanelSummaryRowsPromise;
+    const summaryLayoutRows = await joinWait("focus_panel_summary_rows", focusPanelSummaryRowsPromise);
     const summaryRecord = summaryLayoutRows
         ? resolvePublishedFocusPanelSummaryRecord(summaryLayoutRows, {
               workViewId: contextFrame.workViewId,
@@ -2036,9 +2585,52 @@ export async function composeWorkUnitProvisioningAnswer(
             primaryAction: primaryAction
                 ? { actionRef: primaryAction.actionRef, label: primaryAction.label }
                 : null,
-            subjectIdentityTruth,
+            subjectIdentityTruth: subjectIdentityTruthWithChildren,
+            /*
+             * First-order lifecycle truth, carried so the Business Process card states
+             * "Enrollment" and its configured rail at commit instead of "Business Process" and an
+             * empty timeline until the drawer settles.
+             */
+            businessProcessStages: wave3Rail?.stages ?? [],
+            businessProcessName: wave3ProcessName,
             subjectGrain,
     });
+
+    /*
+     * JOIN WITH A BOUNDED GRACE — overlap, never relocation.
+     *
+     * By here the KPI work has had the whole records/projection/enrichment branch to run in. If it
+     * has landed, it travels and the client issues no request at all. If it has not, we wait only
+     * a small measured grace and then ship without it: the client's existing fetch is the fallback,
+     * so the worst case is today's behaviour, never a document blocked behind the KPI cost.
+     * `header_kpi_wait_ms` is what this join actually added — the number to hold honest.
+     */
+    /*
+     * TWO DIFFERENT NUMBERS, MEASURED SEPARATELY.
+     *
+     * `header_kpi_wait_ms` previously started at KPI EXECUTION start, so it reported 812-1,152ms
+     * and read like the join cost. It was not: it was elapsed-time-to-join. The join's real cost is
+     * bounded by the grace, and conflating the two hid exactly the fact that needed seeing — that
+     * the resolve was starting too late, not that the join was expensive.
+     *
+     * `header_kpi_execution_elapsed_ms` is how long the resolve took (stamped where it completes).
+     * `header_kpi_join_wait_ms` is how long the DOCUMENT actually waited here, and is bounded by
+     * WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS plus timer tolerance.
+     */
+    const tKpiJoinStart = now();
+    const headerKpis = await (async (): Promise<WorkUnitHeaderKpiSeed | null> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const grace = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), WORK_UNIT_HEADER_KPI_JOIN_GRACE_MS);
+        });
+        try {
+            return await Promise.race([headerKpiPromise, grace]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    })();
+    markSpan("header_kpi_join_wait_ms", tKpiJoinStart);
+    spans.header_kpi_seeded = headerKpis && headerKpis.status === "ok" ? 1 : 0;
 
     const answer: ProvisioningAnswer = {
         terminal: "operational",
@@ -2116,7 +2708,7 @@ export async function composeWorkUnitProvisioningAnswer(
                   published_stage_inputs: null,
               }
             : null,
-        subjectIdentityTruth,
+        subjectIdentityTruth: subjectIdentityTruthWithChildren,
         focusPanelOperationalProjection: (() => {
             /*
              * THE PROJECTION CHOKEPOINT. One call, here, where every ingredient already exists.
@@ -2130,6 +2722,11 @@ export async function composeWorkUnitProvisioningAnswer(
             return projected;
         })(),
         focusPanelSummaryDoc,
+        /*
+         * The header KPI answer, resolved during THIS composition. Absent (null) means it did not
+         * land inside the join grace, which the client reads as "fetch as before" — never as zero.
+         */
+        headerKpis,
         presentation,
         settlement,
         actionsProjection,

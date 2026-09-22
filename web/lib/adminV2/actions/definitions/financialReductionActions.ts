@@ -126,7 +126,21 @@ const applyDiscounts: RegisteredAction = {
         };
     },
 
-    /** What the run would consider: the policies actually in force for that period. No writes. */
+    /**
+     * WHAT THE RUN WOULD DO, IN MONEY — resolved by the run's own planner, writing nothing.
+     *
+     * This used to list the policies IN FORCE and stop there, with a comment arguing that
+     * predicting eligibility would be "telling an operator a number the run might not produce".
+     * The argument was sound about GUESSING and wrong about this: the same function can resolve
+     * eligibility for real and decline to write. Measured on the running app, the old preview said
+     * "1 discount policy in force" and Confirm then created six reductions worth $237.50 — a figure
+     * the operator had never been shown.
+     *
+     * So the preview now runs `applyFinancialReductions` in preview mode: every read, every
+     * eligibility fact and every policy evaluation is the code the run itself uses, and only the
+     * writes are skipped. The policies stay in `changes`, because who qualified is still the
+     * explanation for the number.
+     */
     async buildPreview({ supabase, ctx, payload }) {
         const periodKey = t(payload?.period_key);
         const period = billingPeriodBounds(periodKey);
@@ -138,17 +152,38 @@ const applyDiscounts: RegisteredAction = {
                 && (!p.effective.start || p.effective.start <= period.end)
                 && (!p.effective.end || p.effective.end >= period.start),
         );
+        if (inForce.length === 0) {
+            return { summary: `No discount policy is in force for ${periodKey}.`, changes: [] };
+        }
+
+        const customerId = t(payload?.customer_id);
+        const planned = await applyFinancialReductions(supabase as SupabaseClient, {
+            orgId: ctx.orgId,
+            periodKey,
+            customerIds: customerId ? [customerId] : null,
+            mode: "preview",
+        });
+        const totalCents = planned.outcomes.reduce(
+            (sum, o) => sum + (o.kind === "applied" ? o.amountCents : 0),
+            0,
+        );
+        const money = (cents: number) =>
+            (Math.abs(cents) / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
         return {
             summary:
-                inForce.length === 0
-                    ? `No discount policy is in force for ${periodKey}.`
-                    : `${inForce.length} discount ${inForce.length === 1 ? "policy" : "policies"} in force for ${periodKey}.`,
-            /*
-             * The POLICIES, not a predicted set of amounts. Who qualifies depends on enrolments and
-             * employments read at execution, and a preview that guessed at eligibility would be
-             * telling an operator a number the run might not produce.
-             */
+                `${planned.counts.applied} ${planned.counts.applied === 1 ? "obligation" : "obligations"} would be `
+                + `reduced by ${money(totalCents)} for ${periodKey} · ${planned.counts.unchanged} unchanged, `
+                + `${planned.counts.alreadyPosted} already posted, ${planned.counts.notEligible} not eligible, `
+                + `${planned.counts.refused} refused`,
             changes: inForce.map((p) => `${p.kind} · ${JSON.stringify(p.params)}`),
+            after: {
+                period_key: periodKey,
+                service_period: planned.servicePeriod,
+                counts: planned.counts,
+                total_reduction_cents: totalCents,
+                refused_outcomes: planned.outcomes.filter((o) => o.kind === "refused"),
+                not_eligible_outcomes: planned.outcomes.filter((o) => o.kind === "not_eligible"),
+            },
         };
     },
 

@@ -35,6 +35,30 @@ export const TRANSIENT_POPUP_SELECTOR = '[role="listbox"], [role="menu"][data-st
 export const INLINE_EDIT_SELECTOR = '[data-identity-editing="true"]';
 
 /**
+ * An open FINANCIALS DEPTH CARD — Manage responsibility, and Manage discounts.
+ *
+ * EVERY depth card belongs in this selector, and forgetting one reproduces the defect exactly.
+ * Measured on deployed 76a8f3fc8: the discount card carried the same host guard responsibility
+ * has, and Escape still closed the whole Details surface with focus landing on <body> — because
+ * the guard is a React bubble handler and the grid listens at window CAPTURE. Registering here is
+ * the only thing that makes a parent yield; a per-card guard cannot win that race.
+ *
+ * MEASURED on deployed 33e8a90d9: with the card open on Financials Details, one Escape closed the
+ * card AND the whole Details surface, leaving focus on <body>. The card already answers Escape in
+ * its host and stops it there, but that handler is a React BUBBLE listener on the app root, and the
+ * grid's is CAPTURE on `window` — the earliest listener in the document. The grid therefore
+ * dismissed the elevated card before the depth card's own handler ever ran. Registering here is how
+ * a nested layer declares itself, and is why this file exists rather than a second Escape listener.
+ *
+ * Like the inline editor, it counts only when it also HOLDS FOCUS: the card's dismissal runs from
+ * its own `onKeyDown`, which cannot fire unless focus is inside it, and yielding to a layer that
+ * will not act would leave Escape doing nothing at all. The panel takes focus when it opens
+ * (`tabIndex={-1}` plus a focusing ref), so this is true exactly while it is the innermost thing.
+ */
+export const FINANCIALS_DEPTH_CARD_SELECTOR =
+    '[data-financials-manage-responsibility="open-panel"], [data-financials-manage-discounts="open-panel"]';
+
+/**
  * True when a transient popup is open anywhere.
  *
  * Also the inline editor's own deferral test. React attaches its listeners to the app root, which
@@ -52,5 +76,6 @@ export function hasInnerDismissibleLayer(doc: Document | null | undefined): bool
     if (!doc) return false;
     if (hasOpenTransientPopup(doc)) return true;
     const active = doc.activeElement;
-    return Boolean(active && typeof active.closest === "function" && active.closest(INLINE_EDIT_SELECTOR));
+    if (!active || typeof active.closest !== "function") return false;
+    return Boolean(active.closest(INLINE_EDIT_SELECTOR) || active.closest(FINANCIALS_DEPTH_CARD_SELECTOR));
 }

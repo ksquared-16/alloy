@@ -5,6 +5,16 @@ import type { ReactNode } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
+import { AlloyMultiSelect, AlloySelect } from "@/components/workspace/AlloySelect";
+
+/**
+ * HOUSEHOLD IS A VALUE, NOT AN ABSENCE.
+ *
+ * The multi-select needs a value to carry "the whole account", and it must not be a real member
+ * id or an empty list. An empty selection means the operator has chosen nobody — the one reading
+ * that must never silently become "everybody" on the surface that commits money.
+ */
+const ADDCHARGE_HOUSEHOLD_VALUE = "__household__";
 
 /**
  * Add charge — the command surface, driven by `financial_charge_templates`.
@@ -76,6 +86,35 @@ export default function AddChargeCommand({
         subjects: Array<{ id: string; label: string }>;
         selectedSubjectId: string | null;
         onSelectSubject: (subjectId: string) => void;
+        /**
+         * ── ALSO BILL THESE CHILDREN ──────────────────────────────────────────────────────────
+         *
+         * Absent when the operation cannot legitimately widen: the charge category does not permit
+         * child grain, or the account has only one child. MULTIPLE CHILDREN IS AN OPERATION, not a
+         * grain — each ticked child receives their own independent obligation at the full amount,
+         * and nothing here creates a shared or household row.
+         */
+        /**
+         * The one target control. When present it replaces the anchor select and the "Also bill"
+         * checkboxes; the GRAIN model beneath is unchanged — a household charge still names no
+         * child, and children are still independent obligations.
+         */
+        unifiedTarget?: {
+            householdOffered: boolean;
+            householdSelected: boolean;
+            onSelectHousehold: () => void;
+            children: Array<{ id: string; label: string }>;
+            selectedChildIds: string[];
+            onToggleChild: (id: string) => void;
+            perChildLabel: string | null;
+        };
+        alsoChildren?: {
+            options: Array<{ id: string; label: string }>;
+            selectedIds: string[];
+            onToggle: (id: string) => void;
+            /** The per-child amount, already formatted, so the total can be stated honestly. */
+            perChildLabel: string | null;
+        };
         amount: string;
         onAmount: (value: string) => void;
         note: string;
@@ -125,19 +164,15 @@ export default function AddChargeCommand({
                 can be long, and the operator sees labels, never keys. */}
             <Field label="Charge type" required>
                 {controls ? (
-                    <select
-                        className="alloy-os-addcharge__select"
-                        data-addcharge-template
+                    <AlloySelect
+                        testId="addcharge-template"
+                        aria-label="Charge type"
+                        allowEmpty={false}
                         value={controls.selectedTemplateId ?? ""}
-                        onChange={(e) => controls.onSelectTemplate(e.target.value)}
-                    >
-                        {templates.map((opt) => (
-                            // LABELS, never internal keys. The catalog owns the wording.
-                            <option key={opt.key} value={opt.key}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
+                        /* LABELS, never internal keys. The catalog owns the wording. */
+                        options={templates.map((opt) => ({ value: opt.key, label: opt.label }))}
+                        onChange={(next) => controls.onSelectTemplate(next)}
+                    />
                 ) : (
                     <span className="alloy-os-addcharge__select">
                         {t.label}
@@ -173,24 +208,148 @@ export default function AddChargeCommand({
             {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
                 Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
             <SectionHead ruled={false}>Charge</SectionHead>
-            <Field label="Applies to" required={t.requiresSubject}>
-                {controls && controls.subjects.length > 1 ? (
-                    <select
-                        className="alloy-os-addcharge__select"
-                        data-addcharge-subject
-                        value={controls.selectedSubjectId ?? ""}
-                        onChange={(e) => controls.onSelectSubject(e.target.value)}
-                    >
-                        {controls.subjects.map((s) => (
-                            <option key={s.id} value={s.id}>
-                                {s.label}
-                            </option>
-                        ))}
-                    </select>
-                ) : (
-                    <Value>{specimen.subject}</Value>
-                )}
-            </Field>
+            {/*
+             * ── ONE TARGET, TWO CONCEPTS UNDERNEATH ──────────────────────────────────────────
+             *
+             * "Applies to" and "Also bill" were two controls for one question — who receives this
+             * charge — and an operator had to understand the GRAIN model to use them: pick an
+             * anchor here, then widen there. The model is right and the presentation was not.
+             *
+             * So one control, and the same model beneath it: Household stays an explicit option,
+             * children are a multi-select, and the two are mutually exclusive. Selecting Household
+             * clears every child; selecting a child clears Household. What is never allowed is an
+             * empty selection meaning Household — that is the ambiguity the grain model forbids,
+             * and it is why the household option is a radio with a value rather than the absence
+             * of ticks.
+             *
+             * Category grain still governs what is offered: the household option only appears when
+             * `categoryPermitsHouseholdGrain`, the children only when `categoryPermitsChildGrain`.
+             * A control that offers a choice the write path refuses is worse than one that does not.
+             */}
+            {controls && controls.unifiedTarget ? (
+                <Field label="Applies to" required={t.requiresSubject}>
+                    {/*
+                     * ONE control, the canonical one. This was a radio plus a row of checkboxes
+                     * sitting open on the command surface — correct in its model and wrong in its
+                     * grammar, and the only native-select-shaped island left on the surface that
+                     * commits money. It is now `AlloyMultiSelect`, which is the same primitive the
+                     * rest of the runtime uses, extended once for multiple answers.
+                     *
+                     * The MODEL beneath is untouched. Household is still an explicit option with a
+                     * value, still mutually exclusive with the children — now enforced by the
+                     * primitive's own `exclusive` flag rather than by this surface remembering to —
+                     * and an empty selection still means nothing has been chosen, never "everyone".
+                     * The per-child economics are unchanged: each selected child receives their own
+                     * independent charge, which the line below still says out loud.
+                     */}
+                    <AlloyMultiSelect
+                        aria-label="Applies to"
+                        testId="addcharge-target"
+                        placeholder="Choose who receives this charge"
+                        values={
+                            controls.unifiedTarget.householdSelected
+                                ? [ADDCHARGE_HOUSEHOLD_VALUE]
+                                : controls.unifiedTarget.selectedChildIds
+                        }
+                        options={[
+                            ...(controls.unifiedTarget.householdOffered
+                                ? [{ value: ADDCHARGE_HOUSEHOLD_VALUE, label: "Household", exclusive: true }]
+                                : []),
+                            ...controls.unifiedTarget.children.map((c) => ({ value: c.id, label: c.label })),
+                        ]}
+                        onChange={(next) => {
+                            const target = controls.unifiedTarget!;
+                            if (next.includes(ADDCHARGE_HOUSEHOLD_VALUE)) {
+                                if (!target.householdSelected) target.onSelectHousehold();
+                                return;
+                            }
+                            /*
+                             * Replay the difference through the EXISTING per-child toggle rather
+                             * than setting a list wholesale: that handler owns whatever the grain
+                             * model does on each change, and a surface that bypassed it would be a
+                             * second writer for the same decision.
+                             */
+                            const before = target.householdSelected ? [] : target.selectedChildIds;
+                            for (const id of next) if (!before.includes(id)) target.onToggleChild(id);
+                            for (const id of before) if (!next.includes(id)) target.onToggleChild(id);
+                        }}
+                    />
+                    {/*
+                     * COLLAPSED TO ONE LINE. The count and the per-child total are the two numbers
+                     * an operator checks before committing money, and neither is a chip row.
+                     */}
+                    <p className="alloy-os-addcharge__childsum" data-addcharge-targetsum>
+                        {controls.unifiedTarget.householdSelected
+                            ? "Household · one charge for the account"
+                            : controls.unifiedTarget.selectedChildIds.length === 0
+                              ? "Choose who receives this charge"
+                              : controls.unifiedTarget.selectedChildIds.length === 1
+                                ? `${controls.unifiedTarget.children.find((c) => c.id === controls.unifiedTarget!.selectedChildIds[0])?.label ?? "1 child"}`
+                                : `${controls.unifiedTarget.perChildLabel ? `${controls.unifiedTarget.perChildLabel} per child · ` : ""}${controls.unifiedTarget.selectedChildIds.length} children selected · each receives their own charge`}
+                    </p>
+                </Field>
+            ) : (
+                <Field label="Applies to" required={t.requiresSubject}>
+                    {controls && controls.subjects.length > 1 ? (
+                        <div data-addcharge-subject>
+                            {/*
+                              * The hook stays on the wrapper. `data-addcharge-subject` is how the
+                              * certification specs identify the LEGACY single-subject path — the
+                              * one offered when the unified target is not — and converting the
+                              * control's presentation is not a reason to retire an identifier
+                              * other surfaces still ask by name. The control inside is canonical;
+                              * the contract is unchanged.
+                              */}
+                        <AlloySelect
+                            testId="addcharge-subject"
+                            aria-label="Applies to"
+                            allowEmpty={false}
+                            value={controls.selectedSubjectId ?? ""}
+                            options={controls.subjects.map((sub) => ({ value: sub.id, label: sub.label }))}
+                            onChange={(next) => controls.onSelectSubject(next)}
+                        />
+                        </div>
+                    ) : (
+                        <Value>{specimen.subject}</Value>
+                    )}
+                </Field>
+            )}
+            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 && !controls.unifiedTarget ? (
+                <Field label="Also bill">
+                    {/*
+                     * ── PER CHILD, STATED SO IT CANNOT BE MISREAD ────────────────────────────
+                     *
+                     * The amount is what EACH selected child is billed. Two children at $40 is two
+                     * $40 obligations totalling $80 — never $40 split in half, and never one $80
+                     * household charge. The count and the total are both said out loud, because
+                     * those are the two numbers an operator checks before committing money.
+                     */}
+                    <div className="alloy-os-addcharge__children" data-addcharge-children>
+                        {controls.alsoChildren.options.map((c) => {
+                            const checked = controls.alsoChildren!.selectedIds.includes(c.id);
+                            return (
+                                <label key={c.id} className="alloy-os-addcharge__child">
+                                    <input
+                                        type="checkbox"
+                                        data-addcharge-child={c.id}
+                                        checked={checked}
+                                        onChange={() => controls.alsoChildren!.onToggle(c.id)}
+                                    />
+                                    <span>{c.label}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    {controls.alsoChildren.selectedIds.length > 1 ? (
+                        <p className="alloy-os-addcharge__childsum" data-addcharge-childsum>
+                            {controls.alsoChildren.perChildLabel
+                                ? `${controls.alsoChildren.perChildLabel} per child · `
+                                : ""}
+                            {controls.alsoChildren.selectedIds.length} children · each receives their own charge
+                        </p>
+                    ) : null}
+                </Field>
+            ) : null}
             <Field label="Amount" required={!amountLocked}>
                 {controls && !amountLocked ? (
                     <input
@@ -241,10 +400,22 @@ export default function AddChargeCommand({
             <Field label="Due">
                 <Value>{specimen.due}</Value>
             </Field>
-            {/* A DRAFT IS NOT YET OWED. The card says what confirming actually does rather than
-                naming the mechanism that does it. */}
+            {/*
+                ── WHAT CONFIRMING ACTUALLY DOES, ON THIS TENANT ────────────────────────────────
+                This read "Creates a draft — not yet owed" unconditionally. That was true of every
+                tenant when it was written, and it stopped being true once manual entry began
+                honouring the configured review boundary: on an organization that has configured
+                none, the charge posts on confirm and the balance moves. A command may not describe
+                a mechanism it will not use.
+                `reviewRequired` is the server's answer — the posting_review policy for this
+                template's service, OR'd with the template's own flag — so this states the act.
+            */}
             <Field label="Posting">
-                <Value locked>Creates a draft — not yet owed</Value>
+                <Value locked>
+                    {t.reviewRequired
+                        ? "Creates a draft — not yet owed"
+                        : "Posts on confirm — owed immediately"}
+                </Value>
             </Field>
 
             <SectionHead ruled={false}>Charge to</SectionHead>
@@ -280,19 +451,38 @@ export default function AddChargeCommand({
                     </>
                 ) : null}
                 {/*
-                    A DRAFT IS NOT YET OWED, so the balance does not move here.
-                    Showing "$75.00 → $115.00" would claim a posted increase that confirming this
-                    command does not cause: it creates a draft, and the balance changes when the
-                    draft posts. The charge amount above is the implication; the balance below is
-                    the fact, and it is stated unchanged on purpose.
+                    THE BALANCE LINE MUST MATCH THE ACT.
+
+                    Under a review boundary a draft is not yet owed, so the balance genuinely does
+                    not move and stating it unchanged is the fact. Without one the charge posts on
+                    confirm — and showing the balance UNCHANGED there would be the same lie in the
+                    other direction, telling an operator nothing will happen a moment before it does.
                 */}
-                <p className="alloy-os-addcharge__draftnote">
-                    Creates a draft — the balance does not change until it posts.
-                </p>
-                <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                    <span className="alloy-os-billing__line-label">Current balance</span>
-                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                </p>
+                {t.reviewRequired ? (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Creates a draft — the balance does not change until it posts.
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                    </>
+                ) : (
+                    <>
+                        <p className="alloy-os-addcharge__draftnote">
+                            Posts on confirm — this is what the family will owe.
+                        </p>
+                        <p className="alloy-os-billing__line">
+                            <span className="alloy-os-billing__line-label">Current balance</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        </p>
+                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                            <span className="alloy-os-billing__line-label">After posting</span>
+                            <span className="alloy-os-billing__line-value">{specimen.previewAfter}</span>
+                        </p>
+                    </>
+                )}
             </div>
 
             {controls?.error ? (
@@ -301,8 +491,24 @@ export default function AddChargeCommand({
                 </p>
             ) : null}
 
+            {/*
+             * AN EMPTY TARGET IS NOT A HOUSEHOLD CHARGE. With the unified control, neither
+             * Household nor any child selected is a state the operator can reach — by unticking
+             * the last child — and committing from it would have to invent a subject. Confirm is
+             * unavailable instead, which is the refusal stated before the money rather than after.
+             */}
             <ActionRow>
-                <Action primary onClick={controls?.onSubmit}>
+                <Action
+                    primary
+                    disabled={
+                        controls?.unifiedTarget
+                            ? !controls.unifiedTarget.householdSelected
+                              && controls.unifiedTarget.selectedChildIds.length === 0
+                            : undefined
+                    }
+                    data-addcharge-submit
+                    onClick={controls?.onSubmit}
+                >
                     {controls?.running ? "Adding…" : "Add charge"}
                 </Action>
                 <Action onClick={controls?.onCancel}>Cancel</Action>

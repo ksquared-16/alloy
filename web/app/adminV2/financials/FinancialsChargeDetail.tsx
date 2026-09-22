@@ -46,12 +46,15 @@ type ChargeDetail = {
     billingPeriodLabel?: string | null;
     /* Decided by the attribution trigger at INSERT, read here — never recomputed. */
     accountingPeriod?: { key: string; label: string | null; status: string; startsOn: string; endsOn: string } | null;
+    accountingDeferredFrom?: string | null;
     glAccount?: { code: string; name: string | null } | null;
     label: string | null;
     description: string | null;
     currencyCode: string;
     status: string;
     serviceDate: string | null;
+    invoiceDate: string | null;
+    dueDate: string | null;
     postedAt: string | null;
     customerId: string | null;
     customerMemberId: string | null;
@@ -265,6 +268,24 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 value={detail.billingPeriodLabel ?? "Unplaced"}
                 testId="billing-period"
             />
+            {/*
+              * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
+              * when the obligation was issued; the due date is when payment is expected and is
+              * blank for an organisation that has configured no terms — which is a real answer,
+              * not a missing one, so it is stated rather than hidden.
+              */}
+            <Row
+                label="Invoice date"
+                value={formatDisplayDate(detail.invoiceDate) || "—"}
+                muted={!detail.invoiceDate}
+                testId="invoice-date"
+            />
+            <Row
+                label="Due date"
+                value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
+                muted={!detail.dueDate}
+                testId="due-date"
+            />
             <Row
                 label="Accounting period"
                 value={
@@ -277,6 +298,22 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 muted={!detail.accountingPeriod}
                 testId="accounting-period"
             />
+            {/*
+              * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
+              *
+              * Closing a period does not refuse the money effective in it — the entry is
+              * attributed to the next open period instead. Shown alone, an October attribution on
+              * a September charge is indistinguishable from a charge that was always October's.
+              * The trigger records where it came from; this says so, so the operator can tell a
+              * deferral from an ordinary posting without reading the journal.
+              */}
+            {detail.accountingDeferredFrom ? (
+                <Row
+                    label="Deferred from"
+                    value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
+                    testId="accounting-deferred-from"
+                />
+            ) : null}
             <Row
                 label="GL account"
                 value={
@@ -317,6 +354,8 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     customerId={detail.customerId}
                     customerMemberId={detail.customerMemberId}
                     chargeId={detail.chargeId}
+                    chargeStatus={detail.status}
+                    subjectLabel={detail.childName}
                     arrangement={detail.accountArrangement}
                     parties={detail.responsibility.parties}
                     onCommitted={reload}

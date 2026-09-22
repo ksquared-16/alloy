@@ -51,7 +51,13 @@ import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/u
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
-import { derivePersonStaffCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import {
+    derivePersonAvailabilityCard,
+    derivePersonCompensationCard,
+    derivePersonReadinessCard,
+    derivePersonQualificationsCard,
+    derivePersonStaffCard,
+} from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
@@ -394,6 +400,101 @@ export default function DurableRecordContextualCard({
                     // Tab-pane drill navigation, which a contextual card has no tabs for. The
                     // renderer requires it; pure cards ignore it.
                     compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "compensation" && subject.kind === "staff") {
+            /*
+             * Reached only when the context layer offered a compensation context,
+             * which it does only for a caller holding `staff.compensation.read`.
+             * The card re-checks anyway and renders nothing on a 403.
+             */
+            if (!cardAppliesToGrain("staff_compensation", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_compensation"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonCompensationCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "readiness" && subject.kind === "staff") {
+            /*
+             * The same card the person panel composes. It evaluates server-side, so
+             * both surfaces read one verdict rather than each deriving their own.
+             */
+            if (!cardAppliesToGrain("staff_readiness", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_readiness"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonReadinessCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "availability" && subject.kind === "staff") {
+            /*
+             * The same card the person panel composes — one component, one answer.
+             * It reads its own state from the employment in this context and resolves
+             * against the organisation's day server-side, so the two surfaces cannot
+             * come to disagree about when someone can work.
+             */
+            if (!cardAppliesToGrain("staff_availability", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_availability"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonAvailabilityCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        if (option.kind === "qualifications" && subject.kind === "staff") {
+            /*
+             * THE SAME CARD THE PERSON PANEL COMPOSES — one component, one answer.
+             *
+             * It reads its own state from the employment in this context and derives standing
+             * against the ORGANISATION's day, server-side. Nothing is recomputed here, because a
+             * second resolver is exactly how two surfaces come to disagree about whether a
+             * credential has expired.
+             *
+             * The grain gate is asked for the same reason the Staff branch above asks it: an
+             * undeclared card must refuse rather than render, so "which cards exist on this
+             * surface" keeps one authority.
+             */
+            if (!cardAppliesToGrain("staff_qualifications", "person")) return null;
+            return (
+                <div
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="staff_qualifications"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonQualificationsCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                        compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );

@@ -18,6 +18,7 @@ import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDr
 import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
+import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
@@ -96,6 +97,7 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
         <section
             className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
             data-work-unit-command-rail-actions="true"
+            {...alloySectionDomAttrs("WU-12")}
             aria-label="Work unit actions"
         >
             <ul className="adminv2-command-rail-executable-actions">

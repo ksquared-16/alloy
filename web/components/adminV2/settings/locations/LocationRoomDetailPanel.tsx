@@ -28,10 +28,36 @@ import {
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
+import RoomCapacitySection from "@/components/adminV2/settings/locations/RoomCapacitySection";
+import { resolveRoomCapacityStanding } from "@/lib/locations/capacityAdoptionState";
+import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
+import {
+    presentRoomTopology,
+    roomRailTopologySegments,
+} from "@/lib/locations/topologyPresentation";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
+import {
+    ROOM_TYPE_OPTIONS,
+    roleAcceptsInside,
+    roomTypeHint,
+    type InsideOption,
+} from "@/lib/locations/roomTypeVocabulary";
+import {
+    committedRoomTopology,
+    roomTopologyPatch,
+} from "@/lib/locations/roomTopologyEdit";
+import { topologyRefusalCopy } from "@/lib/locations/topologyRefusalCopy";
+import { topologyRefusalCodeOf } from "@/lib/locations/topologyRefusalError";
 
 export default function LocationRoomDetailPanel({
     room,
     siteLabel,
+    topologyRows,
+    siteId,
+    insideOptions,
+    capacityRules,
+    todayYmd,
+    onCapacityChanged,
     programOptions,
     schedulePatterns,
     canMutate,
@@ -44,6 +70,16 @@ export default function LocationRoomDetailPanel({
 }: {
     room: LocationHierarchyRow | null;
     siteLabel: string;
+    /** Sites + rooms, so topology context resolves through canonical ancestry. */
+    topologyRows: readonly LocationHierarchyRow[];
+    /** The site this room belongs to, for "directly at the site" containment. */
+    siteId: string | null;
+    /** Physical rooms this room may be moved inside — the SAME provider create uses. */
+    insideOptions: InsideOption[];
+    /** Canonical capacity rules, for capacity standing and the canonical display. */
+    capacityRules: readonly ChildcareCapacityRuleRow[];
+    todayYmd: string;
+    onCapacityChanged: () => Promise<void> | void;
     programOptions: LocationProgramCategoryRow[];
     schedulePatterns: SchedulePatternRow[];
     canMutate: boolean;
@@ -59,6 +95,8 @@ export default function LocationRoomDetailPanel({
     const [supportedKeys, setSupportedKeys] = useState<string[]>([]);
     const [schedulePatternId, setSchedulePatternId] = useState("");
     const [active, setActive] = useState(true);
+    const [roomType, setRoomType] = useState<CanonicalUnitRole>("operational_group");
+    const [insideId, setInsideId] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
@@ -71,6 +109,11 @@ export default function LocationRoomDetailPanel({
         setSupportedKeys(readRoomSupportedProgramKeys(md));
         setSchedulePatternId(readRoomSchedulePatternId(md) ?? "");
         setActive(next.is_active !== false);
+        // Committed topology, effective — a historical NULL hydrates as Classroom,
+        // so the operator never meets a blank or a raw stored value.
+        const committed = committedRoomTopology(next, siteId);
+        setRoomType(committed.roomType);
+        setInsideId(committed.insideId);
         setError(null);
     };
 
@@ -97,12 +140,32 @@ export default function LocationRoomDetailPanel({
             })
         :   null;
     const statusLabel = active ? "Active" : "Inactive";
+    // Read-only topology context. There is no Type or Inside control anywhere in
+    // this panel: the server can safely refuse an unsafe change, but adopting an
+    // existing location is its own product slice.
+    const topology = room ? presentRoomTopology(room, topologyRows) : null;
+    // Once canonical capacity exists, the untyped field stops being current truth.
+    // Two ordinary editors maintaining Canonical = 12 and Legacy = 14 is exactly
+    // the ambiguity this convergence removes.
+    const capacityStanding = room ? resolveRoomCapacityStanding(room, capacityRules) : null;
+    const canEditLegacyCapacity = (capacityStanding?.canonicalRules.length ?? 0) === 0;
 
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
         if (!room) return;
         hydrateFromRoom(room);
         setEditing(false);
+    };
+
+    const showsInside = roleAcceptsInside(roomType) && insideOptions.length > 0;
+
+    // Same rule as create: only a Classroom can sit inside a physical room, so a
+    // Type change away from Classroom drops a pending Inside rather than carrying
+    // an impossible pair into the payload.
+    const changeRoomType = (next: CanonicalUnitRole) => {
+        setRoomType(next);
+        if (!roleAcceptsInside(next)) setInsideId("");
+        setError(null);
     };
 
     const toggleProgram = (key: string) => {
@@ -167,18 +230,65 @@ export default function LocationRoomDetailPanel({
                                 data-testid="locations-room-name"
                             />
                         </label>
-                        <label className="block max-w-36 space-y-1">
-                            <span className="config-typo-field-label">Capacity</span>
-                            <input
-                                type="number"
-                                min={0}
-                                value={capacity}
+                        <label className="block max-w-md space-y-1">
+                            <span className="config-typo-field-label">Type</span>
+                            <select
+                                value={roomType}
                                 disabled={!canMutate}
-                                onChange={(e) => setCapacity(e.target.value)}
-                                className="config-runtime-input"
-                                data-testid="locations-room-capacity"
-                            />
+                                onChange={(e) => changeRoomType(e.target.value as CanonicalUnitRole)}
+                                className="config-runtime-select"
+                                data-testid="locations-room-type"
+                            >
+                                {ROOM_TYPE_OPTIONS.map((option) => (
+                                    <option key={option.role} value={option.role}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="config-typo-sublabel" data-testid="locations-room-type-hint">
+                                {roomTypeHint(roomType)}
+                            </p>
                         </label>
+
+                        {showsInside ?
+                            <label className="block max-w-md space-y-1">
+                                <span className="config-typo-field-label">Inside</span>
+                                <select
+                                    value={insideId}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setInsideId(e.target.value)}
+                                    className="config-runtime-select"
+                                    data-testid="locations-room-inside"
+                                >
+                                    <option value="">
+                                        {siteLabel ? `${siteLabel} (no physical room)` : "No physical room"}
+                                    </option>
+                                    {insideOptions.map((option) => (
+                                        <option key={option.id} value={option.id}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        :   null}
+
+                        {canEditLegacyCapacity ?
+                            <label className="block max-w-36 space-y-1">
+                                <span className="config-typo-field-label">Capacity</span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    value={capacity}
+                                    disabled={!canMutate}
+                                    onChange={(e) => setCapacity(e.target.value)}
+                                    className="config-runtime-input"
+                                    data-testid="locations-room-capacity"
+                                />
+                            </label>
+                        :   <p className="config-typo-sublabel" data-testid="locations-room-capacity-canonical-owned">
+                                Capacity for this room is set in Operational Rules.
+                            </p>
+                        }
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -276,10 +386,22 @@ export default function LocationRoomDetailPanel({
                                                 label: label.trim() || null,
                                                 is_active: active,
                                                 metadata,
+                                                // Empty unless the operator actually moved
+                                                // topology, so an ordinary rename patches
+                                                // exactly what it always did.
+                                                ...roomTopologyPatch(
+                                                    committedRoomTopology(room, siteId),
+                                                    { roomType, insideId },
+                                                    siteId,
+                                                ),
                                             });
                                             setEditing(false);
                                         } catch (e) {
-                                            setError(e instanceof Error ? e.message : "Save failed");
+                                            // A refusal is a normal product state. Explain it
+                                            // from the named code; stay in edit mode so the
+                                            // rejected topology is never visually committed.
+                                            const fallback = e instanceof Error ? e.message : "Save failed";
+                                            setError(topologyRefusalCopy(topologyRefusalCodeOf(e), fallback));
                                         } finally {
                                             setSaving(false);
                                         }
@@ -317,10 +439,21 @@ export default function LocationRoomDetailPanel({
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
                     {[
                         {
-                            key: "capacity",
-                            label: "Capacity",
-                            value: capacity.trim() || "Not set",
+                            key: "type",
+                            label: "Type",
+                            value: topology!.typeLabel,
                         },
+                        {
+                            key: "site",
+                            label: "Site",
+                            value: topology!.siteLabel ?? siteLabel ?? "Not set",
+                        },
+                        // Omitted entirely when the room hangs off the site — the detail
+                        // grid shows properties that apply, rather than an em dash for
+                        // one that cannot.
+                        ...(topology!.containingSpaceLabel ?
+                            [{ key: "inside", label: "Inside", value: topology!.containingSpaceLabel }]
+                        :   []),
                         {
                             key: "programs",
                             label: "Programs",
@@ -356,6 +489,16 @@ export default function LocationRoomDetailPanel({
                     ))}
                 </div>
 
+                <RoomCapacitySection
+                    room={room}
+                    siteId={siteId}
+                    capacityRules={capacityRules}
+                    todayYmd={todayYmd}
+                    canMutate={canMutate}
+                    onAdopted={onCapacityChanged}
+                    onSaveRoom={onSave}
+                />
+
                 <RoomOrganizationCalculationPanel roomId={room.id} />
             </div>
         ;
@@ -384,7 +527,11 @@ export default function LocationRoomDetailPanel({
                         const inactive = entry.is_active === false;
                         const selected = entry.id === selectedRoomId;
                         const keys = readRoomSupportedProgramKeys(md);
+                        // Type first, then the physical room containing it. The campus is
+                        // the page you are already standing on, so repeating it in every
+                        // row would be noise.
                         const subtitleParts = [
+                            ...roomRailTopologySegments(entry, topologyRows),
                             inactive ? "Inactive" : "Active",
                             capacityMd.capacity ? `${capacityMd.capacity} capacity` : null,
                             keys.length > 0 ? `${keys.length} program${keys.length === 1 ? "" : "s"}` : null,

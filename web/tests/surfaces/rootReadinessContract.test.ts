@@ -16,6 +16,7 @@
  * payload agrees with what that state means.
  */
 
+import { resolveFinancialSubjectIdFromTruth } from "@/lib/adminV2/runtime/focusPanel/financialSubjectIdentity";
 import { describe, expect, it } from "vitest";
 
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
@@ -71,6 +72,7 @@ describe("the root's producer envelope is complete and explicit", () => {
                     supabase: emptySupabase() as never,
                     orgId: "org-1",
                     context: subject.context as never,
+                    financialSubjectId: resolveFinancialSubjectIdFromTruth(((subject.context as never) as { truth?: Record<string, unknown> }).truth ?? {}),
                     access: access(grants),
                 });
 
@@ -119,6 +121,7 @@ describe("the root's producer envelope is complete and explicit", () => {
             supabase: failing as never,
             orgId: "org-1",
             context: { truth: { "customer.id": "cust-1" }, participantScope: { customerMemberId: "cm-1" } } as never,
+            financialSubjectId: resolveFinancialSubjectIdFromTruth((({ truth: { "customer.id": "cust-1" }, participantScope: { customerMemberId: "cm-1" } } as never) as { truth?: Record<string, unknown> }).truth ?? {}),
             access: access(["health.view", "fin.read"]),
         });
         for (const key of REGISTERED_PRODUCERS) {
@@ -135,6 +138,7 @@ describe("the root's producer envelope is complete and explicit", () => {
                 orgId: "org-1",
                 // A context missing `truth` violates the type, and must still not reject the call.
                 context: {} as never,
+                financialSubjectId: resolveFinancialSubjectIdFromTruth((({} as never) as { truth?: Record<string, unknown> }).truth ?? {}),
                 access: access([]),
             }),
         ).resolves.toBeDefined();

@@ -11,7 +11,7 @@
  *   attendance     the assignment's `schedule_type` — the shape of the week, not its length
  *   days a week    the committed `schedule_assignments` pattern, else the requested days
  *   site           the committed placement's site, else the assignment's
- *   date           the caller's date, else the assignment's start, else its desired start, else today
+ *   date           the caller's date, else the assignment's start, else today
  *
  * The provenance of each choice travels with the facts, because "why is this family priced at five
  * days" is answerable only if the record says which owner said five.
@@ -27,7 +27,13 @@ export type AssignmentFactSources = {
     programKey: "committed_placement" | "assignment" | "none";
     daysPerWeek: "committed_schedule" | "requested" | "none";
     locationId: "committed_placement" | "assignment" | "none";
-    asOf: "requested" | "assignment_start" | "assignment_desired_start" | "today";
+    /*
+     * `assignment_desired_start` is GONE, and its absence is the point. It named a second column,
+     * `desired_start_date`, which `20260711000000_enrollment_participation_canonical_fields`
+     * RENAMED to `start_date` — they were never two dates, and since that migration they are not
+     * even two names. Keeping the value would invite the select that asks for both.
+     */
+    asOf: "requested" | "assignment_start" | "today";
 };
 
 export type AssignmentPricingSubject = {
@@ -74,7 +80,20 @@ export async function readAssignmentPricingFacts(
 
     const { data: ocmRow, error: ocmError } = await supabase
         .from("opportunity_customer_members")
-        .select("id, customer_member_id, schedule_type, location_id, program_category_id, start_date, desired_start_date, metadata")
+        /*
+         * `desired_start_date` IS NOT A COLUMN. `20260711000000_enrollment_participation_canonical_fields`
+         * renamed it to `start_date` — the canonical per-child start — and this select kept asking
+         * for both. PostgREST answered `42703 column
+         * opportunity_customer_members.desired_start_date does not exist`, so EVERY assignment
+         * pricing read failed, on every tenant, since July.
+         *
+         * Nothing said so. The error became `{ ok: false, code: "db_error" }`, which
+         * `buildAssignmentTuitionView` turned into `null`, which `buildOpportunityTuitionViews`
+         * dropped — and the surface reported "No assignment on this record to price." This is the
+         * SAME defect this module's sibling route already carried once: a select left pointing at
+         * columns a July migration had renamed, invisible because its tests built their own rows.
+         */
+        .select("id, customer_member_id, schedule_type, location_id, program_category_id, start_date, metadata")
         .eq("org_id", args.orgId)
         .eq("id", ocmId)
         .maybeSingle();
@@ -160,8 +179,7 @@ export async function readAssignmentPricingFacts(
     // ── The date being priced ────────────────────────────────────────────────────────────────
     const requestedAsOf = t(args.asOf);
     const assignmentStart = t(ocm.start_date);
-    const desiredStart = t(ocm.desired_start_date);
-    const asOf = requestedAsOf || assignmentStart || desiredStart || todayYmd();
+    const asOf = requestedAsOf || assignmentStart || todayYmd();
 
     const sources: AssignmentFactSources = {
         programKey: t(placement?.program_category_id)
@@ -175,13 +193,7 @@ export async function readAssignmentPricingFacts(
             : t(ocm.location_id)
               ? "assignment"
               : "none",
-        asOf: requestedAsOf
-            ? "requested"
-            : assignmentStart
-              ? "assignment_start"
-              : desiredStart
-                ? "assignment_desired_start"
-                : "today",
+        asOf: requestedAsOf ? "requested" : assignmentStart ? "assignment_start" : "today",
     };
 
     return {

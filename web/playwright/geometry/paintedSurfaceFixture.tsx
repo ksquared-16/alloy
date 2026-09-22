@@ -98,6 +98,87 @@ function SolvedCell({
     );
 }
 
+/**
+ * A SPARSE CARD WITH A SEMANTIC FOOTER — the internal-vertical-rhythm scenario.
+ *
+ * The cells above certify that the band height reaches the painted card. This one certifies what the
+ * card then DOES with it: a card whose content is far shorter than its band must spend the surplus
+ * BETWEEN its semantic regions, leaving its card-level footer on the bottom edge — not leave the
+ * whole remainder as a blank block under everything.
+ *
+ * Two footer spellings, because Alloy has two and both must anchor:
+ *
+ *   `bodyFooter`  — the footer lives INSIDE the body, carrying `alloy-os-ucard__body-footer`.
+ *                   This is Business Process's foot row, and the timeline archetype's only option
+ *                   since the shell footer is `display: none` there.
+ *   otherwise     — the real shell `<footer class="alloy-os-ucard__footer">` via `footerAction`.
+ *
+ * The primary region's height is controlled so the spec can drive it from "far shorter than the
+ * band" to "taller than the band" and assert the footer stays after the content either way.
+ */
+function RhythmCell({
+    cardKey,
+    solvedHeight,
+    primaryHeight,
+    bodyFooter,
+    wrapped,
+}: {
+    cardKey: string;
+    solvedHeight: number;
+    primaryHeight: number;
+    bodyFooter: boolean;
+    wrapped: boolean;
+}) {
+    const footerBox = (
+        <div
+            data-rhythm-footer="true"
+            className={bodyFooter ? "alloy-os-ucard__body-footer" : undefined}
+            style={{ height: "24px" }}
+        >
+            Recent activity
+        </div>
+    );
+
+    const card = (
+        <UniversalCard
+            title={cardKey}
+            insight=""
+            iconName="GitBranch"
+            tier="work"
+            archetype="action"
+            density="compact"
+            gridSpan="row"
+            data-universal-card-key={cardKey}
+            footerAction={bodyFooter ? null : footerBox}
+        >
+            <div data-rhythm-primary="true" style={{ height: `${primaryHeight}px` }} />
+            {bodyFooter ? footerBox : null}
+        </UniversalCard>
+    );
+
+    return (
+        <div
+            className="alloy-os-fp-grid-area"
+            data-fp-grid-area={cardKey}
+            style={{ height: `${solvedHeight}px` }}
+        >
+            <div className="alloy-os-fp-card-intrinsic" data-fp-card-intrinsic={cardKey}>
+                <div className="alloy-os-focus-panel-grid__cell">
+                    {wrapped ? (
+                        /* Two nested wrappers — Health & Safety's real shape, and the one a rule
+                           naming a single card could never reach. */
+                        <div className="alloy-os-health">
+                            <div className="alloy-os-health">{card}</div>
+                        </div>
+                    ) : (
+                        card
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function Fixture() {
     // Deliberately not 299 or 325 — the two numbers this defect has already been measured at.
     const [solvedHeight, setSolvedHeight] = useState(471);
@@ -133,6 +214,25 @@ function Fixture() {
                     solvedHeight={solvedHeight}
                     wrapped={false}
                     contentHeight={contentHeight}
+                />
+            </div>
+            {/* The internal-rhythm pair: same band, same content, two footer spellings. */}
+            <div style={{ width: "340px" }}>
+                <RhythmCell
+                    cardKey="rhythm_body_footer"
+                    solvedHeight={solvedHeight}
+                    primaryHeight={contentHeight}
+                    bodyFooter
+                    wrapped
+                />
+            </div>
+            <div style={{ width: "340px" }}>
+                <RhythmCell
+                    cardKey="rhythm_shell_footer"
+                    solvedHeight={solvedHeight}
+                    primaryHeight={contentHeight}
+                    bodyFooter={false}
+                    wrapped={false}
                 />
             </div>
         </div>

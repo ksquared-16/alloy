@@ -115,6 +115,18 @@ export type CommercialPolicyDef = {
     /** The scope references; only the one matching `scopeType` is meaningful. */
     scope: { locationId: string | null; programKey: string | null; offeringId: string | null; variantId: string | null };
     effective: EffectiveWindow;
+    /**
+     * THE POLICY'S OPERATOR-FACING NAME, as configured.
+     *
+     * `commercial_policies.label` is where an operator's name for a policy lives, and this
+     * projection did not carry it — so every consumer downstream fell back to the policy KIND and
+     * an operator saw "Sibling discount (QA specimen)" in Organization configuration and
+     * "discount" on the family's own finances. One policy wearing two names.
+     *
+     * Null when the policy has never been named; consumers fall back to the kind, which is then
+     * the truthful answer rather than a dropped one.
+     */
+    label: string | null;
     /** Typed value fields (validated at authoring against the policy registry). */
     params: Record<string, unknown>;
     isActive: boolean;

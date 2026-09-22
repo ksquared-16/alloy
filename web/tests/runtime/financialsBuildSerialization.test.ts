@@ -206,7 +206,8 @@ describe("the concurrency was not bought with extra database work", () => {
             charges: 5,
             child_enrollment_agreements: 1,
             customer_members: 1,
-            customer_payment_methods: 1,
+            /* Payments W2: the canonical method table replaced customer_payment_methods here. */
+            payment_methods: 1,
             customer_persons: 1,
             financial_charge_templates: 1,
             financial_expected_funding: 1,

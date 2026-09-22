@@ -1,0 +1,17 @@
+{
+  "before": "https://staging.workwithalloy.com/workspace/work-unit/enrolled-children",
+  "after": {
+    "url": "/workspace/work-unit/enrolled-children",
+    "cards": [
+      "business_process",
+      "financials",
+      "children",
+      "household",
+      "attendance",
+      "health_safety"
+    ],
+    "schedulingPresent": false,
+    "dialogOpen": false,
+    "heading": "Enrollment"
+  }
+}

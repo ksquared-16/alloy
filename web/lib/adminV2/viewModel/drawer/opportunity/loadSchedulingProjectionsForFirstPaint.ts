@@ -16,6 +16,7 @@ import {
     type OrgAssignmentTypeOption,
 } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import {
+    assignableClassrooms,
     loadSiteOperationalRooms,
     type SiteOperationalRoom,
 } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
@@ -128,7 +129,10 @@ export async function loadSchedulingProjectionsForFirstPaint(
             resolveSiteConfig(supabase, orgId, siteLocationId),
             loadEditorPatternsForSite(supabase, orgId, siteLocationId),
             loadOrgAssignmentTypes(supabase, orgId, { subjectType: "child" }).catch(() => []),
-            loadSiteOperationalRooms(supabase, orgId, siteLocationId).catch(() => []),
+            // Classroom picker: operational groups only.
+            loadSiteOperationalRooms(supabase, orgId, siteLocationId)
+                .then(assignableClassrooms)
+                .catch(() => []),
         ]);
     // ONE canonical read of the whole child set. This used to be one loader invocation per child —
     // seventeen three-hop chains for one card, 3,116-3,903 ms of cumulative database work hidden

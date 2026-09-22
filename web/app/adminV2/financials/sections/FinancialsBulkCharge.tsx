@@ -38,6 +38,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import { moneyExact } from "@/app/adminV2/financials/financialsFormat";
@@ -47,11 +48,31 @@ const GENERATE_TUITION_ACTION_KEY = "billing.generate_tuition";
 
 type GenerationCounts = {
     generated: number;
+    /** Drafts that already stood and still agree — converged, not billed again. */
+    unchanged: number;
     alreadyPosted: number;
     notDue: number;
     refused: number;
     errors: number;
 };
+
+/**
+ * THE BILLING FREQUENCY IS OPERATOR INTENT, NOT A DEFAULT.
+ *
+ * One account can legitimately hold a weekly term for one child and a monthly term for another, so
+ * a month alone does not say what to run. Before this control the surface previewed the MONTHLY
+ * answer and Confirm ran whatever the action defaulted to — measured: a preview reading "1 to bill ·
+ * $1,450.00" whose run produced five weekly obligations.
+ *
+ * The vocabulary is `isPeriodBillableCadence`'s: the cadences that have an interval to bill. Daily
+ * and annual are omitted here only because no tenant authors tuition on them yet — adding one is a
+ * line, and the action already accepts them.
+ */
+const CADENCES: ReadonlyArray<{ key: string; label: string }> = [
+    { key: "monthly", label: "Monthly" },
+    { key: "weekly", label: "Weekly" },
+    { key: "biweekly", label: "Bi-weekly" },
+];
 
 type ExceptionOutcome = { assignmentId?: string; reason?: string; detail?: string; message?: string; kind?: string };
 
@@ -64,14 +85,19 @@ type PreviewPayload = {
     already_posted_outcomes: ExceptionOutcome[];
 };
 
-type RunResult = { counts: GenerationCounts; periodKey: string };
+type RunResult = { counts: GenerationCounts; periodKey: string; cadenceKey: string };
 
 /** This month, in the action's own `YYYY-MM` vocabulary. A default, never an inference at run time. */
 function currentPeriodKey(): string {
     return new Date().toISOString().slice(0, 7);
 }
 
-async function callAction(mode: "preview" | "execute", periodKey: string) {
+/**
+ * ONE CALL SHAPE FOR BOTH MODES, which is what makes preview and Confirm the same operation. The
+ * cadence and the period travel together in one payload; there is no second place for either of
+ * them to be decided.
+ */
+async function callAction(mode: "preview" | "execute", periodKey: string, cadenceKey: string) {
     const res = await fetch("/api/admin/actions/execute", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -86,7 +112,7 @@ async function callAction(mode: "preview" | "execute", periodKey: string) {
             entity_id: "",
             mode,
             confirmation: { confirmed: mode === "execute" },
-            payload: { period_key: periodKey },
+            payload: { period_key: periodKey, cadence: cadenceKey },
         }),
     });
     const json = (await res.json()) as {
@@ -112,6 +138,7 @@ export default function FinancialsBulkCharge({
 }) {
     const [open, setOpen] = useState(false);
     const [periodKey, setPeriodKey] = useState(currentPeriodKey);
+    const [cadenceKey, setCadenceKey] = useState("monthly");
     const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
     const [preview, setPreview] = useState<PreviewPayload | null>(null);
     const [result, setResult] = useState<RunResult | null>(null);
@@ -124,7 +151,7 @@ export default function FinancialsBulkCharge({
         setError(null);
         setResult(null);
         try {
-            const detail = await callAction("preview", periodKey);
+            const detail = await callAction("preview", periodKey, cadenceKey);
             const after = (detail.preview as { after?: PreviewPayload } | undefined)?.after ?? null;
             if (!after) throw new Error("The preview returned no detail to confirm against.");
             setPreview(after);
@@ -134,22 +161,24 @@ export default function FinancialsBulkCharge({
         } finally {
             setBusy(null);
         }
-    }, [periodKey]);
+    }, [periodKey, cadenceKey]);
 
     const runExecute = useCallback(async () => {
         setBusy("execute");
         setError(null);
         try {
-            const detail = await callAction("execute", periodKey);
+            const detail = await callAction("execute", periodKey, cadenceKey);
             setResult({
                 counts: {
                     generated: Number(detail.generated ?? 0),
+                    unchanged: Number(detail.unchanged ?? 0),
                     alreadyPosted: Number(detail.alreadyPosted ?? 0),
                     notDue: Number(detail.notDue ?? 0),
                     refused: Number(detail.refused ?? 0),
                     errors: Number(detail.errors ?? 0),
                 },
                 periodKey: String(detail.period_key ?? periodKey),
+                cadenceKey: String(detail.cadence_key ?? cadenceKey),
             });
             /* Preview is cleared: it described a cohort that has now moved. */
             setPreview(null);
@@ -159,7 +188,7 @@ export default function FinancialsBulkCharge({
         } finally {
             setBusy(null);
         }
-    }, [periodKey, onCommitted]);
+    }, [periodKey, cadenceKey, onCommitted]);
 
     const exceptions = useMemo(() => {
         if (!preview) return [];
@@ -201,6 +230,25 @@ export default function FinancialsBulkCharge({
             </div>
 
             <label className="mt-2 flex items-center gap-2">
+                <span className="shrink-0 text-xs text-alloy-midnight/60">Billing frequency</span>
+                <AlloySelect
+                    testId="financials-bulk-cadence"
+                    aria-label="Cadence"
+                    density="compact"
+                    allowEmpty={false}
+                    className="min-w-0 flex-1"
+                    value={cadenceKey}
+                    options={CADENCES.map((c) => ({ value: c.key, label: c.label }))}
+                    onChange={(next) => {
+                        setCadenceKey(next);
+                        /* The preview described a different operation. It is not an answer to this one. */
+                        setPreview(null);
+                        setResult(null);
+                    }}
+                />
+            </label>
+
+            <label className="mt-2 flex items-center gap-2">
                 <span className="shrink-0 text-xs text-alloy-midnight/60">Service period</span>
                 <input
                     type="month"
@@ -217,7 +265,7 @@ export default function FinancialsBulkCharge({
 
             {/* The scope, stated before anything is run — not discovered from the result. */}
             <p className="mt-1.5 text-[11px] text-alloy-midnight/55" data-financials-bulk-scope="org_wide">
-                Organization-wide for this period.
+                {CADENCES.find((c) => c.key === cadenceKey)?.label ?? cadenceKey} terms, organization-wide for this period.
                 {siteSelected ? " The site filter above does not narrow a generation run." : ""}
             </p>
 
@@ -282,8 +330,10 @@ export default function FinancialsBulkCharge({
                 <p className="mt-2 text-xs text-alloy-midnight" data-financials-bulk-run-result="true">
                     {/* The run's own tally, not the preview's — they can legitimately differ. */}
                     {/* The month in words. The `<input type="month">` above still holds the key. */}
-                    {billingPeriodLabel(result.periodKey)} · {result.counts.generated} generated, {result.counts.alreadyPosted} already
-                    posted, {result.counts.refused} refused, {result.counts.errors} errored.
+                    {/* `unchanged` is named, because a rerun that creates nothing must not read as billing. */}
+                    {billingPeriodLabel(result.periodKey)} · {result.cadenceKey} · {result.counts.generated} newly generated,{" "}
+                    {result.counts.unchanged} already existed, {result.counts.alreadyPosted} already posted,{" "}
+                    {result.counts.refused} refused, {result.counts.errors} errored.
                 </p>
             ) : null}
         </div>

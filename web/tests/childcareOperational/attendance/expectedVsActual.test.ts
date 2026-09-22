@@ -12,6 +12,7 @@ function expected(p: Partial<ExpectedAttendanceEntry> = {}): ExpectedAttendanceE
         siteLocationId: "site-1",
         roomLocationId: "room-1",
         programCategoryId: "prog-1",
+        assignmentId: "asg-1",
         schedulePatternId: "pat-1",
         scheduleTypeKey: "full_time",
         ...p,

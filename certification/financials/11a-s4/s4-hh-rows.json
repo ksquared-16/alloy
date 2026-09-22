@@ -1,0 +1,46 @@
+{
+  "fresh": [
+    {
+      "chargeId": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4",
+      "responsibility": "not-allocated",
+      "responsibilityText": "Not allocated",
+      "actions": [
+        "reverse",
+        "adjust",
+        "resolveResponsibility"
+      ],
+      "cells": [
+        "Sep 18, 2026",
+        "Fee",
+        "Household",
+        "4010 · Registration Fees",
+        "$75.00",
+        "posted",
+        "Not allocated",
+        "Registration fee"
+      ]
+    }
+  ],
+  "household": [
+    {
+      "chargeId": "2279460a-0b4e-4d31-9d86-3a00a4d4daf4",
+      "responsibility": "not-allocated",
+      "responsibilityText": "Not allocated",
+      "actions": [
+        "reverse",
+        "adjust",
+        "resolveResponsibility"
+      ],
+      "cells": [
+        "Sep 18, 2026",
+        "Fee",
+        "Household",
+        "4010 · Registration Fees",
+        "$75.00",
+        "posted",
+        "Not allocated",
+        "Registration fee"
+      ]
+    }
+  ]
+}

@@ -19,13 +19,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-    DEFAULT_UNIT_ROLE,
+    canonicalLocationTypeFromStorage,
+    canonicalUnitRoleFromStorage,
     isChildcareLocationType,
     type CanonicalLocation,
     type CanonicalLocationAddress,
     type CanonicalLocationResolutionMode,
     type CanonicalLocationType,
-    type CanonicalUnitRole,
     type SiteScopeFilter,
 } from "@/lib/location/canonicalLocationModel";
 
@@ -55,24 +55,11 @@ function asMetadata(value: unknown): Record<string, unknown> {
         : {};
 }
 
-/** DB CHECK guarantees one of three; default to the DB default `address` if absent. */
-function normalizeLocationType(value: unknown): CanonicalLocationType {
-    if (value === "site" || value === "unit" || value === "address") return value;
-    return "address";
-}
-
-/**
- * Effective unit role. A stored NULL on a unit is not missing data — it is a
- * legacy classroom, which is exactly what `operational_group` means, so it
- * resolves rather than reading as unknown.
- */
-function normalizeUnitRole(rawType: unknown, rawRole: unknown): CanonicalUnitRole | null {
-    if (normalizeLocationType(rawType) !== "unit") return null;
-    if (rawRole === "physical_space" || rawRole === "operational_group" || rawRole === "shared_space") {
-        return rawRole;
-    }
-    return DEFAULT_UNIT_ROLE;
-}
+// Storage is folded into the type and role vocabularies by the model, so the
+// NULL-compatibility rule has exactly one owner. These aliases keep the call
+// sites below reading as they always have.
+const normalizeLocationType = canonicalLocationTypeFromStorage;
+const normalizeUnitRole = canonicalUnitRoleFromStorage;
 
 function normalizeAddress(raw: RawLocationRow): CanonicalLocationAddress | null {
     const address: CanonicalLocationAddress = {

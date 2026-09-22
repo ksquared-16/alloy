@@ -1,0 +1,33 @@
+{
+  "step": "done",
+  "chargeId": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+  "outstanding": 4000,
+  "overpay": 24000,
+  "execStatus": 200,
+  "execOk": true,
+  "before": {
+    "availableCents": 0,
+    "pendingCents": 0,
+    "heldCents": 0,
+    "heldSupported": false,
+    "positions": [],
+    "currency": "USD"
+  },
+  "after": {
+    "availableCents": 20000,
+    "pendingCents": 0,
+    "heldCents": 0,
+    "heldSupported": false,
+    "positions": [
+      {
+        "paymentId": "7ca91075-1b80-4584-a722-c769d5241ff8",
+        "availability": "available",
+        "unappliedCents": 20000,
+        "payerCustomerId": null,
+        "payerLabel": null,
+        "receivedAt": "2026-09-18T15:53:51.405+00:00"
+      }
+    ],
+    "currency": "USD"
+  }
+}

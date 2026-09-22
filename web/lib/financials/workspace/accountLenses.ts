@@ -26,6 +26,10 @@ import {
     isCollectibleOffsetRow,
     type FinancialsLedgerRow,
 } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import {
+    FINANCIALS_HOUSEHOLD_SCOPE,
+    rowInFinancialsSubjectScope,
+} from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
 /** The angles. `payments` reads receipts rather than ledger rows — money in, not money owed. */
 export const ACCOUNT_LENSES = ["all", "charges", "credits", "funding", "payments"] as const;
@@ -73,13 +77,50 @@ export type LedgerFilter = {
     subject: string | null;
     /** A billing period key. Null = every period. */
     periodKey: string | null;
+    /**
+     * WHO IS OBLIGATED TO PAY THIS ROW — a responsible party's name, or `UNASSIGNED_PARTY`.
+     *
+     * NOT the subject and NOT the payer. A row can concern Ana while responsibility belongs to a
+     * parent, and the money may ultimately arrive from a third person entirely. Those are three
+     * different questions and the ledger answers them from three different authorities; collapsing
+     * any two of them is how an operator ends up chasing the wrong person.
+     *
+     * Null = every responsible party.
+     */
+    responsibleParty: string | null;
 };
 
-export const NO_FILTER: LedgerFilter = Object.freeze({ lens: "all", subject: null, periodKey: null });
+export const NO_FILTER: LedgerFilter = Object.freeze({
+    lens: "all",
+    subject: null,
+    periodKey: null,
+    responsibleParty: null,
+});
 
-/** The token a row with no child subject filters under. Household rows are childless BY CONSTRUCTION. */
-export const HOUSEHOLD_SUBJECT = "household";
+/**
+ * The token for an obligation nobody has been made answerable for.
+ *
+ * A real option rather than an absence, because "who has not been assigned" is one of the most
+ * actionable questions an operator can ask of an account — it is the work, not the tidy-up.
+ */
+export const UNASSIGNED_PARTY = "__unassigned__";
 
+/**
+ * The token a row with no child subject filters under. Household rows are childless BY CONSTRUCTION.
+ *
+ * RE-EXPORTED, not re-declared. This file used to own the string, and owning it was how it came to
+ * own a second definition of subject scope as well — see `filterLedger` below.
+ */
+export const HOUSEHOLD_SUBJECT = FINANCIALS_HOUSEHOLD_SCOPE;
+
+/**
+ * Which filter option a row CONTRIBUTES TO — not which rows a filter selects.
+ *
+ * Those are different questions and conflating them is exactly what broke this surface. A household
+ * row contributes to the "Household" option (one row, one option, so the counts add up), but it is
+ * SELECTED by a child scope too, because it is the account's row and the child is inside the
+ * account. Selection is `rowInFinancialsSubjectScope`'s job and only its job.
+ */
 export function subjectTokenOf(row: FinancialsLedgerRow): string {
     return row.subjectMemberId ? row.subjectMemberId : HOUSEHOLD_SUBJECT;
 }
@@ -92,8 +133,20 @@ export function filterLedger(
         /* The payments lens is not a view of the ledger at all — it reads receipts. */
         if (filter.lens === "payments") return false;
         if (filter.lens !== "all" && ledgerLensOf(row) !== filter.lens) return false;
-        if (filter.subject && subjectTokenOf(row) !== filter.subject) return false;
+        /*
+         * ONE SUBJECT-SCOPE AUTHORITY, SHARED WITH THE FOCUS PANEL.
+         *
+         * This line read `subjectTokenOf(row) !== filter.subject` — an EXACT match, which is a
+         * different definition of child scope from the one the Focus Panel ships. Selecting a child
+         * here returned that child's rows only and silently dropped every household row: the
+         * account fee, the registration fee, the family's own credits. That is the same defect
+         * `financialsRowScope` was created to repair one surface at a time, still live in the other
+         * surface, and two definitions of "this child's financial scope" is the thing the module
+         * note above says this file must never become.
+         */
+        if (filter.subject && !rowInFinancialsSubjectScope(row, filter.subject)) return false;
         if (filter.periodKey && (row.periodKey ?? "") !== filter.periodKey) return false;
+        if (filter.responsibleParty && responsiblePartyTokenOf(row) !== filter.responsibleParty) return false;
         return true;
     });
 }
@@ -117,10 +170,17 @@ export function lensCounts(
     payments: readonly LensPayment[],
     within: Omit<LedgerFilter, "lens">,
 ): Record<AccountLens, number> {
+    /*
+     * SCOPED THE SAME WAY `filterLedger` SCOPES, through the same authority. A count derived from a
+     * different predicate than the view it labels is a badge that promises rows the lens will not
+     * show — and before the convergence above, the child scopes disagreed by exactly the household
+     * rows.
+     */
     const scoped = rows.filter(
         (row) =>
-            (!within.subject || subjectTokenOf(row) === within.subject)
-            && (!within.periodKey || (row.periodKey ?? "") === within.periodKey),
+            (!within.subject || rowInFinancialsSubjectScope(row, within.subject))
+            && (!within.periodKey || (row.periodKey ?? "") === within.periodKey)
+            && (!within.responsibleParty || responsiblePartyTokenOf(row) === within.responsibleParty),
     );
     const counts: Record<AccountLens, number> = {
         all: scoped.length,
@@ -172,6 +232,43 @@ export function subjectOptions(rows: readonly FinancialsLedgerRow[]): FilterOpti
  * LABEL is the operator's: "September 2026". They were the same string, so the one control an
  * operator uses to choose a month offered them a list of dated identifiers.
  */
+/**
+ * Which responsible-party option a row files under.
+ *
+ * `responsibilityUnassigned` is the read model's own answer — an allocation exists and deliberately
+ * names nobody — and it is told apart from "no allocation at all", which simply has no name. Both
+ * present as Unassigned to an operator, because in both cases the question "who owes this" is open.
+ */
+export function responsiblePartyTokenOf(row: FinancialsLedgerRow): string {
+    const name = (row.responsiblePartyName ?? "").trim();
+    return name ? name : UNASSIGNED_PARTY;
+}
+
+/**
+ * The responsible parties this account's rows actually name.
+ *
+ * Derived from the rows, never from household membership: a parent who is on the account but has
+ * been made responsible for nothing is not a filter an operator needs, and offering them would
+ * imply an arrangement that does not exist.
+ */
+export function responsiblePartyOptions(rows: readonly FinancialsLedgerRow[]): FilterOption[] {
+    const byToken = new Map<string, FilterOption>();
+    for (const row of rows) {
+        const value = responsiblePartyTokenOf(row);
+        const label = value === UNASSIGNED_PARTY ? "Unassigned" : value;
+        const found = byToken.get(value);
+        if (found) found.count += 1;
+        else byToken.set(value, { value, label, count: 1 });
+    }
+    /* Unassigned last: it is a state, not a person, and the named parties are the common question. */
+    return [...byToken.values()].sort((a, b) => {
+        if ((a.value === UNASSIGNED_PARTY) !== (b.value === UNASSIGNED_PARTY)) {
+            return a.value === UNASSIGNED_PARTY ? 1 : -1;
+        }
+        return a.label.localeCompare(b.label);
+    });
+}
+
 export function periodOptions(rows: readonly FinancialsLedgerRow[]): FilterOption[] {
     const byKey = new Map<string, FilterOption>();
     for (const row of rows) {

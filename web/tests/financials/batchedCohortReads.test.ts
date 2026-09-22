@@ -175,7 +175,17 @@ describe("the cohort's own charge read", () => {
 
     it("pages the read rather than trusting a single limit", () => {
         expect(source, "the cohort must request successive pages").toMatch(/\.range\(/);
-        expect(source, "the server's page size is stated, not assumed away").toMatch(/const PAGE = 1000/);
+        /*
+         * The page size moved into `readAllPages` when the account card started sharing this loop —
+         * one primitive, two surfaces — but the rule is the same one: the SERVER's ceiling is stated
+         * here rather than assumed away by a `.limit()` the server silently ignores.
+         */
+        expect(source, "the server's page size is stated, not assumed away").toMatch(
+            /const POSTGREST_MAX_ROWS = 1000/,
+        );
+        expect(source, "and the cohort walks it rather than inlining its own loop").toMatch(
+            /readAllPages<PositionChargeRow>/,
+        );
     });
 
     it("stops on a short page instead of asking forever", () => {
@@ -187,7 +197,7 @@ describe("the cohort's own charge read", () => {
      * use to tell an operator their view is partial; if it lies, the omission is undetectable.
      */
     it("reports truncation only when the cap was actually reached", () => {
-        expect(source).toMatch(/const truncated = !reachedEnd && charges\.length >= scanCap/);
+        expect(source).toMatch(/truncated: !reachedEnd && rows\.length >= scanCap/);
     });
 
     /*

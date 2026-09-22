@@ -1,0 +1,10 @@
+{
+  "grainValue": "e408fa51-7261-43c4-8e60-555d17fc9888",
+  "grainText": "Certa Certhouse",
+  "childBoxes": [
+    "46105cd4-6030-417d-a7cb-faf409071c0d"
+  ],
+  "childSum": null,
+  "responsibility": "Household",
+  "text": "ADD\nCharge\nAdjustment\n\nCHARGE TYPEREQUIRED\nField trip\nLate pickup\nMaterials\nMonthly tuition\nRegistration fee\n5 configured types\n\nHousehold · dated by the event · billed next cycle · fixed amount\n\nCHARGE\n\nAPPLIES TOREQUIRED\nHousehold\nCerta Certhouse\nCertb Certhouse\n\nALSO BILL\nCertb Certhouse\n\nAMOUNT\n$40.00\n\nNOTE\n\nDATES\n\nSERVICE DATEREQUIRED\n\nBILLING PERIOD\nSeptember 2026\n\nDUE\nConfigured policy\n\nPOSTING\nPosts on confirm — owed immediately\n\nCHARGE TO\n\nRESPONSIBILITY\nHousehold\n\nPREVIEW\n\nField trip\n+$40.00\n\nPosts on confirm — this is what the family will owe.\n\nCurrent balance\n$443.00\n\nAFTER POSTING\n$443.00\n\nAdd charge\nCancel"
+}

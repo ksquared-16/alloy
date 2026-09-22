@@ -1,0 +1,264 @@
+[
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 to bill, 1 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 1,
+                "notDue": 1,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 145000,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "450da54f-11a3-4236-91d0-aac108493ca0"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 1,
+          "alreadyPosted": 0,
+          "notDue": 1,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+      },
+      "correlation_id": "79d0a072-70dc-473d-9151-e06d45135607"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "preview",
+      "confirmation": {
+        "confirmed": false
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "mode": "preview",
+          "eligibility": {
+            "eligible": true,
+            "blockers": [],
+            "availableTransitions": [],
+            "requiredInputs": []
+          },
+          "preview": {
+            "summary": "1 to bill, 1 not due, 0 refused for 2026-09",
+            "changes": [
+              "79f8011d-a236-4054-bee7-af10f1dbc632 · cadence_not_billed_by_this_run",
+              "cf044308-3ee4-47ab-a8fb-205eb172aa48 · 1450.00 USD"
+            ],
+            "after": {
+              "period_key": "2026-09",
+              "counts": {
+                "generated": 1,
+                "notDue": 1,
+                "refused": 0,
+                "alreadyPosted": 0,
+                "errors": 0
+              },
+              "total_amount_cents": 145000,
+              "refused_outcomes": [],
+              "not_due_outcomes": [
+                {
+                  "kind": "not_due",
+                  "assignmentId": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                  "periodKey": "2026-09",
+                  "periodLabel": "September 2026",
+                  "reason": "cadence_not_billed_by_this_run"
+                }
+              ],
+              "error_outcomes": [],
+              "already_posted_outcomes": []
+            }
+          }
+        },
+        "affected_id": null
+      },
+      "correlation_id": "5317d4f4-7108-4999-a57b-51c7406856d3"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 200,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "opportunity_customer_member",
+      "entity_id": "",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "period_key": "2026-09"
+      }
+    },
+    "response": {
+      "ok": true,
+      "data": {
+        "execution_result": {
+          "period_key": "2026-09",
+          "service_period": {
+            "start": "2026-09-01",
+            "end": "2026-09-30"
+          },
+          "generated": 1,
+          "alreadyPosted": 0,
+          "notDue": 1,
+          "refused": 0,
+          "errors": 0,
+          "refused_outcomes": [],
+          "error_outcomes": []
+        },
+        "affected_id": "cf044308-3ee4-47ab-a8fb-205eb172aa48"
+      },
+      "correlation_id": "db49445e-5716-4b5e-979b-238ac7da0c5b"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 400,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "organization",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "period_key": "2026-09",
+        "cadence": "weekly"
+      }
+    },
+    "response": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\".",
+        "details": {
+          "blockers": [
+            {
+              "code": "unsupported_entity_type",
+              "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\"."
+            }
+          ]
+        }
+      },
+      "correlation_id": "baec8d99-8810-4b64-b5bf-f5393fcecee8"
+    }
+  },
+  {
+    "url": "/api/admin/actions/execute",
+    "status": 400,
+    "request": {
+      "action_key": "billing.generate_tuition",
+      "entity_type": "organization",
+      "mode": "execute",
+      "confirmation": {
+        "confirmed": true
+      },
+      "payload": {
+        "period_key": "2026-09",
+        "cadence": "weekly"
+      }
+    },
+    "response": {
+      "ok": false,
+      "error": {
+        "code": "ACTION_BLOCKED",
+        "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\".",
+        "details": {
+          "blockers": [
+            {
+              "code": "unsupported_entity_type",
+              "message": "Action \"billing.generate_tuition\" does not support entity type \"organization\"."
+            }
+          ]
+        }
+      },
+      "correlation_id": "86ca2f98-5162-4994-9a0e-83c7ac9b82f2"
+    }
+  }
+]

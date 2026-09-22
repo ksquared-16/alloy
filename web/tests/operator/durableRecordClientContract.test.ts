@@ -119,6 +119,7 @@ describe("the wire format preserves the card maps", () => {
                 primary_location_id: null,
                 primary_location_label: "Riverside",
                 external_employee_id: null,
+                badge_number: null,
                 start_date: "2026-01-05",
                 end_date: null,
                 end_reason_key: null,

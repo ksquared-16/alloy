@@ -1,0 +1,67 @@
+{
+  "inputs": [
+    {
+      "type": "search",
+      "name": "Search…",
+      "value": ""
+    },
+    {
+      "type": "date",
+      "name": "?",
+      "value": "2026-09-18"
+    },
+    {
+      "type": "number",
+      "name": "Amount",
+      "value": ""
+    },
+    {
+      "type": "number",
+      "name": "Amount",
+      "value": ""
+    }
+  ],
+  "buttons": [
+    "9+",
+    "6",
+    "All locations ▾",
+    "QS",
+    "Actions (1) ▶",
+    "Reset",
+    "Pin",
+    "Close",
+    "Here are some ways I can help ▾",
+    "Summarize this queue Get a quick overview of details and his",
+    "Identify missing information See what's needed to move forwa",
+    "Draft follow-up Create a personalized follow-up message",
+    "All sites ▾",
+    "Work",
+    "Studio",
+    "Overview",
+    "Accounts",
+    "Charges",
+    "Payments",
+    "Subsidy",
+    "Activity",
+    "Generate a period's tuition",
+    "Awaiting posting9",
+    "Posted52",
+    "Certhouse Family $40.00 Sep 18, 2026 · child · settled",
+    "Certhouse Family -$7.77 Sep 14, 2026 · child · settled",
+    "Certhouse Family $25.00 Sep 14, 2026 · child · $25.00 outsta",
+    "Certhouse Family $7.77 Sep 14, 2026 · child · $7.77 outstand",
+    "Certhouse Family $12.34 Sep 14, 2026 · child · $12.34 outsta",
+    "Certhouse Family -$12.34 Sep 14, 2026 · child · settled",
+    "Certhouse Family $12.34 Sep 13, 2026 · child · $12.34 outsta",
+    "Certhouse Family $0.00 Sep 13, 2026 · child · settled",
+    "Certhouse Family -$57.59 Sep 13, 2026 · child · settled",
+    "Kurzman Family $25.00 Sep 13, 2026 · account-wide · settled",
+    "Certhouse Family -$12.34 Sep 13, 2026 · child · settled",
+    "Kurzman Family $18.00 Sep 13, 2026 · account-wide · settled",
+    "Certhouse Family $360.00 Sep 1, 2026 · child · $360.00 outst",
+    "Kurzman Family $75.00 Aug 28, 2026 · account-wide · $75.00 o",
+    "Certhouse Family $18.00 Aug 26, 2026 · child · $18.00 outsta",
+    "Certhouse Family -$13.85 Aug 26, 2026 · child · settled"
+  ],
+  "panelText": null
+}
