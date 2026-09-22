@@ -28,6 +28,8 @@ import {
     type ProcessingLibraryGroupOffer,
 } from "@/lib/forms/processingFormFieldLibrary";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
+import { projectChildProfileFields } from "@/lib/forms/childProfileFieldProjection";
+import { loadChildProfileFieldDefinitions } from "@/lib/forms/loadChildProfileFieldDefinitions";
 
 export type FormLifecycleCoverageSchemaSource = "published" | "draft" | "none";
 
@@ -192,6 +194,8 @@ export async function loadFormLifecycleCoveragePayload(
         palette: mergeLifecycleFieldPaletteForStage(stage, orgFieldDefinitions),
         requiredRuleIds: stageRules.required_rule_ids,
         recommendedRuleIds: stageRules.recommended_rule_ids,
+        // The child's own profile, which the lifecycle palette's entity vocabulary cannot name.
+        childProfile: projectChildProfileFields(await loadChildProfileFieldDefinitions(supabase, orgId)),
     });
 
     return {

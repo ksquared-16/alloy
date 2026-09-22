@@ -288,3 +288,74 @@ change is that the picker now says so instead of inserting a control that lies a
   requirement catalog.
 - **A record-picker Form primitive** — the honest answer for the six reference fields, and the
   reason they fail closed rather than being quietly dropped.
+
+---
+
+# Canonical child-profile coverage — 2026-09-22 (second slice)
+
+## The three person-shaped things Forms consumes, and which is which
+
+This is not a new doctrine. It is the existing one, written down where Forms can read it.
+
+| record | what it holds | Forms grain | example |
+|---|---|---|---|
+| `person` | a **guardian**'s own attributes | Parent / Guardian | `person.gender` — the adult's gender |
+| `customer_member` | the **child**'s durable profile | Child | `customer_member.gender` — the child's gender |
+| enrollment / opportunity | the child's **participation** in a program, not the child | Enrollment | start date, desired schedule |
+
+`person.gender` and `customer_member.gender` are **two canonical fields with two owners**, not one
+field seen twice. Aliasing them would let a child's answer overwrite an adult's record. Both are
+offered; each is named by the grain that owns it.
+
+## Why `+ customer_member` was the wrong repair
+
+`LIFECYCLE_FIELD_ENTITY_TYPES` is a module-private constant inside
+`loadOrgFieldDefinitionsForLifecycle`, and that loader is read by:
+
+- Business Process requirement authoring (`/api/admin/departments/{id}/lifecycle-requirements`)
+- `buildLifecycleStageBootstrap` and `persistLifecycleStageFieldRules`
+- Create Lead eligibility (`resolveCreateLeadEligibilityForInvocation`)
+- the action intake spec route
+- **`validatePublicSubmissionLifecycleRequirements`** — which decides whether a family's submission
+  is accepted at runtime
+- and the Forms coverage payload
+
+Its entity vocabulary is `LifecycleRequirementEntityKey = person | child | opportunity | customer`,
+and `lifecycleEntityFromFieldDefinitionEntityType` returns `null` for anything outside it. So that
+constant does not own "every field Alloy has". **It owns the Business Process requirement
+contract.** Widening the table read alone would have changed nothing; widening the contract would
+have changed what five other surfaces require, including what a family is allowed to submit.
+
+**Chosen seam (outcome B):** Forms projects the child profile itself — same `field_definitions`
+table, a second reader with a different question. `lib/forms/childProfileFieldProjection.ts` derives
+WHICH fields belong to the child profile from `CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST` (the
+platform's own declaration) and WHAT each one is from the org's own rows. No hand-curated Forms
+list; no field is named anywhere in it.
+
+## Grain now follows the record the answer is written to
+
+A palette rule carries the entity its RULE is written against; the registry entry it resolves to
+carries the entity the field is STORED on. Those disagree for any child fact a guardian-facing rule
+asks for — which is why `child_allergies`, declared `entity_type: "child"`, was reaching the picker
+under Parent / Guardian. The registry's entity decides the grain now.
+
+## Duplicate labels are named by owner
+
+Where one label is claimed by two grains, each copy is prefixed with the operator word for the group
+that owns it — `Child — Gender` / `Parent — Gender`. A label owned by one grain is left exactly as
+the organization wrote it. Where one CONCEPT is claimed twice at the SAME grain, the established
+registry-backed offer wins and the second is suppressed, rather than presenting two identical rows.
+
+## Capability status
+
+| capability | MODEL | MOUNTED PRODUCT | CANONICAL FIELD COVERAGE | PRODUCT ROUND TRIP | HUMAN ACCEPTANCE |
+|---|---|---|---|---|---|
+| canonical binding | yes | yes | yes | yes | **PENDING** |
+| option-set vocabulary | yes | yes | yes | yes | **PENDING** |
+| conditional visibility | yes | yes | n/a | yes | **PENDING** |
+| derived value | yes | yes | n/a | yes | **PENDING** |
+| child profile (`customer_member`) | yes | yes | yes | yes | **PENDING** |
+| guardian profile (`person`) | yes | yes | yes | yes | **PENDING** |
+| repeated person · structured address · configuration-supplied | no | no | no | n/a | n/a |
+
+HUMAN ACCEPTANCE is Kelly's to set. Nothing in this run changes it.

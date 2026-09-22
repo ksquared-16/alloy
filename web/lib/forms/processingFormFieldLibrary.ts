@@ -21,6 +21,10 @@ import {
 } from "@/lib/forms/processingFormBuilderLibrary";
 import type { BuilderFieldType } from "@/lib/forms/formBuilderSchema";
 import {
+    CHILD_PROFILE_ENTITY_TYPE,
+    type ChildProfileFieldProjection,
+} from "@/lib/forms/childProfileFieldProjection";
+import {
     OPERATIONAL_FORM_SYSTEM_FIELDS,
     SYSTEM_FIELD_BY_ID,
     type SystemFieldRegistryEntry,
@@ -206,11 +210,20 @@ function offerFromPalette(
     tier: "required" | "recommended" | undefined
 ): ProcessingLibraryFieldOffer {
     const registry = registryEntryForPalette(entry);
-    // A palette rule belongs to its OWN entity's group — the curated overlay may only lend a nicer
-    // label, never relocate it. Several curated entries share one registry field under different
-    // operator framings (guardian_email is both "Parent email" and "Emergency email"); letting the
-    // first match win filed the parent-email requirement under Emergency contacts.
-    const group = ENTITY_GROUP[entry.entity] ?? "system";
+    /*
+     * THE OWNER IS THE ENTITY THE FIELD ACTUALLY LIVES ON.
+     *
+     * A palette rule carries the entity its RULE is written against; the registry entry it resolves
+     * to carries the entity the field is STORED on, and those disagree for any child-grain fact a
+     * guardian-facing rule asks for. `child_allergies` is declared `entity_type: "child"` in the
+     * registry and was reaching the picker under Parent / Guardian because the rule that asks for
+     * it is written against `person`.
+     *
+     * The registry's own entity is the stronger statement — it is where the answer is written — so
+     * it decides the grain. This is not the curated overlay relocating anything: a curated entry may
+     * still only lend a nicer LABEL, and the guard below keeps it in the resolved group.
+     */
+    const group = (registry ? ENTITY_GROUP[registry.entity_type] : undefined) ?? ENTITY_GROUP[entry.entity] ?? "system";
     const curated = registry ? curatedLabelSourceFor(registry.id, group) : undefined;
     const builderType = builderTypeFor(entry, registry);
 
@@ -317,6 +330,14 @@ export type BuildProcessingFormFieldLibraryInput = {
     /** Stage rule ids, so the picker can mark what this stage actually asks for. */
     requiredRuleIds?: readonly string[];
     recommendedRuleIds?: readonly string[];
+    /**
+     * The child's own profile fields (`customer_member`).
+     *
+     * Carried separately because the lifecycle palette's entity vocabulary cannot express this
+     * owner — see `lib/forms/childProfileFieldProjection.ts` for why widening that contract would
+     * have changed what Create Lead and public submission validation require.
+     */
+    childProfile?: readonly ChildProfileFieldProjection[];
 };
 
 /**
@@ -329,7 +350,7 @@ export function buildProcessingFormFieldLibrary(
     const required = new Set(input.requiredRuleIds ?? []);
     const recommended = new Set(input.recommendedRuleIds ?? []);
 
-    const offers: ProcessingLibraryFieldOffer[] = [];
+    let offers: ProcessingLibraryFieldOffer[] = [];
     const claimedRegistryIds = new Set<string>();
     const seenIds = new Set<string>();
 
@@ -350,6 +371,120 @@ export function buildProcessingFormFieldLibrary(
         if (seenIds.has(extra.id)) continue;
         seenIds.add(extra.id);
         offers.push(extra);
+    }
+
+    /*
+     * THE CHILD'S OWN PROFILE.
+     *
+     * `person.gender` is the guardian's and stays the guardian's. The child's gender lives on
+     * `customer_member`, which the lifecycle palette's entity vocabulary cannot name, so these are
+     * projected from the platform's child-profile manifest intersected with the org's own rows —
+     * canonical data, not a curated list, and nothing here names a field.
+     */
+    /*
+     * A CONCEPT ALREADY OFFERED AT CHILD GRAIN IS NOT OFFERED TWICE.
+     *
+     * `child_allergies` is an established child-grain destination in the system field registry, and
+     * the child profile manifest carries `allergies` as well. Offering both put two identical
+     * "Allergies" entries under Child, writing to different destinations, with nothing for an
+     * administrator to choose between — and picking the manifest one would have created a second
+     * home for a Health-classified fact that the Health contract has not yet given a writer.
+     *
+     * The established offer wins. Suppression is by concept at the same grain, so this is a rule
+     * about duplication rather than a rule about allergies.
+     */
+    const claimedChildLabels = new Set(
+        offers.filter((o) => o.group === "child").map((o) => o.label.trim().toLowerCase()),
+    );
+    for (const field of input.childProfile ?? []) {
+        const id = `${CHILD_PROFILE_ENTITY_TYPE}:${field.field_key}`;
+        if (seenIds.has(id)) continue;
+        if (claimedChildLabels.has(field.label.trim().toLowerCase())) continue;
+        seenIds.add(id);
+        const builderType = KIND_TO_BUILDER_TYPE[field.field_type] ?? null;
+        const unsupported =
+            builderType === null
+            || ((builderType === "select" || builderType === "multiselect")
+                && !field.option_set_key
+                && !field.has_inline_options);
+        offers.push({
+            id,
+            ruleId: null,
+            label: field.label,
+            meta: unsupported
+                ? "Tracked on the record — cannot be captured by a form"
+                : `${BUILDER_TYPE_META[builderType!]} · Child`,
+            group: "child",
+            add: {
+                kind: "bound",
+                entityType: CHILD_PROFILE_ENTITY_TYPE,
+                fieldKey: field.field_key,
+                builderType: builderType ?? "short_text",
+                ...(field.option_set_key && (builderType === "select" || builderType === "multiselect")
+                    ? { optionSetKey: field.option_set_key }
+                    : {}),
+            },
+            ...(unsupported ? { captureUnsupported: true } : {}),
+        });
+    }
+
+    /*
+     * TWO FIELDS, ONE WORD, DIFFERENT RECORDS.
+     *
+     * `Start date` exists at child grain and at enrollment grain; `Vertical` at enrollment and at
+     * household; `Location` at child and at enrollment. An administrator scanning the picker sees
+     * the same word twice with nothing to choose between them, and the two write to different
+     * canonical owners — so picking the wrong one is silent and permanent.
+     *
+     * Where a label is claimed by more than one grain, each copy is named by the grain that owns
+     * it. Nothing is invented: the prefix is the operator word for the group the offer is already
+     * in, so a label only changes when it was genuinely ambiguous. A label owned by one grain is
+     * left exactly as the organization wrote it.
+     */
+    /*
+     * ONE DESTINATION, ONE OFFER.
+     *
+     * The identity of a destination is its BINDING, not the picker row that reached it — the
+     * inspector has always matched on `entity.field_key` for exactly this reason. Two stage rules
+     * can ask for the same registry field (a child-grain rule and a guardian-grain rule both
+     * needing `start_date`), and once grain follows the record the answer is written to, both land
+     * in the same group as two rows reading `Desired start date` with nothing to tell them apart.
+     *
+     * Keeping the first is safe: they resolve to the same field, so the second adds a choice
+     * without adding an option. A tier the later row carries is preserved, because "this stage
+     * requires it" is information the survivor should not lose.
+     */
+    const byBinding = new Map<string, ProcessingLibraryFieldOffer>();
+    const deduped: ProcessingLibraryFieldOffer[] = [];
+    for (const offer of offers) {
+        const binding =
+            offer.add.kind === "bound"
+                ? `${offer.add.entityType}.${offer.add.fieldKey}`
+                : `registry:${offer.add.registryId}`;
+        const key = `${offer.group}::${binding}`;
+        const kept = byBinding.get(key);
+        if (kept) {
+            if (!kept.tier && offer.tier) kept.tier = offer.tier;
+            continue;
+        }
+        byBinding.set(key, offer);
+        deduped.push(offer);
+    }
+    offers = deduped;
+
+    const labelOwners = new Map<string, Set<ProcessingBuilderLibraryGroup>>();
+    for (const offer of offers) {
+        if (offer.captureUnsupported) continue;
+        const key = offer.label.trim().toLowerCase();
+        const seen = labelOwners.get(key) ?? new Set<ProcessingBuilderLibraryGroup>();
+        seen.add(offer.group);
+        labelOwners.set(key, seen);
+    }
+    for (const offer of offers) {
+        if (offer.captureUnsupported) continue;
+        const owners = labelOwners.get(offer.label.trim().toLowerCase());
+        if (!owners || owners.size < 2) continue;
+        offer.label = `${GROUP_META_LABEL[offer.group]} — ${offer.label}`;
     }
 
     const byGroup = new Map<ProcessingBuilderLibraryGroup, ProcessingLibraryFieldOffer[]>();
