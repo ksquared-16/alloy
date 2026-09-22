@@ -155,6 +155,20 @@ describe("the boundary in the code", () => {
             .not.toMatch(/tuition|billing|invoice|charge|autopay|aging/i);
     });
 
+    it("the route registers the consumers before depending on the registry", () => {
+        /*
+         * The registry is module-scope and filled by `ensureScheduledWorkConsumersRegistered`. A
+         * route that skips it gets an EMPTY registry in any instance that has not served a wake,
+         * and the command then refuses `handler_not_registered` for a handler that is plainly
+         * registered in the running app — which is exactly what deployed staging returned.
+         */
+        const route = statements(code("app/api/admin/financials/periodic-billing-evaluate-now/route.ts"));
+        expect(route).toContain("ensureScheduledWorkConsumersRegistered()");
+        const ensureAt = route.indexOf("ensureScheduledWorkConsumersRegistered()");
+        const useAt = route.indexOf("makeScheduledWorkDueNow(");
+        expect(ensureAt, "and registers BEFORE it asks").toBeLessThan(useAt);
+    });
+
     it("the Financials route refuses rather than activating", () => {
         const route = statements(code("app/api/admin/financials/periodic-billing-evaluate-now/route.ts"));
         expect(route).toContain("assertFinancialsWriteAllowed");
