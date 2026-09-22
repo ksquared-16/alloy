@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertFinancialsWriteAllowed } from "@/lib/financials/financialsPermissions";
 import { readPeriodicBillingSchedule } from "@/lib/financials/periodicBilling/periodicBillingSchedule";
+import { ensureScheduledWorkConsumersRegistered } from "@/lib/scheduledWork/scheduledWorkConsumers";
 import { makeScheduledWorkDueNow } from "@/lib/scheduledWork/makeScheduledWorkDueNow";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -55,6 +56,18 @@ export async function POST() {
             { status: 409 },
         );
     }
+
+    /*
+     * REGISTER THE CONSUMERS FIRST, exactly as the wake route does.
+     *
+     * The handler registry is a module-scope map filled by this call, so in a request instance
+     * that has never served a wake it is EMPTY — and the generic command, quite correctly, refuses
+     * to make work due for a handler it cannot resolve. Measured on deployed staging: the first
+     * evaluate-now returned `handler_not_registered` for a handler that is registered in the
+     * running app. The guard was right and the caller was incomplete; the registry belongs to
+     * whoever is about to depend on it.
+     */
+    ensureScheduledWorkConsumersRegistered();
 
     const result = await makeScheduledWorkDueNow(supabase, {
         orgId: ctx.orgId,
