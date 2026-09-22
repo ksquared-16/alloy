@@ -114,6 +114,41 @@ describe("responsibility and discounts get a row each, at child grain", () => {
             .toMatch(/index > 0 \?/);
     });
 
+    it("a child with no discount says None rather than disappearing", () => {
+        /*
+         * §11's rule, and the reason it needs one: the route answers BY POLICY, so a child no
+         * policy reaches appears in no list at all. Driving the row from the policies would drop
+         * that child silently — and a child missing from a per-child row reads as a child who was
+         * not considered, which is a different and more alarming claim than "nothing reduces this
+         * one". The household's roster decides who is listed; the policies decide what each says.
+         */
+        const card = code(CARD);
+        const summariser = card.slice(card.indexOf("function summariseDiscountPositions"));
+        const body = summariser.slice(0, summariser.indexOf("\n}") + 2);
+        expect(body, "the roster is an input").toContain("allChildren");
+        /*
+         * AND IT IS REACHABLE. `if (false && allChildren.length > 0)` leaves every mention of the
+         * roster in place while restoring the defect exactly — the policies drive the row again
+         * and the child with no discount is gone. The branch must open on the roster alone.
+         */
+        expect(body, "the roster branch is not short-circuited off")
+            .toMatch(/if \(allChildren\.length > 0\) \{/);
+        expect(body, "and it drives the list").toMatch(/allChildren\.map\(\(child\)/);
+        expect(body, "a child no policy reaches still gets a word").toMatch(/effects\.length > 0 \? effects\.join/);
+        expect(body).toContain('"None"');
+    });
+
+    it("both rows name the same children", () => {
+        /*
+         * Responsibility and discounts are independent facts about the SAME household. If the two
+         * rows were rostered from different sources they could disagree about who the children
+         * are, and an operator comparing them would be comparing two different families.
+         */
+        const card = code(CARD);
+        expect(card, "the discount roster comes from the responsibility read")
+            .toMatch(/summariseDiscountPositions\([\s\S]{0,700}positionsBody as/);
+    });
+
     it("responsibility is not inferred from the payer", () => {
         /*
          * `vm.payers` means responsibility and is the right fact at the WRONG GRAIN: it names the

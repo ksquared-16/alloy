@@ -217,6 +217,13 @@ function summariseHouseholdArrangement(body: unknown): string {
 function summariseDiscountPositions(
     body: unknown,
     labelFor: (customerMemberId: string | null) => string | null,
+    /*
+     * EVERY CHILD THE HOUSEHOLD HAS, so one with no discount says "None" instead of vanishing.
+     * The route answers by POLICY, so a child no policy reaches appears in no list at all — and a
+     * child silently missing from a per-child row reads as a child who was not considered, which
+     * is a different and more alarming claim than "nothing reduces this one".
+     */
+    allChildren: Array<{ customerMemberId: string; label: string }>,
 ): Array<{ childLabel: string; summary: string }> {
     const parsed = body as {
         policies?: Array<{
@@ -244,6 +251,19 @@ function summariseDiscountPositions(
             byChild.set(key, entry);
         }
     }
+    /*
+     * The household's own roster decides WHO is listed and in what order; the policies decide what
+     * each one says. Driving the list from the policies instead would let the row's membership
+     * change as discounts come and go.
+     */
+    if (allChildren.length > 0) {
+        return allChildren.map((child) => {
+            const entry = byChild.get(child.customerMemberId);
+            const effects = [...new Set(entry?.effects ?? [])];
+            return { childLabel: child.label, summary: effects.length > 0 ? effects.join(" · ") : "None" };
+        });
+    }
+    /* No roster yet — say what the policies say, and name nobody who was not mentioned. */
     if (byChild.size === 0) return [];
     return [...byChild.values()].map((entry) => ({
         childLabel: entry.label,
@@ -462,8 +482,18 @@ export default function FinancialsCard({
             setAdminPositionsLoading(false);
 
             const responsibility = summariseResponsibilityPositions(positionsBody);
-            const discounts = summariseDiscountPositions(discountBody, (customerMemberId) =>
-                (vm?.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)?.displayName ?? null,
+            const discounts = summariseDiscountPositions(
+                discountBody,
+                (customerMemberId) =>
+                    (vm?.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)?.displayName ?? null,
+                /* The same roster the responsibility row uses, so the two rows name the same children. */
+                ((positionsBody as { positions?: Array<{ customerMemberId?: string; label?: string }> } | null)
+                    ?.positions ?? [])
+                    .map((position) => ({
+                        customerMemberId: position.customerMemberId ?? "",
+                        label: position.label ?? "—",
+                    }))
+                    .filter((child) => child.customerMemberId.length > 0),
             );
             /*
              * A FAILED READ IS NOT AN ANSWER. Either half keeps its last truthful value rather
