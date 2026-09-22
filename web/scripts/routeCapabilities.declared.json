@@ -4116,6 +4116,16 @@
         "reason": "Records a Director's human acceptance testimony only \u2014 scenario key, result, observation, classification, evidence reference \u2014 into qa_director_acceptance_results. It holds no amounts, references no financial row, and writes nothing a balance can be derived from. Role-gated by requireAdminOrOps; a Financials capability would misdescribe what it touches."
       }
     },
+    "app/api/admin/qa/staffing-v1/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Staffing V1 human acceptance QA harness. Gated by requireAdminOrOps with the org taken from the session; reads the staffing day through the canonical projection and this build's own acceptance results, and no staffing-QA catalog capability exists."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "Records one operator acceptance result for the Staffing V1 QA suite. Gated by requireAdminOrOps; writes only the tester's own testimony to the acceptance table and authors no staffing fact."
+      }
+    },
     "app/api/admin/queue-row-layout/[surfaceId]/route.ts": {
       "GET": {
         "status": "pending"
