@@ -44,6 +44,7 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { WORK_VIEW_QUEUE_FILTER_FETCH_CAP } from "@/lib/lifecycle/operationalProjection";
 import { getWorkUnitQueueItems } from "@/lib/queues/QueueService";
 import { aggregateWorkViewTotals } from "@/lib/queues/aggregateWorkViewTotals";
+import { mergeIndependentRowAttachments } from "@/lib/queues/mergeIndependentRowAttachments";
 import {
     countChildGrainMembersForLenses,
     emptyChildMembershipBatchMeasurement,
@@ -207,112 +208,92 @@ export async function evaluateWorkViewTotalsForGroup(args: {
              * itself and never a family number borrowed from another lens. Same queries, same
              * results, same per-view failure semantics — just not one at a time.
              */
-            const childTotals = new Map<string, TotalOut>();
-            if (childViews.length) {
-                const measurement = emptyChildMembershipBatchMeasurement();
-                const tChild = Date.now();
-                const counts = await countChildGrainMembersForLenses({
-                    supabase,
-                    orgId,
-                    workUnitId: group.workUnitId,
-                    views: childViews,
-                    measurement,
-                    timeline,
-                    group: groupKey,
-                });
-                spans.child_counts += Date.now() - tChild;
-                markWorkViewSpan(timeline, "child_block", tChild, groupKey);
-                spans.child_batches.push(measurement);
-                for (const view of childViews) {
-                    const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
-                    const count = counts.get(view.id) ?? null;
-                    // UNKNOWN, never a family number. A wrong count is worse than an absent one —
-                    // the client keeps its prior value and shows none, rather than captioning
-                    // child rows with a count of something else.
-                    childTotals.set(
-                        view.id,
-                        count === null
-                            ? ({ ...base, count: null, known: false } as TotalOut)
-                            : ({ ...base, count, known: true } as TotalOut),
-                    );
-                }
-            }
+            /**
+             * The lane chain, as a unit of work that can be STARTED rather than awaited in place.
+             * Its body is the existing computation verbatim, apart from repair B inside it.
+             */
+            const computeLaneTotals = async (): Promise<Record<string, { count: number; known: boolean }>> => {
+                // ── A WORK VIEW IS COUNTED OVER THE PROCESS POPULATION, NOT AN EXECUTION LANE. ──
+                //
+                // The lane path (`getWorkUnitQueueItems(queueKey)`) counts a status-filtered SLICE of
+                // the process. `findAllRecordsQueueKey` hands back `primary_total_queue` without checking
+                // whether it is filtered, so on Firefly the "all records" lane IS `lifecycle_lead`, whose
+                // allowlist is `case_status in (open, new_inquiry, new)`. A family sitting at
+                // `tour_scheduled` is invisible to it — so "All Leads" (an include-all view) counted 7
+                // while the answer rendered 8, and every stage-scoped family view undercounted the same way.
+                //
+                // Where the Work Unit is governed by a Business Process, its population is knowable
+                // directly and is exactly what the provisioning answer publishes rows from. Counting over
+                // THAT makes rows and counts one answer, for every view, with the SAME predicate evaluator
+                // (`computeOperationalProjection`) applied on top — predicates are unchanged; only the
+                // population they run over stops being a worklist.
+                //
+                // Work units with no Business Process (no stages) keep the lane path untouched.
+                if (stages.length > 0) {
+                    const tPop = Date.now();
+                    const population = await loadWorkUnitProcessPopulation({
+                        supabase,
+                        orgId,
+                        workUnitId: group.workUnitId,
+                        scope: recordScopeConstraints,
+                        scopeImpossible: recordScopeImpossible,
+                    });
+                    spans.population += Date.now() - tPop;
+                    markWorkViewSpan(timeline, "population", tPop, groupKey);
 
-            // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
-            if (laneViews.length === 0) {
-                markWorkViewSpan(timeline, "group", tGroup, groupKey);
-                return [...group.viewIds].map(
-                    (workViewId) =>
-                        childTotals.get(workViewId) ??
-                        unknownTotals.get(workViewId) ?? {
-                            workUnitId: group.workUnitId,
-                            queueKey: group.queueKey,
-                            workViewId,
-                            count: null,
-                            known: false,
-                        },
-                );
-            }
-            // ── A WORK VIEW IS COUNTED OVER THE PROCESS POPULATION, NOT AN EXECUTION LANE. ──
-            //
-            // The lane path below (`getWorkUnitQueueItems(queueKey)`) counts a status-filtered SLICE of
-            // the process. `findAllRecordsQueueKey` hands back `primary_total_queue` without checking
-            // whether it is filtered, so on Firefly the "all records" lane IS `lifecycle_lead`, whose
-            // allowlist is `case_status in (open, new_inquiry, new)`. A family sitting at
-            // `tour_scheduled` is invisible to it — so "All Leads" (an include-all view) counted 7
-            // while the answer rendered 8, and every stage-scoped family view undercounted the same way.
-            //
-            // Where the Work Unit is governed by a Business Process, its population is knowable
-            // directly and is exactly what the provisioning answer publishes rows from. Counting over
-            // THAT makes rows and counts one answer, for every view, with the SAME predicate evaluator
-            // (`computeOperationalProjection`) applied on top — predicates are unchanged; only the
-            // population they run over stops being a worklist.
-            //
-            // Work units with no Business Process (no stages) keep the lane path untouched.
-            let totals: Record<string, { count: number; known: boolean }>;
-            if (stages.length > 0) {
-                const tPop = Date.now();
-                const population = await loadWorkUnitProcessPopulation({
-                    supabase,
-                    orgId,
-                    workUnitId: group.workUnitId,
-                    scope: recordScopeConstraints,
-                    scopeImpossible: recordScopeImpossible,
-                });
-                spans.population += Date.now() - tPop;
-                markWorkViewSpan(timeline, "population", tPop, groupKey);
-                // EPP before Work View totals — same keys as D1 provisioning rows.
-                const tEpp = Date.now();
-                const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
-                    supabase,
-                    orgId,
-                    rows: population.rows,
-                    allowedLocationIds: recordScopeConstraints?.locationIds ?? null,
-                    logLabel: "queue-view-totals",
-                });
-                spans.epp += Date.now() - tEpp;
-                markWorkViewSpan(timeline, "epp", tEpp, groupKey);
-                const tTours = Date.now();
-                const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
-                    supabase,
-                    orgId,
-                    rows: baseWithEpp,
-                    logLabel: "queue-view-totals",
-                });
-                spans.tours += Date.now() - tTours;
-                markWorkViewSpan(timeline, "tours", tTours, groupKey);
-                const tAgg = Date.now();
-                totals = aggregateWorkViewTotals({
-                    baseRows: baseWithTourFacts,
-                    workViews: laneViews,
-                    // An include-all view is the population itself. There is no separate "lane total" to
-                    // prefer — preferring one is what substituted a worklist for the process.
-                    exactLaneTotal: population.truncated ? null : population.rows.length,
-                    baseTruncated: population.truncated,
-                });
-                spans.aggregate += Date.now() - tAgg;
-                markWorkViewSpan(timeline, "aggregate", tAgg, groupKey);
-            } else {
+                    /*
+                     * REPAIR B — EPP AND TOURS SHARE NO DATA EITHER, SO THEY RUN TOGETHER.
+                     *
+                     * Both are PURE attaches over the SAME `population.rows`: each returns
+                     * `rows.map(row => ({ ...row, <its own fields> }))`, neither mutates its input, and
+                     * tours reads only `row.id` — never a field EPP added. They were serial because
+                     * tours was handed `baseWithEpp`, which is an ordering, not a dependency.
+                     *
+                     * The merge is by INDEX and is safe because both owners preserve length and order
+                     * on every path, including their failure paths, which return the input rows
+                     * unchanged. Tours' contribution is taken as the fields it actually CHANGED against
+                     * the shared base, so a tours failure overlays nothing and the EPP answer stands,
+                     * and an EPP failure still receives the tour fields. If the two ever disagree about
+                     * length, the merge refuses and the serial composition is used instead — a
+                     * scheduling optimisation must never be the reason a row loses a field.
+                     */
+                    const tEpp = Date.now();
+                    const eppPromise = attachEffectiveEnrollmentStagesToOpportunityRows({
+                        supabase,
+                        orgId,
+                        rows: population.rows,
+                        allowedLocationIds: recordScopeConstraints?.locationIds ?? null,
+                        logLabel: "queue-view-totals",
+                    }).then((r) => { spans.epp += Date.now() - tEpp; markWorkViewSpan(timeline, "epp", tEpp, groupKey); return r; });
+
+                    const tTours = Date.now();
+                    const toursPromise = attachActiveTourFactsToOpportunityRows({
+                        supabase,
+                        orgId,
+                        rows: population.rows,
+                        logLabel: "queue-view-totals",
+                    }).then((r) => { spans.tours += Date.now() - tTours; markWorkViewSpan(timeline, "tours", tTours, groupKey); return r; });
+
+                    const [baseWithEpp, baseWithTours] = await Promise.all([eppPromise, toursPromise]);
+                    const baseWithTourFacts = mergeIndependentRowAttachments(
+                        population.rows,
+                        baseWithEpp,
+                        baseWithTours,
+                    );
+
+                    const tAgg = Date.now();
+                    const out = aggregateWorkViewTotals({
+                        baseRows: baseWithTourFacts,
+                        workViews: laneViews,
+                        // An include-all view is the population itself. There is no separate "lane total" to
+                        // prefer — preferring one is what substituted a worklist for the process.
+                        exactLaneTotal: population.truncated ? null : population.rows.length,
+                        baseTruncated: population.truncated,
+                    });
+                    spans.aggregate += Date.now() - tAgg;
+                    markWorkViewSpan(timeline, "aggregate", tAgg, groupKey);
+                    return out;
+                }
                 // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
                 // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
                 // a total must never materialize presentation rows (persons/customers/household/
@@ -332,13 +313,89 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     rowEnrichment: "count_only",
                 });
                 const items = Array.isArray(result.items) ? result.items : [];
-                totals = aggregateWorkViewTotals({
+                return aggregateWorkViewTotals({
                     baseRows: items as Record<string, unknown>[],
                     workViews: laneViews,
                     exactLaneTotal: typeof result.total === "number" ? result.total : null,
                     baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
                 });
+            };
+
+            /*
+             * REPAIR A — THE CHILD BLOCK AND THE LANE CHAIN SHARE NO DATA, SO THEY START TOGETHER.
+             *
+             * These were serial only because they were written one after the other. Nothing in the
+             * lane chain reads a child count: `childTotals` is consulted once, at assembly, after
+             * both have finished. Measured on 486ea3eb9, the binding group spent 102ms of lane work
+             * strictly after a 521ms child lens that it never consumed.
+             *
+             * The saving is smaller than that tail, and knowing why matters: the phase ends at the
+             * SLOWEST of five concurrent groups, so removing this edge promotes the runner-up rather
+             * than paying out in full. It is worth doing because it is free and real, not because it
+             * is large.
+             *
+             * Per-view failure semantics are unchanged — each lens still keeps its own try/catch and
+             * still yields UNKNOWN for itself alone — and so is the group's completion rule: the
+             * group is done when every canonical fact it owes is ready, which is now when the later
+             * of the two branches finishes rather than the sum of both.
+             */
+            const childMeasurement = emptyChildMembershipBatchMeasurement();
+            const childTotals = new Map<string, TotalOut>();
+            const tChild = Date.now();
+            const childWork = childViews.length
+                ? countChildGrainMembersForLenses({
+                      supabase,
+                      orgId,
+                      workUnitId: group.workUnitId,
+                      views: childViews,
+                      measurement: childMeasurement,
+                      timeline,
+                      group: groupKey,
+                  })
+                : null;
+
+            const laneWork = laneViews.length ? computeLaneTotals() : null;
+
+            const [childCounts, laneOutcome] = await Promise.all([
+                childWork ?? Promise.resolve(null),
+                laneWork ?? Promise.resolve(null),
+            ]);
+
+            if (childWork) {
+                spans.child_counts += Date.now() - tChild;
+                markWorkViewSpan(timeline, "child_block", tChild, groupKey);
+                spans.child_batches.push(childMeasurement);
             }
+            for (const view of childViews) {
+                const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
+                const count = childCounts?.get(view.id) ?? null;
+                // UNKNOWN, never a family number. A wrong count is worse than an absent one —
+                // the client keeps its prior value and shows none, rather than captioning
+                // child rows with a count of something else.
+                childTotals.set(
+                    view.id,
+                    count === null
+                        ? ({ ...base, count: null, known: false } as TotalOut)
+                        : ({ ...base, count, known: true } as TotalOut),
+                );
+            }
+
+            // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
+            if (laneViews.length === 0) {
+                markWorkViewSpan(timeline, "group", tGroup, groupKey);
+                return [...group.viewIds].map(
+                    (workViewId) =>
+                        childTotals.get(workViewId) ??
+                        unknownTotals.get(workViewId) ?? {
+                            workUnitId: group.workUnitId,
+                            queueKey: group.queueKey,
+                            workViewId,
+                            count: null,
+                            known: false,
+                        },
+                );
+            }
+            const totals: Record<string, { count: number; known: boolean }> = laneOutcome ?? {};
             markWorkViewSpan(timeline, "group", tGroup, groupKey);
             return [...group.viewIds].map((workViewId) => {
                 const child = childTotals.get(workViewId);
