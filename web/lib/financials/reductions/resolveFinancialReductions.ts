@@ -82,6 +82,24 @@ export type EligibilityFacts = {
     siblingCount: number;
     /** A person on this household holds an employment covering the service period. */
     employeeHousehold: boolean;
+    /*
+     * ── POLICIES THIS RELATIONSHIP HAS BEEN EXPLICITLY GIVEN ──────────────────────────────────
+     *
+     * Until this existed, a child received a discount only by satisfying a RULE — sibling rank and
+     * count, or an employee household — and an operator who wanted to give one family a configured
+     * discount the rules did not already reach had no way to say so.
+     *
+     * An assignment satisfies the policy's RELATIONSHIP-level eligibility and NOTHING ELSE. It
+     * does not decide whether the policy covers this charge, whether the category may be
+     * discounted at all, or whether an exception or exclusion removes it. Those gates are below
+     * and the assignment passes through every one of them, because "which policies does this child
+     * receive" and "does this policy apply to this charge" are two different questions and only
+     * the first is an operator's to answer.
+     *
+     * Server-resolved like every other fact here: a browser that could declare itself assigned
+     * could grant itself a discount.
+     */
+    assignedPolicyIds?: readonly string[];
 };
 
 export type AppliedReduction = {
@@ -238,7 +256,25 @@ function evaluateOne(
         };
     }
 
-    if (policy.kind === "sibling_discount") {
+    /*
+     * ── AN EXPLICIT ASSIGNMENT ANSWERS THE RELATIONSHIP QUESTION, AND ONLY THAT ───────────────
+     *
+     * The two gates below ask whether this RELATIONSHIP qualifies: enough siblings, the right
+     * rank, an employee household. An operator who assigned this policy to this relationship has
+     * answered that question themselves, deliberately and attributably, so the rules do not get
+     * to answer it again.
+     *
+     * NOTE WHAT IS ABOVE THIS LINE AND CANNOT BE REACHED FROM HERE: `coversCategory` and
+     * `chargeCategorySemantics(...).discountable` already ran. A sibling discount assigned to a
+     * child STILL cannot reduce a Registration Fee when the policy's own `applies_to` excludes
+     * fees, and still cannot reduce a charge whose category is not discountable at all. That is
+     * the intersection this model turns on: assignment says which policies a child receives,
+     * policy eligibility says whether one applies to a charge, and an operator may decide the
+     * first without being able to overrule the second.
+     */
+    const assigned = (facts.assignedPolicyIds ?? []).includes(policy.id);
+
+    if (!assigned && policy.kind === "sibling_discount") {
         const minSiblings = num(policy.params.min_siblings) ?? 2;
         if (facts.siblingCount < minSiblings) return { skip: "not_enough_siblings" };
         const rankRule = typeof policy.params.applies_to_rank === "string" ? policy.params.applies_to_rank : "subsequent";
@@ -247,7 +283,7 @@ function evaluateOne(
         if (rankRule !== "all" && facts.siblingRank < minSiblings) return { skip: "rank_not_covered" };
     }
 
-    if (policy.kind === "discount") {
+    if (!assigned && policy.kind === "discount") {
         // Employee eligibility is a CONFIGURED requirement, not a hard-coded discount type. The
         // shared policy substrate stays free of childcare vocabulary; the tenant expresses "staff
         // families" and the server proves it from `employments`.

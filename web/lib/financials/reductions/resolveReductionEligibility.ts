@@ -25,6 +25,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { EligibilityFacts } from "@/lib/financials/reductions/resolveFinancialReductions";
+import { readLivePolicyAssignmentsByMember } from "@/lib/financials/reductions/commercialPolicyAssignmentService";
 
 /** An enrolment covers a period when it starts on/before the end and has not ended before the start. */
 function coversPeriod(start: string | null, end: string | null, periodStart: string, periodEnd: string): boolean {
@@ -100,12 +101,31 @@ export async function resolveHouseholdEligibility(
         periodEnd,
     });
 
+    /*
+     * ── WHICH POLICIES EACH CHILD HAS BEEN EXPLICITLY GIVEN ──────────────────────────────────
+     *
+     * One query for the whole household, beside the facts the rules derive. An assignment is a
+     * fact about a relationship exactly as sibling rank is, and it is resolved here so the
+     * resolver receives it the same way — server-side, from canonical rows, never asserted by a
+     * caller. A browser that could declare itself assigned could grant itself a discount.
+     *
+     * Asked AS OF the period start, because an assignment has an effective window and a policy
+     * given from next month must not reduce this month's money.
+     */
+    const assignmentsByMember = await readLivePolicyAssignmentsByMember(supabase, {
+        orgId,
+        customerMemberIds: ranked.map(([memberId]) => memberId),
+        onDate: periodStart,
+    });
+
     const byMember = new Map<string, EligibilityFacts>();
     ranked.forEach(([memberId], index) => {
         byMember.set(memberId, {
             siblingRank: index + 1,
             siblingCount: ranked.length,
             employeeHousehold,
+            /* This child's own assignments. A sibling's never reach here: the map is keyed by child. */
+            assignedPolicyIds: (assignmentsByMember.get(memberId) ?? []).map((a) => a.policyId),
         });
     });
 
