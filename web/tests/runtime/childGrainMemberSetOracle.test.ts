@@ -1,30 +1,21 @@
 /**
- * SAME MEMBERSHIP ANSWER. CHEAPER ACQUISITION.
+ * THE MEMBER-SET ORACLE — what each child lens actually contains, by exact participation id.
  *
- * The child lenses of one work unit each ran the whole membership projection, so three lenses meant
- * three acquisitions of the same org's enrollment instances and three resolutions of the same
- * opportunities, children and program categories. `acquireEnrollmentChildBase` hoists that
- * acquisition; nothing else moves.
+ * A CLAIM ABOUT COUNTS WOULD NOT BE WORTH ANYTHING HERE. The defect this module exists to prevent
+ * — thirteen rows under a pill of eight — was two different member SETS whose sizes were each
+ * honestly computed. So every case below asserts the exact set, not its size: a change that
+ * returned the right number of the wrong children would pass a count assertion and fail every one
+ * of these.
  *
- * A CLAIM ABOUT COUNTS WOULD NOT BE WORTH ANYTHING HERE. The defect this whole module exists to
- * prevent — thirteen rows under a pill of eight — was two different member sets whose sizes were
- * each honestly computed. So every parity proof below compares the MEMBER SETS by participation id,
- * exactly, in both directions. A repair that returned the right number of the wrong children would
- * pass a count assertion and fail every one of these.
+ * These cases were written to hold a shared-acquisition repair to exact parity. That repair was
+ * retired for making the frame slower, and the cases outlived it — they are the standing
+ * description of what a lens selects, and the next repair to this path will be held to them too.
  */
 import { describe, expect, it } from "vitest";
 
-import {
-    childBaseScopeForLenses,
-    countChildGrainMembersForLenses,
-} from "@/lib/runtime/provisioning/childGrainMembership";
+import { countChildGrainMembersForLenses } from "@/lib/runtime/provisioning/childGrainMembership";
 import { loadChildGrainProvisioningRows } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { childRowMembershipForLens } from "@/lib/runtime/provisioning/childGrainMembership";
-import {
-    acquireEnrollmentChildBase,
-    queryEnrollmentProcessInstanceParticipationRows,
-    queryEnrollmentProcessInstanceTrackRows,
-} from "@/lib/queues/childGrainProcessInstanceQueue";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 
 const ORG = "org-1";
@@ -105,45 +96,30 @@ const lens = (id: string, stages?: string[]): WorkViewConfigV1Stored =>
     }) as unknown as WorkViewConfigV1Stored;
 
 /** The member SET a lens admits, as participation ids. */
-async function memberSet(
-    supabase: never,
-    view: WorkViewConfigV1Stored,
-    base?: Awaited<ReturnType<typeof acquireEnrollmentChildBase>>,
-): Promise<string[]> {
+async function memberSet(supabase: never, view: WorkViewConfigV1Stored): Promise<string[]> {
     const rows = await loadChildGrainProvisioningRows({
-        supabase, orgId: ORG, workUnitId: WU, membership: childRowMembershipForLens(view), base,
+        supabase, orgId: ORG, workUnitId: WU, membership: childRowMembershipForLens(view),
     });
     return rows.map((r) => r.participationId ?? "").sort();
 }
 
 /**
- * THE ORACLE. Runs every lens both ways over one fixture and asserts exact set equality per lens,
- * returning the read log of each arm so the acquisition claim is evidence rather than assertion.
+ * THE ORACLE. Evaluates each lens over one fixture and returns its member set plus the reads it
+ * took, so a case can assert BOTH what a lens selects and what it cost to find out.
  */
-async function bothArms(
+async function lensSets(
     data: Parameters<typeof fixtureSupabase>[0],
     views: WorkViewConfigV1Stored[],
-): Promise<{ sets: string[][]; perLensReads: ReadLog; sharedReads: ReadLog }> {
-    const a = fixtureSupabase(data);
-    const perLens: string[][] = [];
-    for (const v of views) perLens.push(await memberSet(a.supabase, v));
-
-    const b = fixtureSupabase(data);
-    const scope = childBaseScopeForLenses(views);
-    const base = await acquireEnrollmentChildBase({
-        supabase: b.supabase, orgId: ORG, workUnitId: WU, stageKeys: scope.stageKeys,
-    });
-    const shared: string[][] = [];
-    for (const v of views) shared.push(await memberSet(b.supabase, v, base));
-
-    // EXACT SET EQUALITY, per lens, in one place so no case can forget to check it.
-    expect(shared).toEqual(perLens);
-    return { sets: perLens, perLensReads: a.log, sharedReads: b.log };
+): Promise<{ sets: string[][]; reads: ReadLog }> {
+    const f = fixtureSupabase(data);
+    const sets: string[][] = [];
+    for (const v of views) sets.push(await memberSet(f.supabase, v));
+    return { sets, reads: f.log };
 }
 
-describe("shared child-lens acquisition — exact member-set parity", () => {
+describe("child lens membership — exact member sets", () => {
     it("1. participation lens: live instances only, same set both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [
                     pi("p1", "c1", "o1", null),
@@ -159,7 +135,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("2. stages lens admits only its lane's effective stage", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", "waitlist"), pi("p2", "c2", "o2", "lead")],
                 opportunities: [opp("o1", { stage_key: "lead" }), opp("o2", { stage_key: "lead" })],
@@ -171,7 +147,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("3. a null-stage rider is admitted at its FAMILY's stage, identically both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", null)],
                 opportunities: [opp("o1", { stage_key: "lead" })],
@@ -183,7 +159,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("4. a BRANCHED child is NOT reported at its family's stage", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", "waitlist")],
                 opportunities: [opp("o1", { stage_key: "lead" })],
@@ -195,7 +171,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("5. a multi-stage lens dedupes a child that matches twice", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", null)],
                 opportunities: [opp("o1", { stage_key: "lead" })],
@@ -206,10 +182,9 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
         expect(r.sets[0]).toEqual(["p1"]);
     });
 
-    it("6. MIXED modes in one batch: the base widens to `all` and no lens's set changes", async () => {
+    it("6. MIXED modes in one batch: each lens keeps its own set", async () => {
         const views = [lens("all"), lens("wl", ["waitlist"]), lens("leadlens", ["lead"])];
-        expect(childBaseScopeForLenses(views).stageKeys).toBeNull();
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [
                     pi("p1", "c1", "o1", null),
@@ -226,10 +201,9 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
         expect(r.sets[2]).toEqual(["p1"]);
     });
 
-    it("7. stages-only lenses narrow the base to the stage UNION, sets unchanged", async () => {
+    it("7. two stage-scoped lenses each select only their own lane", async () => {
         const views = [lens("wl", ["waitlist"]), lens("leadlens", ["lead"])];
-        expect(childBaseScopeForLenses(views).stageKeys?.sort()).toEqual(["lead", "waitlist"]);
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [
                     pi("p1", "c1", "o1", null),
@@ -246,7 +220,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("8. a participation-ANCHORED context id resolves through OCM in both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "ocm-1", null)],
                 opportunity_customer_members: [{ id: "ocm-1", org_id: ORG, opportunity_id: "o1" }],
@@ -260,7 +234,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("9. an unresolvable context opportunity drops the row in both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "missing", null)],
                 opportunities: [opp("o1")],
@@ -272,7 +246,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("10. a context-free instance is dropped in both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", null, null)],
                 opportunities: [opp("o1")],
@@ -284,7 +258,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("11. an INACTIVE subject fails the liveness gate in both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", null), pi("p2", "c2", "o1", null)],
                 opportunities: [opp("o1")],
@@ -296,7 +270,7 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 
     it("12. a CLOSED context household fails the liveness gate in both arms", async () => {
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", null), pi("p2", "c2", "o2", null)],
                 opportunities: [opp("o1", { status_key: "closed" }), opp("o2")],
@@ -307,11 +281,10 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
         expect(r.sets[0]).toEqual(["p2"]);
     });
 
-    it("13. a blank stage predicate is PARTICIPATION, and still widens the base to `all`", async () => {
+    it("13. a blank stage predicate is PARTICIPATION, not an empty stage scope", async () => {
         const blank = { id: "blank", label: "b", filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "  " }] } as unknown as WorkViewConfigV1Stored;
         expect(childRowMembershipForLens(blank)).toEqual({ mode: "participation" });
-        expect(childBaseScopeForLenses([blank]).stageKeys).toBeNull();
-        const r = await bothArms(
+        const r = await lensSets(
             {
                 process_instances: [pi("p1", "c1", "o1", "registration")],
                 opportunities: [opp("o1", { stage_key: "lead" })],
@@ -323,7 +296,14 @@ describe("shared child-lens acquisition — exact member-set parity", () => {
     });
 });
 
-describe("the acquisition is what collapsed, and nothing else", () => {
+describe("each lens acquires for itself, and they do not wait on each other", () => {
+    /**
+     * THIS IS NOT A COST PREFERENCE, IT IS THE MEASURED ONE. A shared acquisition across these
+     * lenses was built, proven to return identical member sets, and retired: on deployed bf3274774
+     * it made COMPLETE_FRAME 316ms slower, because the per-lens reads already overlap and hoisting
+     * them created a serial prefix. The read count below is therefore the EXPECTED shape, not a
+     * defect waiting to be optimised.
+     */
     const data = {
         process_instances: [pi("p1", "c1", "o1", null), pi("p2", "c2", "o1", "waitlist")],
         opportunities: [opp("o1", { stage_key: "lead" })],
@@ -331,79 +311,39 @@ describe("the acquisition is what collapsed, and nothing else", () => {
     };
     const views = [lens("all"), lens("wl", ["waitlist"]), lens("leadlens", ["lead"])];
 
-    it("three lenses issue three acquisitions unshared, and ONE shared", async () => {
-        const r = await bothArms(data, views);
-        expect(r.perLensReads.process_instances).toBe(3);
-        expect(r.perLensReads.opportunities).toBe(3);
-        expect(r.perLensReads.customer_members).toBe(3);
-        expect(r.sharedReads.process_instances).toBe(1);
-        expect(r.sharedReads.opportunities).toBe(1);
-        expect(r.sharedReads.customer_members).toBe(1);
+    it("three lenses issue three acquisitions, concurrently", async () => {
+        const r = await lensSets(data, views);
+        expect(r.reads.process_instances).toBe(3);
+        expect(r.reads.opportunities).toBe(3);
+        expect(r.reads.customer_members).toBe(3);
+        expect(r.sets[0]).toEqual(["p1", "p2"]);
+        expect(r.sets[1]).toEqual(["p2"]);
+        expect(r.sets[2]).toEqual(["p1"]);
     });
 
-    it("the batch counter returns the same counts on both arms", async () => {
-        const a = fixtureSupabase(data);
-        const b = fixtureSupabase(data);
-        const unshared = await countChildGrainMembersForLenses({
-            supabase: a.supabase, orgId: ORG, workUnitId: WU, views, shareAcquisition: false,
+    it("the counter returns each lens's own count, keyed by view id", async () => {
+        const f = fixtureSupabase(data);
+        const counts = await countChildGrainMembersForLenses({
+            supabase: f.supabase, orgId: ORG, workUnitId: WU, views,
         });
-        const shared = await countChildGrainMembersForLenses({
-            supabase: b.supabase, orgId: ORG, workUnitId: WU, views, shareAcquisition: true,
-        });
-        expect([...shared.entries()].sort()).toEqual([...unshared.entries()].sort());
-        expect(shared.get("all")).toBe(2);
-        expect(shared.get("wl")).toBe(1);
-        expect(shared.get("leadlens")).toBe(1);
-        expect(b.log.process_instances).toBe(1);
-        expect(a.log.process_instances).toBe(3);
-    });
-});
-
-describe("a base that does not cover a lens is REFUSED, never used", () => {
-    const data = {
-        process_instances: [pi("p1", "c1", "o1", null)],
-        opportunities: [opp("o1", { stage_key: "lead" })],
-        customer_members: [cm("c1")],
-    };
-
-    it("participation membership refuses a stage-scoped base", async () => {
-        const { supabase } = fixtureSupabase(data);
-        const base = await acquireEnrollmentChildBase({ supabase, orgId: ORG, workUnitId: WU, stageKeys: ["lead"] });
-        await expect(
-            queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU, base }),
-        ).rejects.toThrow(/unscoped enrollment child base/);
+        expect(counts.get("all")).toBe(2);
+        expect(counts.get("wl")).toBe(1);
+        expect(counts.get("leadlens")).toBe(1);
     });
 
-    it("a stages lens refuses a base that omits its stage", async () => {
-        const { supabase } = fixtureSupabase(data);
-        const base = await acquireEnrollmentChildBase({ supabase, orgId: ORG, workUnitId: WU, stageKeys: ["lead"] });
-        await expect(
-            queryEnrollmentProcessInstanceTrackRows({ supabase, orgId: ORG, workUnitId: WU, stageKey: "waitlist", base }),
-        ).rejects.toThrow(/does not cover stage waitlist/);
-    });
-
-    it("an unsafe stage token widens to `all` rather than being spliced into a filter", async () => {
-        const { supabase } = fixtureSupabase(data);
-        const base = await acquireEnrollmentChildBase({
-            supabase, orgId: ORG, workUnitId: WU, stageKeys: ["lead,stage_key.not.is.null"],
-        });
-        expect(base.scope).toBe("all");
-    });
-
-    it("a failed shared acquisition yields UNKNOWN for every lens, never a number", async () => {
+    it("a lens that cannot read is UNKNOWN, and never a number borrowed from another lens", async () => {
         const broken = {
             from() {
-                const builder: Rec = {
-                    select: () => builder, eq: () => builder, or: () => builder, in: () => builder,
-                    then: (resolve: (r: { data: null; error: { message: string } }) => void) =>
-                        resolve({ data: null, error: { message: "read failed" } }),
+                const b: Rec = {
+                    select: () => b, eq: () => b, or: () => b, in: () => b,
+                    then: (r: (x: { data: null; error: { message: string } }) => void) =>
+                        r({ data: null, error: { message: "read failed" } }),
                 };
-                return builder;
+                return b;
             },
         } as never;
         const out = await countChildGrainMembersForLenses({
-            supabase: broken, orgId: ORG, workUnitId: WU,
-            views: [lens("all"), lens("wl", ["waitlist"])], shareAcquisition: true,
+            supabase: broken, orgId: ORG, workUnitId: WU, views: [lens("all"), lens("wl", ["waitlist"])],
         });
         expect(out.get("all")).toBeNull();
         expect(out.get("wl")).toBeNull();

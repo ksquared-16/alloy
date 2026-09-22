@@ -1,14 +1,14 @@
 /**
- * THE ACQUISITION MUST BE HOISTED ABOVE THE GROUPS, OR IT IS SHARED WITH NOBODY.
+ * A LENS THAT CONTRADICTS ITSELF IS UNKNOWN, NEVER A LANE COUNT.
  *
- * A count group is (work unit, queue key). Measured deployed at 445bc8b23 the surface's three
- * child lenses sat in THREE DIFFERENT groups — so a base acquired inside the group evaluator would
- * have been acquired three times and shared with one lens each, which is what it already did.
+ * A lens declaring child Row Grain while filtering on a FAMILY-grain stage is refused by
+ * `resolveLensRowGrain`. The refusal has to survive whatever the count path is doing: a refused
+ * lens must not fall through to the opportunity lane's population, because a pill of one over zero
+ * rows is the shape of the 13-vs-8 defect.
  *
- * Neither child membership rule filters by work unit: both read the org's enrollment instances and
- * narrow afterwards, by effective stage or by the Enrollment Definition's liveness gate. That is
- * exactly why one request-scoped acquisition can serve every group — and why this gate counts
- * READS rather than asserting that a parameter is passed.
+ * This file is what remains of a suite that proved a shared child acquisition was hoisted above the
+ * count groups. That mechanism was measured 316ms slower and retired. The refusal gate is not about
+ * the mechanism and outlives it.
  */
 import { describe, expect, it } from "vitest";
 
@@ -96,7 +96,7 @@ const DATA: Record<string, Rec[]> = {
     ],
 };
 
-const seedInput = (supabase: never, share: boolean) => ({
+const seedInput = (supabase: never) => ({
     supabase,
     orgId: ORG,
     hostWorkUnitId: HOSTS[0],
@@ -111,7 +111,6 @@ const seedInput = (supabase: never, share: boolean) => ({
     recordScopeConstraints: null as never,
     recordScopeImpossible: false,
     viewerDisplayTimeZone: { iana: "UTC", source: "default", cacheHit: false } as never,
-    shareChildAcquisition: share,
 });
 
 /**
@@ -120,7 +119,7 @@ const seedInput = (supabase: never, share: boolean) => ({
  * it is not swept into the shared acquisition, and it never falls through to a lane population
  * count — pill 1 over zero rows is the shape of the original defect.
  */
-describe("a self-contradicting lens is still refused, in both arms", () => {
+describe("a self-contradicting lens is refused", () => {
     const contradictory = () => {
         const md = metadataWithChildLenses() as Record<string, Rec>;
         const builder = md[LIFECYCLE_BUILDER_METADATA_KEY] as { processes: Rec[] };
@@ -143,97 +142,22 @@ describe("a self-contradicting lens is still refused, in both arms", () => {
         expect(laneViews.map((v) => v.id)).not.toContain("cv-bad");
     });
 
-    it("it resolves UNKNOWN in both arms — never a number", async () => {
-        const withBad = (share: boolean, supabase: never) => ({
-            ...seedInput(supabase, share),
+    it("it resolves UNKNOWN through the seed — never a number", async () => {
+        const f = fixtureSupabase(DATA);
+        const seed = await resolveWorkViewTotalsSeed({
+            ...seedInput(f.supabase),
             departmentMetadata: contradictory(),
             countTargets: [
-                ...seedInput(supabase, share).countTargets as unknown as Rec[],
+                ...(seedInput(f.supabase).countTargets as unknown as Rec[]),
                 { workViewId: "cv-bad", hostWorkUnitId: HOSTS[0], baseQueueKey: "q-a" },
             ] as never,
-        });
-        for (const share of [false, true]) {
-            const f = fixtureSupabase(DATA);
-            const seed = await resolveWorkViewTotalsSeed(withBad(share, f.supabase) as never);
-            if (seed.status !== "resolved") throw new Error("seed unavailable");
-            const bad = (seed as { totals: { workViewId: string; count: number | null; known: boolean }[] })
-                .totals.find((t) => t.workViewId === "cv-bad");
-            expect(bad, `arm share=${share}`).toBeDefined();
-            expect(bad!.known, `arm share=${share}`).toBe(false);
-            expect(bad!.count, `arm share=${share}`).toBeNull();
-        }
+        } as never);
+        if (seed.status !== "resolved") throw new Error("seed unavailable");
+        const bad = (seed as { totals: { workViewId: string; count: number | null; known: boolean }[] })
+            .totals.find((t) => t.workViewId === "cv-bad");
+        expect(bad).toBeDefined();
+        expect(bad!.known).toBe(false);
+        expect(bad!.count).toBeNull();
     });
 });
 
-describe("the request-scoped child acquisition", () => {
-    it("the three lenses really do land in three separate groups", () => {
-        const md = metadataWithChildLenses();
-        const views = savedWorkViewsFromDepartmentMetadata(md).map((v) => v.id);
-        expect(views).toEqual(expect.arrayContaining(["cv-all", "cv-wl", "cv-enr"]));
-        const { childViews } = classifyRequestedWorkViews({ metadata: md, viewIds: new Set(views) });
-        expect(childViews.map((v) => v.id).sort()).toEqual(["cv-all", "cv-enr", "cv-wl"]);
-    });
-
-    it("UNSHARED: each lens acquires its own — three instance reads for three lenses", async () => {
-        const f = fixtureSupabase(DATA);
-        const seed = await resolveWorkViewTotalsSeed(seedInput(f.supabase, false) as never);
-        expect(seed.status).toBe("resolved");
-        expect(f.reads.process_instances).toBe(3);
-    });
-
-    it("SHARED: one acquisition serves all three groups", async () => {
-        const f = fixtureSupabase(DATA);
-        const seed = await resolveWorkViewTotalsSeed(seedInput(f.supabase, true) as never);
-        expect(seed.status).toBe("resolved");
-        expect(f.reads.process_instances).toBe(1);
-        expect(f.reads.opportunities).toBe(1);
-        expect(f.reads.customer_members).toBe(1);
-    });
-
-    it("SAME ANSWER: the two arms return identical totals for every view", async () => {
-        const a = await resolveWorkViewTotalsSeed(seedInput(fixtureSupabase(DATA).supabase, false) as never);
-        const b = await resolveWorkViewTotalsSeed(seedInput(fixtureSupabase(DATA).supabase, true) as never);
-        if (a.status !== "resolved" || b.status !== "resolved") throw new Error("seed unavailable");
-        const norm = (s: typeof a) =>
-            (s as { totals: { workViewId: string; count: number | null; known: boolean }[] }).totals
-                .map((t) => `${t.workViewId}=${t.known ? t.count : "UNKNOWN"}`)
-                .sort();
-        expect(norm(b)).toEqual(norm(a));
-        // And the answer is the real membership, not an empty one that would agree trivially.
-        expect(norm(a)).toEqual(["cv-all=2", "cv-enr=0", "cv-wl=1"]);
-    });
-
-    it("a participation lens forces the unscoped base, and the spans say so", async () => {
-        const f = fixtureSupabase(DATA);
-        const seed = await resolveWorkViewTotalsSeed(seedInput(f.supabase, true) as never);
-        if (seed.status !== "resolved") throw new Error("seed unavailable");
-        const batches = seed.spans.child_batches;
-        expect(batches.length).toBeGreaterThan(0);
-        expect(batches[0].baseScope).toBe("all");
-        expect(batches[0].base.piRows).toBe(2);
-    });
-
-    it("a failed shared acquisition falls back to per-lens reads rather than to a wrong number", async () => {
-        let first = true;
-        const base = fixtureSupabase(DATA);
-        const flaky = {
-            from(table: string) {
-                if (table === "process_instances" && first) {
-                    first = false;
-                    const b: Rec = {
-                        select: () => b, eq: () => b, or: () => b, in: () => b,
-                        then: (r: (x: { data: null; error: { message: string } }) => void) =>
-                            r({ data: null, error: { message: "acquisition failed" } }),
-                    };
-                    return b;
-                }
-                return (base.supabase as unknown as { from: (t: string) => unknown }).from(table);
-            },
-        } as never;
-        const seed = await resolveWorkViewTotalsSeed(seedInput(flaky, true) as never);
-        if (seed.status !== "resolved") throw new Error("seed unavailable");
-        const totals = (seed as { totals: { workViewId: string; count: number | null; known: boolean }[] }).totals;
-        expect(totals.map((t) => `${t.workViewId}=${t.known ? t.count : "UNKNOWN"}`).sort())
-            .toEqual(["cv-all=2", "cv-enr=0", "cv-wl=1"]);
-    });
-});

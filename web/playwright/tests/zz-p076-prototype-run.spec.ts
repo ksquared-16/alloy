@@ -114,38 +114,22 @@ test("p076 prototype run", async ({ page }) => {
         + (workUnitId ? `&work_unit_id=${workUnitId}` : "");
     await page.evaluate((d) => { (window as unknown as { __p076extra?: string }).__p076extra = d; }, extra);
     /*
-     * PAIRED A/B, IN ONE PAGE SESSION.
-     *
-     * The two child-lens acquisition arms differ by perhaps a few hundred milliseconds against a
-     * shared staging database whose own load this lane does not control. Sampling them in two
-     * separate sessions would compare arm A's afternoon with arm B's, and any ordering or
-     * warm-cache asymmetry would read as the result. So each iteration fires BOTH arms against the
-     * same subject in the same page, and ALTERNATES which goes first, so a first-call penalty
-     * falls equally on each.
+     * ONE REQUEST PER PAGE. A paired in-page A/B lived here to compare two child-acquisition arms;
+     * that experiment is over and its second arm is retired. It left one fact worth keeping: the
+     * SECOND request in a page is its own effect — on identical code the in-page delta ranged from
+     * -875ms to +5ms — so absolute frame timings come from fresh pages, one request each.
      */
-    const ab = process.env.P076_AB === "1";
-    const fire = async (arm: "A" | "B") =>
-        page.evaluate(async ([mid, cid, suffix]) => {
+    for (let i = 0; i < n; i++) {
+        const out = await page.evaluate(async ([mid, cid]) => {
             const t0 = performance.now();
             const res = await fetch(
-                `/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}${(window as unknown as { __p076extra?: string }).__p076extra ?? ""}${suffix}`,
+                `/api/admin/p076-first-order-prototype?member_id=${mid}&customer_id=${cid}${(window as unknown as { __p076extra?: string }).__p076extra ?? ""}`,
                 { credentials: "include" },
             );
             const wall = Math.round(performance.now() - t0);
             const body = await res.json().catch(() => null);
             return { status: res.status, clientWallMs: wall, body };
-        }, [memberId, customerId, arm === "B" ? "&child_batch=1" : ""]);
-
-    for (let i = 0; i < n; i++) {
-        if (!ab) {
-            const out = await fire(process.env.P076_CHILD_BATCH === "1" ? "B" : "A");
-            console.log(`[proto] ${JSON.stringify({ i, memberId, customerId, ...out })}`);
-            continue;
-        }
-        const order: ("A" | "B")[] = i % 2 === 0 ? ["A", "B"] : ["B", "A"];
-        for (const arm of order) {
-            const out = await fire(arm);
-            console.log(`[proto] ${JSON.stringify({ i, arm, order: order.join(""), memberId, customerId, ...out })}`);
-        }
+        }, [memberId, customerId]);
+        console.log(`[proto] ${JSON.stringify({ i, memberId, customerId, ...out })}`);
     }
 });

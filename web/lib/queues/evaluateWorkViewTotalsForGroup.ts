@@ -30,7 +30,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
     WorkViewTotalRow as WorkViewTotalRowContract,
     WorkViewTotalsSpans as WorkViewTotalsSpansContract,
+    WorkViewTotalsTimeline,
 } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
+import { markWorkViewSpan } from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
@@ -128,22 +130,8 @@ export async function evaluateWorkViewTotalsForGroup(args: {
      */
     viewerDisplayTimeZone: Parameters<typeof getWorkUnitQueueItems>[0]["viewerDisplayTimeZone"];
     spans: WorkViewTotalsSpansContract;
-    /**
-     * ARM SELECTOR, not a feature flag on the answer.
-     *
-     * True acquires the enrollment child base once for this group's child lenses; false leaves each
-     * lens acquiring its own, exactly as before. Both arms run the same membership rules over the
-     * same rows and must return the same counts — which is the point: the claim "same answer,
-     * cheaper acquisition" is only worth anything if both arms can be measured on one deployed
-     * lineage and compared. Defaults to the pre-existing behaviour.
-     */
-    shareChildAcquisition?: boolean;
-    /**
-     * An enrollment child base the CALLER acquired for this whole request. The child lenses of one
-     * surface sit in different groups, and the base is org-scoped (neither membership rule filters
-     * by work unit), so the only place one acquisition can serve all of them is above the groups.
-     */
-    childBase?: Parameters<typeof countChildGrainMembersForLenses>[0]["base"];
+    /** Interval recorder. Diagnostic only; an absent timeline changes nothing. */
+    timeline?: WorkViewTotalsTimeline;
 }): Promise<WorkViewTotalRowContract[]> {
     const {
         supabase,
@@ -155,7 +143,9 @@ export async function evaluateWorkViewTotalsForGroup(args: {
         viewerDisplayTimeZone,
         spans,
     } = args;
-    const shareChildAcquisition = args.shareChildAcquisition === true;
+    const timeline = args.timeline;
+    const groupKey = `${group.workUnitId}::${group.queueKey}`;
+    const tGroup = Date.now();
     type TotalOut = WorkViewTotalRowContract;
         const unknownAll = (): TotalOut[] =>
             [...group.viewIds].map((workViewId) => ({
@@ -226,11 +216,12 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     orgId,
                     workUnitId: group.workUnitId,
                     views: childViews,
-                    shareAcquisition: shareChildAcquisition,
-                    base: args.childBase,
                     measurement,
+                    timeline,
+                    group: groupKey,
                 });
                 spans.child_counts += Date.now() - tChild;
+                markWorkViewSpan(timeline, "child_block", tChild, groupKey);
                 spans.child_batches.push(measurement);
                 for (const view of childViews) {
                     const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
@@ -249,6 +240,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
 
             // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
             if (laneViews.length === 0) {
+                markWorkViewSpan(timeline, "group", tGroup, groupKey);
                 return [...group.viewIds].map(
                     (workViewId) =>
                         childTotals.get(workViewId) ??
@@ -288,6 +280,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     scopeImpossible: recordScopeImpossible,
                 });
                 spans.population += Date.now() - tPop;
+                markWorkViewSpan(timeline, "population", tPop, groupKey);
                 // EPP before Work View totals — same keys as D1 provisioning rows.
                 const tEpp = Date.now();
                 const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
@@ -298,6 +291,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     logLabel: "queue-view-totals",
                 });
                 spans.epp += Date.now() - tEpp;
+                markWorkViewSpan(timeline, "epp", tEpp, groupKey);
                 const tTours = Date.now();
                 const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
                     supabase,
@@ -306,6 +300,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     logLabel: "queue-view-totals",
                 });
                 spans.tours += Date.now() - tTours;
+                markWorkViewSpan(timeline, "tours", tTours, groupKey);
                 const tAgg = Date.now();
                 totals = aggregateWorkViewTotals({
                     baseRows: baseWithTourFacts,
@@ -316,6 +311,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     baseTruncated: population.truncated,
                 });
                 spans.aggregate += Date.now() - tAgg;
+                markWorkViewSpan(timeline, "aggregate", tAgg, groupKey);
             } else {
                 // ONE base-lane fetch (exact all-records count + up to the cap of rows) for the whole
                 // group. COUNT-ONLY: the base-query operational fields carry the Work-View predicates —
@@ -343,6 +339,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
                     baseTruncated: items.length >= WORK_VIEW_QUEUE_FILTER_FETCH_CAP,
                 });
             }
+            markWorkViewSpan(timeline, "group", tGroup, groupKey);
             return [...group.viewIds].map((workViewId) => {
                 const child = childTotals.get(workViewId);
                 if (child) return child;
