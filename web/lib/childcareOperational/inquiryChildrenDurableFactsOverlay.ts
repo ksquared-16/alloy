@@ -59,24 +59,52 @@ export async function resolveDurableFactsForChildren(
         byMember.set(memberId, arr);
     }
 
-    for (const child of children) {
-        const list = byMember.get(child.customerMemberId);
-        if (!list?.length) continue;
-        // Prefer the agreement at the child's site; else the first operational agreement.
-        const site = child.siteLocationId ?? null;
-        const agr = (site ? list.find((a) => a.site_location_id === site) : null) ?? list[0];
-        const rm = await buildOperationalEnrollmentReadModelForAgreement(supabase, orgId, agr.id);
-        if (!rm.agreement) continue;
-        out.set(child.customerMemberId, {
-            programLabel: rm.labels.program,
-            roomLabel: rm.labels.room,
-            scheduleLabel: rm.labels.schedule,
-            startDate: rm.placement?.start_date ?? rm.agreement.start_date ?? null,
-            programCategoryId: rm.placement?.program_category_id ?? null,
-            roomLocationId: rm.placement?.room_location_id ?? null,
-            siteLocationId: rm.agreement.site_location_id ?? null,
-            agreementStatus: rm.agreement.status ?? null,
-        });
+    /*
+     * ONE CHILD'S READ MODEL DOES NOT DEPEND ON ANOTHER'S — so they are built together.
+     *
+     * This was `for (const child of children) { … await build…(agr.id) }`: an await inside a loop,
+     * once per child. Measured on deployed 1072986ab the enclosing
+     * `children_overlay_parallel_fetch_ms` was 2,296ms P50 — 82% of the whole children chain, and
+     * the chain is the binding owner of the product metric. The three legs of that Promise.all were
+     * already concurrent with each other; the serial cost was INSIDE this one.
+     *
+     * Each iteration reads only `agr.id`, which is chosen purely from `byMember`, and writes one
+     * key. Nothing crosses iterations.
+     *
+     * ORDERING IS PRESERVED DELIBERATELY. `children` may name one member twice, and the serial loop
+     * resolved that by last-write-wins in iteration order. Results are therefore collected in order
+     * and applied in order afterwards, so the map is byte-identical to the serial one rather than
+     * dependent on which request answered first.
+     *
+     * NOT a query-count repair: the same reads happen. Only their SCHEDULE changes, which is what
+     * the Work View shared-acquisition experiment proved is the thing that actually moves wall time.
+     */
+    const resolved = await Promise.all(
+        children.map(async (child) => {
+            const list = byMember.get(child.customerMemberId);
+            if (!list?.length) return null;
+            // Prefer the agreement at the child's site; else the first operational agreement.
+            const site = child.siteLocationId ?? null;
+            const agr = (site ? list.find((a) => a.site_location_id === site) : null) ?? list[0];
+            const rm = await buildOperationalEnrollmentReadModelForAgreement(supabase, orgId, agr.id);
+            if (!rm.agreement) return null;
+            return [
+                child.customerMemberId,
+                {
+                    programLabel: rm.labels.program,
+                    roomLabel: rm.labels.room,
+                    scheduleLabel: rm.labels.schedule,
+                    startDate: rm.placement?.start_date ?? rm.agreement.start_date ?? null,
+                    programCategoryId: rm.placement?.program_category_id ?? null,
+                    roomLocationId: rm.placement?.room_location_id ?? null,
+                    siteLocationId: rm.agreement.site_location_id ?? null,
+                    agreementStatus: rm.agreement.status ?? null,
+                } satisfies DurableChildFacts,
+            ] as const;
+        }),
+    );
+    for (const entry of resolved) {
+        if (entry) out.set(entry[0], entry[1]);
     }
     return out;
 }
