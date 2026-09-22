@@ -127,7 +127,15 @@ describe("4 & 5 — no Enrollment-specific branch, no generic compiler edit", ()
          * not a branch. What would betray process coupling is a COMPARISON against process
          * vocabulary, so that is what is asserted: no such token ever appears as a string literal.
          */
-        const literals = [...compiler.matchAll(/"([^"]*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2]);
+        /*
+         * A TYPE INDEX IS NOT A BRANCH. `OperationalContextSignals["tour"]` names a field of a
+         * struct every grain carries, exactly like the `tour:` property key excused above. Strip
+         * index positions before extracting literals, so the guard keeps catching the thing it
+         * exists to catch — a COMPARISON against process vocabulary — and stops flagging the thing
+         * it does not.
+         */
+        const comparable = compiler.replace(/\[\s*["'][^"']*["']\s*\]/g, "[]");
+        const literals = [...comparable.matchAll(/"([^"]*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2]);
         for (const lit of literals) {
             expect(lit, `compiler must not compare against process vocabulary: ${lit}`)
                 .not.toMatch(/enroll|inquiry|waitlist|tour/i);

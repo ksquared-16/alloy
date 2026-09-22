@@ -34,6 +34,7 @@
  * action the answer does not claim `operational`.
  */
 import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
+import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -425,6 +426,14 @@ export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
        * drawer settled, ~3.5s later, to learn what the answer already carried.
        */
       resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+      /**
+       * The tour signal the ANSWER resolved, or null when it did not.
+       *
+       * Null is NOT "no tour" — it is "not established". The collapsed Business Process card's
+       * activity preview falls back to a scheduled tour, so publishing an unestablished empty here
+       * would state an authoritative "no activity" the answer never computed.
+       */
+      resolvedTour?: OperationalContextSignals["tour"] | null;
 
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;

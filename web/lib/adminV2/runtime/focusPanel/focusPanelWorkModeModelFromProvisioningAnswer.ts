@@ -22,7 +22,7 @@ import {
 } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { participantScopeFromChildSubjectTruth } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
-import type { OperationalParticipantScope } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { OperationalParticipantScope, OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import { MOUNTABLE_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelMountableCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -81,6 +81,19 @@ export type FocusPanelWorkModeFromAnswerInput = {
      * path untouched.
      */
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    /**
+     * THE TOUR SIGNAL THE ANSWER RESOLVED — optional, and its ABSENCE is meaningful.
+     *
+     * Present  => the answer ran the canonical booking projection and this IS the answer, including
+     *             a legitimate "no tour" (`scheduled: false`).
+     * Absent   => the answer did not resolve it (no subject, or the read failed). The signal stays
+     *             settlement-owned and the surface claims nothing.
+     *
+     * That distinction is the whole point: collapsing "read failed" into `scheduled: false` would
+     * publish a KNOWN_ZERO the answer never established, and the collapsed Business Process card
+     * would then state "no activity" it does not know — UNKNOWN != ZERO.
+     */
+    resolvedTour?: OperationalContextSignals["tour"] | null;
     /**
      * R2 — the SUBJECT GRAIN as resolved ONCE by the provisioning answer. Never re-derived here.
      *
@@ -200,7 +213,13 @@ export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeF
             work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel },
             // Settlement-owned signals — honest empty (reserved), never fabricated.
             attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
-            tour: { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
+            /*
+             * Resolved by the ANSWER when it could be; otherwise the honest settlement-owned empty.
+             * `?? NULL` here is not a default for a failed read — the composer omits the field
+             * entirely in that case, which is what keeps absent distinguishable from "no tour".
+             */
+            tour: input.resolvedTour
+                ?? { scheduled: false, startAt: null, statusLabel: null, statusKey: null, bookingId: null },
             communications: { scheduledSendCount: 0, nextFollowUpAt: null, hasOutreach: false, nextScheduledSendId: null },
             billing: NULL_BILLING_SIGNAL,
         },
