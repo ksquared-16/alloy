@@ -229,7 +229,25 @@ describe("the family Discount position renders canonical truth and computes none
          * that is already there.
          */
         const panel = code(PANEL);
-        expect(panel).toContain("excluded_by_exception");
+        /*
+         * THE STATE MUST BE RENDERED, and the word is the operator's. `excluded_by_exception` is
+         * the canonical REASON CODE and reads "Excluded for this assignment" — accurate about the
+         * record and not what the operator decided. They waived a discount, and the vocabulary
+         * family already says so at the charge grain ("Waived for this charge"); the relationship
+         * grain now matches it. The reason code is untouched and still what every other surface
+         * resolves.
+         *
+         * What this rule has always been about is that an excluded policy does not go MISSING:
+         * "no policy configured" and "a policy exists and was waived here" have different
+         * remedies, and an operator told the first goes to configuration to create something that
+         * is already there.
+         */
+        expect(panel, "the waived state is rendered, not omitted")
+            .toContain('data-financials-discount-waived="true"');
+        expect(panel, "in the operator's word").toMatch(/>\s*Waived\s*</);
+        expect(panel, "with the decision's reason beside it")
+            .toContain('data-financials-discount-waived-reason="true"');
+        expect(panel, "and a way back").toContain("Restore discount");
         /*
          * The sentences live in the SHARED vocabulary now, not in this surface. When each surface
          * kept its own, "Excluded — an exception applies to this relationship" and Assignment's
@@ -262,7 +280,7 @@ describe("the family Discount position renders canonical truth and computes none
          */
         const detail = code(DETAIL);
         const row = detail.indexOf('data-financials-payer-row="true"');
-        const discount = detail.indexOf('data-financials-admin-item="discount"');
+        const discount = detail.indexOf('data-financials-row-group="discount"');
         const ledger = detail.indexOf('data-financials-detail-scroll="true"');
         expect(row, "there is a relationship row").toBeGreaterThan(-1);
         expect(discount, "and the discount states itself on it").toBeGreaterThan(row);

@@ -3834,6 +3834,23 @@ export default function FinancialsCard({
                     <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
                         <PaymentMethodsSection customerId={customerId} />
                         <AutopaySection customerId={customerId} />
+                        {/*
+                          * A VISIBLE WAY BACK. The card ended after the Autopay copy with nothing
+                          * below it, so on an account with no methods it read as a surface that
+                          * had failed to finish loading rather than one waiting to be used.
+                          * Escape has always dismissed it; a keyboard gesture is not an answer to
+                          * "how do I get out of here".
+                          */}
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-payments-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </UniversalCard>
             </div>

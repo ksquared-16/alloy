@@ -512,39 +512,54 @@ export default function FinancialsDetailCard({
                 </div>
 
                 {/*
-                  * ── ONE COMPACT RELATIONSHIP ROW ───────────────────────────────────────────
+                  * ── ONE COMPACT RELATIONSHIP ROW, IN THREE GROUPS ──────────────────────────
                   *
-                  * Who is related to this account, what they owe, how they can pay, what reduces
-                  * it, and the ways to change any of it. Five facts, one line, each in its own
-                  * element — the run-together string this replaced came from class names with no
-                  * rules behind them, not from putting related facts together.
+                  *   LEFT    who this relationship is, and what they owe
+                  *   MIDDLE  what reduces it, with the gear that changes that
+                  *   RIGHT   how they can pay, with the door that changes that
                   *
-                  * THE DISCOUNT IS COMPOSED HERE, NOT OWNED HERE. Its grain is still the child's
-                  * commercial relationship; what sits on this line is the family's position in
-                  * one phrase, already collapsed by the host from the canonical read. When the
-                  * children disagree the phrase says so rather than picking one child's answer,
-                  * and the gear opens the card that can afford the breakdown.
+                  * The grouping is the point. `Manage payments` sat at the row's end with the
+                  * discount between it and the payment state it manages, so the control floated
+                  * next to a concept it has nothing to do with. Each action now touches the state
+                  * it acts on, which is also what makes the row readable when it wraps.
                   *
-                  * Responsibility is deliberately absent: it has a first-class KPI at the top of
-                  * this card, so a row here restated what the operator had just read. Its gear
-                  * lives with the responsible-party filter, where responsibility is already part
-                  * of the operator's mental model.
+                  * THE METHOD JOINS THE RIGHT GROUP ONLY WHEN THERE IS ONE PAYER TO BE ABOUT.
+                  * A payment method is a fact about a payer, not about the account: with two
+                  * payers on record, lifting "No payment method" out to the row's end would
+                  * silently attribute one payer's method state to the relationship as a whole.
+                  * With several, each keeps its own, and only the door is shared.
                   */}
                 {evidence.payers.length || administration ? (
                     <div className="alloy-os-fdetail__payers" data-financials-payer-row="true">
-                        {evidence.payers.map((p) => (
-                            <span key={p.name} className="alloy-os-fdetail__payer" data-funding={p.funding ? "true" : undefined}>
-                                <span className="alloy-os-billing__payer-name">{p.name}</span>
-                                <span className="alloy-os-billing__payer-share">{p.share}</span>
-                                <span className="alloy-os-billing__payer-method">{p.method}</span>
-                                {p.methodIssue ? (
-                                    <span className="alloy-os-billing__method-issue">· {p.methodIssue}</span>
-                                ) : null}
-                            </span>
-                        ))}
+                        <span className="alloy-os-fdetail__rowgroup" data-financials-row-group="identity">
+                            {evidence.payers.map((p) => (
+                                <span
+                                    key={p.name}
+                                    className="alloy-os-fdetail__payer"
+                                    data-funding={p.funding ? "true" : undefined}
+                                >
+                                    <span className="alloy-os-billing__payer-name">{p.name}</span>
+                                    <span className="alloy-os-billing__payer-share">{p.share}</span>
+                                    {evidence.payers.length > 1 ? (
+                                        <>
+                                            <span className="alloy-os-billing__payer-method">{p.method}</span>
+                                            {p.methodIssue ? (
+                                                <span className="alloy-os-billing__method-issue">· {p.methodIssue}</span>
+                                            ) : null}
+                                        </>
+                                    ) : null}
+                                </span>
+                            ))}
+                        </span>
 
+                        {/*
+                          * WHAT REDUCES IT, and the gear that changes that — adjacent by rule,
+                          * because the gear's whole meaning is "change THIS". No money here: the
+                          * expected amounts are per child and belong to the card that shows them
+                          * per child.
+                          */}
                         {administration ? (
-                            <span className="alloy-os-fdetail__rowitem" data-financials-admin-item="discount">
+                            <span className="alloy-os-fdetail__rowgroup" data-financials-row-group="discount">
                                 <span className="alloy-os-fdetail__adminvalue" data-financials-discount-summary="true">
                                     {administration.loading ? (
                                         <span data-financials-summary-state="loading">Reading…</span>
@@ -557,7 +572,7 @@ export default function FinancialsDetailCard({
                                     onClick={administration.onManageDiscount}
                                     data-financials-manage-discounts="gear"
                                     aria-label="Manage discounts"
-                                    title="Manage discounts — how this applies by child, and what can change"
+                                    title="Manage discounts — what each child receives, and what can change"
                                     className="alloy-os-fdetail__admingear"
                                 >
                                     <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
@@ -565,15 +580,26 @@ export default function FinancialsDetailCard({
                             </span>
                         ) : null}
 
+                        {/* HOW THEY CAN PAY, and the door that changes that — one thought, one group. */}
                         {administration ? (
-                            <button
-                                type="button"
-                                onClick={administration.onManagePayments}
-                                data-financials-manage-payments="open"
-                                className="alloy-os-fdetail__payeraction"
-                            >
-                                Manage payments <span aria-hidden>&rarr;</span>
-                            </button>
+                            <span className="alloy-os-fdetail__rowgroup alloy-os-fdetail__rowgroup--end" data-financials-row-group="payment">
+                                {evidence.payers.length === 1 ? (
+                                    <span className="alloy-os-billing__payer-method" data-financials-method-state="true">
+                                        {evidence.payers[0]!.method}
+                                        {evidence.payers[0]!.methodIssue ? (
+                                            <span className="alloy-os-billing__method-issue"> · {evidence.payers[0]!.methodIssue}</span>
+                                        ) : null}
+                                    </span>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={administration.onManagePayments}
+                                    data-financials-manage-payments="open"
+                                    className="alloy-os-fdetail__payeraction"
+                                >
+                                    Manage payments <span aria-hidden>&rarr;</span>
+                                </button>
+                            </span>
                         ) : null}
                     </div>
                 ) : null}

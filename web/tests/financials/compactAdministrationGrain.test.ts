@@ -95,7 +95,7 @@ describe("no permanent administration row survives", () => {
     it("the discount summary lives on the relationship row", () => {
         const detail = code(DETAIL);
         const row = detail.indexOf('data-financials-payer-row="true"');
-        const discount = detail.indexOf('data-financials-admin-item="discount"');
+        const discount = detail.indexOf('data-financials-row-group="discount"');
         const gear = detail.indexOf('data-financials-manage-discounts="gear"');
         const rowEnd = detail.indexOf('data-financials-lenses="true"');
         expect(row).toBeGreaterThan(-1);
@@ -302,13 +302,33 @@ describe("the depth cards state each fact once", () => {
         expect(code(RESP)).toMatch(/hosted \? null : \([\s\S]{0,200}Manage responsibility/);
     });
 
-    it("every child row in the discount card carries its own action", () => {
-        /* An operator must be able to tell immediately what can be acted upon. */
+    it("every child row carries its own action, in the operator's words", () => {
+        /*
+         * THE MODEL IS AN EXCEPTION; THE DECISION IS A WAIVER. "Add exception" names the record
+         * we keep. "Waive discount" names what happens to a family's bill, which is the thing
+         * being decided — and the vocabulary family already said it that way at the charge grain
+         * ("Waived for this charge"), so the relationship grain was the odd one out.
+         *
+         * The service, the table and both registered actions are untouched underneath.
+         */
         const panel = code(DISCOUNT);
-        expect(panel).toMatch(/Add exception <span aria-hidden>&rarr;<\/span>/);
-        expect(panel).toMatch(/End exception <span aria-hidden>&rarr;<\/span>/);
+        expect(panel).toMatch(/Waive discount <span aria-hidden>&rarr;<\/span>/);
+        expect(panel).toMatch(/Restore discount <span aria-hidden>&rarr;<\/span>/);
+        expect(panel, "no implementation vocabulary survives in operator copy")
+            .not.toMatch(/>\s*(Add|End|Confirm) exception/);
         expect(panel, "the actions sit on the subject row, not on the policy header")
             .toMatch(/data-add-policy-exception=\{p\.policyId\}/);
+        expect(panel, "and the authority beneath them is unchanged")
+            .toMatch(/runException\("end"/);
+    });
+
+    it("a waiver still cannot be reasonless", () => {
+        const panel = code(DISCOUNT);
+        expect(panel, "the ask is in the operator's terms")
+            .toContain("Why is this discount being waived?");
+        expect(panel, "and Confirm is refused without one")
+            .toMatch(/disabled=\{busy \|\| draft\.reason\.trim\(\)\.length === 0\}/);
+        expect(panel, "the commit says what it commits").toContain("Confirm waiver");
     });
 });
 
@@ -430,34 +450,184 @@ describe("the depth card answers what the row cannot", () => {
             .toMatch(/basis:\s*r\.basis[\s\S]{0,80}basisValue:\s*r\.basisValue/);
     });
 
-    it("the card names where the policy itself is changed", () => {
+    it("the card offers no discount selection, and no navigation out of the work", () => {
         /*
-         * §10. Discounts are derived from policy eligibility; there is no per-child writer, and a
-         * "choose a discount" control here would be a control that cannot commit — the operator
-         * would set it, nothing would change, and the card would have lied about what it owns.
+         * TWO THINGS THE CARD MUST NOT DO, for two different reasons.
          *
-         * So the card offers exactly the two relationship actions it can perform and NAMES the
-         * surface that owns the rest, rather than leaving an operator who wanted a different rate
-         * on a screen that cannot give them one.
+         * No per-child selection: discounts are organization-authored policies resolved through
+         * eligibility, and there is no `selected_discount_id` writer. A "choose a discount"
+         * control would be one that cannot commit — the operator sets it, nothing changes, and
+         * the card has implied an authority that does not exist.
+         *
+         * And no link to policy configuration either. It was added here to name the surface that
+         * owns rates, and it turned an operational family card into navigation toward Studio for
+         * work that is not this operator's. Administrators reach policies through Organization →
+         * Financials → Policies; this card is for one family's position.
          */
         const panel = code(DISCOUNT);
-        expect(panel, "the policy-configuration region exists")
-            .toContain('data-financials-discount-policy-config="true"');
-        expect(panel, "with a real path to it")
-            .toContain('data-financials-discount-manage-policies="true"');
-        expect(panel, "through the canonical href, not a hand-written URL")
-            .toMatch(/organizationFinancialsChapterHref\("policies"\)/);
-        /* And still no fake per-child assignment beside it. */
         expect(panel, "no invented per-child discount writer")
-            .not.toMatch(/Select discount|Choose a discount|assignDiscount/);
+            .not.toMatch(/Select discount|Choose a discount|assignDiscount|Change discount/);
+        expect(panel, "and no configuration navigation")
+            .not.toMatch(/Manage discount policies|organizationFinancialsChapterHref/);
     });
 
     it("both relationship actions remain, and they are the only writes", () => {
         const panel = code(DISCOUNT);
-        expect(panel).toContain("Add exception");
-        expect(panel).toContain("End exception");
-        /* The two canonical actions, and nothing that writes a policy from here. */
+        /* Operator words on top; the two canonical actions underneath, unchanged. */
+        expect(panel).toContain("Waive discount");
+        expect(panel).toContain("Restore discount");
+        expect(panel, "the create path").toMatch(/runException\("create"/);
+        expect(panel, "and the end path").toMatch(/runException\("end"/);
         expect(panel, "no policy writer lives in this card")
             .not.toMatch(/commercial\/policies["`']\s*,\s*\{\s*method:\s*"(POST|PATCH|DELETE)/);
+    });
+});
+
+describe("each action sits with the state it acts on", () => {
+    /*
+     * `Manage payments` sat at the row's end with the discount between it and the payment state
+     * it manages, so a control floated beside a concept it has nothing to do with. The row is now
+     * three groups — identity, discount, payment — and the grouping is what survives a wrap.
+     */
+    it("the row is three groups, in that order", () => {
+        const detail = code(DETAIL);
+        const identity = detail.indexOf('data-financials-row-group="identity"');
+        const discount = detail.indexOf('data-financials-row-group="discount"');
+        const payment = detail.indexOf('data-financials-row-group="payment"');
+        expect(identity, "identity first").toBeGreaterThan(-1);
+        expect(discount, "then the discount").toBeGreaterThan(identity);
+        expect(payment, "then the payment group").toBeGreaterThan(discount);
+    });
+
+    it("the discount gear is inside the discount group", () => {
+        const detail = code(DETAIL);
+        const group = detail.indexOf('data-financials-row-group="discount"');
+        const payment = detail.indexOf('data-financials-row-group="payment"');
+        const gear = detail.indexOf('data-financials-manage-discounts="gear"');
+        expect(gear, "after the state it changes").toBeGreaterThan(group);
+        expect(gear, "and before the next group begins").toBeLessThan(payment);
+    });
+
+    it("Manage payments is grouped with the payment-method state", () => {
+        const detail = code(DETAIL);
+        const group = detail.indexOf('data-financials-row-group="payment"');
+        const method = detail.indexOf('data-financials-method-state="true"');
+        const door = detail.indexOf('data-financials-manage-payments="open"');
+        expect(method, "the state is in the payment group").toBeGreaterThan(group);
+        expect(door, "and the door follows it").toBeGreaterThan(method);
+    });
+
+    it("the payment group right-aligns where there is room, and stops when there is not", () => {
+        /*
+         * BOTH HALVES, because either alone is inert. A rule nothing wears aligns nothing, and a
+         * class with no rule behind it is exactly how the administration row once rendered as a
+         * single run-together string.
+         */
+        const detail = code(DETAIL);
+        expect(detail, "the payment group claims the row's end")
+            .toMatch(/alloy-os-fdetail__rowgroup--end[\s\S]{0,120}data-financials-row-group="payment"/);
+        const css = read(CSS);
+        expect(css).toMatch(/\.alloy-os-fdetail__rowgroup--end\s*\{[^}]*margin-left:\s*auto/);
+        /* Below the desktop widths the row wraps and the alignment is given up rather than kept. */
+        expect(css, "the alignment is released when the row wraps")
+            .toMatch(/@media \(max-width: 900px\)[\s\S]{0,200}rowgroup--end[\s\S]{0,80}margin-left:\s*0/);
+    });
+
+    it("the method joins the payment group only when one payer owns it", () => {
+        /*
+         * A payment method is a fact about a PAYER. With two payers on record, lifting "No
+         * payment method" out to the row's end would attribute one payer's state to the
+         * relationship as a whole; with several, each keeps its own and only the door is shared.
+         */
+        const detail = code(DETAIL);
+        expect(detail).toMatch(/evidence\.payers\.length === 1 \?[\s\S]{0,400}data-financials-method-state/);
+        expect(detail, "and several payers keep theirs on their own line")
+            .toMatch(/evidence\.payers\.length > 1 \?[\s\S]{0,300}payer-method/);
+    });
+
+    it("no expected amounts reach the relationship row", () => {
+        /* Per-child money belongs to the card that shows it per child. */
+        const detail = code(DETAIL);
+        const row = detail.indexOf('data-financials-payer-row="true"');
+        const lenses = detail.indexOf('data-financials-lenses="true"');
+        expect(detail.slice(row, lenses)).not.toMatch(/Expected|expectedCents|money\(/);
+    });
+
+    it("the row adds no new permanent administration", () => {
+        const detail = code(DETAIL);
+        expect((detail.match(/data-financials-payer-row="true"/g) ?? []).length).toBe(1);
+        expect(detail).not.toContain('data-financials-admin-item="responsibility"');
+        expect(detail, "responsibility states itself in a KPI").toMatch(/<Stat label="Responsibility"/);
+        expect(detail, "and is managed from the filter, not the row")
+            .toContain('data-financials-manage-responsibility="gear"');
+    });
+});
+
+describe("every centred card ends the same way", () => {
+    /*
+     * "How do I get out of here" is a question all five have to answer, and two of them answered
+     * it in faint underlined body text — the Payments card not at all, so on an account with no
+     * methods it read as a surface that had failed to load rather than one waiting to be used.
+     */
+    it("Discounts, Payments and Responsibility all end in the shared action row", () => {
+        for (const [rel, marker] of [
+            [DISCOUNT, 'data-financials-discount-close="true"'],
+            [CARD, 'data-financials-payments-close="true"'],
+            [RESP, 'data-financials-responsibility-cancel="true"'],
+        ] as const) {
+            const src = code(rel);
+            expect(src, `${rel} has a visible way out`).toContain(marker);
+            expect(src, `${rel} uses the family's action row`).toContain("alloy-os-depthcard__actions");
+        }
+    });
+
+    it("the action row is a real rule, not a class name with nothing behind it", () => {
+        /*
+         * The administration row shipped with class names and no stylesheet rules and rendered as
+         * one run-together string. That is not a mistake worth making twice, so the rule is
+         * asserted beside the markup that depends on it.
+         */
+        const css = read(CSS);
+        expect(css).toMatch(/\.alloy-os-depthcard__actions\s*\{/);
+        const actions = css.slice(css.search(/\.alloy-os-depthcard__actions\s*\{/));
+        expect(actions.slice(0, 400), "a separated row").toMatch(/border-top:|padding-top:/);
+        expect(css, "and the close control reads as a control")
+            .toMatch(/\.alloy-os-depthcard__close\s*\{[^}]*border:/);
+    });
+
+    it("Escape still pops one level and focus still returns", () => {
+        /* A visible Close does not replace the gesture; it stands beside it. */
+        const card = code(CARD);
+        expect(card).toMatch(/key !== "Escape"/);
+        expect(card, "the restore is still driven by the surface going away").toContain("adminFocusSelector");
+        expect(code(DISCOUNT), "and the panel still dismisses its own layer")
+            .toContain('data-financials-manage-discounts="depth-card"');
+    });
+});
+
+describe("the responsibility card reads like Alloy", () => {
+    it("the question replaces the doctrine paragraph", () => {
+        const panel = code(RESP);
+        expect(panel).toContain("Who owes for this account?");
+        expect(panel, "the paragraph is gone")
+            .not.toContain("Who contractually owes this account, from a date.");
+    });
+
+    it("but the doctrine itself is not lost — it moved to the mechanism", () => {
+        /*
+         * An operator who reads "change who owes" as "move that receipt" will come here to fix a
+         * misapplied payment. Effective dating is precisely why that does not happen, so the
+         * warning sits with the effective date rather than at the top where it is skipped.
+         */
+        const panel = code(RESP);
+        expect(panel).toContain("Money already paid is not moved.");
+        expect(panel, "beside the field that causes it")
+            .toMatch(/data-financials-responsibility-effective="true"[\s\S]{0,700}data-financials-responsibility-effective-note/);
+    });
+
+    it("what stands today is a labelled fact, not running prose", () => {
+        const panel = code(RESP);
+        expect(panel, "the shares are the readable part").toMatch(/Current · this child|Current · inherited/);
+        expect(panel, "and the old sentence is gone").not.toContain("saving supersedes it");
     });
 });

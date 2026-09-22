@@ -56,7 +56,7 @@ describe("administration comes before the ledger", () => {
     it("and before the ledger's own controls, not merely above the rows", () => {
         const lenses = at('data-financials-lenses="true"');
         expect(at('data-financials-payer-row="true"')).toBeLessThan(lenses);
-        expect(at('data-financials-admin-item="discount"')).toBeLessThan(lenses);
+        expect(at('data-financials-row-group="discount"')).toBeLessThan(lenses);
     });
 
     it("autopay stays with the methods it qualifies", () => {

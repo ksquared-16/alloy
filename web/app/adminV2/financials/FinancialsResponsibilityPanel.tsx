@@ -579,15 +579,21 @@ export default function FinancialsResponsibilityPanel({
             {hosted ? null : (
                 <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
             )}
-            <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                {/*
-                 * ONE LINE, AND IT IS RECONCILIATION TRUTH RATHER THAN INSTRUCTION. The fields
-                 * below say what to fill in; what they cannot say is that this decides the
-                 * CONTRACT and not the history — an operator who reads "changing who owes" as
-                 * "moving what has been paid" will use this to fix a misapplied receipt, and it
-                 * will not do that. Everything else that was here explained the form to itself.
-                 */}
-                Who contractually owes this account, from a date. Changing it does not move money already paid.
+            {/*
+              * ── THE QUESTION, NOT THE DOCTRINE ────────────────────────────────────────────
+              *
+              * This was two sentences: what the card decides, and the warning that it does not
+              * move money already paid. The second is real and must not be lost — an operator who
+              * reads "change who owes" as "move that receipt" will come here to fix a misapplied
+              * payment and it will not do that.
+              *
+              * But a doctrine paragraph at the top of a form is read once and skipped after, and
+              * the warning belongs where the mechanism is: the EFFECTIVE DATE is precisely why
+              * paid money is unaffected, so it is said there, quietly, beside the field that
+              * causes it.
+              */}
+            <p className="mt-0.5 text-[11px] text-alloy-midnight/55" data-financials-responsibility-question="true">
+                Who owes for this account?
             </p>
 
             {/*
@@ -638,27 +644,56 @@ export default function FinancialsResponsibilityPanel({
                     {scopeLoading ? (
                         <span className="mt-1 block text-[11px] text-alloy-midnight/45">Reading what applies…</span>
                     ) : scopeArrangement?.arrangement ? (
+                        <>
+                        {/*
+                          * ── WHAT STANDS TODAY, AS A LABELLED FACT ──────────────────────────
+                          *
+                          * This was one sentence carrying five things — the grain, the parties,
+                          * the amounts, the dates and a warning that saving supersedes it — and
+                          * it sat in the middle of a form as running prose, so the operator had
+                          * to parse it to learn what they were about to replace.
+                          *
+                          * Same truths, given a label and a shape. Nothing is dropped: the grain
+                          * still distinguishes an arrangement authored AT this scope from the
+                          * household's reaching a child that has none, because showing inherited
+                          * money as deliberately given is the misreading this exists to prevent.
+                          */}
                         <span
-                            className="mt-1 block text-[11px] text-alloy-midnight/55"
+                            className="mt-1 block"
                             data-financials-scope-arrangement={scopeArrangement.authoredAtRequestedScope ? "authored" : "inherited"}
                             data-financials-scope-arrangement-id={scopeArrangement.arrangement.id}
                         >
-                            {scopeArrangement.authoredAtRequestedScope
-                                ? effectiveMemberId
-                                    ? "Overrides household responsibility."
-                                    : "Household responsibility."
-                                : "No child-specific arrangement — household responsibility applies."}{" "}
-                            {scopeArrangement.arrangement.shares
-                                .map((sh) => `${sh.name}${sh.amountCents != null ? ` ${money(sh.amountCents)}` : ""}`)
-                                .join(" · ")}
-                            {scopeArrangement.arrangement.effectiveStart
-                                ? ` · from ${formatDisplayDate(scopeArrangement.arrangement.effectiveStart)}`
-                                : ""}
-                            {scopeArrangement.arrangement.effectiveEnd
-                                ? ` until ${formatDisplayDate(scopeArrangement.arrangement.effectiveEnd)}`
-                                : ""}
-                            {scopeArrangement.authoredAtRequestedScope ? " · saving supersedes it" : ""}
+                            <span className="block text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                {scopeArrangement.authoredAtRequestedScope
+                                    ? effectiveMemberId
+                                        ? "Current · this child"
+                                        : "Current"
+                                    : "Current · inherited from the household"}
+                            </span>
+                            <span className="block text-[11px] text-alloy-midnight/70">
+                                {scopeArrangement.arrangement.shares
+                                    .map((sh) => `${sh.name}${sh.amountCents != null ? ` · ${money(sh.amountCents)}` : ""}`)
+                                    .join(" · ")}
+                                {scopeArrangement.arrangement.effectiveStart
+                                    ? ` · since ${formatDisplayDate(scopeArrangement.arrangement.effectiveStart)}`
+                                    : ""}
+                                {scopeArrangement.arrangement.effectiveEnd
+                                    ? ` · until ${formatDisplayDate(scopeArrangement.arrangement.effectiveEnd)}`
+                                    : ""}
+                            </span>
+                            {/*
+                              * SAVING REPLACES IT — said only when it is true. An inherited
+                              * arrangement is not superseded by authoring one here; a new
+                              * child-scoped arrangement sits beneath it, which is a different
+                              * outcome and must not wear the same warning.
+                              */}
+                            {scopeArrangement.authoredAtRequestedScope ? (
+                                <span className="block text-[10px] text-alloy-midnight/45" data-financials-scope-supersedes="true">
+                                    Saving replaces this arrangement.
+                                </span>
+                            ) : null}
                         </span>
+                        </>
                     ) : (
                         <span className="mt-1 block text-[11px] text-alloy-midnight/55" data-financials-scope-arrangement="none">
                             Nothing governs this scope yet — saving creates the first arrangement.
@@ -696,6 +731,15 @@ export default function FinancialsResponsibilityPanel({
                     data-financials-responsibility-effective="true"
                     className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs"
                 />
+                {/*
+                  * THE DOCTRINE, SAID WHERE THE MECHANISM IS. Effective dating is exactly why a
+                  * new arrangement cannot disturb what has already been paid, so the warning that
+                  * used to open the card lives here instead — next to the field that causes it,
+                  * read at the moment it matters rather than skipped at the top.
+                  */}
+                <span className="mt-0.5 block text-[10px] text-alloy-midnight/45" data-financials-responsibility-effective-note="true">
+                    Applies from this date onward. Money already paid is not moved.
+                </span>
             </label>
 
             {/*
@@ -815,7 +859,12 @@ export default function FinancialsResponsibilityPanel({
                 </p>
             ) : null}
 
-            <div className="mt-3 flex items-center gap-2">
+            {/*
+              * THE FAMILY'S ACTION ROW. Every centred card in this family ends the same way —
+              * a ruled row with its actions in it — so an operator learns one place to look for
+              * "how do I finish, and how do I get out" and it is the same place on all of them.
+              */}
+            <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
                 <button
                     type="button"
                     className="rounded border border-alloy-stone/20 px-2 py-1 text-xs text-alloy-midnight/70"
@@ -841,7 +890,8 @@ export default function FinancialsResponsibilityPanel({
                 </button>
                 <button
                     type="button"
-                    className="text-xs text-alloy-midnight/50 hover:underline"
+                    className="alloy-os-depthcard__close"
+                    data-financials-responsibility-cancel="true"
                     onClick={() => setOpen(false)}
                     disabled={busy !== null}
                 >

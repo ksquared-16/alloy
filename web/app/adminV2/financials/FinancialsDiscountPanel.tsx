@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { organizationFinancialsChapterHref } from "@/lib/commercial/commercialChapterRoutes";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
 import { Settings2 } from "lucide-react";
 
@@ -356,11 +356,13 @@ export default function FinancialsDiscountPanel({
                         {hostedOpen ? null : (
                             <p className="text-sm font-semibold text-alloy-midnight">Manage discounts</p>
                         )}
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                            {/* The law this intent obeys, said where the operator is about to act on it. */}
-                            Which policies reach this family, and whether a relationship is excepted from one.
-                            Rates and eligibility are organization configuration.
-                        </p>
+                        {/*
+                          * NO EXPLANATORY PARAGRAPH. It described the architecture — which policies
+                          * reach a family, what is organization configuration — to an operator who
+                          * came here to answer one question about one child. The rows below state
+                          * the position and offer the action, which is the same information
+                          * arranged so it can be acted on rather than read.
+                          */}
 
                         {policies.length === 0 ? (
                             <p className="mt-2 text-[11px] text-alloy-midnight/45">
@@ -409,32 +411,60 @@ export default function FinancialsDiscountPanel({
                                                         </span>
                                                     ) : null}
                                                 </p>
+                                                {/*
+                                                  * ── OPERATOR LANGUAGE OVER THE SAME AUTHORITY ──
+                                                  *
+                                                  * The model is a commercial policy exception and
+                                                  * stays one — the service, the table and the two
+                                                  * registered actions are untouched. What changes
+                                                  * is the word the operator reads: they are not
+                                                  * "adding an exception", they are WAIVING a
+                                                  * discount for one child, and later restoring it.
+                                                  *
+                                                  * "Add exception" describes the record we keep.
+                                                  * "Waive discount" describes what happens to a
+                                                  * family's bill, which is the thing being decided.
+                                                  */}
                                                 {excepted ? (
-                                                    <p className="text-[11px] text-alloy-ember" data-financials-discount-exception={excepted.id}>
-                                                        {reductionReasonLabel("excluded_by_exception")}
-                                                        {excepted.reason ? ` — ${excepted.reason}` : ""}
-                                                        {excepted.effectiveStart ? ` · from ${excepted.effectiveStart}` : ""}
-                                                        {" "}
+                                                    <div data-financials-discount-exception={excepted.id}>
+                                                        <p className="text-[11px] font-medium text-alloy-ember" data-financials-discount-waived="true">
+                                                            Waived
+                                                        </p>
+                                                        {excepted.reason ? (
+                                                            <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-waived-reason="true">
+                                                                {excepted.reason}
+                                                                {excepted.effectiveStart ? ` · since ${formatDisplayDate(excepted.effectiveStart)}` : ""}
+                                                            </p>
+                                                        ) : null}
                                                         <button
                                                             type="button"
                                                             disabled={busy}
                                                             data-end-policy-exception={excepted.id}
-                                                            className="font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                            data-financials-restore-discount={s.opportunityCustomerMemberId}
+                                                            className="mt-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
                                                             onClick={() => void runException("end", {
                                                                 ocmId: excepted.opportunityCustomerMemberId,
                                                                 exceptionId: excepted.id,
                                                                 reason: "Ended from family discount administration",
                                                             })}
                                                         >
-                                                            End exception <span aria-hidden>&rarr;</span>
+                                                            Restore discount <span aria-hidden>&rarr;</span>
                                                         </button>
-                                                    </p>
+                                                    </div>
                                                 ) : draft && draft.policyId === p.policyId && draft.ocmId === s.opportunityCustomerMemberId ? (
                                                     <div className="mt-0.5" data-financials-discount-exception-draft="true">
-                                                        {/* A REASON IS REQUIRED. An exception carries provenance or it is not one. */}
+                                                        {/*
+                                                          * A REASON IS REQUIRED, and the ask is in
+                                                          * the operator's terms. "Why is this
+                                                          * relationship excepted?" asks about our
+                                                          * record; this asks about the decision.
+                                                          */}
+                                                        <p className="text-[11px] font-medium text-alloy-midnight" data-financials-waive-heading="true">
+                                                            Waive discount
+                                                        </p>
                                                         <input
-                                                            className="block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
-                                                            placeholder="Why is this relationship excepted?"
+                                                            className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
+                                                            placeholder="Why is this discount being waived?"
                                                             value={draft.reason}
                                                             data-financials-discount-exception-reason="true"
                                                             onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
@@ -451,7 +481,7 @@ export default function FinancialsDiscountPanel({
                                                                     reason: draft.reason.trim(),
                                                                 })}
                                                             >
-                                                                Confirm exception
+                                                                Confirm waiver
                                                             </button>
                                                             <button
                                                                 type="button"
@@ -470,7 +500,7 @@ export default function FinancialsDiscountPanel({
                                                         className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
                                                         onClick={() => setDraft({ policyId: p.policyId, ocmId: s.opportunityCustomerMemberId, reason: "" })}
                                                     >
-                                                        Add exception <span aria-hidden>&rarr;</span>
+                                                        Waive discount <span aria-hidden>&rarr;</span>
                                                     </button>
                                                 )}
                                             </div>
@@ -495,46 +525,28 @@ export default function FinancialsDiscountPanel({
                             <p className="mt-2 text-[11px] text-alloy-ember" data-financials-discount-action-error="true">{actionError}</p>
                         ) : null}
 
-                        {/*
-                          * ── WHERE THE POLICY ITSELF IS CHANGED ─────────────────────────────
-                          *
-                          * THE AUTHORITY MODEL, STATED RATHER THAN IMPLIED. A discount is not
-                          * assigned to a child; it is an organization-authored policy that either
-                          * reaches a relationship or does not, and `resolveReductionEligibility`
-                          * is what decides. There is no per-child writer, and adding a "choose a
-                          * discount" control here would be a control that cannot commit — the
-                          * operator would set it, nothing would change, and the card would have
-                          * lied about what it owns.
-                          *
-                          * So this card offers exactly the two things it can do — except a
-                          * relationship, end that exception — and NAMES the surface that owns the
-                          * rest. An operator who wanted a different rate came to the wrong screen,
-                          * and the useful answer is which screen is the right one.
-                          */}
-                        <div className="mt-3 border-t border-alloy-stone/10 pt-2" data-financials-discount-policy-config="true">
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                Policy configuration
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                                Rates and who qualifies are organization configuration. This card decides
-                                whether an authored policy reaches one relationship — never what it is worth.
-                            </p>
-                            <a
-                                href={organizationFinancialsChapterHref("policies")}
-                                className="mt-1 inline-block text-[11px] font-medium text-alloy-bend-pine hover:underline"
-                                data-financials-discount-manage-policies="true"
-                            >
-                                Manage discount policies <span aria-hidden>&rarr;</span>
-                            </a>
-                        </div>
 
-                        <button
-                            type="button"
-                            className="mt-2 text-[11px] font-medium text-alloy-midnight/55 hover:underline"
-                            onClick={closeManage}
-                        >
-                            Close
-                        </button>
+                        {/*
+                          * ── AN ACTION THAT LOOKS LIKE ONE ─────────────────────────────────
+                          *
+                          * This was faint underlined body text at the foot of a card with no other
+                          * way out visible, so a card whose content ran past the fold appeared to
+                          * have no return path at all. Escape has always worked; a keyboard
+                          * gesture is not an answer to "how do I get out of here".
+                          *
+                          * It sits in the card's own action row, which is what every other card in
+                          * this family ends with.
+                          */}
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-discount-close="true"
+                                onClick={closeManage}
+                            >
+                                Close
+                            </button>
+                        </div>
                     </section>
                 </div>
             ) : null}

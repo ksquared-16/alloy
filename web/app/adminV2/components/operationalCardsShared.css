@@ -1965,7 +1965,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 22px;
+  /* Row gap keeps a wrapped group clear of the line above; column gap separates the groups. */
+  gap: 4px 18px;
   margin-top: 7px;
   padding-top: 7px;
   border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
@@ -1992,6 +1993,67 @@
  * string — that came from class names with no rules behind them, not from putting related facts
  * on one line.
  */
+/*
+ * ── THE DEPTH CARDS' SHARED ACTION ROW ────────────────────────────────────────────────────────
+ *
+ * Responsibility, Discounts, Payments, Add Charge and Payment are one family of centred cards.
+ * They do not need identical content; they do need to END the same way, because "how do I get
+ * out of here" is the question every one of them has to answer and two of them answered it in
+ * faint underlined body text — or, in the Payments card, not at all.
+ *
+ * A rule, written at the same time as the markup that uses it. The administration row shipped
+ * with class names and no rules behind them and rendered as one run-together string; that is not
+ * a mistake worth making twice.
+ */
+.alloy-os-depthcard__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-depthcard__close {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  background: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.alloy-os-depthcard__close:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+}
+.alloy-os-depthcard__close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+}
+
+/*
+ * THREE GROUPS ON ONE LINE — identity, discount, payment. Each action sits with the state it
+ * acts on, and the groups are what wrap: at 1280 and up the row is one line with the payment
+ * group at its end; narrower, the groups break between themselves rather than mid-thought, and
+ * `Manage payments` stays attached to the method state it manages.
+ */
+.alloy-os-fdetail__rowgroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/*
+ * RIGHT-ALIGNED WHERE THERE IS ROOM. `margin-left: auto` on a flex child claims the free space,
+ * so the payment group sits at the row's end on a wide card and falls back into normal flow the
+ * moment the row wraps — no media query needed for the alignment itself.
+ */
+.alloy-os-fdetail__rowgroup--end {
+  margin-left: auto;
+}
 .alloy-os-fdetail__rowitem {
   display: inline-flex;
   align-items: center;
@@ -2048,6 +2110,19 @@
  * At phone width the row wraps rather than shrinking its type — compactness is not worth buying
  * with illegibility, and `Manage payments` stops being pushed to an end that is no longer there.
  */
+/*
+ * ── RESPONSIVE, AT THE WIDTHS THE CARD IS ACTUALLY READ AT ────────────────────────────────────
+ *
+ * 1280 / 1440 / 1680 all hold the row on one line; the groups only wrap below that. When they do
+ * they wrap as GROUPS, so the row never reads as concatenated text — and the payment group gives
+ * up its right alignment rather than being pushed to an end that is no longer meaningful.
+ *
+ * The type scale is untouched at every width. A row that fits because its text shrank is not a
+ * row that fits.
+ */
+@media (max-width: 900px) {
+  .alloy-os-fdetail__rowgroup--end { margin-left: 0; }
+}
 @media (max-width: 520px) {
   .alloy-os-fdetail__payeraction { margin-left: 0; }
 }

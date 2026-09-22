@@ -244,3 +244,42 @@ describe("orchestration runs against the charges that exist", () => {
         expect(cancel.slice(0, 500)).toContain("resetChargeDecisions()");
     });
 });
+
+describe("two Waives, two grains, and they must not blur", () => {
+    /*
+     * The family card now says "Waive discount" for a RELATIONSHIP-level exception; Add Charge has
+     * said "Waive" for a CHARGE-level exclusion since it was built. Same verb, same operator word,
+     * deliberately — and two different decisions about two different amounts of money.
+     *
+     * Waiving at the relationship stops the policy reducing every charge that relationship
+     * produces, until somebody restores it. Waiving on one charge leaves the policy in force
+     * everywhere else. If either surface ever routed to the other's authority, an operator would
+     * make the larger decision while believing they had made the smaller one.
+     */
+    it("the family card waives a relationship, through the relationship authority", () => {
+        const panel = code("app/adminV2/financials/FinancialsDiscountPanel.tsx");
+        expect(panel, "the relationship exception service").toMatch(/runException\("create"/);
+        expect(panel, "and never the charge-level one")
+            .not.toContain("billing.waive_charge_discount");
+    });
+
+    it("Add Charge waives one charge, through the charge authority", () => {
+        const card = code(CARD);
+        expect(card).toContain("billing.waive_charge_discount");
+        const orchestration = card.slice(card.indexOf("const applyChargeDecisions"));
+        const body = orchestration.slice(0, orchestration.indexOf("const commit"));
+        expect(body, "keyed by the charge it just created").toMatch(/charge_id: chargeId/);
+        expect(body, "and never the relationship exception")
+            .not.toMatch(/except_commercial_policy/);
+    });
+
+    it("each surface says which grain it is about", () => {
+        const cmd = code(CMD);
+        expect(cmd, "Add Charge is explicit that it means this charge")
+            .toMatch(/waived for this charge/i);
+        const labels = code("lib/financials/reductions/reductionReasonLabels.ts");
+        expect(labels, "and the reason codes stay distinct")
+            .toMatch(/excluded_by_charge_exception:\s*"Waived for this charge"/);
+        expect(labels).toMatch(/excluded_by_exception:/);
+    });
+});
