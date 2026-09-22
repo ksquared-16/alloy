@@ -548,6 +548,7 @@ export async function GET(req: NextRequest) {
                     k, { state: f.state, value: f.state === "known" ? f.value : null },
                 ])),
                 workViewDiagnostics: r.workViewDiagnostics ?? null,
+                attendanceDiagnostics: r.attendanceDiagnostics ?? null,
                 serializedBytes: new TextEncoder().encode(JSON.stringify(p)).length,
             };
         } catch (e) {

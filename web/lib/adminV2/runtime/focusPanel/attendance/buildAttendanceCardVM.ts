@@ -25,6 +25,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { markAttendancePhase, type AttendanceTrace } from "./attendanceTrace";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 
 import {
@@ -237,8 +238,11 @@ export async function buildAttendanceCardVM(
         date?: string | null;
         /** How many days of history the compact strip shows. */
         recentDays?: number;
+        /** Diagnostic interval recorder. Absent by default; records nothing and changes nothing. */
+        trace?: AttendanceTrace;
     },
 ): Promise<AttendanceCardVM> {
+    const trace = args.trace;
     const date = args.date?.trim() || ymd(new Date());
     const historyDays = Math.max(1, args.recentDays ?? 5);
     const windowStart = shiftDays(date, -(historyDays - 1));
@@ -262,23 +266,41 @@ export async function buildAttendanceCardVM(
 
     // FAIL CLOSED. Without an attendable enrolment there is no attendance to show and no command to
     // offer — the card says so rather than rendering an empty day that looks like "nobody arrived".
+    const tSubject = Date.now();
     const subject = await resolveAttendanceSubject(supabase, args.orgId, args.customerMemberId);
-    if (!subject.ok) return { ...base, unavailableReason: subject.message };
+    markAttendancePhase(trace, "subject", tSubject);
+    if (!subject.ok) {
+        if (trace) trace.outcome = "short_circuit";
+        return { ...base, unavailableReason: subject.message };
+    }
+    if (trace) trace.outcome = "full";
 
+    const tEvents = Date.now();
+    const tExpect = Date.now();
     const [events, expectations] = await Promise.all([
         listAttendanceEvents(supabase, args.orgId, {
             enrollmentAgreementId: subject.subject.enrollmentAgreementId,
             serviceDateStart: windowStart,
             serviceDateEnd: date,
-        }).catch(() => []),
-        subject.subject.siteLocationId
+        })
+            .catch(() => [])
+            .then((r) => { markAttendancePhase(trace, "events", tEvents, { rows: r.length }); return r; }),
+        (subject.subject.siteLocationId
             ? fetchScheduleExpectations(supabase, {
                   orgId: args.orgId,
                   siteLocationId: subject.subject.siteLocationId,
                   dateStart: date,
                   dateEnd: date,
               }).catch(() => null)
-            : Promise.resolve(null),
+            : Promise.resolve(null)
+        ).then((r) => {
+            markAttendancePhase(trace, "expectations", tExpect, {
+                rows: r?.expectedAttendance?.length ?? null,
+                // agreements, then placements/assignments/proposed together, then patterns.
+                queries: 5,
+            });
+            return r;
+        }),
     ]);
 
     const expectedToday = (expectations?.expectedAttendance ?? []).find(
@@ -292,16 +314,22 @@ export async function buildAttendanceCardVM(
     });
 
     // The transfer destinations, from the child's own site. One query, alongside the label read.
+    const tRooms = Date.now();
     const siteRooms = subject.subject.siteLocationId
         ? await siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
         : [];
+    markAttendancePhase(trace, "site_rooms", tRooms, { rows: siteRooms.length });
 
+    const tLabels = Date.now();
     const roomLabels = await roomLabelsFor(supabase, args.orgId, [
         expectedToday?.roomLocationId ?? null,
         read.currentPresenceState.roomLocationId,
         ...read.roomMovementTimeline.flatMap((m) => [m.fromRoomLocationId, m.toRoomLocationId]),
     ]);
 
+    markAttendancePhase(trace, "room_labels", tLabels, { rows: roomLabels.size });
+
+    const tFold = Date.now();
     const today = read.actualPresenceSummary.find((d) => d.serviceDate === date) ?? null;
     const movements = read.roomMovementTimeline
         .filter((m) => m.serviceDate === date)
@@ -323,6 +351,7 @@ export async function buildAttendanceCardVM(
     const state: AttendanceCardVM["state"] =
         foldState === "no_record" && expectedToday ? "not_arrived" : foldState;
 
+    markAttendancePhase(trace, "fold", tFold, { rows: null, queries: 0 });
     return {
         ...base,
         siteRooms,
