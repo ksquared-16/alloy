@@ -1964,6 +1964,7 @@
 .alloy-os-fdetail__payers {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 4px 22px;
   margin-top: 7px;
   padding-top: 7px;
@@ -1975,6 +1976,118 @@
   gap: 6px;
   min-width: 0;
 }
+/*
+ * ── THE COMPACT ADMINISTRATION REGION ─────────────────────────────────────────────────────────
+ *
+ * WHY THIS BLOCK EXISTS AT ALL. The administration row shipped with class names and no rules, so
+ * every label and value was an inline span with nothing between them and the card rendered
+ * "Payment methodManage paymentsResponsibilityCert Certhouse⚙DiscountNone⚙" — four concepts run
+ * into one string. Separators would have made that legible and left it wrong: Payment method,
+ * Responsibility and Discounts are different questions at different grains, and a row of bullets
+ * presents them as one fact about whoever is named first.
+ *
+ * So each gets a row with the same three-part anatomy — LABEL · STATE · DOOR — and the labels
+ * align down a column, which is what makes three rows read as one region instead of three
+ * unrelated lines.
+ */
+.alloy-os-fdetail__admin {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__adminrow {
+  display: grid;
+  /* The label column is fixed so Responsibility and Discounts start their answers together. */
+  grid-template-columns: 5.6rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 10px;
+  min-width: 0;
+}
+.alloy-os-fdetail__adminlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__adminvalue {
+  display: flex;
+  flex-wrap: wrap;
+  /* The row gap is what keeps a wrapped second child off the line above it. */
+  gap: 2px 14px;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__adminchild {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+/* The separator belongs to the child that follows it, so a wrap never orphans a bullet. */
+.alloy-os-fdetail__adminsep {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-right: 5px;
+}
+.alloy-os-fdetail__adminchildname {
+  color: var(--alloy-os-text-secondary, #6b7280);
+}
+.alloy-os-fdetail__adminchildvalue {
+  font-variant-numeric: tabular-nums;
+}
+/*
+ * QUIET ON PURPOSE. A gear at the row's own size, no fill and no border: these are doors, not
+ * commands, and giving them button weight would make the administration region compete with
+ * Payment and Add directly above it.
+ */
+.alloy-os-fdetail__admingear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 4px;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.alloy-os-fdetail__admingear:hover {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-fdetail__admingear:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 1px;
+}
+/*
+ * MANAGE PAYMENTS SITS WITH THE PAYER IT IS ABOUT, pushed to the row's end so the relationship
+ * reads left to right — who, what they owe, how they can pay, and then the way to change it.
+ */
+.alloy-os-fdetail__payeraction {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+  white-space: nowrap;
+}
+.alloy-os-fdetail__payeraction:hover { text-decoration: underline; }
+.alloy-os-fdetail__payeraction:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* At phone width the label column would leave the answer no room, so the row stacks. */
+@media (max-width: 520px) {
+  .alloy-os-fdetail__adminrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .alloy-os-fdetail__adminlabel { grid-column: 1 / -1; }
+}
+
 .alloy-os-fdetail__filterrow {
   display: flex;
   flex-wrap: wrap;

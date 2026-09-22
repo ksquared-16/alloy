@@ -657,6 +657,66 @@ export default function AddChargeCommand({
                     <span className="alloy-os-billing__line-label">{t.label}</span>
                     <span className="alloy-os-billing__line-value">+{specimen.amount}</span>
                 </p>
+                {/*
+                    ── WHAT THE OPERATOR JUST DECIDED, RESTATED BEFORE THEY COMMIT IT ───────────
+                    Both of these are decisions taken a few lines above and applied after the
+                    charge exists, which means the preview is the ONLY place they are visible
+                    together. They are STATED, never computed: the card says who it will divide
+                    this charge between and which policy it will record as not applying, and it
+                    leaves what either is worth to the resolver that owns that question.
+                */}
+                {controls?.chargeResponsibility?.scope === "charge"
+                    && controls.chargeResponsibility.shares.some((share) => share.partyId) ? (
+                    <>
+                        <p className="alloy-os-billingdetail__group" data-addcharge-preview-responsibility="true">
+                            Responsibility · this charge only
+                        </p>
+                        {controls.chargeResponsibility.shares
+                            .filter((share) => share.partyId)
+                            .map((share, index) => (
+                                <p key={`preview-share-${index}`} className="alloy-os-billing__line">
+                                    <span className="alloy-os-billing__line-label">
+                                        {controls.chargeResponsibility!.parties.find((p) => p.id === share.partyId)?.label
+                                            ?? "—"}
+                                    </span>
+                                    <span className="alloy-os-billing__line-value">
+                                        {share.method === "remainder"
+                                            ? "remainder"
+                                            : share.method === "percentage"
+                                              ? `${share.value || "0"}%`
+                                              : `$${share.value || "0.00"}`}
+                                    </span>
+                                </p>
+                            ))}
+                        {/* The standing arrangement is untouched, and says so rather than being assumed. */}
+                        <p className="alloy-os-addcharge__draftnote" data-addcharge-preview-standing="true">
+                            The account&apos;s arrangement is unchanged and keeps governing every other charge.
+                        </p>
+                    </>
+                ) : null}
+
+                {controls?.chargeDiscount && controls.chargeDiscount.waivedPolicyIds.length > 0 ? (
+                    <>
+                        <p className="alloy-os-billingdetail__group" data-addcharge-preview-waivers="true">
+                            Waived for this charge
+                        </p>
+                        {controls.chargeDiscount.waivedPolicyIds.map((policyId) => (
+                            <p key={`waived-${policyId}`} className="alloy-os-billing__line">
+                                <span className="alloy-os-billing__line-label">
+                                    {controls.chargeDiscount!.policies.find((p) => p.id === policyId)?.label ?? "Discount"}
+                                </span>
+                                {/*
+                                    NO NUMBER. What the waived policy would have been worth is the
+                                    resolver's answer about a charge that does not exist yet, and a
+                                    figure computed here to fill the column would be this card
+                                    quietly becoming a second reduction authority.
+                                */}
+                                <span className="alloy-os-billing__line-value">does not apply</span>
+                            </p>
+                        ))}
+                    </>
+                ) : null}
+
                 {/* Allocation math renders ONLY when the split is authoritative. */}
                 {specimen.allocation ? (
                     <>

@@ -20,7 +20,7 @@ import {
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
-import FinancialsDiscountPanel from "@/app/adminV2/financials/FinancialsDiscountPanel";
+import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
 import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
 import AutopaySection from "@/components/operationalCards/AutopaySection";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
@@ -120,6 +120,137 @@ type Props = {
  * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
  * projects it, so this card renders the answer rather than deciding it.
  */
+/**
+ * ── TURNING TWO CANONICAL READS INTO TWO ROWS ────────────────────────────────────────────────
+ *
+ * Both of these are PRESENTATION. They choose words for answers the server already gave, per
+ * child, and neither computes money, resolves specificity, or decides what applies to whom. Every
+ * number they render was carried through from the read that produced it.
+ *
+ * They live at module scope so it is obvious they hold no state and can see no other source: a
+ * summariser that could reach the view model is a summariser that can quietly substitute one
+ * child's answer for another's, which is the exact defect the child grain exists to prevent.
+ */
+
+/** "Certa — Household", "Certb — Parent A 60% · Parent B 40%", "Certc — Not on record". */
+function summariseResponsibilityPositions(body: unknown): Array<{ childLabel: string; summary: string }> {
+    const positions = (body as {
+        positions?: Array<{
+            label?: string | null;
+            authoredAtChild?: boolean;
+            shares?: Array<{
+                name?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        }>;
+    } | null)?.positions;
+    if (!Array.isArray(positions)) return [];
+
+    return positions.map((position) => {
+        const shares = position.shares ?? [];
+        /*
+         * A CHILD COVERED BY THE HOUSEHOLD'S ARRANGEMENT SAYS SO. The route reports whether the
+         * governing arrangement was authored at this child, and collapsing that distinction would
+         * show inherited household money as though the child had been given it deliberately.
+         */
+        if (!position.authoredAtChild) {
+            return { childLabel: position.label ?? "—", summary: shares.length > 0 ? "Household" : "Not on record" };
+        }
+        if (shares.length === 0) return { childLabel: position.label ?? "—", summary: "Not on record" };
+        return {
+            childLabel: position.label ?? "—",
+            summary: shares
+                .map((share) => {
+                    const who = (share.name ?? "").trim() || "Unnamed";
+                    if (share.method === "percentage" && share.percentBasisPoints != null) {
+                        return `${who} ${share.percentBasisPoints / 100}%`;
+                    }
+                    if (share.method === "fixed" && share.amountCents != null) {
+                        return `${who} $${(share.amountCents / 100).toFixed(2)}`;
+                    }
+                    if (share.method === "remainder") return `${who} remainder`;
+                    return who;
+                })
+                .join(" · "),
+        };
+    });
+}
+
+/** The account's own arrangement in one line — what a charge-scoped override would depart from. */
+function summariseHouseholdArrangement(body: unknown): string {
+    const household = (body as {
+        household?: {
+            shares?: Array<{
+                name?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        } | null;
+    } | null)?.household;
+    const shares = household?.shares ?? [];
+    if (shares.length === 0) return "The account has no standing arrangement.";
+    return `The account's arrangement: ${shares
+        .map((share) => {
+            const who = (share.name ?? "").trim() || "Unnamed";
+            if (share.method === "percentage" && share.percentBasisPoints != null) {
+                return `${who} ${share.percentBasisPoints / 100}%`;
+            }
+            if (share.method === "fixed" && share.amountCents != null) {
+                return `${who} $${(share.amountCents / 100).toFixed(2)}`;
+            }
+            if (share.method === "remainder") return `${who} remainder`;
+            return who;
+        })
+        .join(" · ")}.`;
+}
+
+/**
+ * "Certa — Sibling 10%", "Certb — None".
+ *
+ * The route answers BY POLICY, with the children each policy affects; the row asks by child. That
+ * inversion is the whole job here, and it is why a child with no line in any policy must still
+ * appear: a child silently missing from a per-child row reads as a child who was not considered.
+ */
+function summariseDiscountPositions(
+    body: unknown,
+    labelFor: (customerMemberId: string | null) => string | null,
+): Array<{ childLabel: string; summary: string }> {
+    const parsed = body as {
+        policies?: Array<{
+            label?: string | null;
+            subjects?: Array<{ customerMemberId?: string | null; expectedCents?: number | null }>;
+        }>;
+        notExpected?: Array<{ opportunityCustomerMemberId?: string | null }>;
+    } | null;
+    const policies = parsed?.policies;
+    if (!Array.isArray(policies)) return [];
+
+    const byChild = new Map<string, { label: string; effects: string[] }>();
+    for (const policy of policies) {
+        for (const subject of policy.subjects ?? []) {
+            const memberId = (subject.customerMemberId ?? "").trim();
+            const label = labelFor(memberId || null) ?? "This child";
+            const key = memberId || label;
+            const entry = byChild.get(key) ?? { label, effects: [] };
+            /*
+             * THE POLICY'S NAME, NOT A RESTATEMENT OF ITS RULE. "Sibling discount" is what the
+             * forecast called it; re-deriving "10%" from the expected amount and the basis would
+             * be this card computing a rate the policy already states.
+             */
+            entry.effects.push((policy.label ?? "Discount").trim());
+            byChild.set(key, entry);
+        }
+    }
+    if (byChild.size === 0) return [];
+    return [...byChild.values()].map((entry) => ({
+        childLabel: entry.label,
+        summary: entry.effects.length > 0 ? [...new Set(entry.effects)].join(" · ") : "None",
+    }));
+}
+
 export default function FinancialsCard({
     model,
     context,
@@ -274,72 +405,98 @@ export default function FinancialsCard({
     const expanded = overlay === "detail";
 
     /*
-     * ── WHAT THE COMPACT ROW SAYS, READ FROM TRUTH THE CARD ALREADY HOLDS ─────────────────────
+     * ── WHAT THE COMPACT ROWS SAY, EACH FROM THE AUTHORITY THAT OWNS ITS GRAIN ────────────────
      *
-     * `vm.payers` IS responsibility — `paymentSubjectModel` says so plainly: "the card already had
-     * a `payers` field and it means RESPONSIBILITY". So the summary names the parties on record
-     * rather than asking a second source, and says "Household" when nobody has been named, which
-     * is what the resolver itself answers for an account with no arrangement.
+     * The first version of this built responsibility out of `vm.payers`, because that field means
+     * responsibility and was already in hand. It is the right fact at the WRONG GRAIN: `payers`
+     * names the parties on the ACCOUNT, and the row has to name each CHILD. Rendering the account
+     * answer against a per-child label would have asserted one child's arrangement for a sibling
+     * who may have their own — a claim about real money, made by a summary, from a convenience.
      *
-     * Neither of these computes money. They are labels over answers that already exist.
+     * So both rows read the canonical per-child answer, and neither is derived from the other:
+     * responsibility says who owes, the discount position says what reduces the obligation, and a
+     * summary that inferred one from the other would be stating a policy it never read.
      */
-    const responsibilityAdminSummary = useMemo(() => {
-        const parties = (vm?.payers ?? []).filter((p) => (p.name ?? "").trim().length > 0);
-        if (parties.length === 0) return "Household";
-        if (parties.length === 1) return parties[0]!.name;
-        return parties.map((p) => `${p.name} ${p.share}`.trim()).join(" + ");
-    }, [vm?.payers]);
-
+    const [adminPositions, setAdminPositions] = useState<{
+        responsibility: Array<{ childLabel: string; summary: string }>;
+        discounts: Array<{ childLabel: string; summary: string }>;
+    }>({ responsibility: [], discounts: [] });
+    const [adminPositionsLoading, setAdminPositionsLoading] = useState(false);
     /*
-     * THE DISCOUNT POSITION, FROM THE ROUTE THAT OWNS IT.
-     *
-     * The card's own view model does not carry it — the depth card fetches it — so the compact
-     * summary asks the SAME canonical route rather than deriving a second answer from something
-     * nearby. One extra read for one line of truth, and no second notion of what a family's
-     * discount position is.
-     *
-     * "None" is a truthful answer and needs no empty-state block: a family with no policy is the
-     * ordinary case, and the surface this replaces gave it several lines of explanation.
-     */
-    const [discountSummaryState, setDiscountSummaryState] = useState<string>("None");
-    /*
-     * THE SAME READ, KEPT RATHER THAN REDUCED TO A SENTENCE. The compact row needs a summary; Add
-     * Charge needs the policies themselves, to offer waiving one. Two fetches of one canonical
-     * answer would be two answers the moment configuration changed between them.
+     * THE POLICIES THEMSELVES, kept from the same read rather than fetched again for Add Charge —
+     * which needs their IDS to offer waiving one. Two fetches of one canonical answer would be two
+     * answers the moment configuration changed between them.
      */
     const [expectedPolicies, setExpectedPolicies] = useState<Array<{ id: string; label: string }>>([]);
+    /* What the ACCOUNT's standing arrangement says, so Add Charge can show what it would override. */
+    const [standingResponsibilitySummary, setStandingResponsibilitySummary] = useState("Not on record");
+    /*
+     * THE RAW BODY OF THE DISCOUNT READ, kept so the depth card can paint real content on its
+     * first frame. The compact row and the depth card ask the identical question of the identical
+     * route; making the card ask again meant the operator pressed a gear and waited out a second
+     * round trip for an answer this component was already holding.
+     */
+    const [discountPositionBody, setDiscountPositionBody] = useState<FamilyPosition | null>(null);
+
     useEffect(() => {
         if (!customerId) return;
         let cancelled = false;
-        void fetch(
-            `/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`,
-            { credentials: "include" },
-        )
-            .then((r) => (r.ok ? r.json() : null))
-            .then((body: { expected?: Array<{ policyId?: string | null; label?: string | null }> } | null) => {
-                if (cancelled || !body) return;
-                const policies = body.expected ?? [];
+        setAdminPositionsLoading(true);
+        /*
+         * CONCURRENT. Two independent questions of two independent authorities; asking them in
+         * series doubles the time the rows say "Reading…" and buys nothing.
+         */
+        void Promise.all([
+            fetch(`/api/admin/financials/responsibility-positions?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+            fetch(`/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+        ]).then(([positionsBody, discountBody]) => {
+            if (cancelled) return;
+            setAdminPositionsLoading(false);
+
+            const responsibility = summariseResponsibilityPositions(positionsBody);
+            const discounts = summariseDiscountPositions(discountBody, (customerMemberId) =>
+                (vm?.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)?.displayName ?? null,
+            );
+            /*
+             * A FAILED READ IS NOT AN ANSWER. Either half keeps its last truthful value rather
+             * than falling back to "None", which an operator would read as "no discount applies".
+             */
+            setAdminPositions((prior) => ({
+                responsibility: positionsBody ? responsibility : prior.responsibility,
+                discounts: discountBody ? discounts : prior.discounts,
+            }));
+
+            if (discountBody) {
+                setDiscountPositionBody(discountBody as FamilyPosition);
+                const policies = (discountBody as { policies?: Array<{ policyId?: string | null; label?: string | null }> })
+                    .policies ?? [];
                 setExpectedPolicies(
                     policies
-                        .map((policy) => ({ id: (policy.policyId ?? "").trim(), label: policy.label ?? "Discount" }))
+                        .map((policy) => ({ id: (policy.policyId ?? "").trim(), label: (policy.label ?? "Discount").trim() }))
                         .filter((policy) => policy.id.length > 0),
                 );
-                setDiscountSummaryState(
-                    policies.length === 0
-                        ? "None"
-                        : policies.length === 1
-                          ? (policies[0]?.label ?? "Configured")
-                          : `${policies.length} policies`,
-                );
-            })
-            .catch(() => {
-                /* A failed read is not "no discount". The row keeps its last truthful answer. */
-            });
+            }
+            if (positionsBody) {
+                setStandingResponsibilitySummary(summariseHouseholdArrangement(positionsBody));
+            }
+        });
         return () => {
             cancelled = true;
         };
-    }, [customerId]);
-    const discountAdminSummary = discountSummaryState;
+        /*
+         * `vm?.subjects` is READ inside, to name a child the discount route identifies by id. It is
+         * in the list so a card that resolves its subjects after this read re-labels rather than
+         * leaving the discount row naming ids.
+         */
+    }, [customerId, vm?.subjects]);
 
     /*
      * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
@@ -3470,7 +3627,7 @@ export default function FinancialsCard({
                             ...((vm.payers ?? []).length > 0
                                 ? {
                                       chargeResponsibility: {
-                                          standingSummary: responsibilityAdminSummary,
+                                          standingSummary: standingResponsibilitySummary,
                                           parties: (vm.payers ?? [])
                                               .filter((party) => party.name.trim().length > 0)
                                               .map((party) => ({
@@ -3641,6 +3798,8 @@ export default function FinancialsCard({
                     <div className="alloy-os-financials__entrybody" data-financials-entry="discount_admin">
                         <FinancialsDiscountPanel
                             customerId={customerId}
+                            /* Real content on the first frame; the panel re-reads and still owns it. */
+                            initialPosition={discountPositionBody}
                             childLabelFor={(_ocmId: string, customerMemberId: string | null) =>
                                 (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
                                     ?.displayName ?? null
@@ -4258,9 +4417,9 @@ export default function FinancialsCard({
                     administration={
                         customerId
                             ? {
-                                  responsibilitySummary: responsibilityAdminSummary,
-                                  discountSummary: discountAdminSummary,
-                                  autopaySummary: null,
+                                  responsibility: adminPositions.responsibility,
+                                  discounts: adminPositions.discounts,
+                                  loading: adminPositionsLoading,
                                   onManagePayments: () =>
                                       openAdmin("payments_admin", '[data-financials-manage-payments="open"]'),
                                   onManageResponsibility: () =>

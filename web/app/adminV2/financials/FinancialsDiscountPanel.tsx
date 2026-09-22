@@ -55,7 +55,7 @@ type ExceptionRow = {
     superseded: boolean;
     opportunityCustomerMemberId: string;
 };
-type FamilyPosition = {
+export type FamilyPosition = {
     ok: true;
     policies: PolicyPosition[];
     exceptions: ExceptionRow[];
@@ -106,6 +106,7 @@ export default function FinancialsDiscountPanel({
     childLabelFor,
     hostedOpen,
     onHostedClose,
+    initialPosition,
     onCommitted,
 }: {
     customerId: string;
@@ -119,13 +120,28 @@ export default function FinancialsDiscountPanel({
      */
     hostedOpen?: boolean;
     onHostedClose?: () => void;
+    /**
+     * ── THE POSITION THE HOST HAS ALREADY READ ────────────────────────────────────────────────
+     *
+     * Measured in source: opening this card fired the SAME canonical route the parent had already
+     * read to render its compact discount row, so the operator pressed a gear and waited out a
+     * second round trip for an answer the page was holding. The card shell painted immediately and
+     * its contents did not, which is what reads as a dead click.
+     *
+     * This is a SEED, not a second projection. It is the identical body of the identical route —
+     * the panel's own read still runs, still owns the answer, and overwrites this the moment it
+     * lands. What it buys is a first paint with real content instead of a skeleton, and a
+     * skeleton is still what shows when no host supplies one.
+     */
+    initialPosition?: FamilyPosition | null;
     /** Names the relationship in the operator's words. The panel never invents a label. */
     childLabelFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
     /** Re-read committed truth. This panel reports no success of its own. */
     onCommitted: () => Promise<void> | void;
 }) {
-    const [position, setPosition] = useState<FamilyPosition | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [position, setPosition] = useState<FamilyPosition | null>(initialPosition ?? null);
+    /* Seeded, there is nothing to wait for on the first paint — only something to confirm. */
+    const [loading, setLoading] = useState(!initialPosition);
     const [error, setError] = useState<string | null>(null);
     /* Hosted, management IS the surface — it opens with it rather than behind another gear. */
     const [manageOpen, setManageOpen] = useState(Boolean(hostedOpen));
@@ -139,7 +155,12 @@ export default function FinancialsDiscountPanel({
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
+        /*
+         * A SEEDED CARD DOES NOT FLASH BACK TO A SKELETON. The re-read still runs — it is the
+         * authority — but replacing real content with "Reading discounts…" while confirming it
+         * would be a worse flicker than the wait this removed.
+         */
+        if (!position) setLoading(true);
         void fetch(`/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`, {
             credentials: "include",
         })
@@ -209,8 +230,29 @@ export default function FinancialsDiscountPanel({
     const policies = position?.policies ?? [];
     const liveExceptions = (position?.exceptions ?? []).filter((e) => e.isLiveNow);
 
+    /*
+     * ── ONE STATEMENT OF ONE FACT ─────────────────────────────────────────────────────────────
+     *
+     * This panel has two regions: a position summary, and a management section the gear opens.
+     * Inline on Accounts that is right — the summary is what an operator reads, and management is
+     * a door beside it.
+     *
+     * HOSTED AS A DEPTH CARD it is wrong, and was rendering both: `manageOpen` starts true, so the
+     * card opened with "Certa · Expected $18.50" in the summary and "Certa · Expected $18.50"
+     * again four lines below it under a "Manage discounts" heading that repeated the card's own
+     * title. The operator read the same sentence twice and had to work out which copy could be
+     * acted on.
+     *
+     * Hosted, the management list IS the content — it states every figure the summary did and
+     * carries the action for each row. So the summary and the heading it sat under are suppressed,
+     * and nothing is lost but the duplicate.
+     */
+    const summaryIsSeparate = !hostedOpen;
+
     return (
         <div className="mb-3" data-financials-discount-position="true">
+            {summaryIsSeparate ? (
+            <>
             <div className="flex items-center gap-1.5">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Discounts</p>
                 {/*
@@ -231,7 +273,6 @@ export default function FinancialsDiscountPanel({
                     <Settings2 aria-hidden size={13} strokeWidth={1.9} />
                 </button>
             </div>
-
             {loading ? (
                 <p className="text-[11px] text-alloy-midnight/45" data-financials-discount-loading="true">Reading discounts…</p>
             ) : error ? (
@@ -275,6 +316,8 @@ export default function FinancialsDiscountPanel({
                     ) : null}
                 </div>
             )}
+            </>
+            ) : null}
 
             {manageOpen ? (
                 /*
@@ -297,7 +340,14 @@ export default function FinancialsDiscountPanel({
                         tabIndex={-1}
                         ref={(el) => el?.focus({ preventScroll: true })}
                     >
-                        <p className="text-sm font-semibold text-alloy-midnight">Manage discounts</p>
+                        {/*
+                          * THE TITLE BELONGS TO WHICHEVER SURFACE IS THE OUTERMOST ONE. Hosted,
+                          * the depth card's own header already says "Discounts"; repeating it
+                          * here made the card look like it contained a second, smaller card.
+                          */}
+                        {hostedOpen ? null : (
+                            <p className="text-sm font-semibold text-alloy-midnight">Manage discounts</p>
+                        )}
                         <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
                             {/* The law this intent obeys, said where the operator is about to act on it. */}
                             Which policies reach this family, and whether a relationship is excepted from one.
@@ -343,7 +393,7 @@ export default function FinancialsDiscountPanel({
                                                                 reason: "Ended from family discount administration",
                                                             })}
                                                         >
-                                                            End exception
+                                                            End exception <span aria-hidden>&rarr;</span>
                                                         </button>
                                                     </p>
                                                 ) : draft && draft.policyId === p.policyId && draft.ocmId === s.opportunityCustomerMemberId ? (
@@ -387,7 +437,7 @@ export default function FinancialsDiscountPanel({
                                                         className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
                                                         onClick={() => setDraft({ policyId: p.policyId, ocmId: s.opportunityCustomerMemberId, reason: "" })}
                                                     >
-                                                        Add exception
+                                                        Add exception <span aria-hidden>&rarr;</span>
                                                     </button>
                                                 )}
                                             </div>

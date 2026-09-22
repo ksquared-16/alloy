@@ -41,8 +41,19 @@ describe("administration comes before the ledger", () => {
          */
         const ledger = at("data-financials-ledger-hydrating");
         const admin = at('data-financials-administration="compact"');
-        expect(admin, "the administration row precedes the ledger").toBeLessThan(ledger);
-        for (const item of ["responsibility", "discount", "payments"]) {
+        expect(admin, "the administration region precedes the ledger").toBeLessThan(ledger);
+        /*
+         * PAYMENT STATE IS NOT AN ADMINISTRATION ITEM ANY MORE, and that is the correction rather
+         * than a gap: how a payer can pay is a fact about the PAYER, so it states itself on the
+         * relationship row and is managed from there. Responsibility and discounts are per-child
+         * questions and keep their own rows. All three still precede the ledger, which is what
+         * this rule was ever about.
+         */
+        expect(at('data-financials-payer-row="true"'), "payment state precedes the ledger")
+            .toBeLessThan(ledger);
+        expect(at('data-financials-manage-payments="open"'), "and so does the way to change it")
+            .toBeLessThan(ledger);
+        for (const item of ["responsibility", "discount"]) {
             expect(at(`data-financials-admin-item="${item}"`), `${item} states itself before the ledger`)
                 .toBeLessThan(ledger);
         }
@@ -55,11 +66,25 @@ describe("administration comes before the ledger", () => {
     });
 
     it("autopay stays with the methods it qualifies", () => {
-        const payments = at('data-financials-admin-item="payments"');
-        const autopay = at('data-financials-admin-item="autopay"');
-        const lenses = at('data-financials-lenses="true"');
-        expect(autopay).toBeGreaterThan(payments);
-        expect(autopay, "both still sit in the administration row").toBeLessThan(lenses);
+        /*
+         * AND THE METHODS MOVED. Autopay qualifies a payment method, so when payment methods left
+         * Details for the Manage payments depth card, autopay had to go with them — a standing
+         * autopay line in Details beside a method the operator can no longer see from Details
+         * states a dependency on something absent.
+         *
+         * The rule is unchanged: the two are never separated. What changed is where both live.
+         */
+        const detail = statements(code(DETAIL));
+        expect(detail, "autopay does not stand alone in Details")
+            .not.toContain('data-financials-admin-item="autopay"');
+        expect(detail, "nor does an autopay section").not.toContain("<AutopaySection");
+
+        const host = statements(code("components/admin/focusPanel/cards/FinancialsCard.tsx"));
+        const at2 = host.indexOf('if (overlay === "payments_admin"');
+        expect(at2, "the payments depth card exists").toBeGreaterThan(-1);
+        const card = host.slice(at2, at2 + 2200);
+        expect(card, "the methods are there").toContain("<PaymentMethodsSection");
+        expect(card, "and autopay is there with them").toContain("<AutopaySection");
     });
 
     it("administration is one row, not a stack of sections", () => {

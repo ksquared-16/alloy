@@ -570,10 +570,24 @@ export default function FinancialsResponsibilityPanel({
             tabIndex={-1}
             ref={(el) => el?.focus({ preventScroll: true })}
         >
-            <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
+            {/*
+              * THE TITLE BELONGS TO THE OUTERMOST SURFACE. Hosted as a depth card, the card's own
+              * header already says "Responsibility", and repeating "Manage responsibility" beneath
+              * it made the card look like it contained a second, smaller card. Inline on Accounts
+              * there is no outer header, so the heading is what names the section.
+              */}
+            {hosted ? null : (
+                <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
+            )}
             <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                {/* The law this intent obeys, said where the operator is about to act on it. */}
-                Who contractually owes this account, from a date. Changing it does not change who has already paid.
+                {/*
+                 * ONE LINE, AND IT IS RECONCILIATION TRUTH RATHER THAN INSTRUCTION. The fields
+                 * below say what to fill in; what they cannot say is that this decides the
+                 * CONTRACT and not the history — an operator who reads "changing who owes" as
+                 * "moving what has been paid" will use this to fix a misapplied receipt, and it
+                 * will not do that. Everything else that was here explained the form to itself.
+                 */}
+                Who contractually owes this account, from a date. Changing it does not move money already paid.
             </p>
 
             {/*

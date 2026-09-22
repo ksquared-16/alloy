@@ -170,6 +170,26 @@ describe("the command offers the decisions and the host applies them", () => {
         expect(cmd).toMatch(/type ShareMethod = "percentage" \| "fixed" \| "remainder"/);
     });
 
+    it("the preview states both decisions and computes neither", () => {
+        /*
+         * The preview is the only place the two decisions appear together, so it is where an
+         * operator sees what they are about to commit. What it must NOT do is put a number on
+         * them: what a waived policy would have been worth is the resolver's answer about a
+         * charge that does not exist yet, and a figure invented here would make this card a
+         * second reduction authority.
+         */
+        const cmd = code(CMD);
+        expect(cmd).toContain('data-addcharge-preview-responsibility="true"');
+        expect(cmd).toContain('data-addcharge-preview-waivers="true"');
+        expect(cmd, "a waived policy states applicability, not money")
+            .toMatch(/data-addcharge-preview-waivers[\s\S]{0,1200}does not apply/);
+        expect(cmd, "and the standing arrangement is declared untouched")
+            .toContain('data-addcharge-preview-standing="true"');
+        const waivers = cmd.slice(cmd.indexOf('data-addcharge-preview-waivers="true"'));
+        expect(waivers.slice(0, 1200), "no arithmetic on the waived amount")
+            .not.toMatch(/amountCents|\* 100|toFixed\(/);
+    });
+
     it("no native select reaches the new controls", () => {
         /* Every dropdown on a touched surface is the platform's, never a raw <select>. */
         expect(code(CMD).match(/<select\b/g) ?? []).toHaveLength(0);
