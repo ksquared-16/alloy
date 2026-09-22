@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { ResponsibilityError } from "@/lib/financials/responsibility/responsibilityService";
 
 export type ShareInput = {
@@ -128,6 +129,46 @@ export async function configureResponsibilityArrangement(
         .from("customers").select("id").eq("org_id", input.orgId).eq("id", input.customerId).maybeSingle();
     if (customerError) throw new ResponsibilityError("db_error", customerError.message);
     if (!customerRow) throw new ResponsibilityError("unknown_account", "No such account in this organisation.");
+
+    /*
+     * ── A CHARGE-SCOPED ARRANGEMENT MUST BE SCOPED TO THIS ACCOUNT'S CHARGE ───────────────────
+     *
+     * The org-parity trigger refuses a charge from another organisation. It cannot refuse a charge
+     * that belongs to a DIFFERENT HOUSEHOLD IN THE SAME ORGANISATION, and that is the mistake an
+     * operator surface can actually make: the charge id is carried from a ledger row, and a wrong
+     * one would make these parties responsible for money billed to someone else — an arrangement
+     * that reads as deliberate and correct on every screen that renders it.
+     *
+     * The charge's own account is not stored on the charge; it is resolved from the enrolment the
+     * charge names. `resolveAllocatableNet` is the one place that answers that question, and it is
+     * the same answer the resolver uses when it later divides this charge, so the two cannot
+     * disagree about which account a charge belongs to.
+     */
+    if (input.chargeId) {
+        let chargeAccount: string | null;
+        try {
+            const net = await resolveAllocatableNet(supabase, { orgId: input.orgId, chargeId: input.chargeId });
+            chargeAccount = net.customerId;
+        } catch (err) {
+            throw new ResponsibilityError(
+                "unknown_charge",
+                err instanceof Error ? err.message : "That charge could not be read.",
+            );
+        }
+        if (!chargeAccount) {
+            /* A charge whose enrolment names no household cannot be scoped to one either. */
+            throw new ResponsibilityError(
+                "charge_has_no_account",
+                "That charge's enrolment names no household, so it cannot carry an account's arrangement.",
+            );
+        }
+        if (chargeAccount !== input.customerId) {
+            throw new ResponsibilityError(
+                "charge_belongs_to_another_account",
+                "That charge belongs to a different account.",
+            );
+        }
+    }
 
     // ── CLOSE THE PREDECESSOR, THEN OPEN THE SUCCESSOR ──────────────────────────────────────
     const { data: priorRows, error: priorError } = await supabase

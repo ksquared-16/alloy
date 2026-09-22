@@ -302,6 +302,12 @@ export default function FinancialsCard({
      * ordinary case, and the surface this replaces gave it several lines of explanation.
      */
     const [discountSummaryState, setDiscountSummaryState] = useState<string>("None");
+    /*
+     * THE SAME READ, KEPT RATHER THAN REDUCED TO A SENTENCE. The compact row needs a summary; Add
+     * Charge needs the policies themselves, to offer waiving one. Two fetches of one canonical
+     * answer would be two answers the moment configuration changed between them.
+     */
+    const [expectedPolicies, setExpectedPolicies] = useState<Array<{ id: string; label: string }>>([]);
     useEffect(() => {
         if (!customerId) return;
         let cancelled = false;
@@ -310,9 +316,14 @@ export default function FinancialsCard({
             { credentials: "include" },
         )
             .then((r) => (r.ok ? r.json() : null))
-            .then((body: { expected?: Array<{ label?: string | null }> } | null) => {
+            .then((body: { expected?: Array<{ policyId?: string | null; label?: string | null }> } | null) => {
                 if (cancelled || !body) return;
                 const policies = body.expected ?? [];
+                setExpectedPolicies(
+                    policies
+                        .map((policy) => ({ id: (policy.policyId ?? "").trim(), label: policy.label ?? "Discount" }))
+                        .filter((policy) => policy.id.length > 0),
+                );
                 setDiscountSummaryState(
                     policies.length === 0
                         ? "None"
@@ -1570,6 +1581,118 @@ export default function FinancialsCard({
         [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm],
     );
 
+    /*
+     * ── WHAT THE OPERATOR DECIDED ABOUT THIS CHARGE, BEFORE THE CHARGE EXISTS ─────────────────
+     *
+     * Responsibility and exclusions are both keyed by charge id, and there is no charge id until
+     * `charge.add` returns one. So the decisions are held here and applied afterwards, against the
+     * charges that were actually created — which is also why there is no durable charge-intent
+     * model: nothing is written that a later step has to reconcile or clean up. An operator who
+     * abandons the command leaves no trace, because these are React state and nothing else.
+     */
+    const [chargeScope, setChargeScope] = useState<"account" | "charge">("account");
+    const [chargeShares, setChargeShares] = useState<
+        Array<{ partyId: string; method: "percentage" | "fixed" | "remainder"; value: string }>
+    >([]);
+    const [waivedPolicyIds, setWaivedPolicyIds] = useState<string[]>([]);
+    const [waiverReason, setWaiverReason] = useState("");
+    const resetChargeDecisions = useCallback(() => {
+        setChargeScope("account");
+        setChargeShares([]);
+        setWaivedPolicyIds([]);
+        setWaiverReason("");
+    }, []);
+
+    /*
+     * ── AFTER THE CHARGE EXISTS, THE DECISIONS ABOUT IT ──────────────────────────────────────
+     *
+     * Two registered actions, each per created charge: a charge-scoped arrangement when the
+     * operator divided this charge themselves, and a charge-level exclusion per waived policy.
+     * Both are keyed by a charge id that did not exist a moment ago, which is the entire reason
+     * this runs after the create rather than inside it.
+     *
+     * NOTHING IS ROLLED BACK. The charge is canonical the instant it is written, and reversing it
+     * because a waiver failed would destroy real money to tidy up a follow-up — so every refusal
+     * is COLLECTED and returned, and the caller reports them. Each step is independently
+     * retryable, which is what makes reporting rather than unwinding the honest answer.
+     */
+    const applyChargeDecisions = useCallback(
+        async (chargeIds: readonly string[]): Promise<string[]> => {
+            const failures: string[] = [];
+            if (chargeIds.length === 0) return failures;
+
+            const run = async (actionKey: string, payload: Record<string, unknown>): Promise<string | null> => {
+                try {
+                    const res = await fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            action_key: actionKey,
+                            /*
+                             * THE SAME SUBJECT THE CHARGE WAS RAISED AGAINST. There is no `charge`
+                             * entity type in the action runtime; the charge these decisions are
+                             * about travels in the payload, where every other charge-scoped
+                             * financial action carries it.
+                             */
+                            entity_type: chargeInvocation?.entityType ?? "child",
+                            entity_id: chargeInvocation?.entityId ?? "",
+                            mode: "execute",
+                            confirmation: { confirmed: true },
+                            payload,
+                        }),
+                    });
+                    const body = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+                    if (body?.ok) return null;
+                    const message = typeof body?.error === "string" ? body.error : body?.error?.message;
+                    return message || "refused";
+                } catch {
+                    return "could not be sent";
+                }
+            };
+
+            for (const chargeId of chargeIds) {
+                if (chargeScope === "charge" && chargeShares.length > 0) {
+                    /*
+                     * THE SHARES ARE TRANSLATED, NOT COMPUTED. A percentage becomes basis points
+                     * and an amount becomes cents because that is how the domain stores them; what
+                     * a share is WORTH against this charge is the resolver's answer, and this card
+                     * never asks itself that question.
+                     */
+                    const shares = chargeShares
+                        .filter((share) => share.partyId.trim().length > 0)
+                        .map((share) => ({
+                            responsible_party_id: share.partyId,
+                            method: share.method,
+                            percent_basis_points:
+                                share.method === "percentage" ? Math.round(Number(share.value || 0) * 100) : null,
+                            amount_cents:
+                                share.method === "fixed" ? Math.round(Number(share.value || 0) * 100) : null,
+                        }));
+                    const error = await run("billing.configure_responsibility", {
+                        customer_id: customerId,
+                        charge_id: chargeId,
+                        /* Today: the arrangement governs this charge from the moment it is made. */
+                        effective_start: new Date().toISOString().slice(0, 10),
+                        shares,
+                    });
+                    if (error) failures.push(`responsibility for this charge — ${error}`);
+                }
+
+                for (const policyId of waivedPolicyIds) {
+                    const error = await run("billing.waive_charge_discount", {
+                        charge_id: chargeId,
+                        policy_id: policyId,
+                        reason: waiverReason,
+                    });
+                    if (error) failures.push(`waiving a discount — ${error}`);
+                }
+            }
+            return failures;
+        },
+        [chargeInvocation, chargeScope, chargeShares, customerId, waivedPolicyIds, waiverReason],
+    );
+
     const commit = useCallback(async () => {
         if (!pending || running) return;
         if (!chargeInvocation) {
@@ -1616,14 +1739,59 @@ export default function FinancialsCard({
                     },
                 }),
             });
-            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                result?: {
+                    affectedId?: string | null;
+                    detail?: {
+                        per_child?: Array<{ charge_id?: string | null; error?: string | null }>;
+                        charges_failed?: number;
+                    } | null;
+                } | null;
+            };
             if (!json?.ok) {
                 const err = typeof json?.error === "string" ? json.error : json?.error?.message;
                 // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
                 setCommandError(err || "The charge was refused.");
                 return;
             }
+
+            /*
+             * ── THE CHARGES THAT NOW EXIST ───────────────────────────────────────────────────
+             *
+             * One per billed child, or one for the household. `charge.add` reports a multi-child
+             * operation as SUCCESS carrying its failures, so the list below can be shorter than
+             * what the operator selected — and the follow-up work must run against the charges
+             * that exist rather than the ones that were asked for.
+             */
+            const detail = json.result?.detail ?? null;
+            const createdChargeIds = detail?.per_child
+                ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
+                : [String(json.result?.affectedId ?? "").trim()].filter(Boolean);
+            const followUpFailures = await applyChargeDecisions(createdChargeIds);
+
+            /*
+             * ── PARTIAL COMPLETION IS REPORTED, NOT ROUNDED ──────────────────────────────────
+             *
+             * The charge is written and cannot be un-written by a later step failing. An operator
+             * told only "done" would believe a waiver stands that does not, and would find out
+             * from an invoice. So a follow-up refusal keeps the command open, naming what DID
+             * happen first — the charge is real — and then exactly what did not.
+             */
+            if (followUpFailures.length > 0) {
+                const created = createdChargeIds.length;
+                setCommandError(
+                    `${created === 1 ? "The charge was created" : `${created} charges were created`}, `
+                    + `but ${followUpFailures.length === 1 ? "one step" : `${followUpFailures.length} steps`} `
+                    + `did not complete: ${followUpFailures.join("; ")}`,
+                );
+                /* Nothing is reset: the decisions stay on screen so the operator can retry them. */
+                return;
+            }
+
             setPending(null);
+            resetChargeDecisions();
             // The command card closes on success only. A refusal keeps it open with the domain's
             // own message, so the operator can correct the charge rather than re-open and retype it.
             resetStack();
@@ -1641,7 +1809,17 @@ export default function FinancialsCard({
         // dependency list. Without them the commit closed over the empty initial values and the
         // domain refused with `missing_event_date` — after the operator had entered a date, and
         // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
-    }, [chargeEventDate, chargeNote, chargeInvocation, chargeUnavailableReason, load, pending, running]);
+    }, [
+        applyChargeDecisions,
+        chargeEventDate,
+        chargeNote,
+        chargeInvocation,
+        chargeUnavailableReason,
+        load,
+        pending,
+        resetChargeDecisions,
+        running,
+    ]);
 
     /**
      * A LEDGER ROW'S OWN TRANSITION — post a draft, reverse posted money.
@@ -3284,12 +3462,85 @@ export default function FinancialsCard({
                             onNote: setChargeNote,
                             eventDate: chargeEventDate,
                             onEventDate: setChargeEventDate,
+                            /*
+                             * WHO OWES THIS CHARGE — offered only when there are parties on record
+                             * to divide it between. With none, the account has no arrangement to
+                             * depart from and the control would be an empty form.
+                             */
+                            ...((vm.payers ?? []).length > 0
+                                ? {
+                                      chargeResponsibility: {
+                                          standingSummary: responsibilityAdminSummary,
+                                          parties: (vm.payers ?? [])
+                                              .filter((party) => party.name.trim().length > 0)
+                                              .map((party) => ({
+                                                  id: party.personId,
+                                                  label: party.name,
+                                              })),
+                                          scope: chargeScope,
+                                          onScope: (scope: "account" | "charge") => {
+                                              setChargeScope(scope);
+                                              /*
+                                               * Choosing to divide this charge opens ONE empty
+                                               * share rather than a copy of the standing
+                                               * arrangement: a pre-filled copy would be committed
+                                               * unread, creating a charge-scoped duplicate of the
+                                               * answer that already governed — an override that
+                                               * overrides nothing and hides the next real change.
+                                               */
+                                              if (scope === "charge" && chargeShares.length === 0) {
+                                                  setChargeShares([
+                                                      { partyId: "", method: "percentage", value: "" },
+                                                  ]);
+                                              }
+                                          },
+                                          shares: chargeShares,
+                                          onShare: (
+                                              index: number,
+                                              patch: {
+                                                  partyId?: string;
+                                                  method?: "percentage" | "fixed" | "remainder";
+                                                  value?: string;
+                                              },
+                                          ) =>
+                                              setChargeShares((prior) =>
+                                                  prior.map((share, i) => (i === index ? { ...share, ...patch } : share)),
+                                              ),
+                                          onAddShare: () =>
+                                              setChargeShares((prior) => [
+                                                  ...prior,
+                                                  { partyId: "", method: "percentage", value: "" },
+                                              ]),
+                                          onRemoveShare: (index: number) =>
+                                              setChargeShares((prior) => prior.filter((_, i) => i !== index)),
+                                      },
+                                  }
+                                : {}),
+                            /* Waiving is offered only where there is an authored policy to waive. */
+                            ...(expectedPolicies.length > 0
+                                ? {
+                                      chargeDiscount: {
+                                          policies: expectedPolicies,
+                                          waivedPolicyIds,
+                                          onToggleWaive: (policyId: string) =>
+                                              setWaivedPolicyIds((prior) =>
+                                                  prior.includes(policyId)
+                                                      ? prior.filter((id) => id !== policyId)
+                                                      : [...prior, policyId],
+                                              ),
+                                          reason: waiverReason,
+                                          onReason: setWaiverReason,
+                                      },
+                                  }
+                                : {}),
                             onSubmit: () => void commit(),
                             onCancel: () => {
                                 /* One level back. Raised from Details, this returns to Details. */
                                 pop();
                                 setPending(null);
                                 setCommandError(null);
+                                /* An abandoned command leaves no decision behind, because none was written. */
+                                resetChargeDecisions();
                             },
                             running,
                             error: commandError,

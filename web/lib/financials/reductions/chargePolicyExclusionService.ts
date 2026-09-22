@@ -133,16 +133,48 @@ export async function createChargePolicyExclusion(
     };
 }
 
-/** Lift a waiver. The row stays — that it once stood is part of the charge's history. */
+/**
+ * Lift a waiver. The row stays — that it once stood is part of the charge's history.
+ *
+ * It returns the row it ended, and the same refusal shape as creating one. A bare boolean was
+ * enough while nothing called this; the moment an operator surface does, the caller needs to know
+ * WHICH charge to re-read and WHY a lift did nothing. "ok: false" with no reason is indistinguish-
+ * able from a waiver somebody else had already lifted, and the two want different words on screen.
+ */
 export async function endChargePolicyExclusion(
     supabase: SupabaseClient,
     args: { orgId: string; exclusionId: string; actorUserId?: string | null },
-): Promise<{ ok: boolean }> {
-    const { error } = await supabase
+): Promise<ChargeExclusionResult> {
+    const id = t(args.exclusionId);
+    if (!id) return { ok: false, code: "charge_required", message: "Name the waiver being ended." };
+
+    const { data, error } = await supabase
         .from(TABLE)
         .update({ ended_at: new Date().toISOString(), ended_by: args.actorUserId ?? null, updated_at: new Date().toISOString() })
         .eq("org_id", args.orgId)
-        .eq("id", t(args.exclusionId))
-        .is("ended_at", null);
-    return { ok: !error };
+        .eq("id", id)
+        /* Only a waiver that still stands can be lifted; ending an ended one moves no money. */
+        .is("ended_at", null)
+        .select("id, policy_id, charge_id, reason, created_by, created_at")
+        .maybeSingle();
+    if (error) return { ok: false, code: "db_error", message: error.message };
+    if (!data) {
+        return {
+            ok: false,
+            code: "already_excluded",
+            message: "That waiver is not in force — it was already lifted, or it is not this organisation's.",
+        };
+    }
+    const row = data as Record<string, unknown>;
+    return {
+        ok: true,
+        exclusion: {
+            id: String(row.id),
+            policyId: String(row.policy_id),
+            chargeId: String(row.charge_id),
+            reason: String(row.reason ?? ""),
+            createdBy: row.created_by ? String(row.created_by) : null,
+            createdAt: String(row.created_at ?? ""),
+        },
+    };
 }
