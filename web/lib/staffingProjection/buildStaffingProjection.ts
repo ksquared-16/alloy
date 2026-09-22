@@ -141,7 +141,9 @@ function lineFor(fact: StaffingExplanationFact): string {
         case "expected_children":
             return `Expected children: ${fact.count}`;
         case "expected_children_unknown_hours":
-            return `${fact.count} expected ${fact.count === 1 ? "child has" : "children have"} no recorded hours and are counted in no segment`;
+            return fact.count === 1
+                ? "1 expected child has no recorded hours and is counted in no segment"
+                : `${fact.count} expected children have no recorded hours and are counted in no segment`;
         case "actual_children":
             return `Actual children: ${fact.count}`;
         case "required_staff":
