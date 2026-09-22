@@ -269,12 +269,40 @@ describe("what an operator is told", () => {
         expect(describeInstallation(null).connected).toBe(false);
     });
 
+    /*
+     * THIS ASSERTION INVERTED, AND THAT IS THE REPAIR.
+     *
+     * It required the operator sentence to contain the word "restricted". That word is the
+     * PROVIDER's vocabulary for a state, not a description of anything the operator can do, and a
+     * human who had just completed Stripe onboarding read it as "something broke" when the provider
+     * had simply asked for one more field. The sentence must now carry business meaning instead.
+     *
+     * What the case still protects is unchanged and is the reason it exists: never a generic
+     * failure, and always something actionable.
+     */
     it("explains a restricted account in a sentence an operator can act on", () => {
         const state = describeInstallation({
             id: "m", processor: "stripe", provider_account_ref: "acct",
             readiness: "restricted", ach_readiness: "ready", readiness_checked_at: null,
+            readiness_detail: null,
         });
-        expect(state.attention).toMatch(/restricted/i);
         expect(state.attention, "never a generic failure").not.toMatch(/payment failed/i);
+        expect(state.attention, "no provider state vocabulary as operator copy").not.toMatch(/restricted/i);
+        expect(state.attention, "it says what is true and what to do").toMatch(/has not enabled payments/i);
+        expect(state.attention).toMatch(/continue setup/i);
+        /* And the rails stay closed whatever the sentence says. */
+        expect(state.cardAvailable).toBe(false);
+        expect(state.bankAvailable).toBe(false);
+    });
+
+    /* When the provider DID say what remains, the sentence carries it. */
+    it("carries the outstanding requirement count when the provider reported one", () => {
+        const state = describeInstallation({
+            id: "m", processor: "stripe", provider_account_ref: "acct",
+            readiness: "restricted", ach_readiness: "restricted", readiness_checked_at: null,
+            readiness_detail: { past_due: 1, currently_due: 1, disabled_reason: "requirements.past_due" },
+        });
+        expect(state.attention).toMatch(/one more step/i);
+        expect(state.attention).toMatch(/one more piece of information/i);
     });
 });
