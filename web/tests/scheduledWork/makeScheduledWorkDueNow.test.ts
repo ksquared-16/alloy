@@ -34,12 +34,13 @@ type Write = { table: string; patch: Record<string, unknown>; filters: Record<st
  */
 function client(opts: { schedule: Record<string, unknown> | null; inFlight?: unknown[] }) {
     const writes: Write[] = [];
-    const reads: string[] = [];
+    const reads: Array<{ table: string; filters: Record<string, unknown> }> = [];
     const from = (table: string) => {
         const filters: Record<string, unknown> = {};
         const chain: Record<string, unknown> = {};
         const self = () => chain;
-        chain.select = (...a: unknown[]) => { reads.push(`${table}:${String(a[0] ?? "")}`); return chain; };
+        /* The FILTERS are the interesting part of a read: an unscoped lookup is the defect. */
+        chain.select = () => { reads.push({ table, filters }); return chain; };
         chain.eq = (k: string, v: unknown) => { filters[k] = v; return chain; };
         chain.in = (k: string, v: unknown) => { filters[k] = v; return chain; };
         chain.not = self; chain.gt = self; chain.limit = self; chain.order = self; chain.is = self;
@@ -130,10 +131,20 @@ describe("evaluate now makes work due, and does nothing else", () => {
     });
 
     it("enforces the organization boundary in the lookup itself", async () => {
-        const c = client({ schedule: null });
-        await makeScheduledWorkDueNow(c.db, { orgId: "other-org", scheduleId: SCHEDULE });
-        // A schedule in another tenant is simply not found, rather than found and then rejected.
-        expect(c.reads.some((r) => r.startsWith("scheduled_work:"))).toBe(true);
+        /*
+         * ASSERT THE FILTER, NOT THAT A READ HAPPENED. The first version of this lock only checked
+         * that `scheduled_work` was selected at all, so a planted defect that dropped
+         * `.eq("org_id", …)` — letting one tenant re-due another tenant's schedule — passed it
+         * cleanly. "A query ran" is not "the query was scoped".
+         */
+        const c = client({ schedule: schedule() });
+        await makeScheduledWorkDueNow(c.db, { orgId: ORG, scheduleId: SCHEDULE, now: new Date("2026-09-22T02:00:00Z") });
+
+        const lookup = c.reads.find((r) => r.table === "scheduled_work");
+        expect(lookup, "the schedule is looked up").toBeTruthy();
+        expect(lookup!.filters, "scoped by BOTH id and organization").toMatchObject({ id: SCHEDULE, org_id: ORG });
+        // And the write is scoped the same way, so neither half can leak alone.
+        expect(c.writes[0]!.filters).toMatchObject({ id: SCHEDULE, org_id: ORG });
     });
 });
 
