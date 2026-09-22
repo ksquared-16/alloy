@@ -35,6 +35,15 @@ import type { AttendanceIngestAuthor } from "@/lib/childcareOperational/attendan
 import type { ApplicationPrincipal } from "@/lib/platform/principal/platformPrincipalTypes";
 import { internalPermissionsForScopes } from "@/lib/platform/external/scopeCatalog";
 
+/** The collection function's own maximum. Paging is internal; no caller supplies a cursor. */
+const BOUNDARY_PAGE_SIZE = 200;
+/**
+ * 250 pages is 50,000 locations — far beyond any real organization, and finite. If a boundary ever
+ * exceeds it, the resolver fails instead of truncating, because a silently partial boundary is the
+ * defect this ceiling is guarding against rather than a fallback it may take.
+ */
+const MAX_BOUNDARY_PAGES = 250;
+
 export type AttendanceAuthorityResolution =
     | { ok: true; authority: NonHumanProducerAuthority }
     | { ok: false; code: "no_sites_in_boundary" | "lookup_failed" };
@@ -61,27 +70,61 @@ export async function resolveBoundarySites(
     principal: ApplicationPrincipal,
 ): Promise<{ ok: true; siteIds: string[] } | { ok: false; code: "lookup_failed" }> {
     const boundary = principal.boundary;
-
-    const { data, error } = await supabase.rpc("list_external_locations", {
-        p_org_id: principal.orgId,
-        p_boundary_mode: boundary.mode,
-        p_boundary: boundary.mode === "locations" ? [...boundary.locationIds] : [],
-        p_limit: 200,
-        p_cursor_sort: null,
-        p_cursor_id: null,
-        p_types: null,
-        p_parent_id: null,
-        p_location_ids: null,
-        p_updated_since: null,
-    });
-
-    if (error) return { ok: false, code: "lookup_failed" };
+    const boundaryIds = boundary.mode === "locations" ? [...boundary.locationIds] : [];
 
     const siteIds = new Set<string>();
-    for (const row of (data ?? []) as Array<{ site_id: string | null }>) {
-        if (row.site_id) siteIds.add(row.site_id);
+    let cursor: { sortKey: string; id: string } | null = null;
+
+    /*
+     * PAGE UNTIL THE BOUNDARY IS EXHAUSTED.
+     *
+     * This asked for one page of 200 and treated it as the whole answer. No organization has yet
+     * exceeded that, so nothing failed — but an organization with 201 locations would have had the
+     * 201st silently dropped from its own boundary, and every resource in the platform resolves its
+     * territory through here. The failure would have looked like missing data rather than a cap,
+     * which is the worst way for a limit to announce itself.
+     *
+     * The page size stays 200 because that is the function's own maximum; what changed is that the
+     * loop continues rather than stopping at the first page. The pagination is INTERNAL: no caller
+     * supplies a cursor, so none of this widens authority, and each page applies the same boundary
+     * predicate inside the same SQL the first page did.
+     */
+    for (let page = 0; page < MAX_BOUNDARY_PAGES; page += 1) {
+        const { data, error } = await supabase.rpc("list_external_locations", {
+            p_org_id: principal.orgId,
+            p_boundary_mode: boundary.mode,
+            p_boundary: boundaryIds,
+            p_limit: BOUNDARY_PAGE_SIZE,
+            p_cursor_sort: cursor?.sortKey ?? null,
+            p_cursor_id: cursor?.id ?? null,
+            p_types: null,
+            p_parent_id: null,
+            p_location_ids: null,
+            p_updated_since: null,
+        });
+
+        if (error) return { ok: false, code: "lookup_failed" };
+
+        const rows = (data ?? []) as Array<{ id: string; site_id: string | null; sort_key: string }>;
+        for (const row of rows) {
+            if (row.site_id) siteIds.add(row.site_id);
+        }
+
+        if (rows.length < BOUNDARY_PAGE_SIZE) {
+            return { ok: true, siteIds: [...siteIds] };
+        }
+
+        const last = rows[rows.length - 1];
+        cursor = { sortKey: last.sort_key, id: last.id };
     }
-    return { ok: true, siteIds: [...siteIds] };
+
+    /*
+     * The ceiling exists so a pathological boundary cannot loop forever, and it FAILS rather than
+     * returning what it managed to collect. A partial boundary is the precise bug this change
+     * exists to remove: it would answer a different question than the one asked, and do it
+     * silently. A caller that sees this gets an error it can act on.
+     */
+    return { ok: false, code: "lookup_failed" };
 }
 
 /**
