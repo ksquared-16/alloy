@@ -1431,6 +1431,7 @@ export async function composeWorkUnitProvisioningAnswer(
         // (`process_instances.stage_key ?? opportunities.stage_key`). Re-running the opportunity lens over
         // child rows would evaluate the wrong predicate against the wrong subject.
         page = childRows.slice(0, PROVISIONING_ROW_PAGE_CAP) as unknown as OperationalProjectionRow[];
+        markSpan("geometry_page_ready_ms", t0);
     } else {
         // ── ONE Operational Projection. The lens is evaluated exactly once. ──
         // Effective Process Position MUST be attached BEFORE the evaluator: case-grain
@@ -2119,6 +2120,19 @@ export async function composeWorkUnitProvisioningAnswer(
             : null;
         familyMissionPrimaryAbsence = actionRef ? null : "work_template_has_no_action";
     }
+    /*
+     * GEOMETRY IDENTITY — the offset at which the surface could state its final geometry.
+     *
+     * The published Focus Panel composition is selected by `workViewId` + `stage.key`, so once the
+     * chosen subject and its stage are known, card membership, order and presentation are decided.
+     * Every configured FACT may still be UNKNOWN at this point; none of them selects geometry.
+     *
+     * Measured against `cohort_rows_done_ms` (682ms P50), which is the enriched cohort the QUEUE
+     * needs — CRM, children and personal-seen projections plus presentation rows. The SELECTOR
+     * consumes only `{id, entityId, entityType, sortIndex}`. This span exists to show what the
+     * frame would actually have to wait for, rather than inferring it from the enriched path.
+     */
+    markSpan("geometry_identity_ms", t0);
 
     // ── COMMIT-CRITICAL FOCUS PANEL — the answer OWNS the operational Current Work projection. ──
     // Progress + requirements + blocked/status are part of Situation→Decision→Action, so the useful
