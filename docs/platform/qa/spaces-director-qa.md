@@ -12,7 +12,7 @@ assume you know how anything is built.
 
 **Where:** https://staging.workwithalloy.com → Organization → Locations → **North Campus**
 **Sign in as:** your usual staging account
-**Build:** `9f8b2b944`
+**Build:** `3cd0e0483`
 
 You are checking one idea: **you can describe the places at your centre, and say how many
 children fit, without leaving the thing you are describing.**
@@ -26,77 +26,76 @@ few spaces called "QA …" already there; those are mine from testing. Ignore th
 
 Click **North Campus**, then the **Spaces** tab.
 
-**You should see** a tab called Spaces — not Rooms — and a list of the places at this
-campus, each one labelled Classroom or Physical space.
+**You should see** a tab called Spaces, and — importantly — **no Operational Rules tab**.
+Everything you need to configure a space is on the space.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 2. Create a physical space
+## 2. Narrow the list
 
-Click **+ Add space**. Set **Type** to *Physical space*. Name it `Room A`.
-Put **24** in Capacity. Save.
+Above the list, click **Operational**, then **Physical**, then **All**.
 
-**You should see** exactly two choices under Type — Classroom and Physical space. There is
-no third option, and nothing asks you to classify the room as "shared".
-You should not be offered Programs or a schedule: those belong to a class, not to a room.
+**You should see** counts beside each, and the list narrowing to match. Operational spaces
+are the groups children belong to; Physical spaces are places.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 3. Read it back
+## 3. Create a physical space
 
-**You should see** the space you just made, showing Type *Physical space*, its site, and
-**Capacity 24** — on the object itself, with no instruction to go and configure it
-somewhere else.
+**+ Add space** → **Kind** = *Physical* → name it `Room A` → Capacity **24** → Save.
 
-☐ PASS ☐ FAIL
-
----
-
-## 4. Create a classroom inside it
-
-**+ Add space** → Type *Classroom* → name it `Toddler AM` → **Inside** `Room A` →
-Capacity **10** → pick a Program → Save.
-
-**You should see** Toddler AM listed as a Classroom, inside Room A, with capacity 10.
+**You should see** exactly two choices under Kind: Operational and Physical. You should
+not be asked for Programs, a schedule or a ratio — those belong to a group, not a room.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 5. The list and the detail must agree
+## 4. Create a group inside it
 
-Look at the row for `Toddler AM` in the list on the left, then at the panel on the right.
+**+ Add space** → **Kind** = *Operational* → name it `Toddler AM` → **Physical space** =
+`Room A` → Capacity **10** → Save.
 
-**They must show the same capacity.** If the list says one number and the detail says
-another — or the detail says capacity is configured elsewhere — that is a FAIL, and it is
-the single most important check on this page.
-
-☐ PASS ☐ FAIL
-
----
-
-## 6. Change your mind
-
-Click **Edit space** on `Toddler AM`, change Capacity to **12**, Save. Then click away to
-another space and come back.
-
-**You should see** 12. You should never have been asked for an effective date, a version,
-or a capacity type.
+**You should see** it created, showing Kind *Operational* and Physical space *Room A*.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 7. A second classroom in the same room
+## 5. Set the staffing ratio — this is the one that was missing
 
-**+ Add space** → Classroom → `Toddler PM` → Inside `Room A` → Capacity 10 → Save.
+On `Toddler AM`, find **Staffing ratio** and click **Set ratio**. Add two steps:
 
-**You should see** both classrooms listed inside Room A. Room A keeps its own 24 — the
-numbers are not added together anywhere.
+- 1 staff for up to **5** children
+- 2 staff for up to **11** children
+
+Save.
+
+**You should see** `1:5 · 2:11`, written the way you say it. If it shows anything like
+`1:1 ≤ 5`, that is a FAIL — that was the old bug that made your ratios look lost.
+
+☐ PASS ☐ FAIL
+
+---
+
+## 6. A second group in the same room
+
+**+ Add space** → Operational → `Toddler PM` → Physical space `Room A` → Capacity 10 → Save.
+
+☐ PASS ☐ FAIL
+
+---
+
+## 7. Look at the room from its own page
+
+Open `Room A`.
+
+**You should see** an **Operational spaces** line listing *Toddler AM* and *Toddler PM*.
+One room, two groups — readable from either side.
 
 ☐ PASS ☐ FAIL
 
@@ -104,22 +103,20 @@ numbers are not added together anywhere.
 
 ## 8. A playground
 
-**+ Add space** → Type *Physical space* → name it `Playground` → leave Capacity blank →
-Save.
+**+ Add space** → Kind *Physical* → `Playground` → leave Capacity blank → Save.
 
-**You should see** a Physical space with no capacity, no Programs and no schedule, created
-without you having to know any special word for it.
+**You should see** a physical space with no capacity, no programs, no ratio and no
+operational spaces — created without you learning any special word for it.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 9. A classroom that is not inside anything
+## 9. A group that is not in any room
 
-**+ Add space** → Classroom → `Infant AM` → leave **Inside** empty → Capacity 8 → Save.
+**+ Add space** → Operational → `Infant AM` → leave **Physical space** empty → Save.
 
-**You should see** it created normally. A classroom does not need a physical room around
-it.
+**You should see** it created normally. A group does not need a room around it.
 
 ☐ PASS ☐ FAIL
 
@@ -127,10 +124,10 @@ it.
 
 ## 10. Where children can be assigned
 
-Go to a child and start a placement or schedule at North Campus.
+Start a placement or schedule for a child at North Campus.
 
-**You should see** your classrooms offered — and **not** `Room A` and **not** `Playground`.
-A child is assigned to a group, not to a building.
+**You should see** your operational spaces offered — and **not** `Room A`, **not**
+`Playground`.
 
 ☐ PASS ☐ FAIL
 
@@ -138,9 +135,7 @@ A child is assigned to a group, not to a building.
 
 ## 11. Where staff can be assigned
 
-Do the same for a staff classroom assignment.
-
-**You should see** classrooms only, for the same reason.
+Same check for a staff classroom assignment: operational spaces only.
 
 ☐ PASS ☐ FAIL
 
@@ -148,46 +143,46 @@ Do the same for a staff classroom assignment.
 
 ## 12. Where people can be marked present
 
-Open Attendance for North Campus and look at where someone can be located.
+Open Attendance for North Campus.
 
-**You should see** `Playground` available. Children go outside; the system should be able
-to say so.
-
-☐ PASS ☐ FAIL
-
----
-
-## 13. The advanced page still exists
-
-Go to the **Operational Rules** tab.
-
-**You should see** it introduce itself as *Advanced configuration*, and say that everyday
-capacity lives on each space. Ratios, operating hours, licensed ceilings and future-dated
-changes are all still here.
+**You should see** `Playground` available as a place someone can be.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 14. Licensed capacity is still a separate, deliberate thing
+## 13. Infant A — a disagreement we will not settle for you
 
-Still on Operational Rules, look at the Capacity Rules section.
+Open **Infant A** at North Campus and look at Staffing ratio.
 
-**You should see** that setting a *licensed* ceiling is possible here, and that it was
-never what you typed on a classroom. Your everyday number and a regulator's limit are not
-the same claim.
+**You should see** a *Ratio needs review* note showing both records:
+
+    Recorded earlier:  1:5 · 2:11
+    Configured now:    1:4 · 2:8 · 3:12
+
+**Nothing has been changed.** Which one is right is a staffing-law decision, and only you
+can make it. Clicking **Review ratio** opens the editor with *neither* filled in, on
+purpose.
 
 ☐ PASS ☐ FAIL
 
 ---
 
-## 15. Nothing asked you to do the same thing twice
+## 14. Ordinary configuration never needs a rules page
 
-Think back over the last ten minutes.
+Think back over the last ten minutes: capacity, ratio, programs, schedule, the room a
+group sits in — all of it was set on the space itself.
 
-**You should be able to say** that you never had to enter capacity in two places, never
-had to leave a space to finish describing it, and were never shown a version or an
-effective date for an ordinary change.
+☐ PASS ☐ FAIL
+
+---
+
+## 15. The advanced page still exists
+
+The rules engine has not been deleted. From a space, follow **Advanced rules and history →**.
+
+**You should see** the versioned rules page, with capacity history, licensed ceilings,
+ratios and future-dated changes — reachable when you want it, and never in your way.
 
 ☐ PASS ☐ FAIL
 
@@ -195,8 +190,7 @@ effective date for an ordinary change.
 
 ## 16. Does it feel like Alloy?
 
-**You should see** the same shell, cards, spacing and buttons as the rest of the product —
-including on Operational Rules, which used to read like a configuration console.
+**You should see** the same shell, cards, spacing and buttons as the rest of the product.
 
 ☐ PASS ☐ FAIL
 
@@ -216,12 +210,13 @@ including on Operational Rules, which used to read like a configuration console.
 
 ---
 
-### Two things you may notice, which are known
+### Things you may notice, which are known
 
-- **A few spaces named "QA …"** at North Campus are mine from mounted testing. They can be
-  deleted or left; they change nothing.
+- **Several spaces named "QA …"** at North Campus are mine from mounted testing. Delete
+  them or leave them; they change nothing.
 - **Toddler 1 and Toddler 2** had their capacity recorded as a *licensed* ceiling by the
-  old adoption flow. That was corrected to ordinary capacity today. Both still read 10.
-  Until the end of today the system will still credit the old licensed rule as the binding
-  limit, because a rule that is retired today is still in force for today. From tomorrow it
-  reads as ordinary capacity with no action from you.
+  old adoption flow, and that was corrected to ordinary capacity. Both read 10.
+- **Twelve other spaces** still carry an old ratio written as free text. Each will show
+  *Ratio needs review* until someone confirms it. Nothing was guessed on your behalf.
+- **Operating hours and schedule rules** are not on a space. They have never been
+  configured anywhere, so there was nothing to move; the rules engine still supports them.
