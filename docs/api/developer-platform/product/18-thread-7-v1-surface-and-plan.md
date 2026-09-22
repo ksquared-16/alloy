@@ -142,7 +142,7 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 |---|---|---|
 | Attendance facts — read | **SHIPPED (7.1)** | — |
 | Attendance state — projection | `READY_AFTER_PLATFORM_GAP` | Same read authority; projection itself exists |
-| Attendance submit + correct | **READY** | All three platform prerequisites closed in 7.3. Domain authority complete; what remains is the route and its contract |
+| Attendance submit + correct | **SHIPPED (7.4)** | — |
 | Placements | `READY_AFTER_PLATFORM_GAP` | 5A representation decided; `updated_at` IS trigger-maintained here, so delivery works — needs only the archive representation applied |
 | Enrollment | `READY_AFTER_PLATFORM_GAP` | 5A representation; `updated_at` is trigger-maintained. Field allow-list must exclude pricing terms |
 | Households | `DOMAIN_GAP` | `customers.updated_at` is not trigger-maintained, so a lifecycle change is not deliverable incrementally (D-08). Allow-list must exclude payment methods |
@@ -158,8 +158,9 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after slices 7.1–7.3.** Attendance read has shipped; Attendance operations are now the
-only fully `READY` item, because 7.3 closed all three of its platform prerequisites. The people
+**Updated after slices 7.1–7.4.** Attendance read shipped in 7.1 and Attendance submission in
+7.4, which makes the public surface writable for the first time; no `READY` item remains, so the
+next slice must clear a decision or a domain gap rather than pick up available work. The people
 resources moved in the other direction: measurement found that `customer_members` and `customers`
 do not maintain `updated_at`, so they carry a `DOMAIN_GAP` that a decision alone cannot close.
 
@@ -216,7 +217,7 @@ Dependency-ordered. The preliminary 7A–7H sequence is **not** preserved: it op
 | ~~7.1 Attendance read~~ | **Shipped.** `GET /api/v1/attendance-events`, scope `attendance.read` | — | no | `attendance.read` added | +1 operation | reference auto-renders | 23 live specs | done | a second resource copies the read pattern |
 | **7.2 (partial)** | **Exact sync law shipped**; archive representation decided, delivery blocked on D-08 | 7.1 | the D-08 trigger migration, when authorized | none | `sync_token` + `since_token` on every collection | sync procedure documented | 23 + 16 live specs across both collections | no | every collection resumes exactly |
 | **7.3** | **Shipped as law.** D-09 resolved from doctrine; `idempotency_conflict` + `authenticatedWrite` added; **no store built — none needed** | none | **no** | none | error + budget documented | — | 6 contract specs | no | any governed operation |
-| **7.4 Attendance operations** | Submit + correct, batch, idempotent | 7.1, 7.3 | no | `attendance.write` exists | +1 operation | ingestion guide | live submit/replay/correct/boundary-denial | **yes** — first external write | partners can author facts |
+| ~~7.4 Attendance operations~~ | **Shipped.** `POST /api/v1/attendance-events`, scope `attendance.write`; batch, per-item outcomes, replay-safe | 7.1, 7.3 | no | `attendance.write` bound to the new operation | +1 operation | reference auto-renders | 23 live + 16 contract specs | **yes** — first external write | partners author facts; a second write copies this pattern |
 | **7.5 People reads** | Households → Children → Relationships | 7.2, decisions D-02/D-04/D-06/D-11 | possibly (lifecycle) | new read scopes | +5 operations | people model guide | boundary, PII allow-list, archive | **yes** — PII surface | enrollment can reference children |
 | **7.6 Service state** | Enrollment, Placements, Schedule projection | 7.5 | possibly | new read scopes | +4 operations | enrollment guide | effective-dating, supersession | no | attendance can be interpreted against expectation |
 | **7.7 Staff** | Staff composition read | 7.2, D-07 | no | new read scope | +2 operations | short guide | boundary via assignment | no | ratio/roster consumers |
