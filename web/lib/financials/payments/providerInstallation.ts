@@ -69,9 +69,12 @@ type MerchantRow = {
     readiness: MerchantReadiness;
     ach_readiness: MerchantReadiness | null;
     readiness_checked_at: string | null;
+    /** What the provider said about WHY, as `persistReadiness` recorded it. Counts and state only. */
+    readiness_detail: { disabled_reason?: unknown; currently_due?: unknown; past_due?: unknown } | null;
 };
 
-const MERCHANT_COLUMNS = "id, processor, provider_account_ref, readiness, ach_readiness, readiness_checked_at";
+const MERCHANT_COLUMNS =
+    "id, processor, provider_account_ref, readiness, ach_readiness, readiness_checked_at, readiness_detail";
 
 export const NOT_CONNECTED: ProviderInstallationState = {
     connected: false,
@@ -110,7 +113,58 @@ export function describeInstallation(row: MerchantRow | null): ProviderInstallat
     };
 }
 
-/** The sentence beside a state that is not `ready`. Operator language, never provider vocabulary. */
+/**
+ * THE SENTENCE BESIDE A STATE THAT IS NOT `ready` — operator language, never provider vocabulary.
+ *
+ * ── WHY `restricted` ALONE WAS NOT GOOD ENOUGH ──
+ *
+ * An operator finished Stripe's hosted onboarding, chose a payout account and a payout schedule,
+ * came back, and was told "The payment provider has restricted this account." That is true and it is
+ * useless: it reads as though something went wrong, when what actually happened is that the provider
+ * still wants one more piece of information.
+ *
+ * The provider already told us which of those it is. `persistReadiness` records `disabled_reason`
+ * and the COUNTS of `currently_due` / `past_due`, and this now reads them — so a state that needs
+ * the operator to do something says so, and a state that needs them to do NOTHING says that instead.
+ * Telling somebody to redo an onboarding they just completed, while the provider is merely
+ * reviewing it, is the worse of the two mistakes.
+ *
+ * Raw requirement keys never reach this copy. The provider's field names are its vocabulary, not the
+ * operator's, and a count answers the only question they can act on: is there something left to give?
+ */
+function outstandingCount(detail: MerchantRow["readiness_detail"]): number {
+    const past = Number((detail ?? {}).past_due ?? 0);
+    const due = Number((detail ?? {}).currently_due ?? 0);
+    const n = Math.max(Number.isFinite(past) ? past : 0, Number.isFinite(due) ? due : 0);
+    return n > 0 ? n : 0;
+}
+
+function restrictedSentence(row: MerchantRow): string {
+    const reason = String((row.readiness_detail ?? {}).disabled_reason ?? "").trim();
+    const n = outstandingCount(row.readiness_detail);
+    const thing = n === 1 ? "one more piece of information" : `${n} more pieces of information`;
+
+    /*
+     * NOTHING IS OWED BY THE OPERATOR. The provider is checking what it already has, and Continue
+     * setup would take them back into a flow with nothing left to answer.
+     */
+    if (reason === "requirements.pending_verification" || reason === "under_review") {
+        return "The payment provider is reviewing the information already provided. "
+            + "Nothing is needed from you — this usually clears on its own.";
+    }
+    /* Something IS owed, and the provider's own flow is where it is given. */
+    if (n > 0 || reason.startsWith("requirements.")) {
+        return `Setup needs one more step: the payment provider needs ${n > 0 ? thing : "more information"} `
+            + "before this organization can accept payments. Continue setup to provide it.";
+    }
+    if (reason.startsWith("rejected") || reason === "listed" || reason === "platform_paused") {
+        return "The payment provider will not enable payments for this account. "
+            + "Contact the provider — this cannot be resolved from Alloy.";
+    }
+    /* A reason we do not recognise is still reported, without pretending to explain it. */
+    return "The payment provider has not enabled payments for this account yet. Continue setup to resolve it.";
+}
+
 function attentionFor(row: MerchantRow): string | null {
     switch (row.readiness) {
         case "ready":
@@ -120,7 +174,7 @@ function attentionFor(row: MerchantRow): string | null {
         case "onboarding_incomplete":
             return "Setup is not finished. Continue setup to start accepting payments.";
         case "restricted":
-            return "The payment provider has restricted this account, so it cannot accept payments. Continue setup to resolve it.";
+            return restrictedSentence(row);
         case "not_connected":
             return "This account cannot accept payments yet. Continue setup to finish connecting it.";
         default:
