@@ -34,7 +34,12 @@ import {
     parseOrdinaryCapacityInput,
     readOrdinaryCapacity,
 } from "@/lib/locations/objectCapacity";
-import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
+import type {
+    ChildcareCapacityRuleRow,
+    ChildcareRatioRuleRow,
+    ChildcareRatioRuleTierRow,
+} from "@/lib/childcareOperational/config/configRuleTypes";
+import SpaceRatioSection from "@/components/adminV2/settings/locations/SpaceRatioSection";
 import {
     presentRoomTopology,
     roomRailTopologySegments,
@@ -61,6 +66,8 @@ export default function LocationRoomDetailPanel({
     siteId,
     insideOptions,
     capacityRules,
+    ratioRules = [],
+    ratioTiers = [],
     todayYmd,
     onCapacityChanged,
     programOptions,
@@ -83,6 +90,16 @@ export default function LocationRoomDetailPanel({
     insideOptions: InsideOption[];
     /** Canonical capacity rules, for capacity standing and the canonical display. */
     capacityRules: readonly ChildcareCapacityRuleRow[];
+    /**
+     * Canonical staffing ratios, for the operational space's own section.
+     *
+     * Optional because the panel can render before the rules bundle resolves;
+     * an absent list reads as "no ratio yet", which is what it looks like. A
+     * source guard in tests/location/objectRatioSurface pins that the page
+     * really supplies them, so the default cannot quietly become the behaviour.
+     */
+    ratioRules?: readonly ChildcareRatioRuleRow[];
+    ratioTiers?: readonly ChildcareRatioRuleTierRow[];
     todayYmd: string;
     onCapacityChanged: () => Promise<void> | void;
     programOptions: LocationProgramCategoryRow[];
@@ -105,6 +122,7 @@ export default function LocationRoomDetailPanel({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
+    const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
 
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
         const md = (next.metadata ?? {}) as Record<string, unknown>;
@@ -153,7 +171,7 @@ export default function LocationRoomDetailPanel({
             })
         :   null;
     const statusLabel = active ? "Active" : "Inactive";
-    // Read-only topology context. There is no Type or Inside control anywhere in
+    // Read-only topology context. There is no Kind or physical-space control in
     // this panel: the server can safely refuse an unsafe change, but adopting an
     // existing location is its own product slice.
     const topology = room ? presentRoomTopology(room, topologyRows) : null;
@@ -197,7 +215,7 @@ export default function LocationRoomDetailPanel({
     const showsInside = roleAcceptsInside(roomType) && insideOptions.length > 0;
 
     // Same rule as create: only a Classroom can sit inside a physical room, so a
-    // Type change away from Classroom drops a pending Inside rather than carrying
+    // A Kind change away from Operational drops a pending physical space rather than carrying
     // an impossible pair into the payload.
     const changeRoomType = (next: CanonicalUnitRole) => {
         setRoomType(next);
@@ -212,6 +230,37 @@ export default function LocationRoomDetailPanel({
     };
 
     /** The canonical ordinary capacity for a row, in the rail's own vocabulary. */
+    /**
+     * The operational spaces this physical space supports, by name.
+     *
+     * Read from the SAME canonical parent relationship the operational side
+     * writes — `parent_location_id` — so the two directions cannot disagree.
+     * There is no second association table and no duplicated topology state.
+     */
+    /*
+     * KIND FILTER. Twelve mixed rows is not a site an operator can read at a
+     * glance, and the two kinds answer different questions — "where do children
+     * go" and "what places exist". Presentation only: it narrows the rail and
+     * creates no second classification of anything.
+     */
+    const kindOf = (entry: LocationHierarchyRow): CanonicalUnitRole =>
+        committedRoomTopology(entry, siteId).roomType;
+    const kindCounts = {
+        all: rooms.length,
+        operational: rooms.filter((r) => kindOf(r) === "operational_group").length,
+        physical: rooms.filter((r) => kindOf(r) !== "operational_group").length,
+    };
+    const visibleRooms =
+        kindFilter === "all" ? rooms
+        : kindFilter === "operational" ? rooms.filter((r) => kindOf(r) === "operational_group")
+        : rooms.filter((r) => kindOf(r) !== "operational_group");
+
+    const operationalSpacesIn = (entry: LocationHierarchyRow): string[] =>
+        rooms
+            .filter((r) => r.parent_location_id === entry.id && r.is_active !== false)
+            .map((r) => (r.label ?? "").trim() || "Untitled space")
+            .sort((a, b) => a.localeCompare(b));
+
     const canonicalCapacityFor = (entry: LocationHierarchyRow): number | null =>
         readOrdinaryCapacity(capacityRules, entry.id, committedRoomTopology(entry, siteId).roomType, todayYmd);
 
@@ -272,7 +321,7 @@ export default function LocationRoomDetailPanel({
                             />
                         </label>
                         <label className="block max-w-md space-y-1">
-                            <span className="config-typo-field-label">Type</span>
+                            <span className="config-typo-field-label">Kind</span>
                             <select
                                 value={roomType}
                                 disabled={!canMutate}
@@ -293,7 +342,7 @@ export default function LocationRoomDetailPanel({
 
                         {showsInside ?
                             <label className="block max-w-md space-y-1">
-                                <span className="config-typo-field-label">Inside</span>
+                                <span className="config-typo-field-label">Physical space</span>
                                 <select
                                     value={insideId}
                                     disabled={!canMutate}
@@ -350,7 +399,7 @@ export default function LocationRoomDetailPanel({
                     <>
                     <ConfigEditorSection
                         title="Programs supported"
-                        description="Programs offered at this location that this room can serve."
+                        description="Programs offered at this location that this space can serve."
                         testId="locations-room-editor-programs"
                     >
                         {programOptions.length === 0 ?
@@ -382,7 +431,7 @@ export default function LocationRoomDetailPanel({
 
                     <ConfigEditorSection
                         title="Default schedule"
-                        description="Optional default Schedule Definition for this room. Enrollment still chooses from the Location catalog."
+                        description="Optional default Schedule Definition for this space. Enrollment still chooses from the Location catalog."
                         testId="locations-room-editor-schedule"
                     >
                         <label className="block max-w-md space-y-1">
@@ -510,7 +559,7 @@ export default function LocationRoomDetailPanel({
                     {[
                         {
                             key: "type",
-                            label: "Type",
+                            label: "Kind",
                             value: topology!.typeLabel,
                         },
                         {
@@ -521,8 +570,25 @@ export default function LocationRoomDetailPanel({
                         // Omitted entirely when the room hangs off the site — the detail
                         // grid shows properties that apply, rather than an em dash for
                         // one that cannot.
+                        // A relationship, not a nesting lesson. Shown only when the
+                        // operational space actually names one.
                         ...(topology!.containingSpaceLabel ?
-                            [{ key: "inside", label: "Inside", value: topology!.containingSpaceLabel }]
+                            [{ key: "inside", label: "Physical space", value: topology!.containingSpaceLabel }]
+                        :   []),
+                        // The other side of that relationship. A physical space that
+                        // supports operational ones should say so from its own page,
+                        // rather than making the operator open each group to find out.
+                        ...(operationalSpacesIn(room).length > 0 ?
+                            [
+                                {
+                                    key: "operational-spaces",
+                                    label:
+                                        operationalSpacesIn(room).length === 1 ?
+                                            "Operational space"
+                                        :   "Operational spaces",
+                                    value: operationalSpacesIn(room).join(", "),
+                                },
+                            ]
                         :   []),
                         {
                             // The AUTHORED number for this object, never the derived
@@ -535,7 +601,7 @@ export default function LocationRoomDetailPanel({
                             label: "Capacity",
                             value: canonicalCapacityFor(room) != null ? String(canonicalCapacityFor(room)) : "Not set",
                         },
-                        // Programs and schedule are classroom facts. A physical space has
+                        // Programs and schedule are operational facts. A physical space has
                         // neither, and an em dash for a property that cannot apply reads
                         // as missing data rather than as an inapplicable field.
                         ...(roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
@@ -584,6 +650,17 @@ export default function LocationRoomDetailPanel({
                     ))}
                 </div>
 
+                {roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
+                    <SpaceRatioSection
+                        room={room}
+                        ratioRules={ratioRules}
+                        ratioTiers={ratioTiers}
+                        todayYmd={todayYmd}
+                        canMutate={canMutate}
+                        onSaved={onCapacityChanged}
+                    />
+                :   null}
+
                 <RoomCapacitySection
                     room={room}
                     siteId={siteId}
@@ -601,7 +678,31 @@ export default function LocationRoomDetailPanel({
     return (
         <ConfigChildObjectMasterDetail
             listTitle="Spaces"
-            listSummary={`${rooms.length} ${rooms.length === 1 ? "space" : "spaces"}`}
+            listSummary={`${visibleRooms.length} ${visibleRooms.length === 1 ? "space" : "spaces"}`}
+            listFilter={
+                <div className="flex flex-wrap gap-1" data-testid="locations-room-kind-filter" role="group" aria-label="Filter spaces by kind">
+                    {([
+                        ["all", "All", kindCounts.all],
+                        ["operational", "Operational", kindCounts.operational],
+                        ["physical", "Physical", kindCounts.physical],
+                    ] as const).map(([key, label, count]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setKindFilter(key)}
+                            data-testid={`locations-room-kind-filter-${key}`}
+                            aria-pressed={kindFilter === key}
+                            className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+                                kindFilter === key ?
+                                    "bg-alloy-bend-pine/[0.14] text-alloy-bend-pine"
+                                :   "text-alloy-midnight/55 hover:bg-alloy-midnight/[0.04]"
+                            }`}
+                        >
+                            {label} {count}
+                        </button>
+                    ))}
+                </div>
+            }
             listActions={
                 canMutate && onAddRoom ?
                     <ConfigurationPrimaryButton
@@ -615,8 +716,8 @@ export default function LocationRoomDetailPanel({
             }
             testId="locations-rooms"
             list={
-                rooms.length > 0 ?
-                    rooms.map((entry) => {
+                visibleRooms.length > 0 ?
+                    visibleRooms.map((entry) => {
                         const md = (entry.metadata ?? {}) as Record<string, unknown>;
                         const capacityMd = readLocationMetadataPresentation(entry.metadata);
                         const inactive = entry.is_active === false;
@@ -644,7 +745,7 @@ export default function LocationRoomDetailPanel({
                                 key={entry.id}
                                 variant="rail"
                                 active={selected}
-                                title={String(entry.label ?? "").trim() || "Untitled room"}
+                                title={String(entry.label ?? "").trim() || "Untitled space"}
                                 subtitle={subtitleParts.join(" · ")}
                                 muted={inactive}
                                 leading={

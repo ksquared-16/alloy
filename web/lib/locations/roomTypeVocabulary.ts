@@ -7,8 +7,16 @@
  * here rather than inline in the form so that the list/detail presentation slice
  * reuses the same words instead of inventing a second set.
  *
- * TWO TYPES, NOT THREE. The operator chooses between a Classroom and a Physical
- * space. `shared_space` is no longer offered: measured across the product, no
+ * TWO KINDS, NOT THREE TYPES. The operator chooses between Operational and
+ * Physical — the structural distinction the canonical model already makes, and
+ * the only one that changes behaviour. "Classroom" was withdrawn as the
+ * structural word because it is not one: `metadata.semantic_kind` is the
+ * constant string "classroom" on every unit that carries it, and
+ * `metadata.category` holds toddler/preschool/infant, which is the Programs
+ * vocabulary wearing a different hat. What a space IS gets said by its name and
+ * its Programs; what it STRUCTURALLY is gets said by Kind.
+ *
+ * `shared_space` is no longer offered: measured across the product, no
  * behavioral branch distinguished it from `physical_space` — placement and
  * scheduling exclude both, and attendance offers every unit regardless of role —
  * so it was a choice that changed nothing and cost the operator a decision on
@@ -40,13 +48,13 @@ export type RoomTypeOption = {
 export const ROOM_TYPE_OPTIONS: readonly RoomTypeOption[] = [
     {
         role: "operational_group",
-        label: "Classroom",
-        hint: "The group children are assigned to.",
+        label: "Operational",
+        hint: "A group children are assigned to, such as Toddler 1.",
     },
     {
         role: "physical_space",
-        label: "Physical space",
-        hint: "A place people can be — a room, a playground, a gym.",
+        label: "Physical",
+        hint: "A place people can be, such as Room 1 or the playground.",
     },
 ];
 
@@ -66,8 +74,8 @@ export const DEFAULT_ROOM_TYPE: CanonicalUnitRole = "operational_group";
  * would have no way to understand where it came from.
  */
 export function roomTypeLabel(role: CanonicalUnitRole | null | undefined): string {
-    if (role === "shared_space") return "Physical space";
-    return ROOM_TYPE_OPTIONS.find((o) => o.role === role)?.label ?? "Classroom";
+    if (role === "shared_space") return "Physical";
+    return ROOM_TYPE_OPTIONS.find((o) => o.role === role)?.label ?? "Operational";
 }
 
 export function roomTypeHint(role: CanonicalUnitRole): string {
@@ -80,7 +88,7 @@ export function roomTypeHint(role: CanonicalUnitRole): string {
  *
  * A stored shared space keeps its own role in the list so that editing it does
  * not silently rewrite storage the moment someone opens the form and saves.
- * It occupies the "Physical space" slot, because that is what it is to the
+ * It occupies the "Physical" slot, because that is what it is to the
  * operator. So a stored shared space can be turned into a Classroom, or left
  * exactly as it is; the editor never converts it to `physical_space`, and no
  * ordinary Save rewrites a role nobody asked to change.
@@ -98,7 +106,12 @@ export function roomTypeOptionsFor(role: CanonicalUnitRole | null | undefined): 
     );
 }
 
-/** Only a classroom can sit inside something; a physical space hangs off the site. */
+/**
+ * Only an operational space can name a containing physical space.
+ *
+ * The relationship is one physical to many operational, and never the reverse:
+ * the database refuses a physical space inside a physical space.
+ */
 export function roleAcceptsInside(role: CanonicalUnitRole): boolean {
     return role === "operational_group";
 }
