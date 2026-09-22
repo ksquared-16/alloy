@@ -45,6 +45,32 @@ const APP_URL = (process.env.CERT_APP_URL ?? "http://127.0.0.1:3018").replace(/\
 const describeLive = env ? describe : describe.skip;
 
 const ORG = "00000000-0000-4000-8000-000000000001";
+/**
+ * THE STANDING BOUNDARY FIXTURE, AND HOW IT CAME TO BE PERMANENT.
+ *
+ * The certification list requires proof at timestamp boundaries that organic data does not contain:
+ * facts sharing one microsecond, and facts a microsecond apart around a watermark. An earlier run of
+ * this suite inserted them and intended to remove them afterwards. It could not:
+ * `child_attendance_events` refuses DELETE at the database — *"append-only: record a correction or
+ * reversal event instead"* — which is the very property this resource advertises, enforced where it
+ * cannot be talked out of.
+ *
+ * So 36 rows recorded at year-2030 instants are now a permanent part of the certification tenant.
+ * They are inert: `absence` facts on a 2026 service day, at a site the fixture already covers, each
+ * carrying the marker below. This suite now READS them and inserts nothing — the mistake became the
+ * fixture, and saying so here is cheaper than someone rediscovering it in a year.
+ *
+ *   2030-01-01T00:00:00.123456Z   x12   an exact tie
+ *   2030-02-01T00:00:00.00000{1,2,3}Z  x4 each   microsecond-adjacent, around a watermark
+ *   2030-03-01T00:00:00.5005Z     x12   an exact tie
+ */
+/** Every row of the standing fixture carries this in its (non-public) source key. */
+export const BOUNDARY_FIXTURE_MARKER = "t7-sync-boundary:";
+const TIE_INSTANT = "2030-01-01T00:00:00.123456+00:00";
+const ADJACENT_BEFORE = "2030-02-01T00:00:00.000001+00:00";
+const ADJACENT_ON = "2030-02-01T00:00:00.000002+00:00";
+const ADJACENT_AFTER = "2030-02-01T00:00:00.000003+00:00";
+const BOUNDARY_SINCE = "2029-12-31T00:00:00Z";
 /** The site the certification organization's attendance facts live at. */
 const RIVERSIDE = "00000000-0000-4000-8000-000000000010";
 /** A real sibling site with no attendance facts — the boundary's negative case. */
@@ -121,7 +147,18 @@ describeLive("GET /api/v1/attendance-events, over the wire", () => {
         return installationId;
     }
 
+    /**
+     * One token per installation, held for the suite.
+     *
+     * Token exchange is budgeted at 30 per minute, keyed by client and caller — deliberately the
+     * tightest budget on the API because it is the guessable surface. A suite that re-exchanged on
+     * every request spent that budget on itself and then measured the refusal instead of the
+     * contract. A real client holds its token for the 900 seconds it is valid, so this does too.
+     */
+    const tokens = new Map<string, string>();
     async function bearer(key: string): Promise<string> {
+        const cached = tokens.get(key);
+        if (cached) return cached;
         const c = creds.get(key)!;
         const res = await fetch(`${APP_URL}/api/v1/oauth/token`, {
             method: "POST",
@@ -132,8 +169,10 @@ describeLive("GET /api/v1/attendance-events, over the wire", () => {
                 client_secret: c.secret,
             }),
         });
-        const body = (await res.json()) as { access_token: string };
-        return body.access_token;
+        const body = (await res.json()) as { access_token?: string };
+        expect(body.access_token, `token exchange for ${key} (status ${res.status})`).toBeTruthy();
+        tokens.set(key, body.access_token!);
+        return body.access_token!;
     }
 
     const get = (path: string, accessToken?: string) =>
@@ -455,6 +494,84 @@ describeLive("GET /api/v1/attendance-events, over the wire", () => {
 
         const context = (await (await get("/api/v1/context", token)).json()) as { scopes?: string[] };
         expect(context.scopes).toContain("attendance.read");
+    });
+
+    // ── boundary certification, against the standing fixture (7.2) ──────────
+    it("orders facts sharing one microsecond deterministically, and pages across the tie", async () => {
+        const token = await bearer("reader");
+        const whole = (await (await get(
+            `/api/v1/attendance-events?limit=200&updated_since=${encodeURIComponent(BOUNDARY_SINCE)}`,
+            token,
+        )).json()) as Page;
+
+        const tied = whole.data.filter((r) => r.recorded_at === TIE_INSTANT);
+        expect(tied.length, "the standing fixture carries an exact tie").toBeGreaterThan(1);
+        // `recorded_at` cannot order these, so the id tiebreak is the only stable order there is.
+        expect(tied.map((r) => r.id)).toEqual([...tied.map((r) => r.id)].sort());
+
+        // Page one row at a time THROUGH the tie: nothing lost, nothing repeated.
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        for (let i = 0; i < 60; i += 1) {
+            const url: string = `/api/v1/attendance-events?limit=1&updated_since=${encodeURIComponent(BOUNDARY_SINCE)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+            const page = (await (await get(url, token)).json()) as Page;
+            seen.push(...page.data.map((r) => r.id));
+            cursor = page.next_cursor;
+            if (!cursor) break;
+        }
+        expect(new Set(seen).size, "no row appeared twice while paging across a tie").toBe(seen.length);
+        expect(seen).toEqual(whole.data.map((r) => r.id));
+    });
+
+    it("a watermark landing exactly on a fact excludes it and nothing else", async () => {
+        /*
+         * Creation immediately around the checkpoint, at microsecond resolution. `updated_since` is
+         * strictly-after: the fact ON the watermark is already consumed, the one before it stays
+         * consumed, and the one a microsecond later is delivered.
+         */
+        const page = (await (await get(
+            `/api/v1/attendance-events?limit=200&updated_since=${encodeURIComponent(ADJACENT_ON)}`,
+            await bearer("reader"),
+        )).json()) as Page;
+        const recorded = page.data.map((r) => r.recorded_at);
+        expect(recorded, "the fact ON the watermark is excluded").not.toContain(ADJACENT_ON);
+        expect(recorded, "the fact before it stays excluded").not.toContain(ADJACENT_BEFORE);
+        expect(recorded, "the fact a microsecond later is delivered").toContain(ADJACENT_AFTER);
+    });
+
+    it("a sync token taken mid-tie resumes inside the tie without loss", async () => {
+        const token = await bearer("reader");
+        const since = encodeURIComponent(BOUNDARY_SINCE);
+        const whole = (await (await get(`/api/v1/attendance-events?limit=200&updated_since=${since}`, token)).json()) as Page;
+
+        const first = (await (await get(`/api/v1/attendance-events?limit=2&updated_since=${since}`, token)).json()) as Page;
+        expect(first.data).toHaveLength(2);
+        expect(first.data[0].recorded_at).toBe(TIE_INSTANT);
+
+        const resumed = (await (await get(
+            `/api/v1/attendance-events?limit=200&updated_since=${since}&since_token=${encodeURIComponent(first.sync_token!)}`,
+            token,
+        )).json()) as Page;
+
+        const firstIds = new Set(first.data.map((r) => r.id));
+        for (const row of resumed.data) expect(firstIds.has(row.id)).toBe(false);
+        // Split mid-tie, the two passes reconstruct the single pass exactly.
+        expect([...first.data, ...resumed.data].map((r) => r.id)).toEqual(whole.data.map((r) => r.id));
+    });
+
+    it("a filter combined with a cursor still cannot widen authority", async () => {
+        const readerPage = (await (await get(
+            `/api/v1/attendance-events?limit=1&site_id=${RIVERSIDE}`,
+            await bearer("reader"),
+        )).json()) as Page;
+        expect(readerPage.data).toHaveLength(1);
+
+        const res = await get(
+            `/api/v1/attendance-events?limit=50&site_id=${RIVERSIDE}&cursor=${encodeURIComponent(readerPage.next_cursor!)}`,
+            await bearer("elsewhere"),
+        );
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as Page).data, "a filter plus a cursor is still not a grant").toEqual([]);
     });
 
     it("carries the standard rate-limit and correlation headers", async () => {
