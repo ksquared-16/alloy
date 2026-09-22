@@ -61,9 +61,9 @@ function term(over: Partial<Record<string, unknown>> = {}) {
 
 /** Records what generation was asked to do, and answers as generation answers. */
 function recordingGenerate() {
-    const calls: { periodKey: string; cadenceKey?: string; scope?: readonly string[] | null }[] = [];
-    const fn = (async (_supabase: unknown, args: { periodKey: string; cadenceKey?: string; opportunityCustomerMemberIds?: readonly string[] | null }) => {
-        calls.push({ periodKey: args.periodKey, cadenceKey: args.cadenceKey, scope: args.opportunityCustomerMemberIds ?? null });
+    const calls: { periodKey: string; cadenceKey?: string; scope?: readonly string[] | null; periodKeys?: readonly string[] | null }[] = [];
+    const fn = (async (_supabase: unknown, args: { periodKey: string; cadenceKey?: string; opportunityCustomerMemberIds?: readonly string[] | null; periodKeys?: readonly string[] | null }) => {
+        calls.push({ periodKey: args.periodKey, cadenceKey: args.cadenceKey, scope: args.opportunityCustomerMemberIds ?? null, periodKeys: args.periodKeys ?? null });
         return {
             periodKey: args.periodKey,
             servicePeriod: { start: `${args.periodKey}-01`, end: `${args.periodKey}-28` },
@@ -329,5 +329,52 @@ describe("the deployed fixture, evaluated against the doctrine", () => {
         // Sep 22-28 and Sep 29-Oct 5 overlap the span the preview enumerates; neither is due.
         expect(outcome.newestOutstandingPeriod).not.toContain("2026-09-22");
         expect(outcome.outstandingPeriods).toBeLessThan(5);
+    });
+});
+
+describe("automation bills the periods it decided were due, and no others", () => {
+    /**
+     * MEASURED ON DEPLOYED STAGING, and this is the lock that was missing.
+     *
+     * The handler asks generation for the month SPAN containing each outstanding period, and a
+     * span contains periods that have not begun. A one-period specimen was billed for 2026-09-22
+     * AND 2026-09-29; a two-period one received three charges. The outstanding count was right,
+     * the refusal threshold was right, and the mutation was still larger than the set the bound
+     * had been computed on — which is the bound not holding.
+     *
+     * The earlier locks could not catch it: the recording generate() asserted WHICH SPANS were
+     * requested, and the spans were correct. What was never asserted is that the request carried
+     * the due period keys, so generation could not wander past them.
+     */
+    it("passes the exact due period keys, not just the span", async () => {
+        const { outcome, calls } = await evaluate({ charges: charged("2026-01"), todayYmd: "2026-03-15" });
+        expect(outcome.outstandingPeriods).toBe(2);
+        /*
+         * TWO CALLS IS CORRECT, and asserting one was my mistake: February and March are different
+         * month spans, so the span loop legitimately asks twice. What matters is that EVERY
+         * request carries the due keys, so neither span can bill beyond them.
+         */
+        expect(calls.map((c) => c.periodKey).sort()).toEqual(["2026-02", "2026-03"]);
+        for (const call of calls) {
+            expect(call.periodKeys, "every request names the due periods").toEqual(["2026-02", "2026-03"]);
+        }
+    });
+
+    it("a single due period is billed as a single period", async () => {
+        const { outcome, calls } = await evaluate({ charges: charged("2026-01", "2026-02"), todayYmd: "2026-03-15" });
+        expect(outcome.outstandingPeriods).toBe(1);
+        expect(calls[0]!.periodKeys).toEqual(["2026-03"]);
+    });
+
+    it("a weekly specimen never carries a period that has not begun", async () => {
+        /* The deployed shape: weekly anchored 2026-09-22, evaluated on 2026-09-22. */
+        const { outcome, calls } = await evaluate({
+            charges: [], todayYmd: "2026-09-22",
+            terms: [term({ cadence_key: "weekly", effective_start: "2026-09-22", amount_cents: 19_500 })],
+        });
+        expect(outcome.outstandingPeriods).toBe(1);
+        expect(calls[0]!.periodKeys).toEqual(["2026-09-22~2026-09-28"]);
+        expect(calls[0]!.periodKeys, "2026-09-29 had not begun")
+            .not.toContain("2026-09-29~2026-10-05");
     });
 });

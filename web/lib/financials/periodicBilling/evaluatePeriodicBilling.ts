@@ -196,6 +196,17 @@ export async function evaluatePeriodicBilling(
         }
 
         /* Within the bound: the canonical authority does the billing, for this assignment only. */
+        /*
+         * THE SPAN SAYS WHERE TO LOOK; THE PERIOD KEYS SAY WHAT TO BILL.
+         *
+         * Asking for a month and taking whatever it contains billed periods that had not begun —
+         * measured on deployed staging, a one-period specimen received charges for 2026-09-22 AND
+         * 2026-09-29, and a two-period one received three. The bound was computed on the
+         * outstanding set and then applied to a larger set, which is the bound not holding.
+         *
+         * So the exact periods this evaluation decided are due travel with the request.
+         */
+        const dueKeys = assignment.outstanding.map((p) => p.periodKey);
         const results: TuitionGenerationResult[] = [];
         for (const span of spansCovering(assignment.outstanding)) {
             results.push(await generate(supabase, {
@@ -203,6 +214,7 @@ export async function evaluatePeriodicBilling(
                 periodKey: span,
                 cadenceKey: assignment.cadenceKey,
                 opportunityCustomerMemberIds: [assignment.opportunityCustomerMemberId],
+                periodKeys: dueKeys,
                 today: truth.todayYmd,
             }));
         }
