@@ -168,3 +168,39 @@ finality landing 40-57 ms after the drawer view model returns.
 Four samples across both runs were **discarded loudly** for specimen drift — the queue focused a
 4-card household with no attendance card. Discards are reported, never counted as quiet zeros.
 That is the trap that once made a frame "improve" to 805 ms by doing less.
+
+---
+
+## Phase 1 (provisioning DAG) — the max()-shaped promotion, confirmed
+
+Post-repair provisioning samples on `a1ecf609`, pinned full-attendance specimen.
+**n=11 of an in-flight 21-sample batch** — reported with that count rather than rounded up.
+Per Phase 13 these figures are **diagnostic only** and are not a product gate.
+
+| span | pre (`680e5765`, n=21) | post (`a1ecf609`, n=11) |
+|---|---|---|
+| **attendance_fold** end P50 | **898** (binds 21/21) | **704** (binds 2/11) |
+| **work_view_totals** end P50 | 758 (binds 0/21) | **789 (binds 9/11)** |
+| A′ frame = max(span.end) P50 | 898 | **812** |
+
+**Measured attendance saving: ~192 ms on `attendance_fold`** (898 → 704).
+**Frame saving: ~86 ms** (898 → 812).
+
+The difference between those two numbers is the whole point, and it was predicted before the
+repair was written: the DAG is **max()-shaped**, so speeding the binder promotes the runner-up.
+The provisioning DAG said at most ~140 ms was recoverable before `work_view_totals` took over. It
+took over. Attendance now binds in only 2 of 11 samples; `work_view_totals` binds in 9.
+
+Per the dispatch, **the new binding owner was not optimised.** Max recoverable by attacking it is
+a further 85 ms, against a product gap of 6,614 ms — which is exactly why Phase 13 retires this
+DAG as a product gate.
+
+### The two numbers side by side
+
+| | |
+|---|---|
+| A′ provisioning frame | 812 ms |
+| real-page `FIRST_ORDER_VISIBLE_COMPLETE` | **7,614 ms** |
+
+Provisioning is **11%** of the operator-visible metric. Every further millisecond available inside
+it is worth less than 1.3% of the gap.
