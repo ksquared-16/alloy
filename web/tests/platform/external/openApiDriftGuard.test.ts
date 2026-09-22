@@ -46,8 +46,20 @@ function actualRoutes(): { urlPath: string; methods: string[] }[] {
             const rel = path.relative(webRoot, path.dirname(full)).replace(/\\/g, "/");
             const urlPath = "/" + rel.replace(/^app\//, "");
             const source = readFileSync(full, "utf8");
+            /*
+             * Next.js accepts a route method as a function declaration OR as an exported const,
+             * and both forms ship. Matching only the function form was a real blind spot in both
+             * directions: a factory-built handler exported as `export const GET = ...` reported NO
+             * methods, so "documented path exports the method" failed for a route that does, and —
+             * worse — "every route is documented" passed vacuously for one that is not.
+             */
             const methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].filter((m) =>
-                new RegExp(`export\\s+async\\s+function\\s+${m}\\b|export\\s+function\\s+${m}\\b`).test(source),
+                new RegExp(
+                    `export\\s+async\\s+function\\s+${m}\\b` +
+                        `|export\\s+function\\s+${m}\\b` +
+                        `|export\\s+(?:const|let|var)\\s+${m}\\s*[:=]` +
+                        `|export\\s*\\{[^}]*\\b${m}\\b[^}]*\\}`,
+                ).test(source),
             );
             out.push({ urlPath, methods });
         }
@@ -128,13 +140,21 @@ describe("public OpenAPI drift guard", () => {
     it("currently describes exactly the endpoints that are implemented", () => {
         // A deliberate tripwire. Adding a public endpoint must be a decision that
         // updates this expectation, not something that happens quietly. B.3 added
-        // /api/v1/locations and Thread 7 slice 7.1 added /api/v1/attendance-events;
-        // both changed this line on purpose, and neither relaxed it.
+        // /api/v1/locations, slice 7.1 added /api/v1/attendance-events, and the Core Resource
+        // Expansion added the eight below; each changed this line on purpose, and none relaxed it.
         expect(Object.keys(spec.paths).sort()).toEqual([
             "/api/v1/attendance-events",
+            "/api/v1/children",
             "/api/v1/context",
+            "/api/v1/enrollments",
+            "/api/v1/households",
             "/api/v1/locations",
             "/api/v1/oauth/token",
+            "/api/v1/placements",
+            "/api/v1/relationships",
+            "/api/v1/schedule-assignments",
+            "/api/v1/schedule-days",
+            "/api/v1/staff",
         ]);
     });
 

@@ -32,7 +32,19 @@
     },
     {
       "name": "Locations",
-      "description": "Organizational locations — sites and the units within them."
+      "description": "Organizational locations \u2014 sites and the units within them."
+    },
+    {
+      "name": "People",
+      "description": "Children, the households that group them, and the adults related to them."
+    },
+    {
+      "name": "Service state",
+      "description": "Enrollment, room placement and schedule \u2014 the three commitments Alloy keeps separate."
+    },
+    {
+      "name": "Staff",
+      "description": "People employed by the organization, composed from person and employment."
     }
   ],
   "paths": {
@@ -43,7 +55,7 @@
           "Authentication"
         ],
         "summary": "Exchange an installation credential for an access token",
-        "description": "Client-credentials grant. The returned token is opaque, expires in 15 minutes, and carries no authority of its own — scopes and resource boundary are re-read from the installation on every request, so a revocation takes effect on the next call.",
+        "description": "Client-credentials grant. The returned token is opaque, expires in 15 minutes, and carries no authority of its own \u2014 scopes and resource boundary are re-read from the installation on every request, so a revocation takes effect on the next call.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -152,7 +164,7 @@
           "Locations"
         ],
         "summary": "List organizational locations",
-        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope — they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.\n\nIncremental sync: page the collection once, remember the newest `updated_at` you saw, then pass it as `updated_since`. Rewind your checkpoint slightly — `updated_at` is wall-clock and not transactionally ordered.",
+        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope \u2014 they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.\n\nIncremental sync: page the collection once, remember the newest `updated_at` you saw, then pass it as `updated_since`. Rewind your checkpoint slightly \u2014 `updated_at` is wall-clock and not transactionally ordered.",
         "security": [
           {
             "bearerAuth": []
@@ -281,7 +293,7 @@
           "Locations"
         ],
         "summary": "List canonical attendance facts",
-        "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record. Because nothing disappears, a consumer that has read every page holds the complete history.\n\nOrder and synchronization both advance on `recorded_at` — when Alloy recorded the fact — not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a checkpoint you had already passed.\n\n## Keeping a copy in step\n\n1. Bootstrap: request without `since_token` or `updated_since`.\n2. Follow `next_cursor` until it is null, storing each page as you go.\n3. When the pass completes, persist the `sync_token` from the last page you consumed. Persist it only after the whole pass succeeded — a token saved mid-pass would skip whatever you did not store.\n4. Next time, request with `since_token` set to the value you persisted.\n5. Follow `next_cursor` to exhaustion again, then persist the new `sync_token`.\n\nA `sync_token` identifies one record, not an instant, so records sharing a timestamp are neither skipped nor repeated. If you checkpoint with `updated_since` instead, supply the exact `recorded_at` you stopped at — it is matched at full precision.\n\n### Example\n\nBootstrap, then resume:\n\n```\nGET /api/v1/attendance-events?limit=200\n  -> { \"data\": [...], \"next_cursor\": \"eyJ...\", \"sync_token\": \"eyJ...\" }\nGET /api/v1/attendance-events?limit=200&cursor=eyJ...\n  -> { \"data\": [...], \"next_cursor\": null, \"sync_token\": \"eyJhZ...\" }\n\n# store \"eyJhZ...\", then later:\nGET /api/v1/attendance-events?limit=200&since_token=eyJhZ...\n  -> only facts recorded after the one that token names\n```\n\nNarrow a sync to one site or one child with `site_id` or `child_id`; filters never widen what your installation may read.",
+        "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record. Because nothing disappears, a consumer that has read every page holds the complete history.\n\nOrder and synchronization both advance on `recorded_at` \u2014 when Alloy recorded the fact \u2014 not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a checkpoint you had already passed.\n\n## Keeping a copy in step\n\n1. Bootstrap: request without `since_token` or `updated_since`.\n2. Follow `next_cursor` until it is null, storing each page as you go.\n3. When the pass completes, persist the `sync_token` from the last page you consumed. Persist it only after the whole pass succeeded \u2014 a token saved mid-pass would skip whatever you did not store.\n4. Next time, request with `since_token` set to the value you persisted.\n5. Follow `next_cursor` to exhaustion again, then persist the new `sync_token`.\n\nA `sync_token` identifies one record, not an instant, so records sharing a timestamp are neither skipped nor repeated. If you checkpoint with `updated_since` instead, supply the exact `recorded_at` you stopped at \u2014 it is matched at full precision.\n\n### Example\n\nBootstrap, then resume:\n\n```\nGET /api/v1/attendance-events?limit=200\n  -> { \"data\": [...], \"next_cursor\": \"eyJ...\", \"sync_token\": \"eyJ...\" }\nGET /api/v1/attendance-events?limit=200&cursor=eyJ...\n  -> { \"data\": [...], \"next_cursor\": null, \"sync_token\": \"eyJhZ...\" }\n\n# store \"eyJhZ...\", then later:\nGET /api/v1/attendance-events?limit=200&since_token=eyJhZ...\n  -> only facts recorded after the one that token names\n```\n\nNarrow a sync to one site or one child with `site_id` or `child_id`; filters never widen what your installation may read.",
         "security": [
           {
             "bearerAuth": []
@@ -433,7 +445,7 @@
           "Locations"
         ],
         "summary": "Submit attendance facts",
-        "description": "Record attendance facts for children at locations within this installation's boundary.\n\nAttendance is a ledger, not a mutable record. There is no update and no delete: a mistake is fixed by submitting a **correction**, which restates the fact and names the event it supersedes, or a **reversal**, which voids it and asserts nothing in its place. Both appear through `GET /api/v1/attendance-events` as new facts carrying `corrects_event_id`.\n\n## Each event is judged on its own\n\nThis operation is **not atomic**. Every event you send gets its own durable outcome, and one unmapped identifier does not discard the events either side of it. The response is `200` whenever the batch was processed — including when every event was refused — so read `results`, not the status code. Results may be returned in any order; match them by `external_event_id`.\n\nEvents are applied in the order you send them, so a correction may name an original earlier in the same batch.\n\n## Retrying is safe\n\n`external_event_id` is the replay identity. If a request times out or you are unsure whether it arrived, send it again: an event Alloy already accepted comes back as `replayed` with the fact it recorded the first time, and nothing is created twice. Reusing an id for DIFFERENT content is a `conflict` — use a new id for a new fact, or submit a correction. You do not need an idempotency header; your own event id is the key.\n\n## Identifiers\n\nChildren and rooms are named with YOUR identifiers, as mapped for this installation. Alloy never creates a record from an identifier it does not recognise: an unmapped identifier returns `pending_mapping`, and the event applies when you submit it again after the mapping exists.\n\n## Reading your own writes\n\nAn accepted fact is immediately readable through `GET /api/v1/attendance-events` at its `recorded_at` position, so a synchronizing consumer picks it up on the next incremental pass.",
+        "description": "Record attendance facts for children at locations within this installation's boundary.\n\nAttendance is a ledger, not a mutable record. There is no update and no delete: a mistake is fixed by submitting a **correction**, which restates the fact and names the event it supersedes, or a **reversal**, which voids it and asserts nothing in its place. Both appear through `GET /api/v1/attendance-events` as new facts carrying `corrects_event_id`.\n\n## Each event is judged on its own\n\nThis operation is **not atomic**. Every event you send gets its own durable outcome, and one unmapped identifier does not discard the events either side of it. The response is `200` whenever the batch was processed \u2014 including when every event was refused \u2014 so read `results`, not the status code. Results may be returned in any order; match them by `external_event_id`.\n\nEvents are applied in the order you send them, so a correction may name an original earlier in the same batch.\n\n## Retrying is safe\n\n`external_event_id` is the replay identity. If a request times out or you are unsure whether it arrived, send it again: an event Alloy already accepted comes back as `replayed` with the fact it recorded the first time, and nothing is created twice. Reusing an id for DIFFERENT content is a `conflict` \u2014 use a new id for a new fact, or submit a correction. You do not need an idempotency header; your own event id is the key.\n\n## Identifiers\n\nChildren and rooms are named with YOUR identifiers, as mapped for this installation. Alloy never creates a record from an identifier it does not recognise: an unmapped identifier returns `pending_mapping`, and the event applies when you submit it again after the mapping exists.\n\n## Reading your own writes\n\nAn accepted fact is immediately readable through `GET /api/v1/attendance-events` at its `recorded_at` position, so a synchronizing consumer picks it up on the next incremental pass.",
         "security": [
           {
             "bearerAuth": []
@@ -489,6 +501,976 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/children": {
+      "get": {
+        "operationId": "listChildren",
+        "tags": [
+          "People"
+        ],
+        "summary": "List children in service",
+        "description": "Children participating in service at locations within your boundary. Requires the `children.read` scope.\n\n**Enrollment is what makes a child visible.** A child appears here only when an enrollment agreement places them at a site you can reach. Belonging to the organization is not enough, and this holds even for organization-wide installations \u2014 being organization-wide widens which SITES you reach, not what counts as participation in service. If you expect a child and do not see one, check their enrollment first.\n\n**What this resource is not.** It carries identity and lifecycle only. Health, allergy, medical and safeguarding information is never returned by any endpoint in this API. Guardians and contact details are a separate resource with a separate scope: see `GET /api/v1/relationships`.\n\n**Lifecycle.** Poll `status`. A child leaving service becomes `inactive`; records are not removed from history without an observable change first.\n\n**Your own identifiers.** If you have mapped a child to your own system, `external_id` returns YOUR mapping and only yours. You may also filter by it. Another installation's identifier for the same child is never visible to you.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "children.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "household_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only children in this household."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only this child, if they are within your boundary. Use this for a single-resource read."
+          },
+          {
+            "name": "external_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only the child mapped to this identifier in YOUR installation."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households": {
+      "get": {
+        "operationId": "listHouseholds",
+        "tags": [
+          "People"
+        ],
+        "summary": "List households",
+        "description": "The households of children you can already see. Requires the `households.read` scope.\n\n**A household is an anchor, not an access grant.** It appears because at least one of its children is independently visible to you, and it widens nothing: a sibling enrolled only at a site outside your boundary does not appear in `GET /api/v1/children`, and nothing here reveals that they exist \u2014 no member list, no count, no identifier. Households can span sites, so this is a real situation rather than a theoretical one.\n\nTo find the children in a household that you may see, call `GET /api/v1/children?household_id=...`. That answer is filtered to your authority, which is the point.\n\n**Not included.** Billing and payment information is never part of this resource.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "households.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "household_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only this household, if it is visible to you."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships": {
+      "get": {
+        "operationId": "listRelationships",
+        "tags": [
+          "People"
+        ],
+        "summary": "List guardian and parent relationships",
+        "description": "Who a child's adults are, and whether they may collect them. Requires the `relationships.read` scope.\n\n**Relationships are edges, not flags.** Each row is a relationship between one adult and one child, with its own identifier and its own lifecycle. The same person can hold a different relationship to each of their children, which is why this is never flattened into booleans on a child or a person.\n\nA relationship is visible exactly when its child is. This resource never widens the set of people you can see; it describes the people you can already reach.\n\n**`pickup_authorized` is an effective answer, not a stored flag.** Alloy computes it at read time: it is `true` only when collection authority has been granted, nothing currently withdraws it, and the child is within your boundary. It fails closed \u2014 if anything is uncertain, it is `false`.\n\nNo reason is ever returned and none can be requested. Do not infer one from other fields, and do not treat a `false` as a data error: treat it as the answer. If your workflow needs to know why, that conversation belongs with the operator, not with this API.\n\n**Contact details are a stronger grant.** `email` and `phone` are returned only to installations holding `relationships.contact.read`. Without it the fields are absent from the response entirely, rather than present and empty.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "relationships.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only relationships for this child."
+          },
+          {
+            "name": "household_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only relationships in this household."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/enrollments": {
+      "get": {
+        "operationId": "listEnrollments",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "List enrollment agreements",
+        "description": "Committed enrollment agreements. Requires the `enrollment.read` scope.\n\nAlloy keeps three service commitments separate, and so does this API:\n\n- **Enrollment** \u2014 this child is enrolled at this site, from this date. *(here)*\n- **Placement** \u2014 which room, from when. *(`GET /api/v1/placements`)*\n- **Schedule assignment** \u2014 which recurring pattern applies. *(`GET /api/v1/schedule-assignments`)*\n\nThey change independently, so a child can move rooms without their enrollment changing, and change schedule without moving rooms. Synchronize whichever you actually depend on.\n\n**Lifecycle.** `end_date` is null while the agreement is open. Poll for it to learn that enrollment has ended.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only agreements for this child."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only agreements at this site, if it is within your boundary."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only agreements in this state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/placements": {
+      "get": {
+        "operationId": "listPlacements",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "List room placements",
+        "description": "Committed, effective-dated room placement. Requires the `enrollment.read` scope.\n\n**Corrections arrive as new rows.** When a placement is corrected, Alloy writes a new placement naming the one it replaces in `supersedes_placement_id` rather than editing the original. A copy you already stored is therefore never silently wrong \u2014 you will receive the correction through ordinary incremental synchronization.\n\nRooms and sites are Location identifiers from `GET /api/v1/locations`. There is no second room vocabulary to learn.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only placements for this child."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only placements at this site."
+          },
+          {
+            "name": "room_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only placements in this room."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only placements in this state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule-assignments": {
+      "get": {
+        "operationId": "listScheduleAssignments",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "List committed schedule assignments",
+        "description": "The committed, effective-dated schedule commitment for a child. Requires the `schedule.read` scope.\n\n**This is the canonical schedule resource.** It is persisted, it is synchronizable, and it tells you what was actually committed: which recurring pattern applies to a child, at which site and room, over which dates.\n\n**Choosing between the two schedule endpoints:**\n\n- Use **this** endpoint when you hold standing intent and need to be told when it changes. It participates fully in incremental synchronization.\n- Use **`GET /api/v1/schedule-days`** when you are asking \"who is expected on Tuesday\". That endpoint derives individual days from these assignments and is a windowed query, not a collection.\n\nOnly children appear here. Staff schedules are not part of this resource.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "schedule.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only assignments for this child."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only assignments at this site."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only assignments in this state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleAssignmentPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule-days": {
+      "get": {
+        "operationId": "listScheduleDays",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Project expected days from committed schedules",
+        "description": "Answers \"who is expected on Tuesday\". Requires the `schedule.read` scope.\n\n**These rows are derived, not stored.** Each one is generated from a committed schedule assignment and its recurring pattern. They have no identifier of their own and no change history, which is why this endpoint deliberately returns **no cursor and no sync token**. Do not attempt to synchronize it incrementally \u2014 there is nothing to checkpoint against, and any watermark would be one this API could not honour.\n\nIf you need change detection, synchronize `GET /api/v1/schedule-assignments` instead and re-project the window yourself. Each returned day names the assignment it came from in `schedule_assignment_id` so you can do exactly that.\n\n**Deterministic.** The same window over the same committed schedules always returns the same days in the same order.\n\n`from` and `to` are required and the window may not exceed 92 days.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "schedule.read",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "First day of the window, inclusive."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Last day of the window, inclusive. At most 92 days after `from`."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Project only this child's days."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Project only days at this site."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The projected window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleDayWindow"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The window is missing, inverted or longer than 92 days.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff": {
+      "get": {
+        "operationId": "listStaff",
+        "tags": [
+          "Staff"
+        ],
+        "summary": "List staff",
+        "description": "People employed at locations within your boundary. Requires the `staff.read` scope.\n\n**Staff is a composition, not a separate record.** Alloy models a staff member as a person plus an employment. This resource presents them together for convenience: `id` is the employment and `person_id` is the human. If someone is employed twice, you will see two rows sharing one `person_id`.\n\n**Visibility follows the assignment, not the organization.** Employment is organization-wide, but a staff member appears here only when their primary location is inside your boundary. Someone with no assigned location is not returned.\n\n**Never included.** Compensation, payroll, tax, HR records, safeguarding and medical information are not part of this API at all. Alloy's own internal access permissions are also never exposed \u2014 an application role is not an employment role.\n\nContact details require the stronger `staff.contact.read` scope.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "staff.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "since_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only staff assigned to this site."
+          },
+          {
+            "name": "employment_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Return only staff in this employment state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -577,7 +1559,7 @@
           },
           "scope": {
             "type": "string",
-            "description": "Space-delimited scopes the installation currently grants. Informational — authority is re-read from the installation on every request, not carried by the token."
+            "description": "Space-delimited scopes the installation currently grants. Informational \u2014 authority is re-read from the installation on every request, not carried by the token."
           }
         }
       },
@@ -741,7 +1723,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Canonical Alloy identifier. Opaque — do not parse."
+            "description": "Canonical Alloy identifier. Opaque \u2014 do not parse."
           },
           "type": {
             "type": "string",
@@ -761,7 +1743,7 @@
               "shared_space",
               null
             ],
-            "description": "Topology role, units only. Null means unknown — it was never back-filled to a guess."
+            "description": "Topology role, units only. Null means unknown \u2014 it was never back-filled to a guess."
           },
           "name": {
             "type": [
@@ -789,7 +1771,7 @@
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Resync watermark. Re-request from slightly BEFORE your last value and upsert — it is wall-clock and not transactionally ordered."
+            "description": "Resync watermark. Re-request from slightly BEFORE your last value and upsert \u2014 it is wall-clock and not transactionally ordered."
           }
         }
       },
@@ -812,7 +1794,7 @@
               "string",
               "null"
             ],
-            "description": "Pass back as `cursor`. Null means the last page — you never need a request to discover there is nothing left."
+            "description": "Pass back as `cursor`. Null means the last page \u2014 you never need a request to discover there is nothing left."
           },
           "sync_token": {
             "type": [
@@ -926,7 +1908,7 @@
               "emergency_contact",
               "system"
             ],
-            "description": "The kind of actor the fact was recorded by — a staff member, a parent, a guardian, an emergency contact, or an automated system. Alloy never identifies the individual here."
+            "description": "The kind of actor the fact was recorded by \u2014 a staff member, a parent, a guardian, an emergency contact, or an automated system. Alloy never identifies the individual here."
           },
           "source": {
             "type": "string",
@@ -1087,7 +2069,7 @@
               "conflict",
               "rejected"
             ],
-            "description": "`accepted` — a canonical fact was recorded. `replayed` — you had already sent this event; the fact that exists is returned and nothing was created. `pending_mapping` — the event is stored but an identifier is not yet mapped, so it could not be attributed; submit it again once the mapping exists. `conflict` — this id was already accepted carrying different content. `rejected` — Alloy will not record this event; `code` says why."
+            "description": "`accepted` \u2014 a canonical fact was recorded. `replayed` \u2014 you had already sent this event; the fact that exists is returned and nothing was created. `pending_mapping` \u2014 the event is stored but an identifier is not yet mapped, so it could not be attributed; submit it again once the mapping exists. `conflict` \u2014 this id was already accepted carrying different content. `rejected` \u2014 Alloy will not record this event; `code` says why."
           },
           "attendance_event_id": {
             "type": [
@@ -1142,6 +2124,796 @@
             }
           }
         }
+      },
+      "Child": {
+        "type": "object",
+        "description": "A child participating in service. Identity and lifecycle only \u2014 health, allergy and safeguarding information is never part of this resource.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Alloy's identifier for this child."
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Your own identifier for this child, if you have mapped one. Only your installation's mapping is ever returned."
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date_of_birth": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "household_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The household this child belongs to. Read it with `GET /api/v1/households`."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "description": "Poll this to learn when a child leaves service. A child is never removed from history without this changing first."
+          },
+          "status_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The operator-facing lifecycle label, when one is set."
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ]
+      },
+      "ChildPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Child"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "Household": {
+        "type": "object",
+        "description": "The household a visible child belongs to. A thin anchor for grouping siblings \u2014 never a grant of access to them.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "household_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "HouseholdPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Household"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "Relationship": {
+        "type": "object",
+        "description": "One adult's relationship to one child. Relationships are edges with their own identity, because the same person can hold different authority for different children.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The relationship's own stable identifier."
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "household_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
+            "type": "string",
+            "description": "Alloy's identifier for the adult. Stable across every relationship they hold."
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Present only when the installation holds `relationships.contact.read`. The field is absent entirely without it."
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Present only when the installation holds `relationships.contact.read`."
+          },
+          "relationship_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For example `parent`."
+          },
+          "priority": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Contact order, lowest first, when the operator has set one."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pickup_authorized": {
+            "type": "boolean",
+            "description": "Whether this person may collect this child RIGHT NOW. This is an effective answer computed by Alloy, not a stored flag: it is true only when collection authority has been granted, nothing currently withdraws it, and the child is inside your boundary. It fails closed \u2014 anything uncertain is false. No reason is ever returned, and you should not infer one."
+          }
+        },
+        "required": [
+          "id",
+          "child_id",
+          "person_id",
+          "pickup_authorized"
+        ]
+      },
+      "RelationshipPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Relationship"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "Enrollment": {
+        "type": "object",
+        "description": "A committed enrollment agreement: this child is enrolled at this site, from this date. It is not the room (see Placements) and not the days (see Schedule assignments).",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "household_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A Location id from `GET /api/v1/locations`."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Null while the agreement is open. Poll for this to learn that enrollment has ended."
+          }
+        },
+        "required": [
+          "id",
+          "child_id"
+        ]
+      },
+      "EnrollmentPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Enrollment"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "Placement": {
+        "type": "object",
+        "description": "Committed room placement, effective-dated. Corrections arrive as a NEW placement naming the one it replaces, so a stored copy is never silently wrong.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enrollment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_location_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A Location id of type `unit` from `GET /api/v1/locations`."
+          },
+          "program_category_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "supersedes_placement_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The placement this one replaces, when it is a correction."
+          }
+        },
+        "required": [
+          "id",
+          "child_id"
+        ]
+      },
+      "PlacementPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Placement"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "ScheduleAssignment": {
+        "type": "object",
+        "description": "The committed, effective-dated schedule commitment for a child \u2014 standing intent, not individual days. Only children appear here.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "enrollment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedule_pattern_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pattern_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The operator's name for the recurring pattern, such as a full-week or part-week schedule."
+          },
+          "schedule_type_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6
+            },
+            "description": "Days the pattern recurs on, 0 = Sunday."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commitment_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "supersedes_assignment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "child_id",
+          "weekdays",
+          "is_primary"
+        ]
+      },
+      "ScheduleAssignmentPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleAssignment"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
+      },
+      "ScheduleDay": {
+        "type": "object",
+        "description": "One expected day for one child, generated from a committed schedule assignment. Not a stored record \u2014 it has no identifier of its own and no change history.",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "0 = Sunday."
+          },
+          "child_id": {
+            "type": "string"
+          },
+          "site_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedule_assignment_id": {
+            "type": "string",
+            "description": "The committed assignment this day was derived from. Synchronize that resource to be told when it changes."
+          },
+          "schedule_pattern_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedule_type_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "weekday",
+          "child_id",
+          "schedule_assignment_id"
+        ]
+      },
+      "ScheduleDayWindow": {
+        "type": "object",
+        "description": "A derived window. Deliberately carries no cursor and no sync token.",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleDay"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          },
+          "derived_from": {
+            "type": "string",
+            "description": "Names the canonical authority these rows were computed from."
+          }
+        },
+        "required": [
+          "data",
+          "from",
+          "to",
+          "derived_from"
+        ]
+      },
+      "Staff": {
+        "type": "object",
+        "description": "A person employed by the organization, composed with their employment. Alloy has no separate staff record: `id` is the employment, `person_id` is the human.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The employment identifier. Use it as the stable key for this staff member's engagement."
+          },
+          "person_id": {
+            "type": "string"
+          },
+          "external_employee_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "badge_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Present only when the installation holds `staff.contact.read`."
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Present only when the installation holds `staff.contact.read`."
+          },
+          "employment_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "pending_start",
+              "active",
+              "ending",
+              "ended",
+              "canceled",
+              null
+            ]
+          },
+          "employment_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The job title as the operator names it."
+          },
+          "primary_location_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A Location id from `GET /api/v1/locations`. Staff are visible only when this is inside your boundary."
+          },
+          "start_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "end_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          }
+        },
+        "required": [
+          "id",
+          "person_id"
+        ]
+      },
+      "StaffPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Staff"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass back as `cursor` for the next page. Null on the last page."
+          },
+          "sync_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint of the last row on this page. Store it and pass it back as `since_token` to resume exactly here."
+          }
+        },
+        "required": [
+          "data",
+          "next_cursor",
+          "sync_token"
+        ]
       }
     },
     "responses": {

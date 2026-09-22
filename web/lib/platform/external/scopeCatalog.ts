@@ -82,6 +82,69 @@ export const PUBLIC_SCOPES = {
          * another by construction.
          */
     },
+    "children.read": {
+        scope: "children.read",
+        access: "read",
+        summary: "Read identity and lifecycle for children enrolled at locations within the installation boundary.",
+        alloyAuthority: "public.list_external_children — enrollment decides visibility, boundary-enforced in SQL",
+    },
+    "households.read": {
+        scope: "households.read",
+        access: "read",
+        summary: "Read the household a visible child belongs to.",
+        alloyAuthority: "public.list_external_households, boundary-enforced in SQL",
+        /*
+         * A household is an ANCHOR, never an authority. It appears because a child is already
+         * visible, and it grants sight of nothing further — a sibling outside the boundary stays
+         * invisible, and the response carries no count and no id that would reveal one exists.
+         */
+    },
+    "relationships.read": {
+        scope: "relationships.read",
+        access: "read",
+        summary: "Read parent and guardian relationships for visible children, including effective pickup authority.",
+        alloyAuthority: "public.list_external_relationships, boundary-enforced in SQL",
+        /*
+         * This is the scope that exposes ADULT identity, which is why it is separate from
+         * `children.read`. A partner doing occupancy analytics holds the child scope and never
+         * learns a parent's name.
+         */
+    },
+    "relationships.contact.read": {
+        scope: "relationships.contact.read",
+        access: "read",
+        summary: "Read contact points (email, phone) for the people named by visible relationships.",
+        alloyAuthority: "public.list_external_relationships, contact columns gated at the source",
+        /*
+         * A strictly stronger grant than `relationships.read`, and never implied by it. Without
+         * this scope the contact columns are NULL in the SQL result — not removed afterwards by a
+         * serializer someone could forget to apply.
+         */
+    },
+    "enrollment.read": {
+        scope: "enrollment.read",
+        access: "read",
+        summary: "Read committed enrollment agreements and placements for children within the installation boundary.",
+        alloyAuthority: "public.list_external_enrollments and public.list_external_placements, boundary-enforced in SQL",
+    },
+    "schedule.read": {
+        scope: "schedule.read",
+        access: "read",
+        summary: "Read committed schedule assignments and the derived dated schedule projection.",
+        alloyAuthority: "public.list_external_schedule_assignments and public.project_external_schedule_days, boundary-enforced in SQL",
+    },
+    "staff.read": {
+        scope: "staff.read",
+        access: "read",
+        summary: "Read staff — person and employment composed — assigned to locations within the installation boundary.",
+        alloyAuthority: "public.list_external_staff, boundary-enforced in SQL",
+    },
+    "staff.contact.read": {
+        scope: "staff.contact.read",
+        access: "read",
+        summary: "Read contact points (email, phone) for visible staff.",
+        alloyAuthority: "public.list_external_staff, contact columns gated at the source",
+    },
     "attendance.write": {
         scope: "attendance.write",
         access: "write",
@@ -124,6 +187,31 @@ export const PUBLIC_OPERATIONS = {
         scope: "attendance.write",
         route: "/api/v1/attendance-events",
     },
+    listChildren: { operationId: "listChildren", scope: "children.read", route: "/api/v1/children" },
+    listHouseholds: { operationId: "listHouseholds", scope: "households.read", route: "/api/v1/households" },
+    listRelationships: {
+        operationId: "listRelationships",
+        scope: "relationships.read",
+        route: "/api/v1/relationships",
+    },
+    listEnrollments: { operationId: "listEnrollments", scope: "enrollment.read", route: "/api/v1/enrollments" },
+    listPlacements: { operationId: "listPlacements", scope: "enrollment.read", route: "/api/v1/placements" },
+    listScheduleAssignments: {
+        operationId: "listScheduleAssignments",
+        scope: "schedule.read",
+        route: "/api/v1/schedule-assignments",
+    },
+    /*
+     * The DERIVED half of the schedule contract, deliberately sharing `schedule.read` with the
+     * canonical half: they answer two questions about one authority, and a partner entitled to the
+     * standing commitment is entitled to the days it implies.
+     */
+    listScheduleDays: {
+        operationId: "listScheduleDays",
+        scope: "schedule.read",
+        route: "/api/v1/schedule-days",
+    },
+    listStaff: { operationId: "listStaff", scope: "staff.read", route: "/api/v1/staff" },
 } as const satisfies Record<
     string,
     { operationId: string; scope: PublicScope | null; route: string }

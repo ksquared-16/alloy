@@ -21,8 +21,16 @@ describe("the reference is exactly the implemented surface", () => {
     it("every implemented operation, named", () => {
         expect(reference.operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
             "GET /api/v1/attendance-events",
+            "GET /api/v1/children",
             "GET /api/v1/context",
+            "GET /api/v1/enrollments",
+            "GET /api/v1/households",
             "GET /api/v1/locations",
+            "GET /api/v1/placements",
+            "GET /api/v1/relationships",
+            "GET /api/v1/schedule-assignments",
+            "GET /api/v1/schedule-days",
+            "GET /api/v1/staff",
             "POST /api/v1/attendance-events",
             "POST /api/v1/oauth/token",
         ]);

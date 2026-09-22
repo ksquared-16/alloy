@@ -54,6 +54,38 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Attendance",
         detail: "Record children arriving, leaving and moving between rooms at the locations you allow.",
     },
+    "children.read": {
+        title: "Children in your care",
+        detail: "View the name, date of birth and enrolment status of children attending the locations you allow. Only children who are actually enrolled there are shared. No health, allergy or safeguarding information is ever included.",
+    },
+    "households.read": {
+        title: "Families",
+        detail: "View the family a child belongs to, so siblings can be grouped. This does not share children at locations you have not allowed, and no billing or payment details are included.",
+    },
+    "relationships.read": {
+        title: "Parents and guardians",
+        detail: "View which adults are related to each child, and whether each one is currently allowed to collect them. Reasons are never shared — only the answer.",
+    },
+    "relationships.contact.read": {
+        title: "Parent and guardian contact details",
+        detail: "View the email address and phone number of those parents and guardians. This is a separate permission from seeing who they are, and you can allow one without the other.",
+    },
+    "enrollment.read": {
+        title: "Enrolment and room placement",
+        detail: "View which children are enrolled at which site, which room they are placed in, and from when.",
+    },
+    "schedule.read": {
+        title: "Schedules",
+        detail: "View the days each child is scheduled to attend, and work out who is expected on a given day.",
+    },
+    "staff.read": {
+        title: "Staff",
+        detail: "View the names, job titles and employment status of staff assigned to the locations you allow. Pay, payroll and HR records are never shared.",
+    },
+    "staff.contact.read": {
+        title: "Staff contact details",
+        detail: "View the email address and phone number of those staff. This is a separate permission from seeing who they are.",
+    },
 };
 
 export function presentScope(scope: string): ScopePresentation {
