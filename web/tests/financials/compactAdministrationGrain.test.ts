@@ -581,6 +581,22 @@ describe("every centred card ends the same way", () => {
         }
     });
 
+    it("the Payments card does not end on an unfinished-looking empty state", () => {
+        /*
+         * One faint sentence floating between the add controls and the Autopay heading read as a
+         * card that had failed to load rather than an account that has no method yet. Same words,
+         * a bounded shape, and the sentence that says what to do about it.
+         */
+        const section = code("components/operationalCards/PaymentMethodsSection.tsx");
+        expect(section).toContain('data-testid="payment-methods-empty"');
+        const at = section.indexOf('data-testid="payment-methods-empty"');
+        const block = section.slice(at - 200, at + 700);
+        expect(block, "the empty state is a bounded region").toMatch(/border-dashed|rounded-md border/);
+        expect(block, "and says what to do next").toMatch(/Add a card or a bank account/);
+        expect(section, "the controls it points at are still there")
+            .toMatch(/Add card|Add bank account/);
+    });
+
     it("the action row is a real rule, not a class name with nothing behind it", () => {
         /*
          * The administration row shipped with class names and no stylesheet rules and rendered as

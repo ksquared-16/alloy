@@ -254,9 +254,23 @@ export default function PaymentMethodsSection({
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={1.75} /> Reading payment methods…
                 </p>
             ) : live.length === 0 ? (
-                <p data-testid="payment-methods-empty" className="text-sm text-alloy-midnight/65">
-                    No payment method on file.
-                </p>
+                /*
+                 * ── AN EMPTY STATE THAT LOOKS DELIBERATE ─────────────────────────────────────
+                 *
+                 * One faint sentence floating between the add controls and the Autopay heading
+                 * read as a card that had failed to finish loading rather than an account that
+                 * simply has no method yet. Same words, given a bounded shape and the sentence
+                 * that says what to do about it — which is the pair of controls directly above.
+                 */
+                <div
+                    data-testid="payment-methods-empty"
+                    className="rounded-md border border-dashed border-alloy-stone/30 px-3 py-3"
+                >
+                    <p className="text-sm text-alloy-midnight/65">No payment method on file.</p>
+                    <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                        Add a card or a bank account above to collect from this family automatically.
+                    </p>
+                </div>
             ) : (
                 <ul className="space-y-2">
                     {live.map((m) => {
