@@ -47,7 +47,7 @@ function staff(name: string, room: string | null, hours: [string, string] | null
         baselineIntervals: hours ? [iv(hours[0], hours[1])] : [],
         baselineHoursKnown: Boolean(hours),
         availabilityIntervals: [],
-        coverage: [] as { roomLocationId: string | null; interval: ReturnType<typeof iv> }[],
+        coverage: [] as { coverageId: string; roomLocationId: string | null; interval: ReturnType<typeof iv> }[],
         presence: null,
         ...extra,
     };

@@ -461,6 +461,18 @@ function SegmentDetail({
                                     not observed here
                                 </span>
                             ) : null}
+                            {p.source === "coverage" && p.coverageId ? (
+                                <button
+                                    type="button"
+                                    className="rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] text-alloy-midnight/65 hover:bg-alloy-stone/10 disabled:opacity-40"
+                                    disabled={busy}
+                                    onClick={() => onCancelCoverage(p.personId, p.coverageId!)}
+                                    data-calendar-cancel-coverage={p.coverageId}
+                                    title="Withdraw this Coverage. The allocation stays in history as cancelled."
+                                >
+                                    Cancel Coverage
+                                </button>
+                            ) : null}
                             <button
                                 type="button"
                                 className="rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] text-alloy-midnight/65 hover:bg-alloy-stone/10 disabled:opacity-40"
@@ -476,10 +488,16 @@ function SegmentDetail({
                 </div>
             ) : null}
 
-            {segment.plannedState === "short" ? (
-                <div className="mt-3" data-calendar-fill-gap="true">
+            {candidates.length > 0 || segment.plannedState === "short" ? (
+                <div
+                    className="mt-3"
+                    data-calendar-fill-gap={segment.plannedState === "short" ? "true" : "false"}
+                    data-calendar-plan-here="true"
+                >
                     <p className="text-[11px] uppercase tracking-wide text-alloy-midnight/45">
-                        Who could cover this stretch
+                        {segment.plannedState === "short"
+                            ? "Who could cover this stretch"
+                            : "Who else could be planned here"}
                     </p>
                     {candidates.length === 0 ? (
                         <p className="mt-1 text-[12px] text-alloy-midnight/55">

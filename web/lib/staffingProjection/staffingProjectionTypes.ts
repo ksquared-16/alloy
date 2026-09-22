@@ -39,6 +39,16 @@ export type PlannedStaffRef = StaffRef & {
     source: PlannedPlaceSource;
     /** Set only when Coverage moved them; the room the Assignment would have given. */
     baselineRoomLocationId?: string | null;
+    /**
+     * The Coverage allocation that placed them, when Coverage did.
+     *
+     * Carried because a surface that can show a Coverage allocation must be able to
+     * CHANGE or CANCEL it, and the canonical commands take the allocation id. Without
+     * it the only way to act on what is on screen would be to look the row up again,
+     * which is how a surface ends up querying the table it is supposed to be reading
+     * a projection of.
+     */
+    coverageId?: string | null;
 };
 
 /** A child expected in one segment. */

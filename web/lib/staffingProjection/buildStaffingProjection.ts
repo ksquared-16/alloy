@@ -87,7 +87,7 @@ export type ProjectionStaffInput = {
     baselineIntervals: TimeInterval[];
     baselineHoursKnown: boolean;
     availabilityIntervals: TimeInterval[];
-    coverage: { roomLocationId: string | null; interval: TimeInterval }[];
+    coverage: { coverageId: string; roomLocationId: string | null; interval: TimeInterval }[];
     /** Null when Presence observed nothing for this person on this date. */
     presence: { roomLocationId: string | null; interval: TimeInterval }[] | null;
 };
@@ -185,9 +185,15 @@ function explain(facts: StaffingExplanationFact[]): StaffingExplanation {
 function plannedPlaceFor(
     staff: ProjectionStaffInput,
     segment: TimeInterval
-): { roomLocationId: string | null; source: "assignment" | "coverage" } | null {
+): { roomLocationId: string | null; source: "assignment" | "coverage"; coverageId?: string } | null {
     const covering = staff.coverage.find((c) => covers(c.interval, segment));
-    if (covering) return { roomLocationId: covering.roomLocationId, source: "coverage" };
+    if (covering) {
+        return {
+            roomLocationId: covering.roomLocationId,
+            source: "coverage",
+            coverageId: covering.coverageId,
+        };
+    }
     if (staff.baselineIntervals.some((i) => covers(i, segment))) {
         return { roomLocationId: staff.baselineRoomLocationId, source: "assignment" };
     }
@@ -280,7 +286,10 @@ export function buildStaffingProjectionDay(
                     ...ref,
                     source: place.source,
                     ...(place.source === "coverage"
-                        ? { baselineRoomLocationId: s.baselineRoomLocationId }
+                        ? {
+                              baselineRoomLocationId: s.baselineRoomLocationId,
+                              coverageId: place.coverageId ?? null,
+                          }
                         : {}),
                 };
                 plannedByRoom.set(k, [...(plannedByRoom.get(k) ?? []), planned]);

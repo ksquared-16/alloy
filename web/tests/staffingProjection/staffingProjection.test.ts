@@ -198,7 +198,7 @@ describe("planned place", () => {
             children: [child("c1", T2, "08:00", "12:00")],
             staff: [
                 staff("Alex", T1, "08:00", "12:00", {
-                    coverage: [{ roomLocationId: T2, interval: iv("09:00", "10:00") }],
+                    coverage: [{ coverageId: "cov-T2", roomLocationId: T2, interval: iv("09:00", "10:00") }],
                 }),
             ],
         });
@@ -213,7 +213,7 @@ describe("planned place", () => {
             children: [child("c1", T1, "08:00", "12:00")],
             staff: [
                 staff("Float", null, "08:00", "12:00", {
-                    coverage: [{ roomLocationId: T1, interval: iv("08:00", "12:00") }],
+                    coverage: [{ coverageId: "cov-T1", roomLocationId: T1, interval: iv("08:00", "12:00") }],
                 }),
             ],
         });
@@ -233,7 +233,7 @@ describe("planned place", () => {
         const d = day({
             staff: [
                 staff("Float", null, "08:00", "12:00", {
-                    coverage: [{ roomLocationId: T1, interval: iv("08:00", "09:00") }],
+                    coverage: [{ coverageId: "cov-T1", roomLocationId: T1, interval: iv("08:00", "09:00") }],
                 }),
             ],
         });
@@ -456,5 +456,27 @@ describe("the explanation reads as written", () => {
         expect(seg(several, T1, "08:00")!.explanation.lines).toContain(
             "2 expected children have no recorded hours and are counted in no segment"
         );
+    });
+});
+
+describe("a surface that shows Coverage can act on it", () => {
+    it("names the allocation that placed them, so cancel and change have an id", () => {
+        const d = day({
+            staff: [
+                staff("Alex", T1, "08:00", "12:00", {
+                    coverage: [{ coverageId: "cov-abc", roomLocationId: T2, interval: iv("09:00", "10:00") }],
+                }),
+            ],
+        });
+        const moved = seg(d, T2, "09:00")!.plannedStaff[0];
+        expect(moved.source).toBe("coverage");
+        expect(moved.coverageId).toBe("cov-abc");
+    });
+
+    it("leaves the id off a placement the Assignment made, because there is none", () => {
+        const d = day({ staff: [staff("Alex", T1, "08:00", "12:00")] });
+        const planned = seg(d, T1, "08:00")!.plannedStaff[0];
+        expect(planned.source).toBe("assignment");
+        expect(planned.coverageId).toBeUndefined();
     });
 });

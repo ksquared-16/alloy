@@ -99,3 +99,18 @@ describe("the Calendar writes only through registered commands", () => {
         expect(callOut).not.toContain("staff_coverage.cancel");
     });
 });
+
+describe("the Calendar can author Coverage without leaving the command path", () => {
+    const surface = code(SURFACE);
+
+    it("cancels the allocation the projection named, never one it looked up", () => {
+        expect(surface).toContain("p.coverageId");
+        expect(surface).toContain("onCancelCoverage(p.personId, p.coverageId!)");
+        expect(surface).not.toContain("coverage_id:");
+    });
+
+    it("offers planning outside a gap too, which is the staff-context half", () => {
+        expect(surface).toContain('data-calendar-plan-here="true"');
+        expect(surface).toContain("Who else could be planned here");
+    });
+});
