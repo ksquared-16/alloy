@@ -40,6 +40,19 @@ describe("payment-method state shares the payer row it is about", () => {
             .toBeLessThan(admin);
     });
 
+    it("one state, one sentence", () => {
+        /*
+         * "No payment method on file" is what `paymentSubjectModel` says and what the payment
+         * methods surface says. The Focus Panel adapter said "No method on file", so the same
+         * fact wore two names depending on which surface an operator read it on — and on the
+         * relationship row it sits beside a real method label, where a near-miss synonym reads
+         * as a different state rather than the same one.
+         */
+        const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
+        expect(adapter).toContain('"No payment method on file"');
+        expect(adapter, "and never the near-miss").not.toMatch(/"No method on file"/);
+    });
+
     it("Add card and Add bank account are never permanent controls in Details", () => {
         /* They live inside Manage payments. Standing open on the ledger's card, they were setup
            instructions printed across a record. */
