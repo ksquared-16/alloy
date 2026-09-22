@@ -4406,6 +4406,12 @@
         "status": "pending"
       }
     },
+    "app/api/admin/scheduling/staffing-projection/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Read-only time-aware staffing projection for one site over a bounded date range. Gated by getAdminContextCached with the org taken from the session; composes existing certified reads and persists nothing, and no staffing-projection catalog capability exists."
+      }
+    },
     "app/api/admin/send-password-reset/route.ts": {
       "POST": {
         "status": "declared",
