@@ -46,6 +46,7 @@ export const GOVERNED_FILES = Object.freeze([
     "docs/api/developer-platform/guide/README.md",
     "docs/api/developer-platform/guide/locations.md",
     "docs/api/developer-platform/guide/conventions.md",
+    "docs/api/developer-platform/guide/integrating.md",
     "docs/api/developer-platform/external/alloy-developer-platform-specification.md",
 ]);
 

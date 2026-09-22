@@ -166,8 +166,15 @@ If you hold your own location identifiers, correlate them on your side. Alloy
 does not accept a partner identifier as a substitute for canonical identity, and
 no provider alias appears on this resource.
 
-## What is not here yet
+## What is not here
 
-No `POST`, `PATCH` or `DELETE` — this resource is read-only. No children, people,
-households or enrolment. Those are described in
-[Conventions](conventions.md) as contract only, and no endpoint serves them.
+No `POST`, `PATCH` or `DELETE` — this resource is read-only, and Locations are
+configured by the operator rather than by an integration.
+
+Children, households, relationships, enrolment, placement, schedules, staff and
+attendance are **live resources with their own endpoints**; see the API
+Reference. What Locations gives them is the shared vocabulary: every one of those
+resources refers to a site or a room by the identifiers on this page, so there is
+no second location model to learn.
+
+Timezone is deliberately not published on this resource.

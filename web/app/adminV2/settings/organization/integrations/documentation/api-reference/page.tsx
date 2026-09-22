@@ -15,6 +15,8 @@ import Link from "next/link";
 
 import { DocumentationShell } from "@/app/adminV2/settings/organization/integrations/documentation/DocumentationShell";
 import { CodeBlock } from "@/components/developerDocs/CodeBlock";
+import { DocumentationRenderer } from "@/components/developerDocs/DocumentationRenderer";
+import { parseBlocks } from "@/lib/developerDocs/markdown";
 import { API_REFERENCE_SLUG, RAW_OPENAPI_PATH } from "@/lib/developerDocs/documentationSources";
 import { apiReference, type ReferenceOperation } from "@/lib/developerDocs/openApiReference";
 
@@ -106,7 +108,22 @@ function Operation({ operation }: { operation: ReferenceOperation }) {
 
             <p className="mt-1.5 text-[13.5px] font-medium text-alloy-midnight">{operation.summary}</p>
             {operation.description && (
-                <p className="mt-1 text-[13px] leading-[1.7] text-alloy-midnight/75">{operation.description}</p>
+                /*
+                 * Operation descriptions are Markdown in the governed contract — the same source a
+                 * partner downloads — so rendering them as plain text put literal `**` and raw
+                 * bullet characters on the page. The emphasis in these descriptions is carrying
+                 * the load-bearing sentences ("Enrollment is what makes a child visible"), which is
+                 * exactly the text a reader skimming the reference must not lose.
+                 *
+                 * Reuses the guide parser and renderer rather than a second Markdown path, so the
+                 * reference and the guides cannot render the same syntax two different ways.
+                 */
+                <div className="mt-1 text-[13px] leading-[1.7] text-alloy-midnight/75">
+                    <DocumentationRenderer
+                        blocks={parseBlocks(operation.description)}
+                        sourceFile={RAW_OPENAPI_PATH}
+                    />
+                </div>
             )}
 
             <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.4] px-3 py-2 text-[12px]">

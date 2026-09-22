@@ -25,6 +25,7 @@ export const DOCUMENTATION_TITLES: Readonly<Record<string, string>> = Object.fre
     "getting-started": "Getting started",
     locations: "Locations",
     conventions: "Conventions",
+    integrating: "Integrating with Alloy",
     specification: "Full specification",
     [API_REFERENCE_SLUG]: "API Reference",
 });

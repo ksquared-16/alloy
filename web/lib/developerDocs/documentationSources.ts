@@ -65,6 +65,12 @@ export const DOCUMENTATION_SECTIONS: readonly DocumentationSection[] = [
         file: "docs/api/developer-platform/guide/conventions.md",
     },
     {
+        slug: "integrating",
+        title: "Integrating with Alloy",
+        blurb: "The whole integration in one read: identity, authority, the resource graph, sync, submission and limits.",
+        file: "docs/api/developer-platform/guide/integrating.md",
+    },
+    {
         slug: "specification",
         title: "Full specification",
         blurb: "Authentication, scopes, boundaries, every field and limit — read from the implementation.",
