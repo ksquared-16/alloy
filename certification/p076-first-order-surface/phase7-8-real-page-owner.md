@@ -117,3 +117,37 @@ Even if the drawer-VM wait were removed entirely, finality would sit at first pa
 Not E: the trace does not show an unavoidable floor above the target — it shows two addressable
 waits, one of which the first-order surface provably does not need. Not A: no single bounded repair
 closes 6,731 ms. Selected from the real page, never from the prototype.
+
+---
+
+## Phase 1 addendum — the attendance repair, measured on deployed code
+
+The merge landed mid-run: PR #1195 merged as **`a1ecf609`**, deployed at 02:25:32 PDT, and
+containment is proven by git ancestry — `a1ecf609` contains `63931a86`. The sampling run therefore
+straddles the deploy and partitions cleanly by `deployedSha`.
+
+| real-page metric | `b4a4a2bf` (pre) n=11 | `a1ecf609` (post) n=12 |
+|---|---|---|
+| **V2.1 FIRST_ORDER_VISIBLE_COMPLETE** P50 | **7,731** | **7,613** |
+| V2.1 P95 | 8,590 | 8,202 |
+| WU-09 first authoritative paint P50 | 3,280 | 3,240 |
+| drawer VM duration P50 | 4,536 | 4,344 |
+| V2.1 − drawer-VM end P50 | 40 | 45 |
+| completion owner | WU-09, 11/11 | WU-09, 12/12 |
+
+The repair moves the product metric by roughly **118 ms on a 7,613 ms number — about 1.5%**. That
+is consistent with the ≤140 ms of frame time the provisioning DAG said was recoverable, and it is
+the clearest possible statement of why provisioning optimisation was the wrong place to keep
+looking.
+
+**The owner does not change.** WU-09 in 23 of 23 samples across both lineages, with semantic
+finality landing 40–45 ms after the drawer view model returns.
+
+### Sample discipline
+
+One sample was **discarded loudly** for specimen drift (the queue focused a 4-card household with
+no attendance card). Discards are reported, never silently counted as zero — the drift trap that
+once made a frame "improve" to 805 ms by doing less.
+
+Post-repair sampling was still in flight when this was written; these are the samples complete at
+that point. Additional batches continue on disk under `post/`, `rpafter/` and `provafter/`.
