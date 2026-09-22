@@ -180,12 +180,15 @@ export async function fetchStaffingProjection(
             dateTo: date,
             roomLocationId: null,
         });
-        const coverageByEmployment = new Map<string, { roomLocationId: string | null; interval: TimeInterval }[]>();
+        const coverageByEmployment = new Map<
+            string,
+            { coverageId: string; roomLocationId: string | null; interval: TimeInterval }[]
+        >();
         for (const c of coverage) {
             const interval = toInterval(c.startTime, c.endTime);
             if (!interval) continue;
             const list = coverageByEmployment.get(c.employmentId) ?? [];
-            list.push({ roomLocationId: c.roomLocationId, interval });
+            list.push({ coverageId: c.id, roomLocationId: c.roomLocationId, interval });
             coverageByEmployment.set(c.employmentId, list);
         }
 
