@@ -187,12 +187,19 @@ describe("the compose's own semantics are untouched", () => {
          *                             composition rather than after it.
          *   4 resolveWorkViewTotalsSeed
          *                           — the counts themselves, inside the announcement listener.
-         *   10 seedRef.run          — the join. It awaits work already in flight, and whatever it
+         *   9  tourRef.run         — the tour signal's join. Started from the SAME
+         *                             `onSubjectResolved` announcement as the participant read, so
+         *                             it too awaits work already in flight. It is listed here
+         *                             because it drifted in without argument once: the gate went
+         *                             red, the list was not updated, and a red gate stops guarding
+         *                             anything. `null` from it means NOT ESTABLISHED — never
+         *                             "no tour" — so the join can settle honestly either way.
+         *   11 seedRef.run          — the join. It awaits work already in flight, and whatever it
          *                             waits is published as `join_wait_ms`, the ADDED DOCUMENT
          *                             WAIT, rather than disappearing into page_total.
          *
          * None of these is a new serial step ahead of the answer: 3 and 4 run inside a listener
-         * the composer fires mid-composition, and 10 is the join for that work.
+         * the composer fires mid-composition, and 9 and 11 are the joins for that work.
          */
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
@@ -203,6 +210,7 @@ describe("the compose's own semantics are untouched", () => {
             "projectFocusPanelCardProducers",
             "earlyRef.run",
             "(async",
+            "tourRef.run",
             "(async",
             "seedRef.run",
         ]);
