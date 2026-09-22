@@ -66,6 +66,13 @@ transition can tell them apart.
 Nothing is deleted and nothing is edited in place. Cancelling frees the interval to be
 planned again while the cancelled row stays readable.
 
+Cancelling is the one operation that writes to an existing row rather than adding one,
+and it touches only the cancellation fields. **Why an allocation existed and why it was
+cancelled are separate columns** — `reason_key` and `cancel_reason_key` — because they are
+facts about different moments. An early version wrote both into `reason_key`, so
+cancelling a correction erased the record that it had been a correction; the hosted audit
+projection caught it.
+
 ## Reading it
 
 Two directions, one definition of effective.

@@ -692,6 +692,27 @@ describe.runIf(LIVE)("audit", () => {
     });
 });
 
+describe.runIf(LIVE)("cancellation reason fidelity", () => {
+    it("B36 keeps why an allocation existed when it is cancelled", async () => {
+        const id = await planCoverage(db, {
+            orgId: ORG, employmentId, serviceDate: D.crossSite,
+            startTime: "13:00", endTime: "14:00",
+            siteLocationId: SITE_A, roomLocationId: ROOM_A1,
+            reasonKey: "authored_reason", sourceKey: "test",
+        });
+        await cancelCoverage(db, id, "cancellation_reason", null);
+
+        const lineage = await readCoverageLineageFor(db, { orgId: ORG, coverageId: id });
+        expect(lineage[0].reasonKey).toBe("authored_reason");
+        expect(lineage[0].cancelReasonKey).toBe("cancellation_reason");
+
+        // The audit must report each moment's own reason, not one for both.
+        const events = projectCoverageAudit(lineage);
+        expect(events.find((e) => e.operation === "CREATED")?.reasonKey).toBe("authored_reason");
+        expect(events.find((e) => e.operation === "CANCELLED")?.reasonKey).toBe("cancellation_reason");
+    });
+});
+
 describe.runIf(LIVE)("non-regression", () => {
     /**
      * Coverage is a new fact about a day. Slice 3 deliberately does NOT let it
