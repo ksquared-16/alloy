@@ -250,3 +250,88 @@ describe("the depth cards state each fact once", () => {
             .toMatch(/data-add-policy-exception=\{p\.policyId\}/);
     });
 });
+
+describe("the discount read is measured, not guessed at", () => {
+    const POSITION_READ = "lib/financials/reductions/readAssignmentDiscountPosition.ts";
+
+    it("independent reads run together", () => {
+        /*
+         * MEASURED IN SOURCE: the position made four sequential round trips, of which only the
+         * first two were dependent — the agreement is found by an id the tuition view returns.
+         * The forecast, the exception history and the policy labels need nothing from each other.
+         * And this read is itself fanned out per relationship, so the serialisation was multiplied
+         * by the size of the family before anything reached the operator.
+         */
+        const read = code(POSITION_READ);
+        expect(read).toMatch(/const \[forecast, history, policies\] = await Promise\.all\(/);
+        const at = read.indexOf("await Promise.all([");
+        const block = read.slice(at, at + 1200);
+        for (const call of ["forecastAssignmentReductions", "readExceptionHistory", "readPolicies"]) {
+            expect(block, `${call} is in the concurrent group`).toContain(call);
+        }
+    });
+
+    it("the route fans out across relationships rather than looping", () => {
+        const route = code("app/api/admin/financials/family-discount-position/route.ts");
+        expect(route).toMatch(/await Promise\.all\(\s*ocmIds\.map/);
+    });
+
+    it("the per-child position read is concurrent too", () => {
+        const route = code(POSITIONS);
+        expect(route).toMatch(/await Promise\.all\(\s*members\.map/);
+    });
+});
+
+describe("three doors, one grammar", () => {
+    /*
+     * They do not need identical content. They do need to be recognisably the same KIND of
+     * surface: an operator who opens Manage payments and then Manage discounts must not feel they
+     * have moved between two products. The platform card carries all of it — width, header,
+     * border, radius, shadow, spacing — so the rule is that all three declare the same card.
+     */
+    const SURFACES = ["payments_admin", "responsibility_admin", "discount_admin", "payment"] as const;
+
+    it.each(SURFACES)("%s is the platform's command card", (kind) => {
+        const card = code(CARD);
+        const at = card.indexOf(`if (overlay === "${kind}"`);
+        expect(at, `${kind} is a surface`).toBeGreaterThan(-1);
+        const block = card.slice(at, at + 2600);
+        for (const attr of [
+            'modalClass="command"',
+            'density="expanded"',
+            'gridSpan="row"',
+            'tier="work"',
+            'archetype="status"',
+        ]) {
+            expect(block, `${kind} declares ${attr}`).toContain(attr);
+        }
+    });
+
+    it("Manage payments carries everything that left Details", () => {
+        /*
+         * The controls did not disappear — Add card, Add bank account and autopay are Payments'
+         * own, and they moved behind the door rather than being retired. A door that opened on a
+         * card missing them would have traded a cluttered Details for a broken workflow.
+         */
+        const card = code(CARD);
+        const at = card.indexOf('if (overlay === "payments_admin"');
+        const block = card.slice(at, at + 2200);
+        expect(block, "the methods, with their own add controls").toContain("<PaymentMethodsSection");
+        expect(block, "and autopay, which qualifies them").toContain("<AutopaySection");
+    });
+
+    it("every door restores focus to the control that opened it", () => {
+        /* One grammar includes how each is dismissed, not only how each looks. */
+        const card = code(CARD);
+        for (const selector of [
+            'data-financials-manage-payments="open"',
+            'data-financials-manage-responsibility="gear"',
+            'data-financials-manage-discounts="gear"',
+        ]) {
+            expect(card, `${selector} is what focus returns to`).toMatch(
+                new RegExp(`openAdmin\\([\\s\\S]{0,80}${selector.replace(/[[\]"=]/g, "\\$&")}`),
+            );
+        }
+        expect(card, "and the restore runs when the surface goes away").toContain("adminFocusSelector");
+    });
+});
