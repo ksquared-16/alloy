@@ -139,6 +139,18 @@ export type TuitionGenerationArgs = {
     opportunityCustomerMemberIds?: readonly string[] | null;
     /** The cadence this run bills. */
     cadenceKey?: string;
+    /**
+     * Optional bounded set of canonical period keys. Absent, every period the span contains is
+     * billed — which is what an operator asking to "bill September" means.
+     *
+     * AUTOMATION MEANS SOMETHING ELSE. A scheduled run bills what is DUE, and a span contains
+     * periods that have not begun: measured on deployed staging, a one-period specimen was billed
+     * for 2026-09-22 AND 2026-09-29 because both weeks fall inside September. The caller that
+     * decided which periods are due says so here; the tiling, the price, the due-ness and the
+     * idempotency all still belong to this authority, exactly as `opportunityCustomerMemberIds`
+     * narrows which assignments without moving any decision out of it.
+     */
+    periodKeys?: readonly string[] | null;
     /** Operating day, for the charge lifecycle's own date resolution. */
     today?: string | null;
 };
@@ -260,6 +272,8 @@ export async function generateTuitionCharges(
         byAssignment.set(t.opportunityCustomerMemberId, list);
     }
 
+    const periodFilter = args.periodKeys?.length ? new Set(args.periodKeys) : null;
+
     const outcomes: TuitionGenerationOutcome[] = [];
 
     const periodsBilledByKey = new Map<string, BillingPeriod>();
@@ -278,6 +292,7 @@ export async function generateTuitionCharges(
         const periods = assignmentBillingPeriods(assignmentTerms, cadence, span);
 
         for (const period of periods) {
+        if (periodFilter && !periodFilter.has(period.key)) continue;
         const decision = resolveTuitionRecurrence({
             terms: assignmentTerms,
             period,
