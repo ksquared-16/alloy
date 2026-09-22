@@ -84,7 +84,16 @@ describe("the doors are real depth surfaces", () => {
     it("each is a surface on the same stack Add Charge and Payment use", () => {
         for (const kind of ["responsibility_admin", "discount_admin", "payments_admin"]) {
             expect(CARD, `${kind} is a surface kind`).toContain(`kind: "${kind}"`);
-            expect(CARD, `${kind} renders as an overlay`).toContain(`overlay === "${kind}"`);
+            /*
+             * THE GUARD MUST STILL GUARD. Asserting only that the string appears let a planted
+             * `false && overlay === "responsibility_admin"` pass cleanly — the overlay would never
+             * render, administration would fall back into Details, and the lock would not notice.
+             * The check has to OPEN the statement.
+             */
+            expect(CARD, `${kind} opens its own early return`)
+                .toMatch(new RegExp(`if \\(overlay === "${kind}"`));
+            expect(CARD, `${kind} is not short-circuited off`)
+                .not.toMatch(new RegExp(`(false|0) &&\\s*overlay === "${kind}"`));
         }
     });
 
