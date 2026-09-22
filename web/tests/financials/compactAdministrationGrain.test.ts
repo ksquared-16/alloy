@@ -236,6 +236,23 @@ describe("the depth cards state each fact once", () => {
             .toMatch(/\{summaryIsSeparate \? \(/);
     });
 
+    it("the responsibility card names its shares as a group", () => {
+        /*
+         * Below "Effective from" came a run of labelled rows with no statement of what they
+         * collectively are, so the arrangement's shares read as more fields rather than as the
+         * division itself. There is deliberately no "add a party" beside the heading: every party
+         * on the account is already a row, and a control that could only offer someone already
+         * listed would be a button that does nothing.
+         */
+        const panel = code(RESP);
+        expect(panel).toContain('data-financials-responsibility-shares-head="true"');
+        const head = panel.indexOf('data-financials-responsibility-shares-head="true"');
+        const sharesList = panel.indexOf("{shares.map((share, i) =>");
+        expect(sharesList, "the heading sits above the rows it names").toBeGreaterThan(head);
+        expect(panel, "and it appears only when there are shares to name")
+            .toMatch(/\{shares\.length > 0 \?[\s\S]{0,400}responsibility-shares-head/);
+    });
+
     it("neither depth card repeats the title its host already renders", () => {
         expect(code(DISCOUNT)).toMatch(/hostedOpen \? null : \([\s\S]{0,200}Manage discounts/);
         expect(code(RESP)).toMatch(/hosted \? null : \([\s\S]{0,200}Manage responsibility/);

@@ -698,6 +698,24 @@ export default function FinancialsResponsibilityPanel({
                 />
             </label>
 
+            {/*
+              * THE ONE PIECE OF HIERARCHY THE CARD WAS MISSING. Below "Effective from" came a
+              * run of labelled rows with no statement of what they collectively are, so the
+              * arrangement's shares read as more fields rather than as the division itself.
+              *
+              * There is deliberately no "add a party" control beside it: every party on the
+              * account is already a row. A party who is not on the account cannot be made
+              * responsible from here, and a control that could only offer someone already listed
+              * would be a button that does nothing.
+              */}
+            {shares.length > 0 ? (
+                <p
+                    className="mt-3 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45"
+                    data-financials-responsibility-shares-head="true"
+                >
+                    Responsible parties
+                </p>
+            ) : null}
             {shares.length === 0 ? (
                 <p className="mt-2 text-[11px] text-alloy-midnight/55" data-financials-responsibility-no-parties="true">
                     Nobody on this account can be made responsible yet. Add a parent or guardian to the
