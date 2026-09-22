@@ -89,6 +89,46 @@ function hasHouseholdIdentity(context: OperationalContext): boolean {
     return hasFinancialSubject(context);
 }
 
+/**
+ * PARTICIPATION RESOLVED, WITH OR WITHOUT A PARTICIPANT — the question the two scoped cards
+ * actually need answered.
+ *
+ * `hasParticipantIdentity` answers "can this card ADDRESS its own read". That is the right question
+ * for issuing a request and the WRONG one for mounting, and the difference was measured:
+ *
+ *   On a family with five children there is no sole participant, so the predicate was false, the
+ *   grid reserved the cell, and Attendance rendered "Resolving attendance…". It stayed that way
+ *   until the DRAWER VM landed ~4.4s later, at which point the settled producer — which admits
+ *   every card unconditionally — mounted it and it rendered "Select a child to see their day."
+ *
+ *   Measured on deployed a1ecf609 across four cold samples, that transition was the ONLY
+ *   authoritative change in WU-09 at drawer arrival, and semantic finality followed it by ~40ms.
+ *   The drawer supplied no truth for it. It only changed which producer was in charge.
+ *
+ * "There is no sole participant" IS the answer, and the answer already knows it:
+ * `composeProvisioningAnswerForRoute` resolves participation on EVERY path that has a subject —
+ * from the speculative early run when it matches, otherwise by a canonical await — and the panel
+ * carries `resolvedParticipant` and `summaryDocSeed` from the SAME answer object. So by the time
+ * this predicate runs, a null scope means RESOLVED-AND-NONE, never NOT-YET-RESOLVED.
+ *
+ * That distinction is the whole point. Collapsing it is how a known-empty gets presented as
+ * pending, and the cards then wait on a payload the collapsed census proved they never read.
+ *
+ * The card itself is already correct for both branches: it renders the honest empty state when it
+ * has no member and ISSUES NO REQUEST, so mounting without a participant cannot start a doomed
+ * read or state an authoritative-sounding empty about a specific child.
+ */
+function hasResolvedParticipation(context: OperationalContext): boolean {
+    // A participant that IS present is trivially resolved.
+    if (hasParticipantIdentity(context)) return true;
+    /*
+     * Otherwise: resolved-and-none. Guarded on the subject actually existing, so a context built
+     * before the answer — which the registry's own truth-only fixture exercises — still reserves
+     * rather than claiming an empty answer it has not got.
+     */
+    return hasAnyTruthKey(context, SUBJECT_IDENTITY_TRUTH_KEYS);
+}
+
 /** Present means a non-blank value. A key carrying `""` is an absent identity, not an empty one. */
 function hasAnyTruthKey(context: OperationalContext, keys: readonly string[]): boolean {
     return keys.some((key) => {
@@ -143,13 +183,13 @@ export const MOUNTABLE_CARD_SPECS: readonly MountableCardSpec[] = [
     {
         key: "attendance",
         identityTruthKeys: PARTICIPANT_IDENTITY_TRUTH_KEYS,
-        identityKnowable: hasParticipantIdentity,
+        identityKnowable: hasResolvedParticipation,
         build: () => buildSelfFetchingCardShell("attendance", focusPanelCardCatalogLabel("attendance")),
     },
     {
         key: "health_safety",
         identityTruthKeys: PARTICIPANT_IDENTITY_TRUTH_KEYS,
-        identityKnowable: hasParticipantIdentity,
+        identityKnowable: hasResolvedParticipation,
         build: () => buildSelfFetchingCardShell("health_safety", focusPanelCardCatalogLabel("health_safety")),
     },
     /*

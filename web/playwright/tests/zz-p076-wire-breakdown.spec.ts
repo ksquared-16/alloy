@@ -27,6 +27,17 @@ test("p076 wire breakdown", async ({ page }) => {
             + (cardList ? `&cards=${encodeURIComponent(cardList)}` : "")
             + `&kpi_keys=${encodeURIComponent(KPI)}&view_ids=${encodeURIComponent(VIEWS)}`;
         performance.clearResourceTimings();
+        /*
+         * BASELINE FIRST — the same origin, the same connection, a route that composes nothing.
+         * Without it a large TTFB on the real endpoint cannot be attributed: wire and server work
+         * are indistinguishable from one number.
+         */
+        const baseline: number[] = [];
+        for (let i = 0; i < 3; i++) {
+            const b0 = performance.now();
+            await fetch(`/api/build-info?cb=${Math.random()}`, { credentials: "include" });
+            baseline.push(Math.round(performance.now() - b0));
+        }
         const t0 = performance.now();
         const res = await fetch(url, { credentials: "include" });
         const atHeaders = performance.now() - t0;
@@ -61,6 +72,7 @@ test("p076 wire breakdown", async ({ page }) => {
             serverOuterWallMs: parsed?.shadow?.outerWallMs ?? null,
             serverReadDagMs: parsed?.shadow?.timing?.readDagMs ?? null,
             note: parsed?.note ?? null,
+            baselineBuildInfoMs: baseline,
         };
     }, [member, customer, cards]);
 
