@@ -69,6 +69,19 @@ export const PUBLIC_SCOPES = {
         summary: "Read organizational locations (sites and units) within the installation boundary.",
         alloyAuthority: "public.list_external_locations, boundary-enforced in SQL",
     },
+    "attendance.read": {
+        scope: "attendance.read",
+        access: "read",
+        summary: "Read canonical attendance facts for children at locations within the installation boundary.",
+        alloyAuthority: "child_attendance_events, boundary-enforced against the same sites GET /api/v1/locations returns",
+        /*
+         * No internal permission key, and that is the catalog's own rule for a read scope: reads
+         * are authorized by the boundary and the query. It is also why this is a SEPARATE entry
+         * from `attendance.write` — a partner that may submit a fact has not thereby been granted
+         * the ability to read every child's movements, and the catalog forbids one scope implying
+         * another by construction.
+         */
+    },
     "attendance.write": {
         scope: "attendance.write",
         access: "write",
@@ -94,6 +107,11 @@ export const PUBLIC_OPERATIONS = {
     getContext: { operationId: "getContext", scope: null, route: "/api/v1/context" },
     issueAccessToken: { operationId: "issueAccessToken", scope: null, route: "/api/v1/oauth/token" },
     listLocations: { operationId: "listLocations", scope: "locations.read", route: "/api/v1/locations" },
+    listAttendanceEvents: {
+        operationId: "listAttendanceEvents",
+        scope: "attendance.read",
+        route: "/api/v1/attendance-events",
+    },
 } as const satisfies Record<
     string,
     { operationId: string; scope: PublicScope | null; route: string }

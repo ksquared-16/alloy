@@ -116,8 +116,9 @@ describe("links never send a reader somewhere they cannot go", () => {
 describe("the advertised surface is the implemented surface", () => {
     it("the operations shown are read from the governed OpenAPI document", () => {
         const operations = publicOperations();
-        expect(operations).toHaveLength(3);
+        expect(operations).toHaveLength(4);
         expect(operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
+            "GET /api/v1/attendance-events",
             "GET /api/v1/context",
             "GET /api/v1/locations",
             "POST /api/v1/oauth/token",
@@ -127,8 +128,16 @@ describe("the advertised surface is the implemented surface", () => {
         }
     });
 
-    it("no public attendance operation is advertised", () => {
-        expect(publicOperations().some((o) => /attendance/i.test(o.path))).toBe(false);
+    it("no public attendance MUTATION is advertised", () => {
+        /*
+         * Narrowed, not dropped. Thread 7 slice 7.1 published an attendance READ, so the landing
+         * legitimately lists one attendance operation. The fact that must stay true — and that the
+         * documentation's hard gates turn on — is that no credential can SUBMIT attendance through
+         * the public API, however real the `attendance.write` scope looks in an installation UI.
+         */
+        const attendance = publicOperations().filter((o) => /attendance/i.test(o.path));
+        expect(attendance).toHaveLength(1);
+        expect(attendance.every((o) => o.method === "GET")).toBe(true);
     });
 
     it("the landing derives the list rather than hard-coding it", () => {
@@ -140,6 +149,7 @@ describe("the advertised surface is the implemented surface", () => {
         expect(landing).toContain("publicOperations()");
         expect(landing).not.toContain("/api/v1/locations");
         expect(landing).not.toContain("/api/v1/oauth/token");
+        expect(landing).not.toContain("/api/v1/attendance-events");
     });
 
     it("the landing names the scope-versus-endpoint distinction", () => {

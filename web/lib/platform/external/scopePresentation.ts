@@ -46,6 +46,10 @@ const PRESENTATION: Record<string, { title: string; detail: string }> = {
         title: "Locations",
         detail: "View your sites and the rooms within them. No addresses or access codes are shared.",
     },
+    "attendance.read": {
+        title: "Attendance history",
+        detail: "View when children arrived, left and moved between rooms at the locations you allow. Read only — this does not let the integration record anything.",
+    },
     "attendance.write": {
         title: "Attendance",
         detail: "Record children arriving, leaving and moving between rooms at the locations you allow.",

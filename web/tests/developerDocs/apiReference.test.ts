@@ -18,18 +18,26 @@ const reference = apiReference();
 const byId = (id: string) => reference.operations.find((o) => o.id === id)!;
 
 describe("the reference is exactly the implemented surface", () => {
-    it("three operations, named", () => {
+    it("every implemented operation, named", () => {
         expect(reference.operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
+            "GET /api/v1/attendance-events",
             "GET /api/v1/context",
             "GET /api/v1/locations",
             "POST /api/v1/oauth/token",
         ]);
     });
 
-    it("no attendance operation is represented", () => {
-        const text = JSON.stringify(reference).toLowerCase();
-        expect(reference.operations.some((o) => /attendance/i.test(o.path))).toBe(false);
-        expect(text).not.toContain("/api/v1/attendance");
+    it("the attendance operation that is represented is a READ, and only a read", () => {
+        /*
+         * This assertion used to say "no attendance operation is represented", which was true when
+         * attendance existed only as a scope. It now protects the sharper fact: a partner can read
+         * attendance facts and cannot submit one, and the reference must not suggest otherwise.
+         */
+        const attendance = reference.operations.filter((o) => /attendance/i.test(o.path));
+        expect(attendance).toHaveLength(1);
+        expect(attendance[0].method).toBe("GET");
+        expect(attendance[0].requiredScope).toBe("attendance.read");
+        expect(reference.operations.some((o) => o.method !== "GET" && /attendance/i.test(o.path))).toBe(false);
     });
 
     it("the page derives its content rather than restating it", () => {

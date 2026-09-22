@@ -40,7 +40,11 @@ export type AttendanceAuthorityResolution =
     | { ok: false; code: "no_sites_in_boundary" | "lookup_failed" };
 
 /**
- * Resolve the SITES an installation may author attendance for.
+ * Resolve the SITES an installation may reach.
+ *
+ * Exported because the external attendance READ needs exactly this set, and a second resolver
+ * would be a second answer to "which sites may this installation see". Reading and authoring share
+ * one boundary; what differs between them is the permission checked afterwards, not the territory.
  *
  * `NonHumanProducerAuthority` is expressed in site ids, while an installation's
  * boundary may name sites, units, or the whole organization. Rather than walking
@@ -52,7 +56,7 @@ export type AttendanceAuthorityResolution =
  * never exceed what `GET /api/v1/locations` would return for the same
  * installation, because it is literally the same query.
  */
-async function resolveBoundarySites(
+export async function resolveBoundarySites(
     supabase: SupabaseClient,
     principal: ApplicationPrincipal,
 ): Promise<{ ok: true; siteIds: string[] } | { ok: false; code: "lookup_failed" }> {

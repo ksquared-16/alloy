@@ -108,9 +108,13 @@ export default function DeveloperDocumentationLandingPage() {
 
                     <AnswerCard icon={Map} question="What can I read right now?" testId="landing-resources">
                         <p>
-                            Locations — the first canonical resource — plus your own calling context.
-                            Everything else in the documentation states a contract Alloy has ratified but
-                            does not yet publish, and says so where it is described.
+                            Your own calling context, your organization&rsquo;s locations, and the
+                            attendance facts recorded at the locations you are authorized for.
+                            Attendance is append-only: corrections and reversals arrive as new facts
+                            that name the one they supersede, so nothing you have read is ever
+                            silently rewritten. Everything else in the documentation states a contract
+                            Alloy has ratified but does not yet publish, and says so where it is
+                            described.
                         </p>
                         <Link
                             href={`${DOCUMENTATION_BASE_PATH}/locations`}
@@ -166,11 +170,12 @@ export default function DeveloperDocumentationLandingPage() {
                             state="internal"
                             title="Internal consumers of the same authority"
                             testId="position-internal"
-                            items={["Attendance ingestion runs on this authority model internally"]}
+                            items={["Attendance submission runs on this authority model internally"]}
                         >
                             Some Alloy domains already use the Developer Platform&rsquo;s authority model
-                            without a public endpoint. Attendance is one: the capability exists, and no
-                            public Attendance mutation does.
+                            without a public endpoint. Attendance is one: you can read attendance facts,
+                            and there is no public Attendance mutation — submitting a fact is not yet
+                            something a credential can do, whatever the capability list suggests.
                         </PositionCard>
 
                         <PositionCard

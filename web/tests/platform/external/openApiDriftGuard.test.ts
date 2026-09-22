@@ -125,15 +125,35 @@ describe("public OpenAPI drift guard", () => {
         expect(new Set(ids).size).toBe(ids.length);
     });
 
-    it("currently describes exactly the three endpoints implemented through B.3", () => {
+    it("currently describes exactly the endpoints that are implemented", () => {
         // A deliberate tripwire. Adding a public endpoint must be a decision that
         // updates this expectation, not something that happens quietly. B.3 added
-        // /api/v1/locations and this line was changed on purpose, not relaxed.
+        // /api/v1/locations and Thread 7 slice 7.1 added /api/v1/attendance-events;
+        // both changed this line on purpose, and neither relaxed it.
         expect(Object.keys(spec.paths).sort()).toEqual([
+            "/api/v1/attendance-events",
             "/api/v1/context",
             "/api/v1/locations",
             "/api/v1/oauth/token",
         ]);
+    });
+
+    it("publishes no attendance MUTATION — the read does not open a write", () => {
+        /*
+         * The invariant this file has always protected, restated now that an attendance READ
+         * exists. `attendance.write` is a real scope with no public endpoint behind it, and the
+         * arrival of `GET /api/v1/attendance-events` must not be read — by a partner or by a later
+         * change — as evidence that submission shipped too.
+         */
+        for (const [docPath, operations] of Object.entries(spec.paths)) {
+            for (const method of Object.keys(operations)) {
+                const isWrite = ["post", "put", "patch", "delete"].includes(method);
+                expect(
+                    isWrite && /attendance/i.test(docPath),
+                    `${method.toUpperCase()} ${docPath} would be a public attendance mutation`,
+                ).toBe(false);
+            }
+        }
     });
 
     it("declares a required scope for every operation that reads domain data", () => {

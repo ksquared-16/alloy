@@ -264,6 +264,151 @@
           }
         }
       }
+    },
+    "/api/v1/attendance-events": {
+      "get": {
+        "operationId": "listAttendanceEvents",
+        "tags": [
+          "Locations"
+        ],
+        "summary": "List canonical attendance facts",
+        "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record.\n\nBecause nothing disappears, a consumer that has read every page holds the complete history. Order and `updated_since` both advance on `recorded_at` — when Alloy recorded the fact — not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a watermark you had already passed.\n\nSynchronization is at-least-once. `updated_since` is matched at millisecond precision while facts are recorded with finer precision, so the fact on your watermark boundary can be delivered twice; deduplicate by `id`. Nothing is ever skipped, and a cursor carries an exact position, so paging through a single pass returns each fact once.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "attendance.read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "description": "Page size. Clamped to 200."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from a previous `next_cursor`. A cursor is a position, never a permission."
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return only facts recorded strictly after this instant. Must carry a timezone offset or Z. Matched at millisecond precision, so the boundary fact may repeat; deduplicate by id."
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Narrow to one site. A site outside your boundary narrows to nothing rather than widening to it."
+          },
+          {
+            "name": "child_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Narrow to one child."
+          },
+          {
+            "name": "event_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "check_in",
+                "check_out",
+                "absence",
+                "present",
+                "room_transfer",
+                "schedule_override"
+              ]
+            },
+            "description": "Narrow to one kind of fact."
+          },
+          {
+            "name": "service_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Narrow to facts on or after this service day."
+          },
+          {
+            "name": "service_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Narrow to facts on or before this service day."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of attendance facts.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "RateLimit-Limit": {
+                "$ref": "#/components/headers/RateLimitLimit"
+              },
+              "RateLimit-Remaining": {
+                "$ref": "#/components/headers/RateLimitRemaining"
+              },
+              "RateLimit-Reset": {
+                "$ref": "#/components/headers/RateLimitReset"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttendanceEventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidCredential"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -584,6 +729,155 @@
               "null"
             ],
             "description": "Pass back as `cursor`. Null means the last page — you never need a request to discover there is nothing left."
+          }
+        }
+      },
+      "AttendanceEvent": {
+        "type": "object",
+        "description": "One canonical attendance fact. Append-only: a mistake is corrected by a later event that names this one, never by changing it.",
+        "required": [
+          "id",
+          "child_id",
+          "site_id",
+          "event_kind",
+          "entry_type",
+          "event_at",
+          "service_date",
+          "actor_type",
+          "source",
+          "recorded_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier for this attendance fact."
+          },
+          "child_id": {
+            "type": "string",
+            "description": "The Alloy identifier of the child this fact is about."
+          },
+          "child_external_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Your own identifier for the child, if this installation has mapped one. Null when no mapping exists."
+          },
+          "site_id": {
+            "type": "string",
+            "description": "The site the fact was recorded at. Always within your installation's location boundary."
+          },
+          "room_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The room, for facts that name one."
+          },
+          "from_room_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Origin room of a room transfer."
+          },
+          "to_room_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Destination room of a room transfer."
+          },
+          "event_kind": {
+            "type": "string",
+            "enum": [
+              "check_in",
+              "check_out",
+              "absence",
+              "present",
+              "room_transfer",
+              "schedule_override"
+            ],
+            "description": "What happened."
+          },
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "original",
+              "correction",
+              "reversal"
+            ],
+            "description": "`original` is a first statement. `correction` restates an earlier fact. `reversal` voids one and contributes nothing of its own."
+          },
+          "corrects_event_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The attendance fact this one supersedes, for corrections and reversals."
+          },
+          "event_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it physically happened."
+          },
+          "service_date": {
+            "type": "string",
+            "format": "date",
+            "description": "The service day it belongs to, which is not always the calendar day of event_at."
+          },
+          "actor_type": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "parent",
+              "guardian",
+              "emergency_contact",
+              "system"
+            ],
+            "description": "The kind of actor who recorded it. Never an identified person."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "operator_action",
+              "staff_workspace",
+              "parent_portal",
+              "processing_import",
+              "system",
+              "kiosk",
+              "integration_api",
+              "door_access",
+              "mobile_app"
+            ],
+            "description": "The channel the fact was captured through. `integration_api` means it arrived through this API."
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When Alloy recorded it. This is the field incremental synchronization advances on, and the order the collection returns."
+          }
+        }
+      },
+      "AttendanceEventPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "next_cursor"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttendanceEvent"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque cursor for the next page, or null when this is the last page."
           }
         }
       }
