@@ -152,6 +152,15 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
         cohort,
         aspect,
     };
+    /*
+     * SERIALIZED ONCE, REFERENCED TWICE.
+     *
+     * Calling `toRscPlainJson(answer)` at each prop produced two distinct objects, and the flight
+     * serializer — which dedupes by REFERENCE — wrote the whole answer into the payload twice.
+     * Measured on deployed f7aaa0b0: `decodedBodySize` 312,235 against 210,115 before, ~102KB of
+     * duplicate the browser had to parse on the frame's own critical path. One binding, one copy.
+     */
+    const frameAnswer = answer ? toRscPlainJson(answer) : null;
 
     return (
         <>
@@ -161,15 +170,12 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             subject={requestedSubjectId}
             cohort={cohort}
             aspect={aspect}
-            answer={answer ? toRscPlainJson(answer) : null}
+            answer={frameAnswer}
             producer={`page(subject=${requestedSubjectId ?? "null"},cohort=${cohort ?? "null"})`}
         />
         {/* PHASE 1 — the navigation becomes addressable, so a settlement has a frame to attach to
             and a settlement for another navigation has a frame to be refused against. */}
-        <ProvisioningFrameRegistration
-            navigation={navigation}
-            answer={answer ? toRscPlainJson(answer) : null}
-        />
+        <ProvisioningFrameRegistration navigation={navigation} answer={frameAnswer} />
         {/* PHASE 2 — awaited in its OWN boundary. Without the Suspense the page segment would block
             on the settlement again and the split would buy nothing. `fallback={null}` because this
             renders no UI: the frame above is already on screen. */}

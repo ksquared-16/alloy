@@ -10,6 +10,9 @@
  * occur, and — where the guard is subtle — demonstrates the gap it is closing rather than merely
  * asserting the happy path. A plant that cannot fail proves nothing.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -255,5 +258,31 @@ describe("plant: the kernel owns transport, not truth", () => {
         expect((a.contextFrame as { workViewId: string }).workViewId).toBe("wv-new");
         expect((a.currentBusinessState as { stageKey: string }).stageKey).toBe("lead");
         expect((a.recordOfAttention as { id: string }).id).toBe("subj-1");
+    });
+});
+
+/* ── THE PAYLOAD IS SERIALIZED ONCE ──────────────────────────────────────────────────────────── */
+
+describe("plant: the frame answer reaches the flight payload exactly once", () => {
+    it("the page binds one serialized answer and references it, rather than calling twice", () => {
+        const page = readFileSync(
+            join(process.cwd(), "app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx"),
+            "utf8",
+        );
+        /*
+         * React's flight serializer dedupes by REFERENCE, so two calls to `toRscPlainJson(answer)`
+         * write the whole answer into the payload twice. Measured on deployed f7aaa0b0 that was
+         * ~102KB of duplicate (`decodedBodySize` 312,235 vs 210,115), parsed by the browser on the
+         * frame's own critical path.
+         *
+         * Counting call sites is the only way to see it: both spellings render identically and both
+         * type-check.
+         */
+        // Comments are stripped first: the paragraph above names the call, and counting prose as a
+        // call site made this fail against correct code.
+        const code = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        const answerCalls = [...code.matchAll(/toRscPlainJson\(answer\)/g)].length;
+        expect(answerCalls).toBeLessThanOrEqual(1);
+        expect(page).toContain("const frameAnswer =");
     });
 });
