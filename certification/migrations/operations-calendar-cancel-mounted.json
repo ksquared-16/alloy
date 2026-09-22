@@ -1,0 +1,41 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "date": "2027-04-01",
+  "steps": [
+    {
+      "name": "deep_link_date",
+      "at": "2026-09-22T09:19:35.207Z",
+      "shown": "2027-04-01"
+    },
+    {
+      "name": "coverage_lane_present",
+      "at": "2026-09-22T09:19:35.210Z",
+      "present": true
+    },
+    {
+      "name": "coverage_segment",
+      "at": "2026-09-22T09:19:35.211Z",
+      "present": true
+    },
+    {
+      "name": "cancel_offered",
+      "at": "2026-09-22T09:19:36.120Z",
+      "detailOpen": true,
+      "cancelPresent": true,
+      "coverageId": "c7611528-4059-481a-9794-ccc750c0f16e",
+      "plannedText": "9 AM – 10 AMRoomStaffedExpected children: 0Required staff: 0Planned staff: Certified Active-LocatedCoverage places Certified Active-Located here for this intervalNo children expected in this intervalNothing has been observed for this date yetPlanned hereCertified Active-LocatedCoverageCancel Coverag"
+    },
+    {
+      "name": "cancel_executed",
+      "at": "2026-09-22T09:20:12.423Z",
+      "message": null,
+      "laneStillPresent": false
+    },
+    {
+      "name": "console_errors",
+      "at": "2026-09-22T09:20:12.492Z",
+      "count": 0,
+      "sample": []
+    }
+  ]
+}
