@@ -1,0 +1,116 @@
+{
+  "trusted_host_action_id": "tha_34231d502736e5",
+  "query_hash": "cbc8a88cb6c1509cd56da023f43566ab7fb9d180c8d50014769a418f2df6a159",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T23:32:15.831Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_34231d502736e5",
+    "query_hash": "cbc8a88cb6c1509cd56da023f43566ab7fb9d180c8d50014769a418f2df6a159",
+    "authorization_id": "grnt_edbf4f0a450a4f19",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T23:32:17.342Z",
+    "question_ids": [
+      "coverage_lifecycle_after_revise"
+    ],
+    "questions": {
+      "coverage_lifecycle_after_revise": {
+        "question_id": "coverage_lifecycle_after_revise",
+        "row_count": null,
+        "rows": [
+          {
+            "step": "after_revise",
+            "lineage": [
+              {
+                "id": "dd5ab616-43aa-4527-9543-7427a4688b62",
+                "state": "superseded",
+                "transition": null,
+                "supersedes": null,
+                "root": "dd5ab616-43aa-4527-9543-7427a4688b62",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "room": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-21 23:30:39.376877+00",
+                "cancelled_by": null,
+                "cancelled_at": null,
+                "reason": null,
+                "source": "operator_action"
+              },
+              {
+                "id": "7bb4dbea-2461-43f8-b0f5-884b3009ca8b",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "7bb4dbea-2461-43f8-b0f5-884b3009ca8b",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "room": null,
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-21 23:30:40.573194+00",
+                "cancelled_by": null,
+                "cancelled_at": null,
+                "reason": null,
+                "source": "operator_action"
+              },
+              {
+                "id": "518940f2-75dd-4a6d-b919-1c47a8557dd7",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "518940f2-75dd-4a6d-b919-1c47a8557dd7",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-21 23:30:41.343321+00",
+                "cancelled_by": null,
+                "cancelled_at": null,
+                "reason": null,
+                "source": "operator_action"
+              },
+              {
+                "id": "7f7cca70-dd68-463f-b05c-535b429eb9cc",
+                "state": "active",
+                "transition": "revision",
+                "supersedes": "dd5ab616-43aa-4527-9543-7427a4688b62",
+                "root": "dd5ab616-43aa-4527-9543-7427a4688b62",
+                "start": "09:00:00",
+                "end": "10:00:00",
+                "room": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+                "created_at": "2026-09-21 23:31:03.102247+00",
+                "cancelled_by": null,
+                "cancelled_at": null,
+                "reason": "qa_revision",
+                "source": "operator_action"
+              }
+            ],
+            "effective_by_employment": [
+              "518940f2-75dd-4a6d-b919-1c47a8557dd7",
+              "7bb4dbea-2461-43f8-b0f5-884b3009ca8b",
+              "7f7cca70-dd68-463f-b05c-535b429eb9cc"
+            ],
+            "effective_by_place": [
+              "518940f2-75dd-4a6d-b919-1c47a8557dd7",
+              "7bb4dbea-2461-43f8-b0f5-884b3009ca8b",
+              "7f7cca70-dd68-463f-b05c-535b429eb9cc"
+            ],
+            "observed_at": "2026-09-21 23:32:17.242036+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

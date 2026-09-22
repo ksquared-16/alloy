@@ -14,6 +14,9 @@ import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource
 import { resolveHouseholdPaymentViews } from "@/lib/financials/paymentApplicationView";
 import { composeFirstOrderWorkUnitProjection } from "@/lib/runtime/firstOrder/composeFirstOrderWorkUnitProjection";
 import { resolveFirstOrderSurfaceConfiguration } from "@/lib/runtime/firstOrder/resolveFirstOrderSurfaceConfiguration";
+import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { resolveAccountPrepaidPosition } from "@/lib/financials/prepaid/availableFunds";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
@@ -444,8 +447,30 @@ export async function GET(req: NextRequest) {
     const shadowCards = (req.nextUrl.searchParams.get("cards") ?? "").split(",").map((c) => c.trim()).filter(Boolean);
     let shadow: Record<string, unknown> | null = null;
     if (shadowCards.length && workUnitId) {
+        const csv = (name: string) => (req.nextUrl.searchParams.get(name) ?? "")
+            .split(",").map((v) => v.trim()).filter(Boolean);
+        const shadowKpiKeys = csv("kpi_keys");
+        const shadowViewIds = csv("view_ids");
         const kpis = Number(req.nextUrl.searchParams.get("kpis") ?? "0") || 0;
         const views = Number(req.nextUrl.searchParams.get("views") ?? "0") || 0;
+        /*
+         * Resolved BEFORE the frame so the diagnostic asks production's question. `active_view`
+         * is a caller parameter because the surface's active lens is a property of the
+         * navigation, not of the work unit.
+         */
+        const scopeAndTz = await Promise.all([
+            resolveQueueRecordScopeConstraints(supabase, orgId, scopeDimensionsFromAccess(access), null),
+            fetchEffectiveUserDisplayTimezoneCached(supabase, { orgId, userId: access.userId }),
+        ]).catch(() => null);
+        const workViewCaller = scopeAndTz
+            ? {
+                  recordScopeConstraints: scopeAndTz[0].recordScopeConstraints,
+                  recordScopeImpossible: scopeAndTz[0].recordScopeImpossible,
+                  viewerDisplayTimeZone: scopeAndTz[1],
+                  activeWorkViewId: req.nextUrl.searchParams.get("active_view") ?? (shadowViewIds[0] ?? ""),
+              }
+            : null;
+
         const started = performance.now();
         try {
             const r = await composeFirstOrderWorkUnitProjection({
@@ -459,13 +484,39 @@ export async function GET(req: NextRequest) {
                  */
                 configuration: resolveFirstOrderSurfaceConfiguration({
                     cardKeys: shadowCards,
-                    kpiKeys: Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
-                    workViewIds: Array.from({ length: views }, (_, i) => `view_${i}`),
+                    /*
+                     * REAL CONFIGURED IDENTITIES, supplied by the caller.
+                     *
+                     * These were synthesised as `kpi_0..n` and `view_0..n`. Synthetic KPI keys are
+                     * not known metric keys, so `isKnownOipMetricKey` rejected every one and the
+                     * frame reported UNKNOWN — correct runtime behaviour, and worthless as parity
+                     * evidence. The probe reads the tenant's own `sourceKey`s off the rendered
+                     * frame and passes them here, so the diagnostic asks the SAME question the
+                     * product asks. The `kpis`/`views` counts remain only as a scaling knob for
+                     * configuration-cost experiments.
+                     */
+                    kpiKeys: shadowKpiKeys.length
+                        ? shadowKpiKeys
+                        : Array.from({ length: kpis }, (_, i) => `kpi_${i}`),
+                    workViewIds: shadowViewIds.length
+                        ? shadowViewIds
+                        : Array.from({ length: views }, (_, i) => `view_${i}`),
                     siteScopeId: null,
                 }),
                 // Request-time decisions, resolved by this route's own gate. The composer never
                 // decides authorization itself.
                 authority: { financialsRead: true, healthView: true },
+                /*
+                 * THE SAME CALLER-OWNED INPUTS PRODUCTION RESOLVES, FROM THE SAME OWNERS.
+                 *
+                 * `composeProvisioningAnswerForRoute` resolves record scope and viewer timezone at
+                 * its gate and passes them into the Work View seed, noting they are "request-time
+                 * by construction". This route now does exactly that — same functions, same
+                 * `workspaceSiteId: null`. Without them the Work View prerequisite never runs and
+                 * all seven views report UNAVAILABLE: correct behaviour, useless as parity
+                 * evidence, and the same trap the synthetic KPI keys already sprang once.
+                 */
+                workViewCaller: workViewCaller ?? undefined,
             });
             const p = r.projection;
             shadow = {
@@ -479,8 +530,25 @@ export async function GET(req: NextRequest) {
                     insight: c.insight.state,
                     facts: Object.fromEntries(Object.entries(c.facts).map(([fk, f]) => [fk, f.state === "known" ? { state: f.state, value: f.value } : { state: f.state }])),
                 }])),
+                /*
+                 * STATE AND VALUE, not state alone.
+                 *
+                 * The previous echo emitted only `state`, so a KPI reading `known` proved the
+                 * capability ran and nothing about WHAT it answered. Parity against the operator's
+                 * frame needs the number: "known" is compatible with 6 and with 600. The value is
+                 * emitted only when the state actually carries one, so an UNKNOWN or UNAVAILABLE
+                 * slot cannot acquire a value here that the projection never produced.
+                 */
                 kpiStates: Object.fromEntries(Object.entries(p.kpiValues).map(([k, f]) => [k, f.state])),
+                kpiValues: Object.fromEntries(Object.entries(p.kpiValues).map(([k, f]) => [
+                    k, { state: f.state, value: f.state === "known" ? f.value : null },
+                ])),
                 workViewStates: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [k, f.state])),
+                workViewValues: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [
+                    k, { state: f.state, value: f.state === "known" ? f.value : null },
+                ])),
+                workViewDiagnostics: r.workViewDiagnostics ?? null,
+                attendanceDiagnostics: r.attendanceDiagnostics ?? null,
                 serializedBytes: new TextEncoder().encode(JSON.stringify(p)).length,
             };
         } catch (e) {

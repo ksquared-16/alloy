@@ -25,6 +25,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { markAttendancePhase, type AttendanceTrace } from "./attendanceTrace";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 
 import {
@@ -237,8 +238,11 @@ export async function buildAttendanceCardVM(
         date?: string | null;
         /** How many days of history the compact strip shows. */
         recentDays?: number;
+        /** Diagnostic interval recorder. Absent by default; records nothing and changes nothing. */
+        trace?: AttendanceTrace;
     },
 ): Promise<AttendanceCardVM> {
+    const trace = args.trace;
     const date = args.date?.trim() || ymd(new Date());
     const historyDays = Math.max(1, args.recentDays ?? 5);
     const windowStart = shiftDays(date, -(historyDays - 1));
@@ -262,23 +266,66 @@ export async function buildAttendanceCardVM(
 
     // FAIL CLOSED. Without an attendable enrolment there is no attendance to show and no command to
     // offer — the card says so rather than rendering an empty day that looks like "nobody arrived".
+    const tSubject = Date.now();
     const subject = await resolveAttendanceSubject(supabase, args.orgId, args.customerMemberId);
-    if (!subject.ok) return { ...base, unavailableReason: subject.message };
+    markAttendancePhase(trace, "subject", tSubject);
+    if (!subject.ok) {
+        if (trace) trace.outcome = "short_circuit";
+        return { ...base, unavailableReason: subject.message };
+    }
+    if (trace) trace.outcome = "full";
 
+    /*
+     * SITE ROOMS START WITH THE OTHER TWO, NOT BEHIND THEM.
+     *
+     * `siteRoomsFor` takes orgId and subject.siteLocationId and nothing else: it never reads an
+     * event, an expectation, or anything derived from them. It was awaited after both only because
+     * it is written after both. Measured on deployed 20c3dd7e2 over 23 cold samples, that cost
+     * 111ms of pure waiting on a 1,072ms fold.
+     *
+     * FAILURE SEMANTICS ARE PRESERVED EXACTLY, and that is why this captures the settlement rather
+     * than simply hoisting the call. `siteRoomsFor` has no catch: a failure must still propagate out
+     * of the fold and become UNAVAILABLE, and it must still do so at the same point in the sequence.
+     * Starting the promise early without attaching a handler would also risk an unhandled rejection
+     * in the window before it is awaited. Settling it into a tagged result attaches the handler
+     * immediately and rethrows at exactly the line the old code threw from.
+     */
+    const siteRoomsSettled = (
+        subject.subject.siteLocationId
+            ? siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
+            : Promise.resolve([] as Array<{ id: string; label: string }>)
+    ).then(
+        (v) => ({ ok: true as const, value: v }),
+        (error: unknown) => ({ ok: false as const, error }),
+    );
+    const tRooms = Date.now();
+
+    const tEvents = Date.now();
+    const tExpect = Date.now();
     const [events, expectations] = await Promise.all([
         listAttendanceEvents(supabase, args.orgId, {
             enrollmentAgreementId: subject.subject.enrollmentAgreementId,
             serviceDateStart: windowStart,
             serviceDateEnd: date,
-        }).catch(() => []),
-        subject.subject.siteLocationId
+        })
+            .catch(() => [])
+            .then((r) => { markAttendancePhase(trace, "events", tEvents, { rows: r.length }); return r; }),
+        (subject.subject.siteLocationId
             ? fetchScheduleExpectations(supabase, {
                   orgId: args.orgId,
                   siteLocationId: subject.subject.siteLocationId,
                   dateStart: date,
                   dateEnd: date,
               }).catch(() => null)
-            : Promise.resolve(null),
+            : Promise.resolve(null)
+        ).then((r) => {
+            markAttendancePhase(trace, "expectations", tExpect, {
+                rows: r?.expectedAttendance?.length ?? null,
+                // agreements, then placements/assignments/proposed together, then patterns.
+                queries: 5,
+            });
+            return r;
+        }),
     ]);
 
     const expectedToday = (expectations?.expectedAttendance ?? []).find(
@@ -292,16 +339,21 @@ export async function buildAttendanceCardVM(
     });
 
     // The transfer destinations, from the child's own site. One query, alongside the label read.
-    const siteRooms = subject.subject.siteLocationId
-        ? await siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
-        : [];
+    const settled = await siteRoomsSettled;
+    if (!settled.ok) throw settled.error;
+    const siteRooms = settled.value;
+    markAttendancePhase(trace, "site_rooms", tRooms, { rows: siteRooms.length });
 
+    const tLabels = Date.now();
     const roomLabels = await roomLabelsFor(supabase, args.orgId, [
         expectedToday?.roomLocationId ?? null,
         read.currentPresenceState.roomLocationId,
         ...read.roomMovementTimeline.flatMap((m) => [m.fromRoomLocationId, m.toRoomLocationId]),
     ]);
 
+    markAttendancePhase(trace, "room_labels", tLabels, { rows: roomLabels.size });
+
+    const tFold = Date.now();
     const today = read.actualPresenceSummary.find((d) => d.serviceDate === date) ?? null;
     const movements = read.roomMovementTimeline
         .filter((m) => m.serviceDate === date)
@@ -323,6 +375,7 @@ export async function buildAttendanceCardVM(
     const state: AttendanceCardVM["state"] =
         foldState === "no_record" && expectedToday ? "not_arrived" : foldState;
 
+    markAttendancePhase(trace, "fold", tFold, { rows: null, queries: 0 });
     return {
         ...base,
         siteRooms,

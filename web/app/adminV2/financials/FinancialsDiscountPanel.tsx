@@ -32,6 +32,8 @@ type Subject = {
     customerMemberId: string | null;
     expectedCents: number;
     currencyCode: string;
+    /** How THIS relationship's effect was derived — the basis differs per child. */
+    explanation: string | null;
 };
 type PolicyPosition = {
     policyId: string;
@@ -76,6 +78,28 @@ function money(cents: number, currency: string): string {
  * absence of configuration. An operator told "no policy configured" goes to Organization to create
  * something that is already there.
  */
+
+
+/**
+ * THE BASIS, WITHOUT THE NAME IN FRONT OF IT.
+ *
+ * The forecast builds its explanation as "<policy name> · <basis>" — it has to, because a caller
+ * reading one outcome in isolation needs to know which policy it is about. This surface already
+ * states the policy name as a header, so rendering the explanation whole printed the name twice
+ * on every relationship line.
+ *
+ * MEASURED on deployed cfd4168b8: "Certa Certhouse · Expected $18.50 · Sibling discount (QA
+ * specimen) · 10% of $185.00". Two fixes interacting — D2 moved the basis onto the relationship
+ * line, D3 gave the explanation the policy's real name — and neither was wrong alone.
+ *
+ * Only a LEADING, exact name is removed. Nothing is recomputed, and an explanation that does not
+ * begin with the name is shown untouched rather than guessed at.
+ */
+function basisWithoutPolicyName(explanation: string | null, policyName: string): string | null {
+    if (!explanation) return null;
+    const prefix = `${policyName} · `;
+    return explanation.startsWith(prefix) ? explanation.slice(prefix.length) : explanation;
+}
 
 export default function FinancialsDiscountPanel({
     customerId,
@@ -202,10 +226,16 @@ export default function FinancialsDiscountPanel({
                 <div className="mt-0.5 flex flex-col gap-1">
                     {policies.map((p) => (
                         <div key={p.policyId} data-financials-discount-policy={p.policyId}>
-                            <p className="text-[11px] text-alloy-midnight/75">
-                                {p.label}
-                                {p.explanation ? <span className="text-alloy-midnight/45"> · {p.explanation}</span> : null}
-                            </p>
+                            {/*
+                              * THE NAME ONLY, AND ONLY HERE. The forecast's explanation always
+                              * leads with the policy's own name, so rendering both printed the name
+                              * twice — "discount · discount · 10% of $185.00" before D3 gave the
+                              * policy its real name, "Sibling discount (QA specimen) · Sibling
+                              * discount (QA specimen) · 10% of $185.00" after. And that basis was
+                              * one child's, shown as if it were the policy's. The name stays at
+                              * policy grain; the derivation sits on the line it belongs to.
+                              */}
+                            <p className="text-[11px] text-alloy-midnight/75">{p.label}</p>
                             {p.subjects.map((s) => (
                                 <p
                                     key={s.opportunityCustomerMemberId}
@@ -213,6 +243,9 @@ export default function FinancialsDiscountPanel({
                                     data-financials-discount-subject={s.opportunityCustomerMemberId}
                                 >
                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
+                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
+                                        <span className="text-alloy-midnight/40"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
+                                    ) : null}
                                 </p>
                             ))}
                         </div>
@@ -261,9 +294,6 @@ export default function FinancialsDiscountPanel({
                             policies.map((p) => (
                                 <div key={p.policyId} className="mt-2 border-t border-alloy-stone/10 pt-2" data-financials-discount-manage-policy={p.policyId}>
                                     <p className="text-[12px] font-medium text-alloy-midnight">{p.label}</p>
-                                    {p.explanation ? (
-                                        <p className="text-[11px] text-alloy-midnight/55">{p.explanation}</p>
-                                    ) : null}
                                     {p.subjects.map((s) => {
                                         const excepted = (position?.exceptions ?? []).find(
                                             (e) => e.policyId === p.policyId
@@ -274,6 +304,9 @@ export default function FinancialsDiscountPanel({
                                             <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
                                                 <p className="text-[11px] text-alloy-midnight/70">
                                                     {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
+                                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
+                                                        <span className="text-alloy-midnight/45"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
+                                                    ) : null}
                                                 </p>
                                                 {excepted ? (
                                                     <p className="text-[11px] text-alloy-ember" data-financials-discount-exception={excepted.id}>

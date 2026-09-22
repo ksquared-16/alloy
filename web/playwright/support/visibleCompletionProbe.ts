@@ -227,7 +227,8 @@ export function installVisibleCompletionProbe(): void {
         | "AUTHORITATIVE_VISIBLE_STATE_CHANGE"
         | "IDENTICAL_RERENDER"
         | "DIAGNOSTIC_ATTRIBUTE_CHANGE"
-        | "PRESENTATIONAL_ANIMATION";
+        | "PRESENTATIONAL_ANIMATION"
+        | "STAGE2_ENRICHMENT";
     /** Only a change in operator-visible authoritative truth may move FINAL_AUTHORITATIVE_MS. */
     const ADVANCES_FINALITY: Record<Kind21, boolean> = {
         AUTHORITATIVE_CONTENT_CHANGE: true,
@@ -236,6 +237,21 @@ export function installVisibleCompletionProbe(): void {
         IDENTICAL_RERENDER: false,
         DIAGNOSTIC_ATTRIBUTE_CHANGE: false,
         PRESENTATIONAL_ANIMATION: false,
+        /*
+         * STAGE 2 MAY ADD DETAIL; IT MAY NOT CORRECT STAGE 1.
+         *
+         * The first-order projection contract names the exclusions outright — "nested surfaces,
+         * Recent activity, payment applications, rails, expanded contacts, avatars, drawer
+         * content". A subtree the product has declared Stage-2 therefore cannot decide when the
+         * FIRST-ORDER surface became authoritative, however late it arrives.
+         *
+         * This is NOT a way to silence an inconvenient mutation. It applies only where the
+         * renderer has marked a subtree `data-alloy-stage2-enrichment`, and that marking is itself
+         * a product statement that the operator's first-order decision does not depend on it.
+         * Mark something first-order with it and the metric WILL go quiet about a real correction,
+         * which is why the guard test asserts the marker's reach is exactly its subtree.
+         */
+        STAGE2_ENRICHMENT: false,
     };
     /*
      * THE SAME REPLACEMENT, SPLIT ACROSS TWO RECORDS.
@@ -306,7 +322,24 @@ export function installVisibleCompletionProbe(): void {
         return out;
     };
 
+    /** Nearest ancestor (or self) declared Stage-2 enrichment by the renderer. */
+    const inStage2Enrichment = (n: Node | null): boolean => {
+        let cur: Element | null = n
+            ? (n.nodeType === 1 ? (n as Element) : n.parentElement)
+            : null;
+        while (cur) {
+            if (cur.getAttribute?.("data-alloy-stage2-enrichment") === "true") return true;
+            cur = cur.parentElement;
+        }
+        return false;
+    };
+
     const classify21 = (r: MutationRecord, batchIdentical?: Set<Node>): Kind21 => {
+        /*
+         * Asked FIRST, and before the mutation type is even considered: a Stage-2 subtree's
+         * arrival is detail by product contract, whatever shape the mutation takes.
+         */
+        if (inStage2Enrichment(r.target)) return "STAGE2_ENRICHMENT";
         if (r.type === "attributes") {
             const raw = r.attributeName ?? "";
             const name = raw.toLowerCase();
@@ -548,6 +581,7 @@ export function installVisibleCompletionProbe(): void {
             AUTHORITATIVE_CONTENT_CHANGE: 0, AUTHORITATIVE_STRUCTURE_CHANGE: 0,
             AUTHORITATIVE_VISIBLE_STATE_CHANGE: 0, IDENTICAL_RERENDER: 0,
             DIAGNOSTIC_ATTRIBUTE_CHANGE: 0, PRESENTATIONAL_ANIMATION: 0,
+            STAGE2_ENRICHMENT: 0,
         },
         blockingSeen: [],
         latestGeneration: null,
@@ -629,7 +663,24 @@ export function installVisibleCompletionProbe(): void {
                     componentId: el?.closest?.("[data-alloy-section-id]")?.getAttribute("data-alloy-section-id") ?? null,
                     addedFp: fingerprintList(r.addedNodes),
                     removedFp: fingerprintList(r.removedNodes),
-                    identical: fingerprintList(r.addedNodes) === fingerprintList(r.removedNodes),
+                    /*
+                     * A characterData mutation has NO added or removed nodes, so `identical`
+                     * below is vacuously true for it. Downstream analysis that compared only
+                     * those fingerprints therefore scored a real "1" -> "2" as same-value, and a
+                     * genuine authoritative correction read as convergence for two runs.
+                     *
+                     * The classifier above always compared the text (it has
+                     * `characterDataOldValue`); what was missing was the EVIDENCE in the record.
+                     * These two fields are that evidence.
+                     */
+                    textBefore: r.type === "characterData" ? (r.oldValue ?? "").replace(/\s+/g, " ").trim() : null,
+                    textAfter: r.type === "characterData"
+                        ? (r.target.nodeValue ?? "").replace(/\s+/g, " ").trim()
+                        : null,
+                    /** Only meaningful for childList; null where it cannot decide. */
+                    identical: r.type === "characterData"
+                        ? null
+                        : fingerprintList(r.addedNodes) === fingerprintList(r.removedNodes),
                     generation: genOfMutation,
                     liveGeneration: live,
                     stale,
@@ -755,6 +806,10 @@ export function installVisibleCompletionProbe(): void {
                      * PARENT's text, which is unchanged in exactly the case under investigation.
                      * This is how the WU-07 observation was finally named: `SPAN|Work: 1`.
                      */
+                    textBefore: r.type === "characterData" ? (r.oldValue ?? "").replace(/\s+/g, " ").trim() : null,
+                    textAfter: r.type === "characterData"
+                        ? (r.target.nodeValue ?? "").replace(/\s+/g, " ").trim()
+                        : null,
                     addedFp: Array.from(r.addedNodes ?? []).map(fingerprint).join("~").slice(0, 160),
                     removedFp: Array.from(r.removedNodes ?? []).map(fingerprint).join("~").slice(0, 160),
                     /*

@@ -1,0 +1,93 @@
+{
+  "trusted_host_action_id": "tha_414b315cfde0ca",
+  "query_hash": "85dcdef07294557c515c4df8fbe0fc0c7575249b0b29ac8e4ffd33a3b0cb8a86",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:38:29.869Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_414b315cfde0ca",
+    "query_hash": "85dcdef07294557c515c4df8fbe0fc0c7575249b0b29ac8e4ffd33a3b0cb8a86",
+    "authorization_id": "grnt_87a5af6802274745",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:38:31.389Z",
+    "question_ids": [
+      "coverage_wave2_cleanup"
+    ],
+    "questions": {
+      "coverage_wave2_cleanup": {
+        "question_id": "coverage_wave2_cleanup",
+        "row_count": null,
+        "rows": [
+          {
+            "effective_anywhere": 0,
+            "effective_on_wave2_date": 0,
+            "total_rows": 13,
+            "by_state": {
+              "superseded": 4,
+              "cancelled": 9
+            },
+            "authored_reasons_preserved": [
+              {
+                "id": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "state": "superseded",
+                "transition": null,
+                "reason": "wave2_authored",
+                "cancel_reason": null
+              },
+              {
+                "id": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+                "state": "cancelled",
+                "transition": null,
+                "reason": "wave2_adjacent",
+                "cancel_reason": "qa_cleanup_slice3_wave2"
+              },
+              {
+                "id": "f745b56d-d56f-4658-86f9-3f1f8947022f",
+                "state": "superseded",
+                "transition": "revision",
+                "reason": "qa_revision",
+                "cancel_reason": null
+              },
+              {
+                "id": "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+                "state": "cancelled",
+                "transition": "correction",
+                "reason": "qa_correction",
+                "cancel_reason": "qa_cleanup"
+              },
+              {
+                "id": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+                "state": "cancelled",
+                "transition": null,
+                "reason": "wave2_shared_room",
+                "cancel_reason": "qa_cleanup_slice3_wave2"
+              },
+              {
+                "id": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+                "state": "cancelled",
+                "transition": null,
+                "reason": "wave2_out_of_scope",
+                "cancel_reason": "qa_cleanup_slice3_wave2"
+              }
+            ],
+            "staff_assignments_live": 3,
+            "staff_assignments_supply": 3,
+            "child_demand_assignments": 3,
+            "assignment_weekday_intervals": 35,
+            "availability_windows": 7,
+            "availability_exceptions": 7,
+            "presence_events": 5,
+            "observed_at": "2026-09-22 01:38:31.313228+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

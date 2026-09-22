@@ -1,0 +1,50 @@
+{
+  "trusted_host_action_id": "tha_6cbbce8da619a5",
+  "query_hash": "c2aa056ccee9437c8f3fa606ca49f91ac68eb92db4dc7be89b6aae71fd75be2f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:32:15.566Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_6cbbce8da619a5",
+    "query_hash": "c2aa056ccee9437c8f3fa606ca49f91ac68eb92db4dc7be89b6aae71fd75be2f",
+    "authorization_id": "grnt_a5cc072ac6dd471f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:32:17.095Z",
+    "question_ids": [
+      "coverage_repair_identity"
+    ],
+    "questions": {
+      "coverage_repair_identity": {
+        "question_id": "coverage_repair_identity",
+        "row_count": null,
+        "rows": [
+          {
+            "repair_column_present": 1,
+            "cancel_rpc_writes_cancel_reason": 1,
+            "cancel_rpc_still_clobbers_reason": 0,
+            "ledger_has_repair_version": 1,
+            "ledger_head": "20261013120000",
+            "staff_assignments_live": 3,
+            "staff_assignments_supply": 3,
+            "child_demand_assignments": 3,
+            "assignment_weekday_intervals": 35,
+            "availability_windows": 7,
+            "availability_exceptions": 7,
+            "presence_events": 5,
+            "coverage_total": 7,
+            "coverage_effective": 0,
+            "coverage_rows_on_wave2_date": 0,
+            "observed_at": "2026-09-22 01:32:16.994532+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

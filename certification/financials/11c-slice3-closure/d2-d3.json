@@ -1,0 +1,21 @@
+{
+  "position": {
+    "fullText": "DISCOUNTS Sibling discount (QA specimen) Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00 Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "header": "Sibling discount (QA specimen)"
+      }
+    ],
+    "subjects": [
+      "Certa Certhouse · Expected $18.50 · Sibling discount (QA specimen) · 10% of $185.00",
+      "Certb Certhouse · Expected $145.00 · Sibling discount (QA specimen) · 10% of $1450.00"
+    ]
+  },
+  "familyPolicyName": "Sibling discount (QA specimen)",
+  "familyPolicyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+  "organization": {
+    "found": true,
+    "text": "Sibling discount (QA specimen) Pricing · Discount 10% off everything · Active · Whole organization · from 2026-01-01"
+  }
+}

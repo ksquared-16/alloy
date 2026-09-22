@@ -82,7 +82,7 @@ export async function loadOperationalExpectationInputs(
         agreementIds.length > 0
             ? supabase
                   .from("schedule_assignments")
-                  .select("enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
+                  .select("id, enrollment_agreement_id, schedule_pattern_id, start_date, end_date, status")
                   .eq("org_id", orgId)
                   .in("enrollment_agreement_id", agreementIds)
                   .eq("commitment_kind", "committed")
@@ -91,7 +91,7 @@ export async function loadOperationalExpectationInputs(
         supabase
             .from("schedule_assignments")
             .select(
-                "customer_member_id, site_location_id, room_location_id, program_category_id, schedule_pattern_id, start_date, end_date, status"
+                "id, customer_member_id, site_location_id, room_location_id, program_category_id, schedule_pattern_id, start_date, end_date, status"
             )
             .eq("org_id", orgId)
             .eq("site_location_id", siteLocationId)
@@ -114,33 +114,67 @@ export async function loadOperationalExpectationInputs(
             ...proposedAssignments.map((a) => a.schedule_pattern_id),
         ]),
     ];
-    const patternsById = new Map<string, SchedulePatternInput>();
-    if (patternIds.length > 0) {
-        const { data: patternData, error: patternError } = await supabase
+    /*
+     * PATTERNS AND AGE GROUPS ARE INDEPENDENT — SO THEY ARE ASKED TOGETHER.
+     *
+     * `schedule_patterns` is keyed by the pattern ids on the assignments; age-group resolution is
+     * keyed by the program categories and rooms on the placements. Neither reads the other's
+     * result. They were nonetheless awaited in series, which put two full round trips on the
+     * Attendance critical path where one belongs. Measured on deployed 680e5765: the
+     * `expectations` phase was ~700ms over a six-deep serial chain, and `attendance_fold` bound the
+     * provisioning frame in 21 of 21 cold samples.
+     *
+     * NOTHING ELSE CHANGES. Same queries, same filters, same org scoping, same authorization, same
+     * rows. Only the SCHEDULE changes, so the assembler downstream cannot tell the difference —
+     * which is what `attendanceExpectationsMemberScopeParity` and the concurrency guard pin.
+     *
+     * FAILURE PRECEDENCE IS PRESERVED DELIBERATELY. In series a pattern error threw before age
+     * groups ran, so a caller seeing both faults saw the pattern one. `allSettled` keeps both
+     * outcomes and rethrows in that same order, and because both are reads, running the second
+     * one on a doomed request mutates nothing.
+     */
+    const patternsPromise: Promise<SchedulePatternInput[]> = (async () => {
+        if (patternIds.length === 0) return [];
+        const { data, error } = await supabase
             .from("schedule_patterns")
             .select("id, weekdays, schedule_type_key")
             .eq("org_id", orgId)
             .in("id", patternIds);
-        if (patternError) throw new OperationalEnrollmentServiceError("db_error", patternError.message);
-        for (const p of (patternData ?? []) as SchedulePatternInput[]) {
-            patternsById.set(p.id, p);
-        }
-    }
+        if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+        return (data ?? []) as SchedulePatternInput[];
+    })();
 
     // Resolve age groups from canonical sources unless the caller overrode them.
     let ageGroupByProgramCategoryId = args.ageGroupByProgramCategoryId;
     let ageGroupByRoomLocationId = args.ageGroupByRoomLocationId;
-    if (ageGroupByProgramCategoryId == null || ageGroupByRoomLocationId == null) {
-        const resolved = await loadExpectationAgeGroups(supabase, orgId, {
-            programCategoryIds: [
-                ...placements.map((p) => p.program_category_id),
-                ...proposedAssignments.map((a) => a.program_category_id),
-            ].filter((id): id is string => Boolean(id)),
-            roomLocationIds: [
-                ...placements.map((p) => p.room_location_id),
-                ...proposedAssignments.map((a) => a.room_location_id),
-            ].filter((id): id is string => Boolean(id)),
-        });
+    const needsAgeGroups = ageGroupByProgramCategoryId == null || ageGroupByRoomLocationId == null;
+    const ageGroupsPromise = needsAgeGroups
+        ? loadExpectationAgeGroups(supabase, orgId, {
+              programCategoryIds: [
+                  ...placements.map((p) => p.program_category_id),
+                  ...proposedAssignments.map((a) => a.program_category_id),
+              ].filter((id): id is string => Boolean(id)),
+              roomLocationIds: [
+                  ...placements.map((p) => p.room_location_id),
+                  ...proposedAssignments.map((a) => a.room_location_id),
+              ].filter((id): id is string => Boolean(id)),
+          })
+        : null;
+
+    const [patternsSettled, ageGroupsSettled] = await Promise.allSettled([
+        patternsPromise,
+        ageGroupsPromise ?? Promise.resolve(null),
+    ]);
+    if (patternsSettled.status === "rejected") throw patternsSettled.reason;
+    if (ageGroupsSettled.status === "rejected") throw ageGroupsSettled.reason;
+
+    const patternsById = new Map<string, SchedulePatternInput>();
+    for (const p of patternsSettled.value) {
+        patternsById.set(p.id, p);
+    }
+
+    const resolved = ageGroupsSettled.value;
+    if (resolved) {
         ageGroupByProgramCategoryId = ageGroupByProgramCategoryId ?? resolved.ageGroupByProgramCategoryId;
         ageGroupByRoomLocationId = ageGroupByRoomLocationId ?? resolved.ageGroupByRoomLocationId;
     }

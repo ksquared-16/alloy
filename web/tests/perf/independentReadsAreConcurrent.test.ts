@@ -115,14 +115,27 @@ describe("queue-critical independent reads are issued together", () => {
         expect(all).toContain("customer_members");
         expect(all).toContain("location_program_categories");
 
-        // `customer_members` is keyed by subject_id and `location_program_categories` by
-        // metadata.program_category_id — both known from the process rows alone. Neither may wait on
-        // the ocm -> opportunity chain, so both must be in flight while that chain is still resolving.
-        const idx = (t: string) => all.indexOf(t);
+        /*
+         * EVERY REFERENCE READ IS ISSUED IN ONE BATCH, DIRECTLY BEHIND THE PROCESS ROWS.
+         *
+         * This used to assert `idx(customer_members) <= idx(opportunities)`, which was a proxy for
+         * "cm does not wait on the ocm -> opportunity chain" and was only true while `opportunities`
+         * came LAST, after ocm resolved. The opportunities read is now issued speculatively in the
+         * same tick as ocm, so the proxy inverted while the property it stood for held perfectly.
+         *
+         * The property itself is assertable directly and more strictly: the process-instance read
+         * comes first, and all four reference reads are issued CONSECUTIVELY after it. That forbids
+         * any chaining among them — including the ocm -> opportunity chain this slice removed —
+         * rather than forbidding one particular ordering of the four.
+         */
+        expect(all[0], "the process-instance read must still come first").toBe("process_instances");
         expect(
-            idx("customer_members"),
-            "customer_members must be issued no later than the opportunities read it does not depend on",
-        ).toBeLessThan(idx("opportunities") + 1);
-        expect(idx("location_program_categories")).toBeLessThan(idx("opportunities") + 1);
+            [...all.slice(1, 5)].sort(),
+            "all four reference reads must be issued together, with nothing awaited between them",
+        ).toEqual(
+            ["customer_members", "location_program_categories", "opportunities", "opportunity_customer_members"],
+        );
+        // And with every context id resolvable speculatively, the bounded backstop must not fire.
+        expect(all.filter((t) => t === "opportunities")).toHaveLength(1);
     });
 });

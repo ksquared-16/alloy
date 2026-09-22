@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { newAttendanceTrace } from "@/lib/adminV2/runtime/focusPanel/attendance/attendanceTrace";
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
@@ -12,6 +13,9 @@ import { readWorkUnitProcessConfiguration } from "@/lib/runtime/firstOrder/readW
 import { readHealthFirstOrderSupplements } from "@/lib/runtime/firstOrder/readHealthFirstOrderSupplements";
 import { readAccountLedgerPosition } from "@/lib/runtime/firstOrder/readAccountLedgerPosition";
 import { readHeaderKpiValues } from "@/lib/runtime/firstOrder/readFirstOrderValueSeeds";
+import {
+    readWorkViewTotalsForFirstOrder, type FirstOrderWorkViewCallerInputs,
+} from "@/lib/runtime/firstOrder/readWorkViewTotalsForFirstOrder";
 import {
     compileFirstOrderPlan, type FirstOrderPlan, type FirstOrderSurfaceConfiguration,
 } from "@/lib/runtime/firstOrder/compileFirstOrderPlan";
@@ -70,15 +74,14 @@ export type FirstOrderComposeInput = {
     /** Request-time decisions, resolved by the caller's gate. Never decided here. */
     authority: { financialsRead: boolean; healthView: boolean };
     /**
-     * Work View totals, already resolved by the caller through the ONE canonical evaluator.
+     * The request-time inputs the canonical Work View evaluator needs and A′ must not invent:
+     * the record scope resolved at the caller's gate, and the viewer's display timezone.
      *
-     * Supplied rather than computed for the same reason `authority` is: the seed needs the
-     * caller's record scope, the department's work units and the viewer's timezone, and
-     * resolving those here would make a second scope authority and a second timezone owner out
-     * of a projection runtime. Absent means the surface configured none, or the caller could not
-     * resolve them — the capability then says UNAVAILABLE rather than zero.
+     * A′ derives the count TARGETS itself now, through `loadSettlementLocators` — the same owner
+     * the legacy composer calls — so only these two genuinely request-scoped facts are passed in.
+     * Absent means the caller cannot supply them and the capability says UNAVAILABLE, never zero.
      */
-    workViewTotals?: { status: string; totalsByViewId: Record<string, number | null> } | null;
+    workViewCaller?: FirstOrderWorkViewCallerInputs | null;
 };
 
 export type FirstOrderComposeTiming = {
@@ -98,6 +101,10 @@ export type FirstOrderComposeResult = {
     projection: FirstOrderWorkUnitProjection;
     timing: FirstOrderComposeTiming;
     plan: FirstOrderPlan;
+    /** Diagnostic decomposition of the Work View evaluator, when it ran. Never product state. */
+    workViewDiagnostics?: unknown;
+    /** Diagnostic decomposition of the attendance fold, when it ran. Never product state. */
+    attendanceDiagnostics?: unknown;
 };
 
 /**
@@ -127,8 +134,8 @@ const PREREQUISITE_QUERY_COST: Readonly<Record<FirstOrderPrerequisiteKey, number
     account_ledger: 4,
     // org_settings plus the metric resolver's own reads
     header_kpis: 2,
-    // the canonical Work View evaluator, supplied by the caller when it can run
-    work_view_totals: 0,
+    // settlement locators (work_units by department) plus the canonical evaluator's own counts
+    work_view_totals: 2,
 };
 
 export async function composeFirstOrderWorkUnitProjection(
@@ -192,6 +199,13 @@ export async function composeFirstOrderWorkUnitProjection(
     );
     const planMs = at();
 
+    /*
+     * ATTENDANCE IS THE BINDING FIRST-ORDER TERM AND HAS NEVER BEEN DECOMPOSED. The ~125ms it used
+     * to cost was the fail-closed branch; a specimen with an active enrolment measures 1,111-1,147ms.
+     * This records its internal intervals so the DAG can be read rather than inferred.
+     */
+    const attendanceTrace = newAttendanceTrace();
+
     // ── EXECUTE ────────────────────────────────────────────────────────────────────────────────
     const run = async <T,>(name: FirstOrderPrerequisiteKey, fn: () => Promise<T>): Promise<T | null> => {
         executedResolvers.push(name);
@@ -222,6 +236,10 @@ export async function composeFirstOrderWorkUnitProjection(
      * The edge now also exists as DATA (`PREREQUISITE_DEPENDENCIES`), so a capability added later
      * cannot reintroduce the defect by naming the wrong phase.
      */
+    const processConfigPromise = executable.has("process_config")
+        ? run("process_config", () => readWorkUnitProcessConfiguration({ supabase, orgId, workUnitId }))
+        : Promise.resolve(null);
+
     const populationPromise = executable.has("population")
         ? run("population", () => loadWorkUnitProcessPopulation({ supabase, orgId, workUnitId }))
         : Promise.resolve(null);
@@ -243,17 +261,18 @@ export async function composeFirstOrderWorkUnitProjection(
         return { crm: c, children: ch, seen: sn, rows: depRows };
     });
 
-    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, accountLedger, headerKpis, dependent] =
+    const [population, attendance, healthProfile, healthSupplements, processConfig, prepaid, accountLedger, headerKpis, workViewTotalsRead, dependent] =
         await Promise.all([
             populationPromise,
             maybe("attendance_fold", () => buildAttendanceCardVM(supabase, {
                 orgId, customerMemberId: input.customerMemberId!, recentDays: 5,
+                trace: attendanceTrace,
             })),
             maybe("health_profile", () =>
                 loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!])),
             maybe("health_supplements", () =>
                 readHealthFirstOrderSupplements({ supabase, orgId, customerMemberId: input.customerMemberId! })),
-            maybe("process_config", () => readWorkUnitProcessConfiguration({ supabase, orgId, workUnitId })),
+            processConfigPromise,
             maybe("prepaid_position", () => readAccountPrepaidPosition(supabase, {
                 orgId, householdId: input.householdId!, authorized: input.authority.financialsRead,
             })),
@@ -264,6 +283,21 @@ export async function composeFirstOrderWorkUnitProjection(
                 supabase, orgId, workUnitId, siteLocationId: cfg.siteScopeId,
                 configuredKpiKeys: cfg.kpiKeys,
             })),
+            /*
+             * Work View totals depend on the process configuration for their department and
+             * configured views, so this is the one value family that chains — off
+             * `process_config` alone, not off the whole of phase 1.
+             */
+            processConfigPromise.then((pc) => (
+                executable.has("work_view_totals") && pc && input.workViewCaller
+                    ? run("work_view_totals", () => readWorkViewTotalsForFirstOrder(supabase, {
+                          orgId, workUnitId,
+                          departmentId: pc.departmentId,
+                          departmentMetadata: pc.departmentMetadata,
+                          caller: input.workViewCaller!,
+                      }))
+                    : Promise.resolve(null)
+            )),
             dependentPromise,
         ]);
 
@@ -336,7 +370,7 @@ export async function composeFirstOrderWorkUnitProjection(
         prepaid,
         accountLedger,
         headerKpis,
-        workViewTotals: input.workViewTotals ?? null,
+        workViewTotals: workViewTotalsRead,
         rail,
         processConfigRead: executable.has("process_config") ? processConfig !== null : undefined,
         childrenRead: executable.has("children_projection") ? children !== null : undefined,
@@ -438,5 +472,9 @@ export async function composeFirstOrderWorkUnitProjection(
         projection,
         timing: { planMs, readDagMs, assemblyMs, totalMs: at(), spans, executedResolvers, queryCount },
         plan,
+        workViewDiagnostics: workViewTotalsRead && workViewTotalsRead.status === "ok"
+            ? workViewTotalsRead.diagnostics
+            : null,
+        attendanceDiagnostics: attendanceTrace.marks.length ? attendanceTrace : null,
     };
 }

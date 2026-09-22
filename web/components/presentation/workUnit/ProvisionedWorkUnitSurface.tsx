@@ -368,6 +368,10 @@ export function ProvisionedWorkUnitSurface() {
                     // The participation the ANSWER resolved — identity only, carried so the browser
                     // can mount the participant-scoped cards from truth it already has.
                     resolvedParticipant={op ? op.resolvedParticipant ?? null : null}
+                    // The tour signal the ANSWER resolved. Null means NOT ESTABLISHED, never
+                    // "no tour" — same object, same navigation, so it cannot drift from the
+                    // participant beside it.
+                    resolvedTour={op ? op.resolvedTour ?? null : null}
                     // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
                     // the panel never infers what the subject is. A contextual answer resolves it too
                     // (from the subject's entity class rather than a lens's Row Grain), so it is carried

@@ -1,0 +1,427 @@
+{
+  "trusted_host_action_id": "tha_1a86ff711a81cc",
+  "query_hash": "9f0a32be7441b4e30b752e3e1926e1987011b2de32cf2f02117b72e504324907",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T14:49:37.799Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1a86ff711a81cc",
+    "query_hash": "9f0a32be7441b4e30b752e3e1926e1987011b2de32cf2f02117b72e504324907",
+    "authorization_id": "grnt_a62d9dd4bbb844c5",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T14:49:39.510Z",
+    "question_ids": [
+      "ratio_config"
+    ],
+    "questions": {
+      "ratio_config": {
+        "question_id": "ratio_config",
+        "row_count": null,
+        "rows": [
+          {
+            "ratio_tables": [
+              {
+                "table": "attendance_integration_events",
+                "columns": [
+                  "id",
+                  "provider_key",
+                  "provider_event_id",
+                  "provider_event_type",
+                  "presented_producer_key",
+                  "org_id",
+                  "disposition",
+                  "failure_code",
+                  "attendance_event_id",
+                  "payload_fingerprint",
+                  "physical_event_at",
+                  "provider_recorded_at",
+                  "received_at",
+                  "processed_at",
+                  "raw",
+                  "created_at",
+                  "updated_at",
+                  "installation_id"
+                ]
+              },
+              {
+                "table": "childcare_ratio_rule_tiers",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "ratio_rule_id",
+                  "max_children",
+                  "required_staff",
+                  "sort_order",
+                  "metadata",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "childcare_ratio_rules",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "scope_type",
+                  "site_location_id",
+                  "program_category_id",
+                  "room_location_id",
+                  "age_group_key",
+                  "jurisdiction_key",
+                  "effective_start",
+                  "effective_end",
+                  "source_key",
+                  "metadata",
+                  "created_by",
+                  "updated_by",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "configuration_command_operations",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "command_key",
+                  "idempotency_key",
+                  "status",
+                  "request_fingerprint",
+                  "entry_point",
+                  "program_id",
+                  "publication_id",
+                  "revision_id",
+                  "distribution_run_id",
+                  "result",
+                  "created_by",
+                  "created_at",
+                  "completed_at"
+                ]
+              },
+              {
+                "table": "configuration_consumptions",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "domain_key",
+                  "subject_id",
+                  "location_id",
+                  "publication_id",
+                  "revision_id",
+                  "consumed_at",
+                  "delivered_by_run_id",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "configuration_delivery_attempts",
+                "columns": [
+                  "id",
+                  "run_id",
+                  "target_id",
+                  "org_id",
+                  "attempt_number",
+                  "status",
+                  "failure_category",
+                  "retryability",
+                  "failure_code",
+                  "failure_message",
+                  "provider_result",
+                  "mutation_event_id",
+                  "attempted_by",
+                  "attempted_at",
+                  "location_id",
+                  "result",
+                  "error_code",
+                  "error_message",
+                  "audit_event_id"
+                ]
+              },
+              {
+                "table": "configuration_distribution_consumptions",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "domain_key",
+                  "subject_key",
+                  "target_kind",
+                  "target_key",
+                  "revision_id",
+                  "revision_number",
+                  "revision_checksum",
+                  "run_id",
+                  "target_id",
+                  "attempt_id",
+                  "provider_key",
+                  "provider_version",
+                  "provider_receipt",
+                  "consumed_at",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "configuration_distribution_runs",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "domain_key",
+                  "subject_key",
+                  "revision_id",
+                  "revision_number",
+                  "revision_checksum",
+                  "provider_key",
+                  "provider_version",
+                  "target_set_checksum",
+                  "idempotency_key",
+                  "status",
+                  "requested_by",
+                  "requested_by_label",
+                  "created_at",
+                  "started_at",
+                  "completed_at",
+                  "publication_id"
+                ]
+              },
+              {
+                "table": "configuration_distribution_targets",
+                "columns": [
+                  "id",
+                  "run_id",
+                  "org_id",
+                  "domain_key",
+                  "subject_key",
+                  "target_kind",
+                  "target_key",
+                  "target_label",
+                  "location_id",
+                  "location_program_category_id",
+                  "status",
+                  "attempt_count",
+                  "retryability",
+                  "failure_category",
+                  "failure_code",
+                  "failure_message",
+                  "provider_result",
+                  "assigned_at",
+                  "last_attempt_at",
+                  "succeeded_at",
+                  "updated_at",
+                  "result",
+                  "error_code",
+                  "error_message"
+                ]
+              },
+              {
+                "table": "configuration_publications",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "domain_key",
+                  "subject_id",
+                  "revision_id",
+                  "revision_number",
+                  "payload_checksum",
+                  "published_by",
+                  "published_at",
+                  "audit_event_id"
+                ]
+              },
+              {
+                "table": "integration_resource_refs",
+                "columns": [
+                  "id",
+                  "installation_id",
+                  "org_id",
+                  "resource_type",
+                  "external_id",
+                  "child_customer_member_id",
+                  "location_id",
+                  "status",
+                  "disabled_at",
+                  "disabled_by",
+                  "created_at",
+                  "created_by",
+                  "updated_at",
+                  "metadata"
+                ]
+              },
+              {
+                "table": "operational_assignment_types",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "key",
+                  "label",
+                  "icon_key",
+                  "visual_tone",
+                  "subject_types",
+                  "default_behavior",
+                  "billing_participation",
+                  "attendance_participation",
+                  "staffing_participation",
+                  "sort_order",
+                  "is_active",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "operational_authorities",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "authority_key",
+                  "label",
+                  "description",
+                  "authority_kind",
+                  "is_active",
+                  "effective_start",
+                  "effective_end",
+                  "config_version_ref",
+                  "created_by",
+                  "created_at"
+                ]
+              },
+              {
+                "table": "operational_authority_assignments",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "authority_key",
+                  "holder_type",
+                  "holder_id",
+                  "scope_type",
+                  "scope_id",
+                  "status",
+                  "effective_start",
+                  "effective_end",
+                  "supersedes_assignment_id",
+                  "source",
+                  "granted_by",
+                  "recorded_at",
+                  "metadata"
+                ]
+              },
+              {
+                "table": "operational_expectation_ratifications",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "expectation_id",
+                  "lineage_root_id",
+                  "prior_standing",
+                  "new_standing",
+                  "ratifier_authority_key",
+                  "ratified_by_user_id",
+                  "ratified_by_label",
+                  "rationale",
+                  "idempotency_key",
+                  "payload_fingerprint",
+                  "ratified_at",
+                  "metadata"
+                ]
+              },
+              {
+                "table": "operational_expectations",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "authority_key",
+                  "author_class",
+                  "modality",
+                  "subject_kind",
+                  "subject_ref",
+                  "condition",
+                  "temporal_frame",
+                  "beneficiary",
+                  "verb",
+                  "transition_type",
+                  "supersedes_expectation_id",
+                  "lineage_root_id",
+                  "standing",
+                  "footprint",
+                  "valid_from",
+                  "valid_to",
+                  "authored_at",
+                  "config_version_ref",
+                  "authored_by_user_id",
+                  "authored_by_label",
+                  "schema_version",
+                  "metadata",
+                  "created_by",
+                  "idempotency_key",
+                  "payload_fingerprint",
+                  "authority_assignment_id",
+                  "authority_matched_scope"
+                ]
+              },
+              {
+                "table": "operational_tasks",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "entity_type",
+                  "entity_id",
+                  "assigned_to_user_id",
+                  "created_by",
+                  "title",
+                  "description",
+                  "due_at",
+                  "status",
+                  "source",
+                  "proposal_id",
+                  "metadata",
+                  "created_at",
+                  "updated_at"
+                ]
+              },
+              {
+                "table": "processing_plan_operations",
+                "columns": [
+                  "id",
+                  "org_id",
+                  "plan_id",
+                  "op_id",
+                  "op_order",
+                  "op_kind",
+                  "command_key",
+                  "command_version",
+                  "target_type",
+                  "target_id",
+                  "payload",
+                  "before_snapshot",
+                  "after_values",
+                  "reason",
+                  "evidence_refs",
+                  "resolution_refs",
+                  "risk",
+                  "depends_on",
+                  "atomic_group",
+                  "precondition_record_version",
+                  "included",
+                  "optional",
+                  "reversibility",
+                  "expected_side_effects",
+                  "mapping",
+                  "created_at"
+                ]
+              }
+            ],
+            "row_counts": {
+              "childcare_ratio_rules": 0,
+              "childcare_ratio_rule_tiers": 0
+            },
+            "observed_at": "2026-09-22 14:49:39.333063+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

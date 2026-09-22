@@ -1,0 +1,30 @@
+{
+  "before": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPanel": 0,
+    "discountPosition": 1
+  },
+  "after": {
+    "detailsOpen": 1,
+    "lens": "all",
+    "rows": 116,
+    "filters": [
+      "financials-filter-subject=Everyone",
+      "financials-filter-period=All periods",
+      "financials-filter-responsible-party=Anyone responsible"
+    ],
+    "discountPanel": 0,
+    "discountPosition": 1
+  },
+  "focus": {
+    "name": "Manage discounts",
+    "isTheOpener": true
+  }
+}

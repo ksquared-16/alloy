@@ -1,0 +1,42 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "date": "2027-04-02",
+  "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "phase": "cleanup",
+  "transcript": [
+    {
+      "step": "cleanup_ad0a7129",
+      "action_key": "staff_coverage.cancel",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+        "reason_key": "qa_cleanup_slice3_wave2"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "ad0a7129-e7c1-49ab-9c26-b102923d5dcc",
+      "detail": null,
+      "at": "2026-09-22T01:37:56.222Z"
+    },
+    {
+      "step": "cleanup_54cf129f",
+      "action_key": "staff_coverage.cancel",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+        "reason_key": "qa_cleanup_slice3_wave2"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "54cf129f-aa9f-41d6-a90f-9cc093955b40",
+      "detail": null,
+      "at": "2026-09-22T01:37:56.996Z"
+    }
+  ]
+}

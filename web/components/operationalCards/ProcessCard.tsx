@@ -313,7 +313,26 @@ export default function ProcessCard({
 
                         {/* 4 · ACTIVITY ON DEMAND — zero rows on the card face. Omitted entirely when
                             there is none: a trigger that opens an empty menu is a broken promise. */}
-                        <div className="alloy-os-process__foot-right">
+                        {/*
+                          * DECLARED STAGE-2, because the product contract already says so.
+                          *
+                          * `firstOrderWorkUnitProjection` names its exclusions outright — "nested
+                          * surfaces, Recent activity, payment applications, rails, expanded
+                          * contacts, avatars, drawer content" — and `business_process` declares six
+                          * firstOrderFields, none of which is activity. The card face carries zero
+                          * activity rows; this is an affordance that opens detail on demand, and
+                          * its count exists only so the trigger is not a broken promise.
+                          *
+                          * Measured on deployed 03f93ec6f: the count's text arrived with the drawer
+                          * in 20 of 20 samples and, being an authoritative content change inside a
+                          * blocking region, it was deciding FIRST_ORDER_VISIBLE_COMPLETE. A field
+                          * the contract calls Stage-2 must not do that.
+                          *
+                          * This marks the affordance as enrichment. It does NOT hide the count, and
+                          * it does not change when the count appears — only whether its arrival is
+                          * allowed to claim the first-order surface had not finished.
+                          */}
+                        <div className="alloy-os-process__foot-right" data-alloy-stage2-enrichment="true">
                             {evidence.activity.length ? (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

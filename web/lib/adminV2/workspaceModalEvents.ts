@@ -91,12 +91,12 @@ export const ROSTER_WORKSPACE_DEEPLINK_KEY = "alloy.roster.workspace.deeplink";
 
 export type OpenRosterModalDetail = {
     /**
-     * A WORK section. Roster is the expectation mode and Attendance the actuality mode; Staff and
-     * Children are the durable population underneath both. All four are sections of one workspace,
-     * so a deep link written to the old separate Records workspace names `staff`/`children` here and
-     * still lands.
+     * A WORK section. Roster is the expectation mode and Attendance the actuality mode; Calendar is
+     * the same expectation asked as when-and-where; Staff and Children are the durable population
+     * underneath all of them. They are sections of one workspace, so a deep link written to the old
+     * separate Records workspace names `staff`/`children` here and still lands.
      */
-    section?: "roster" | "attendance" | "staff" | "children";
+    section?: "roster" | "calendar" | "attendance" | "staff" | "children";
     /**
      * A STUDIO section. Present so a single detail type can carry either placement — an Assignments
      * Studio link and a Roster link are both "open Operations at X", and splitting them into two

@@ -1,0 +1,66 @@
+{
+  "position": {
+    "text": "DISCOUNTS discount · discount · 10% of $185.00 Certa Certhouse · Expected $18.50 Certb Certhouse · Expected $145.00",
+    "policies": [
+      {
+        "policyId": "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0",
+        "text": "discount · discount · 10% of $185.00 Certa Certhouse · Expected $18.50 Certb Certhouse · Expected $145.00"
+      }
+    ],
+    "subjects": [
+      "Certa Certhouse · Expected $18.50",
+      "Certb Certhouse · Expected $145.00"
+    ],
+    "gear": 1,
+    "loading": 0,
+    "error": null,
+    "none": 0
+  },
+  "anatomy": {
+    "discounts": {
+      "top": 3495,
+      "left": 550,
+      "width": 1036,
+      "height": 74
+    },
+    "payerMethods": {
+      "top": 3581,
+      "left": 550,
+      "width": 1036,
+      "height": 58
+    },
+    "responsibilityFilter": {
+      "top": 470,
+      "left": 1418,
+      "width": 137,
+      "height": 27
+    },
+    "responsibilityGear": {
+      "top": 471,
+      "left": 1560,
+      "width": 26,
+      "height": 26
+    },
+    "paymentButton": {
+      "top": 381
+    },
+    "prepaidNamed": true,
+    "horizontalOverflow": false
+  },
+  "gearName": "Manage discounts",
+  "management": {
+    "text": "Manage discounts Which policies reach this family, and whether a relationship is excepted from one. Rates and eligibility are organization configuration. discount discount · 10% of $185.00 Certa Certhouse · Expected $18.50 Add exception Certb Certhouse · Expected $145.00 Add exception Close",
+    "policies": [
+      "5df9fc6c-71e6-4f1b-a00f-f612cecbe9e0"
+    ],
+    "addException": 2,
+    "endException": 0,
+    "liveExceptions": 0,
+    "policyEditorFields": 0
+  },
+  "exceptionDraft": {
+    "reasonFieldPresent": true,
+    "confirmDisabledWithEmptyReason": true,
+    "amountFields": 0
+  }
+}

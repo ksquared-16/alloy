@@ -34,6 +34,7 @@ import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipat
 import {
     queryEnrollmentProcessInstanceParticipationRows,
     queryEnrollmentProcessInstanceTrackRows,
+    type ChildGrainTrace,
 } from "@/lib/queues/childGrainProcessInstanceQueue";
 
 /**
@@ -181,12 +182,15 @@ export async function loadChildGrainProvisioningRows(params: {
     orgId: string;
     workUnitId: string;
     membership: ChildRowMembership;
+    trace?: ChildGrainTrace;
 }): Promise<ChildProvisioningRow[]> {
-    const { supabase, orgId, workUnitId } = params;
+    const { supabase, orgId, workUnitId, trace } = params;
 
     let batches: (readonly unknown[])[];
     if (params.membership.mode === "participation") {
-        batches = [await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId, workUnitId })];
+        batches = [
+            await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId, workUnitId, trace }),
+        ];
     } else {
         const stages = [...new Set(params.membership.stageKeys.map((s) => s.trim()).filter(Boolean))];
         // A `stages` lens with no stage is not "everything" — it selects nothing, and saying so is the
@@ -194,7 +198,7 @@ export async function loadChildGrainProvisioningRows(params: {
         if (!stages.length) return [];
         batches = await Promise.all(
             stages.map((stageKey) =>
-                queryEnrollmentProcessInstanceTrackRows({ supabase, orgId, workUnitId, stageKey }),
+                queryEnrollmentProcessInstanceTrackRows({ supabase, orgId, workUnitId, stageKey, trace }),
             ),
         );
     }

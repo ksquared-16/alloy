@@ -1,0 +1,65 @@
+{
+  "trusted_host_action_id": "tha_d53b2edd1ef635",
+  "query_hash": "f1a2b003f4927ae38cfb047ee077d1c5577e37ee308226575df600657016d670",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T10:54:50.609Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d53b2edd1ef635",
+    "query_hash": "f1a2b003f4927ae38cfb047ee077d1c5577e37ee308226575df600657016d670",
+    "authorization_id": "grnt_77e21fa18e594cd4",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T10:54:51.892Z",
+    "question_ids": [
+      "ledger_has_backstop",
+      "index_live_by_room",
+      "fn_has_children_guard",
+      "fn_has_placement_guard",
+      "trigger_attached"
+    ],
+    "questions": {
+      "ledger_has_backstop": {
+        "question_id": "ledger_has_backstop",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "index_live_by_room": {
+        "question_id": "index_live_by_room",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fn_has_children_guard": {
+        "question_id": "fn_has_children_guard",
+        "row_count": null,
+        "rows": [
+          false
+        ]
+      },
+      "fn_has_placement_guard": {
+        "question_id": "fn_has_placement_guard",
+        "row_count": null,
+        "rows": [
+          false
+        ]
+      },
+      "trigger_attached": {
+        "question_id": "trigger_attached",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "accessibleName": "Manage discounts",
+  "openedWithEnter": true,
+  "focusInsidePanel": true,
+  "afterEscape": {
+    "panelClosed": true,
+    "detailsSurvives": false,
+    "focus": "BODY"
+  }
+}

@@ -47,7 +47,9 @@ import { evaluateWorkViewTotalsForGroup } from "@/lib/queues/evaluateWorkViewTot
 import {
     buildConfiguredViewSignature,
     emptyWorkViewTotalsSpans,
+    markWorkViewSpan,
     type WorkViewTotalsSeed,
+    type WorkViewTotalsTimeline,
 } from "./workViewTotalsSeedContract";
 import type { SettlementCountTarget } from "./settlementLocators";
 
@@ -95,7 +97,10 @@ export async function resolveWorkViewTotalsSeed(input: {
      * Derived from the evaluator so the two can never disagree about it.
      */
     viewerDisplayTimeZone: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["viewerDisplayTimeZone"];
+    /** Interval recorder owned by the caller, so seed offsets share one origin with deptUnits and locator. */
+    timeline?: WorkViewTotalsTimeline;
 }): Promise<WorkViewTotalsSeed> {
+    const tSeed = Date.now();
     try {
         if (!input.countTargets.length) {
             return { status: "unavailable", reason: "no_configured_count_targets" };
@@ -147,6 +152,10 @@ export async function resolveWorkViewTotalsSeed(input: {
         /*
          * Concurrency matches the endpoint's, so the seed's wall is comparable to the wall it
          * replaces rather than accidentally faster or slower for scheduling reasons.
+         *
+         * A REQUEST-SCOPED SHARED CHILD ACQUISITION WAS TRIED HERE AND RETIRED. It hoisted the
+         * three lenses' reads above this Promise.all and measured 316ms SLOWER, because those
+         * reads were already overlapping inside it. Nothing serial belongs in front of this.
          */
         const perGroup = await Promise.all(
             [...groups.values()].map((group) =>
@@ -164,10 +173,12 @@ export async function resolveWorkViewTotalsSeed(input: {
                     recordScopeImpossible: input.recordScopeImpossible,
                     viewerDisplayTimeZone: input.viewerDisplayTimeZone,
                     spans,
+                    timeline: input.timeline,
                 }),
             ),
         );
 
+        markWorkViewSpan(input.timeline, "seed", tSeed);
         return {
             status: "resolved",
             identity: {

@@ -33,6 +33,9 @@ import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/fina
 import { resolveSoleEnrollmentParticipantForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { loadOpportunityTourProjectionStrict } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
+import { buildTourSignalFromBookings } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
 
 export type RouteProvisioningResult =
@@ -135,6 +138,15 @@ export async function composeProvisioningAnswerForRoute(input: {
      */
     const earlyRef: { run: Promise<EarlyProducerRun | null> | null } = { run: null };
     /*
+     * THE TOUR SIGNAL, RESOLVED BY THE ANSWER.
+     *
+     * Started beside the participant read rather than after it: the two are independent, and the
+     * collapsed Business Process card needs this one. `null` here means NOT RESOLVED — a failed
+     * read must never reach the surface as "no tour".
+     */
+    const tourRef: { run: Promise<{ active: TourBookingRow[]; operatorRelevant: TourBookingRow | null } | null> | null } =
+        { run: null };
+    /*
      * THE OVERLAP'S OWN INSTRUMENT — because the existing spans structurally cannot see it.
      *
      * `inner_compose_ms` and `card_producers_ms` measure two ADJACENT blocks. That was a complete
@@ -232,6 +244,13 @@ export async function composeProvisioningAnswerForRoute(input: {
             });
         },
         onSubjectResolved: ({ subjectId, orgId, customerId }) => {
+            if (!tourRef.run && subjectId) {
+                // Settled to null on failure, so the signal stays settlement-owned rather than
+                // publishing an empty nobody established.
+                tourRef.run = loadOpportunityTourProjectionStrict(supabase, orgId, subjectId)
+                    .then((v) => v)
+                    .catch(() => null);
+            }
             if (earlyRef.run || !subjectId) return;
             /*
              * Participant, then producers — the whole prerequisite chain, started as soon as the
@@ -394,6 +413,19 @@ export async function composeProvisioningAnswerForRoute(input: {
                 })()
               : null;
         answer.resolvedParticipant = resolvedParticipant;
+        /*
+         * Map through the ONE canonical mapping owner settlement uses, so the commit answer and the
+         * settled answer cannot drift. Omitted entirely when the read did not resolve.
+         */
+        const tourProjection = tourRef.run ? await tourRef.run : null;
+        const resolvedTour = tourProjection
+            ? buildTourSignalFromBookings({
+                  activeBookings: tourProjection.active,
+                  operatorRelevantBooking: tourProjection.operatorRelevant,
+                  truth: (answer.subjectIdentityTruth ?? {}) as Record<string, unknown>,
+              })
+            : null;
+        answer.resolvedTour = resolvedTour;
         const commitContext = buildCommitCriticalOperationalContext({
                     mode: "work",
                     subjectId: answer.recordOfAttention?.id ?? "",
@@ -416,6 +448,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                     subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
                     subjectGrain: answer.subjectGrain,
                     resolvedParticipant,
+                    resolvedTour,
         });
         /*
          * The canonical household answer, from the composed truth. This is the value the early run

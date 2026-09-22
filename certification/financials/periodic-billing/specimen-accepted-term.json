@@ -1,0 +1,32 @@
+[
+  {
+    "step": "attendance_custom",
+    "status": 200
+  },
+  {
+    "step": "pricing",
+    "state": "recommended",
+    "reason": null,
+    "facts": {
+      "programKey": "school_age",
+      "attendanceType": "custom",
+      "daysPerWeek": null,
+      "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "payerType": "private_pay",
+      "cadenceKey": null,
+      "asOf": "2026-09-22"
+    },
+    "resolutionKey": "9ae3ff05",
+    "recommended": "{\"sourceId\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"offeringId\":\"fe7bb68f-1b36-432c-ae0b-e478dbc9f582\",\"variantId\":\"ee157cff-3546-4172-b591-984b96fbec10\",\"variantLabel\":\"\",\"programKey\":\"school_age\",\"attendanceType\":\"custom\",\"cadenceKey\":\"weekly\",\"amountCents\":19500,\"currencyCode\":\"USD\",\"amountLabel\":\"$195.00/weekly\",\"scope\":\"location\",\"effectiveStart\":\"2026-09-01\",\"effectiveEnd\":null,\"matched\":[\"Program · Before & After\",\"Attendance · custom\",\"Schedule · any\",\"Billed · weekly\",\"Site rate\",\"Effec",
+    "applicable": "[{\"sourceId\":\"5532489d-eed3-4080-9477-f47a94fde1c6\",\"offeringId\":\"fe7bb68f-1b36-432c-ae0b-e478dbc9f582\",\"variantId\":\"ee157cff-3546-4172-b591-984b96fbec10\",\"variantLabel\":\"\",\"programKey\":\"school_age\",\"attendanceType\":\"custom\",\"cadenceKey\":\"weekly\",\"amountCents\":18500,\"currencyCode\":\"USD\",\"amountLabel\":\"$185.00/weekly\",\"scope\":\"org_default\",\"effectiveStart\":\"2026-09-01\",\"effectiveEnd\":null,\"matched\":[\"Program · Before & After\",\"Attendance · custom\",\"Schedule · any\",\"Billed · weekly\",\"Organisation default\",\"Effective 2026-09-01\"]},{\"sourceId\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"offeringId\":\"fe7bb68f-1b36-432c-ae0b-e478dbc9f582\",\"variantId\":\"ee157cff-3546-4172-b591-984b96fbec10\",\"variantLabel\":\"\",\"programKey\":\"school_age\",\"attendanceType\":\"custom\",\"cadenceKey\":\"weekly\",\"amountCents\":19500,"
+  },
+  {
+    "step": "accept",
+    "chosen": "{\"sourceId\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"offeringId\":\"fe7bb68f-1b36-432c-ae0b-e478dbc9f582\",\"variantId\":\"ee157cff-3546-4172-b591-984b96fbec10\",\"variantLabel\":\"\",\"programKey\":\"school_age\",\"attendanceType\":\"custom\",\"cadenceKey\":\"weekly\",\"amountCents\":19500,\"currencyCode\":\"USD\",\"amountLabel\"",
+    "result": "{\"s\":409,\"j\":{\"ok\":false,\"error\":{\"code\":\"ACTION_BLOCKED\",\"message\":\"This assignment has changed since the tuition was resolved. Resolve it again before accepting, so the price matches the assignment as it now stands.\",\"details\":{\"blockers\":[{\"code\":\"stale_resolution\",\"message\":\"This assignment has changed since the tuition was resolved. Resolve it again before accepting, so the price matches the assignment as it now stands.\"}]}},\"correlation_id\":\"8645fdd5-8097-42e0-873e-f1002ce478dc\"}}"
+  },
+  {
+    "step": "accepted_term",
+    "accepted": "null"
+  }
+]

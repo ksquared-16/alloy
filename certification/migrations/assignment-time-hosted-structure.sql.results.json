@@ -1,0 +1,51 @@
+{
+  "trusted_host_action_id": "tha_4607a011125064",
+  "query_hash": "aa7f234cd40a4478d00a33ea1a46182b07e52c867242d14d2162cb8376d9cc6a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:46:54.611Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4607a011125064",
+    "query_hash": "aa7f234cd40a4478d00a33ea1a46182b07e52c867242d14d2162cb8376d9cc6a",
+    "authorization_id": "grnt_36d35c3ff2ed4a00",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:46:56.219Z",
+    "question_ids": [
+      "hoststruct"
+    ],
+    "questions": {
+      "hoststruct": {
+        "question_id": "hoststruct",
+        "row_count": null,
+        "rows": [
+          {
+            "table_present": true,
+            "rls_enabled": true,
+            "policy_count": 3,
+            "constraint_shape": true,
+            "constraint_weekday": true,
+            "constraint_overlap": true,
+            "constraint_org_fk": true,
+            "idx_known": true,
+            "idx_unknown": true,
+            "trigger_knownness": true,
+            "trigger_seed_insert": true,
+            "trigger_seed_update": true,
+            "fn_parser": true,
+            "grants_anon_authed": 0,
+            "old_version_in_ledger": true,
+            "old_version_owner_is_payments": true,
+            "observed_at": "2026-09-21 21:46:56.185652+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

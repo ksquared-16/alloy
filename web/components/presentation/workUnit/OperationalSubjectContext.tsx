@@ -17,6 +17,7 @@
  * the operator is working on. That answer comes from the committed snapshot and nowhere else.
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -157,6 +158,8 @@ export type OperationalSubject = {
  * drawer settled, ~3.5s later, to learn what the answer already carried.
  */
     resolvedParticipant: { participationId: string; customerMemberId: string } | null;
+    /** The answer's resolved tour signal; null means not established, not "no tour". */
+    resolvedTour: OperationalContextSignals["tour"] | null;
     /**
      * A — the published Summary composition for the committed scope, carried by the answer so the
      * committed panel presents the PUBLISHED composition immediately (no default-doc first frame, no
@@ -171,6 +174,7 @@ const EMPTY: OperationalSubject = {
     decision: null, action: null, actionAbsence: null,
     stageWorkRuntime: null, operationalProjection: null, workIntentRuntime: null, subjectIdentityTruth: null,
     resolvedParticipant: null,
+    resolvedTour: null,
     summaryDocSeed: null,
 };
 const Ctx = createContext<OperationalSubject>(EMPTY);
@@ -189,6 +193,7 @@ export function OperationalSubjectProvider({
     workIntentRuntime,
     subjectIdentityTruth,
     resolvedParticipant,
+    resolvedTour,
     summaryDocSeed,
     subjectGrain,
     children,
@@ -207,6 +212,7 @@ export function OperationalSubjectProvider({
     workIntentRuntime?: WorkIntentRuntimeProjection | null;
     subjectIdentityTruth?: SubjectIdentityTruth | null;
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    resolvedTour?: OperationalContextSignals["tour"] | null;
     summaryDocSeed?: FocusPanelSummaryDocProjection | null;
     children: ReactNode;
 }) {
@@ -230,9 +236,10 @@ export function OperationalSubjectProvider({
             workIntentRuntime: workIntentRuntime ?? null,
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             resolvedParticipant: resolvedParticipant ?? null,
+            resolvedTour: resolvedTour ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, resolvedParticipant, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, resolvedParticipant, resolvedTour, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

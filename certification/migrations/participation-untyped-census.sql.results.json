@@ -1,0 +1,48 @@
+{
+  "trusted_host_action_id": "tha_9a44b32c56b7c8",
+  "query_hash": "4d9400dff5959e15e59531860305a6065e06fee86b757cc4b39b2425b02e07d6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T21:56:56.516Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9a44b32c56b7c8",
+    "query_hash": "4d9400dff5959e15e59531860305a6065e06fee86b757cc4b39b2425b02e07d6",
+    "authorization_id": "grnt_a1cb49d59d1f4383",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T21:56:58.718Z",
+    "question_ids": [
+      "untyped"
+    ],
+    "questions": {
+      "untyped": {
+        "question_id": "untyped",
+        "row_count": null,
+        "rows": [
+          {
+            "untyped_active_total": 2,
+            "untyped_child": 2,
+            "untyped_staff": 0,
+            "typed_staff_active": 3,
+            "typed_child_active": 0,
+            "staff_supply_today": 3,
+            "staff_supply_by_type": [
+              {
+                "type": "recurring_service",
+                "participation": "none",
+                "n": 3
+              }
+            ],
+            "observed_at": "2026-09-21 21:56:58.673776+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
