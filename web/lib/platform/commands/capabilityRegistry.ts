@@ -40,6 +40,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "employment.end",
     "staff_presence.record",
     "staff_presence.correct",
+    "assignment.set_time",
     "staff_coverage.plan",
     "staff_coverage.change",
     "staff_coverage.correct",
@@ -1253,6 +1254,22 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason:
             "Staff Presence Phase 4. Correction/reversal by reference — the original fact is never mutated.",
+    }),
+    def({
+        capabilityKey: "assignment.set_time",
+        canonicalCommandKey: "assignment.set_time",
+        operatorLabel: "Set assignment hours",
+        family: "scheduling",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "assignment.set_time",
+        implementationStatus: "production",
+        reason:
+            "Assignment Time authoring. Hours could previously only be seeded from a pattern when an assignment was created, uniformly across every weekday, so an operator could not give an assignment hours afterwards, change them, or work different hours on different days.",
     }),
     def({
         capabilityKey: "staff_coverage.plan",
