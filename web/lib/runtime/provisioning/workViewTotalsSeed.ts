@@ -39,7 +39,19 @@ import "server-only";
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { evaluateWorkViewTotalsForGroup } from "@/lib/queues/evaluateWorkViewTotalsForGroup";
+import {
+    classifyRequestedWorkViews,
+    evaluateWorkViewTotalsForGroup,
+} from "@/lib/queues/evaluateWorkViewTotalsForGroup";
+import {
+    childBaseScopeForLenses,
+    emptyChildMembershipBatchMeasurement,
+} from "@/lib/runtime/provisioning/childGrainMembership";
+import {
+    acquireEnrollmentChildBase,
+    emptyChildGrainTrace,
+    type EnrollmentChildBase,
+} from "@/lib/queues/childGrainProcessInstanceQueue";
 /*
  * The crossable half lives in the CONTRACT module. Importing the signature helper from here into
  * the client matcher is what pulled `server-only` into the browser bundle the first time.
@@ -95,6 +107,8 @@ export async function resolveWorkViewTotalsSeed(input: {
      * Derived from the evaluator so the two can never disagree about it.
      */
     viewerDisplayTimeZone: Parameters<typeof evaluateWorkViewTotalsForGroup>[0]["viewerDisplayTimeZone"];
+    /** Arm selector for the child-lens acquisition; see the evaluator. Default is unchanged behaviour. */
+    shareChildAcquisition?: boolean;
 }): Promise<WorkViewTotalsSeed> {
     try {
         if (!input.countTargets.length) {
@@ -144,6 +158,57 @@ export async function resolveWorkViewTotalsSeed(input: {
         if (!groups.size) return { status: "unavailable", reason: "no_resolvable_groups" };
 
         const spans = emptyWorkViewTotalsSpans();
+
+        /*
+         * ONE CHILD ACQUISITION FOR THE WHOLE REQUEST.
+         *
+         * The child lenses of a surface do NOT share a count group: a group is
+         * (work unit, queue key), and measured deployed at 445bc8b23 the three child lenses of
+         * WU-03 sat in three different groups. Neither child membership rule filters by work unit
+         * — both are org-scoped reads narrowed afterwards by effective stage or by the liveness
+         * gate — so the acquisition they share must be acquired ABOVE the groups or it is shared
+         * with nobody.
+         *
+         * The lenses are identified through `classifyRequestedWorkViews`, the evaluator's own
+         * classification, so this cannot come to a different view of which lenses are child-grain
+         * than the evaluator does.
+         */
+        let childBase: EnrollmentChildBase | undefined;
+        if (input.shareChildAcquisition) {
+            const requestedViewIds = new Set<string>();
+            for (const g of groups.values()) for (const id of g.viewIds) requestedViewIds.add(id);
+            const { childViews } = classifyRequestedWorkViews({
+                metadata: input.departmentMetadata,
+                viewIds: requestedViewIds,
+            });
+            if (childViews.length) {
+                const measurement = emptyChildMembershipBatchMeasurement();
+                const trace = emptyChildGrainTrace();
+                const t0 = Date.now();
+                try {
+                    childBase = await acquireEnrollmentChildBase({
+                        supabase: input.supabase,
+                        orgId: input.orgId,
+                        workUnitId: input.hostWorkUnitId,
+                        stageKeys: childBaseScopeForLenses(childViews).stageKeys,
+                        trace,
+                    });
+                } catch {
+                    /*
+                     * An acquisition failure is NOT fatal to the seed and must not silently become
+                     * a different answer: every child lens falls back to acquiring its own, which
+                     * is what it did before this existed.
+                     */
+                    childBase = undefined;
+                }
+                measurement.shared = childBase !== undefined;
+                measurement.baseScope = childBase ? (childBase.scope === "all" ? "all" : "stages") : "none";
+                measurement.baseStages = childBase && childBase.scope !== "all" ? childBase.scope.stageKeys.length : 0;
+                measurement.baseMs = Date.now() - t0;
+                measurement.base = trace;
+                spans.child_batches.push(measurement);
+            }
+        }
         /*
          * Concurrency matches the endpoint's, so the seed's wall is comparable to the wall it
          * replaces rather than accidentally faster or slower for scheduling reasons.
@@ -164,6 +229,8 @@ export async function resolveWorkViewTotalsSeed(input: {
                     recordScopeImpossible: input.recordScopeImpossible,
                     viewerDisplayTimeZone: input.viewerDisplayTimeZone,
                     spans,
+                    shareChildAcquisition: input.shareChildAcquisition,
+                    childBase,
                 }),
             ),
         );

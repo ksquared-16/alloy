@@ -44,7 +44,7 @@ import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWor
  * add to the caller's wall — they rank phases, they do not reconcile to the wall by addition.
  */
 export type FirstOrderWorkViewDiagnostics = {
-    readonly spans: Record<string, number>;
+    readonly spans: Record<string, unknown>;
     readonly targetCount: number;
     readonly hostWorkUnitCount: number;
     readonly groupCount: number;
@@ -52,6 +52,8 @@ export type FirstOrderWorkViewDiagnostics = {
     readonly seedMs: number;
     readonly deptUnitsMs: number;
     readonly deptUnitCount: number;
+    /** Which acquisition arm produced these spans. */
+    readonly shareChildAcquisition: boolean;
 };
 
 export type FirstOrderWorkViewTotals =
@@ -69,6 +71,11 @@ export type FirstOrderWorkViewCallerInputs = {
     viewerDisplayTimeZone: Parameters<typeof resolveWorkViewTotalsSeed>[0]["viewerDisplayTimeZone"];
     /** The Work View the surface opened with, for the locator's own active-target resolution. */
     activeWorkViewId: string;
+    /**
+     * Arm selector for the child-lens acquisition. Diagnostic-only today: the prototype route sets
+     * it so both arms can be measured on one deployed lineage before either becomes the only one.
+     */
+    shareChildAcquisition?: boolean;
 };
 
 export async function readWorkViewTotalsForFirstOrder(
@@ -139,6 +146,7 @@ export async function readWorkViewTotalsForFirstOrder(
         recordScopeConstraints: args.caller.recordScopeConstraints,
         recordScopeImpossible: args.caller.recordScopeImpossible,
         viewerDisplayTimeZone: args.caller.viewerDisplayTimeZone,
+        shareChildAcquisition: args.caller.shareChildAcquisition,
     });
     const seedMs = Math.round(performance.now() - tSeed);
     if (seed.status !== "resolved") {
@@ -160,11 +168,12 @@ export async function readWorkViewTotalsForFirstOrder(
         totalsByViewId,
         configuredViewSignature: seed.identity.configuredViewSignature,
         diagnostics: {
-            spans: seed.spans as unknown as Record<string, number>,
+            spans: seed.spans as unknown as Record<string, unknown>,
             targetCount: locators.workViewCountTargets.length,
             hostWorkUnitCount: new Set(locators.workViewCountTargets.map((t) => t.hostWorkUnitId)).size,
             groupCount: new Set(locators.workViewCountTargets.map((t) => `${t.hostWorkUnitId}::${t.baseQueueKey}`)).size,
             locatorMs, seedMs, deptUnitsMs, deptUnitCount: deptWorkUnits.length,
+            shareChildAcquisition: args.caller.shareChildAcquisition === true,
         },
     };
 }

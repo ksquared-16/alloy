@@ -42,7 +42,10 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { WORK_VIEW_QUEUE_FILTER_FETCH_CAP } from "@/lib/lifecycle/operationalProjection";
 import { getWorkUnitQueueItems } from "@/lib/queues/QueueService";
 import { aggregateWorkViewTotals } from "@/lib/queues/aggregateWorkViewTotals";
-import { countChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
+import {
+    countChildGrainMembersForLenses,
+    emptyChildMembershipBatchMeasurement,
+} from "@/lib/runtime/provisioning/childGrainMembership";
 import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
 import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
@@ -74,6 +77,43 @@ export { emptyWorkViewTotalsSpans } from "@/lib/runtime/provisioning/workViewTot
 
 
 
+/**
+ * WHICH CONFIGURED VIEWS ARE CHILD LENSES — one classification, two callers.
+ *
+ * The evaluator has always decided this per group. The seed now needs the same answer BEFORE it
+ * evaluates any group, because the child acquisition it wants to share is org-scoped and the child
+ * lenses are spread across groups — so sharing it per group would share it with nobody.
+ *
+ * Two callers of one pure function, not two readings. `resolveLensRowGrain` is still the only
+ * grain authority and this still asks it exactly once per view per caller; the alternative was the
+ * seed re-deriving "is this lens child-grain", which is how a count and its rows come to disagree.
+ */
+export function classifyRequestedWorkViews(args: {
+    metadata: unknown;
+    viewIds: ReadonlySet<string>;
+}): {
+    stages: ReturnType<typeof activeStagesForProcess>;
+    childViews: WorkViewConfigV1Stored[];
+    laneViews: WorkViewConfigV1Stored[];
+    unknownViews: WorkViewConfigV1Stored[];
+} {
+    const bpProcess = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(args.metadata));
+    const stages = bpProcess ? activeStagesForProcess(bpProcess) : [];
+    const childViews: WorkViewConfigV1Stored[] = [];
+    const laneViews: WorkViewConfigV1Stored[] = [];
+    const unknownViews: WorkViewConfigV1Stored[] = [];
+    for (const v of savedWorkViewsFromDepartmentMetadata(args.metadata)) {
+        if (!args.viewIds.has(v.id)) continue;
+        const grain = resolveLensRowGrain(v, stages);
+        // Grain must resolve the same way for pills and rows. Ambiguous / refused lenses must NOT
+        // fall through to lane population counts (pill=1 / rows=0).
+        if (!grain.ok) unknownViews.push(v);
+        else if (grain.grain === "child") childViews.push(v);
+        else laneViews.push(v);
+    }
+    return { stages, childViews, laneViews, unknownViews };
+}
+
 export async function evaluateWorkViewTotalsForGroup(args: {
     supabase: SupabaseClient;
     orgId: string;
@@ -88,6 +128,22 @@ export async function evaluateWorkViewTotalsForGroup(args: {
      */
     viewerDisplayTimeZone: Parameters<typeof getWorkUnitQueueItems>[0]["viewerDisplayTimeZone"];
     spans: WorkViewTotalsSpansContract;
+    /**
+     * ARM SELECTOR, not a feature flag on the answer.
+     *
+     * True acquires the enrollment child base once for this group's child lenses; false leaves each
+     * lens acquiring its own, exactly as before. Both arms run the same membership rules over the
+     * same rows and must return the same counts — which is the point: the claim "same answer,
+     * cheaper acquisition" is only worth anything if both arms can be measured on one deployed
+     * lineage and compared. Defaults to the pre-existing behaviour.
+     */
+    shareChildAcquisition?: boolean;
+    /**
+     * An enrollment child base the CALLER acquired for this whole request. The child lenses of one
+     * surface sit in different groups, and the base is org-scoped (neither membership rule filters
+     * by work unit), so the only place one acquisition can serve all of them is above the groups.
+     */
+    childBase?: Parameters<typeof countChildGrainMembersForLenses>[0]["base"];
 }): Promise<WorkViewTotalRowContract[]> {
     const {
         supabase,
@@ -99,6 +155,7 @@ export async function evaluateWorkViewTotalsForGroup(args: {
         viewerDisplayTimeZone,
         spans,
     } = args;
+    const shareChildAcquisition = args.shareChildAcquisition === true;
     type TotalOut = WorkViewTotalRowContract;
         const unknownAll = (): TotalOut[] =>
             [...group.viewIds].map((workViewId) => ({
@@ -117,8 +174,6 @@ export async function evaluateWorkViewTotalsForGroup(args: {
              */
             if (!prerequisite.accessible) return unknownAll();
             const metadata = prerequisite.departmentMetadata;
-            const savedViews = savedWorkViewsFromDepartmentMetadata(metadata);
-            const requestedViews = savedViews.filter((v) => group.viewIds.has(v.id));
 
             // ── A CHILD LENS IS COUNTED BY ITS OWN MEMBERSHIP, NOT BY THE OPPORTUNITY LANE. ──
             //
@@ -130,25 +185,12 @@ export async function evaluateWorkViewTotalsForGroup(args: {
             // A child lens is counted by the SAME projection that produced its rows
             // (`countChildGrainMembersForLens` → the provider → the Enrollment Definition's liveness
             // gate), so rows and count cannot drift — there is nothing to drift between.
-            const bpProcess = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata));
-            const stages = bpProcess ? activeStagesForProcess(bpProcess) : [];
-            const childViews: WorkViewConfigV1Stored[] = [];
-            const laneViews: WorkViewConfigV1Stored[] = [];
-            const unknownViews: WorkViewConfigV1Stored[] = [];
-            for (const v of requestedViews) {
-                const grain = resolveLensRowGrain(v, stages);
-                // Grain must resolve the same way for pills and rows. Ambiguous / refused lenses
-                // must NOT fall through to lane population counts (pill=1 / rows=0).
-                if (!grain.ok) {
-                    unknownViews.push(v);
-                } else if (grain.grain === "child") {
-                    childViews.push(v);
-                } else {
-                    laneViews.push(v);
-                }
-            }
+            const { stages, childViews, laneViews, unknownViews } = classifyRequestedWorkViews({
+                metadata,
+                viewIds: group.viewIds,
+            });
 
-            spans.views += requestedViews.length;
+            spans.views += childViews.length + laneViews.length + unknownViews.length;
             spans.child_views += childViews.length;
             spans.lane_views += laneViews.length;
             spans.unknown_views += unknownViews.length;
@@ -176,28 +218,34 @@ export async function evaluateWorkViewTotalsForGroup(args: {
              * results, same per-view failure semantics — just not one at a time.
              */
             const childTotals = new Map<string, TotalOut>();
-            const tChild = Date.now();
-            const childCounted = await Promise.all(
-                childViews.map(async (view) => {
+            if (childViews.length) {
+                const measurement = emptyChildMembershipBatchMeasurement();
+                const tChild = Date.now();
+                const counts = await countChildGrainMembersForLenses({
+                    supabase,
+                    orgId,
+                    workUnitId: group.workUnitId,
+                    views: childViews,
+                    shareAcquisition: shareChildAcquisition,
+                    base: args.childBase,
+                    measurement,
+                });
+                spans.child_counts += Date.now() - tChild;
+                spans.child_batches.push(measurement);
+                for (const view of childViews) {
                     const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
-                    try {
-                        const count = await countChildGrainMembersForLens({
-                            supabase,
-                            orgId,
-                            workUnitId: group.workUnitId,
-                            view,
-                        });
-                        return { id: view.id, total: { ...base, count, known: true } as TotalOut };
-                    } catch {
-                        // UNKNOWN, never a family number. A wrong count is worse than an absent one —
-                        // the client keeps its prior value and shows none, rather than captioning
-                        // child rows with a count of something else.
-                        return { id: view.id, total: { ...base, count: null, known: false } as TotalOut };
-                    }
-                }),
-            );
-            spans.child_counts += Date.now() - tChild;
-            for (const { id, total } of childCounted) childTotals.set(id, total);
+                    const count = counts.get(view.id) ?? null;
+                    // UNKNOWN, never a family number. A wrong count is worse than an absent one —
+                    // the client keeps its prior value and shows none, rather than captioning
+                    // child rows with a count of something else.
+                    childTotals.set(
+                        view.id,
+                        count === null
+                            ? ({ ...base, count: null, known: false } as TotalOut)
+                            : ({ ...base, count, known: true } as TotalOut),
+                    );
+                }
+            }
 
             // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
             if (laneViews.length === 0) {
