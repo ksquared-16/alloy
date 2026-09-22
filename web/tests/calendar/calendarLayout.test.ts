@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
     buildCalendarLanes,
     candidatesForGap,
+    candidatesWithoutConflict,
     gapCommandContext,
     hourTicks,
     operatingWindow,
@@ -46,7 +47,7 @@ function staff(name: string, room: string | null, hours: [string, string] | null
         baselineRoomLocationId: room,
         baselineIntervals: hours ? [iv(hours[0], hours[1])] : [],
         baselineHoursKnown: Boolean(hours),
-        availabilityIntervals: [],
+        availability: { recorded: false, intervals: [] },
         coverage: [] as { coverageId: string; roomLocationId: string | null; interval: ReturnType<typeof iv> }[],
         presence: null,
         ...extra,
@@ -173,7 +174,7 @@ describe("the gap hands the command its context", () => {
         staff: [
             staff("Alex", T1, ["09:00", "10:00"]),
             staff("Sam", T1, ["09:00", "10:00"]),
-            staff("Jordan", null, null, { availabilityIntervals: [iv("09:00", "10:00")] }),
+            staff("Jordan", null, null, { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
         ],
     });
     const gap = d.segments.find((s) => s.roomLocationId === T1 && s.plannedState === "short")!;
@@ -194,21 +195,61 @@ describe("the gap hands the command its context", () => {
         expect(fine ? gapCommandContext(fine) : null).toBeNull();
     });
 
-    it("offers only people free in that interval, and ranks nobody", () => {
-        expect(candidatesForGap(gap, d.segments)).toEqual([
-            { employmentId: "emp-Jordan", personId: "per-Jordan", displayName: "Jordan" },
+    it("does not offer someone already planned in this very room", () => {
+        // Alex and Sam are planned here; "plan Alex here" would mean nothing.
+        expect(candidatesForGap(gap).map((c) => c.displayName)).toEqual(["Jordan"]);
+    });
+
+    it("STILL offers someone with no Availability recorded — the old dead end", () => {
+        const d2 = day({
+            children: Array.from({ length: 10 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00")),
+            staff: [
+                staff("Alex", T1, ["09:00", "10:00"]),
+                // Taylor is employed at the site, free, and has no availability
+                // record at all. Before this slice the gap offered nobody.
+                staff("Taylor", null, null),
+            ],
+        });
+        const short = d2.segments.find((s) => s.roomLocationId === T1 && s.plannedState === "short")!;
+        const taylor = candidatesForGap(short).find((c) => c.displayName === "Taylor")!;
+        expect(taylor.availability).toBe("unknown");
+        expect(taylor.plannedElsewhere).toBe(false);
+    });
+
+    it("leads with the certain yes, and calls nothing else available", () => {
+        const d3 = day({
+            children: Array.from({ length: 10 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00")),
+            staff: [
+                staff("Alex", T1, ["09:00", "10:00"]),
+                staff("Taylor", null, null),
+                staff("Jordan", null, null, { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
+                staff("Casey", null, null, { availability: { recorded: true, intervals: [iv("13:00", "14:00")] } }),
+            ],
+        });
+        const short = d3.segments.find((s) => s.roomLocationId === T1 && s.plannedState === "short")!;
+        expect(candidatesForGap(short).map((c) => [c.displayName, c.availability])).toEqual([
+            ["Jordan", "available"],
+            ["Taylor", "unknown"],
+            // Recorded, and the recorded answer for this hour is no.
+            ["Casey", "unavailable"],
         ]);
     });
 
-    it("does not offer someone already planned in another room at that time", () => {
+    it("offers someone planned elsewhere, but says so rather than hiding them", () => {
         const busy = day({
             children: Array.from({ length: 10 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00")),
             staff: [
                 staff("Alex", T1, ["09:00", "10:00"]),
-                staff("Sam", T2, ["09:00", "10:00"], { availabilityIntervals: [iv("09:00", "10:00")] }),
+                staff("Sam", T2, ["09:00", "10:00"], { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
             ],
         });
         const short = busy.segments.find((s) => s.roomLocationId === T1 && s.plannedState === "short")!;
-        expect(candidatesForGap(short, busy.segments)).toEqual([]);
+        const sam = candidatesForGap(short).find((c) => c.displayName === "Sam")!;
+        // Hiding him is what made the gap unanswerable; the conflict is context,
+        // and the Coverage exclusion constraint still refuses an overlap.
+        expect(sam.availability).toBe("available");
+        expect(sam.plannedElsewhere).toBe(true);
+        expect(sam.plannedInRoomLocationId).toBe(T2);
+        expect(candidatesWithoutConflict(short).map((c) => c.displayName)).not.toContain("Sam");
     });
 });

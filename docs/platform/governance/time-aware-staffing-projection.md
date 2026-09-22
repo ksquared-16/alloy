@@ -70,6 +70,31 @@ Because the rule selects exactly one place per employment per segment, **one emp
 counted at most once**. A site-level baseline plus a room-level Coverage is one person in
 that room, never one in the room and a second at the site.
 
+## Plan is not availability
+
+Someone explicitly unavailable is still **planned** — the schedule says so, and erasing it
+would hide why the room is short. They simply do not count toward the requirement.
+`plannedStaff` names everyone the schedule put there; `effectivePlannedStaff` is the subset
+who can actually work it, and the requirement is compared against that.
+
+This is what makes a call-out open a gap without anybody's Coverage being cancelled. The
+operator sees *Alex is planned here but unavailable during this interval*, then *Short 1
+staff*, and decides what to do about it. The projection never resolves the divergence by
+editing a fact.
+
+The same three-way honesty applies to Availability itself:
+
+| | meaning |
+|---|---|
+| **available** | Availability was recorded and says yes for this interval |
+| **unavailable** | Availability was recorded and says no — including recorded windows that simply do not cover this hour |
+| **unknown** | nothing was ever authored |
+
+`unknown` is not a shade of `unavailable`. Reading it as one would quietly remove half a
+workforce from every candidate list; reading it as `available` would offer people who may
+be unreachable. Saying so is the only honest option, and it is why the resolver's
+provenance is carried through the projection rather than collapsed into a window list.
+
 ## Unknown is an answer
 
 `unknown` is not zero, not adequate and not a gap. Required staff is null whenever no

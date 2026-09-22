@@ -114,3 +114,33 @@ describe("the Calendar can author Coverage without leaving the command path", ()
         expect(surface).toContain("Who else could be planned here");
     });
 });
+
+describe("the chooser states facts and holds no opinion", () => {
+    const surface = code(SURFACE);
+
+    it("introduces no ranking, scoring or recommendation", () => {
+        for (const forbidden of ["recommend", "bestCandidate", "best match", "score", "rank", "suggest"]) {
+            expect(surface.toLowerCase(), `surface must not contain ${forbidden}`).not.toContain(
+                forbidden.toLowerCase()
+            );
+        }
+    });
+
+    it("never labels an unrecorded person available", () => {
+        // The only affirmative label is reached through the availability state,
+        // never through absence of a record.
+        expect(surface).toContain('if (state === "available") return "Available"');
+        expect(surface).toContain('return "Availability not recorded"');
+        expect(surface).not.toMatch(/availability\s*(!==|===)\s*"unknown"\s*\?\s*"Available"/);
+    });
+
+    it("reads the candidate pool from the projection rather than filtering people out", () => {
+        expect(surface).toContain("candidatesForGap(segment)");
+        expect(surface).not.toMatch(/candidates\.filter\(/);
+    });
+
+    it("shows a conflict as context instead of hiding the person", () => {
+        expect(surface).toContain("plannedElsewhere");
+        expect(surface).toContain("already planned");
+    });
+});
