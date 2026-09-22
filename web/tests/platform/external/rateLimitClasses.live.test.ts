@@ -161,8 +161,13 @@ describeLive("the public rate classes are independent", () => {
         const after = await doWrite("a");
         expect(after.status, "a write after heavy reading must not be rate limited").not.toBe(429);
         expect(after.limit).toBe(WRITE_LIMIT);
-        // Two writes have happened in this test; nothing else may have moved the counter.
-        expect(after.remaining).toBe(WRITE_LIMIT - 2);
+        /*
+         * At most the two writes this test performed may have moved the counter — and possibly
+         * only one, because the reads can straddle a window boundary and reset it. Pinning the
+         * exact figure would be asserting the window's phase rather than the property under test,
+         * which is that 130 READS left the write budget essentially whole.
+         */
+        expect(after.remaining).toBeGreaterThanOrEqual(WRITE_LIMIT - 2);
     }, 600_000);
 
     // ── B. WRITE DOES NOT CONSUME READ ──────────────────────────────────────
@@ -174,8 +179,12 @@ describeLive("the public rate classes are independent", () => {
 
         const after = await doRead("b");
         expect(after.limit).toBe(READ_LIMIT);
-        // Exactly the two reads in this test moved the read counter.
-        expect(before.remaining - after.remaining).toBe(1);
+        /*
+         * The twenty writes must not appear here. One read separates the two measurements, so the
+         * gap is 1 — or 0 if a window boundary intervened. Anything approaching 20 would mean the
+         * write traffic was being charged to the read budget.
+         */
+        expect(before.remaining - after.remaining).toBeLessThanOrEqual(1);
     }, 300_000);
 
     // ── D + G. WRITE LIMIT ENFORCED, READS UNAFFECTED ───────────────────────
