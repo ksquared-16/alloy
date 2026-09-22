@@ -167,27 +167,22 @@ export default function FinancialsDetailCard({
      */
     administration?: {
         /*
-         * ── FOUR CONCEPTS, FOUR GRAINS, AND THEY ARE NOT INTERCHANGEABLE ──────────────────────
+         * ── ONE ROW, NOT A REGION ─────────────────────────────────────────────────────────────
          *
-         *   POLICY              an organisation-authored commercial rule
-         *   DISCOUNT POSITION   what that policy does to ONE CHILD's obligation
-         *   RESPONSIBILITY      who owes, per child
-         *   PAYER               who pays, and by what method
+         * This was two standalone rows — Responsibility and Discounts — each naming every child.
+         * Correct about grain and wrong about weight: the card grew a permanent administration
+         * block above the ledger, and responsibility already has a first-class KPI at the top of
+         * the card, so the row restated what the operator had just read.
          *
-         * They were rendered as one line of label/value pairs and ran together on screen —
-         * "Payment methodManage paymentsResponsibilityCert Certhouse⚙DiscountNone⚙" — which is
-         * worse than a layout bug: it presents four different questions as one fact about the
-         * payer standing nearest to them. Responsibility is not a property of the payer, and a
-         * discount is not a property of responsibility.
-         *
-         * So each arrives already resolved, AT ITS OWN GRAIN, and each gets its own row.
+         * What remains is the concise DISCOUNT POSITION on the relationship row, and the two
+         * gears that open the depth cards. The grain did not move: a discount is still a fact
+         * about a child's commercial relationship, and it is composed here rather than owned
+         * here. Per-child detail lives in the depth card, which is the surface that can afford it.
          */
 
-        /** Who owes, per child. Empty is "nothing is on record", never "the household owes". */
-        responsibility: Array<{ childLabel: string; summary: string }>;
-        /** What reduces each child's obligation. A child with none says so, concisely. */
-        discounts: Array<{ childLabel: string; summary: string }>;
-        /** True while the canonical read is still in flight, so a row can wait without inventing. */
+        /** The whole family's discount position in one phrase, already collapsed by the host. */
+        discountSummary: string;
+        /** True while the canonical read is in flight, so the row can wait without inventing. */
         loading?: boolean;
         onManagePayments: () => void;
         onManageResponsibility: () => void;
@@ -517,16 +512,25 @@ export default function FinancialsDetailCard({
                 </div>
 
                 {/*
-                  * ── THE RELATIONSHIP ROW: WHO, WHAT THEY OWE, HOW THEY CAN PAY ─────────────
+                  * ── ONE COMPACT RELATIONSHIP ROW ───────────────────────────────────────────
                   *
-                  * One row, one relationship, and payment-method state belongs here because it IS
-                  * a fact about this payer. What it never carried was a way to change the method,
-                  * so payment administration grew underneath as a permanent section with its own
-                  * "Add card" and "Add bank account" buttons standing open on a card whose subject
-                  * is the ledger. Those actions live inside Manage payments now; the row keeps the
-                  * state and gains the door.
+                  * Who is related to this account, what they owe, how they can pay, what reduces
+                  * it, and the ways to change any of it. Five facts, one line, each in its own
+                  * element — the run-together string this replaced came from class names with no
+                  * rules behind them, not from putting related facts together.
+                  *
+                  * THE DISCOUNT IS COMPOSED HERE, NOT OWNED HERE. Its grain is still the child's
+                  * commercial relationship; what sits on this line is the family's position in
+                  * one phrase, already collapsed by the host from the canonical read. When the
+                  * children disagree the phrase says so rather than picking one child's answer,
+                  * and the gear opens the card that can afford the breakdown.
+                  *
+                  * Responsibility is deliberately absent: it has a first-class KPI at the top of
+                  * this card, so a row here restated what the operator had just read. Its gear
+                  * lives with the responsible-party filter, where responsibility is already part
+                  * of the operator's mental model.
                   */}
-                {evidence.payers.length ? (
+                {evidence.payers.length || administration ? (
                     <div className="alloy-os-fdetail__payers" data-financials-payer-row="true">
                         {evidence.payers.map((p) => (
                             <span key={p.name} className="alloy-os-fdetail__payer" data-funding={p.funding ? "true" : undefined}>
@@ -538,6 +542,29 @@ export default function FinancialsDetailCard({
                                 ) : null}
                             </span>
                         ))}
+
+                        {administration ? (
+                            <span className="alloy-os-fdetail__rowitem" data-financials-admin-item="discount">
+                                <span className="alloy-os-fdetail__adminvalue" data-financials-discount-summary="true">
+                                    {administration.loading ? (
+                                        <span data-financials-summary-state="loading">Reading…</span>
+                                    ) : (
+                                        administration.discountSummary
+                                    )}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={administration.onManageDiscount}
+                                    data-financials-manage-discounts="gear"
+                                    aria-label="Manage discounts"
+                                    title="Manage discounts — how this applies by child, and what can change"
+                                    className="alloy-os-fdetail__admingear"
+                                >
+                                    <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
+                                </button>
+                            </span>
+                        ) : null}
+
                         {administration ? (
                             <button
                                 type="button"
@@ -548,67 +575,6 @@ export default function FinancialsDetailCard({
                                 Manage payments <span aria-hidden>&rarr;</span>
                             </button>
                         ) : null}
-                    </div>
-                ) : null}
-
-                {/*
-                  * ── RESPONSIBILITY AND DISCOUNTS: TWO ROWS, TWO GRAINS ────────────────────────
-                  *
-                  * Both answer a question about a CHILD, and neither answers the other's. "Who
-                  * owes for Certa" and "what reduces Certa's obligation" are independent facts
-                  * that happen to be about the same child — so they are read separately, named
-                  * separately, and rendered on separate rows with the child named once on each.
-                  *
-                  * Each row is state plus a door. Neither is an editor, and neither unfolds.
-                  */}
-                {administration ? (
-                    <div className="alloy-os-fdetail__admin" data-financials-administration="compact">
-                        <div className="alloy-os-fdetail__adminrow" data-financials-admin-item="responsibility">
-                            <span className="alloy-os-fdetail__adminlabel">Responsibility</span>
-                            <span className="alloy-os-fdetail__adminvalue" data-financials-responsibility-summary="true">
-                                <ChildGrainSummary
-                                    entries={administration.responsibility}
-                                    loading={administration.loading}
-                                    /* Nothing on record is not "the household owes" — that would be a claim. */
-                                    empty="Not on record"
-                                />
-                            </span>
-                            <button
-                                type="button"
-                                onClick={administration.onManageResponsibility}
-                                data-financials-manage-responsibility="gear"
-                                aria-label="Manage responsibility"
-                                title="Manage responsibility — who owes, per child"
-                                className="alloy-os-fdetail__admingear"
-                            >
-                                <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-                            </button>
-                        </div>
-
-                        <div className="alloy-os-fdetail__adminrow" data-financials-admin-item="discount">
-                            <span className="alloy-os-fdetail__adminlabel">Discounts</span>
-                            <span className="alloy-os-fdetail__adminvalue" data-financials-discount-summary="true">
-                                {/*
-                                  * "None" is a truthful, complete answer and gets one word. The
-                                  * surface this replaced spent a paragraph of empty state on it.
-                                  */}
-                                <ChildGrainSummary
-                                    entries={administration.discounts}
-                                    loading={administration.loading}
-                                    empty="None"
-                                />
-                            </span>
-                            <button
-                                type="button"
-                                onClick={administration.onManageDiscount}
-                                data-financials-manage-discounts="gear"
-                                aria-label="Manage discounts"
-                                title="Manage discounts — what reduces each child's obligation"
-                                className="alloy-os-fdetail__admingear"
-                            >
-                                <Settings2 className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-                            </button>
-                        </div>
                     </div>
                 ) : null}
 
@@ -1256,45 +1222,6 @@ function ledgerRowFromPayment(p: FinancialsEvidence["payments"][number]): Financ
  * A lens context filter — the same control the workspace account uses, in this card's type scale.
  * Value "" is the unfiltered state and is always offered, so a chosen filter can be cleared.
  */
-/**
- * A CHILD-GRAIN SUMMARY — each child named once, with its own answer.
- *
- * The separator is its own element rather than text baked into either child's words, so a row that
- * wraps breaks between children instead of orphaning a bullet. Empty and loading are words, not
- * layouts: "None" tells an operator what a paragraph of empty state would, in the space a row has.
- *
- * LOADING NEVER INVENTS. While the canonical read is in flight this says so. It does not fall back
- * to the household's answer, to a previous child's answer, or to "None" — all three would be
- * claims about real money that nothing has confirmed yet.
- */
-function ChildGrainSummary({
-    entries,
-    loading,
-    empty,
-}: {
-    entries: Array<{ childLabel: string; summary: string }>;
-    loading?: boolean;
-    empty: string;
-}) {
-    if (loading && entries.length === 0) {
-        return <span data-financials-summary-state="loading">Reading…</span>;
-    }
-    if (entries.length === 0) {
-        return <span data-financials-summary-state="empty">{empty}</span>;
-    }
-    return (
-        <>
-            {entries.map((entry, index) => (
-                <span key={`${entry.childLabel}-${index}`} className="alloy-os-fdetail__adminchild">
-                    {index > 0 ? <span className="alloy-os-fdetail__adminsep" aria-hidden>·</span> : null}
-                    <span className="alloy-os-fdetail__adminchildname">{entry.childLabel}</span>
-                    <span className="alloy-os-fdetail__adminchildvalue">{entry.summary}</span>
-                </span>
-            ))}
-        </>
-    );
-}
-
 function LensFilter({
     testId,
     value,

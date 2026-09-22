@@ -1977,79 +1977,44 @@
   min-width: 0;
 }
 /*
- * ── THE COMPACT ADMINISTRATION REGION ─────────────────────────────────────────────────────────
+ * ── THE COMPACT RELATIONSHIP ROW ──────────────────────────────────────────────────────────────
  *
- * WHY THIS BLOCK EXISTS AT ALL. The administration row shipped with class names and no rules, so
- * every label and value was an inline span with nothing between them and the card rendered
- * "Payment methodManage paymentsResponsibilityCert Certhouse⚙DiscountNone⚙" — four concepts run
- * into one string. Separators would have made that legible and left it wrong: Payment method,
- * Responsibility and Discounts are different questions at different grains, and a row of bullets
- * presents them as one fact about whoever is named first.
+ * ONE row carries who is related to this account, what they owe, how they can pay, what reduces
+ * it, and the way to change any of it.
  *
- * So each gets a row with the same three-part anatomy — LABEL · STATE · DOOR — and the labels
- * align down a column, which is what makes three rows read as one region instead of three
- * unrelated lines.
+ * It replaced a two-row administration grid that replaced a four-section block. Each step was a
+ * correction of the last: the sections pushed the ledger down the card, and the rows were right
+ * about grain but still spent permanent vertical space restating a Responsibility KPI that sits
+ * at the top of this same card. What is left is state plus doors, on the line the state was
+ * always about.
+ *
+ * The items are flex children with a real gap, which is the whole fix for the run-together
+ * string — that came from class names with no rules behind them, not from putting related facts
+ * on one line.
  */
-.alloy-os-fdetail__admin {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
-}
-.alloy-os-fdetail__adminrow {
-  display: grid;
-  /* The label column is fixed so Responsibility and Discounts start their answers together. */
-  grid-template-columns: 5.6rem minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 0 10px;
+.alloy-os-fdetail__rowitem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
-}
-.alloy-os-fdetail__adminlabel {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .alloy-os-fdetail__adminvalue {
-  display: flex;
-  flex-wrap: wrap;
-  /* The row gap is what keeps a wrapped second child off the line above it. */
-  gap: 2px 14px;
-  min-width: 0;
   font-size: 0.72rem;
   color: var(--alloy-os-midnight, #273f52);
-}
-.alloy-os-fdetail__adminchild {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-}
-/* The separator belongs to the child that follows it, so a wrap never orphans a bullet. */
-.alloy-os-fdetail__adminsep {
-  color: var(--alloy-os-text-tertiary, #9ca3af);
-  margin-right: 5px;
-}
-.alloy-os-fdetail__adminchildname {
-  color: var(--alloy-os-text-secondary, #6b7280);
-}
-.alloy-os-fdetail__adminchildvalue {
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 /*
  * QUIET ON PURPOSE. A gear at the row's own size, no fill and no border: these are doors, not
- * commands, and giving them button weight would make the administration region compete with
- * Payment and Add directly above it.
+ * commands, and giving them button weight would make them compete with Payment and Add directly
+ * above. Sized in rem so it tracks the row rather than pinning the row's height to a constant.
  */
 .alloy-os-fdetail__admingear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.45rem;
-  height: 1.45rem;
+  width: 1.25rem;
+  height: 1.25rem;
   border-radius: 4px;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, transparent);
   transition: background-color 120ms ease, color 120ms ease;
@@ -2063,8 +2028,8 @@
   outline-offset: 1px;
 }
 /*
- * MANAGE PAYMENTS SITS WITH THE PAYER IT IS ABOUT, pushed to the row's end so the relationship
- * reads left to right — who, what they owe, how they can pay, and then the way to change it.
+ * MANAGE PAYMENTS SITS AT THE ROW'S END, pushed there so the relationship reads left to right —
+ * who, what they owe, how they can pay, what reduces it, and then the way in.
  */
 .alloy-os-fdetail__payeraction {
   margin-left: auto;
@@ -2079,13 +2044,12 @@
   outline-offset: 2px;
   border-radius: 3px;
 }
-
-/* At phone width the label column would leave the answer no room, so the row stacks. */
+/*
+ * At phone width the row wraps rather than shrinking its type — compactness is not worth buying
+ * with illegibility, and `Manage payments` stops being pushed to an end that is no longer there.
+ */
 @media (max-width: 520px) {
-  .alloy-os-fdetail__adminrow {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .alloy-os-fdetail__adminlabel { grid-column: 1 / -1; }
+  .alloy-os-fdetail__payeraction { margin-left: 0; }
 }
 
 .alloy-os-fdetail__filterrow {

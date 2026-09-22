@@ -252,7 +252,15 @@ describe("§5 · one authority, both consumers", () => {
             "lib/financials/reductions/forecastAssignmentReductions.ts",
             "lib/financials/reductions/commercialPolicyExceptionService.ts",
         ]) {
-            expect(strip(src(f)), `${f} does no discount arithmetic`).not.toMatch(/basisValue|percent_basis_points|\* 0?\.\d/);
+            /*
+             * THE BAN IS ON ARITHMETIC. `basisValue` was in this list as a proxy for "computes a
+             * discount", and it started firing when the forecast began CARRYING the resolver's
+             * authored rate up to the surfaces — which exists so an operator can read 10% without
+             * inferring it from -$18.50 and -$145.00. Passing a number through is the opposite of
+             * computing one; multiplying a rate by a gross is what must stay impossible here.
+             */
+            expect(strip(src(f)), `${f} does no discount arithmetic`)
+                .not.toMatch(/percent_basis_points|\* 0?\.\d|basisAmountCents\s*\*|\/\s*100\b/);
         }
     });
 });

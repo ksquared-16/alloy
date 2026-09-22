@@ -30,49 +30,41 @@ describe("administration comes before the ledger", () => {
 
     it("responsibility, discounts and payment methods all precede the ledger", () => {
         /*
-         * Measured before this change: the administration sat after 116 ledger rows, so managing
-         * who pays or what reduces a bill meant scrolling past every transaction on the account.
+         * Measured before any of this: administration sat after 116 ledger rows, so managing who
+         * pays or what reduces a bill meant scrolling past every transaction on the account.
          *
-         * Moving those sections above the ledger fixed the scroll and created a worse problem —
-         * a stack of configuration sections between the commands and the record, so the card read
-         * as a settings screen with a ledger at the bottom. The three facts now state themselves
-         * on ONE row and each opens a depth card, which is why the section markers this rule used
-         * to read are gone. The ordering rule itself is unchanged.
+         * Three shapes have now answered that. Four stacked sections above the ledger fixed the
+         * order and read as a settings screen. Two compact rows fixed the weight and still spent
+         * permanent height restating a Responsibility KPI at the top of the same card. What is
+         * left is ONE relationship row — payer, what they owe, how they can pay, what reduces it,
+         * and the doors — with responsibility stated by its KPI and managed from the filter.
+         *
+         * The ordering rule never changed: everything administrable is reachable before the
+         * record, not after it.
          */
         const ledger = at("data-financials-ledger-hydrating");
-        const admin = at('data-financials-administration="compact"');
-        expect(admin, "the administration region precedes the ledger").toBeLessThan(ledger);
-        /*
-         * PAYMENT STATE IS NOT AN ADMINISTRATION ITEM ANY MORE, and that is the correction rather
-         * than a gap: how a payer can pay is a fact about the PAYER, so it states itself on the
-         * relationship row and is managed from there. Responsibility and discounts are per-child
-         * questions and keep their own rows. All three still precede the ledger, which is what
-         * this rule was ever about.
-         */
-        expect(at('data-financials-payer-row="true"'), "payment state precedes the ledger")
+        expect(at('data-financials-payer-row="true"'), "the relationship row precedes the ledger")
             .toBeLessThan(ledger);
-        expect(at('data-financials-manage-payments="open"'), "and so does the way to change it")
+        expect(at('data-financials-manage-payments="open"'), "payment management precedes it")
             .toBeLessThan(ledger);
-        for (const item of ["responsibility", "discount"]) {
-            expect(at(`data-financials-admin-item="${item}"`), `${item} states itself before the ledger`)
-                .toBeLessThan(ledger);
-        }
+        expect(at('data-financials-manage-discounts="gear"'), "discount management precedes it")
+            .toBeLessThan(ledger);
+        expect(at('data-financials-manage-responsibility="gear"'), "responsibility management precedes it")
+            .toBeLessThan(ledger);
     });
 
     it("and before the ledger's own controls, not merely above the rows", () => {
         const lenses = at('data-financials-lenses="true"');
-        expect(at('data-financials-administration="compact"')).toBeLessThan(lenses);
+        expect(at('data-financials-payer-row="true"')).toBeLessThan(lenses);
         expect(at('data-financials-admin-item="discount"')).toBeLessThan(lenses);
     });
 
     it("autopay stays with the methods it qualifies", () => {
         /*
          * AND THE METHODS MOVED. Autopay qualifies a payment method, so when payment methods left
-         * Details for the Manage payments depth card, autopay had to go with them — a standing
-         * autopay line in Details beside a method the operator can no longer see from Details
-         * states a dependency on something absent.
-         *
-         * The rule is unchanged: the two are never separated. What changed is where both live.
+         * Details for the Manage payments depth card, autopay went with them — a standing autopay
+         * line beside a method the operator can no longer see states a dependency on something
+         * absent. The rule is unchanged: the two are never separated.
          */
         const detail = statements(code(DETAIL));
         expect(detail, "autopay does not stand alone in Details")
@@ -87,20 +79,22 @@ describe("administration comes before the ledger", () => {
         expect(card, "and autopay is there with them").toContain("<AutopaySection");
     });
 
-    it("administration is one row, not a stack of sections", () => {
+    it("administration is one row, not a stack of anything", () => {
         /*
-         * THE REASON THE PREVIOUS SHAPE FAILED. Four sections above the ledger is the same defect
-         * as four sections below it: the operator's record is not what the card is about any more.
-         * There is exactly one administration container, and no section-shaped administration
-         * blocks survive beside it.
+         * THE REASON EACH PREVIOUS SHAPE FAILED. Four sections above the ledger is the same defect
+         * as four below it; two full-width rows is a smaller version of it. There is exactly one
+         * permanent row, and no section- or row-shaped administration survives beside it.
          */
-        expect((src.match(/data-financials-administration="compact"/g) ?? []).length).toBe(1);
+        expect((src.match(/data-financials-payer-row="true"/g) ?? []).length).toBe(1);
         for (const gone of [
+            'data-financials-administration="compact"',
+            'data-financials-admin-item="responsibility"',
             'data-financials-discounts="detail"',
             'data-financials-payment-methods="detail"',
             'data-financials-autopay="detail"',
         ]) {
-            expect(src, `${gone} is a section, and sections are what this replaced`).not.toContain(gone);
+            expect(src, `${gone} is permanent administration, and that is what this replaced`)
+                .not.toContain(gone);
         }
     });
 });

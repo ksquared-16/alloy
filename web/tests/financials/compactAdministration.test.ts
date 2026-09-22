@@ -51,16 +51,32 @@ describe("Details renders no administration editor", () => {
 });
 
 describe("what Details does carry is compact state and doors", () => {
-    it("one administration region, not several", () => {
-        expect(DETAIL).toContain('data-financials-administration="compact"');
-        const regions = DETAIL.split('data-financials-administration="compact"').length - 1;
-        expect(regions, "exactly one region").toBe(1);
+    it("one relationship row, and no administration region beside it", () => {
+        /*
+         * There WAS a region — a marked block of administration rows above the ledger. It was the
+         * fix for four stacked sections and became the next thing to remove: two permanent
+         * full-width rows, one of them restating a Responsibility KPI at the top of the same card.
+         *
+         * What carries the state now is the row the state was always about. "One region" has
+         * become "one row, and nothing else permanent".
+         */
+        expect(DETAIL, "no administration region survives")
+            .not.toContain('data-financials-administration="compact"');
+        const rows = DETAIL.split('data-financials-payer-row="true"').length - 1;
+        expect(rows, "exactly one relationship row").toBe(1);
     });
 
-    it("it states responsibility, discount and a way to manage payments", () => {
-        expect(DETAIL).toContain('data-financials-responsibility-summary="true"');
+    it("it states the discount position and offers all three doors", () => {
+        /*
+         * Responsibility states itself in a KPI rather than in a summary here, so its DOOR is what
+         * Details must still carry — losing the row must not lose the way in.
+         */
         expect(DETAIL).toContain('data-financials-discount-summary="true"');
         expect(DETAIL).toContain('data-financials-manage-payments="open"');
+        expect(DETAIL).toContain('data-financials-manage-discounts="gear"');
+        expect(DETAIL, "responsibility keeps its door beside the filter")
+            .toContain('data-financials-manage-responsibility="gear"');
+        expect(DETAIL, "and its state is the KPI").toMatch(/<Stat label="Responsibility"/);
     });
 
     it("both gears open a surface rather than local state", () => {
@@ -70,13 +86,13 @@ describe("what Details does carry is compact state and doors", () => {
             .not.toContain("setManageResponsibilityOpen(true)");
     });
 
-    it("administration still precedes the ledger", () => {
-        const admin = DETAIL.indexOf('data-financials-administration="compact"');
+    it("the relationship row still precedes the ledger", () => {
+        const row = DETAIL.indexOf('data-financials-payer-row="true"');
         const lenses = DETAIL.indexOf('data-financials-lenses="true"');
         const ledger = DETAIL.indexOf("data-financials-ledger-hydrating");
-        expect(admin).toBeGreaterThan(-1);
-        expect(admin).toBeLessThan(lenses);
-        expect(admin).toBeLessThan(ledger);
+        expect(row).toBeGreaterThan(-1);
+        expect(row).toBeLessThan(lenses);
+        expect(row).toBeLessThan(ledger);
     });
 });
 

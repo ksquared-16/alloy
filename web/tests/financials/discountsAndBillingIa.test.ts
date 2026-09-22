@@ -37,8 +37,21 @@ describe("the family discount position uses the canonical forecast, and only it"
          * show "10% of $1,450". That figure would not know about exceptions, effective windows or
          * category scoping, and would disagree with the applied truth the moment any changed.
          */
-        expect(family).not.toMatch(/percent|basisPoints|\*\s*0\.1|\/\s*100\b/);
-        expect(family).not.toMatch(/reduce\(\s*\(?\w+,\s*\w+\)?\s*=>\s*\w+\s*\+/);
+        /*
+         * THE BAN IS ON ARITHMETIC, not on the word. Forbidding /percent/ outright was a proxy
+         * for "derives no rate", and it started firing on a TYPE LITERAL the moment the route
+         * began carrying the resolver's authored basis through — which is the opposite of
+         * deriving one. The rule is that no rate is COMPUTED here: no multiplying, no dividing by
+         * a hundred, no summing a family's discounts into a figure nobody resolved.
+         */
+        expect(family, "no rate is computed from a gross").not.toMatch(/\*\s*0\.\d|\/\s*100\b|\*\s*100\b/);
+        expect(family, "and no total is summed here")
+            .not.toMatch(/reduce\(\s*\(?\w+,\s*\w+\)?\s*=>\s*\w+\s*\+/);
+        /* Carried verbatim from the outcome, which is the only thing that knows it. */
+        expect(family, "the authored basis is passed through untouched")
+            .toMatch(/basis:\s*outcome\.basis\s*\?\?\s*null/);
+        expect(family, "and so is its value")
+            .toMatch(/basisValue:\s*outcome\.basisValue\s*\?\?\s*null/);
     });
 
     it("carries the forecast's own amounts through untouched", () => {
@@ -172,9 +185,19 @@ describe("the family Discount position renders canonical truth and computes none
          * disagree with the applied ledger the moment any changed.
          */
         const panel = code(PANEL);
-        expect(panel).not.toMatch(/percent|basisPoints|\*\s*0?\.\d|\/\s*100\s*\)?\s*\*/);
+        /*
+         * THE BAN IS ON ARITHMETIC, not on the word. This forbade /percent/ outright as a proxy
+         * for "computes no rate", and it fired the moment the card began STATING the resolver's
+         * authored rate — which exists precisely so the operator does not have to infer 10% from
+         * -$18.50 and -$145.00. Printing a number the resolver authored is the opposite of
+         * deriving one; multiplying a rate by a gross here is what must stay impossible.
+         */
+        expect(panel, "no rate is computed from a gross")
+            .not.toMatch(/\*\s*0?\.\d|\/\s*100\s*\)?\s*\*|basisAmountCents\s*\*/);
         /* Dividing by 100 to render cents as currency is formatting, and is the only such use. */
         expect((panel.match(/\/ 100/g) ?? []).length).toBeLessThanOrEqual(1);
+        /* And the rate that IS shown came from the outcome, never from this component. */
+        expect(panel, "the rate is the authored one").toMatch(/s\.basisValue/);
     });
 
     it("carries the forecast's own expected amount", () => {
@@ -227,23 +250,22 @@ describe("the family Discount position renders canonical truth and computes none
         expect(panel).toMatch(/gearRef\.current\?\.focus\(\)/);
     });
 
-    it("sits in the administration region, not on the transaction row", () => {
+    it("sits on the relationship row, not on the transaction row", () => {
         /*
-         * The administration region used to be a stack of sections rendered between the commands
-         * and the ledger — discounts, then methods, then autopay — and each one pushed the ledger
-         * further down the card. It is now ONE compact row of states with a door beside each, so
-         * the section markers this rule used to read no longer exist.
+         * The administration REGION is gone. It was two standalone rows naming every child, which
+         * was right about grain and wrong about weight — a permanent block above the ledger
+         * restating a Responsibility KPI at the top of the same card.
          *
-         * The rule is the same and is now easier to state: the discount's place is in the
-         * administration row, above the ledger and outside the command row, and its editor is a
-         * depth card rather than anything that unfolds here.
+         * The discount's place is now the compact relationship row: one phrase for the family's
+         * position, a gear beside it, and the per-child breakdown in the depth card that can
+         * afford it. The rule that has not changed is which row it must NOT be on.
          */
         const detail = code(DETAIL);
-        const admin = detail.indexOf('data-financials-administration="compact"');
+        const row = detail.indexOf('data-financials-payer-row="true"');
         const discount = detail.indexOf('data-financials-admin-item="discount"');
         const ledger = detail.indexOf('data-financials-detail-scroll="true"');
-        expect(admin, "there is an administration row").toBeGreaterThan(-1);
-        expect(discount, "and the discount states itself in it").toBeGreaterThan(admin);
+        expect(row, "there is a relationship row").toBeGreaterThan(-1);
+        expect(discount, "and the discount states itself on it").toBeGreaterThan(row);
         expect(ledger, "the ledger is still below it").toBeGreaterThan(discount);
         /* Never inside the command row, and never unfolded in place. */
         expect(detail).not.toMatch(/ActionRow[\s\S]{0,200}FinancialsDiscountPanel/);
@@ -597,7 +619,12 @@ describe("the policy name is stated once, not once per line", () => {
         expect(panel, "the raw explanation is never rendered beside the name")
             .not.toMatch(/·\s*\{s\.explanation\}/);
         expect(panel, "only an exact leading name is removed").toContain("explanation.startsWith(prefix)");
-        expect(panel, "and nothing is recomputed").not.toMatch(/percent|basisPoints/);
+        /*
+         * "Nothing is recomputed" is the rule; /percent/ was a proxy that also caught the card
+         * READING the authored basis, which is a carried fact rather than a recomputed one. What
+         * must stay absent is arithmetic on the gross.
+         */
+        expect(panel, "and nothing is recomputed").not.toMatch(/basisAmountCents\s*\*|\*\s*0?\.\d/);
     });
 });
 

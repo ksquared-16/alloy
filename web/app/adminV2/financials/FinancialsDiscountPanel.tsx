@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { organizationFinancialsChapterHref } from "@/lib/commercial/commercialChapterRoutes";
 import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
 import { Settings2 } from "lucide-react";
 
@@ -34,6 +35,13 @@ type Subject = {
     currencyCode: string;
     /** How THIS relationship's effect was derived — the basis differs per child. */
     explanation: string | null;
+    /*
+     * THE AUTHORED RATE, carried from the resolver. An operator must be able to read "10%" without
+     * inferring it from the expected amount — and they could not, because one sibling policy
+     * produced -$18.50 on one tuition and -$145.00 on another. Two numbers, one rate.
+     */
+    basis?: "percentage" | "amount" | null;
+    basisValue?: number | null;
 };
 type PolicyPosition = {
     policyId: string;
@@ -370,10 +378,35 @@ export default function FinancialsDiscountPanel({
                                         );
                                         return (
                                             <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
+                                                {/*
+                                                  * ── THE CHILD, THE RATE, THE MONEY ──────────
+                                                  *
+                                                  * The rate is STATED, not left to be inferred:
+                                                  * this policy is 10% for both children and paid
+                                                  * out as -$18.50 and -$145.00, so an operator
+                                                  * reading only the amounts cannot tell whether
+                                                  * they are looking at one rate or two.
+                                                  *
+                                                  * It comes from the resolver's authored value,
+                                                  * never from dividing the expected amount by a
+                                                  * basis this card would have had to guess at.
+                                                  */}
                                                 <p className="text-[11px] text-alloy-midnight/70">
-                                                    {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
+                                                    <span className="font-medium">{label(s)}</span>
+                                                    {s.basis === "percentage" && s.basisValue != null ? (
+                                                        <span data-financials-discount-rate={s.opportunityCustomerMemberId}>
+                                                            {" · "}{s.basisValue}%
+                                                        </span>
+                                                    ) : s.basis === "amount" && s.basisValue != null ? (
+                                                        <span data-financials-discount-rate={s.opportunityCustomerMemberId}>
+                                                            {" · "}{money(s.basisValue, s.currencyCode)}
+                                                        </span>
+                                                    ) : null}
+                                                    {" · Expected "}{money(Math.abs(s.expectedCents), s.currencyCode)}
                                                     {basisWithoutPolicyName(s.explanation, p.label) ? (
-                                                        <span className="text-alloy-midnight/45"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
+                                                        <span className="block pl-0 text-alloy-midnight/45" data-financials-discount-why={s.opportunityCustomerMemberId}>
+                                                            {basisWithoutPolicyName(s.explanation, p.label)}
+                                                        </span>
                                                     ) : null}
                                                 </p>
                                                 {excepted ? (
@@ -461,6 +494,39 @@ export default function FinancialsDiscountPanel({
                         {actionError ? (
                             <p className="mt-2 text-[11px] text-alloy-ember" data-financials-discount-action-error="true">{actionError}</p>
                         ) : null}
+
+                        {/*
+                          * ── WHERE THE POLICY ITSELF IS CHANGED ─────────────────────────────
+                          *
+                          * THE AUTHORITY MODEL, STATED RATHER THAN IMPLIED. A discount is not
+                          * assigned to a child; it is an organization-authored policy that either
+                          * reaches a relationship or does not, and `resolveReductionEligibility`
+                          * is what decides. There is no per-child writer, and adding a "choose a
+                          * discount" control here would be a control that cannot commit — the
+                          * operator would set it, nothing would change, and the card would have
+                          * lied about what it owns.
+                          *
+                          * So this card offers exactly the two things it can do — except a
+                          * relationship, end that exception — and NAMES the surface that owns the
+                          * rest. An operator who wanted a different rate came to the wrong screen,
+                          * and the useful answer is which screen is the right one.
+                          */}
+                        <div className="mt-3 border-t border-alloy-stone/10 pt-2" data-financials-discount-policy-config="true">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                Policy configuration
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                                Rates and who qualifies are organization configuration. This card decides
+                                whether an authored policy reaches one relationship — never what it is worth.
+                            </p>
+                            <a
+                                href={organizationFinancialsChapterHref("policies")}
+                                className="mt-1 inline-block text-[11px] font-medium text-alloy-bend-pine hover:underline"
+                                data-financials-discount-manage-policies="true"
+                            >
+                                Manage discount policies <span aria-hidden>&rarr;</span>
+                            </a>
+                        </div>
 
                         <button
                             type="button"

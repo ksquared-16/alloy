@@ -1,5 +1,5 @@
 /**
- * FOUR CONCEPTS, FOUR GRAINS, AND A ROW EACH.
+ * FOUR CONCEPTS, FOUR GRAINS, AND ONE ROW.
  *
  *   POLICY              an organisation-authored commercial rule
  *   DISCOUNT POSITION   what that policy does to ONE CHILD's obligation
@@ -11,7 +11,14 @@
  * have made that legible and left it wrong: a row of bullets presents four different questions as
  * one fact about whoever is named first.
  *
- * These locks hold the grain, not the spacing. The mounted frames answer the spacing.
+ * Giving each its own row fixed the legibility and left the card over-structured: two permanent
+ * full-width rows above the ledger, one of them restating a Responsibility KPI that sits at the
+ * top of the same card. So responsibility keeps its KPI and its gear beside the responsible-party
+ * filter, and the discount position joins the relationship row as one collapsed phrase.
+ *
+ * Grain did not move. A discount is still a fact about a child's commercial relationship; it is
+ * COMPOSED onto the payer row, not reassigned to the payer. These locks hold that distinction,
+ * and the collapse rule that makes one line truthful. The mounted frames answer the spacing.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -32,12 +39,12 @@ describe("payment-method state shares the payer row it is about", () => {
     it("the door sits on the relationship row, not in a section of its own", () => {
         const detail = code(DETAIL);
         const payerRow = detail.indexOf('data-financials-payer-row="true"');
-        const admin = detail.indexOf('data-financials-administration="compact"');
         const managePayments = detail.indexOf('data-financials-manage-payments="open"');
+        const lenses = detail.indexOf('data-financials-lenses="true"');
         expect(payerRow, "the relationship row exists").toBeGreaterThan(-1);
         expect(managePayments, "Manage payments is rendered").toBeGreaterThan(payerRow);
-        expect(managePayments, "and inside the payer row, before administration begins")
-            .toBeLessThan(admin);
+        /* On the row, not after it: the lens bar is where the row's territory ends. */
+        expect(managePayments, "and inside the relationship row").toBeLessThan(lenses);
     });
 
     it("one state, one sentence", () => {
@@ -62,137 +69,126 @@ describe("payment-method state shares the payer row it is about", () => {
     });
 });
 
-describe("responsibility and discounts get a row each, at child grain", () => {
-    it("each is its own row, not an item on a shared line", () => {
+describe("no permanent administration row survives", () => {
+    it("responsibility has no standalone summary row", () => {
+        /*
+         * It has a first-class KPI at the top of this same card, so a row below restated what the
+         * operator had just read — and cost permanent vertical space to do it. The AUTHORITY is
+         * untouched: the gear still opens the centred depth card, it simply lives with the
+         * responsible-party filter, where responsibility is already part of the operator's model.
+         */
         const detail = code(DETAIL);
-        for (const item of ["responsibility", "discount"]) {
-            const at = detail.indexOf(`data-financials-admin-item="${item}"`);
-            expect(at, `${item} has a row`).toBeGreaterThan(-1);
-            /* A row, with a label, a value and a door — not a span in a wrapping flex line. */
-            expect(detail.slice(at - 120, at), `${item} is a row`).toContain("__adminrow");
-        }
+        expect(detail, "the KPI is what states responsibility").toMatch(/<Stat label="Responsibility"/);
+        expect(detail, "and no row restates it")
+            .not.toContain('data-financials-admin-item="responsibility"');
+        expect(detail, "no responsibility summary marker at all")
+            .not.toContain('data-financials-responsibility-summary');
     });
 
-    it("the rows have real layout behind them", () => {
+    it("discounts have no standalone summary row", () => {
+        const detail = code(DETAIL);
+        expect(detail, "no administration region remains")
+            .not.toContain('data-financials-administration="compact"');
+        expect(detail, "and no row grid behind one").not.toContain("alloy-os-fdetail__adminrow");
+    });
+
+    it("the discount summary lives on the relationship row", () => {
+        const detail = code(DETAIL);
+        const row = detail.indexOf('data-financials-payer-row="true"');
+        const discount = detail.indexOf('data-financials-admin-item="discount"');
+        const gear = detail.indexOf('data-financials-manage-discounts="gear"');
+        const rowEnd = detail.indexOf('data-financials-lenses="true"');
+        expect(row).toBeGreaterThan(-1);
+        expect(discount, "inside the relationship row").toBeGreaterThan(row);
+        expect(discount, "and before the lens bar").toBeLessThan(rowEnd);
+        expect(gear, "with its gear immediately beside it").toBeGreaterThan(discount);
+        expect(gear, "still on that row").toBeLessThan(rowEnd);
+    });
+
+    it("the row is a real flex line, not concatenated text", () => {
         /*
-         * THE ROOT CAUSE OF THE RUN-TOGETHER LINE. The class names existed and the stylesheet did
-         * not define them, so every label and value was an inline span with nothing between them.
-         * A grid with a label column is what makes three rows read as one region.
+         * THE ROOT CAUSE OF THE RUN-TOGETHER STRING, which was never about putting related facts
+         * on one line: the class names existed and the stylesheet defined none of them, so every
+         * span was inline with nothing between it and the next.
          */
         const css = read(CSS);
-        /*
-         * THE SELECTOR THE MARKUP ACTUALLY USES, matched as a whole. A substring check passed
-         * happily against `.alloy-os-fdetail__adminrowX` — a rule that styles nothing, which is
-         * indistinguishable on this assertion from the no-rules state that caused the defect.
-         */
-        expect(css, "the row rule exists and is the one the markup names")
-            .toMatch(/\.alloy-os-fdetail__adminrow\s*\{/);
-        /*
-         * THE BASE RULE, not the narrow-width override. The selector appears twice — once at top
-         * level and once inside the phone-width media query, where the label column is dropped on
-         * purpose — so matching "the first .alloy-os-fdetail__adminrow that mentions
-         * grid-template-columns" was satisfied by the override alone.
-         *
-         * What must hold is that the DEFAULT row has three tracks: a fixed label column, the
-         * answer, and the door. That column is what aligns Responsibility and Discounts.
-         */
-        const rule = css.slice(css.search(/^\.alloy-os-fdetail__adminrow\s*\{/m));
-        expect(rule.slice(0, 400), "the label column aligns the answers")
-            .toMatch(/grid-template-columns:\s*[\d.]+rem\s+minmax\(0,\s*1fr\)\s+auto/);
-        expect(css, "and the value itself can wrap between children")
-            .toMatch(/\.alloy-os-fdetail__adminvalue\s*\{/);
-        expect(code(DETAIL), "and the markup uses that class").toContain("alloy-os-fdetail__adminrow");
+        expect(css, "row items are spaced").toMatch(/\.alloy-os-fdetail__rowitem\s*\{/);
+        const item = css.slice(css.search(/\.alloy-os-fdetail__rowitem\s*\{/));
+        expect(item.slice(0, 300)).toMatch(/gap:/);
+        const payers = css.slice(css.search(/\.alloy-os-fdetail__payers\s*\{/));
+        expect(payers.slice(0, 400), "and the row itself is a flex line with a gap")
+            .toMatch(/display:\s*flex[\s\S]{0,200}gap:/);
     });
 
-    it("each child is named once, on each row", () => {
-        /* A child that appears twice on one row is two answers about one obligation. */
+    it("compactness did not come out of the type scale", () => {
+        /* §14: preserve normal Alloy legibility. A smaller font is not a shorter card. */
+        const css = read(CSS);
+        const value = css.slice(css.search(/\.alloy-os-fdetail__adminvalue\s*\{/));
+        const size = /font-size:\s*([\d.]+)rem/.exec(value.slice(0, 300));
+        expect(size, "the row states a font size").not.toBeNull();
+        expect(Number(size![1]), "and it is not shrunk to buy height").toBeGreaterThanOrEqual(0.7);
+    });
+});
+
+describe("the collapse rule is about agreement, not counting", () => {
+    const summariser = () => {
+        const card = code(CARD);
+        const at = card.indexOf("function summariseFamilyDiscount");
+        expect(at, "the summariser exists").toBeGreaterThan(-1);
+        return card.slice(at, card.indexOf("\n}", at) + 2);
+    };
+
+    it("children who agree collapse to the shared state", () => {
+        const body = summariser();
+        expect(body, "one fingerprint means one answer").toMatch(/fingerprints\.size === 1/);
+        expect(body, "and the shared state names the policy and its rate")
+            .toMatch(/l\.rate \? `\$\{l\.label\} · \$\{l\.rate\}`/);
+    });
+
+    it("agreement is judged on the authored RATE, never the expected amount", () => {
+        /*
+         * THE CASE THAT MAKES THIS NECESSARY: one sibling policy at 10% produced -$18.50 for one
+         * child and -$145.00 for the other, because their tuitions differ. Comparing amounts
+         * would call that a disagreement and print "2 discount arrangements" for a family that
+         * has exactly one discount — the row would be wrong about the simplest case there is.
+         */
+        const body = summariser();
+        expect(body, "the fingerprint is policy and rate").toMatch(/`\$\{l\.policyId\}@\$\{l\.rate\}`/);
+        expect(body, "and never the expected amount").not.toMatch(/expectedCents/);
+    });
+
+    it("children who differ are not falsely collapsed", () => {
+        const body = summariser();
+        expect(body, "a disagreement is stated as an aggregate")
+            .toMatch(/discount \$\{count === 1 \? "arrangement" : "arrangements"\}/);
+        expect(body, "and the row does not enumerate them").not.toMatch(/childLabel/);
+    });
+
+    it("a child no policy reaches still counts as a child without one", () => {
+        /*
+         * The roster seeds the map, so a child the policies never mention holds an empty list and
+         * makes the family disagree. Driving the map from the policies alone would have called a
+         * family "Sibling discount · 10%" when only one of two children was covered.
+         */
+        const body = summariser();
+        expect(body).toMatch(/for \(const child of allChildren\) byChild\.set\(child\.customerMemberId, \[\]\)/);
+        const card = code(CARD);
+        expect(card, "and the roster comes from the household reader")
+            .toMatch(/const roster = [\s\S]{0,300}positions/);
+    });
+
+    it("no discount is a compact state, not an empty section", () => {
+        const body = summariser();
+        expect(body).toMatch(/return "No discount"/);
         const detail = code(DETAIL);
-        expect(detail).toContain("ChildGrainSummary");
-        const helper = detail.slice(detail.indexOf("function ChildGrainSummary"));
-        expect(helper.slice(0, 1400)).toMatch(/entries\.map\(\(entry, index\)/);
-        expect(helper.slice(0, 1400), "the separator belongs to the child that follows it")
-            .toMatch(/index > 0 \?/);
+        expect(detail, "Details renders no empty discount block")
+            .not.toMatch(/No discount is expected on this family/);
     });
 
-    it("a child with no discount says None rather than disappearing", () => {
-        /*
-         * §11's rule, and the reason it needs one: the route answers BY POLICY, so a child no
-         * policy reaches appears in no list at all. Driving the row from the policies would drop
-         * that child silently — and a child missing from a per-child row reads as a child who was
-         * not considered, which is a different and more alarming claim than "nothing reduces this
-         * one". The household's roster decides who is listed; the policies decide what each says.
-         */
+    it("a failed read keeps the last truthful answer", () => {
+        /* "No discount" is a claim an operator acts on; it must never mean "the read failed". */
         const card = code(CARD);
-        const summariser = card.slice(card.indexOf("function summariseDiscountPositions"));
-        const body = summariser.slice(0, summariser.indexOf("\n}") + 2);
-        expect(body, "the roster is an input").toContain("allChildren");
-        /*
-         * AND IT IS REACHABLE. `if (false && allChildren.length > 0)` leaves every mention of the
-         * roster in place while restoring the defect exactly — the policies drive the row again
-         * and the child with no discount is gone. The branch must open on the roster alone.
-         */
-        expect(body, "the roster branch is not short-circuited off")
-            .toMatch(/if \(allChildren\.length > 0\) \{/);
-        expect(body, "and it drives the list").toMatch(/allChildren\.map\(\(child\)/);
-        expect(body, "a child no policy reaches still gets a word").toMatch(/effects\.length > 0 \? effects\.join/);
-        expect(body).toContain('"None"');
-    });
-
-    it("both rows name the same children", () => {
-        /*
-         * Responsibility and discounts are independent facts about the SAME household. If the two
-         * rows were rostered from different sources they could disagree about who the children
-         * are, and an operator comparing them would be comparing two different families.
-         */
-        const card = code(CARD);
-        expect(card, "the discount roster comes from the responsibility read")
-            .toMatch(/summariseDiscountPositions\([\s\S]{0,700}positionsBody as/);
-    });
-
-    it("responsibility is not inferred from the payer", () => {
-        /*
-         * `vm.payers` means responsibility and is the right fact at the WRONG GRAIN: it names the
-         * parties on the ACCOUNT. Rendering it against a per-child label asserts one child's
-         * arrangement for a sibling who may have their own.
-         */
-        const card = code(CARD);
-        const summariser = card.slice(card.indexOf("function summariseResponsibilityPositions"));
-        const body = summariser.slice(0, summariser.indexOf("\n}"));
-        expect(body, "the row is built from the per-child read").toContain("positions");
-        expect(body, "never from the account's payers").not.toContain("payers");
-    });
-
-    it("discount is not inferred from responsibility", () => {
-        const card = code(CARD);
-        const summariser = card.slice(card.indexOf("function summariseDiscountPositions"));
-        /* The function itself — its closing brace at column zero, not whatever follows it. */
-        const body = summariser.slice(0, summariser.indexOf("\n}") + 2);
-        expect(body, "the discount row reads the discount position").toContain("policies");
-        expect(body, "and knows nothing about who owes")
-            .not.toMatch(/responsibility|arrangement|shares/);
-    });
-
-    it("one child's answer is never another's", () => {
-        /*
-         * The read asks about every child separately and says whether the governing arrangement
-         * was authored AT that child or inherited from the household. Collapsing that shows
-         * inherited household money as though the child had been given it deliberately.
-         */
-        const route = code(POSITIONS);
-        expect(route).toContain("readAccountArrangement");
-        expect(route).toContain("authoredAtChild");
-        expect(route, "asked per child, not once for the account")
-            .toMatch(/members\.map\(async \(member\)/);
-        const card = code(CARD);
-        expect(card, "and the summary keeps the distinction").toMatch(/authoredAtChild/);
-    });
-
-    it("the route composes two authorities and resolves nothing itself", () => {
-        /* Not a second projection: specificity stays with the grain-aware reader that owns it. */
-        const route = code(POSITIONS);
-        expect(route).toContain("readHouseholdScopes");
-        expect(route, "no arrangement is picked by hand here")
-            .not.toMatch(/arrangementSpecificity|\.sort\(/);
+        expect(card).toMatch(/if \(discountBody\) setAdminDiscountSummary\(discountSummary\)/);
     });
 });
 
@@ -211,14 +207,14 @@ describe("nothing administrable unfolds inside Details", () => {
 
     it("the ledger begins immediately after the compact region", () => {
         const detail = code(DETAIL);
-        const admin = detail.indexOf('data-financials-administration="compact"');
+        const row = detail.indexOf('data-financials-payer-row="true"');
         const lenses = detail.indexOf('data-financials-lenses="true"');
         const ledger = detail.indexOf('data-financials-detail-scroll="true"');
-        expect(admin).toBeGreaterThan(-1);
-        expect(lenses, "the ledger's own controls come next").toBeGreaterThan(admin);
+        expect(row).toBeGreaterThan(-1);
+        expect(lenses, "the ledger's own controls come next").toBeGreaterThan(row);
         expect(ledger, "then the record").toBeGreaterThan(lenses);
-        /* And nothing section-shaped in between. */
-        expect(detail.slice(admin, lenses)).not.toMatch(/<SectionHead|__section\b/);
+        /* And nothing section-shaped in between — one row, then the ledger's controls. */
+        expect(detail.slice(row, lenses)).not.toMatch(/<SectionHead|__section\b/);
     });
 });
 
@@ -253,11 +249,11 @@ describe("a depth card paints before its canonical content resolves", () => {
         /* FAIL CLOSED: an unreadable position says so; it never degrades to "no discount". */
         expect(panel).toMatch(/setPosition\(null\); setError\(e\.message\)/);
         const detail = code(DETAIL);
-        const helper = detail.slice(detail.indexOf("function ChildGrainSummary"));
-        expect(helper.slice(0, 1400), "and a waiting row says it is waiting")
+        expect(detail, "a waiting row says it is waiting")
             .toContain('data-financials-summary-state="loading"');
-        expect(helper.slice(0, 1400), "rather than falling through to the empty answer")
-            .toMatch(/if \(loading && entries\.length === 0\)/);
+        /* And says it INSTEAD of the summary, never over the top of a stale one. */
+        expect(detail, "rather than falling through to an answer nothing has confirmed")
+            .toMatch(/administration\.loading \?[\s\S]{0,260}administration\.discountSummary/);
     });
 
     it("the seed is the same route's body, not a second projection", () => {
@@ -398,5 +394,70 @@ describe("three doors, one grammar", () => {
             );
         }
         expect(card, "and the restore runs when the surface goes away").toContain("adminFocusSelector");
+    });
+});
+
+describe("the depth card answers what the row cannot", () => {
+    /*
+     * THE DIVISION OF LABOUR. The row answers "what discount position exists"; the card answers
+     * "how does it apply by child, and what can I change". The row is allowed to collapse because
+     * the card is where the per-child truth lives — so the card must actually carry it.
+     */
+    it("the rate is stated, never left to be inferred", () => {
+        /*
+         * §8. One policy at 10% paid out as -$18.50 and -$145.00 on two different tuitions; an
+         * operator reading only the amounts cannot tell whether that is one rate or two. The rate
+         * is the authored value from the resolver, rendered as itself.
+         */
+        const panel = code(DISCOUNT);
+        expect(panel, "a percentage rate is rendered").toMatch(
+            /s\.basis === "percentage" && s\.basisValue != null \?/,
+        );
+        expect(panel, "and shown as a percentage").toMatch(/\{s\.basisValue\}%/);
+        expect(panel, "a fixed-amount policy states its amount instead")
+            .toMatch(/s\.basis === "amount" && s\.basisValue != null \?/);
+        expect(panel, "the rate carries a marker so a frame can find it")
+            .toContain("data-financials-discount-rate");
+    });
+
+    it("the rate the card shows is the one the route carried", () => {
+        /* Not re-derived from the expected amount, which is what makes it trustworthy. */
+        const route = code("app/api/admin/financials/family-discount-position/route.ts");
+        expect(route).toMatch(/basis:\s*outcome\.basis/);
+        expect(route).toMatch(/basisValue:\s*outcome\.basisValue/);
+        const forecast = code("lib/financials/reductions/forecastAssignmentReductions.ts");
+        expect(forecast, "and the forecast carries the resolver's own values")
+            .toMatch(/basis:\s*r\.basis[\s\S]{0,80}basisValue:\s*r\.basisValue/);
+    });
+
+    it("the card names where the policy itself is changed", () => {
+        /*
+         * §10. Discounts are derived from policy eligibility; there is no per-child writer, and a
+         * "choose a discount" control here would be a control that cannot commit — the operator
+         * would set it, nothing would change, and the card would have lied about what it owns.
+         *
+         * So the card offers exactly the two relationship actions it can perform and NAMES the
+         * surface that owns the rest, rather than leaving an operator who wanted a different rate
+         * on a screen that cannot give them one.
+         */
+        const panel = code(DISCOUNT);
+        expect(panel, "the policy-configuration region exists")
+            .toContain('data-financials-discount-policy-config="true"');
+        expect(panel, "with a real path to it")
+            .toContain('data-financials-discount-manage-policies="true"');
+        expect(panel, "through the canonical href, not a hand-written URL")
+            .toMatch(/organizationFinancialsChapterHref\("policies"\)/);
+        /* And still no fake per-child assignment beside it. */
+        expect(panel, "no invented per-child discount writer")
+            .not.toMatch(/Select discount|Choose a discount|assignDiscount/);
+    });
+
+    it("both relationship actions remain, and they are the only writes", () => {
+        const panel = code(DISCOUNT);
+        expect(panel).toContain("Add exception");
+        expect(panel).toContain("End exception");
+        /* The two canonical actions, and nothing that writes a policy from here. */
+        expect(panel, "no policy writer lives in this card")
+            .not.toMatch(/commercial\/policies["`']\s*,\s*\{\s*method:\s*"(POST|PATCH|DELETE)/);
     });
 });
