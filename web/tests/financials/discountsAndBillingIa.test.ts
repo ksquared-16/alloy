@@ -228,13 +228,27 @@ describe("the family Discount position renders canonical truth and computes none
     });
 
     it("sits in the administration region, not on the transaction row", () => {
+        /*
+         * The administration region used to be a stack of sections rendered between the commands
+         * and the ledger — discounts, then methods, then autopay — and each one pushed the ledger
+         * further down the card. It is now ONE compact row of states with a door beside each, so
+         * the section markers this rule used to read no longer exist.
+         *
+         * The rule is the same and is now easier to state: the discount's place is in the
+         * administration row, above the ledger and outside the command row, and its editor is a
+         * depth card rather than anything that unfolds here.
+         */
         const detail = code(DETAIL);
-        const discounts = detail.indexOf('data-financials-discounts="detail"');
-        const methods = detail.indexOf('data-financials-payment-methods="detail"');
-        expect(discounts).toBeGreaterThan(-1);
-        /* Beside payer administration, below the command row — never inside it. */
-        expect(methods).toBeGreaterThan(discounts);
+        const admin = detail.indexOf('data-financials-administration="compact"');
+        const discount = detail.indexOf('data-financials-admin-item="discount"');
+        const ledger = detail.indexOf('data-financials-detail-scroll="true"');
+        expect(admin, "there is an administration row").toBeGreaterThan(-1);
+        expect(discount, "and the discount states itself in it").toBeGreaterThan(admin);
+        expect(ledger, "the ledger is still below it").toBeGreaterThan(discount);
+        /* Never inside the command row, and never unfolded in place. */
         expect(detail).not.toMatch(/ActionRow[\s\S]{0,200}FinancialsDiscountPanel/);
+        expect(detail, "the editor is a depth card, not an inline section")
+            .not.toContain("<FinancialsDiscountPanel");
     });
 
     it("the host supplies the canonical re-read, not optimistic state", () => {

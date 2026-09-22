@@ -1694,16 +1694,31 @@ describe("F38 · the entry command previews the act it will perform", () => {
         expect(cmd, "the posting line is a decision, not a constant").toMatch(
             /t\.reviewRequired[\s\S]{0,200}Creates a draft/,
         );
-        expect(cmd, "and the other branch states the act").toMatch(/Posts on confirm/);
         /*
-         * The draft sentence still exists — it is the truth under a configured boundary. What must
-         * not exist is a path to it that does not go through the boundary, so it is located INSIDE
-         * the conditional rather than merely present in the file.
+         * THE RULE IS "NO UNCONDITIONAL DRAFT CLAIM", NOT A PARTICULAR SENTENCE.
+         *
+         * This used to require the words "Posts on confirm" on the other branch. That copy was
+         * removed deliberately: naming the ordinary case in implementation language told the
+         * operator nothing they had to decide, while the review boundary is the case that changes
+         * what pressing Confirm does. Requiring the removed sentence back would be asking the
+         * command to say more, not to say it more truthfully — the spelling, not the rule.
+         *
+         * What must hold: every draft claim sits inside the boundary fork, and the balance line
+         * forks too, so an unchanged balance is never shown for a charge that posts on confirm.
          */
-        const branch = cmd.indexOf("t.reviewRequired ? (");
-        const draftNote = cmd.indexOf("Creates a draft — the balance does not change until it posts.");
-        expect(branch, "the preview forks on the boundary").toBeGreaterThan(-1);
-        expect(draftNote, "and the draft sentence lives inside that fork").toBeGreaterThan(branch);
+        const draftClaims = [...cmd.matchAll(/Creates a draft/g)].map((m) => m.index ?? -1);
+        expect(draftClaims.length, "the draft sentence exists").toBeGreaterThan(0);
+        for (const at of draftClaims) {
+            const enclosing = cmd.lastIndexOf("t.reviewRequired ? (", at);
+            expect(enclosing, "every draft claim is inside a boundary fork").toBeGreaterThan(-1);
+        }
+        /* Both arms are authored: the fork is a real decision, not a conditional with one answer. */
+        expect(cmd, "the balance preview forks on the same boundary").toMatch(
+            /t\.reviewRequired \? \([\s\S]{0,900}\) : \(/,
+        );
+        expect(cmd, "and no draft is claimed outside the fork").not.toMatch(
+            /reviewRequired[\s\S]{0,40}\?[\s\S]{0,40}null[\s\S]{0,120}Creates a draft/,
+        );
     });
 });
 

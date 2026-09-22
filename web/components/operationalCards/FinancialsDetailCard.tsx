@@ -320,43 +320,18 @@ export default function FinancialsDetailCard({
      * Open state only. The arrangement itself is the panel's business and the authority's; this
      * card holds no copy of it, so there is nothing here to drift from the committed truth.
      */
-    const [manageResponsibilityOpen, setManageResponsibilityOpen] = useState(false);
     /*
-     * The control that opened the card, so focus can return to it. Without this, dismissing the
-     * card drops focus to <body> and a keyboard operator restarts from the top of the page.
+     * ── WHY NO GEAR REF LIVES HERE ────────────────────────────────────────────────────────────
+     *
+     * Focus restoration is real and required, and it is NOT this component's to hold. Opening a
+     * depth card pushes a surface whose host returns early, so Details unmounts — every ref it
+     * was keeping dies with it, and the element it pointed at is gone from the document. A ref
+     * captured here would be null by the time anything could focus it.
+     *
+     * The gears therefore only have to be findable: they carry stable markers, the host records
+     * which one it opened from, and on dismissal it focuses that marker once Details is back in
+     * the document. See `restoreAdminFocus` in FinancialsCard.
      */
-    const manageResponsibilityGearRef = useRef<HTMLButtonElement | null>(null);
-    const closeResponsibility = useCallback(() => {
-        setManageResponsibilityOpen(false);
-        manageResponsibilityGearRef.current?.focus();
-    }, []);
-    const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
-        { customerMemberId: string; label: string }[]
-    >([]);
-    useEffect(() => {
-        /*
-         * Canonical household membership, read when the operator asks to administer — not on every
-         * card open, because the ledger does not need it. Same endpoint Accounts asks; the children
-         * an account may arrange for are not derivable from ledger rows, which name parties and not
-         * members.
-         */
-        const customerId = responsibilityAdmin?.customerId;
-        if (!manageResponsibilityOpen || !customerId || responsibilityScopeMembers.length > 0) return;
-        let cancelled = false;
-        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
-            credentials: "include",
-        })
-            .then((r) => (r.ok ? r.json() : null))
-            .then((b: { members?: { customerMemberId: string; label: string }[] } | null) => {
-                if (!cancelled && b?.members) setResponsibilityScopeMembers(b.members);
-            })
-            .catch(() => {
-                /* The card still administers the household; it simply cannot offer a child. */
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [manageResponsibilityOpen, responsibilityAdmin?.customerId, responsibilityScopeMembers.length]);
 
     const responsiblePartyChoices = useMemo(
         () =>
@@ -705,14 +680,13 @@ export default function FinancialsDetailCard({
                         {lens !== "payments" && administration ? (
                             <button
                                 type="button"
-                                ref={manageResponsibilityGearRef}
                                 /*
                                  * THE SAME DEPTH SURFACE THE COMPACT ROW OPENS. This gear used to
                                  * set local state that unfolded the editor inside Details, which
                                  * is the behaviour that pushed the ledger down. Two hosts, one
                                  * surface — a second way in must not mean a second experience.
                                  */
-                                onClick={() => administration?.onManageResponsibility()}
+                                onClick={() => administration.onManageResponsibility()}
                                 aria-label="Manage responsibility"
                                 title="Manage responsibility — who contractually owes, from a date"
                                 data-financials-manage-responsibility="gear"

@@ -32,25 +32,51 @@ describe("administration comes before the ledger", () => {
         /*
          * Measured before this change: the administration sat after 116 ledger rows, so managing
          * who pays or what reduces a bill meant scrolling past every transaction on the account.
+         *
+         * Moving those sections above the ledger fixed the scroll and created a worse problem —
+         * a stack of configuration sections between the commands and the record, so the card read
+         * as a settings screen with a ledger at the bottom. The three facts now state themselves
+         * on ONE row and each opens a depth card, which is why the section markers this rule used
+         * to read are gone. The ordering rule itself is unchanged.
          */
         const ledger = at("data-financials-ledger-hydrating");
-        expect(at("{responsibilityAdmin ?"), "responsibility before the ledger").toBeLessThan(ledger);
-        expect(at("{discountAdmin ?"), "discounts before the ledger").toBeLessThan(ledger);
-        expect(at('data-financials-payment-methods="detail"'), "payment methods before the ledger").toBeLessThan(ledger);
+        const admin = at('data-financials-administration="compact"');
+        expect(admin, "the administration row precedes the ledger").toBeLessThan(ledger);
+        for (const item of ["responsibility", "discount", "payments"]) {
+            expect(at(`data-financials-admin-item="${item}"`), `${item} states itself before the ledger`)
+                .toBeLessThan(ledger);
+        }
     });
 
     it("and before the ledger's own controls, not merely above the rows", () => {
         const lenses = at('data-financials-lenses="true"');
-        expect(at('data-financials-payment-methods="detail"')).toBeLessThan(lenses);
-        expect(at("{discountAdmin ?")).toBeLessThan(lenses);
+        expect(at('data-financials-administration="compact"')).toBeLessThan(lenses);
+        expect(at('data-financials-admin-item="discount"')).toBeLessThan(lenses);
     });
 
     it("autopay stays with the methods it qualifies", () => {
-        const methods = at('data-financials-payment-methods="detail"');
-        const autopay = at('data-financials-autopay="detail"');
+        const payments = at('data-financials-admin-item="payments"');
+        const autopay = at('data-financials-admin-item="autopay"');
         const lenses = at('data-financials-lenses="true"');
-        expect(autopay).toBeGreaterThan(methods);
-        expect(autopay, "both still sit in the administration strip").toBeLessThan(lenses);
+        expect(autopay).toBeGreaterThan(payments);
+        expect(autopay, "both still sit in the administration row").toBeLessThan(lenses);
+    });
+
+    it("administration is one row, not a stack of sections", () => {
+        /*
+         * THE REASON THE PREVIOUS SHAPE FAILED. Four sections above the ledger is the same defect
+         * as four sections below it: the operator's record is not what the card is about any more.
+         * There is exactly one administration container, and no section-shaped administration
+         * blocks survive beside it.
+         */
+        expect((src.match(/data-financials-administration="compact"/g) ?? []).length).toBe(1);
+        for (const gone of [
+            'data-financials-discounts="detail"',
+            'data-financials-payment-methods="detail"',
+            'data-financials-autopay="detail"',
+        ]) {
+            expect(src, `${gone} is a section, and sections are what this replaced`).not.toContain(gone);
+        }
     });
 });
 

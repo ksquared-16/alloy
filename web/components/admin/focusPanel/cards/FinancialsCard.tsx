@@ -220,6 +220,43 @@ export default function FinancialsCard({
     const overlay = surface?.kind ?? null;
     const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);
     const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
+
+    /*
+     * ── FOCUS RETURNS TO THE CONTROL THAT OPENED THE DEPTH CARD ───────────────────────────────
+     *
+     * The ownership doctrine says a dismissed depth card hands focus back to the control that
+     * opened it; without that, Escape drops a keyboard operator on <body> and they restart from
+     * the top of the page. The Accounts host keeps a ref, because there the gear and the card
+     * live in one component. Here they do not: opening a depth card returns early, Details
+     * unmounts, and the gear element is removed from the document — a ref would hold a node that
+     * is no longer anywhere.
+     *
+     * So the opener records WHAT it opened from, as a selector, and the restore runs after
+     * Details is back in the document. Same rule as Accounts, expressed the only way that
+     * survives an unmount.
+     */
+    const adminFocusSelector = useRef<string | null>(null);
+    const openAdmin = useCallback(
+        (kind: "responsibility_admin" | "discount_admin" | "payments_admin", selector: string) => {
+            adminFocusSelector.current = selector;
+            push({ kind });
+        },
+        [push],
+    );
+    useEffect(() => {
+        const selector = adminFocusSelector.current;
+        /* Only once the depth card is actually gone, and only for the card that set it. */
+        if (!selector || overlay === "responsibility_admin" || overlay === "discount_admin" || overlay === "payments_admin") {
+            return;
+        }
+        adminFocusSelector.current = null;
+        /* One frame, so the restored Details subtree exists to be queried. */
+        const frame = requestAnimationFrame(() => {
+            const gear = document.querySelector<HTMLElement>(selector);
+            gear?.focus();
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [overlay]);
     const resetStack = useCallback(() => setStack([]), []);
     /*
      * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────
@@ -292,6 +329,35 @@ export default function FinancialsCard({
         };
     }, [customerId]);
     const discountAdminSummary = discountSummaryState;
+
+    /*
+     * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
+     *
+     * Read when the responsibility depth card opens, not on every card open: the ledger does not
+     * need it. This fetch used to live in Details, next to the editor it fed. The editor moved to
+     * depth and the fetch has to follow it — a panel handed no member options can only arrange at
+     * household grain, which silently retires child-scoped responsibility rather than declaring it.
+     */
+    const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
+        { customerMemberId: string; label: string }[]
+    >([]);
+    useEffect(() => {
+        if (overlay !== "responsibility_admin" || !customerId || responsibilityScopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && body?.members) setResponsibilityScopeMembers(body.members);
+            })
+            .catch(() => {
+                /* The card still arranges the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [overlay, customerId, responsibilityScopeMembers.length]);
 
     /*
      * ── THE DETAILS VIEW BELONGS TO THE CARD, NOT TO THE DETAILS COMPONENT ────────────────────
@@ -3267,7 +3333,7 @@ export default function FinancialsCard({
      */
     if (overlay === "responsibility_admin" && vm && customerId) {
         return (
-            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="responsibility_admin">
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="responsibility_admin" data-financials-manage-responsibility="depth-card">
                 <UniversalCard
                     title="Responsibility"
                     insight=""
@@ -3292,6 +3358,7 @@ export default function FinancialsCard({
                             parties={(vm.payers ?? [])
                                 .map((party) => ({ personId: party.personId ?? null, name: party.name }))
                                 .filter((party) => party.name.trim().length > 0)}
+                            memberOptions={responsibilityScopeMembers}
                             hostedOpen
                             onHostedClose={pop}
                             onCommitted={async () => {
@@ -3307,7 +3374,7 @@ export default function FinancialsCard({
 
     if (overlay === "discount_admin" && vm && customerId) {
         return (
-            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="discount_admin">
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="discount_admin" data-financials-manage-discounts="depth-card">
                 <UniversalCard
                     title="Discounts"
                     insight=""
@@ -3943,9 +4010,12 @@ export default function FinancialsCard({
                                   responsibilitySummary: responsibilityAdminSummary,
                                   discountSummary: discountAdminSummary,
                                   autopaySummary: null,
-                                  onManagePayments: () => push({ kind: "payments_admin" }),
-                                  onManageResponsibility: () => push({ kind: "responsibility_admin" }),
-                                  onManageDiscount: () => push({ kind: "discount_admin" }),
+                                  onManagePayments: () =>
+                                      openAdmin("payments_admin", '[data-financials-manage-payments="open"]'),
+                                  onManageResponsibility: () =>
+                                      openAdmin("responsibility_admin", '[data-financials-manage-responsibility="gear"]'),
+                                  onManageDiscount: () =>
+                                      openAdmin("discount_admin", '[data-financials-manage-discounts="gear"]'),
                               }
                             : null
                     }
