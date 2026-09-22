@@ -275,6 +275,31 @@ export async function buildAttendanceCardVM(
     }
     if (trace) trace.outcome = "full";
 
+    /*
+     * SITE ROOMS START WITH THE OTHER TWO, NOT BEHIND THEM.
+     *
+     * `siteRoomsFor` takes orgId and subject.siteLocationId and nothing else: it never reads an
+     * event, an expectation, or anything derived from them. It was awaited after both only because
+     * it is written after both. Measured on deployed 20c3dd7e2 over 23 cold samples, that cost
+     * 111ms of pure waiting on a 1,072ms fold.
+     *
+     * FAILURE SEMANTICS ARE PRESERVED EXACTLY, and that is why this captures the settlement rather
+     * than simply hoisting the call. `siteRoomsFor` has no catch: a failure must still propagate out
+     * of the fold and become UNAVAILABLE, and it must still do so at the same point in the sequence.
+     * Starting the promise early without attaching a handler would also risk an unhandled rejection
+     * in the window before it is awaited. Settling it into a tagged result attaches the handler
+     * immediately and rethrows at exactly the line the old code threw from.
+     */
+    const siteRoomsSettled = (
+        subject.subject.siteLocationId
+            ? siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
+            : Promise.resolve([] as Array<{ id: string; label: string }>)
+    ).then(
+        (v) => ({ ok: true as const, value: v }),
+        (error: unknown) => ({ ok: false as const, error }),
+    );
+    const tRooms = Date.now();
+
     const tEvents = Date.now();
     const tExpect = Date.now();
     const [events, expectations] = await Promise.all([
@@ -314,10 +339,9 @@ export async function buildAttendanceCardVM(
     });
 
     // The transfer destinations, from the child's own site. One query, alongside the label read.
-    const tRooms = Date.now();
-    const siteRooms = subject.subject.siteLocationId
-        ? await siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
-        : [];
+    const settled = await siteRoomsSettled;
+    if (!settled.ok) throw settled.error;
+    const siteRooms = settled.value;
     markAttendancePhase(trace, "site_rooms", tRooms, { rows: siteRooms.length });
 
     const tLabels = Date.now();

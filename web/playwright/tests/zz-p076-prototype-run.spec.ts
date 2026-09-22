@@ -46,9 +46,21 @@ test("p076 prototype run", async ({ page }) => {
         };
     });
 
-    const memberId = ids.customerMember[0] ?? null;
-    const customerId = ids.customer[0] ?? null;
-    const workUnitId = ids.workUnit[0] ?? null;
+    /*
+     * THE SPECIMEN IS PINNABLE, BECAUSE THE QUEUE'S FIRST ROW IS NOT STABLE.
+     *
+     * These ids are read from the rendered frame by default, which is right for parity work: it
+     * measures whatever the operator is actually looking at. It is wrong for a PERFORMANCE series,
+     * because the tenant is shared and another lane adding a lead re-sorts the queue. That happened
+     * mid-analysis: the focused subject changed from a child with six cards to a household with
+     * four, attendance stopped executing entirely, and the frame "improved" to 805ms by doing less.
+     *
+     * So a sampling run may pin the subject and the card set, and then every sample in the series
+     * answers the same question.
+     */
+    const memberId = process.env.P076_MEMBER_ID || ids.customerMember[0] || null;
+    const customerId = process.env.P076_CUSTOMER_ID || ids.customer[0] || null;
+    const workUnitId = process.env.P076_WORK_UNIT_ID || ids.workUnit[0] || null;
     if (!memberId || !customerId) {
         // FATAL. A silent return here is how a sampling run reports success over no samples.
         throw new Error(`p076: subject ids not found in the rendered frame — ${JSON.stringify(ids)}`);
@@ -94,16 +106,18 @@ test("p076 prototype run", async ({ page }) => {
                 || el.closest("[data-universal-card-key]")?.getAttribute("data-universal-card-key") || "")
             .filter(Boolean),
     }));
+    const pinnedCards = (process.env.P076_CARDS || "").trim();
     if (process.env.P076_SHADOW === "1" && (rendered.kpiKeys.length === 0 || rendered.viewIds.length === 0)) {
         // An under-configured sample is fatal. Silently measuring 36 of 39 capabilities and
         // calling the result a complete frame is the failure this guard exists to stop.
         throw new Error(`p076: incomplete configuration — kpi=${rendered.kpiKeys.length} views=${rendered.viewIds.length}`);
     }
-    if (process.env.P076_SHADOW === "1" && rendered.cards.length === 0) {
+    if (process.env.P076_SHADOW === "1" && !pinnedCards && rendered.cards.length === 0) {
         throw new Error("p076: shadow measurement requested but the rendered frame exposed no "
             + "configured cards — refusing to measure a projection with no configuration");
     }
-    const cardParam = rendered.cards.length ? `&cards=${encodeURIComponent([...new Set(rendered.cards)].join(","))}` : "";
+    const cardList = pinnedCards ? pinnedCards.split(",") : [...new Set(rendered.cards)];
+    const cardParam = cardList.length ? `&cards=${encodeURIComponent(cardList.join(","))}` : "";
     console.log(`[proto-config] ${JSON.stringify({ cards: [...new Set(rendered.cards)] })}`);
     const kpiParam = rendered.kpiKeys.length ? `&kpi_keys=${encodeURIComponent(rendered.kpiKeys.join(","))}` : "";
     const viewParam = rendered.viewIds.length ? `&view_ids=${encodeURIComponent(rendered.viewIds.join(","))}` : "";
