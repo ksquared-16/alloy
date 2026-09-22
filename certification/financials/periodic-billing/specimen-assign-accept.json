@@ -1,0 +1,33 @@
+[
+  {
+    "step": "scheduling",
+    "status": 409,
+    "body": "{\"error\":\"Child already has an operational schedule; use a change command to supersede\",\"correlationId\":\"9b6b8d03-af5f-4efa-95cc-ce52e97f877c\"}"
+  },
+  {
+    "step": "resolve",
+    "state": "no_match",
+    "facts": {
+      "programKey": "school_age",
+      "attendanceType": null,
+      "daysPerWeek": 5,
+      "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "payerType": "private_pay",
+      "cadenceKey": null,
+      "asOf": "2026-09-22"
+    },
+    "resolutionKey": "33c217ff",
+    "recommended": "null",
+    "applicable": "[]",
+    "reason": "missing_required_input"
+  },
+  {
+    "step": "accept",
+    "weekly": "null",
+    "result": "null"
+  },
+  {
+    "step": "accepted_term",
+    "accepted": "null"
+  }
+]
