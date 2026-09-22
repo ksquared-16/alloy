@@ -9,6 +9,8 @@
  * Nothing here decides anything. Authorization, idempotency and the provider call all live on the
  * server; this posts an intent and renders the answer.
  */
+
+import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
 export const PROVIDER_COMMANDS = {
     connect: "provider.connect",
     refresh: "provider.refresh_readiness",
@@ -47,13 +49,13 @@ export async function executeProviderCommand(
         const json = (await res.json()) as {
             ok?: boolean;
             error?: string | { message?: string };
-            data?: { execution_result?: { detail?: Record<string, unknown> } };
+            data?: { execution_result?: Record<string, unknown> };
         };
         if (!res.ok || json.ok === false) {
             const error = typeof json.error === "string" ? json.error : json.error?.message;
             return { ok: false, error: error || "That could not be completed." };
         }
-        return { ok: true, detail: json.data?.execution_result?.detail ?? {} };
+        return { ok: true, detail: executeDetailFrom(json) };
     } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "That could not be completed." };
     }

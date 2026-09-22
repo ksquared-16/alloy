@@ -116,24 +116,55 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
             setBusy(command);
             setError(null);
             setNotice(null);
-            const result = await executeProviderCommand(command, payload);
-            if (!result.ok) {
-                setError(result.error);
+            try {
+                const result = await executeProviderCommand(command, payload);
+                if (!result.ok) {
+                    setError(result.error);
+                    setBusy(null);
+                    await load();
+                    return;
+                }
+                const url = typeof result.detail.onboarding_url === "string" ? result.detail.onboarding_url : "";
+                if (url) {
+                    /*
+                     * The provider's own flow, in its own page. Alloy never renders it.
+                     *
+                     * BUSY IS DELIBERATELY LEFT SET while the browser leaves the page — but only
+                     * briefly. A navigation that does not happen used to strand the operator on
+                     * "Opening…" for good, with nothing to press and nothing said. If we are still
+                     * here after the handoff should have taken, the loading state is cleared and the
+                     * operator is told something true and actionable.
+                     */
+                    window.location.assign(url);
+                    window.setTimeout(() => {
+                        setBusy(null);
+                        setError(
+                            "The payment provider's setup page did not open. Check that pop-ups and "
+                            + "redirects are allowed for this site, then try Continue setup again.",
+                        );
+                    }, 4000);
+                    return;
+                }
+                if (command === "connect") {
+                    /*
+                     * A successful connect ALWAYS carries a link. Arriving here means the server
+                     * answered without one, and saying nothing is what made this defect invisible.
+                     */
+                    setError(
+                        "The payment provider did not return a setup link. Nothing was changed — "
+                        + "press Continue setup to ask for a new one.",
+                    );
+                }
+                if (command === "disconnect") {
+                    setNotice("Disconnected. Payments already received are unchanged.");
+                }
                 setBusy(null);
                 await load();
-                return;
+            } catch (e) {
+                /* Nothing may leave this handler still reading "Opening…". */
+                setError(e instanceof Error ? e.message : "That could not be completed.");
+                setBusy(null);
             }
-            const url = typeof result.detail.onboarding_url === "string" ? result.detail.onboarding_url : "";
-            if (url) {
-                // The provider's own flow, in its own page. Alloy never renders it.
-                window.location.assign(url);
-                return;
-            }
-            if (command === "disconnect") {
-                setNotice("Disconnected. Payments already received are unchanged.");
-            }
-            setBusy(null);
-            await load();
         },
         [load],
     );
@@ -224,7 +255,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     {!connected ? (
                         <button
                             type="button"
-                            className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-45"
                             disabled={busy != null || loading}
                             onClick={() => void run("connect", { display_name: organizationName || "This organization" })}
                             data-testid="payments-provider-connect"
@@ -234,7 +265,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     ) : !ready ? (
                         <button
                             type="button"
-                            className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-45"
                             disabled={busy != null || loading}
                             onClick={() => void run("connect", { display_name: organizationName || "This organization" })}
                             data-testid="payments-provider-continue"
@@ -246,7 +277,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     {connected ? (
                         <button
                             type="button"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-cloud/50 disabled:opacity-45"
                             disabled={busy != null || loading}
                             onClick={() => void run("refresh")}
                             data-testid="payments-provider-refresh"
@@ -259,7 +290,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     {connected && !confirmingDisconnect ? (
                         <button
                             type="button"
-                            className="rounded-lg border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight/75 disabled:opacity-50"
+                            className="rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight/75 hover:bg-alloy-cloud/50 disabled:opacity-45"
                             disabled={busy != null || loading}
                             onClick={() => setConfirmingDisconnect(true)}
                             data-testid="payments-provider-disconnect"
@@ -284,7 +315,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                         <div className="mt-2 flex gap-2">
                             <button
                                 type="button"
-                                className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                                className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                                 disabled={busy != null}
                                 onClick={() => {
                                     setConfirmingDisconnect(false);
@@ -296,7 +327,7 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                             </button>
                             <button
                                 type="button"
-                                className="rounded-lg border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight"
+                                className="rounded-md border border-alloy-stone/40 px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-cloud/50"
                                 onClick={() => setConfirmingDisconnect(false)}
                             >
                                 Keep it connected
@@ -305,10 +336,23 @@ export default function PaymentsProviderChapter({ organizationName }: { organiza
                     </div>
                 ) : null}
 
+                {/*
+                  * THE PROVIDER REFERENCE IS DIAGNOSTIC, NOT BUSINESS MEANING.
+                  *
+                  * `acct_…` answers none of the questions an operator opens this page with, and
+                  * standing in the normal flow it read as though it did. It is kept — it is the
+                  * thing support asks for — behind a closed disclosure, which is where this surface
+                  * puts adapter detail rather than deleting it.
+                  */}
                 {state?.providerAccountRef ? (
-                    <p className="pt-1 text-xs text-alloy-midnight/40" data-testid="payments-provider-ref">
-                        Provider reference · {state.providerAccountRef}
-                    </p>
+                    <details className="pt-1" data-testid="payments-provider-details">
+                        <summary className="cursor-pointer text-xs text-alloy-midnight/45 hover:text-alloy-midnight/70">
+                            Technical details
+                        </summary>
+                        <p className="pt-1 text-xs text-alloy-midnight/45" data-testid="payments-provider-ref">
+                            Provider reference · {state.providerAccountRef}
+                        </p>
+                    </details>
                 ) : null}
             </div>
         </ConfigWorkspaceCard>
