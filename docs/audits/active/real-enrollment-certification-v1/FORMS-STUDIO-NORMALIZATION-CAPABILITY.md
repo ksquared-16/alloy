@@ -244,3 +244,47 @@ holds it. Actually carrying it means adding `customer_member` to the lifecycle p
 set — which changes what the Business Process requirements engine can require, on a surface this
 slice's scope guard protects. That is a Business Process decision, not a Forms one, and it is left
 for a run that is allowed to make it.
+
+---
+
+# Canonical field catalog audit — 2026-09-22
+
+Every field the Add-question picker exposes, read from the live coverage payload in the mounted
+product (not from source), classified against the Data Model's own `field_definitions`.
+
+**Total exposed: 60.**
+
+| classification | count | what it means |
+|---|---|---|
+| PASS | 52 | type, grain, binding and option source all agree with the record |
+| UNSUPPORTED_IN_FORMS | 8 | declared type has no Form answer control, or a choice with no answers behind it — now offered as a labelled dead end |
+| WRONG_TYPE | 0 | was ~every org choice field before this repair; all now carry the declared type |
+| WRONG_OPTION_SOURCE | 0 | a vocabulary-backed field now arrives with its vocabulary |
+| MISSING_BINDING | 0 | every offer carries an entity and a field key |
+| WRONG_OWNER | 1 | `Allergies` is offered under Parent / Guardian while its registry id is `child_allergies` |
+| AMBIGUOUS | 4 | `Location` and `Start date` each appear under two grains; `Vertical` appears under both Enrollment and Household |
+
+## The 8 that now fail closed
+
+`child/Location` · `child/Tuition plan` · `enrollment/Opportunity Status` · `enrollment/Status Group`
+· `enrollment/Tour status` · `enrollment/Vertical` · `household/Primary Contact` ·
+`household/Vertical`
+
+Six of these are **reference** fields: declared `select`, but pointing at rows in another table
+(`location_id`, `pipeline_stage_id`, `primary_contact_id`, `vertical_id`) rather than at a list of
+answers. Before this repair they were offered as dropdowns **containing nothing** — a question a
+family cannot answer and an administrator cannot repair from the builder. Two (`Tuition plan`,
+`Tour status`) have declared types with no Form answer control at all.
+
+None of the eight is newly broken. Each was already incapable of being captured by a form; the
+change is that the picker now says so instead of inserting a control that lies about it.
+
+## Still open, and owned elsewhere
+
+- **`Allergies` under Parent / Guardian** — a curated-label overlay decision, not the palette
+  projection this run repaired.
+- **`Location` / `Start date` / `Vertical` across two grains** — one canonical field reachable from
+  two subjects. Needs a rule for which grain owns the offer; that rule belongs with the lifecycle
+  requirement catalog.
+- **A record-picker Form primitive** — the honest answer for the six reference fields, and the
+  reason they fail closed rather than being quietly dropped.

@@ -48,6 +48,15 @@ export type LifecycleFieldPaletteEntry = {
      */
     canonical_field_type?: string | null;
     canonical_option_set_key?: string | null;
+    /**
+     * Whether a choice field carries its own inline list.
+     *
+     * A `select` with neither a vocabulary nor inline options is a REFERENCE to rows in another
+     * table (`location_id`, `primary_contact_id`, `pipeline_stage_id`) — not a list of answers. A
+     * form cannot present one, and offering it as a dropdown produces a dropdown with nothing in
+     * it. Carried so the Forms library can tell the two apart.
+     */
+    canonical_has_inline_options?: boolean;
 };
 
 function catalogEntryToPalette(entry: LifecycleFieldRequirementDefinition): LifecycleFieldPaletteEntry {
@@ -88,6 +97,8 @@ function orgRowToPalette(entity: LifecycleRequirementEntityKey, row: OrgFieldDef
         config_only: true,
         canonical_field_type: row.field_type ?? null,
         canonical_option_set_key: optionSetKeyFromConfig(row.config),
+        canonical_has_inline_options: Array.isArray((row.config as { options?: unknown[] } | null)?.options)
+            && ((row.config as { options?: unknown[] }).options?.length ?? 0) > 0,
     };
 }
 

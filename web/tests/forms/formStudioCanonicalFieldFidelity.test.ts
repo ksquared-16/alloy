@@ -255,3 +255,26 @@ describe("what the operator authored is what the runtime evaluates", () => {
         expect(gender.static_options).toBeUndefined();
     });
 });
+
+describe("a choice with no answers is offered as a dead end, not as an empty dropdown", () => {
+    /*
+     * `location_id`, `primary_contact_id`, `pipeline_stage_id` and their kind are declared `select`
+     * but reference ROWS in another table — there is no list of answers behind them. The picker
+     * offered each as a dropdown containing nothing, which a family cannot answer and an
+     * administrator cannot repair from the builder.
+     */
+    const ref = (over: Partial<LifecycleFieldPaletteEntry>) =>
+        offerFor(palette({ rule_id: "custom:opportunity:location_id", entity: "opportunity", field_key: "location_id", field_label: "Location", canonical_field_type: "select", canonical_option_set_key: null, ...over }));
+
+    it("refuses a reference-typed choice", () => {
+        expect(ref({}).captureUnsupported).toBe(true);
+    });
+
+    it("still offers a choice that carries its own list", () => {
+        expect(ref({ field_label: "Status", canonical_has_inline_options: true }).captureUnsupported).toBeUndefined();
+    });
+
+    it("still offers a choice backed by an organization vocabulary", () => {
+        expect(ref({ field_label: "Rooms", canonical_option_set_key: "rooms" }).captureUnsupported).toBeUndefined();
+    });
+});

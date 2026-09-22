@@ -227,7 +227,20 @@ function offerFromPalette(
      * field visible and honest ("tracked on the record") instead of inserting a text box that
      * silently loses the field's semantics.
      */
-    const captureUnsupported = (!entry.form_coverage_supported && !registry) || builderType === null;
+    /*
+     * A choice with no answers is the same lie in a different shape. `location_id`,
+     * `primary_contact_id` and `pipeline_stage_id` are declared `select` but point at ROWS in
+     * another table rather than at a list of answers — the picker offered them as dropdowns with
+     * nothing in them, which a family cannot answer and an administrator cannot fix.
+     */
+    const choiceWithoutAnswers =
+        !registry
+        && (builderType === "select" || builderType === "multiselect")
+        && !entry.canonical_option_set_key
+        && entry.canonical_field_type != null
+        && entry.canonical_has_inline_options !== true;
+    const captureUnsupported =
+        (!entry.form_coverage_supported && !registry) || builderType === null || choiceWithoutAnswers;
 
     return {
         id: entry.rule_id,
