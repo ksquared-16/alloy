@@ -91,23 +91,25 @@ describe("9-11. detail shows Type, Site and — when it applies — Inside", () 
 
     it("a Physical room shows Physical room and no Inside", async () => {
         await renderDetail(ROOM1);
-        expect(metricValue("type")).toBe("Physical room");
+        expect(metricValue("type")).toBe("Physical space");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });
 
-    it("a Shared space shows Shared space and no Inside", async () => {
+    it("a stored Shared space now shows Physical space and no Inside", async () => {
+        // The compatibility fold: the row keeps its stored role, and the operator
+        // is shown the word the product still uses.
         await renderDetail(PLAY);
-        expect(metricValue("type")).toBe("Shared space");
+        expect(metricValue("type")).toBe("Physical space");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });
 
     it("keeps the existing operational cards alongside the topology ones", async () => {
         await renderDetail(TOD1);
-        // "capacity" is no longer a metric card: capacity moved to its own section,
-        // because an untyped number beside typed canonical kinds read as a fourth,
-        // competing capacity.
+        // Capacity IS a metric card again, but it now shows the canonical
+        // authored value rather than the untyped legacy number that once read as
+        // a fourth, competing capacity.
         for (const key of ["programs", "schedule", "status"]) {
             expect(metric(key)).not.toBeNull();
         }
@@ -226,8 +228,9 @@ describe("10. the room rail leads with Type and containment", () => {
         await renderDetail(INFANT);
         const text = container!.textContent ?? "";
         // One rail row per room, each labelled by what it actually is.
-        expect(text).toContain("Physical room");
-        expect(text).toContain("Shared space");
+        expect(text).toContain("Physical space");
         expect(text).toContain("Classroom");
+        // Two types in the rail, not three — the playground reads as what it is.
+        expect(text).not.toContain("Shared space");
     });
 });

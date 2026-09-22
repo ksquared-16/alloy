@@ -51,15 +51,15 @@ describe("1-5. operator grammar", () => {
         expect(p.containingSpaceLabel).toBeNull();
     });
 
-    it("3. a Physical room reads Physical room · North Campus — never Classroom", () => {
+    it("3. a Physical space reads Physical space · North Campus — never Classroom", () => {
         const p = presentRoomTopology(ROOM1, ROWS);
-        expect(p.subtitle).toBe("Physical room · North Campus");
+        expect(p.subtitle).toBe("Physical space · North Campus");
         expect(p.typeLabel).not.toBe("Classroom");
     });
 
-    it("4. a Shared space reads Shared space · North Campus with no containing segment", () => {
+    it("4. a stored Shared space now reads Physical space · North Campus with no containing segment", () => {
         const p = presentRoomTopology(PLAY, ROWS);
-        expect(p.subtitle).toBe("Shared space · North Campus");
+        expect(p.subtitle).toBe("Physical space · North Campus");
         expect(p.containingSpaceLabel).toBeNull();
     });
 
@@ -151,8 +151,8 @@ describe("rail grammar inside one site", () => {
 
     it("shows only Type for a room that hangs off the site", () => {
         expect(roomRailTopologySegments(INFANT, ROWS)).toEqual(["Classroom"]);
-        expect(roomRailTopologySegments(ROOM1, ROWS)).toEqual(["Physical room"]);
-        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Shared space"]);
+        expect(roomRailTopologySegments(ROOM1, ROWS)).toEqual(["Physical space"]);
+        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Physical space"]);
     });
 
     it("never repeats the campus in a row already scoped to it", () => {

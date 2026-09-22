@@ -206,7 +206,11 @@ describe("1-2. a historical NULL-role room edits as a Classroom", () => {
         await enterEdit();
         expect(need<HTMLSelectElement>("locations-room-type").value).toBe("operational_group");
         const shown = [...need<HTMLSelectElement>("locations-room-type").options].map((o) => o.textContent);
-        expect(shown).toEqual(["Classroom", "Physical room", "Shared space"]);
+        // Two types, not three. "Shared space" was withdrawn from the operator
+        // vocabulary because no behavioral branch distinguished it from a
+        // physical space, and "Physical room" became "Physical space" so the
+        // word can honestly cover a playground.
+        expect(shown).toEqual(["Classroom", "Physical space"]);
         expect(need("locations-room-type").textContent).not.toContain("operational_group");
     });
 
@@ -305,12 +309,13 @@ describe("3-8. adopting the historical room into a physical room", () => {
         expect(captured.update).toMatchObject({ unit_role: "physical_space", parent_location_id: SITE });
     });
 
-    it("an empty Physical room may become a Shared space", async () => {
+    it("a Physical space can no longer be turned into a Shared space", async () => {
+        // The editor cannot produce the role because the picker no longer offers
+        // it. Stored shared spaces keep working; new ones are never authored.
         await renderPanel("room2");
         await enterEdit();
-        await setValue("locations-room-type", "shared_space");
-        await save();
-        expect(captured.update).toMatchObject({ unit_role: "shared_space" });
+        const roles = [...need<HTMLSelectElement>("locations-room-type").options].map((o) => o.value);
+        expect(roles).toEqual(["operational_group", "physical_space"]);
     });
 
     it("19-20. presentation explains the adopted room immediately afterwards", async () => {

@@ -84,8 +84,8 @@ function ResolvedPreviewCard({
     return (
         <ConfigurationDetailCard testId="locations-operational-resolved" title="Resolved per location">
             <p className="config-typo-sublabel mb-2 text-alloy-forge/60">
-                What resolves today (most-specific-wins: Room → Program → Location → Org default). “Org default” means
-                inherited; a more specific label means overridden here.
+                What applies today at each site. The most specific rule wins, so a rule set on a space beats one
+                set on the site, which beats an organization default.
             </p>
             <ul className="divide-y divide-alloy-stone/30">
                 {sites.map((site) => {
@@ -108,7 +108,7 @@ function ResolvedPreviewCard({
                                         <span className="text-alloy-forge/55">({describeScopeWithLabel(capacity, labelFor)})</span>
                                     </>
                                 ) : (
-                                    <span className="text-amber-700">no rule — fallback applies</span>
+                                    <span className="text-alloy-forge/55">not set here</span>
                                 )}
                             </p>
                             <p className="config-typo-sublabel text-alloy-forge/70">
@@ -123,7 +123,7 @@ function ResolvedPreviewCard({
                                         <span className="text-alloy-forge/55">({describeScopeWithLabel(ratio, labelFor)})</span>
                                     </>
                                 ) : (
-                                    <span className="text-amber-700">no rule — fallback applies</span>
+                                    <span className="text-alloy-forge/55">not set here</span>
                                 )}
                             </p>
                         </li>
@@ -203,9 +203,12 @@ export default function LocationOperationalRulesPanel({
     return (
         <div className="space-y-4" data-testid="locations-operational-rules">
             <ConfigurationDetailCard testId="locations-operational-notice">
-                <p className="config-typo-sublabel text-alloy-forge/75">
-                    Operational rules are versioned, effective-dated configuration. Editing creates a new version on a
-                    chosen date and closes the prior one — history is preserved and future-dated changes are supported.
+                <p className="config-typo-field-value text-alloy-midnight">Advanced configuration</p>
+                <p className="config-typo-sublabel mt-0.5 text-alloy-forge/75">
+                    Everyday capacity is set on each space, under Spaces. This page is for the rest: licensed
+                    ceilings, ratios, operating hours, defaults that apply to a whole site or program, and changes
+                    you want to take effect on a future date. Nothing here is overwritten — each change keeps the
+                    version it replaced.
                 </p>
             </ConfigurationDetailCard>
 
@@ -234,7 +237,9 @@ export default function LocationOperationalRulesPanel({
                 busy={authoring.busy}
                 scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}|${r.capacity_kind}`}
-                lineageTitle={(w) => `Capacity · ${humanize(w.capacity_kind)}${w.age_group_key ? ` · Age ${w.age_group_key}` : ""} · ${describeScopeWithLabel(w, labelFor)}`}
+                // THE OBJECT FIRST. "Capacity · Licensed · Room: Toddler 2" is a
+                // scope expression; an Alloy card leads with the thing it is about.
+                lineageTitle={(w) => `${describeScopeWithLabel(w, labelFor)} · ${humanize(w.capacity_kind)} capacity${w.age_group_key ? ` · Age ${w.age_group_key}` : ""}`}
                 versionFields={(w) => [
                     { key: "capacity", label: "Capacity", type: "number", defaultValue: String(w.capacity), required: true },
                 ]}
@@ -274,7 +279,7 @@ export default function LocationOperationalRulesPanel({
                 busy={authoring.busy}
                 scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}|${r.jurisdiction_key ?? ""}`}
-                lineageTitle={(w) => `Ratio · Age ${w.age_group_key ?? "all"}${w.jurisdiction_key ? ` · ${w.jurisdiction_key}` : ""} · ${describeScopeWithLabel(w, labelFor)}`}
+                lineageTitle={(w) => `${describeScopeWithLabel(w, labelFor)} · ratio${w.age_group_key ? ` · Age ${w.age_group_key}` : ""}${w.jurisdiction_key ? ` · ${w.jurisdiction_key}` : ""}`}
                 versionFields={(w) => [
                     { key: "jurisdiction_key", label: "Jurisdiction (optional)", type: "text", defaultValue: w.jurisdiction_key ?? "" },
                 ]}
@@ -363,7 +368,7 @@ export default function LocationOperationalRulesPanel({
                 busy={authoring.busy}
                 scopeOptions={scopeOptions}
                 lineageKey={(r) => `${scopeKey(r)}|${r.age_group_key ?? ""}`}
-                lineageTitle={(w) => `Schedule eligibility · Age ${w.age_group_key ?? "all"} · ${describeScopeWithLabel(w, labelFor)}`}
+                lineageTitle={(w) => `${describeScopeWithLabel(w, labelFor)} · schedule eligibility${w.age_group_key ? ` · Age ${w.age_group_key}` : ""}`}
                 versionFields={(w) => [
                     { key: "eligible_schedule_type_keys", label: "Eligible schedule types (comma)", type: "text", defaultValue: (w.eligible_schedule_type_keys ?? []).join(", ") },
                     { key: "eligible_age_group_keys", label: "Eligible age groups (comma)", type: "text", defaultValue: (w.eligible_age_group_keys ?? []).join(", ") },

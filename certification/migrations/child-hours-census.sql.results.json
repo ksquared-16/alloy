@@ -1,0 +1,80 @@
+{
+  "trusted_host_action_id": "tha_8f9b18ec5d1f52",
+  "query_hash": "4bfd227cd91dcd582fac6fe567ebc68c6fedc4e32341471a8b1d100e8223238c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T13:37:23.759Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8f9b18ec5d1f52",
+    "query_hash": "4bfd227cd91dcd582fac6fe567ebc68c6fedc4e32341471a8b1d100e8223238c",
+    "authorization_id": "grnt_30ba4f50693640d5",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T13:37:25.316Z",
+    "question_ids": [
+      "child_hours"
+    ],
+    "questions": {
+      "child_hours": {
+        "question_id": "child_hours",
+        "row_count": null,
+        "rows": [
+          {
+            "child_assignments": [
+              {
+                "id": "9d81581a-256e-42d6-a717-23a89a10a087",
+                "status": "active",
+                "start": "2026-08-26",
+                "end": null,
+                "pattern": "a405e9a1-1f1f-4585-9fec-04608a312e3b",
+                "interval_rows": 5,
+                "known_rows": 0
+              },
+              {
+                "id": "e10dcea5-0edb-4a6b-bd53-2b9d98e5da96",
+                "status": "active",
+                "start": "2026-08-26",
+                "end": null,
+                "pattern": "a405e9a1-1f1f-4585-9fec-04608a312e3b",
+                "interval_rows": 5,
+                "known_rows": 0
+              },
+              {
+                "id": "e67c62b7-fcae-4aca-858f-87f03067e10e",
+                "status": "active",
+                "start": "2026-09-01",
+                "end": null,
+                "pattern": "07a0ac51-82de-467a-8a26-1378884eaadd",
+                "interval_rows": 5,
+                "known_rows": 0
+              }
+            ],
+            "staff_assignments": [
+              {
+                "id": "75f8c3b7-a6af-44f8-a175-c81b9f388107",
+                "interval_rows": 5
+              },
+              {
+                "id": "b9fdb090-d3f7-4e79-8db5-be491ef6cf82",
+                "interval_rows": 5
+              },
+              {
+                "id": "dee41608-f1ec-4ef1-b854-651e5c672960",
+                "interval_rows": 5
+              }
+            ],
+            "agreements_operational": 14,
+            "placements_operational": 3,
+            "observed_at": "2026-09-22 13:37:25.250962+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

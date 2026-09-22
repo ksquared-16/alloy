@@ -13,7 +13,7 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 export const LOCATION_WORKSPACE_TABS = [
     { key: "overview", label: "Overview" },
     { key: "programs", label: "Programs" },
-    { key: "rooms", label: "Rooms" },
+    { key: "rooms", label: "Spaces" },
     { key: "schedule", label: "Scheduling" },
     { key: "operational-rules", label: "Operational Rules" },
     { key: "tours", label: "Tours" },

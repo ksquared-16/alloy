@@ -54,7 +54,7 @@ function legacyCell(room: string | null, members: ScheduledStaffMember[]): Staff
     };
 }
 
-function projStaff(name: string, room: string | null, hours: [string, string] | null, coverage = [] as { roomLocationId: string | null; interval: ReturnType<typeof iv> }[]) {
+function projStaff(name: string, room: string | null, hours: [string, string] | null, coverage = [] as { coverageId: string; roomLocationId: string | null; interval: ReturnType<typeof iv> }[]) {
     return {
         employmentId: `emp-${name}`,
         personId: `per-${name}`,
@@ -63,7 +63,7 @@ function projStaff(name: string, room: string | null, hours: [string, string] | 
         baselineRoomLocationId: room,
         baselineIntervals: hours ? [iv(hours[0], hours[1])] : [],
         baselineHoursKnown: Boolean(hours),
-        availabilityIntervals: [],
+        availability: { recorded: false, intervals: [] },
         coverage,
         presence: null,
     };
@@ -118,7 +118,7 @@ describe("whole-day convergence", () => {
     it("places a covered person where Coverage put them, which the old reading could not say", () => {
         const day = projection([
             projStaff("Alex", T1, ["08:00", "16:00"], [
-                { roomLocationId: T2, interval: iv("12:00", "16:00") },
+                { coverageId: "cov-T2", roomLocationId: T2, interval: iv("12:00", "16:00") },
             ]),
         ]);
         const reduced = wholeDayFromProjection(day);
@@ -135,7 +135,7 @@ describe("whole-day convergence", () => {
     it("counts one employment once per room even across many segments", () => {
         const day = projection([
             projStaff("Alex", T1, ["08:00", "16:00"], [
-                { roomLocationId: T1, interval: iv("10:00", "11:00") },
+                { coverageId: "cov-T1", roomLocationId: T1, interval: iv("10:00", "11:00") },
             ]),
         ]);
         const reduced = wholeDayFromProjection(day);

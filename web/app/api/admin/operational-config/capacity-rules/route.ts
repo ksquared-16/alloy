@@ -8,6 +8,9 @@ import {
     retireCapacityRule,
     voidScheduledCapacityRule,
 } from "@/lib/childcareOperational/config/configRuleAuthoringService";
+import { setObjectCapacity } from "@/lib/childcareOperational/config/objectCapacityService";
+import { listCapacityRules } from "@/lib/childcareOperational/config/childcareConfigRuleService";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import {
     operationalEnrollmentErrorResponse,
     parseJsonObject,
@@ -17,8 +20,14 @@ import {
 /**
  * Versioned authoring for childcare capacity rules (Operational Configuration V1,
  * Phase 3). Role-gated POST dispatching by `action`: create | version (supersede)
- * | retire | void. Effective-dated truth is never overwritten in place. L1
- * configuration only — no expectations/attendance/charges/GL writes.
+ * | retire | void | set_object_capacity. Effective-dated truth is never
+ * overwritten in place. L1 configuration only — no expectations/attendance/
+ * charges/GL writes.
+ *
+ * The first four actions are the rule console's vocabulary: the caller names the
+ * kind, the scope and the effective date. `set_object_capacity` is the ordinary
+ * one a director reaches through a classroom's own editor — it carries a number
+ * and an object, and derives the rest. Both land in the same authoring service.
  */
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -85,6 +94,47 @@ export async function POST(request: NextRequest) {
                 orgId: ctx.orgId,
                 id: String(body.id ?? ""),
                 todayYmd,
+                actorUserId: ctx.userId,
+            });
+            return NextResponse.json(result, { status: 200 });
+        }
+
+        /*
+         * ORDINARY CAPACITY, AUTHORED ON THE OBJECT.
+         *
+         * One typed number from a Classroom or Physical space editor. The kind
+         * is derived from the object's role and the lifecycle operation is
+         * chosen by a pure planner, so this action adds a doorway rather than a
+         * second capacity authority — every write still lands through the same
+         * create / version / retire entry points used above.
+         */
+        if (action === "set_object_capacity") {
+            const roomLocationId = String(body.room_location_id ?? "").trim();
+            if (!roomLocationId) {
+                return NextResponse.json(
+                    { error: "room_location_id is required", code: "invalid_input" },
+                    { status: 400 },
+                );
+            }
+            const rawCapacity = body.capacity;
+            const capacity =
+                rawCapacity == null || String(rawCapacity).trim() === "" ? null : Number(rawCapacity);
+            if (capacity != null && (!Number.isInteger(capacity) || capacity < 0)) {
+                return NextResponse.json(
+                    { error: "Capacity must be a whole number of children.", code: "invalid_input" },
+                    { status: 400 },
+                );
+            }
+            const role = body.unit_role != null ? (String(body.unit_role) as CanonicalUnitRole) : null;
+            const rules = await listCapacityRules(supabase, ctx.orgId);
+            const result = await setObjectCapacity(supabase, {
+                orgId: ctx.orgId,
+                roomLocationId,
+                role,
+                capacity,
+                // The organization's calendar day, not the server's UTC date.
+                todayYmd,
+                rules,
                 actorUserId: ctx.userId,
             });
             return NextResponse.json(result, { status: 200 });

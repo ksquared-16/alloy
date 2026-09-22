@@ -35,10 +35,54 @@ export type StaffRef = {
     displayName: string;
 };
 
+/**
+ * What Availability says about a person during one segment.
+ *
+ * Three answers, and the third is not a shade of the second. A person with no
+ * Availability record at all is UNKNOWN: the platform was never told when they
+ * can work, and reading that as "unavailable" would quietly remove half a
+ * workforce from every candidate list, while reading it as "available" would
+ * offer people who may be unreachable. Both are worse than saying so.
+ */
+export type SegmentAvailability = "available" | "unavailable" | "unknown";
+
 export type PlannedStaffRef = StaffRef & {
     source: PlannedPlaceSource;
+    /** What Availability says about them during this segment. */
+    availability: SegmentAvailability;
+    /** Why they are unavailable, when an exception said so. */
+    unavailableReason?: string | null;
     /** Set only when Coverage moved them; the room the Assignment would have given. */
     baselineRoomLocationId?: string | null;
+    /**
+     * The Coverage allocation that placed them, when Coverage did.
+     *
+     * Carried because a surface that can show a Coverage allocation must be able to
+     * CHANGE or CANCEL it, and the canonical commands take the allocation id. Without
+     * it the only way to act on what is on screen would be to look the row up again,
+     * which is how a surface ends up querying the table it is supposed to be reading
+     * a projection of.
+     */
+    coverageId?: string | null;
+};
+
+/**
+ * Someone the operator could plan into this segment.
+ *
+ * The pool is the site's own staff, not a filtered shortlist: a gap that offers
+ * nobody because nobody authored Availability is a dead end, and the operator
+ * knowing their own people is not a reason to hide them. Every candidate carries
+ * the facts that make the decision — what Availability says, whether they are
+ * already planned somewhere in this interval, and where their Assignment puts
+ * them — and carries no opinion. Nobody is ranked and nobody is scored.
+ */
+export type CandidateStaffRef = StaffRef & {
+    availability: SegmentAvailability;
+    unavailableReason?: string | null;
+    /** The room they are already planned in during this segment, if any. */
+    plannedInRoomLocationId?: string | null;
+    plannedElsewhere: boolean;
+    baselineRoomLocationId: string | null;
 };
 
 /** A child expected in one segment. */
@@ -66,6 +110,8 @@ export type StaffingExplanationFact =
     | { code: "planned_staff"; names: string[] }
     | { code: "available_not_planned"; names: string[] }
     | { code: "coverage_specialized"; names: string[] }
+    | { code: "planned_but_unavailable"; names: string[] }
+    | { code: "availability_not_recorded"; names: string[] }
     | { code: "planned_not_present"; names: string[] }
     | { code: "present_not_planned"; names: string[] }
     | { code: "shortfall"; count: number }
@@ -95,7 +141,19 @@ export type StaffingProjectionSegment = {
 
     baselineStaff: StaffRef[];
     availableStaff: StaffRef[];
+    /** Everyone planned here, including anyone who cannot actually work it. */
     plannedStaff: PlannedStaffRef[];
+    /**
+     * The planned staff who can actually work this interval.
+     *
+     * The plan is never erased to make the arithmetic convenient — `plannedStaff`
+     * still names everyone the schedule put here. This is the subset that counts
+     * toward the requirement, which is why a call-out opens a gap without
+     * deleting anyone's Coverage.
+     */
+    effectivePlannedStaff: PlannedStaffRef[];
+    /** The site's staff, with the facts an operator needs to pick one. */
+    candidateStaff: CandidateStaffRef[];
     actualStaff: StaffRef[] | null;
 
     /** Null when no ratio tier covers this occupancy — never silently zero. */
