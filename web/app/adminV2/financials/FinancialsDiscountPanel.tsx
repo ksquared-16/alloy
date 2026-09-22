@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
 import { Settings2 } from "lucide-react";
@@ -206,6 +207,92 @@ export default function FinancialsDiscountPanel({
      * POLICY and a REASON — never an amount, never a rate, never a boolean. What the exception
      * does to the money is the policy engine's business.
      */
+    /*
+     * ── WHAT THIS CHILD MAY BE GIVEN ──────────────────────────────────────────────────────────
+     *
+     * Read only when the operator asks to add one. The card's default job is to say what each
+     * child receives; the catalogue of what they COULD receive is a second question and a second
+     * read, and asking it on every open would spend a round trip on a list most operators never
+     * look at.
+     */
+    const [candidates, setCandidates] = useState<
+        Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>
+    >([]);
+    const [assignedByMember, setAssignedByMember] = useState<
+        Record<string, Array<{ assignmentId: string; policyId: string; opportunityCustomerMemberId: string }>>
+    >({});
+    const [addingFor, setAddingFor] = useState<{ ocmId: string; memberId: string; label: string } | null>(null);
+    const [chosenPolicyId, setChosenPolicyId] = useState("");
+
+    useEffect(() => {
+        if (!customerId) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/assignable-discounts?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: {
+                candidates?: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+                assignedByMember?: Record<string, Array<{ assignmentId: string; policyId: string; opportunityCustomerMemberId: string }>>;
+            } | null) => {
+                if (cancelled || !body) return;
+                setCandidates(body.candidates ?? []);
+                setAssignedByMember(body.assignedByMember ?? {});
+            })
+            .catch(() => {
+                /* The card still states what each child receives; it simply cannot offer a new one. */
+            });
+        return () => { cancelled = true; };
+    }, [customerId, nonce]);
+
+    /*
+     * ── GIVING AND TAKING BACK ────────────────────────────────────────────────────────────────
+     *
+     * The affirmative pair, beside the exception pair below it. Both go through registered
+     * actions; neither writes a rate, because what a discount is worth is the policy's answer.
+     */
+    const runAssignment = useCallback(
+        async (op: "assign" | "end", args: {
+            ocmId: string;
+            memberId?: string;
+            policyId?: string;
+            assignmentId?: string;
+        }) => {
+            setBusy(true);
+            setActionError(null);
+            const today = new Date().toISOString().slice(0, 10);
+            try {
+                await executeFinancialsAction({
+                    action_key:
+                        op === "assign"
+                            ? "billing.assign_commercial_policy"
+                            : "billing.end_commercial_policy_assignment",
+                    entity_type: "opportunity_customer_member",
+                    entity_id: args.ocmId,
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload:
+                        op === "assign"
+                            ? {
+                                  policy_id: args.policyId,
+                                  opportunity_customer_member_id: args.ocmId,
+                                  customer_member_id: args.memberId,
+                                  effective_start: today,
+                              }
+                            : { assignment_id: args.assignmentId, effective_end: today },
+                });
+                setAddingFor(null);
+                setChosenPolicyId("");
+                await reread();
+            } catch (e) {
+                setActionError((e as Error).message);
+            } finally {
+                setBusy(false);
+            }
+        },
+        [reread],
+    );
+
     const runException = useCallback(
         async (op: "create" | "end", args: { ocmId: string; policyId?: string; exceptionId?: string; reason?: string }) => {
             setBusy(true);
@@ -237,6 +324,91 @@ export default function FinancialsDiscountPanel({
     const label = (s: Subject) => childLabelFor?.(s.opportunityCustomerMemberId, s.customerMemberId) ?? HOUSEHOLD_LABEL;
     const policies = position?.policies ?? [];
     const liveExceptions = (position?.exceptions ?? []).filter((e) => e.isLiveNow);
+
+    /*
+     * ── THE CARD IS ABOUT CHILDREN, AND THE ROUTE ANSWERS BY POLICY ──────────────────────────
+     *
+     * Inverting it is the whole of this view model. The operator's question is "what does Certa
+     * receive", asked once per child; the forecast's answer is "which children does this policy
+     * reach", grouped the other way. Nothing is computed here — every figure is carried from the
+     * position, and the rate is the policy's authored value rather than anything divided out of
+     * an expected amount.
+     *
+     * A CHILD WITH NOTHING STILL APPEARS. They are the child an operator came here to give a
+     * discount to, and a row that omits them says the surface did not consider them.
+     */
+    const childRows = (() => {
+        type Row = {
+            ocmId: string;
+            memberId: string | null;
+            label: string;
+            lines: Array<{
+                policyId: string;
+                policyLabel: string;
+                rate: string;
+                expectedCents: number;
+                currencyCode: string;
+                why: string | null;
+                assignmentId: string | null;
+                exception: ExceptionRow | null;
+            }>;
+        };
+        const byChild = new Map<string, Row>();
+
+        /* Every relationship the position knows about, discount or not. */
+        for (const p of policies) {
+            for (const sub of p.subjects) {
+                const row = byChild.get(sub.opportunityCustomerMemberId) ?? {
+                    ocmId: sub.opportunityCustomerMemberId,
+                    memberId: sub.customerMemberId,
+                    label: label(sub),
+                    lines: [],
+                };
+                const assigned = (assignedByMember[sub.customerMemberId ?? ""] ?? [])
+                    .find((a) => a.policyId === p.policyId);
+                row.lines.push({
+                    policyId: p.policyId,
+                    policyLabel: p.label,
+                    rate:
+                        sub.basis === "percentage" && sub.basisValue != null
+                            ? `${sub.basisValue}%`
+                            : sub.basis === "amount" && sub.basisValue != null
+                              ? money(sub.basisValue, sub.currencyCode)
+                              : "",
+                    expectedCents: sub.expectedCents,
+                    currencyCode: sub.currencyCode,
+                    why: basisWithoutPolicyName(sub.explanation, p.label),
+                    /*
+                     * ASSIGNED vs RULE-DERIVED, and the difference decides what may be done. An
+                     * assignment an operator made can be removed; a discount the rules grant can
+                     * only be waived, because there is no assignment to end.
+                     */
+                    assignmentId: assigned?.assignmentId ?? null,
+                    exception: (position?.exceptions ?? []).find(
+                        (e) => e.policyId === p.policyId
+                            && e.opportunityCustomerMemberId === sub.opportunityCustomerMemberId
+                            && e.isLiveNow,
+                    ) ?? null,
+                });
+                byChild.set(sub.opportunityCustomerMemberId, row);
+            }
+        }
+
+        /* And the relationships no policy reached — named, with nothing, which is a real state. */
+        for (const n of position?.notExpected ?? []) {
+            if (byChild.has(n.opportunityCustomerMemberId)) continue;
+            byChild.set(n.opportunityCustomerMemberId, {
+                ocmId: n.opportunityCustomerMemberId,
+                memberId:
+                    Object.entries(assignedByMember).find(([, list]) =>
+                        list.some((a) => a.opportunityCustomerMemberId === n.opportunityCustomerMemberId),
+                    )?.[0] ?? null,
+                label: childLabelFor?.(n.opportunityCustomerMemberId, null) ?? HOUSEHOLD_LABEL,
+                lines: [],
+            });
+        }
+        return [...byChild.values()];
+    })();
 
     /*
      * ── ONE STATEMENT OF ONE FACT ─────────────────────────────────────────────────────────────
@@ -364,151 +536,215 @@ export default function FinancialsDiscountPanel({
                           * arranged so it can be acted on rather than read.
                           */}
 
-                        {policies.length === 0 ? (
-                            <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                                No discount policy is expected to apply to this family's current period.
-                            </p>
-                        ) : (
-                            policies.map((p) => (
-                                <div key={p.policyId} className="mt-2 border-t border-alloy-stone/10 pt-2" data-financials-discount-manage-policy={p.policyId}>
-                                    <p className="text-[12px] font-medium text-alloy-midnight">{p.label}</p>
-                                    {p.subjects.map((s) => {
-                                        const excepted = (position?.exceptions ?? []).find(
-                                            (e) => e.policyId === p.policyId
-                                                && e.opportunityCustomerMemberId === s.opportunityCustomerMemberId
-                                                && e.isLiveNow,
-                                        );
-                                        return (
-                                            <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
-                                                {/*
-                                                  * ── THE CHILD, THE RATE, THE MONEY ──────────
-                                                  *
-                                                  * The rate is STATED, not left to be inferred:
-                                                  * this policy is 10% for both children and paid
-                                                  * out as -$18.50 and -$145.00, so an operator
-                                                  * reading only the amounts cannot tell whether
-                                                  * they are looking at one rate or two.
-                                                  *
-                                                  * It comes from the resolver's authored value,
-                                                  * never from dividing the expected amount by a
-                                                  * basis this card would have had to guess at.
-                                                  */}
-                                                <p className="text-[11px] text-alloy-midnight/70">
-                                                    <span className="font-medium">{label(s)}</span>
-                                                    {s.basis === "percentage" && s.basisValue != null ? (
-                                                        <span data-financials-discount-rate={s.opportunityCustomerMemberId}>
-                                                            {" · "}{s.basisValue}%
-                                                        </span>
-                                                    ) : s.basis === "amount" && s.basisValue != null ? (
-                                                        <span data-financials-discount-rate={s.opportunityCustomerMemberId}>
-                                                            {" · "}{money(s.basisValue, s.currencyCode)}
-                                                        </span>
-                                                    ) : null}
-                                                    {" · Expected "}{money(Math.abs(s.expectedCents), s.currencyCode)}
-                                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
-                                                        <span className="block pl-0 text-alloy-midnight/45" data-financials-discount-why={s.opportunityCustomerMemberId}>
-                                                            {basisWithoutPolicyName(s.explanation, p.label)}
-                                                        </span>
-                                                    ) : null}
-                                                </p>
-                                                {/*
-                                                  * ── OPERATOR LANGUAGE OVER THE SAME AUTHORITY ──
-                                                  *
-                                                  * The model is a commercial policy exception and
-                                                  * stays one — the service, the table and the two
-                                                  * registered actions are untouched. What changes
-                                                  * is the word the operator reads: they are not
-                                                  * "adding an exception", they are WAIVING a
-                                                  * discount for one child, and later restoring it.
-                                                  *
-                                                  * "Add exception" describes the record we keep.
-                                                  * "Waive discount" describes what happens to a
-                                                  * family's bill, which is the thing being decided.
-                                                  */}
-                                                {excepted ? (
-                                                    <div data-financials-discount-exception={excepted.id}>
-                                                        <p className="text-[11px] font-medium text-alloy-ember" data-financials-discount-waived="true">
-                                                            Waived
+                        {/*
+                          * ── ONE ROW PER CHILD ──────────────────────────────────────────────
+                          *
+                          * The card's job is "manage the discounts each child receives", so the
+                          * child is the unit and the policies are what a child has. It used to be
+                          * the other way round, grouped by policy, which is how the forecast
+                          * answers and not how an operator asks.
+                          */}
+                        {childRows.map((child) => (
+                            <div
+                                key={child.ocmId}
+                                className="mt-3 border-t border-alloy-stone/10 pt-2"
+                                data-financials-discount-child={child.ocmId}
+                            >
+                                <p className="text-[12px] font-medium text-alloy-midnight">{child.label}</p>
+
+                                {child.lines.length === 0 ? (
+                                    /*
+                                     * A CHILD WITH NOTHING IS THE POINT OF THIS CARD. They are who
+                                     * an operator came to give a discount to, and one word plus a
+                                     * door is the whole of what that state needs.
+                                     */
+                                    <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-none-for-child="true">
+                                        No discount
+                                    </p>
+                                ) : (
+                                    child.lines.map((line) => (
+                                        <div key={line.policyId} className="mt-1 pl-2" data-financials-discount-line={line.policyId}>
+                                            <p className="text-[11px] text-alloy-midnight/70">
+                                                <span className="font-medium">{line.policyLabel}</span>
+                                                {line.rate ? (
+                                                    <span data-financials-discount-rate={child.ocmId}>{" · "}{line.rate}</span>
+                                                ) : null}
+                                            </p>
+                                            <p className="text-[11px] text-alloy-midnight/55">
+                                                Expected {money(Math.abs(line.expectedCents), line.currencyCode)}
+                                                {line.why ? (
+                                                    <span className="text-alloy-midnight/40"> · {line.why}</span>
+                                                ) : null}
+                                            </p>
+
+                                            {line.exception ? (
+                                                <div data-financials-discount-exception={line.exception.id}>
+                                                    <p className="text-[11px] font-medium text-alloy-ember" data-financials-discount-waived="true">
+                                                        Waived
+                                                    </p>
+                                                    {line.exception.reason ? (
+                                                        <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-waived-reason="true">
+                                                            {line.exception.reason}
                                                         </p>
-                                                        {excepted.reason ? (
-                                                            <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-waived-reason="true">
-                                                                {excepted.reason}
-                                                                {excepted.effectiveStart ? ` · since ${formatDisplayDate(excepted.effectiveStart)}` : ""}
-                                                            </p>
-                                                        ) : null}
-                                                        <button
-                                                            type="button"
-                                                            disabled={busy}
-                                                            data-end-policy-exception={excepted.id}
-                                                            data-financials-restore-discount={s.opportunityCustomerMemberId}
-                                                            className="mt-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
-                                                            onClick={() => void runException("end", {
-                                                                ocmId: excepted.opportunityCustomerMemberId,
-                                                                exceptionId: excepted.id,
-                                                                reason: "Ended from family discount administration",
-                                                            })}
-                                                        >
-                                                            Restore discount <span aria-hidden>&rarr;</span>
-                                                        </button>
-                                                    </div>
-                                                ) : draft && draft.policyId === p.policyId && draft.ocmId === s.opportunityCustomerMemberId ? (
-                                                    <div className="mt-0.5" data-financials-discount-exception-draft="true">
-                                                        {/*
-                                                          * A REASON IS REQUIRED, and the ask is in
-                                                          * the operator's terms. "Why is this
-                                                          * relationship excepted?" asks about our
-                                                          * record; this asks about the decision.
-                                                          */}
-                                                        <p className="text-[11px] font-medium text-alloy-midnight" data-financials-waive-heading="true">
-                                                            Waive discount
-                                                        </p>
-                                                        <input
-                                                            className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
-                                                            placeholder="Why is this discount being waived?"
-                                                            value={draft.reason}
-                                                            data-financials-discount-exception-reason="true"
-                                                            onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
-                                                        />
-                                                        <div className="mt-1 flex gap-2">
-                                                            <button
-                                                                type="button"
-                                                                disabled={busy || draft.reason.trim().length === 0}
-                                                                data-financials-discount-exception-confirm="true"
-                                                                className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
-                                                                onClick={() => void runException("create", {
-                                                                    ocmId: s.opportunityCustomerMemberId,
-                                                                    policyId: p.policyId,
-                                                                    reason: draft.reason.trim(),
-                                                                })}
-                                                            >
-                                                                Confirm waiver
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="text-[11px] text-alloy-midnight/55 hover:underline"
-                                                                onClick={() => setDraft(null)}
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
+                                                    ) : null}
                                                     <button
                                                         type="button"
                                                         disabled={busy}
-                                                        data-add-policy-exception={p.policyId}
+                                                        data-end-policy-exception={line.exception.id}
+                                                        data-financials-restore-discount={child.ocmId}
+                                                        className="mt-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                        onClick={() => void runException("end", {
+                                                            ocmId: child.ocmId,
+                                                            exceptionId: line.exception!.id,
+                                                            reason: "Ended from family discount administration",
+                                                        })}
+                                                    >
+                                                        Restore discount <span aria-hidden>&rarr;</span>
+                                                    </button>
+                                                </div>
+                                            ) : draft && draft.policyId === line.policyId && draft.ocmId === child.ocmId ? (
+                                                <div className="mt-0.5" data-financials-discount-exception-draft="true">
+                                                    <p className="text-[11px] font-medium text-alloy-midnight" data-financials-waive-heading="true">
+                                                        Waive discount
+                                                    </p>
+                                                    <input
+                                                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
+                                                        placeholder="Why is this discount being waived?"
+                                                        value={draft.reason}
+                                                        data-financials-discount-exception-reason="true"
+                                                        onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+                                                    />
+                                                    <div className="mt-1 flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy || draft.reason.trim().length === 0}
+                                                            data-financials-discount-exception-confirm="true"
+                                                            className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                                                            onClick={() => void runException("create", {
+                                                                ocmId: child.ocmId,
+                                                                policyId: line.policyId,
+                                                                reason: draft.reason.trim(),
+                                                            })}
+                                                        >
+                                                            Confirm waiver
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="text-[11px] text-alloy-midnight/55 hover:underline"
+                                                            onClick={() => setDraft(null)}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-0.5 flex gap-3">
+                                                    {/*
+                                                      * REMOVE vs WAIVE, and the authority decides
+                                                      * which is offered. An assignment an operator
+                                                      * made can be removed; a discount the rules
+                                                      * grant has no assignment to end, so the only
+                                                      * honest act is to waive it — offering
+                                                      * "Remove" there would be a control with
+                                                      * nothing to remove.
+                                                      */}
+                                                    {line.assignmentId ? (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy}
+                                                            data-financials-remove-discount={line.assignmentId}
+                                                            className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                            onClick={() => void runAssignment("end", {
+                                                                ocmId: child.ocmId,
+                                                                assignmentId: line.assignmentId!,
+                                                            })}
+                                                        >
+                                                            Remove discount <span aria-hidden>&rarr;</span>
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        type="button"
+                                                        disabled={busy}
+                                                        data-add-policy-exception={line.policyId}
                                                         className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
-                                                        onClick={() => setDraft({ policyId: p.policyId, ocmId: s.opportunityCustomerMemberId, reason: "" })}
+                                                        onClick={() => setDraft({ policyId: line.policyId, ocmId: child.ocmId, reason: "" })}
                                                     >
                                                         Waive discount <span aria-hidden>&rarr;</span>
                                                     </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))
-                        )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+
+                                {/*
+                                  * ── ADD DISCOUNT ───────────────────────────────────────────
+                                  *
+                                  * The affirmative act, on the child it is about. The operator
+                                  * chooses a CONFIGURED policy; they do not author one, and the
+                                  * option states the rate the organisation set so the choice is
+                                  * legible without being editable.
+                                  */}
+                                {addingFor?.ocmId === child.ocmId ? (
+                                    <div className="mt-1 pl-2" data-financials-add-discount-draft="true">
+                                        <p className="text-[11px] font-medium text-alloy-midnight">Add discount</p>
+                                        <div className="mt-0.5">
+                                            <AlloySelect
+                                                testId="add-discount-policy"
+                                                aria-label="Discount"
+                                                value={chosenPolicyId}
+                                                onChange={setChosenPolicyId}
+                                                options={candidates
+                                                    .filter((c) => !child.lines.some((l) => l.policyId === c.policyId))
+                                                    .map((c) => ({
+                                                        value: c.policyId,
+                                                        label:
+                                                            c.basis === "percentage" && c.basisValue != null
+                                                                ? `${c.label} · ${c.basisValue}%`
+                                                                : c.basis === "amount" && c.basisValue != null
+                                                                  ? `${c.label} · ${money(c.basisValue, "USD")}`
+                                                                  : c.label,
+                                                    }))}
+                                                placeholder="Choose a discount…"
+                                                disabled={busy}
+                                            />
+                                        </div>
+                                        <div className="mt-1 flex gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={busy || !chosenPolicyId}
+                                                data-financials-add-discount-confirm="true"
+                                                className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                                                onClick={() => void runAssignment("assign", {
+                                                    ocmId: child.ocmId,
+                                                    memberId: child.memberId ?? "",
+                                                    policyId: chosenPolicyId,
+                                                })}
+                                            >
+                                                Confirm
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="text-[11px] text-alloy-midnight/55 hover:underline"
+                                                onClick={() => { setAddingFor(null); setChosenPolicyId(""); }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        data-financials-add-discount={child.ocmId}
+                                        className="mt-1 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                        onClick={() => setAddingFor({ ocmId: child.ocmId, memberId: child.memberId ?? "", label: child.label })}
+                                    >
+                                        Add discount <span aria-hidden>&rarr;</span>
+                                    </button>
+                                )}
+                            </div>
+                        ))}
 
                         {/* Why a relationship expects nothing — the canonical reason, never silence. */}
                         {(position?.notExpected ?? []).length > 0 ? (

@@ -316,8 +316,9 @@ describe("the depth cards state each fact once", () => {
         expect(panel).toMatch(/Restore discount <span aria-hidden>&rarr;<\/span>/);
         expect(panel, "no implementation vocabulary survives in operator copy")
             .not.toMatch(/>\s*(Add|End|Confirm) exception/);
-        expect(panel, "the actions sit on the subject row, not on the policy header")
-            .toMatch(/data-add-policy-exception=\{p\.policyId\}/);
+        /* The card is child-grained now, so the actions sit on a child's policy line. */
+        expect(panel, "the actions sit on the line they act on")
+            .toMatch(/data-add-policy-exception=\{line\.policyId\}/);
         expect(panel, "and the authority beneath them is unchanged")
             .toMatch(/runException\("end"/);
     });
@@ -430,13 +431,15 @@ describe("the depth card answers what the row cannot", () => {
          * is the authored value from the resolver, rendered as itself.
          */
         const panel = code(DISCOUNT);
-        expect(panel, "a percentage rate is rendered").toMatch(
-            /s\.basis === "percentage" && s\.basisValue != null \?/,
+        /* The rate is resolved once into the child view model and rendered from there. */
+        expect(panel, "a percentage rate is read from the authored value").toMatch(
+            /sub\.basis === "percentage" && sub\.basisValue != null/,
         );
-        expect(panel, "and shown as a percentage").toMatch(/\{s\.basisValue\}%/);
+        expect(panel, "and shown as a percentage").toMatch(/\$\{sub\.basisValue\}%/);
         expect(panel, "a fixed-amount policy states its amount instead")
-            .toMatch(/s\.basis === "amount" && s\.basisValue != null \?/);
-        expect(panel, "the rate carries a marker so a frame can find it")
+            .toMatch(/sub\.basis === "amount" && sub\.basisValue != null/);
+        expect(panel, "the rate reaches the row").toMatch(/\{line\.rate\}/);
+        expect(panel, "with a marker so a frame can find it")
             .toContain("data-financials-discount-rate");
     });
 
@@ -450,24 +453,31 @@ describe("the depth card answers what the row cannot", () => {
             .toMatch(/basis:\s*r\.basis[\s\S]{0,80}basisValue:\s*r\.basisValue/);
     });
 
-    it("the card offers no discount selection, and no navigation out of the work", () => {
+    it("the card assigns configured discounts, and authors none", () => {
         /*
-         * TWO THINGS THE CARD MUST NOT DO, for two different reasons.
+         * THIS RULE INVERTED, DELIBERATELY. It used to forbid any discount selection here,
+         * because there was no affirmative authority and a selector would have been a control
+         * that could not commit. That authority now exists — `commercial_policy_assignments` —
+         * so choosing which CONFIGURED discount a child receives is a real act with a real writer.
          *
-         * No per-child selection: discounts are organization-authored policies resolved through
-         * eligibility, and there is no `selected_discount_id` writer. A "choose a discount"
-         * control would be one that cannot commit — the operator sets it, nothing changes, and
-         * the card has implied an authority that does not exist.
-         *
-         * And no link to policy configuration either. It was added here to name the surface that
-         * owns rates, and it turned an operational family card into navigation toward Studio for
-         * work that is not this operator's. Administrators reach policies through Organization →
-         * Financials → Policies; this card is for one family's position.
+         * What has not changed is the line it must not cross: the operator picks an existing
+         * policy by identity, and never edits what it is worth. Rates, bases, caps and
+         * eligibility stay in organization configuration.
          */
         const panel = code(DISCOUNT);
-        expect(panel, "no invented per-child discount writer")
-            .not.toMatch(/Select discount|Choose a discount|assignDiscount|Change discount/);
-        expect(panel, "and no configuration navigation")
+        expect(panel, "a child can be given a configured discount")
+            .toContain('data-financials-add-discount-confirm="true"');
+        expect(panel, "through the registered assignment action")
+            .toMatch(/billing\.assign_commercial_policy/);
+        expect(panel, "chosen from candidates the server supplies")
+            .toMatch(/assignable-discounts\?customer_id=/);
+
+        /* And the economics are not editable here, in any spelling. */
+        expect(panel, "no rate authoring")
+            .not.toMatch(/setPercent|setBasisValue|name="percent"|Edit discount percentage/);
+        expect(panel, "no arithmetic on a gross")
+            .not.toMatch(/basisAmountCents\s*\*|\*\s*0?\.\d/);
+        expect(panel, "and no navigation to configuration")
             .not.toMatch(/Manage discount policies|organizationFinancialsChapterHref/);
     });
 

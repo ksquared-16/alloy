@@ -197,7 +197,7 @@ describe("the family Discount position renders canonical truth and computes none
         /* Dividing by 100 to render cents as currency is formatting, and is the only such use. */
         expect((panel.match(/\/ 100/g) ?? []).length).toBeLessThanOrEqual(1);
         /* And the rate that IS shown came from the outcome, never from this component. */
-        expect(panel, "the rate is the authored one").toMatch(/s\.basisValue/);
+        expect(panel, "the rate is the authored one").toMatch(/sub\.basisValue/);
     });
 
     it("carries the forecast's own expected amount", () => {
