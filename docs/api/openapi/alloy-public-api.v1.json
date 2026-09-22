@@ -164,7 +164,7 @@
           "Locations"
         ],
         "summary": "List organizational locations",
-        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope \u2014 they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.\n\nIncremental sync: page the collection once, remember the newest `updated_at` you saw, then pass it as `updated_since`. Rewind your checkpoint slightly \u2014 `updated_at` is wall-clock and not transactionally ordered.",
+        "description": "Returns sites and units within the installation's organization AND its resource boundary. Requires the `locations.read` scope.\n\nCustomer and vendor premises (`location_type = address`) are never returned at any scope \u2014 they describe private addresses rather than organizational locations.\n\nFilters narrow the already-authorized set and can never widen it: naming a location outside the boundary returns nothing rather than granting it.\n\nIncremental sync: page the collection once with `cursor`, then store the `sync_token` from the last page you durably processed and pass it back as `since_token` next time. A sync token identifies an exact row, so two records sharing a timestamp cannot be skipped or repeated and there is nothing to rewind. Use `updated_since` only for deliberate time-based reconciliation against a moment you chose.",
         "security": [
           {
             "bearerAuth": []
@@ -200,7 +200,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "type",
@@ -240,7 +240,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           }
         ],
         "responses": {
@@ -329,7 +329,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -339,7 +339,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "site_id",
@@ -548,7 +548,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -558,7 +558,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "household_id",
@@ -675,7 +675,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -685,7 +685,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "household_id",
@@ -784,7 +784,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -794,7 +794,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "child_id",
@@ -902,7 +902,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -912,7 +912,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "child_id",
@@ -1165,7 +1165,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -1175,7 +1175,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "child_id",
@@ -1438,7 +1438,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -1448,7 +1448,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "child_id",
@@ -1807,7 +1807,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you consumed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. Prefer this for incremental synchronization."
+            "description": "Resume exactly where a previous pass stopped. Pass back the `sync_token` from the last page you durably processed. Unlike `updated_since` it identifies a single row, so two records sharing a timestamp cannot be skipped or repeated. **Prefer this for incremental synchronization.**"
           },
           {
             "name": "updated_since",
@@ -1817,7 +1817,7 @@
               "type": "string",
               "format": "date-time"
             },
-            "description": "Return only records changed strictly after this instant. Must carry a timezone offset or Z. Sub-second precision is honoured exactly as supplied. `since_token` is preferred: a timestamp alone cannot separate two records that share one."
+            "description": "Return only records changed strictly after this instant (ISO-8601, with offset or `Z`). This is the TIME-BASED reconciliation tool; for ordinary incremental synchronization prefer `since_token`, which identifies an exact row."
           },
           {
             "name": "site_id",

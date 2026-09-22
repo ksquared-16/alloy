@@ -134,6 +134,13 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             installationId: ctx.installationId,
             tokenId: ctx.tokenId,
         };
+        /*
+         * Rate-limit headers travel on EVERY response once the budget has been consulted, refusals
+         * included. A client deciding whether to back off is most in need of them on the response
+         * that refused it; dropping them there left a caller guessing at exactly the moment the
+         * contract had the answer.
+         */
+        let budgetHeaders: Record<string, string> = {};
         const fail = (
             code: string,
             type: "invalid_request" | "internal_error" | "forbidden_scope" | "conflict",
@@ -141,7 +148,14 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             status?: number,
         ) =>
             finish(
-                apiError({ code, type, message, requestId: identity.requestId, headers: identityHeaders(identity), status }),
+                apiError({
+                    code,
+                    type,
+                    message,
+                    requestId: identity.requestId,
+                    headers: { ...identityHeaders(identity), ...budgetHeaders },
+                    status,
+                }),
                 { ...ids, errorCode: code },
             );
 
@@ -159,6 +173,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             "RateLimit-Remaining": String(decision.remaining),
             "RateLimit-Reset": String(decision.resetSeconds),
         };
+        budgetHeaders = limitHeaders;
         if (!decision.allowed) {
             return finish(
                 rateLimited(identity.requestId, decision.resetSeconds, { ...identityHeaders(identity), ...limitHeaders }),

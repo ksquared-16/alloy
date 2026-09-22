@@ -110,12 +110,14 @@ export function externalCollectionRoute<TPublic>(def: CollectionDefinition<TPubl
             return response;
         };
 
+        /* See the operation factory: the budget travels on refusals too, not only on success. */
+        let budgetHeaders: Record<string, string> = {};
         const fail = (code: string, type: "invalid_request" | "internal_error" | "forbidden_scope", message: string, ids: Record<string, unknown>) =>
             finish(
                 apiError({
                     code, type, message,
                     requestId: identity.requestId,
-                    headers: identityHeaders(identity),
+                    headers: { ...identityHeaders(identity), ...budgetHeaders },
                 }),
                 { ...ids, errorCode: code },
             );
@@ -156,6 +158,7 @@ export function externalCollectionRoute<TPublic>(def: CollectionDefinition<TPubl
             "RateLimit-Remaining": String(decision.remaining),
             "RateLimit-Reset": String(decision.resetSeconds),
         };
+        budgetHeaders = limitHeaders;
         if (!decision.allowed) {
             return finish(
                 rateLimited(identity.requestId, decision.resetSeconds, {

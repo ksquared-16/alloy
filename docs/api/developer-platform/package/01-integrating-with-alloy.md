@@ -283,13 +283,20 @@ in the same order.
 
 ---
 
-## 9. Submitting facts
+## 9. Submitting facts and performing operations
 
-There is exactly one write: `POST /api/v1/attendance-events`.
+Seven writes exist, and they come in two shapes.
 
-It is a **governed submission**, not a CRUD write. You assert that something
-happened; Alloy decides whether it may be recorded. There is no `PUT`, no
-`PATCH` and no `DELETE` anywhere on this API.
+**Six are service-state operations** — starting and ending an enrollment,
+assigning and moving a placement, setting and changing a schedule. They are
+covered in §9a.
+
+**One is fact submission:** `POST /api/v1/attendance-events`. It is Attendance's
+only write, and the rest of this section is about it.
+
+All seven are **governed**, not CRUD. You assert an intent; Alloy decides whether
+it may be performed. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on
+this API.
 
 ### A batch is not a transaction
 
@@ -419,9 +426,17 @@ human-readable `message`, and the request id.
 | `429` | Rate limit exceeded | Wait for `RateLimit-Reset`, then retry. |
 | `5xx` | Alloy failed | Retry with backoff. Submissions are safe to retry. |
 
-Reads and writes have separate rate budgets, and every response carries
-`RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset`. Use them rather
-than guessing.
+Reads and writes have **different limits but share one counter** per
+installation: 600 reads a minute, 120 writes a minute, both drawn from the same
+per-installation count. So a window spent paging collections can leave your next
+write refused without your having written anything. It rarely bites — 120 a
+minute is two a second, and attendance goes in batches — but if you drive a
+large backfill, interleave the writes rather than reading everything first.
+
+Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and
+`RateLimit-Reset`, refusals included. `RateLimit-Limit` reflects the class of the
+request you just made, so you will see `600` on a read and `120` on a write. Use
+the headers rather than guessing.
 
 **An empty page is not an error.** It usually means the boundary, the scope or
 enrollment — check `GET /api/v1/context` first.

@@ -113,9 +113,11 @@ Nineteen operations across fifteen paths. This is the entire public API.
 | GET | `/api/v1/attendance-events` | `listAttendanceEvents` | `attendance.read` |
 | POST | `/api/v1/attendance-events` | `submitAttendanceEvents` | `attendance.write` |
 
-Thirteen are reads. The six writes are **named governed operations**, not a CRUD
-surface: there is no `PUT`, no `PATCH` and no `DELETE` anywhere in this contract.
-A change is a supersession and an ending is an ending — see §11a.
+**One** is the unauthenticated token exchange, **eleven** are authenticated
+reads, and **seven** are governed domain writes. The writes are **named
+operations**, not a CRUD surface: there is no `PUT`, no `PATCH` and no `DELETE`
+anywhere in this contract. A change is a supersession and an ending is an ending
+— see §11a.
 
 There is no public webhook resource, no self-service correlation API, and no
 public Communications or Financials contract. Alloy's internal administrative
@@ -251,7 +253,7 @@ that cannot discover what it holds cannot diagnose why anything else was refused
 so this is a capability inherent to holding a credential rather than a permission
 an operator grants. There is no `context.read` in the grant model.
 
-The eleven grantable scopes:
+The thirteen grantable scopes:
 
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
@@ -266,6 +268,8 @@ The eleven grantable scopes:
 | `staff.contact.read` | Email and phone for visible staff | Anything `staff.read` does not already permit |
 | `attendance.read` | Read attendance facts for children inside the boundary | Authoring a fact |
 | `attendance.write` | Submit attendance facts for children inside the boundary | Reading anyone's attendance history |
+| `enrollment.write` | Start and end enrollment, and assign or move placement, for authorized children | Reading anything; creating children or households; schedules |
+| `schedule.write` | Set and change committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
 
 The last pair is worth stating plainly, because it is the clearest demonstration
 of what exact matching means: an Installation granted only `attendance.write` can
@@ -741,12 +745,32 @@ on `/api/v1`. No public endpoint currently returns 409; the status is reserved.
 ## 13. Rate limiting
 
 Durable and shared across server instances — a budget, not a per-process
-approximation. Two policies:
+approximation. Three policies:
 
 | Surface | Limit | Window | Keyed on |
 | --- | --- | --- | --- |
 | Token exchange | 30 | 60 s | presented `client_id` + hashed caller address |
 | Authenticated reads | 600 | 60 s | Installation |
+| Authenticated writes | 120 | 60 s | Installation |
+
+**Reads and writes share one counter per Installation.** This is the part worth
+designing around, because the two limits above make it easy to assume otherwise:
+every authenticated request — read or write — increments the *same* per-
+Installation count, and each class simply compares that count against its own
+limit. So a partner that spends a window paging collections will find its next
+**write** refused at 120 without having written anything, while reads continue
+until 600.
+
+In practice this rarely bites, because 120 writes a minute is two a second
+sustained and attendance is submitted in batches rather than one request per
+fact. But if you drive a large backfill, interleave the writes rather than
+reading the whole collection first.
+
+Every authenticated response carries `RateLimit-Limit`, `RateLimit-Remaining`
+and `RateLimit-Reset` — including refusals, so a client deciding whether to back
+off is never left guessing. `RateLimit-Limit` reflects the class of the request
+you just made, so the same Installation sees `600` on a read and `120` on a
+write.
 
 The token budget is consumed **before** credential verification, so a
 credential-stuffing run cannot get free database work. It is never keyed on the
@@ -764,12 +788,16 @@ and the table as indicative.
 
 ## 14. Governed submission, idempotency, correlation
 
-The public API has exactly one write, and its shape is deliberate.
+Seven governed writes exist (§2). This section covers the one whose shape is
+different from the rest — **Attendance submission** — and the idempotency and
+correlation rules that apply to all of them. The service-state operations are
+described in §9 and §11a.
 
-### It is fact submission, not CRUD
+### Attendance is fact submission, not CRUD
 
-`POST /api/v1/attendance-events` appends attendance facts. There is no `PUT`, no
-`PATCH` and no `DELETE` anywhere on the public surface. Attendance is an
+`POST /api/v1/attendance-events` is Attendance's **only** write, and it appends
+facts. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on the public
+surface. Attendance is an
 append-only history: a mistake is corrected by recording a **correction** or a
 **reversal** that supersedes the earlier fact, never by editing or removing it.
 This is why a partner's mirror of attendance can always be reconciled — nothing
@@ -840,8 +868,13 @@ established with Alloy during onboarding.
    `POST /api/v1/oauth/token` with `grant_type=client_credentials`.
 4. Confirm who you are: `GET /api/v1/context`.
 5. List what you may reach: `GET /api/v1/locations?limit=50`.
-6. Page with `next_cursor` until it is `null`; record the highest `updated_at`.
-7. Later: `GET /api/v1/locations?updated_since=<watermark>`.
+6. Page with `next_cursor` until it is `null`, then store the `sync_token` from
+   the last page you durably processed.
+7. Later: `GET /api/v1/locations?since_token=<stored token>`, and page that pass
+   the same way. Replace the stored token only after you have processed the pass.
+
+Use `updated_since` only when you deliberately want time-based reconciliation
+against a moment you chose — see §7.
 
 ```bash
 TOKEN=$(curl -s -X POST https://<alloy-host>/api/v1/oauth/token \

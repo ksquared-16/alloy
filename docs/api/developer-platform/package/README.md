@@ -85,8 +85,11 @@ are what they will keep open while building it.
    information is not available under any permission.
 7. **Attendance is append-only history.** Mistakes are corrected by recording a
    correction or reversal, never by editing or deleting.
-8. **The one write is governed fact submission, not CRUD.** You assert what
-   happened; Alloy decides whether it may be recorded.
+8. **Every write is a governed operation, not CRUD.** Seven exist: six
+   service-state operations (start/end an enrollment, assign/move a placement,
+   set/change a schedule) and Attendance fact submission. You assert an intent;
+   Alloy decides whether it may be performed. There is no `PUT`, `PATCH` or
+   `DELETE` anywhere.
 9. **Enrollment, Placement, Schedule Assignment and Schedule Day are four
    different things** and change independently. Schedule assignments are stored
    and synchronizable; schedule days are derived and are not.
