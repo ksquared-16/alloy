@@ -85,11 +85,18 @@ const STAGES: LifecycleBuilderStageRecord[] = [
 ];
 
 function view(id: string, stageKeys: string[]): WorkViewConfigV1Stored {
+    // `is_any_of` is the operator a stage-scoped lens actually stores; `lensStageKeys` reads the
+    // VALUE of every `opportunity_stage` filter regardless of operator, so the cases below exercise
+    // the real predicate rather than a shape the builder never writes.
     return {
         id,
         label: id,
-        filters_v1: stageKeys.map((v) => ({ field_key: "opportunity_stage", operator: "in", value: [v] })),
-    } as WorkViewConfigV1Stored;
+        filters_v1: stageKeys.map((v) => ({
+            field_key: "opportunity_stage",
+            operator: "is_any_of" as const,
+            value: [v],
+        })),
+    };
 }
 
 /**
