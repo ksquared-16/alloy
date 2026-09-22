@@ -202,12 +202,26 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
     const fields = schema.fields.map((f) => {
         if (f.id !== fieldId) return f;
         const next: FormField = { ...f };
-        if (patch.label !== undefined) next.label = patch.label.trim() || next.label;
+        /*
+         * WHAT THE OPERATOR TYPED IS WHAT THE EDITOR HOLDS.
+         *
+         * This used to read `patch.label.trim() || next.label`, and that single expression made it
+         * impossible to type a space in a question label. A controlled input sends the whole value
+         * on every keystroke, so "Does " arrives here, is trimmed back to "Does", and is handed
+         * straight back to the input — the space is erased before the next character is typed. The
+         * `||` fallback did the same to deletion: clearing the box restored the old label.
+         *
+         * Normalization is a COMMIT concern, not a keystroke concern. `normalizeFormSchemaForPersist`
+         * applies the trim and the "Untitled" fallback when the draft is actually saved, which is
+         * the moment the fallback was written for.
+         */
+        if (patch.label !== undefined) next.label = patch.label;
         if (patch.required !== undefined) next.required = Boolean(patch.required);
         if (patch.description !== undefined) {
-            const d = patch.description.trim();
-            if (d) (next as { description?: string }).description = d;
-            else delete (next as { description?: string }).description;
+            // Help text is prose too — same rule, same reason. Emptying the box removes it; anything
+            // else is stored exactly as typed, spaces included.
+            if (patch.description === "") delete (next as { description?: string }).description;
+            else (next as { description?: string }).description = patch.description;
         }
         if (patch.options !== undefined && (next.type === "select" || next.type === "multiselect")) {
             (next as { static_options?: Array<{ value: string; label: string }> }).static_options = patch.options.filter((o) => o.value && o.label);
@@ -308,7 +322,8 @@ export function addSection(schema: FormSchemaV1, title: string): { schema: FormS
 
 /** Rename a section. */
 export function renameSection(schema: FormSchemaV1, sectionId: string, title: string): FormSchemaV1 {
-    return { ...schema, sections: schema.sections.map((s) => (s.id === sectionId ? { ...s, title: title.trim() || s.title } : s)) };
+    // Verbatim while editing — see `updateField`. The fallback lives in `normalizeFormSchemaForPersist`.
+    return { ...schema, sections: schema.sections.map((s) => (s.id === sectionId ? { ...s, title } : s)) };
 }
 
 /** Remove a section and its fields (keeps schema valid). */
@@ -319,5 +334,33 @@ export function removeSection(schema: FormSchemaV1, sectionId: string): FormSche
         ...schema,
         fields: schema.fields.filter((f) => !removeIds.has(f.id)),
         sections: schema.sections.filter((s) => s.id !== sectionId),
+    };
+}
+
+/**
+ * The normalization the editor no longer does on every keystroke.
+ *
+ * An operator typing "Does your child have siblings?" passes through a dozen states that are not
+ * yet a sentence — including every trailing space. Trimming those as they are typed makes a space
+ * untypeable (see `updateField`), so the editor holds the text verbatim and this runs once, at the
+ * moment the draft is actually written.
+ *
+ * It is deliberately the SAME rule the create path already applied (`fieldFromSpec`,
+ * `createBlankSchema`, `addSection`): trim, and fall back to a placeholder rather than persist an
+ * empty label a participant would be shown.
+ */
+export function normalizeFormSchemaForPersist(schema: FormSchemaV1): FormSchemaV1 {
+    return {
+        ...schema,
+        title: schema.title.trim() || "Untitled form",
+        sections: schema.sections.map((s, i) => ({ ...s, title: (s.title ?? "").trim() || `Section ${i + 1}` })),
+        fields: schema.fields.map((f) => {
+            const label = f.label.trim() || "Untitled";
+            const description = (f as { description?: string }).description?.trim();
+            const next = { ...f, label } as FormField & { description?: string };
+            if (description) next.description = description;
+            else delete next.description;
+            return next;
+        }),
     };
 }

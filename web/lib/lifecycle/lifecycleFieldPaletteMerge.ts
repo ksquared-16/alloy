@@ -35,6 +35,19 @@ export type LifecycleFieldPaletteEntry = {
     runtime_enforced: boolean;
     form_coverage_supported: boolean;
     config_only: boolean;
+    /*
+     * WHAT THE ORGANIZATION ALREADY SAID THIS FIELD IS.
+     *
+     * `field_definitions` records a type and, for choice fields, the vocabulary that backs it
+     * (`person.gender` is a `select` over `person_gender`). The palette used to carry neither, so
+     * every consumer downstream had to guess — the Forms picker guessed from the field key's
+     * spelling and turned Gender into a short text box with no vocabulary at all.
+     *
+     * Optional because the platform catalog half of the palette has no `field_definitions` row; a
+     * consumer that needs a type still falls back to its own rules when these are absent.
+     */
+    canonical_field_type?: string | null;
+    canonical_option_set_key?: string | null;
 };
 
 function catalogEntryToPalette(entry: LifecycleFieldRequirementDefinition): LifecycleFieldPaletteEntry {
@@ -56,6 +69,12 @@ function catalogEntryToPalette(entry: LifecycleFieldRequirementDefinition): Life
     };
 }
 
+/** The vocabulary a choice field is backed by, when the organization named one. */
+function optionSetKeyFromConfig(config: Record<string, unknown> | null | undefined): string | null {
+    const key = (config as { option_set_key?: unknown } | null | undefined)?.option_set_key;
+    return typeof key === "string" && key.trim() ? key.trim() : null;
+}
+
 function orgRowToPalette(entity: LifecycleRequirementEntityKey, row: OrgFieldDefinitionRow): LifecycleFieldPaletteEntry {
     const rule_id = customFieldRuleId(entity, row.field_key);
     return {
@@ -67,6 +86,8 @@ function orgRowToPalette(entity: LifecycleRequirementEntityKey, row: OrgFieldDef
         runtime_enforced: false,
         form_coverage_supported: true,
         config_only: true,
+        canonical_field_type: row.field_type ?? null,
+        canonical_option_set_key: optionSetKeyFromConfig(row.config),
     };
 }
 

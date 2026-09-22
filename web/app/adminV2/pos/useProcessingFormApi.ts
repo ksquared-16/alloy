@@ -9,6 +9,7 @@ import {
 } from "@/lib/pos/processingPublicLinkMetadata";
 import { resolveProcessingPublicSlug } from "@/lib/pos/processingPublicRuntime";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
+import { normalizeFormSchemaForPersist } from "@/lib/forms/formBuilderSchema";
 import {
     getProcessingFormsWarmSnapshot,
     warmProcessingFormsCache,
@@ -243,9 +244,16 @@ export function useProcessingFormApi() {
         async (
             formId: string,
             versionId: string,
-            schema: FormSchemaV1,
+            rawSchema: FormSchemaV1,
             opts?: { branding?: ProcessingFormBranding; existingMeta?: Record<string, unknown>; formName?: string }
         ) => {
+            /*
+             * The one place a draft becomes bytes, and therefore the one place the editor's verbatim
+             * text is trimmed and given its fallbacks. Doing it per keystroke is what made a space
+             * untypeable in the question label — see `normalizeFormSchemaForPersist`. `publishForm`
+             * routes through here too, so publish gets the same treatment without a second copy.
+             */
+            const schema = normalizeFormSchemaForPersist(rawSchema);
             const res = await fetch(`/api/admin/forms/${formId}/versions/${versionId}`, {
                 method: "PATCH",
                 credentials: "same-origin",

@@ -1,5 +1,34 @@
 # Forms Studio — what an administrator can now author, and what is still engineering-only
 
+> ## CORRECTION — 2026-09-22: this document claimed HUMAN QA READY, and human QA failed
+>
+> An earlier revision of this file, and the run summary that accompanied it, reported the
+> normalization inspector as certified and ready for human QA. An administrator then opened the
+> product and could not complete the first step. **That classification was wrong, and the way it was
+> reached was wrong.**
+>
+> What the certification actually proved, and what it did not:
+>
+> | claim as filed | what was measured | what was true |
+> |---|---|---|
+> | option-set vocabulary PASS | the control renders; a scripted `option_set_key` round-trips | the selector's OPTIONS were never read. `GET /api/admin/option-sets` answers `{ option_sets: […] }`; the builder read `data`, matched nothing, and offered an empty list on **every form in the product** |
+> | canonical binding PASS | a scripted `field_source` round-trips | true, but picking `Gender` from the Alloy-field catalog produced a plain short-text box, because the catalog dropped the type and the vocabulary the organization had already declared |
+> | conditional visibility PASS | control renders; schema round-trips | true and still true — re-measured in the mounted product on 2026-09-22 |
+> | derived values PASS | control renders; schema round-trips | true and still true — re-measured in the mounted product on 2026-09-22 |
+> | "UI → save → reload → schema → runtime PASS" | a fixture form driven through `POST /versions` | the **operator's own path** was never driven. Nothing typed a label, and so nothing discovered that a space could not be typed at all |
+>
+> **The method failure, stated plainly.** The round trip was driven through the API with a schema
+> built in code. That proves the model and the persistence layer, which is worth proving — but it
+> exercises none of the authoring surface, and a control's PRESENCE in the DOM was read as its
+> being usable. Two defects lived in exactly the gap between those two things: a reducer that
+> trimmed on every keystroke, and a response envelope that was read with the wrong key. Neither is
+> visible to a test that never types and never opens a list.
+>
+> **The four states are kept apart below**, because collapsing them is what produced the false
+> return. `MODEL IMPLEMENTED` is not `MOUNTED IN PRODUCT`; neither is `PRODUCT ROUND-TRIP CERTIFIED`;
+> and none of the three is `HUMAN ACCEPTED`, which only Kelly can set.
+>
+
 The benchmark: *an administrator imports paperwork, reviews what Alloy inferred, and turns that
 imported structure into the normalized business model without engineering intervention.*
 
@@ -155,3 +184,63 @@ Who provides the answer  The family answers it  |  Alloy calculates it — <deri
 
 No raw JSON, no `option_set_key`, no `field_source` in the primary path — the existing
 *Technical reference* disclosure still shows the underlying keys for anyone who wants them.
+
+---
+
+# Capability status after the 2026-09-22 repair
+
+Four states, never collapsed. `HUMAN ACCEPTED` is Kelly's to set and nobody else's.
+
+| capability | MODEL IMPLEMENTED | MOUNTED IN PRODUCT | PRODUCT ROUND-TRIP CERTIFIED | HUMAN ACCEPTED |
+|---|---|---|---|---|
+| canonical binding (`field_source`) | yes | yes | yes — driven through the operator's own clicks | **PENDING** |
+| option-set vocabulary | yes | yes | yes — selector now lists the org's vocabularies | **PENDING** |
+| conditional visibility | yes | yes | yes | **PENDING** |
+| derived value | yes | yes | yes | **PENDING** |
+| canonical type fidelity on insert | yes | yes | yes — `Gender` inserts as a choice over `person_gender` | **PENDING** |
+| child-grain person attributes in the picker | **no** | no | n/a | **FAIL — see below** |
+| repeated person / structured address / configuration-supplied | no | no | n/a | n/a |
+
+## What the repair changed, and why each is a mechanism rather than a patch
+
+**1. The canonical type and vocabulary now survive the projection.**
+`field_definitions` records `person.gender` as a `select` over `person_gender`.
+`LifecycleFieldPaletteEntry` carried neither, so the Forms picker had nothing to reason from but the
+spelling of the field key — and no rule matches "gender", so it fell to the default text box. The
+palette entry now carries `canonical_field_type` and `canonical_option_set_key`, and the Forms
+library prefers them over its own guess. **Every** canonical field benefits; nothing about Gender is
+named anywhere.
+
+**2. An unsupported type fails closed.**
+A declared type with no Form answer control is offered as "Tracked on the record — cannot be
+captured by a form" rather than silently downgraded. A text box that claims to write a typed
+canonical field is a lie the administrator cannot see.
+
+**3. Normalization moved from the keystroke to the commit.**
+`updateField` trimmed the label on every change. A controlled input sends its whole value on every
+keystroke, so "Does " arrived, came back "Does", and the space was erased before the next character
+— **spaces were untypeable in every question label and every help-text box in the Studio**. The
+editor now holds text verbatim; `normalizeFormSchemaForPersist` applies the trim and the "Untitled"
+fallback once, in `saveDraft`, which is the single place a draft becomes bytes (publish routes
+through it too). This was never a keyboard shortcut — `defaultPrevented` was `false` at both capture
+and bubble phases in the mounted product.
+
+**4. The vocabulary list is read from the envelope the route actually returns.**
+`{ option_sets: [...] }`, not `data`. This one had no symptom an author would recognise: the fetch
+succeeded, the parse succeeded, and the list was simply empty everywhere.
+
+## The one defect NOT repaired, and why
+
+**Gender appears under PARENT / GUARDIAN and there is no Child Gender.**
+
+Measured cause: the picker infers grain from the entity a field is STORED on. `person` holds
+guardians, so `person.gender` is filed correctly. The child's own person attributes live on
+`customer_member` — which `LIFECYCLE_FIELD_ENTITY_TYPES` does not load — so **no child-grain Gender
+is offered at all**, and the single Gender in the menu reads as though it were the child's.
+
+So this is a COVERAGE gap wearing an owner bug's clothes. The mapping is now declared
+(`customer_member → child`) so the grain is right the moment that entity is carried, and a test
+holds it. Actually carrying it means adding `customer_member` to the lifecycle palette's entity
+set — which changes what the Business Process requirements engine can require, on a surface this
+slice's scope guard protects. That is a Business Process decision, not a Forms one, and it is left
+for a run that is allowed to make it.

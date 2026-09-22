@@ -37,6 +37,8 @@ export type ProcessingLibraryFieldAdd =
           entityType: string;
           fieldKey: string;
           builderType: BuilderFieldType;
+          /** The organization vocabulary this field is declared over, when it has one. */
+          optionSetKey?: string;
       };
 
 export type ProcessingLibraryFieldOffer = {
@@ -71,6 +73,19 @@ const ENTITY_GROUP: Record<LifecycleRequirementEntityKey | string, ProcessingBui
     guardian: "parent",
     enrollment: "enrollment",
     household: "household",
+    /*
+     * A CHILD IS A PERSON TOO, AND THAT IS WHY THIS MAP IS NOT ENOUGH ON ITS OWN.
+     *
+     * Grain here is inferred from the entity a field is STORED on, and `person` holds guardians —
+     * so `person.gender` is correctly filed under Parent / Guardian. The child's own person
+     * attributes live on `customer_member`, which the lifecycle palette does not load
+     * (`LIFECYCLE_FIELD_ENTITY_TYPES`), so no child-grain Gender is offered at all and the single
+     * Gender in the picker reads as though it were the child's.
+     *
+     * The mapping is declared here so the grain is right the moment that entity is carried, rather
+     * than leaving a second wrong-owner bug behind the first fix.
+     */
+    customer_member: "child",
 };
 
 /**
@@ -134,8 +149,25 @@ const KIND_TO_BUILDER_TYPE: Record<string, BuilderFieldType> = {
     phone: "short_text",
 };
 
-function builderTypeFor(entry: LifecycleFieldPaletteEntry, registry: SystemFieldRegistryEntry | null): BuilderFieldType {
+/**
+ * The Form answer type for a palette entry, or `null` when Forms cannot represent it.
+ *
+ * `null` is a real answer. A canonical field whose declared type has no Form equivalent is offered
+ * as an explicit dead end rather than quietly downgraded to a text box, because a text box that
+ * claims to write to a typed canonical field is a lie the administrator cannot see.
+ */
+function builderTypeFor(entry: LifecycleFieldPaletteEntry, registry: SystemFieldRegistryEntry | null): BuilderFieldType | null {
     if (registry) return KIND_TO_BUILDER_TYPE[registry.suggested_kind] ?? "short_text";
+    /*
+     * The organization's OWN answer, before any guess.
+     *
+     * `field_definitions.field_type` is what the Data Model says this field is. Reaching the key
+     * spelling first is how `person.gender` — declared a `select` over `person_gender` — became a
+     * short text box: no regex below matches "gender", so it fell to the default. A canonical field
+     * that Alloy already types must never be re-derived from its name.
+     */
+    const declared = entry.canonical_field_type?.trim();
+    if (declared) return KIND_TO_BUILDER_TYPE[declared] ?? null;
     const key = entry.field_key ?? "";
     if (/(^|_)(date|dob|birth)($|_)/.test(key)) return "date";
     if (/(^|_)(count|number|qty|quantity|days_per_week)($|_)/.test(key)) return "number";
@@ -189,7 +221,13 @@ function offerFromPalette(
     // mislabeled Date of birth and Location (both `form_coverage_supported: true`) and, because
     // `orgRowToPalette` sets `config_only: true` on EVERY org custom field, mislabeled every custom
     // field the tenant had defined.
-    const captureUnsupported = !entry.form_coverage_supported && !registry;
+    /*
+     * `builderType === null` is the second reason a field cannot be captured: the organization
+     * declared a type this form builder has no answer control for. Failing closed here keeps the
+     * field visible and honest ("tracked on the record") instead of inserting a text box that
+     * silently loses the field's semantics.
+     */
+    const captureUnsupported = (!entry.form_coverage_supported && !registry) || builderType === null;
 
     return {
         id: entry.rule_id,
@@ -197,7 +235,7 @@ function offerFromPalette(
         label: curated?.pickerLabel ?? entry.field_label,
         meta: captureUnsupported
             ? "Tracked on the record — cannot be captured by a form"
-            : `${BUILDER_TYPE_META[builderType]} · ${GROUP_META_LABEL[group]}`,
+            : `${BUILDER_TYPE_META[builderType!]} · ${GROUP_META_LABEL[group]}`,
         group,
         add:
             registry ?
@@ -206,7 +244,11 @@ function offerFromPalette(
                     kind: "bound",
                     entityType: entry.entity,
                     fieldKey: entry.field_key ?? entry.rule_id,
-                    builderType,
+                    builderType: builderType ?? "short_text",
+                    // Carried so the inserted question is backed by the SAME list the record is.
+                    ...(entry.canonical_option_set_key && (builderType === "select" || builderType === "multiselect")
+                        ? { optionSetKey: entry.canonical_option_set_key }
+                        : {}),
                 },
         ...(tier ? { tier } : {}),
         ...(captureUnsupported ? { captureUnsupported: true } : {}),

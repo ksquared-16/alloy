@@ -262,8 +262,23 @@ export default function ProcessingFormBuilder({
             try {
                 const res = await fetch("/api/admin/option-sets", { credentials: "include" });
                 if (!res.ok) return;
-                const body = (await res.json()) as { data?: Array<{ set_key: string; label: string; item_count?: number }> } | Array<{ set_key: string; label: string; item_count?: number }>;
-                const rows = Array.isArray(body) ? body : (body.data ?? []);
+                /*
+                 * `GET /api/admin/option-sets` answers `{ option_sets: [...] }`.
+                 *
+                 * This read looked for `data` and for a bare array, so it matched neither and
+                 * quietly resolved to an empty list — every catch swallowed, no error anywhere. The
+                 * vocabulary selector therefore offered "This form's own list" and nothing else on
+                 * every form in the product, while a question already bound to a vocabulary showed
+                 * its raw key (`person_gender`) because no option existed to give it a name.
+                 *
+                 * All three shapes are accepted now so the reader cannot be broken again by the
+                 * envelope alone.
+                 */
+                type OptionSetRow = { set_key: string; label: string; item_count?: number };
+                const body = (await res.json()) as
+                    | { option_sets?: OptionSetRow[]; data?: OptionSetRow[] }
+                    | OptionSetRow[];
+                const rows = Array.isArray(body) ? body : (body.option_sets ?? body.data ?? []);
                 if (!cancelled) setOptionSets(rows);
             } catch {
                 /* A form is still fully authorable without the vocabulary list; the selector simply
@@ -434,8 +449,19 @@ export default function ProcessingFormBuilder({
             // Bind to the canonical entity field so coverage matches it by entity_field_key —
             // an unbound custom field would never satisfy the rule it was added for.
             field_source: { entity_type: offer.add.entityType, field_key: offer.add.fieldKey },
-            ...(offer.add.builderType === "select"
-                ? { options: [{ value: "option_1", label: "Option 1" }] }
+            /*
+             * A CHOICE FIELD THE ORGANIZATION ALREADY DEFINED ARRIVES WITH ITS OWN LIST.
+             *
+             * `person.gender` is declared a choice over the `person_gender` vocabulary. Seeding it
+             * with a placeholder "Option 1" instead would hand the administrator a question that
+             * contradicts the record it writes to, and leave them to rebuild — by hand, from memory
+             * — a list Alloy is already maintaining. Only a choice field with NO declared
+             * vocabulary needs a starter option to edit.
+             */
+            ...(offer.add.builderType === "select" || offer.add.builderType === "multiselect"
+                ? offer.add.optionSetKey
+                    ? { option_set_key: offer.add.optionSetKey }
+                    : { options: [{ value: "option_1", label: "Option 1" }] }
                 : {}),
         };
         const { schema: next, fieldId } = addField(schema, spec);
