@@ -349,3 +349,169 @@ describe("each lens acquires for itself, and they do not wait on each other", ()
         expect(out.get("wl")).toBeNull();
     });
 });
+
+/**
+ * THE SPECULATIVE OPPORTUNITY READ CHANGES ACQUISITION TIMING, NOT SEMANTICS.
+ *
+ * The reference resolution now issues `opportunities WHERE id IN (context ids)` concurrently with
+ * the OCM resolve, then a bounded backstop for anything OCM resolved that the speculative read did
+ * not already hold. That creates a way for an opportunity to be in the map that the old shape could
+ * not produce, so each of these asserts the MEMBER SET — never a count — for a case where the two
+ * paths could disagree.
+ *
+ * The invariant under test: `resolveContextOpportunity` asks `opportunityIdByContextId.get(ctx) ?? ctx`,
+ * so where OCM resolves a context, the OCM answer is authoritative and the speculative entry is
+ * never consulted. Existence of an opportunity at a context id can therefore never imply membership.
+ */
+describe("the speculative opportunity read is timing, not authority", () => {
+    it("S1. a raw context id that IS an opportunity id resolves, as before", async () => {
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "o1", null)],
+                opportunities: [opp("o1", { stage_key: "lead" })],
+                customer_members: [cm("c1")],
+            },
+            [lens("leadlens", ["lead"])],
+        );
+        expect(r.sets[0]).toEqual(["p1"]);
+    });
+
+    it("S2. a raw context id that is an OCM id resolves THROUGH the OCM mapping", async () => {
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "ocm-1", null)],
+                opportunity_customer_members: [{ id: "ocm-1", org_id: ORG, opportunity_id: "o1" }],
+                opportunities: [opp("o1", { stage_key: "lead" })],
+                customer_members: [cm("c1")],
+            },
+            [lens("leadlens", ["lead"])],
+        );
+        expect(r.sets[0]).toEqual(["p1"]);
+    });
+
+    it("S3. when BOTH paths resolve the same opportunity the answer is unchanged", async () => {
+        // `o1` is both a real opportunity id AND an OCM id pointing at itself.
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "o1", null)],
+                opportunity_customer_members: [{ id: "o1", org_id: ORG, opportunity_id: "o1" }],
+                opportunities: [opp("o1", { stage_key: "lead" })],
+                customer_members: [cm("c1")],
+            },
+            [lens("leadlens", ["lead"])],
+        );
+        expect(r.sets[0]).toEqual(["p1"]);
+    });
+
+    it("S4. when OCM resolves a DIFFERENT opportunity, OCM wins over the speculative row", async () => {
+        /*
+         * THE CASE THE SPECULATIVE READ COULD HAVE BROKEN. The context id exists as an opportunity
+         * at stage `lead`, and OCM maps it to a DIFFERENT opportunity at `waitlist`. The lens asks
+         * for `lead`. If the speculative row were treated as authority the child would be admitted
+         * to the wrong lane; the OCM answer must win, so the lead lens selects nothing and the
+         * waitlist lens selects the child.
+         */
+        const data = {
+            process_instances: [pi("p1", "c1", "ctx-1", null)],
+            opportunity_customer_members: [{ id: "ctx-1", org_id: ORG, opportunity_id: "o-wait" }],
+            opportunities: [
+                opp("ctx-1", { stage_key: "lead" }),
+                opp("o-wait", { stage_key: "waitlist" }),
+            ],
+            customer_members: [cm("c1")],
+        };
+        const r = await lensSets(data, [lens("leadlens", ["lead"]), lens("wl", ["waitlist"])]);
+        expect(r.sets[0]).toEqual([]);
+        expect(r.sets[1]).toEqual(["p1"]);
+    });
+
+    it("S5. the raw lookup misses and the BACKSTOP supplies the opportunity", async () => {
+        // `ocm-1` is not an opportunity id, so the speculative read returns nothing for it and the
+        // backstop must fetch `o1`. Without the backstop this lens would select nobody.
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "ocm-1", null)],
+                opportunity_customer_members: [{ id: "ocm-1", org_id: ORG, opportunity_id: "o1" }],
+                opportunities: [opp("o1", { stage_key: "lead" })],
+                customer_members: [cm("c1")],
+            },
+            [lens("leadlens", ["lead"])],
+        );
+        expect(r.sets[0]).toEqual(["p1"]);
+    });
+
+    it("S6. no OCM row at all leaves the raw resolution untouched", async () => {
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "o1", null), pi("p2", "c2", "o2", null)],
+                opportunity_customer_members: [],
+                opportunities: [opp("o1", { stage_key: "lead" }), opp("o2", { stage_key: "waitlist" })],
+                customer_members: [cm("c1"), cm("c2")],
+            },
+            [lens("leadlens", ["lead"])],
+        );
+        expect(r.sets[0]).toEqual(["p1"]);
+    });
+
+    it("S7. several OCM refs each resolve to their own opportunity", async () => {
+        const r = await lensSets(
+            {
+                process_instances: [
+                    pi("p1", "c1", "ocm-1", null),
+                    pi("p2", "c2", "ocm-2", null),
+                    pi("p3", "c3", "ocm-3", null),
+                ],
+                opportunity_customer_members: [
+                    { id: "ocm-1", org_id: ORG, opportunity_id: "o1" },
+                    { id: "ocm-2", org_id: ORG, opportunity_id: "o2" },
+                    { id: "ocm-3", org_id: ORG, opportunity_id: "o1" },
+                ],
+                opportunities: [opp("o1", { stage_key: "lead" }), opp("o2", { stage_key: "waitlist" })],
+                customer_members: [cm("c1"), cm("c2"), cm("c3")],
+            },
+            [lens("leadlens", ["lead"]), lens("wl", ["waitlist"])],
+        );
+        expect(r.sets[0]).toEqual(["p1", "p3"]);
+        expect(r.sets[1]).toEqual(["p2"]);
+    });
+
+    it("S7b. the speculative read is ORG-SCOPED — a foreign opportunity cannot admit a child", async () => {
+        /*
+         * THE AUTHORIZATION GAP THIS CASE EXISTS FOR. The speculative lookup is a NEW read, and a
+         * new read is a new place for org scoping to be forgotten. `o-other` belongs to another
+         * org: with the org filter the speculative read returns nothing, the context cannot
+         * resolve, and the row is dropped. Without it the read would return the foreign row and
+         * admit a child on another tenant's opportunity.
+         *
+         * A plant that removed `.eq("org_id", ...)` from that read passed every other case in this
+         * file, because every other fixture lives in one org.
+         */
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "o-other", null), pi("p2", "c2", "o1", null)],
+                opportunities: [
+                    opp("o-other", { org_id: "org-ELSEWHERE", stage_key: "lead" }),
+                    opp("o1", { stage_key: "lead" }),
+                ],
+                customer_members: [cm("c1"), cm("c2")],
+            },
+            [lens("leadlens", ["lead"]), lens("all")],
+        );
+        expect(r.sets[0]).toEqual(["p2"]);
+        expect(r.sets[1]).toEqual(["p2"]);
+    });
+
+    it("S8. an unresolvable context is still dropped, by both paths", async () => {
+        const r = await lensSets(
+            {
+                process_instances: [pi("p1", "c1", "nowhere", null)],
+                opportunity_customer_members: [],
+                opportunities: [opp("o1", { stage_key: "lead" })],
+                customer_members: [cm("c1")],
+            },
+            [lens("leadlens", ["lead"]), lens("all")],
+        );
+        expect(r.sets[0]).toEqual([]);
+        expect(r.sets[1]).toEqual([]);
+    });
+});

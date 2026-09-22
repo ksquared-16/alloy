@@ -122,6 +122,10 @@ export type ChildGrainTrace = {
     oppRows: number;
     cmRows: number;
     catRows: number;
+    /** The bounded backstop: 0ms and 0 ids whenever the speculative read already held everything. */
+    backstopMs: number;
+    backstopIds: number;
+    backstopRows: number;
 };
 
 export function emptyChildGrainTrace(): ChildGrainTrace {
@@ -140,6 +144,9 @@ export function emptyChildGrainTrace(): ChildGrainTrace {
         oppRows: 0,
         cmRows: 0,
         catRows: 0,
+        backstopMs: 0,
+        backstopIds: 0,
+        backstopRows: 0,
     };
 }
 
@@ -211,46 +218,96 @@ async function resolveTrackRowRefs(params: {
     const cmById = new Map<string, Record<string, unknown>>();
     const catById = new Map<string, { key?: string | null; label?: string | null }>();
 
-    const contextChain = (async () => {
+    /*
+     * THE OCM -> OPPORTUNITY CHAIN IS A LATENCY CHAIN, NOT A SEMANTIC ONE.
+     *
+     * Measured on deployed 486ea3eb9 over 23 cold samples, the binding child lens spends
+     * PI 217ms -> ocm 170ms -> opportunities 153ms, and this leg is round-trip bound: it sends
+     * ~308 context ids to `opportunity_customer_members` and gets ONE row back, then sends the
+     * resolved ids to `opportunities` and gets three. Three reads of 329, 1 and 3 rows all cost
+     * 150-220ms, so the cost is the trip, not the payload.
+     *
+     * Only ONE of those ~308 context ids is actually an OCM id. The rest are already opportunity
+     * ids, and for those the second read could have been issued at the same time as the first —
+     * it was waiting on a mapping that, for 307 of 308 ids, is the identity.
+     *
+     * So the raw lookup is issued SPECULATIVELY, concurrently with the OCM resolve, and a bounded
+     * BACKSTOP read afterwards fetches only what OCM resolved to something not already held.
+     *
+     * WHAT THE SPECULATIVE READ IS NOT ALLOWED TO DO. It must not become a second authority on
+     * which opportunity a context has. It only POPULATES the map; `resolveContextOpportunity`
+     * still asks `opportunityIdByContextId.get(context_id) ?? context_id`, so where OCM resolves a
+     * context the OCM answer is the one looked up and the speculative entry is never consulted.
+     * An opportunity existing at a context id therefore cannot imply membership, and a raw lookup
+     * that misses cannot suppress an OCM-derived opportunity — the backstop closes exactly that
+     * case. Acquisition timing changes; the answer does not.
+     */
+    const ocmRead = (async () => {
+        if (!contextIds.length) return;
         const tOcm = Date.now();
-        if (contextIds.length) {
-            const { data, error } = await withDbTiming("member.ocm_resolve", { n: contextIds.length }, async () =>
-                params.supabase
-                    .from("opportunity_customer_members")
-                    .select("id, opportunity_id")
-                    .eq("org_id", params.orgId)
-                    .in("id", contextIds));
-            if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
-            if (trace) {
-                trace.ocmMs = Date.now() - tOcm;
-                trace.ocmRows = (data ?? []).length;
-            }
-            for (const r of data ?? []) {
-                const row = r as { id: string; opportunity_id: string | null };
-                // A context-free participation has no Opportunity. That is an ordinary answer, and it
-                // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
-                if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
-            }
+        const { data, error } = await withDbTiming("member.ocm_resolve", { n: contextIds.length }, async () =>
+            params.supabase
+                .from("opportunity_customer_members")
+                .select("id, opportunity_id")
+                .eq("org_id", params.orgId)
+                .in("id", contextIds));
+        if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
+        if (trace) {
+            trace.ocmMs = Date.now() - tOcm;
+            trace.ocmRows = (data ?? []).length;
         }
-        const resolvedOpportunityIds = [
-            ...new Set(contextIds.map((id) => opportunityIdByContextId.get(id) ?? id)),
-        ];
+        for (const r of data ?? []) {
+            const row = r as { id: string; opportunity_id: string | null };
+            // A context-free participation has no Opportunity. That is an ordinary answer, and it
+            // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
+            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+        }
+    })();
 
+    const speculativeOppRead = (async () => {
+        if (!contextIds.length) return;
         const tOpp = Date.now();
-        if (resolvedOpportunityIds.length) {
-            const { data, error } = await withDbTiming("member.opportunities", { n: resolvedOpportunityIds.length }, async () =>
-                params.supabase
-                    .from("opportunities")
-                    .select(OPP_SELECT)
-                    .eq("org_id", params.orgId)
-                    .in("id", resolvedOpportunityIds));
-            if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
-            if (trace) {
-                trace.oppMs = Date.now() - tOpp;
-                trace.oppRows = (data ?? []).length;
-            }
-            for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+        const { data, error } = await withDbTiming("member.opportunities_speculative", { n: contextIds.length }, async () =>
+            params.supabase
+                .from("opportunities")
+                .select(OPP_SELECT)
+                .eq("org_id", params.orgId)
+                .in("id", contextIds));
+        if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
+        if (trace) {
+            trace.oppMs = Date.now() - tOpp;
+            trace.oppRows = (data ?? []).length;
         }
+        for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
+    })();
+
+    const contextChain = (async () => {
+        await Promise.all([ocmRead, speculativeOppRead]);
+        /*
+         * THE BACKSTOP. Every opportunity OCM resolved that the speculative read did not already
+         * fetch — normally none, because a context id that is an OCM id is rare. One bounded read,
+         * and only when there is something to fetch.
+         */
+        const missing = [
+            ...new Set(
+                [...opportunityIdByContextId.values()].filter((id) => id && !oppById.has(id)),
+            ),
+        ];
+        if (!missing.length) return;
+        const tBack = Date.now();
+        const { data, error } = await withDbTiming("member.opportunities_backstop", { n: missing.length }, async () =>
+            params.supabase
+                .from("opportunities")
+                .select(OPP_SELECT)
+                .eq("org_id", params.orgId)
+                .in("id", missing));
+        if (error) throw new Error(`process-instance opportunity backstop failed: ${error.message}`);
+        if (trace) {
+            trace.backstopMs = Date.now() - tBack;
+            trace.backstopIds = missing.length;
+            trace.backstopRows = (data ?? []).length;
+        }
+        for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
     })();
 
     const cmRead = (async () => {
