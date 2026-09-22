@@ -284,7 +284,7 @@ export default function RoomCapacitySection({
                             {kind === "discard" ?
                                 <div className={CONFIG_OBJECT_CELL} data-testid="locations-room-capacity-discard-preview">
                                     <p className="text-sm font-semibold text-alloy-midnight">
-                                        {legacy} seats will stop counting as this room&rsquo;s capacity.
+                                        {legacy} seats will stop counting as this space&rsquo;s capacity.
                                     </p>
                                     <p className="config-typo-sublabel mt-0.5">
                                         The number is kept as a record of what was there. Set capacity on the space itself
@@ -338,7 +338,7 @@ export default function RoomCapacitySection({
                     className="config-typo-sublabel text-alloy-midnight/45 hover:text-alloy-pine"
                     data-testid="locations-room-capacity-manage"
                 >
-                    Advanced rules →
+                    Advanced rules and history →
                 </Link>
             :   null}
         </ConfigEditorSection>

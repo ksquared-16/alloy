@@ -134,8 +134,8 @@ describe("1-4. Type maps operator words to canonical roles", () => {
     it("never shows database vocabulary to the operator", async () => {
         await renderPanel();
         const text = container!.textContent ?? "";
-        expect(text).toContain("Classroom");
-        expect(text).toContain("Physical space");
+        expect(text).toContain("Operational");
+        expect(text).toContain("Physical");
         expect(text).not.toContain("Shared space");
         expect(text).not.toContain("unit_role");
         expect(text).not.toContain("operational_group");

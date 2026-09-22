@@ -210,7 +210,7 @@ describe("1-2. a historical NULL-role room edits as a Classroom", () => {
         // vocabulary because no behavioral branch distinguished it from a
         // physical space, and "Physical room" became "Physical space" so the
         // word can honestly cover a playground.
-        expect(shown).toEqual(["Classroom", "Physical space"]);
+        expect(shown).toEqual(["Operational", "Physical"]);
         expect(need("locations-room-type").textContent).not.toContain("operational_group");
     });
 
@@ -324,8 +324,8 @@ describe("3-8. adopting the historical room into a physical room", () => {
         await setValue("locations-room-inside", "room1");
         await save();
         const t = presentRoomTopology(rowOf("toddler"), rowsOf());
-        expect(t.subtitle).toBe("Classroom · Room 1 · North Campus");
-        expect(t.typeLabel).toBe("Classroom");
+        expect(t.subtitle).toBe("Operational · Room 1 · North Campus");
+        expect(t.typeLabel).toBe("Operational");
         expect(t.containingSpaceLabel).toBe("Room 1");
         expect(t.siteLabel).toBe("North Campus");
     });

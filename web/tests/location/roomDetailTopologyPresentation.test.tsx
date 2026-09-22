@@ -77,21 +77,21 @@ afterEach(() => {
 describe("9-11. detail shows Type, Site and — when it applies — Inside", () => {
     it("a nested Classroom shows all three", async () => {
         await renderDetail(TOD1);
-        expect(metricValue("type")).toBe("Classroom");
+        expect(metricValue("type")).toBe("Operational");
         expect(metricValue("site")).toBe("North Campus");
         expect(metricValue("inside")).toBe("Room 1");
     });
 
     it("a direct-site Classroom omits Inside rather than showing an em dash", async () => {
         await renderDetail(INFANT);
-        expect(metricValue("type")).toBe("Classroom");
+        expect(metricValue("type")).toBe("Operational");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });
 
     it("a Physical room shows Physical room and no Inside", async () => {
         await renderDetail(ROOM1);
-        expect(metricValue("type")).toBe("Physical space");
+        expect(metricValue("type")).toBe("Physical");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });
@@ -100,7 +100,7 @@ describe("9-11. detail shows Type, Site and — when it applies — Inside", () 
         // The compatibility fold: the row keeps its stored role, and the operator
         // is shown the word the product still uses.
         await renderDetail(PLAY);
-        expect(metricValue("type")).toBe("Physical space");
+        expect(metricValue("type")).toBe("Physical");
         expect(metricValue("site")).toBe("North Campus");
         expect(metric("inside")).toBeNull();
     });
@@ -216,10 +216,10 @@ describe("12, 16. topology is read-only here", () => {
 // 10 — the rail inside a site.
 // ---------------------------------------------------------------------------
 describe("10. the room rail leads with Type and containment", () => {
-    it("shows Classroom · Room 1 for a nested room, without repeating the campus", async () => {
+    it("shows Operational · Room 1 for a nested space, without repeating the campus", async () => {
         await renderDetail(TOD1);
         const text = container!.textContent ?? "";
-        expect(text).toContain("Classroom · Room 1");
+        expect(text).toContain("Operational · Room 1");
         // The campus is the page header, not every row.
         expect(text.match(/North Campus/g)!.length).toBeLessThanOrEqual(2);
     });
@@ -228,8 +228,8 @@ describe("10. the room rail leads with Type and containment", () => {
         await renderDetail(INFANT);
         const text = container!.textContent ?? "";
         // One rail row per room, each labelled by what it actually is.
-        expect(text).toContain("Physical space");
-        expect(text).toContain("Classroom");
+        expect(text).toContain("Physical");
+        expect(text).toContain("Operational");
         // Two types in the rail, not three — the playground reads as what it is.
         expect(text).not.toContain("Shared space");
     });

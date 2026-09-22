@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+    LOCATION_WORKSPACE_ADVANCED_TABS,
     LOCATION_WORKSPACE_TABS,
     locationWorkspaceHref,
 } from "@/lib/locations/locationWorkspaceModel";
@@ -40,11 +41,28 @@ const CONCERN = "operational-rules";
 // ---------------------------------------------------------------------------
 // 1-2 — reachable, and actually mounted.
 // ---------------------------------------------------------------------------
-describe("1-2. Operational Rules is a first-class Locations concern", () => {
-    it("1. appears in the canonical tab registry with an operator label", () => {
-        const tab = LOCATION_WORKSPACE_TABS.find((t) => t.key === CONCERN);
-        expect(tab).toBeDefined();
-        expect(tab!.label).toBe("Operational Rules");
+describe("1-2. Operational Rules is reachable, but no longer a primary destination", () => {
+    it("1. is ABSENT from the primary Site tabs", () => {
+        /*
+         * INVERTED DELIBERATELY. Ordinary operating facts now belong to the
+         * space they describe — capacity and staffing ratio are authored on the
+         * object — so an operator should never have to decide whether a fact
+         * lives under Spaces or under a rules page.
+         *
+         * Measured before removing it: of the four families this page hosts,
+         * capacity and ratio had moved to the object, and operating windows and
+         * schedule rules had ZERO rows in the entire deployed database.
+         */
+        // Widened deliberately: the key has left the primary union, so a narrow
+        // comparison is a type error. The runtime guard is what must survive.
+        const primary = LOCATION_WORKSPACE_TABS as readonly { key: string }[];
+        expect(primary.some((t) => t.key === CONCERN)).toBe(false);
+    });
+
+    it("1. is still a declared advanced destination, so the page is demoted and not deleted", () => {
+        const advanced = LOCATION_WORKSPACE_ADVANCED_TABS.find((t) => t.key === CONCERN);
+        expect(advanced).toBeDefined();
+        expect(advanced!.label).toBe("Operational Rules");
     });
 
     it("1. is a registered concern, not a page-local special case", () => {

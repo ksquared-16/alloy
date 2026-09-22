@@ -14,6 +14,12 @@ import {
     parseJsonObject,
     resolveOperationalEnrollmentTodayYmd,
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
+import { setObjectRatio } from "@/lib/childcareOperational/config/objectRatioService";
+import {
+    listRatioRules,
+    listRatioRuleTiers,
+} from "@/lib/childcareOperational/config/childcareConfigRuleService";
+import { validateRatioTiers, type RatioTierValue } from "@/lib/locations/objectRatio";
 
 /**
  * Versioned authoring for childcare ratio rules + tiers (Operational
@@ -104,6 +110,51 @@ export async function POST(request: NextRequest) {
                 orgId: ctx.orgId,
                 id: String(body.id ?? ""),
                 todayYmd,
+                actorUserId: ctx.userId,
+            });
+            return NextResponse.json(result, { status: 200 });
+        }
+
+        /*
+         * ORDINARY STAFFING RATIO, AUTHORED ON THE OPERATIONAL SPACE.
+         *
+         * The operator sends tiers in their own grammar — one staff for up to
+         * five children is `{ requiredStaff: 1, maxChildren: 5 }` — and a pure
+         * planner decides whether that is a create, a new version, a same-day
+         * replacement or a retirement. A doorway onto the same authoring
+         * service, never a second ratio authority.
+         */
+        if (action === "set_object_ratio") {
+            const roomLocationId = String(body.room_location_id ?? "").trim();
+            if (!roomLocationId) {
+                return NextResponse.json(
+                    { error: "room_location_id is required", code: "invalid_input" },
+                    { status: 400 },
+                );
+            }
+            const rawTiers = Array.isArray(body.tiers) ? body.tiers : [];
+            const parsed: RatioTierValue[] = rawTiers.map((t) => {
+                const tier = (t ?? {}) as Record<string, unknown>;
+                return {
+                    requiredStaff: Number(tier.requiredStaff ?? tier.required_staff),
+                    maxChildren: Number(tier.maxChildren ?? tier.max_children),
+                };
+            });
+            const check = validateRatioTiers(parsed);
+            if (!check.ok) {
+                return NextResponse.json({ error: check.message, code: "invalid_input" }, { status: 400 });
+            }
+            const [rules, tierRows] = await Promise.all([
+                listRatioRules(supabase, ctx.orgId),
+                listRatioRuleTiers(supabase, ctx.orgId),
+            ]);
+            const result = await setObjectRatio(supabase, {
+                orgId: ctx.orgId,
+                roomLocationId,
+                tiers: check.tiers,
+                todayYmd,
+                rules,
+                tierRows,
                 actorUserId: ctx.userId,
             });
             return NextResponse.json(result, { status: 200 });
