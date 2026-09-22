@@ -1,0 +1,60 @@
+{
+  "trusted_host_action_id": "tha_03eb689f8c6127",
+  "query_hash": "8cfa6f8b3a8ad16679c22e9f54b290dff1a12383bd97365d6bf87e5d37c09c70",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:30:15.777Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_03eb689f8c6127",
+    "query_hash": "8cfa6f8b3a8ad16679c22e9f54b290dff1a12383bd97365d6bf87e5d37c09c70",
+    "authorization_id": "grnt_24549283d6484279",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:30:17.603Z",
+    "question_ids": [
+      "coverage_qa_actor_scope"
+    ],
+    "questions": {
+      "coverage_qa_actor_scope": {
+        "question_id": "coverage_qa_actor_scope",
+        "row_count": null,
+        "rows": [
+          {
+            "actor_roles": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "role": "admin"
+              }
+            ],
+            "actor_site_access_columns": [
+              "created_at",
+              "org_id",
+              "role",
+              "user_id"
+            ],
+            "orgs_with_active_employment": 1,
+            "sites_in_org": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2",
+              "ae34d822-60ef-4f82-81eb-8f3513059627",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+            ],
+            "room_b1_site": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "room_a1_site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "employment_z_window": {
+              "start": "2024-06-16",
+              "end": "2026-09-20",
+              "status": "ended"
+            },
+            "observed_at": "2026-09-22 01:30:17.518572+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

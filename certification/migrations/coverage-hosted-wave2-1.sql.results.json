@@ -1,0 +1,79 @@
+{
+  "trusted_host_action_id": "tha_abc54ac02b5bfc",
+  "query_hash": "57980f2f1ffce0eddf9bd901ba73c61cded4c85c43db1599abae4a6afa04b632",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:34:15.575Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_abc54ac02b5bfc",
+    "query_hash": "57980f2f1ffce0eddf9bd901ba73c61cded4c85c43db1599abae4a6afa04b632",
+    "authorization_id": "grnt_ab71c563ece94039",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:34:17.017Z",
+    "question_ids": [
+      "coverage_wave2_after_create"
+    ],
+    "questions": {
+      "coverage_wave2_after_create": {
+        "question_id": "coverage_wave2_after_create",
+        "row_count": null,
+        "rows": [
+          {
+            "step": "create_adjacency_overlap_refusal",
+            "rows_on_date": [
+              {
+                "id": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8",
+                "start": "08:00:00",
+                "end": "10:00:00",
+                "room": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "wave2_authored",
+                "cancel_reason": null,
+                "created_at": "2026-09-22 01:33:41.073814+00"
+              },
+              {
+                "id": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+                "employment": "14a42234-82cf-4b3e-87d4-b43175e9b06c",
+                "state": "active",
+                "transition": null,
+                "supersedes": null,
+                "root": "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+                "start": "10:00:00",
+                "end": "12:00:00",
+                "room": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "reason": "wave2_adjacent",
+                "cancel_reason": null,
+                "created_at": "2026-09-22 01:33:41.730285+00"
+              }
+            ],
+            "effective_by_employment": [
+              "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+              "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8"
+            ],
+            "effective_by_place": [
+              "b62206f4-999a-4f5a-8c40-60b5397b8f31",
+              "c66ecca3-c115-4e40-9ba2-f351a9bdd3f8"
+            ],
+            "rows_on_date_count": 2,
+            "effective_anywhere": 2,
+            "total_rows": 9,
+            "observed_at": "2026-09-22 01:34:16.957266+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
