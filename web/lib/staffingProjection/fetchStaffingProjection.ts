@@ -100,11 +100,26 @@ export async function fetchStaffingProjection(
     const { orgId, siteLocationId, dateStart, dateEnd } = input;
     const dates = enumerateDates(dateStart, dateEnd);
 
-    const timeZone = await fetchOrgTimeZoneIana(supabase, orgId);
+    /*
+     * ── WHAT WAITS FOR WHAT ──
+     *
+     * Read as one chain this cost a Day view 2.7 seconds, and almost none of it
+     * was work: the timezone waited for nothing, the supply read waited for the
+     * expectation loader it shares no input with, and three more reads waited
+     * inside the day loop, once per day.
+     *
+     * The dependencies are only these. Assignment hours need the assignment ids,
+     * which come from the expectations and the supply read. Availability needs the
+     * employment ids, which come from the supply read. Everything else is
+     * independent and now says so.
+     */
+    const [timeZone, loaded, supply] = await Promise.all([
+        fetchOrgTimeZoneIana(supabase, orgId),
+        loadOperationalExpectationInputs(supabase, { orgId, siteLocationId }),
+        buildStaffSupply(supabase, { orgId, siteLocationId, dateStart, dateEnd }),
+    ]);
     const localHhmmOf = (iso: string): string => formatInTimeZone(new Date(iso), timeZone, "HH:mm");
 
-    // Expected children, and the ratio model, from the one expectation loader.
-    const loaded = await loadOperationalExpectationInputs(supabase, { orgId, siteLocationId });
     const expected = expandExpectedAttendance({
         dateStart,
         dateEnd,
@@ -121,19 +136,51 @@ export async function fetchStaffingProjection(
         ageGroupByProgramCategoryId: loaded.ageGroupByProgramCategoryId,
     });
 
-    // Baseline staff: the supply authority answers WHO, this module asks WHEN.
-    const supply = await buildStaffSupply(supabase, { orgId, siteLocationId, dateStart, dateEnd });
-
     const childAssignmentIds = [...new Set(expected.map((e) => e.assignmentId))];
     const staffAssignmentIds = [...new Set(supply.members.map((m) => m.assignmentId))];
-    const assignmentTimes = await resolveAssignmentTimes(supabase, {
-        orgId,
-        assignmentIds: [...childAssignmentIds, ...staffAssignmentIds],
-        patternWeekdaysByAssignment: new Map(),
-    });
-
     const employmentIds = [...new Set(supply.members.map((m) => m.employmentId).filter((v): v is string => Boolean(v)))];
-    const availability = await fetchAvailabilityBatch(supabase, { orgId, employmentIds, dates });
+
+    /*
+     * The day-scoped reads, hoisted out of the day loop and asked once for the
+     * whole window. Coverage and Attendance already accepted a range and were
+     * being called a day at a time; Presence answers one date, so it is asked for
+     * every date at once rather than one after another — still through the
+     * function that owns the read, bounded by the route's 31-day ceiling.
+     */
+    const [assignmentTimes, availability, coverageAll, attendanceAll, presenceByDate] = await Promise.all([
+        resolveAssignmentTimes(supabase, {
+            orgId,
+            assignmentIds: [...childAssignmentIds, ...staffAssignmentIds],
+            patternWeekdaysByAssignment: new Map(),
+        }),
+        fetchAvailabilityBatch(supabase, { orgId, employmentIds, dates }),
+        effectiveCoverageForSite(supabase, {
+            orgId,
+            siteLocationId,
+            dateFrom: dateStart,
+            dateTo: dateEnd,
+            roomLocationId: null,
+        }),
+        listAttendanceEvents(supabase, orgId, {
+            siteLocationId,
+            serviceDateStart: dateStart,
+            serviceDateEnd: dateEnd,
+        }),
+        Promise.all(
+            dates.map(async (d) =>
+                [d, await listStaffPresenceForSiteDate(supabase, orgId, siteLocationId, d)] as const
+            )
+        ).then((entries) => new Map(entries)),
+    ]);
+
+    const coverageByDate = new Map<string, typeof coverageAll>();
+    for (const c of coverageAll) {
+        coverageByDate.set(c.serviceDate, [...(coverageByDate.get(c.serviceDate) ?? []), c]);
+    }
+    const attendanceByDate = new Map<string, typeof attendanceAll>();
+    for (const e of attendanceAll) {
+        attendanceByDate.set(e.service_date, [...(attendanceByDate.get(e.service_date) ?? []), e]);
+    }
 
     const roomNameById = new Map<string, string | null>(
         supply.members
@@ -173,13 +220,7 @@ export async function fetchStaffingProjection(
             }
         }
 
-        const coverage = await effectiveCoverageForSite(supabase, {
-            orgId,
-            siteLocationId,
-            dateFrom: date,
-            dateTo: date,
-            roomLocationId: null,
-        });
+        const coverage = coverageByDate.get(date) ?? [];
         const coverageByEmployment = new Map<
             string,
             { coverageId: string; roomLocationId: string | null; interval: TimeInterval }[]
@@ -192,9 +233,7 @@ export async function fetchStaffingProjection(
             coverageByEmployment.set(c.employmentId, list);
         }
 
-        const presenceRows = effectiveStaffPresenceEvents(
-            await listStaffPresenceForSiteDate(supabase, orgId, siteLocationId, date)
-        );
+        const presenceRows = effectiveStaffPresenceEvents(presenceByDate.get(date) ?? []);
         const presenceObservations: LocalObservation[] = presenceRows
             .map((e): LocalObservation | null => {
                 const at = localHhmmOf(e.event_at);
@@ -211,13 +250,7 @@ export async function fetchStaffingProjection(
             input.openObservationsEndAt ?? null
         );
 
-        const attendanceRows = effectiveAttendanceEvents(
-            await listAttendanceEvents(supabase, orgId, {
-                siteLocationId,
-                serviceDateStart: date,
-                serviceDateEnd: date,
-            })
-        );
+        const attendanceRows = effectiveAttendanceEvents(attendanceByDate.get(date) ?? []);
         const attendanceObservations: LocalObservation[] = attendanceRows
             .map((e): LocalObservation | null => {
                 if (e.event_kind === "absence") return null;
