@@ -119,16 +119,26 @@ describe("the operator surface cannot claim what is not true", () => {
 });
 
 describe("activation stays a deliberate act", () => {
-    it("the schedule is provisioned by nothing yet", () => {
+    it("the schedule is provisioned only by the canonical activation authority", () => {
         /*
-         * Provisioning IS activation. A migration, a startup hook or a surface calling this would
-         * switch automatic billing on for every tenant the moment the candidate was promoted,
-         * which is the opposite of returning READY and stopping for authorization.
+         * Provisioning IS activation, so exactly ONE caller is allowed: the authenticated
+         * activation route, gated on fin.write. A migration or a startup hook calling this would
+         * switch automatic billing on for every tenant the moment a candidate was promoted, which
+         * is the collapse of "ship the capability" into "start billing" that keeping the handler
+         * and the schedule separate exists to prevent.
          */
         const callers = sourceFiles().filter(
             (p) => !p.endsWith("periodicBillingSchedule.ts") && readFileSync(p, "utf8").includes("ensurePeriodicBillingSchedule"),
         ).map((p) => p.replace(`${process.cwd()}/`, ""));
-        expect(callers, `activation must not be wired yet — found ${JSON.stringify(callers)}`).toEqual([]);
+        expect(callers, `only the activation route may provision — found ${JSON.stringify(callers)}`)
+            .toEqual(["app/api/admin/financials/periodic-billing-activation/route.ts"]);
+    });
+
+    it("the activation route gates on the same permission that generates tuition", () => {
+        const route = statements(code("app/api/admin/financials/periodic-billing-activation/route.ts"));
+        expect(route).toContain("assertFinancialsWriteAllowed");
+        // A domain answer, not a scheduler administration surface.
+        expect(route).not.toMatch(/lease|claim_token|occurrence|worker/i);
     });
 
     it("the schedule carries no billing cadence", () => {
