@@ -5333,6 +5333,14 @@
         "helper": "assertFinancialsReadAllowed",
         "reason": "Whether recurring tuition is billed automatically for this organization, read from this tenant's own scheduled-work row rather than from whether the handler shipped. A Financials read: it exposes no lease, occurrence or worker, and writes nothing."
       }
+    },
+    "app/api/admin/financials/periodic-billing-activation/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed",
+        "reason": "Turns automatic Periodic Billing on for this organization by provisioning its one scheduled-work row. Provisioning is activation, so it is gated on fin.write \u2014 the same permission generating tuition requires, because switching on something that generates tuition is not a lesser act."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {

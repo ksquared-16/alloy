@@ -47,6 +47,10 @@ import {
     type ProrationMethod,
     type RefusalReason,
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
+import {
+    readTuitionChargeConvergence,
+    tuitionConvergenceKey,
+} from "@/lib/financials/tuitionGeneration/tuitionChargeConvergence";
 
 export type OutstandingPeriod = {
     periodKey: string;
@@ -76,11 +80,6 @@ export type OutstandingBillingPeriodsResult = {
     todayYmd: string;
     assignments: OutstandingAssignment[];
 };
-
-/** A tuition charge on this agreement for this service date — draft or posted. */
-function chargeIndexKey(agreementId: string, serviceDate: string): string {
-    return `${agreementId}::${serviceDate}`;
-}
 
 export async function readOutstandingBillingPeriods(
     supabase: SupabaseClient,
@@ -113,21 +112,16 @@ export async function readOutstandingBillingPeriods(
         ? ((prorationPolicy.policy.value as { method?: string }).method ?? "none")
         : "none") as ProrationMethod;
 
-    /* Every tuition charge in the org, once. */
-    const agreementIds = [...new Set(terms.map((t) => t.enrollmentAgreementId).filter((v): v is string => Boolean(v)))];
-    const charged = new Set<string>();
-    if (agreementIds.length > 0) {
-        const { data } = await supabase
-            .from("charges")
-            .select("billable_source_id, service_date")
-            .eq("org_id", orgId)
-            .eq("billable_source_type", "enrollment_agreement")
-            .eq("charge_category", "tuition")
-            .in("billable_source_id", agreementIds);
-        for (const row of ((data ?? []) as Array<{ billable_source_id: string; service_date: string }>)) {
-            charged.add(chargeIndexKey(row.billable_source_id, row.service_date));
-        }
-    }
+    /*
+     * Every tuition charge in the org, once, from the SHARED convergence reader. This used to be a
+     * private copy of the same query; the copy was harmless only for as long as the two agreed,
+     * and the preview proved what happens when two readings of "already billed" drift apart.
+     */
+    const convergence = await readTuitionChargeConvergence(
+        supabase,
+        orgId,
+        terms.map((t) => t.enrollmentAgreementId).filter((v): v is string => Boolean(v)),
+    );
 
     const assignments: OutstandingAssignment[] = [];
 
@@ -210,7 +204,7 @@ export async function readOutstandingBillingPeriods(
                 notDue.push({ periodKey: period.key, reason: "no_accepted_term" });
                 continue;
             }
-            if (charged.has(chargeIndexKey(agreementId, decision.serviceDate))) {
+            if (convergence.has(tuitionConvergenceKey(agreementId, decision.serviceDate))) {
                 convergedCount += 1;
                 continue;
             }

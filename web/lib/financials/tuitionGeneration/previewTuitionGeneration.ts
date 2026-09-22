@@ -5,9 +5,22 @@
  * preview cannot describe a different act than the one that follows it. What it does NOT share is
  * the write: no consumption event, no obligation, no charge.
  *
- * The one thing it cannot see is a configuration gap that only the pipeline discovers — a missing
- * tuition charge template surfaces at generation, not here — so a preview counting work to do is not
- * a promise that the organisation is configured to do it.
+ * ── AND IT SHARES CONVERGENCE, WHICH IT USED NOT TO ───────────────────────────────────────────
+ *
+ * It previously reported `generated` for every due period and hardcoded `unchanged: 0,
+ * alreadyPosted: 0`, on the reasoning that a preview writes nothing and so has no converged drafts
+ * of its own to report. But the question an operator asks is not "what did this preview create",
+ * it is "what would the run do" — and against a period that already carries a charge the run
+ * creates nothing. Measured on deployed staging, the preview offered "Generate 5 · $925.00" for
+ * five weeks that already had drafts and "Generate 1 · $1,450.00" for a month already POSTED.
+ *
+ * Convergence now comes from `readTuitionChargeConvergence`, the same fact the outstanding-period
+ * reader uses, so the preview's promise and the run's behaviour cannot disagree about what is
+ * already billed.
+ *
+ * The one thing it still cannot see is a configuration gap that only the pipeline discovers — a
+ * missing tuition charge template surfaces at generation, not here — so a preview counting work to
+ * do is not a promise that the organisation is configured to do it.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,6 +34,7 @@ import {
 } from "@/lib/financials/tuitionGeneration/resolveTuitionRecurrence";
 import {
     assignmentBillingPeriods,
+    tallyTuitionOutcomes,
     type TuitionGenerationOutcome,
     type TuitionGenerationResult,
 } from "@/lib/financials/tuitionGeneration/generateTuitionCharges";
@@ -29,6 +43,10 @@ import {
     isPeriodBillableCadence,
     type BillingCadence,
 } from "@/lib/financials/billingPeriod";
+import {
+    readTuitionChargeConvergence,
+    tuitionConvergenceKey,
+} from "@/lib/financials/tuitionGeneration/tuitionChargeConvergence";
 
 export async function previewTuitionGeneration(
     supabase: SupabaseClient,
@@ -75,6 +93,13 @@ export async function previewTuitionGeneration(
         byAssignment.set(t.opportunityCustomerMemberId, list);
     }
 
+    /* What is already billed, read once for every agreement in scope. */
+    const convergence = await readTuitionChargeConvergence(
+        supabase,
+        args.orgId,
+        terms.map((t) => t.enrollmentAgreementId).filter((id): id is string => Boolean(id)),
+    );
+
     const outcomes: TuitionGenerationOutcome[] = [];
     const billed = new Map<string, { key: string; label: string; start: string; end: string }>();
     for (const [assignmentId, assignmentTerms] of byAssignment) {
@@ -91,17 +116,33 @@ export async function previewTuitionGeneration(
             } else if (!d.term.enrollmentAgreementId) {
                 outcomes.push({ kind: "not_due", assignmentId, periodKey: periodKeyOf, periodLabel, reason: "assignment_not_enrolled" });
             } else {
-                outcomes.push({
-                    kind: "generated",
-                    assignmentId,
-                    periodKey: periodKeyOf,
-                    periodLabel,
-                    termId: d.term.termId,
-                    chargeId: null,
-                    amountCents: d.amountCents,
-                    currencyCode: d.currencyCode,
-                    obligationId: null,
-                });
+                const converged = convergence.get(
+                    tuitionConvergenceKey(d.term.enrollmentAgreementId, d.serviceDate),
+                );
+                if (converged?.outcomeKind === "already_posted") {
+                    outcomes.push({
+                        kind: "already_posted", assignmentId, periodKey: periodKeyOf, periodLabel,
+                        termId: d.term.termId, chargeId: converged.chargeId, amountCents: converged.amountCents,
+                    });
+                } else if (converged) {
+                    outcomes.push({
+                        kind: "unchanged", assignmentId, periodKey: periodKeyOf, periodLabel,
+                        termId: d.term.termId, chargeId: converged.chargeId,
+                        amountCents: converged.amountCents, currencyCode: d.currencyCode, obligationId: null,
+                    });
+                } else {
+                    outcomes.push({
+                        kind: "generated",
+                        assignmentId,
+                        periodKey: periodKeyOf,
+                        periodLabel,
+                        termId: d.term.termId,
+                        chargeId: null,
+                        amountCents: d.amountCents,
+                        currencyCode: d.currencyCode,
+                        obligationId: null,
+                    });
+                }
             }
         }
     }
@@ -111,15 +152,8 @@ export async function previewTuitionGeneration(
         servicePeriod: { start: span.start, end: span.end },
         cadenceKey,
         periodsBilled: [...billed.values()].sort((a, b) => a.start.localeCompare(b.start)),
-        counts: {
-            generated: outcomes.filter((o) => o.kind === "generated").length,
-            // A preview writes nothing, so it has no converged drafts of its own to report.
-            unchanged: 0,
-            notDue: outcomes.filter((o) => o.kind === "not_due").length,
-            refused: outcomes.filter((o) => o.kind === "refused").length,
-            alreadyPosted: 0,
-            errors: 0,
-        },
+        /* Derived from the outcomes, like the run's own tally — never asserted alongside them. */
+        counts: tallyTuitionOutcomes(outcomes),
         outcomes,
     };
 }
