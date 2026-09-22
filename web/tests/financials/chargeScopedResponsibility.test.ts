@@ -12,6 +12,7 @@ import {
     arrangementAppliesTo,
     arrangementSpecificityRank,
     pickGoverningArrangement,
+    type ArrangementCandidate,
 } from "@/lib/financials/responsibility/arrangementSpecificity";
 
 const CHILD = "cm-certa";
@@ -19,11 +20,16 @@ const OTHER_CHILD = "cm-certb";
 const CHARGE = "chg-1";
 const OTHER_CHARGE = "chg-2";
 
-const household = { id: "arr-household", customerMemberId: null, chargeId: null, effectiveStart: "2026-01-01", effectiveEnd: null };
-const child = { id: "arr-child", customerMemberId: CHILD, chargeId: null, effectiveStart: "2026-02-01", effectiveEnd: null };
-const chargeScoped = { id: "arr-charge", customerMemberId: CHILD, chargeId: CHARGE, effectiveStart: "2026-03-01", effectiveEnd: null };
+/*
+ * Typed as the shared candidate rather than inferred from the first literal: inference gave
+ * `customerMemberId: null` and `chargeId: null` LITERAL types, so the child and charge-scoped
+ * fixtures would not fit their own helper. Invisible to vitest, which never typechecks.
+ */
+const household: ArrangementCandidate = { id: "arr-household", customerMemberId: null, chargeId: null, effectiveStart: "2026-01-01", effectiveEnd: null };
+const child: ArrangementCandidate = { id: "arr-child", customerMemberId: CHILD, chargeId: null, effectiveStart: "2026-02-01", effectiveEnd: null };
+const chargeScoped: ArrangementCandidate = { id: "arr-charge", customerMemberId: CHILD, chargeId: CHARGE, effectiveStart: "2026-03-01", effectiveEnd: null };
 
-const govern = (candidates: typeof household[], customerMemberId: string | null, chargeId: string | null = null) =>
+const govern = (candidates: ArrangementCandidate[], customerMemberId: string | null, chargeId: string | null = null) =>
     pickGoverningArrangement(candidates, { customerMemberId, chargeId, onDate: "2026-09-22" });
 
 describe("the specificity ladder", () => {
