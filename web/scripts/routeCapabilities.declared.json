@@ -5341,6 +5341,14 @@
         "helper": "assertFinancialsWriteAllowed",
         "reason": "Turns automatic Periodic Billing on for this organization by provisioning its one scheduled-work row. Provisioning is activation, so it is gated on fin.write \u2014 the same permission generating tuition requires, because switching on something that generates tuition is not a lesser act."
       }
+    },
+    "app/api/admin/financials/periodic-billing-evaluate-now/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed",
+        "reason": "Makes this organization's existing Periodic Billing schedule due now so the ordinary clock picks it up sooner. It runs nothing and creates nothing \u2014 no handler call, no occurrence, no charge \u2014 and refuses when no schedule exists, because evaluation is not activation."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {
