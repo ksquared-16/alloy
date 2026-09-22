@@ -220,15 +220,13 @@ describe("10-12. canonical capacity is server-resolved", () => {
     });
 
     it("12. a kind with no rule is absent, never rendered as zero", async () => {
+        // Binding must DISAGREE with the authored number for the kind cells to
+        // render at all — the section speaks only when there is a limit to explain.
         resolution = {
             status: "resolved", physicalCapacity: null, licensedCapacity: null,
-            configuredCapacity: 12, ratioConstrainedCapacity: null,
-            bindingCapacity: 12, limitingFactor: "operational",
+            configuredCapacity: 12, ratioConstrainedCapacity: 8,
+            bindingCapacity: 8, limitingFactor: "ratio",
         };
-        // Binding must DISAGREE for the kind cells to render at all.
-        resolution.bindingCapacity = 8;
-        resolution.limitingFactor = "ratio";
-        resolution.ratioConstrainedCapacity = 8;
         await render(room(), [rule()]);
         expect(at("locations-room-capacity-operational")).not.toBeNull();
         expect(at("locations-room-capacity-physical")).toBeNull();
