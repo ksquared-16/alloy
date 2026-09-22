@@ -5325,6 +5325,14 @@
         "status": "none",
         "reason": "The external clock's entry point. Vercel Cron issues GET with Authorization: Bearer CRON_SECRET, so the clock arrives on GET rather than POST; both verbs run the same wake through the same runtime. Unauthenticated GET is 401 and drives nothing - it is not a liveness endpoint that returns ok to anyone who finds the URL."
       }
+    },
+    "app/api/admin/financials/periodic-billing-status/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Whether recurring tuition is billed automatically for this organization, read from this tenant's own scheduled-work row rather than from whether the handler shipped. A Financials read: it exposes no lease, occurrence or worker, and writes nothing."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {

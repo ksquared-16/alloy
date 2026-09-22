@@ -1,0 +1,11 @@
+{
+  "gitSha": "1ce2e31a5ff10fd2187d2102de9baf959d9c7fbc",
+  "gitBranch": "staging",
+  "gitMessage": "Merge pull request #1178 from ksquared-16/agent/config-organization\n\nfeat(scheduling): Coverage — day-specific Staff allocation authority",
+  "vercelEnv": "preview",
+  "vercelUrl": "workwithalloy-dhuz5op8x-kellys-projects-2fc9d5eb.vercel.app",
+  "vercelDeploymentId": "dpl_BDm2Z2mGiwud8zy8MSzeyHmu9VJS",
+  "nodeEnv": "production",
+  "supabaseProjectRef": "ikaxilmwmrmbagoidedu",
+  "mergeContained": "7633099f75534b770d5f88a921ecff52cd0adc1b"
+}

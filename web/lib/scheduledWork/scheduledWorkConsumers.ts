@@ -1,4 +1,5 @@
 import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
+import { evaluatePeriodicBillingOccurrence } from "@/lib/financials/periodicBilling/periodicBillingHandler";
 import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
 import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
 import {
@@ -16,19 +17,21 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  *
  * ── WHAT THESE HANDLERS DO AND DO NOT DO IN V1 ──
  *
- * Periodic Billing and Charge Aging economics are NOT productized here, and
- * inventing them to demonstrate scheduling would be worse than a stated
- * limitation — it would put fabricated financial behaviour behind a real clock.
+ * CHARGE AGING economics are NOT productized here, and inventing them to
+ * demonstrate scheduling would be worse than a stated limitation — it would put
+ * fabricated financial behaviour behind a real clock.
  *
- * AUTOPAY IS the exception, and now the proof: Payments V1 W5 replaced its body
- * with the real implementation and nothing above this file changed.
+ * AUTOPAY was the first exception and the first proof: Payments V1 W5 replaced its
+ * body with the real implementation and nothing above this file changed. PERIODIC
+ * BILLING is the second, and it proves the same thing twice — which is what makes
+ * it a boundary rather than a coincidence.
  *
- * So the two remaining stubs cross the exact registered-handler boundary their real
- * implementations will, receive the same context, return the same structured
- * outcome, and perform a NON-MUTATING evaluation. What was certified is the
+ * So ONE remaining stub crosses the exact registered-handler boundary its real
+ * implementation will, receives the same context, returns the same structured
+ * outcome, and performs a NON-MUTATING evaluation. What was certified is the
  * boundary and the runtime, not billing arithmetic. When Financials productizes
- * its mutations it replaces those bodies, and nothing above this file changes —
- * which is no longer a prediction, because Autopay has now done exactly that.
+ * that last mutation it replaces the body, and nothing above this file changes —
+ * which is no longer a prediction, because two handlers have now done exactly that.
  *
  * Each returns COMPLETED for a no-op, which is the contract's most easily
  * mistaken rule: "evaluated, nothing was due" is a successful run, not a failure.
@@ -59,10 +62,19 @@ function evaluated(domain: string, ctx: ScheduledWorkContext): ScheduledWorkOutc
 }
 
 export function registerScheduledWorkConsumers(): void {
+    /*
+     * PERIODIC BILLING IS PRODUCTIZED. It is no longer an evaluation stub.
+     *
+     * The seam is unchanged and that is again the point: the same key, the same context, the same
+     * structured outcome. What changed is only the body — exactly as this file predicted when
+     * Autopay did it first, and for the second time nothing above this line moved.
+     *
+     * The client is built HERE rather than inside the handler so the handler stays injectable: its
+     * tests drive it with a fake client and a fixed clock, and nothing about it needs the
+     * service-role environment to be readable.
+     */
     registerScheduledWorkHandler(BILLING_PERIODIC_HANDLER_KEY, async (ctx) =>
-        // Real implementation resolves the billing period from `domainRef` and
-        // raises charges. Until then this asserts only that the seam is reachable.
-        evaluated("periodic_billing", ctx),
+        evaluatePeriodicBillingOccurrence(ctx, { supabase: createAdminClient() }),
     );
 
     registerScheduledWorkHandler(CHARGE_AGING_HANDLER_KEY, async (ctx) =>

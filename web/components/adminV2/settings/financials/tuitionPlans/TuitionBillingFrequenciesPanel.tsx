@@ -244,6 +244,30 @@ export function TuitionBillingFrequenciesPanel({
         }
     };
 
+    /*
+     * WHETHER RECURRING TUITION IS BILLED AUTOMATICALLY — this tenant's answer, not the build's.
+     *
+     * A productized handler means the scheduler CAN wake Financials. An organization with no
+     * schedule is still billed by an operator pressing Generate Tuition, so the copy below is
+     * gated on the tenant's own state. Claiming automation because a deploy happened would tell
+     * every such operator something false about their own money.
+     *
+     * Unknown is a third state and is shown as nothing: a failed read must not be rendered as
+     * "not automatic", which is a claim this surface has not earned.
+     */
+    const [automatic, setAutomatic] = useState<{ active: boolean; nextAt: string | null } | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        void fetch("/api/admin/financials/periodic-billing-status", { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { automatic_billing_active?: boolean; next_evaluation_at?: string | null } | null) => {
+                if (cancelled || !j) return;
+                setAutomatic({ active: Boolean(j.automatic_billing_active), nextAt: j.next_evaluation_at ?? null });
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
+
     return (
         <div className="space-y-3" data-testid="tuition-billing-frequencies-panel">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -262,6 +286,17 @@ export function TuitionBillingFrequenciesPanel({
                         date — you never author individual periods here. The accounting calendar is
                         configured separately, under Accounting.
                     </p>
+                    {automatic ? (
+                        <p
+                            className={`mt-1.5 text-[12px] ${automatic.active ? "text-alloy-midnight/60" : "text-alloy-ember"}`}
+                            data-testid="periodic-billing-automation-status"
+                            data-periodic-billing-active={automatic.active ? "true" : "false"}
+                        >
+                            {automatic.active
+                                ? "Recurring tuition is billed automatically for this organization. Generate Tuition remains available for periods automation left outstanding."
+                                : "Recurring tuition is NOT billed automatically for this organization — an operator runs Generate Tuition for each period."}
+                        </p>
+                    ) : null}
                 </div>
                 <ConfigurationPrimaryButton
                     className="gap-1"
