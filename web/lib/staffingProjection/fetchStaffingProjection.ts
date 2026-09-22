@@ -288,6 +288,13 @@ export async function fetchStaffingProjection(
                 const resolved = m.employmentId
                     ? availability.byEmployment.get(m.employmentId)?.get(date)
                     : undefined;
+                /*
+                 * The resolver's provenance is the point, not just its windows.
+                 * `no_pattern` means nothing was ever authored — UNKNOWN — and it
+                 * must not arrive here as an empty window list indistinguishable
+                 * from "recorded, and the answer is no".
+                 */
+                const recorded = resolved != null && resolved.provenance.kind !== "no_pattern";
                 const availabilityIntervals = (resolved?.windows ?? [])
                     .map((w) => toInterval(w.start_time, w.end_time))
                     .filter((i): i is TimeInterval => i !== null);
@@ -299,7 +306,11 @@ export async function fetchStaffingProjection(
                     baselineRoomLocationId: baseline?.roomLocationId ?? m.roomLocationId,
                     baselineIntervals: baseline ? intervals : [],
                     baselineHoursKnown: baseline ? hoursKnown : true,
-                    availabilityIntervals,
+                    availability: {
+                        recorded,
+                        intervals: availabilityIntervals,
+                        unavailableReason: resolved?.provenance.reason ?? null,
+                    },
                     coverage: m.employmentId ? (coverageByEmployment.get(m.employmentId) ?? []) : [],
                     presence: presenceRows.length > 0
                         ? presenceIntervals

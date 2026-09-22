@@ -65,6 +65,26 @@ function segmentChrome(segment: StaffingProjectionSegment): string {
     return "bg-alloy-stone/20 hover:bg-alloy-stone/30";
 }
 
+/**
+ * The three Availability answers, and only the first is ever affirmative.
+ *
+ * `unknown` deliberately borrows the neutral stone the staffing doctrine gives
+ * an unresolvable verdict: the platform was never told, and dressing that as
+ * either a yes or a no is the lie the operator cannot see through.
+ */
+function availabilityChrome(state: "available" | "unavailable" | "unknown"): string {
+    if (state === "available") return "rounded-full bg-[#00A283]/10 px-2 py-0.5 text-[11px] text-[#00715C]";
+    if (state === "unavailable")
+        return "rounded-full bg-alloy-gold/15 px-2 py-0.5 text-[11px] text-alloy-midnight ring-1 ring-alloy-gold/40";
+    return "rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[11px] text-alloy-midnight/55";
+}
+
+function availabilityLabel(state: "available" | "unavailable" | "unknown"): string {
+    if (state === "available") return "Available";
+    if (state === "unavailable") return "Unavailable";
+    return "Availability not recorded";
+}
+
 function laneTitle(lane: CalendarLane): string {
     if (lane.roomLocationId === null) return "Site — no room";
     return lane.roomName ?? "Room";
@@ -407,7 +427,7 @@ function SegmentDetail({
     onCancelCoverage: (personId: string, coverageId: string) => void;
     onCallOut: (personId: string, employmentId: string) => void;
 }) {
-    const candidates = useMemo(() => candidatesForGap(segment, allSegments), [segment, allSegments]);
+    const candidates = useMemo(() => candidatesForGap(segment), [segment]);
     const plannedNotPresent = new Set(
         segment.actualStaff == null
             ? []
@@ -456,6 +476,19 @@ function SegmentDetail({
                             <span className="text-alloy-midnight/50">
                                 {p.source === "coverage" ? "Coverage" : "Assignment"}
                             </span>
+                            {p.availability === "unavailable" ? (
+                                <span
+                                    className="rounded-full bg-alloy-gold/15 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight ring-1 ring-alloy-gold/40"
+                                    data-calendar-planned-unavailable={p.personId}
+                                >
+                                    Unavailable{p.unavailableReason ? ` — ${p.unavailableReason}` : ""}
+                                </span>
+                            ) : null}
+                            {p.availability === "unknown" ? (
+                                <span className="text-alloy-midnight/45" data-calendar-planned-unknown={p.personId}>
+                                    availability not recorded
+                                </span>
+                            ) : null}
                             {plannedNotPresent.has(p.employmentId) ? (
                                 <span className="text-alloy-midnight/45" data-calendar-not-present="true">
                                     not observed here
@@ -488,7 +521,7 @@ function SegmentDetail({
                 </div>
             ) : null}
 
-            {candidates.length > 0 || segment.plannedState === "short" ? (
+            {candidates.length > 0 ? (
                 <div
                     className="mt-3"
                     data-calendar-fill-gap={segment.plannedState === "short" ? "true" : "false"}
@@ -499,26 +532,45 @@ function SegmentDetail({
                             ? "Who could cover this stretch"
                             : "Who else could be planned here"}
                     </p>
-                    {candidates.length === 0 ? (
-                        <p className="mt-1 text-[12px] text-alloy-midnight/55">
-                            Nobody is recorded as available and unplanned in this interval.
-                        </p>
-                    ) : (
-                        <div className="mt-1 flex flex-wrap gap-2">
-                            {candidates.map((c) => (
+                    {/*
+                      * Everyone at the site, with what Availability says about each.
+                      * Nobody is hidden for lacking a record — that is the dead end
+                      * this replaces — and nobody is described as available unless
+                      * Availability actually said so.
+                      */}
+                    <div className="mt-1 flex flex-col gap-1">
+                        {candidates.map((c) => (
+                            <div
+                                key={c.employmentId}
+                                className="flex flex-wrap items-center gap-2 text-[12px]"
+                                data-calendar-candidate={c.personId}
+                                data-calendar-candidate-availability={c.availability}
+                                data-calendar-candidate-conflict={c.plannedElsewhere ? "true" : "false"}
+                            >
                                 <button
-                                    key={c.employmentId}
                                     type="button"
-                                    className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/75 hover:bg-alloy-stone/10 disabled:opacity-40"
+                                    className="rounded border border-alloy-stone/25 px-2 py-1 text-alloy-midnight/75 hover:bg-alloy-stone/10 disabled:opacity-40"
                                     disabled={busy}
                                     onClick={() => onPlan(c.personId, c.employmentId)}
-                                    data-calendar-candidate={c.personId}
                                 >
                                     Plan {c.displayName} here
                                 </button>
-                            ))}
-                        </div>
-                    )}
+                                <span className={availabilityChrome(c.availability)}>
+                                    {availabilityLabel(c.availability)}
+                                    {c.availability === "unavailable" && c.unavailableReason
+                                        ? ` — ${c.unavailableReason}`
+                                        : ""}
+                                </span>
+                                {c.plannedElsewhere ? (
+                                    <span className="text-alloy-midnight/50">
+                                        already planned{" "}
+                                        {c.plannedInRoomLocationId === null ? "at the site" : "in another room"}{" "}
+                                        this interval
+                                    </span>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : null}
 

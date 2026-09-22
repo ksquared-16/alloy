@@ -61,6 +61,22 @@ The gap hands the command everything it already knows: site, room, date and the 
 interval, plus the shortfall the projection computed. The operator chooses a person and
 confirms.
 
+## The chooser states facts and holds no opinion
+
+When a stretch is short, the panel offers **the site's own staff** — not a shortlist. Each
+one carries what Availability says (available, unavailable, or not recorded), whether they
+are already planned somewhere in that interval, and where their Assignment puts them.
+
+Nobody is ranked, scored or recommended, and a guard fails the build if the words appear.
+The order groups by what Availability says so the operator reads the certain answers first,
+and that is the only opinion in it.
+
+Crucially, nobody is **hidden**. An earlier version offered only the explicitly-available,
+which meant a site that had never authored Availability got a gap and no way to fix it —
+measured on staging, that was half the workforce. Someone already planned elsewhere is
+shown with that conflict stated rather than removed; the Coverage exclusion constraint still
+refuses a real overlap, and an operator who can see the conflict can decide to move them.
+
 ## Every mutation is a registered command
 
 `staff_coverage.plan`, `.change`, `.correct`, `.cancel`, and `staff_availability.add_exception`
@@ -74,8 +90,11 @@ part of that time."* No constraint name reaches the operator.
 
 ## Called out
 
-The smallest truthful composition of facts that already exist, and deliberately only the
-first half of it. An Availability exception records that the person cannot work that date.
+An Availability exception records that the person cannot work that date, and the staffing
+picture changes accordingly: they stay visible as planned, marked **Unavailable**, they stop
+counting toward the requirement, and the room goes short so the operator can plan a
+replacement.
+
 **Their Coverage is not cancelled for them** — cancelling a plan has consequences for the
 rooms it covered, and doing that silently is exactly what the Coverage authority exists to
 prevent. The surface shows what they were covering so the operator can act on each one.

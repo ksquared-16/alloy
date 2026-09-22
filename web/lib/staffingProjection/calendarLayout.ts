@@ -22,7 +22,10 @@ import {
     type StaffingSufficiency,
 } from "@/lib/scheduling/supply/staffingSufficiency";
 import { minutesOf, type Hhmm } from "@/lib/staffingProjection/staffingSegments";
-import type { StaffingProjectionSegment } from "@/lib/staffingProjection/staffingProjectionTypes";
+import type {
+    CandidateStaffRef,
+    StaffingProjectionSegment,
+} from "@/lib/staffingProjection/staffingProjectionTypes";
 
 export type OperatingWindow = { start: Hhmm; end: Hhmm };
 
@@ -171,24 +174,27 @@ export function gapCommandContext(segment: StaffingProjectionSegment): GapComman
 }
 
 /**
- * Staff the operator could plan into a gap, from canonical facts only.
+ * Who the operator could plan into this segment.
  *
- * Available in that segment and planned nowhere in it — the projection already
- * answers both, so this is a read of its answer rather than a candidate engine.
- * Nobody is ranked and nobody is silently excluded; Readiness is advisory and
- * does not appear here at all, because removing someone from a list is not an
- * advisory act.
+ * The projection already answered this: `candidateStaff` is the site's own staff
+ * with what Availability says about each of them, whether they are already
+ * planned somewhere in this interval, and where their Assignment puts them.
+ * This is a read of that answer, not a second candidate engine — and there is
+ * deliberately no filtering left to do here, because a surface quietly dropping
+ * people is how "who could cover?" became unanswerable in the first place.
+ *
+ * Nobody is ranked. The order groups by what Availability says so the operator
+ * reads the certain answers first, and that is the only opinion in it.
  */
 export function candidatesForGap(
-    segment: StaffingProjectionSegment,
-    allSegmentsInSameInterval: readonly StaffingProjectionSegment[]
-): { employmentId: string; personId: string; displayName: string }[] {
-    const plannedSomewhere = new Set(
-        allSegmentsInSameInterval
-            .filter((s) => s.start === segment.start && s.end === segment.end)
-            .flatMap((s) => s.plannedStaff.map((p) => p.employmentId))
-    );
-    return segment.availableStaff
-        .filter((a) => !plannedSomewhere.has(a.employmentId))
-        .map((a) => ({ employmentId: a.employmentId, personId: a.personId, displayName: a.displayName }));
+    segment: StaffingProjectionSegment
+): readonly CandidateStaffRef[] {
+    return segment.candidateStaff;
+}
+
+/** Those a plan would not immediately conflict with. Context, not a filter. */
+export function candidatesWithoutConflict(
+    segment: StaffingProjectionSegment
+): readonly CandidateStaffRef[] {
+    return segment.candidateStaff.filter((c) => !c.plannedElsewhere);
 }

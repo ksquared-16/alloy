@@ -63,7 +63,7 @@ function projStaff(name: string, room: string | null, hours: [string, string] | 
         baselineRoomLocationId: room,
         baselineIntervals: hours ? [iv(hours[0], hours[1])] : [],
         baselineHoursKnown: Boolean(hours),
-        availabilityIntervals: [],
+        availability: { recorded: false, intervals: [] },
         coverage,
         presence: null,
     };

@@ -65,7 +65,7 @@ function staff(
         baselineRoomLocationId: room,
         baselineIntervals: start && end ? [iv(start, end)] : [],
         baselineHoursKnown: Boolean(start && end),
-        availabilityIntervals: [],
+        availability: { recorded: false, intervals: [] },
         coverage: [],
         presence: null,
         ...extra,
@@ -263,7 +263,7 @@ describe("available, and the difference it makes", () => {
             staff: [
                 staff("Alex", T1, "09:00", "10:00"),
                 staff("Sam", T1, "09:00", "10:00"),
-                staff("Jordan", T1, null, null, { availabilityIntervals: [iv("09:00", "10:00")] }),
+                staff("Jordan", T1, null, null, { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
             ],
         });
         const s = seg(d, T1, "09:00")!;
@@ -289,8 +289,8 @@ describe("available, and the difference it makes", () => {
         const d = day({
             children: Array.from({ length: 10 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00")),
             staff: [
-                staff("Alex", T1, "09:00", "10:00", { availabilityIntervals: [iv("09:00", "10:00")] }),
-                staff("Sam", T2, "09:00", "10:00", { availabilityIntervals: [iv("09:00", "10:00")] }),
+                staff("Alex", T1, "09:00", "10:00", { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
+                staff("Sam", T2, "09:00", "10:00", { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
             ],
         });
         const s = seg(d, T1, "09:00")!;
@@ -400,7 +400,7 @@ describe("states", () => {
             staff: [
                 staff("Alex", T1, "09:00", "10:00"),
                 staff("Sam", T1, "09:00", "10:00"),
-                staff("Jordan", null, null, null, { availabilityIntervals: [iv("09:00", "10:00")] }),
+                staff("Jordan", null, null, null, { availability: { recorded: true, intervals: [iv("09:00", "10:00")] } }),
             ],
         });
         const s = seg(d, T1, "09:00")!;
@@ -411,6 +411,9 @@ describe("states", () => {
             "Baseline staff: Alex and Sam",
             "Planned staff: Alex and Sam",
             "Jordan is available but not planned anywhere during this interval",
+            // Alex and Sam have nothing authored, so the projection says that
+            // rather than implying the room is covered by people it cannot vouch for.
+            "No availability is recorded for Alex and Sam",
             "Short 1 staff",
             "Alex and Sam are planned here but not observed present",
         ]);
@@ -478,5 +481,69 @@ describe("a surface that shows Coverage can act on it", () => {
         const planned = seg(d, T1, "08:00")!.plannedStaff[0];
         expect(planned.source).toBe("assignment");
         expect(planned.coverageId).toBeUndefined();
+    });
+});
+
+describe("plan is not availability", () => {
+    const tenChildren = Array.from({ length: 10 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00"));
+
+    it("an explicitly unavailable person stays planned but stops covering", () => {
+        const d = day({
+            children: tenChildren,
+            staff: [
+                staff("Alex", T1, "09:00", "10:00", {
+                    availability: { recorded: true, intervals: [], unavailableReason: "called_out" },
+                }),
+                staff("Sam", T1, "09:00", "10:00", {
+                    availability: { recorded: true, intervals: [iv("09:00", "10:00")] },
+                }),
+                staff("Kit", T1, "09:00", "10:00", {
+                    availability: { recorded: true, intervals: [iv("09:00", "10:00")] },
+                }),
+            ],
+        });
+        const s = seg(d, T1, "09:00")!;
+        expect(s.requiredStaff).toBe(3);
+        // The plan is preserved — erasing it would hide why the room is short.
+        expect(s.plannedStaff.map((p) => p.displayName)).toEqual(["Alex", "Kit", "Sam"]);
+        expect(s.effectivePlannedStaff.map((p) => p.displayName)).toEqual(["Kit", "Sam"]);
+        expect(s.plannedState).toBe("short");
+        expect(s.shortfall).toBe(1);
+        expect(s.explanation.facts).toContainEqual({ code: "planned_but_unavailable", names: ["Alex"] });
+        expect(s.explanation.lines).toContain(
+            "Alex is planned here but unavailable during this interval"
+        );
+        const alex = s.plannedStaff.find((p) => p.displayName === "Alex")!;
+        expect(alex.availability).toBe("unavailable");
+        expect(alex.unavailableReason).toBe("called_out");
+    });
+
+    it("does not treat an unrecorded person as unavailable", () => {
+        const d = day({
+            children: Array.from({ length: 4 }, (_, i) => child(`c${i}`, T1, "09:00", "10:00")),
+            staff: [staff("Alex", T1, "09:00", "10:00")],
+        });
+        const s = seg(d, T1, "09:00")!;
+        expect(s.plannedStaff[0].availability).toBe("unknown");
+        expect(s.effectivePlannedStaff).toHaveLength(1);
+        expect(s.plannedState).toBe("sufficient");
+    });
+
+    it("never cancels or moves Coverage because someone became unavailable", () => {
+        const d = day({
+            children: tenChildren,
+            staff: [
+                staff("Alex", T1, "09:00", "10:00", {
+                    coverage: [{ coverageId: "cov-1", roomLocationId: T1, interval: iv("09:00", "10:00") }],
+                    availability: { recorded: true, intervals: [], unavailableReason: "called_out" },
+                }),
+            ],
+        });
+        const s = seg(d, T1, "09:00")!;
+        const alex = s.plannedStaff[0];
+        expect(alex.source).toBe("coverage");
+        expect(alex.coverageId).toBe("cov-1");
+        expect(alex.availability).toBe("unavailable");
+        expect(s.effectivePlannedStaff).toHaveLength(0);
     });
 });

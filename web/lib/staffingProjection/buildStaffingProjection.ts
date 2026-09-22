@@ -48,8 +48,10 @@ import {
     type TimeInterval,
 } from "@/lib/staffingProjection/staffingSegments";
 import type {
+    CandidateStaffRef,
     ChildRef,
     PlannedStaffRef,
+    SegmentAvailability,
     StaffRef,
     StaffingExplanation,
     StaffingExplanationFact,
@@ -86,7 +88,18 @@ export type ProjectionStaffInput = {
     baselineRoomLocationId: string | null;
     baselineIntervals: TimeInterval[];
     baselineHoursKnown: boolean;
-    availabilityIntervals: TimeInterval[];
+    /**
+     * What Availability actually said, not merely when it said yes.
+     *
+     * `recorded: false` means the resolver found neither a pattern nor an
+     * exception — nothing was ever authored. That is not the same fact as an
+     * empty window list, and the difference is the whole of the UNKNOWN answer.
+     */
+    availability: {
+        recorded: boolean;
+        intervals: TimeInterval[];
+        unavailableReason?: string | null;
+    };
     coverage: { coverageId: string; roomLocationId: string | null; interval: TimeInterval }[];
     /** Null when Presence observed nothing for this person on this date. */
     presence: { roomLocationId: string | null; interval: TimeInterval }[] | null;
@@ -158,6 +171,10 @@ function lineFor(fact: StaffingExplanationFact): string {
             return `${joinNames(fact.names)} ${fact.names.length === 1 ? "is" : "are"} available but not planned anywhere during this interval`;
         case "coverage_specialized":
             return `Coverage places ${joinNames(fact.names)} here for this interval`;
+        case "planned_but_unavailable":
+            return `${joinNames(fact.names)} ${fact.names.length === 1 ? "is" : "are"} planned here but unavailable during this interval`;
+        case "availability_not_recorded":
+            return `No availability is recorded for ${joinNames(fact.names)}`;
         case "planned_not_present":
             return `${joinNames(fact.names)} ${fact.names.length === 1 ? "is" : "are"} planned here but not observed present`;
         case "present_not_planned":
@@ -173,6 +190,19 @@ function lineFor(fact: StaffingExplanationFact): string {
 
 function explain(facts: StaffingExplanationFact[]): StaffingExplanation {
     return { facts, lines: facts.map(lineFor) };
+}
+
+/**
+ * What Availability says about this person during this segment.
+ *
+ * Windows are the complete statement of when someone can work that day, so a
+ * recorded person outside their windows is UNAVAILABLE rather than unknown — the
+ * platform was told, and the answer was no. Someone with nothing recorded is
+ * UNKNOWN, and stays that way.
+ */
+function availabilityFor(staff: ProjectionStaffInput, segment: TimeInterval): SegmentAvailability {
+    if (!staff.availability.recorded) return "unknown";
+    return staff.availability.intervals.some((i) => covers(i, segment)) ? "available" : "unavailable";
 }
 
 /**
@@ -213,7 +243,7 @@ export function buildStaffingProjectionDay(
     for (const c of children) all.push(...c.intervals);
     for (const a of childActuals) all.push(a.interval);
     for (const s of staff) {
-        all.push(...s.baselineIntervals, ...s.availabilityIntervals);
+        all.push(...s.baselineIntervals, ...s.availability.intervals);
         for (const c of s.coverage) all.push(c.interval);
         for (const p of s.presence ?? []) all.push(p.interval);
     }
@@ -263,6 +293,8 @@ export function buildStaffingProjectionDay(
         const baselineByRoom = new Map<string, StaffRef[]>();
         const actualByRoom = new Map<string, StaffRef[]>();
         const availablePool: StaffRef[] = [];
+        const availabilityByEmployment = new Map<string, SegmentAvailability>();
+        const plannedRoomByEmployment = new Map<string, string | null>();
 
         for (const s of staff) {
             const ref: StaffRef = {
@@ -276,15 +308,22 @@ export function buildStaffingProjectionDay(
                 baselineByRoom.set(k, [...(baselineByRoom.get(k) ?? []), ref]);
             }
 
-            if (s.availabilityIntervals.some((i) => covers(i, segment))) availablePool.push(ref);
+            const availability = availabilityFor(s, segment);
+            availabilityByEmployment.set(s.employmentId, availability);
+            if (availability === "available") availablePool.push(ref);
 
             const place = plannedPlaceFor(s, segment);
             if (place) {
                 plannedAnywhere.add(s.employmentId);
                 const k = roomKey(place.roomLocationId);
+                plannedRoomByEmployment.set(s.employmentId, place.roomLocationId);
                 const planned: PlannedStaffRef = {
                     ...ref,
                     source: place.source,
+                    availability,
+                    ...(s.availability.unavailableReason
+                        ? { unavailableReason: s.availability.unavailableReason }
+                        : {}),
                     ...(place.source === "coverage"
                         ? {
                               baselineRoomLocationId: s.baselineRoomLocationId,
@@ -350,9 +389,21 @@ export function buildStaffingProjectionDay(
                           childCount: actualCount,
                       });
 
+            /*
+             * PLAN ≠ AVAILABILITY.
+             *
+             * Someone explicitly unavailable is still planned here — the schedule
+             * says so and erasing it would hide why the room is short. They simply
+             * do not count toward the requirement, which is what makes a call-out
+             * open a gap without deleting anyone's Coverage.
+             */
+            const effectivePlannedStaff = plannedStaff.filter((p) => p.availability !== "unavailable");
+            const plannedButUnavailable = plannedStaff.filter((p) => p.availability === "unavailable");
+            const plannedUnknownAvailability = plannedStaff.filter((p) => p.availability === "unknown");
+
             const plannedState = resolveStaffingSufficiency({
                 requiredStaff,
-                scheduledStaffCount: plannedStaff.length,
+                scheduledStaffCount: effectivePlannedStaff.length,
             });
             const actualState: StaffingSufficiency = !input.actualsObserved
                 ? "unknown"
@@ -362,7 +413,7 @@ export function buildStaffingProjectionDay(
                   });
 
             const shortfall =
-                requiredStaff == null ? null : Math.max(0, requiredStaff - plannedStaff.length);
+                requiredStaff == null ? null : Math.max(0, requiredStaff - effectivePlannedStaff.length);
 
             // A segment with nothing in it at all is not worth a row; a segment
             // with staff and no children is (that is an idle or over-staffed room,
@@ -377,6 +428,32 @@ export function buildStaffingProjectionDay(
             ) {
                 continue;
             }
+
+            const candidateStaff: CandidateStaffRef[] = staff
+                .filter((c) => plannedRoomByEmployment.get(c.employmentId) !== roomLocationId)
+                .map((c) => {
+                    const plannedRoom = plannedRoomByEmployment.get(c.employmentId);
+                    const availability = availabilityByEmployment.get(c.employmentId) ?? "unknown";
+                    return {
+                        employmentId: c.employmentId,
+                        personId: c.personId,
+                        displayName: c.displayName,
+                        availability,
+                        ...(c.availability.unavailableReason
+                            ? { unavailableReason: c.availability.unavailableReason }
+                            : {}),
+                        plannedInRoomLocationId: plannedRoom ?? null,
+                        plannedElsewhere: plannedRoom !== undefined,
+                        baselineRoomLocationId: c.baselineRoomLocationId,
+                    };
+                })
+                // Grouped by what Availability says, never ranked: the operator
+                // reads "available" before "unknown" before "unavailable", and
+                // decides. Nothing here scores a person against another.
+                .sort((a, b) => {
+                    const order = { available: 0, unknown: 1, unavailable: 2 } as const;
+                    return order[a.availability] - order[b.availability] || byName(a, b);
+                });
 
             const plannedNotPresent =
                 actualStaff == null
@@ -407,6 +484,12 @@ export function buildStaffingProjectionDay(
             if (plannedState === "short" && freeNames.length > 0) {
                 facts.push({ code: "available_not_planned", names: names(freeNames) });
             }
+            if (plannedButUnavailable.length > 0) {
+                facts.push({ code: "planned_but_unavailable", names: names(plannedButUnavailable) });
+            }
+            if (plannedUnknownAvailability.length > 0) {
+                facts.push({ code: "availability_not_recorded", names: names(plannedUnknownAvailability) });
+            }
             if (shortfall != null && shortfall > 0) facts.push({ code: "shortfall", count: shortfall });
             if (expectedCount === 0 && requiredStaff === 0) facts.push({ code: "no_demand" });
             if (plannedNotPresent.length > 0) {
@@ -431,6 +514,8 @@ export function buildStaffingProjectionDay(
                 baselineStaff,
                 availableStaff: availablePool.slice().sort(byName),
                 plannedStaff,
+                effectivePlannedStaff,
+                candidateStaff,
                 actualStaff,
                 requiredStaff,
                 requiredStaffActual,
