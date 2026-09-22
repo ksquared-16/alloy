@@ -22,7 +22,7 @@
  * Workspace, which is true, retained, and visibly yielding.
  */
 
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import { usePathname } from "next/navigation";
 
@@ -53,28 +53,7 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     // This is the only place a URL may establish attention, and `hydrate` throws if attention
     // already exists, so a later URL change can never masquerade as operator intent.
     const hydrated = useRef(false);
-    /*
-     * HYDRATED DURING RENDER, NOT IN AN EFFECT — the same repair, for the same reason, as the
-     * reveal declaration in `WorkUnitSlugRouteHost`, whose comment already records the measurement:
-     * "An effect runs after paint … the rail painted at 765 ms and the effect declared at 1,482 ms."
-     *
-     * Effects do not run until React has hydrated the whole tree. Measured on deployed 5e312eb3
-     * (n=26): the OS shell painted at 619ms and this effect did not establish attention until
-     * 1,521ms — so for 900ms the client was alive, the server-composed answer was already in the
-     * flight payload, and nothing had asked for it. FIRST_AUTHORITATIVE_FRAME landed at 1,557ms
-     * against a 1,000ms target, and that interval was the whole of the remaining gap.
-     *
-     * `orgId` arrives as a server-resolved PROP through `WorkspaceOrgProvider`, so it is available
-     * on the very first render; nothing here waits on a fetch.
-     *
-     * This is still the ONLY place a URL may establish attention (Art 2.4), and `hydrate` still
-     * throws if attention already exists. The `hydrated` ref makes a StrictMode double-render a
-     * no-op rather than a throw.
-     *
-     * Server-safe: there is no `window` during SSR, and hydration is a browser-only act.
-     */
-    useMemo(() => {
-        if (typeof window === "undefined") return;
+    useEffect(() => {
         if (hydrated.current || !orgId) return;
         const h = attentionFromUrl(
             new URL(window.location.href),
