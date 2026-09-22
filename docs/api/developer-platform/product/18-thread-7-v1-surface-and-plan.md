@@ -158,7 +158,15 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after the External Lifecycle batch (2026-09-22).** The V1 grant model is frozen at
+**Updated after the consistency repair (2026-09-22).** Partner documentation, the contract and the
+exported package now agree on scopes (13 grantable), operation counts (19 = 1 + 11 + 7), the
+authenticated-write rate policy, and the synchronization law. The counts are derived from runtime
+in a test rather than written by hand. One documented claim was found false and corrected: reads
+and writes have different limits but share one per-installation counter. Both canonical gates
+passed. Thread 7 is **ready for final acceptance**, then staging reconciliation and promotion
+authorization — see `25-consistency-repair-review-delta.md`.
+
+Earlier: **Updated after the External Lifecycle batch (2026-09-22).** The V1 grant model is frozen at
 eleven scopes and `context.read` is retired from it. Six governed service-state operations are
 shipped and certified — start/end an enrollment, assign/move a placement, set/change a schedule —
 bringing the public surface to **nineteen operations across fifteen paths**, still with no PUT,
