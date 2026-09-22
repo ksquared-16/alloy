@@ -1,4 +1,8 @@
+import { Suspense } from "react";
 import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
+import ProvisioningFrameRegistration from "@/components/admin/workspace/ProvisioningFrameRegistration";
+import ProvisioningSettlementSeed from "@/components/admin/workspace/ProvisioningSettlementSeed";
+import type { ProvisioningSettlementPatch } from "@/lib/runtime/provisioning/provisioningSettlement";
 import RouteTimingSeed from "@/components/admin/workspace/RouteTimingSeed";
 import {
     collectedRouteTiming,
@@ -78,15 +82,25 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
     const pageStarted = timing ? performance.now() : 0;
     const composeStarted = timing ? performance.now() : 0;
 
-    const composed = await composeProvisioningAnswerForRoute({
+    /*
+     * TWO-PHASE EMISSION. `deferSettlement` returns as soon as the FRAME is composed — geometry,
+     * configuration and whatever capability states have already resolved — and hands the rest back
+     * as a promise. The frame is seeded below immediately; the settlement is awaited inside its own
+     * Suspense boundary, so React flushes the frame first and the facts whenever they finish.
+     *
+     * Measured on deployed a5eb2f29: the card-producer join cost 740ms INSIDE the server stream
+     * hold, and nothing in it selects geometry. That join is what this removes from the frame path.
+     */
+    const route = await composeProvisioningAnswerForRoute({
         rawSlug: workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId,
         cohort,
         aspect,
-    })
-        .then((r) => (r.ok ? r.answer : null))
-        .catch(() => null);
+        deferSettlement: true,
+    }).catch(() => null);
+    const composed = route && route.ok ? route.answer : null;
+    const settlement = route && route.ok ? (route.settlement ?? null) : null;
     const composeWallMs = timing ? performance.now() - composeStarted : 0;
 
     // Unchanged admission: an error terminal seeds nothing, exactly as before.
@@ -131,6 +145,23 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
         });
     }
 
+    const navigation = {
+        target: workUnitSlug,
+        lens: requestedWorkViewId,
+        subject: requestedSubjectId,
+        cohort,
+        aspect,
+    };
+    /*
+     * SERIALIZED ONCE, REFERENCED TWICE.
+     *
+     * Calling `toRscPlainJson(answer)` at each prop produced two distinct objects, and the flight
+     * serializer — which dedupes by REFERENCE — wrote the whole answer into the payload twice.
+     * Measured on deployed f7aaa0b0: `decodedBodySize` 312,235 against 210,115 before, ~102KB of
+     * duplicate the browser had to parse on the frame's own critical path. One binding, one copy.
+     */
+    const frameAnswer = answer ? toRscPlainJson(answer) : null;
+
     return (
         <>
         <ProvisioningAnswerSeed
@@ -139,12 +170,38 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             subject={requestedSubjectId}
             cohort={cohort}
             aspect={aspect}
-            answer={answer ? toRscPlainJson(answer) : null}
+            answer={frameAnswer}
             producer={`page(subject=${requestedSubjectId ?? "null"},cohort=${cohort ?? "null"})`}
         />
+        {/* PHASE 1 — the navigation becomes addressable, so a settlement has a frame to attach to
+            and a settlement for another navigation has a frame to be refused against. */}
+        <ProvisioningFrameRegistration navigation={navigation} answer={frameAnswer} />
+        {/* PHASE 2 — awaited in its OWN boundary. Without the Suspense the page segment would block
+            on the settlement again and the split would buy nothing. `fallback={null}` because this
+            renders no UI: the frame above is already on screen. */}
+        <Suspense fallback={null}>
+            <SettlementBoundary settlement={settlement} />
+        </Suspense>
         {/* ONE payload for the route: the layout's spans plus this segment's, emitted by the boundary
             that finishes last. Renders nothing when the flag is off. */}
         <RouteTimingSeed marks={collectedRouteTiming()} />
         </>
     );
+}
+
+/**
+ * The only await that may still be slow, isolated behind its own boundary.
+ *
+ * A failed settlement resolves to null and seeds nothing: the cells stay UNKNOWN and their existing
+ * owners fill them. It must never resolve to an empty patch, which would state authoritatively that
+ * the producers found nothing.
+ */
+async function SettlementBoundary({
+    settlement,
+}: {
+    settlement: Promise<ProvisioningSettlementPatch | null> | null;
+}) {
+    if (!settlement) return null;
+    const patch = await settlement.catch(() => null);
+    return <ProvisioningSettlementSeed patch={patch ? toRscPlainJson(patch) : null} />;
 }

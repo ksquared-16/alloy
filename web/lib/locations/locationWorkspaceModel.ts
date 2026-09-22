@@ -13,9 +13,23 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 export const LOCATION_WORKSPACE_TABS = [
     { key: "overview", label: "Overview" },
     { key: "programs", label: "Programs" },
-    { key: "rooms", label: "Rooms" },
+    { key: "rooms", label: "Spaces" },
     { key: "schedule", label: "Scheduling" },
-    { key: "operational-rules", label: "Operational Rules" },
+    /*
+     * "operational-rules" is deliberately ABSENT from the primary tabs.
+     *
+     * Ordinary operating facts belong to the space they describe: capacity and
+     * staffing ratio are authored on the object, and an operator should never
+     * have to decide whether a fact lives under Spaces or under a rules page.
+     * Measured before removing it: of its four families, capacity and ratio had
+     * moved to the object, and operating windows and schedule rules had zero
+     * rows in the entire deployed database.
+     *
+     * The KEY REMAINS VALID. `locationWorkspaceHref(site, "operational-rules")`
+     * still resolves, every existing deep link still opens, and the canonical
+     * rule APIs, history and resolver are untouched — the page is now reached
+     * as an advanced affordance from the object whose facts it governs.
+     */
     { key: "tours", label: "Tours" },
     { key: "placement", label: "Placement" },
     { key: "access", label: "Access" },
@@ -40,7 +54,22 @@ export function normalizeUsLocationTimezone(value: unknown): UsLocationTimezone 
         :   null;
 }
 
-export type LocationWorkspaceTab = (typeof LOCATION_WORKSPACE_TABS)[number]["key"];
+/**
+ * Reachable, but not offered as a primary destination.
+ *
+ * Keeping the key in the routable union is what makes "the page is demoted, not
+ * deleted" true rather than aspirational: existing deep links resolve, the
+ * advanced affordance on a space resolves, and the rule history stays readable.
+ */
+export const LOCATION_WORKSPACE_ADVANCED_TABS = [
+    { key: "operational-rules", label: "Operational Rules" },
+] as const;
+
+export type LocationWorkspacePrimaryTab = (typeof LOCATION_WORKSPACE_TABS)[number]["key"];
+
+export type LocationWorkspaceTab =
+    | LocationWorkspacePrimaryTab
+    | (typeof LOCATION_WORKSPACE_ADVANCED_TABS)[number]["key"];
 
 export type LocationWorkspaceSetupItem = {
     key: "general" | "programs" | "rooms" | "schedule" | "tours" | "placement" | "access";

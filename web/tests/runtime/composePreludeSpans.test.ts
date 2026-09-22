@@ -187,12 +187,19 @@ describe("the compose's own semantics are untouched", () => {
          *                             composition rather than after it.
          *   4 resolveWorkViewTotalsSeed
          *                           — the counts themselves, inside the announcement listener.
-         *   10 seedRef.run          — the join. It awaits work already in flight, and whatever it
+         *   9  tourRef.run         — the tour signal's join. Started from the SAME
+         *                             `onSubjectResolved` announcement as the participant read, so
+         *                             it too awaits work already in flight. It is listed here
+         *                             because it drifted in without argument once: the gate went
+         *                             red, the list was not updated, and a red gate stops guarding
+         *                             anything. `null` from it means NOT ESTABLISHED — never
+         *                             "no tour" — so the join can settle honestly either way.
+         *   11 seedRef.run          — the join. It awaits work already in flight, and whatever it
          *                             waits is published as `join_wait_ms`, the ADDED DOCUMENT
          *                             WAIT, rather than disappearing into page_total.
          *
          * None of these is a new serial step ahead of the answer: 3 and 4 run inside a listener
-         * the composer fires mid-composition, and 10 is the join for that work.
+         * the composer fires mid-composition, and 9 and 11 are the joins for that work.
          */
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
@@ -203,7 +210,18 @@ describe("the compose's own semantics are untouched", () => {
             "projectFocusPanelCardProducers",
             "earlyRef.run",
             "(async",
+            "tourRef.run",
             "(async",
+            /*
+             * 11 runSettlement — the INLINE settlement join, taken only when the caller did NOT ask
+             *                    for `deferSettlement`. The HTTP seam's consumer has no second
+             *                    delivery to wait for, so it still receives one fully settled
+             *                    answer and this await is how it gets one. The RSC route asks to
+             *                    defer, and then this branch is not taken at all — pinned by the
+             *                    next gate, which is the architectural property that moved
+             *                    FIRST_AUTHORITATIVE_FRAME off the producer join.
+             */
+            "runSettlement",
             "seedRef.run",
         ]);
         /*
@@ -228,6 +246,26 @@ describe("the compose's own semantics are untouched", () => {
         for (const m of ROUTE_CODE.matchAll(/await \(async \(\) => \{([\s\S]{0,200}?)return /g)) {
             expect(m[1]).toMatch(/overlapDiag\.(producer_invocations|participant_reads) \+= 1;/);
         }
+    });
+
+    it("THE GATE: the deferred path starts the settlement and does NOT await it", () => {
+        /*
+         * The whole of two-phase emission rests on this. If `deferSettlement` ever came to await
+         * `runSettlement()`, the frame would go back to waiting behind the card producers (740ms on
+         * deployed a5eb2f29) and every measurement would look healthy while the architecture had
+         * silently reverted.
+         */
+        const fork = ROUTE_CODE.slice(
+            ROUTE_CODE.indexOf("if (input.deferSettlement) {"),
+            ROUTE_CODE.indexOf("const tSeedJoin = mark();"),
+        );
+        expect(fork).toContain("deferredSettlement = runSettlement()");
+        const deferredBranch = fork.slice(0, fork.indexOf("} else {"));
+        expect(deferredBranch).not.toContain("await runSettlement");
+        // and the inline branch must still settle, or the HTTP seam would ship an unsettled answer
+        const inlineBranch = fork.slice(fork.indexOf("} else {"));
+        expect(inlineBranch).toContain("await runSettlement()");
+        expect(inlineBranch).toContain("applyProvisioningSettlement");
     });
 
     it("the document actor is still derived from the same gate, just measured", () => {

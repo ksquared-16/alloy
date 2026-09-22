@@ -42,31 +42,31 @@ const ROWS = [SITE, ROOM1, TOD1, TOD2, INFANT, PLAY, LEGACY];
 // ---------------------------------------------------------------------------
 describe("1-5. operator grammar", () => {
     it("1. a nested Classroom reads Classroom · Room 1 · North Campus", () => {
-        expect(presentRoomTopology(TOD1, ROWS).subtitle).toBe("Classroom · Room 1 · North Campus");
+        expect(presentRoomTopology(TOD1, ROWS).subtitle).toBe("Operational · Room 1 · North Campus");
     });
 
     it("2. a direct-site Classroom reads Classroom · North Campus, with no fabricated room", () => {
         const p = presentRoomTopology(INFANT, ROWS);
-        expect(p.subtitle).toBe("Classroom · North Campus");
+        expect(p.subtitle).toBe("Operational · North Campus");
         expect(p.containingSpaceLabel).toBeNull();
     });
 
-    it("3. a Physical room reads Physical room · North Campus — never Classroom", () => {
+    it("3. a Physical space reads Physical space · North Campus — never Classroom", () => {
         const p = presentRoomTopology(ROOM1, ROWS);
-        expect(p.subtitle).toBe("Physical room · North Campus");
-        expect(p.typeLabel).not.toBe("Classroom");
+        expect(p.subtitle).toBe("Physical · North Campus");
+        expect(p.typeLabel).not.toBe("Operational");
     });
 
-    it("4. a Shared space reads Shared space · North Campus with no containing segment", () => {
+    it("4. a stored Shared space now reads Physical space · North Campus with no containing segment", () => {
         const p = presentRoomTopology(PLAY, ROWS);
-        expect(p.subtitle).toBe("Shared space · North Campus");
+        expect(p.subtitle).toBe("Physical · North Campus");
         expect(p.containingSpaceLabel).toBeNull();
     });
 
     it("5. a historical NULL-role row presents as Classroom", () => {
         const historical = row({ id: "hist", label: "Pre-K", parent_location_id: "site" });
         expect(historical.unit_role).toBeUndefined();
-        expect(presentRoomTopology(historical, [SITE, historical]).subtitle).toBe("Classroom · North Campus");
+        expect(presentRoomTopology(historical, [SITE, historical]).subtitle).toBe("Operational · North Campus");
     });
 
     it("never leaks database vocabulary into operator copy", () => {
@@ -101,7 +101,7 @@ describe("6-7. canonical ancestry, no blanks", () => {
     it("drops the site segment rather than inventing one when ancestry fails", () => {
         const orphan = row({ id: "orphan", label: "Floating", unit_role: "operational_group", parent_location_id: null });
         const p = presentRoomTopology(orphan, [orphan]);
-        expect(p.subtitle).toBe("Classroom");
+        expect(p.subtitle).toBe("Operational");
         expect(p.siteLabel).toBeNull();
     });
 
@@ -116,8 +116,8 @@ describe("6-7. canonical ancestry, no blanks", () => {
         const roomB = row({ id: "roomB", label: "Room B", unit_role: "physical_space", parent_location_id: "siteB" });
         const todB = row({ id: "todB", label: "Toddler B", unit_role: "operational_group", parent_location_id: "roomB" });
         const all = [...ROWS, siteB, roomB, todB];
-        expect(presentRoomTopology(todB, all).subtitle).toBe("Classroom · Room B · South Campus");
-        expect(presentRoomTopology(TOD1, all).subtitle).toBe("Classroom · Room 1 · North Campus");
+        expect(presentRoomTopology(todB, all).subtitle).toBe("Operational · Room B · South Campus");
+        expect(presentRoomTopology(TOD1, all).subtitle).toBe("Operational · Room 1 · North Campus");
     });
 });
 
@@ -146,13 +146,13 @@ describe("8. useScopeOptions grammar", () => {
 // ---------------------------------------------------------------------------
 describe("rail grammar inside one site", () => {
     it("leads with Type and the containing room, omitting the campus", () => {
-        expect(roomRailTopologySegments(TOD1, ROWS)).toEqual(["Classroom", "Room 1"]);
+        expect(roomRailTopologySegments(TOD1, ROWS)).toEqual(["Operational", "Room 1"]);
     });
 
     it("shows only Type for a room that hangs off the site", () => {
-        expect(roomRailTopologySegments(INFANT, ROWS)).toEqual(["Classroom"]);
-        expect(roomRailTopologySegments(ROOM1, ROWS)).toEqual(["Physical room"]);
-        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Shared space"]);
+        expect(roomRailTopologySegments(INFANT, ROWS)).toEqual(["Operational"]);
+        expect(roomRailTopologySegments(ROOM1, ROWS)).toEqual(["Physical"]);
+        expect(roomRailTopologySegments(PLAY, ROWS)).toEqual(["Physical"]);
     });
 
     it("never repeats the campus in a row already scoped to it", () => {

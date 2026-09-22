@@ -25,6 +25,8 @@ import {
 } from "@/lib/locations/capacityAdoptionRequest";
 import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
 import type { LocationHierarchyRow } from "@/lib/adminV2/locationsHierarchyTablePresentation";
+import { ordinaryCapacityKindForRole } from "@/lib/locations/objectCapacity";
+import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 
 /** Canonical resolution, as the server returns it. Never recomputed here. */
 type ResolvedCapacity = {
@@ -76,6 +78,9 @@ export default function RoomCapacitySection({
     onSaveRoom: (id: string, body: Record<string, unknown>) => Promise<void>;
 }) {
     const standing: RoomCapacityStanding = resolveRoomCapacityStanding(room, capacityRules);
+    const ordinaryKind = ordinaryCapacityKindForRole(
+        (room.unit_role ?? null) as CanonicalUnitRole | null,
+    );
     const [choosing, setChoosing] = useState(false);
     const [kind, setKind] = useState<CapacityKindName | "discard" | "">("");
     const [busy, setBusy] = useState(false);
@@ -113,6 +118,17 @@ export default function RoomCapacitySection({
     }, [room.id, standing.canonicalRules.length]);
 
     const legacy = standing.legacyValue;
+    /*
+     * Only speak up when binding DISAGREES with what was authored. `authored` is
+     * the ordinary field's own kind, so a room whose binding equals its authored
+     * number stays quiet — which is the overwhelmingly common case.
+     */
+    const authored =
+        resolved ?
+            (ordinaryKind === "operational" ? resolved.configuredCapacity : resolved.physicalCapacity)
+        :   null;
+    const binds =
+        resolved?.bindingCapacity != null && (authored == null || resolved.bindingCapacity !== authored);
     const manageHref = siteId ? locationWorkspaceHref(siteId, "operational-rules") : null;
 
     const commit = async () => {
@@ -170,32 +186,36 @@ export default function RoomCapacitySection({
             : null;
 
     return (
-        <ConfigEditorSection title="Capacity" testId="locations-room-capacity">
-            {standing.canonicalRules.length > 0 ?
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-capacity-canonical">
-                    {resolved?.bindingCapacity != null ?
-                        <Cell testId="binding" label="Binding" value={`${resolved.bindingCapacity} seats`} />
-                    :   null}
-                    {KINDS.map((k) => {
-                        const field = k === "operational" ? "configuredCapacity" : (`${k}Capacity` as const);
-                        const value = resolved?.[field as keyof ResolvedCapacity];
-                        // A kind with no rule is absent, never zero.
-                        return typeof value === "number" ?
-                                <Cell key={k} testId={k} label={CAPACITY_KIND_LABELS[k]} value={String(value)} />
-                            :   null;
-                    })}
-                    {resolved?.limitingFactor ?
-                        <Cell
-                            testId="limiting"
-                            label="Limited by"
-                            value={LIMITING_FACTOR_LABELS[resolved.limitingFactor] ?? resolved.limitingFactor}
-                        />
-                    :   null}
-                    {resolved && resolved.status === "not_configured" ?
-                        <p className="config-typo-sublabel" data-testid="locations-room-capacity-unresolved">
-                            No capacity resolves for this room yet.
-                        </p>
-                    :   null}
+        <ConfigEditorSection title="Capacity limits" testId="locations-room-capacity">
+            {/*
+              * WHAT THIS SECTION IS NOW.
+              *
+              * The authored number lives on the object, in the detail grid and the
+              * editor. This section exists for the case where the number a director
+              * typed is NOT the number the room can operate at — a licensed ceiling,
+              * a ratio, staffing. Saying "Capacity 10" beside "Limited by ratio · 8"
+              * explains a real disagreement. Repeating "10" under a second heading
+              * would only ask the operator which one to believe.
+              */}
+            {binds && resolved ?
+                <div className="space-y-1.5" data-testid="locations-room-capacity-binding">
+                    <p className="text-sm text-alloy-midnight">
+                        This space can take <strong>{resolved.bindingCapacity}</strong> right now
+                        {resolved.limitingFactor ?
+                            <> — limited by {(LIMITING_FACTOR_LABELS[resolved.limitingFactor] ?? resolved.limitingFactor).toLowerCase()}</>
+                        :   null}
+                        .
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-capacity-canonical">
+                        {KINDS.map((k) => {
+                            const field = k === "operational" ? "configuredCapacity" : (`${k}Capacity` as const);
+                            const value = resolved?.[field as keyof ResolvedCapacity];
+                            // A kind with no rule is absent, never zero.
+                            return typeof value === "number" ?
+                                    <Cell key={k} testId={k} label={CAPACITY_KIND_LABELS[k]} value={String(value)} />
+                                :   null;
+                        })}
+                    </div>
                 </div>
             :   null}
 
@@ -264,11 +284,11 @@ export default function RoomCapacitySection({
                             {kind === "discard" ?
                                 <div className={CONFIG_OBJECT_CELL} data-testid="locations-room-capacity-discard-preview">
                                     <p className="text-sm font-semibold text-alloy-midnight">
-                                        {legacy} seats will stop counting as this room&rsquo;s capacity.
+                                        {legacy} seats will stop counting as this space&rsquo;s capacity.
                                     </p>
                                     <p className="config-typo-sublabel mt-0.5">
-                                        The number is kept as a record of what was there. Set real capacity in
-                                        Operational Rules when you are ready.
+                                        The number is kept as a record of what was there. Set capacity on the space itself
+                                        when you are ready.
                                     </p>
                                 </div>
                             :   null}
@@ -307,19 +327,18 @@ export default function RoomCapacitySection({
                 </div>
             :   null}
 
-            {standing.state === "no_capacity" || standing.state === "legacy_discarded" ?
-                <p className="config-typo-sublabel" data-testid="locations-room-capacity-empty">
-                    No capacity configured for this room.
-                </p>
-            :   null}
-
+            {/*
+              * The old empty state is gone. Capacity is a field on the object now,
+              * so an unset one is an empty field the operator can simply fill in —
+              * not a dead end that sends them to another screen to do it.
+              */}
             {manageHref ?
                 <Link
                     href={manageHref}
-                    className="config-typo-sublabel text-alloy-pine"
+                    className="config-typo-sublabel text-alloy-midnight/45 hover:text-alloy-pine"
                     data-testid="locations-room-capacity-manage"
                 >
-                    Manage capacity rules →
+                    Advanced rules and history →
                 </Link>
             :   null}
         </ConfigEditorSection>

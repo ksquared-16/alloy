@@ -1,0 +1,239 @@
+{
+  "trusted_host_action_id": "tha_5294881acdb7c6",
+  "query_hash": "51194055e28e8f918f2208c0f1a12ea6c44622ff990ad9625f38c186418f8af4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T16:07:06.979Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5294881acdb7c6",
+    "query_hash": "51194055e28e8f918f2208c0f1a12ea6c44622ff990ad9625f38c186418f8af4",
+    "authorization_id": "grnt_ab1b2f707fea4c75",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T16:07:10.479Z",
+    "question_ids": [
+      "spaces_discovery_2"
+    ],
+    "questions": {
+      "spaces_discovery_2": {
+        "question_id": "spaces_discovery_2",
+        "row_count": null,
+        "rows": [
+          {
+            "units": [
+              {
+                "label": "Bears",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "10",
+                "active": true
+              },
+              {
+                "label": "Giraffe",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "12",
+                "active": true
+              },
+              {
+                "label": "Infant A",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "6",
+                "active": true
+              },
+              {
+                "label": "Infant A",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "8",
+                "active": true
+              },
+              {
+                "label": "Infant B",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "8",
+                "active": true
+              },
+              {
+                "label": "Infant B",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "6",
+                "active": true
+              },
+              {
+                "label": "Monkeys",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "9",
+                "active": true
+              },
+              {
+                "label": "Playground",
+                "role": "shared_space",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": null,
+                "active": true
+              },
+              {
+                "label": "Pre-K",
+                "role": "operational_group",
+                "parent_role": "physical_space",
+                "parent_is_site": false,
+                "metadata_capacity": "15",
+                "active": true
+              },
+              {
+                "label": "Preschool",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "8",
+                "active": true
+              },
+              {
+                "label": "Preschool 1",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "12",
+                "active": true
+              },
+              {
+                "label": "Preschool 2",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "12",
+                "active": true
+              },
+              {
+                "label": "Room 1",
+                "role": "physical_space",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": null,
+                "active": true
+              },
+              {
+                "label": "Tigers",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "10",
+                "active": true
+              },
+              {
+                "label": "Toddler 1",
+                "role": "operational_group",
+                "parent_role": "physical_space",
+                "parent_is_site": false,
+                "metadata_capacity": "10",
+                "active": true
+              },
+              {
+                "label": "Toddler 1",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "7",
+                "active": true
+              },
+              {
+                "label": "Toddler 2",
+                "role": "operational_group",
+                "parent_role": "physical_space",
+                "parent_is_site": false,
+                "metadata_capacity": "10",
+                "active": true
+              },
+              {
+                "label": "Toddler 2",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "7",
+                "active": true
+              },
+              {
+                "label": "Zebras",
+                "role": "(null)",
+                "parent_role": "(null)",
+                "parent_is_site": true,
+                "metadata_capacity": "9",
+                "active": true
+              }
+            ],
+            "child_attendance_by_target_role": [
+              {
+                "role": "(null=>operational_group)",
+                "events": 29
+              }
+            ],
+            "child_attendance_events_total": 29,
+            "child_attendance_with_room": 29,
+            "staff_presence_by_target_role": [
+              {
+                "role": "(null=>operational_group)",
+                "events": 2
+              }
+            ],
+            "schedule_assignments_by_target_role": [
+              {
+                "role": "(null=>operational_group)",
+                "subject": "staff",
+                "rows": 1
+              }
+            ],
+            "capacity_rules": [
+              {
+                "kind": "licensed",
+                "scope": "room",
+                "capacity": 10,
+                "room": "Toddler 1",
+                "room_role": "operational_group",
+                "effective_start": "2026-09-20",
+                "effective_end": null
+              },
+              {
+                "kind": "licensed",
+                "scope": "room",
+                "capacity": 10,
+                "room": "Toddler 2",
+                "room_role": "operational_group",
+                "effective_start": "2026-09-19",
+                "effective_end": null
+              },
+              {
+                "kind": "physical",
+                "scope": "room",
+                "capacity": 8,
+                "room": "Infant B",
+                "room_role": "(null)",
+                "effective_start": "2026-09-19",
+                "effective_end": null
+              }
+            ],
+            "observed_at": "2026-09-22 16:07:10.391998+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

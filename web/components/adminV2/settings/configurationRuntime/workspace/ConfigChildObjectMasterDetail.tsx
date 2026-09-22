@@ -11,6 +11,7 @@ export function ConfigChildObjectMasterDetail({
     listTitle,
     listSummary,
     listActions,
+    listFilter,
     list,
     detail,
     testId = "config-child-master-detail",
@@ -18,6 +19,8 @@ export function ConfigChildObjectMasterDetail({
     listTitle: string;
     listSummary?: string;
     listActions?: ReactNode;
+    /** Optional presentation-only narrowing of the queue, under its header. */
+    listFilter?: ReactNode;
     list: ReactNode;
     detail: ReactNode;
     testId?: string;
@@ -43,6 +46,9 @@ export function ConfigChildObjectMasterDetail({
                         <div className="shrink-0">{listActions}</div>
                     :   null}
                 </div>
+                {listFilter ?
+                    <div className="border-b border-alloy-stone/15 px-3 py-2">{listFilter}</div>
+                :   null}
                 <div className="config-child-workspace__list-body">{list}</div>
             </aside>
             <div

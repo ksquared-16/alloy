@@ -83,25 +83,62 @@ describe("the chapter speaks Financials, not its own dialect", () => {
     });
 });
 
-describe("the provider reference is diagnostic, not the subject", () => {
-    it("keeps the account identifier out of the default hierarchy", () => {
-        expect(code).toContain("payments-provider-details");
-        /*
-         * MATCH THE WHOLE ATTRIBUTE. `payments-provider-ref` is a PREFIX of
-         * `payments-provider-refresh`, so a bare indexOf finds the Refresh button and measures the
-         * wrong element entirely — which is how the first version of this case failed against
-         * correct markup.
-         */
-        const at = code.indexOf('data-testid="payments-provider-ref"');
-        expect(at, "the reference is rendered").toBeGreaterThan(-1);
-        const before = code.slice(0, at);
-        expect(before.lastIndexOf("<details"), "it sits inside a closed disclosure")
-            .toBeGreaterThan(before.lastIndexOf("</details>"));
+describe("this is a configuration surface, not an integration debugger", () => {
+    /*
+     * THIS ASSERTION REVERSED, DELIBERATELY.
+     *
+     * It used to require the `acct_…` reference to sit behind a closed "Technical details"
+     * disclosure. A Director product decision removed it from the chapter entirely: quiet was still
+     * the wrong surface for it. Those facts remain readable through the canonical diagnostics and
+     * audit authorities, which is where engineering should be looking.
+     */
+    it("renders no provider account reference anywhere", () => {
+        expect(code).not.toContain("providerAccountRef");
+        expect(code).not.toContain("payments-provider-ref\"");
+        expect(code).not.toMatch(/acct_/);
+    });
+
+    it("has no technical-details disclosure, here or moved elsewhere", () => {
+        expect(code).not.toContain("payments-provider-details");
+        expect(code).not.toMatch(/Technical details/);
+        expect(code, "and no replacement disclosure took its place").not.toMatch(/<details/);
+    });
+
+    it("exposes no raw provider vocabulary as copy", () => {
+        expect(code).not.toMatch(/charges_enabled|details_submitted|currently_due|past_due|disabled_reason/);
+        expect(code).not.toMatch(/us_bank_account_ach_payments|card_payments/);
     });
 
     it("still answers the questions an operator actually arrives with", () => {
         for (const probe of ["payments-provider-status", "payments-rail-card", "payments-rail-bank"]) {
             expect(code).toContain(probe);
         }
+    });
+});
+
+describe("only one primary state at a time", () => {
+    /*
+     * "Checking with the payment provider…" WAS SET AND NEVER CLEARED, so the chapter showed it
+     * beside the resolved state it had already computed — two statuses at once, one of them stale.
+     */
+    it("shows the checking indicator only while a read is in flight", () => {
+        expect(code).toContain("payments-provider-refreshing");
+        expect(code, "it is driven by a flag, not by a sticky notice")
+            .toMatch(/refreshing\s*\?/);
+        expect(code).toMatch(/setRefreshing\(true\)/);
+    });
+
+    it("always clears the indicator when the read settles, however it settles", () => {
+        expect(code, "a finally clause, so a refusal clears it too").toMatch(/finally\([\s\S]{0,120}setRefreshing\(false\)/);
+    });
+
+    it("reports a failed refresh rather than silently stopping", () => {
+        expect(code).toMatch(/could not be reached/i);
+        expect(code).toMatch(/Refresh status to try again/i);
+    });
+
+    /* The expired-link notice is a RESULT, not a progress report, so it must survive the refresh. */
+    it("keeps the expired-link notice, which is an answer rather than progress", () => {
+        expect(code).toMatch(/had expired/i);
     });
 });
