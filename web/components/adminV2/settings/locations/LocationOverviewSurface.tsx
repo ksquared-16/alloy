@@ -47,8 +47,8 @@ export function LocationOverviewSurface({
             label: "Placement",
             status:
                 model.activeRoomCount > 0 ?
-                    `${model.activeRoomCount} ${model.activeRoomCount === 1 ? "room" : "rooms"} available`
-                :   "No active rooms yet",
+                    `${model.activeRoomCount} ${model.activeRoomCount === 1 ? "space" : "spaces"} available`
+                :   "No active spaces yet",
         },
         {
             key: "access",
@@ -85,7 +85,7 @@ export function LocationOverviewSurface({
                 <ConfigWorkspaceCard compact className="h-full" testId="locations-overview-rooms">
                     <button type="button" className="w-full text-left" onClick={() => onOpenTab("rooms")}>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
-                            Rooms
+                            Spaces
                         </p>
                         <p className="mt-1.5 text-lg font-semibold tracking-tight text-alloy-midnight">
                             {model.activeRoomCount}

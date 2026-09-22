@@ -29,7 +29,11 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
 import RoomCapacitySection from "@/components/adminV2/settings/locations/RoomCapacitySection";
-import { resolveRoomCapacityStanding } from "@/lib/locations/capacityAdoptionState";
+import {
+    ordinaryCapacityKindForRole,
+    parseOrdinaryCapacityInput,
+    readOrdinaryCapacity,
+} from "@/lib/locations/objectCapacity";
 import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
 import {
     presentRoomTopology,
@@ -37,9 +41,10 @@ import {
 } from "@/lib/locations/topologyPresentation";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import {
-    ROOM_TYPE_OPTIONS,
     roleAcceptsInside,
+    roleUsesProgramFields,
     roomTypeHint,
+    roomTypeOptionsFor,
     type InsideOption,
 } from "@/lib/locations/roomTypeVocabulary";
 import {
@@ -103,9 +108,17 @@ export default function LocationRoomDetailPanel({
 
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
         const md = (next.metadata ?? {}) as Record<string, unknown>;
-        const capacityMd = readLocationMetadataPresentation(next.metadata);
         setLabel((next.label ?? "").trim());
-        setCapacity(capacityMd.capacity ?? "");
+        // The field shows the CANONICAL ordinary capacity for this object's type,
+        // because that is what Save writes. Hydrating it from the legacy metadata
+        // number would put a value in the box that saving could not reproduce.
+        const canonical = readOrdinaryCapacity(
+            capacityRules,
+            next.id,
+            committedRoomTopology(next, siteId).roomType,
+            todayYmd,
+        );
+        setCapacity(canonical != null ? String(canonical) : "");
         setSupportedKeys(readRoomSupportedProgramKeys(md));
         setSchedulePatternId(readRoomSchedulePatternId(md) ?? "");
         setActive(next.is_active !== false);
@@ -144,11 +157,35 @@ export default function LocationRoomDetailPanel({
     // this panel: the server can safely refuse an unsafe change, but adopting an
     // existing location is its own product slice.
     const topology = room ? presentRoomTopology(room, topologyRows) : null;
-    // Once canonical capacity exists, the untyped field stops being current truth.
-    // Two ordinary editors maintaining Canonical = 12 and Legacy = 14 is exactly
-    // the ambiguity this convergence removes.
-    const capacityStanding = room ? resolveRoomCapacityStanding(room, capacityRules) : null;
-    const canEditLegacyCapacity = (capacityStanding?.canonicalRules.length ?? 0) === 0;
+
+    /**
+     * One typed number, through the canonical authoring service.
+     *
+     * The server derives the capacity kind from the object's role and decides
+     * whether this is a create, a new version, a same-day replacement or a
+     * retirement. Nothing about effective dating reaches the operator.
+     */
+    const saveObjectCapacity = async (
+        roomId: string,
+        role: CanonicalUnitRole,
+        value: number | null,
+    ): Promise<void> => {
+        const res = await fetch("/api/admin/operational-config/capacity-rules", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "set_object_capacity",
+                room_location_id: roomId,
+                unit_role: role,
+                capacity: value,
+            }),
+        });
+        if (!res.ok) {
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(json.error ?? `Could not save capacity (${res.status})`);
+        }
+    };
 
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
@@ -174,14 +211,18 @@ export default function LocationRoomDetailPanel({
         );
     };
 
+    /** The canonical ordinary capacity for a row, in the rail's own vocabulary. */
+    const canonicalCapacityFor = (entry: LocationHierarchyRow): number | null =>
+        readOrdinaryCapacity(capacityRules, entry.id, committedRoomTopology(entry, siteId).roomType, todayYmd);
+
     const detail =
         createDetail ? createDetail
         : !room ?
             rooms.length === 0 ?
                 <ConfigurationEmptyState
                     testId="locations-room-workspace-empty"
-                    title="No rooms yet"
-                    description="Add a room to track capacity for this location."
+                    title="No spaces yet"
+                    description="Add a classroom or a physical space to describe how this location operates."
                     actions={
                         canMutate && onAddRoom ?
                             <ConfigurationPrimaryButton
@@ -189,21 +230,21 @@ export default function LocationRoomDetailPanel({
                                 onClick={onAddRoom}
                                 data-testid="locations-room-empty-add"
                             >
-                                Add room
+                                Add space
                             </ConfigurationPrimaryButton>
                         :   null
                     }
                 />
             :   <ConfigurationEmptyState
                     testId="locations-room-workspace-empty"
-                    title="Select a room"
-                    description="Choose a room to review capacity, programs, and schedule pattern."
+                    title="Select a space"
+                    description="Choose a space to review its capacity, programs and schedule."
                 />
         : editing ?
             <div className="space-y-3" data-testid="locations-room-edit">
                 <ConfigObjectHeader
                     size="hero"
-                    name={label.trim() || "Untitled room"}
+                    name={label.trim() || "Untitled space"}
                     status={{ label: "Editing", tone: "attention" }}
                     facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
@@ -220,7 +261,7 @@ export default function LocationRoomDetailPanel({
                 <div className="space-y-2.5" data-testid="locations-room-editor">
                     <ConfigEditorSection title="Room" testId="locations-room-editor-identity">
                         <label className="block max-w-md space-y-1">
-                            <span className="config-typo-field-label">Room name</span>
+                            <span className="config-typo-field-label">Name</span>
                             <input
                                 type="text"
                                 value={label}
@@ -239,7 +280,7 @@ export default function LocationRoomDetailPanel({
                                 className="config-runtime-select"
                                 data-testid="locations-room-type"
                             >
-                                {ROOM_TYPE_OPTIONS.map((option) => (
+                                {roomTypeOptionsFor(committedRoomTopology(room, siteId).roomType).map((option) => (
                                     <option key={option.role} value={option.role}>
                                         {option.label}
                                     </option>
@@ -272,23 +313,23 @@ export default function LocationRoomDetailPanel({
                             </label>
                         :   null}
 
-                        {canEditLegacyCapacity ?
-                            <label className="block max-w-36 space-y-1">
-                                <span className="config-typo-field-label">Capacity</span>
-                                <input
-                                    type="number"
-                                    min={0}
-                                    value={capacity}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setCapacity(e.target.value)}
-                                    className="config-runtime-input"
-                                    data-testid="locations-room-capacity"
-                                />
-                            </label>
-                        :   <p className="config-typo-sublabel" data-testid="locations-room-capacity-canonical-owned">
-                                Capacity for this room is set in Operational Rules.
+                        <label className="block max-w-36 space-y-1">
+                            <span className="config-typo-field-label">Capacity</span>
+                            <input
+                                type="number"
+                                min={0}
+                                value={capacity}
+                                disabled={!canMutate}
+                                onChange={(e) => setCapacity(e.target.value)}
+                                className="config-runtime-input"
+                                data-testid="locations-room-capacity"
+                            />
+                            <p className="config-typo-sublabel" data-testid="locations-room-capacity-hint">
+                                {ordinaryCapacityKindForRole(roomType) === "operational" ?
+                                    "How many children this class takes."
+                                :   "How many people this space holds."}
                             </p>
-                        }
+                        </label>
                         <label className="flex items-center gap-2">
                             <input
                                 type="checkbox"
@@ -302,6 +343,11 @@ export default function LocationRoomDetailPanel({
                         </label>
                     </ConfigEditorSection>
 
+                    {/* Classroom-only. A physical space serves no program and keeps no
+                        default pattern, so offering either would author data that
+                        nothing reads. */}
+                    {roleUsesProgramFields(roomType) ?
+                    <>
                     <ConfigEditorSection
                         title="Programs supported"
                         description="Programs offered at this location that this room can serve."
@@ -309,7 +355,7 @@ export default function LocationRoomDetailPanel({
                     >
                         {programOptions.length === 0 ?
                             <p className="config-typo-sublabel">
-                                Offer Programs at this Location before assigning them to rooms.
+                                Offer Programs at this Location before assigning them to classrooms.
                             </p>
                         :   <div className="space-y-2" data-testid="locations-room-programs">
                                 {programOptions.map((program) => {
@@ -358,6 +404,8 @@ export default function LocationRoomDetailPanel({
                             </select>
                         </label>
                     </ConfigEditorSection>
+                    </>
+                    :   null}
 
                     {error ?
                         <p className="text-sm text-red-800" role="alert">
@@ -375,12 +423,33 @@ export default function LocationRoomDetailPanel({
                                     void (async () => {
                                         setSaving(true);
                                         setError(null);
+                                        let capacityWritten = false;
                                         try {
+                                            // ORDER MATTERS. Capacity is the part a domain
+                                            // rule can refuse, so it goes first: a refusal
+                                            // then leaves nothing half-saved and the
+                                            // operator can fix the number in place. The
+                                            // location patch that follows is idempotent, so
+                                            // a retry after a later failure is harmless.
+                                            const parsed = parseOrdinaryCapacityInput(capacity);
+                                            if (!parsed.ok) throw new Error(parsed.message);
+                                            // Only when it actually changed. An ordinary
+                                            // rename should not cost a capacity round-trip,
+                                            // and a Save that touches nothing should reach
+                                            // the rule engine not at all.
+                                            if (parsed.value !== canonicalCapacityFor(room)) {
+                                                await saveObjectCapacity(room.id, roomType, parsed.value);
+                                                capacityWritten = true;
+                                            }
+                                            // `capacity` is deliberately NOT passed: an
+                                            // ordinary save no longer writes
+                                            // locations.metadata.capacity, and omitting the
+                                            // key leaves an unreviewed legacy value intact
+                                            // for the existing review flow to resolve.
                                             const metadata = writeRoomProgramsAndScheduleMetadata({
                                                 existing: (room.metadata ?? {}) as Record<string, unknown>,
                                                 supportedProgramKeys: supportedKeys,
                                                 schedulePatternId: schedulePatternId || null,
-                                                capacity: capacity.trim() || null,
                                             });
                                             await onSave(room.id, {
                                                 label: label.trim() || null,
@@ -395,6 +464,7 @@ export default function LocationRoomDetailPanel({
                                                     siteId,
                                                 ),
                                             });
+                                            if (capacityWritten) await onCapacityChanged();
                                             setEditing(false);
                                         } catch (e) {
                                             // A refusal is a normal product state. Explain it
@@ -420,7 +490,7 @@ export default function LocationRoomDetailPanel({
         :   <div className="space-y-3" data-testid="locations-room-detail">
                 <ConfigObjectHeader
                     size="hero"
-                    name={label.trim() || "Untitled room"}
+                    name={label.trim() || "Untitled space"}
                     status={{ label: statusLabel, tone: active ? "active" : "inactive" }}
                     facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
@@ -429,7 +499,7 @@ export default function LocationRoomDetailPanel({
                                 onClick={beginEdit}
                                 data-testid="locations-room-toggle-edit"
                             >
-                                Edit room
+                                Edit space
                             </ConfigurationSecondaryButton>
                         :   null
                     }
@@ -455,16 +525,41 @@ export default function LocationRoomDetailPanel({
                             [{ key: "inside", label: "Inside", value: topology!.containingSpaceLabel }]
                         :   []),
                         {
-                            key: "programs",
-                            label: "Programs",
-                            value: programLabels.length > 0 ? programLabels.join(", ") : "None",
+                            // The AUTHORED number for this object, never the derived
+                            // binding figure. Binding can be lower for reasons this field
+                            // did not author — a licensed ceiling, a ratio, staffing — and
+                            // showing it here would make the object look like it holds a
+                            // value nobody typed. When they differ, the capacity section
+                            // below says so in words.
+                            key: "capacity",
+                            label: "Capacity",
+                            value: canonicalCapacityFor(room) != null ? String(canonicalCapacityFor(room)) : "Not set",
                         },
-                        {
-                            key: "schedule",
-                            label: "Schedule pattern",
-                            value: pattern?.label ?? "None",
-                            hint: patternSummary && pattern ? patternSummary.replace(`${pattern.label} · `, "") : undefined,
-                        },
+                        // Programs and schedule are classroom facts. A physical space has
+                        // neither, and an em dash for a property that cannot apply reads
+                        // as missing data rather than as an inapplicable field.
+                        ...(roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
+                            [
+                                {
+                                    key: "programs",
+                                    label: "Programs",
+                                    value: programLabels.length > 0 ? programLabels.join(", ") : "None",
+                                },
+                            ]
+                        :   []),
+                        ...(roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
+                            [
+                                {
+                                    key: "schedule",
+                                    label: "Schedule pattern",
+                                    value: pattern?.label ?? "None",
+                                    hint:
+                                        patternSummary && pattern ?
+                                            patternSummary.replace(`${pattern.label} · `, "")
+                                        :   undefined,
+                                },
+                            ]
+                        :   []),
                         {
                             key: "status",
                             label: "Status",
@@ -505,8 +600,8 @@ export default function LocationRoomDetailPanel({
 
     return (
         <ConfigChildObjectMasterDetail
-            listTitle="Rooms"
-            listSummary={`${rooms.length} ${rooms.length === 1 ? "room" : "rooms"}`}
+            listTitle="Spaces"
+            listSummary={`${rooms.length} ${rooms.length === 1 ? "space" : "spaces"}`}
             listActions={
                 canMutate && onAddRoom ?
                     <ConfigurationPrimaryButton
@@ -514,7 +609,7 @@ export default function LocationRoomDetailPanel({
                         onClick={onAddRoom}
                         data-testid="locations-room-add"
                     >
-                        + Add room
+                        + Add space
                     </ConfigurationPrimaryButton>
                 :   null
             }
@@ -533,7 +628,15 @@ export default function LocationRoomDetailPanel({
                         const subtitleParts = [
                             ...roomRailTopologySegments(entry, topologyRows),
                             inactive ? "Inactive" : "Active",
-                            capacityMd.capacity ? `${capacityMd.capacity} capacity` : null,
+                            // CANONICAL, not the legacy metadata number. The rail used to
+                            // read `metadata.capacity` while the detail read the rules, so
+                            // one screen could say "8 capacity" beside "No capacity
+                            // configured for this room". A room whose only value is the
+                            // untyped legacy one says so, rather than showing a number the
+                            // object cannot edit and the resolver does not honour.
+                            canonicalCapacityFor(entry) != null ? `${canonicalCapacityFor(entry)} capacity`
+                            : capacityMd.capacity ? "capacity needs review"
+                            : null,
                             keys.length > 0 ? `${keys.length} program${keys.length === 1 ? "" : "s"}` : null,
                         ].filter(Boolean);
                         return (

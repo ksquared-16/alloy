@@ -192,24 +192,40 @@ describe("5-9. preview then commit through the canonical authority", () => {
 // 10-12 — the canonical state comes from the server.
 // ---------------------------------------------------------------------------
 describe("10-12. canonical capacity is server-resolved", () => {
-    it("10-11. shows binding and the limiting factor as the server reports them", async () => {
+    it("10-11. explains binding IN WORDS when it disagrees with what was authored", async () => {
+        // The section no longer repeats the authored number — that lives on the
+        // object now. It speaks only when the room cannot actually operate at
+        // the number someone typed, and then it says why.
         resolution = {
             status: "resolved", physicalCapacity: 24, licensedCapacity: 20,
             configuredCapacity: 18, ratioConstrainedCapacity: 8,
             bindingCapacity: 8, limitingFactor: "ratio",
         };
         await render(room(), [rule()]);
-        expect(need("locations-room-capacity-binding").textContent).toContain("8 seats");
-        expect(need("locations-room-capacity-limiting").textContent).toContain("Ratio");
+        const text = need("locations-room-capacity-binding").textContent ?? "";
+        expect(text).toContain("8");
+        expect(text.toLowerCase()).toContain("ratio");
         // A client minimum over the authored kinds would have said 18.
         expect(container!.textContent).not.toContain("18 seats");
     });
 
-    it("12. a kind with no rule is absent, never rendered as zero", async () => {
+    it("stays silent when binding simply agrees with the authored number", async () => {
         resolution = {
             status: "resolved", physicalCapacity: null, licensedCapacity: null,
             configuredCapacity: 12, ratioConstrainedCapacity: null,
             bindingCapacity: 12, limitingFactor: "operational",
+        };
+        await render(room(), [rule()]);
+        expect(at("locations-room-capacity-binding")).toBeNull();
+    });
+
+    it("12. a kind with no rule is absent, never rendered as zero", async () => {
+        // Binding must DISAGREE with the authored number for the kind cells to
+        // render at all — the section speaks only when there is a limit to explain.
+        resolution = {
+            status: "resolved", physicalCapacity: null, licensedCapacity: null,
+            configuredCapacity: 12, ratioConstrainedCapacity: 8,
+            bindingCapacity: 8, limitingFactor: "ratio",
         };
         await render(room(), [rule()]);
         expect(at("locations-room-capacity-operational")).not.toBeNull();
@@ -236,11 +252,11 @@ describe("10-12. canonical capacity is server-resolved", () => {
 describe("13. a canonical rule beside an unreviewed legacy value still needs review", () => {
     beforeEach(async () => {
         resolution = { status: "resolved", physicalCapacity: null, licensedCapacity: null,
-            configuredCapacity: 12, ratioConstrainedCapacity: null, bindingCapacity: 12, limitingFactor: "operational" };
+            configuredCapacity: 12, ratioConstrainedCapacity: 8, bindingCapacity: 8, limitingFactor: "ratio" };
         await render(room({ metadata: { capacity: "9" } }), [rule()]);
     });
 
-    it("shows canonical capacity AND the outstanding legacy value", () => {
+    it("shows the canonical limit AND the outstanding legacy value", () => {
         expect(at("locations-room-capacity-canonical")).not.toBeNull();
         expect(need("locations-room-capacity-review").textContent).toContain("9 seats");
     });
@@ -284,10 +300,12 @@ describe("14-15. discard makes the value inactive without destroying it", () => 
         expect(posted).toHaveLength(0);
     });
 
-    it("a discarded room then shows no capacity", async () => {
+    it("a discarded room stops asking for review and offers no limits to explain", async () => {
         await render(room({ metadata: { capacity: "12", [LEGACY_CAPACITY_REVIEW_KEY]: "discarded" } }));
-        expect(at("locations-room-capacity-empty")).not.toBeNull();
+        // There is no "no capacity configured" dead end any more: capacity is a
+        // field on the object, so an unset one is simply an empty field there.
         expect(at("locations-room-capacity-review")).toBeNull();
+        expect(at("locations-room-capacity-binding")).toBeNull();
     });
 });
 
@@ -302,16 +320,21 @@ describe("16-18. boundaries and navigation", () => {
         expect(link.getAttribute("href")).toContain("locationId=site");
     });
 
-    it("16. a canonically covered room cannot edit the untyped Capacity field", async () => {
+    it("16. the object's Capacity field is always editable, and always canonical", async () => {
+        // INVERTED DELIBERATELY. The old gate withdrew the Capacity field the
+        // moment canonical capacity existed, so an operator who did the right
+        // thing lost the simple editor and was sent to the rule console. The
+        // field now stays, and writes a typed canonical rule every time.
         const { readFileSync } = await import("node:fs");
         const { resolve } = await import("node:path");
         const src = readFileSync(
             resolve(__dirname, "../../components/adminV2/settings/locations/LocationRoomDetailPanel.tsx"),
             "utf8",
         );
-        expect(src).toContain("canEditLegacyCapacity");
-        expect(src).toContain("locations-room-capacity-canonical-owned");
-        // The gate is the presence of canonical rules, not a flag someone can forget.
-        expect(src).toMatch(/capacityStanding\?\.canonicalRules\.length \?\? 0\) === 0/);
+        expect(src).not.toContain("canEditLegacyCapacity");
+        expect(src).not.toContain("locations-room-capacity-canonical-owned");
+        expect(src).toContain('action: "set_object_capacity"');
+        // The value shown is the canonical one, never locations.metadata.capacity.
+        expect(src).toContain("readOrdinaryCapacity");
     });
 });

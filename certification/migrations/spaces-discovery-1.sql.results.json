@@ -1,0 +1,117 @@
+{
+  "trusted_host_action_id": "tha_d0cbc5c19354da",
+  "query_hash": "a315190d04432f08afbb7c72fade80a8e87ff0bfb6c49edbc6b98406ee3c8f47",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T16:06:06.567Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d0cbc5c19354da",
+    "query_hash": "a315190d04432f08afbb7c72fade80a8e87ff0bfb6c49edbc6b98406ee3c8f47",
+    "authorization_id": "grnt_174938ab1dbf49de",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T16:06:08.919Z",
+    "question_ids": [
+      "spaces_discovery_1"
+    ],
+    "questions": {
+      "spaces_discovery_1": {
+        "question_id": "spaces_discovery_1",
+        "row_count": null,
+        "rows": [
+          {
+            "units_by_effective_role": [
+              {
+                "role": "(null=>operational_group)",
+                "total": 14,
+                "active": 14,
+                "with_metadata_capacity": 14,
+                "with_children": 0
+              },
+              {
+                "role": "operational_group",
+                "total": 3,
+                "active": 3,
+                "with_metadata_capacity": 3,
+                "with_children": 0
+              },
+              {
+                "role": "physical_space",
+                "total": 1,
+                "active": 1,
+                "with_metadata_capacity": 0,
+                "with_children": 1
+              },
+              {
+                "role": "shared_space",
+                "total": 1,
+                "active": 1,
+                "with_metadata_capacity": 0,
+                "with_children": 0
+              }
+            ],
+            "classrooms_nested_in_physical": 3,
+            "capacity_rules_by_kind_scope": [
+              {
+                "kind": "licensed",
+                "scope": "room",
+                "rows": 2,
+                "open_ended": 2,
+                "distinct_rooms": 2
+              },
+              {
+                "kind": "physical",
+                "scope": "room",
+                "rows": 1,
+                "open_ended": 1,
+                "distinct_rooms": 1
+              }
+            ],
+            "rooms_with_more_than_one_capacity_version": 0,
+            "attendance_location_columns": [
+              {
+                "table": "child_attendance_events",
+                "column": "from_room_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "room_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "site_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "to_room_location_id"
+              },
+              {
+                "table": "schedule_assignments",
+                "column": "room_location_id"
+              },
+              {
+                "table": "schedule_assignments",
+                "column": "site_location_id"
+              },
+              {
+                "table": "staff_presence_events",
+                "column": "room_location_id"
+              },
+              {
+                "table": "staff_presence_events",
+                "column": "site_location_id"
+              }
+            ],
+            "observed_at": "2026-09-22 16:06:08.781526+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
