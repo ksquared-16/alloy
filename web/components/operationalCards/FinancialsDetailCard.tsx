@@ -539,6 +539,110 @@ export default function FinancialsDetailCard({
                 </div>
 
                 {/*
+                  * ── ADMINISTRATION, BEFORE THE RECORD ──────────────────────────────────────
+                  *
+                  * Who pays, who owes, and what reduces it are the three things an operator
+                  * comes here to CHANGE. They used to sit below the ledger, so reaching them
+                  * meant scrolling past every transaction on the account — measured at 116
+                  * rows on the certification household, which is not an unusual number.
+                  *
+                  * The ledger is the record and it keeps its place below; this is the
+                  * administration of the account, and it belongs beside the position it
+                  * administers rather than after the history it produces.
+                  */}
+                {/*
+                  * THE PANEL THE GEAR OPENS. Hosted: this card owns the trigger and the open state,
+                  * the panel owns everything else — the scope question, the arrangement in force,
+                  * effective dating, specificity, and `billing.configure_responsibility`, which
+                  * remains the only thing that writes.
+                  *
+                  * `defaultScopeMemberId` is null because Details administers the ACCOUNT, so the
+                  * household is what this host means. It is a stated default, not an absence, and
+                  * the operator still confirms the scope before anything is written.
+                  */}
+                {responsibilityAdmin ? (
+                    /*
+                     * ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT — the containment Accounts has
+                     * carried since 24ffad5bb, now here too. The workspace behind this listens for
+                     * Escape, so a depth card that does not answer FIRST hands its own dismissal to
+                     * its host: measured on the deployed build, one Escape closed the card AND the
+                     * whole Details surface, and the operator lost the account, the lens, the
+                     * filters and their place in the ledger. The card is the innermost open thing,
+                     * so it answers and stops there — and focus goes back to the gear that opened
+                     * it rather than to <body>.
+                     */
+                    <div
+                        data-financials-manage-responsibility="depth-card"
+                        onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            closeResponsibility();
+                        }}
+                    >
+                    <FinancialsResponsibilityPanel
+                        customerId={responsibilityAdmin.customerId}
+                        customerMemberId={null}
+                        subjectLabel={responsibilityAdmin.householdName ?? null}
+                        parties={responsibilityAdmin.parties}
+                        memberOptions={responsibilityScopeMembers}
+                        defaultScopeMemberId={null}
+                        hostedOpen={manageResponsibilityOpen}
+                        onHostedClose={closeResponsibility}
+                        onCommitted={async () => {
+                            /* Committed truth is re-read; the card does not report its own success. */
+                            await responsibilityAdmin.onCommitted();
+                            closeResponsibility();
+                        }}
+                    />
+                    </div>
+                ) : null}
+
+                {/*
+                  * DISCOUNTS, with the other administration concepts rather than on the command
+                  * row. Responsibility answers who owes; this answers what reduces it. Both are
+                  * positions with a gear, and neither is a transaction — which is why they sit
+                  * below Payment | Add and not in it.
+                  */}
+                {discountAdmin ? (
+                    <div className="alloy-os-fdetail__discounts" data-financials-discounts="detail">
+                        <FinancialsDiscountPanel
+                            customerId={discountAdmin.customerId}
+                            childLabelFor={discountAdmin.childLabelFor}
+                            onCommitted={discountAdmin.onCommitted}
+                        />
+                    </div>
+                ) : null}
+
+                {paymentMethodsAccount?.customerId ? (
+                    <div className="alloy-os-fdetail__methods" data-financials-payment-methods="detail">
+                        <PaymentMethodsSection
+                            customerId={paymentMethodsAccount.customerId}
+                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
+                            payerName={paymentMethodsAccount.payerName ?? null}
+                            payerEmail={paymentMethodsAccount.payerEmail ?? null}
+                            canManage={paymentMethodsAccount.canManage ?? true}
+                        />
+                    </div>
+                ) : null}
+
+                {/*
+                  * AUTOPAY SITS DIRECTLY BELOW THE METHODS, because the question it answers is the
+                  * one an operator asks next: the card is on file, does it get charged by itself?
+                  * Keeping them apart would let a surface imply that storing a card is consent.
+                  */}
+                {paymentMethodsAccount?.customerId ? (
+                    <div className="alloy-os-fdetail__autopay" data-financials-autopay="detail">
+                        <AutopaySection
+                            customerId={paymentMethodsAccount.customerId}
+                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
+                            payerName={paymentMethodsAccount.payerName ?? null}
+                            canManage={paymentMethodsAccount.canManage ?? true}
+                        />
+                    </div>
+                ) : null}
+
+                {/*
                     THE LENSES, between the rollup and the record.
                     Selected reads in Bend Pine — the product's active operational control — from
                     the token, never a hardcoded green and never the neutral navy that made a live
@@ -865,97 +969,6 @@ export default function FinancialsDetailCard({
                   * existed, because nothing owned payers, methods or autopay. W2 owns methods, so
                   * they are presented here directly rather than behind a button that goes nowhere.
                   */}
-                {/*
-                  * THE PANEL THE GEAR OPENS. Hosted: this card owns the trigger and the open state,
-                  * the panel owns everything else — the scope question, the arrangement in force,
-                  * effective dating, specificity, and `billing.configure_responsibility`, which
-                  * remains the only thing that writes.
-                  *
-                  * `defaultScopeMemberId` is null because Details administers the ACCOUNT, so the
-                  * household is what this host means. It is a stated default, not an absence, and
-                  * the operator still confirms the scope before anything is written.
-                  */}
-                {responsibilityAdmin ? (
-                    /*
-                     * ESCAPE DISMISSES THE CARD, NOT THE ACCOUNT — the containment Accounts has
-                     * carried since 24ffad5bb, now here too. The workspace behind this listens for
-                     * Escape, so a depth card that does not answer FIRST hands its own dismissal to
-                     * its host: measured on the deployed build, one Escape closed the card AND the
-                     * whole Details surface, and the operator lost the account, the lens, the
-                     * filters and their place in the ledger. The card is the innermost open thing,
-                     * so it answers and stops there — and focus goes back to the gear that opened
-                     * it rather than to <body>.
-                     */
-                    <div
-                        data-financials-manage-responsibility="depth-card"
-                        onKeyDown={(e) => {
-                            if (e.key !== "Escape") return;
-                            e.stopPropagation();
-                            e.preventDefault();
-                            closeResponsibility();
-                        }}
-                    >
-                    <FinancialsResponsibilityPanel
-                        customerId={responsibilityAdmin.customerId}
-                        customerMemberId={null}
-                        subjectLabel={responsibilityAdmin.householdName ?? null}
-                        parties={responsibilityAdmin.parties}
-                        memberOptions={responsibilityScopeMembers}
-                        defaultScopeMemberId={null}
-                        hostedOpen={manageResponsibilityOpen}
-                        onHostedClose={closeResponsibility}
-                        onCommitted={async () => {
-                            /* Committed truth is re-read; the card does not report its own success. */
-                            await responsibilityAdmin.onCommitted();
-                            closeResponsibility();
-                        }}
-                    />
-                    </div>
-                ) : null}
-
-                {/*
-                  * DISCOUNTS, with the other administration concepts rather than on the command
-                  * row. Responsibility answers who owes; this answers what reduces it. Both are
-                  * positions with a gear, and neither is a transaction — which is why they sit
-                  * below Payment | Add and not in it.
-                  */}
-                {discountAdmin ? (
-                    <div className="alloy-os-fdetail__discounts" data-financials-discounts="detail">
-                        <FinancialsDiscountPanel
-                            customerId={discountAdmin.customerId}
-                            childLabelFor={discountAdmin.childLabelFor}
-                            onCommitted={discountAdmin.onCommitted}
-                        />
-                    </div>
-                ) : null}
-
-                {paymentMethodsAccount?.customerId ? (
-                    <div className="alloy-os-fdetail__methods" data-financials-payment-methods="detail">
-                        <PaymentMethodsSection
-                            customerId={paymentMethodsAccount.customerId}
-                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
-                            payerName={paymentMethodsAccount.payerName ?? null}
-                            payerEmail={paymentMethodsAccount.payerEmail ?? null}
-                            canManage={paymentMethodsAccount.canManage ?? true}
-                        />
-                    </div>
-                ) : null}
-
-                {/*
-                  * AUTOPAY SITS DIRECTLY BELOW THE METHODS, because the question it answers is the
-                  * one an operator asks next: the card is on file, does it get charged by itself?
-                  * Keeping them apart would let a surface imply that storing a card is consent.
-                  */}
-                {paymentMethodsAccount?.customerId ? (
-                    <div className="alloy-os-fdetail__autopay" data-financials-autopay="detail">
-                        <AutopaySection
-                            customerId={paymentMethodsAccount.customerId}
-                            payerEntityId={paymentMethodsAccount.payerEntityId ?? null}
-                            payerName={paymentMethodsAccount.payerName ?? null}
-                            canManage={paymentMethodsAccount.canManage ?? true}
-                        />
-                    </div>
-                ) : null}
 
                 {/* Inside the card, because the focused surface owns what it presents. */}
                 {paymentBand ? (

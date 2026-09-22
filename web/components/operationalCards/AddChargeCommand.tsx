@@ -186,24 +186,14 @@ export default function AddChargeCommand({
                 </span>
             </Field>
             {/*
-                What this charge type DOES, in words — not the strategy keys that encode it.
-                `occurs event_date · billable next_billing_cycle` is a schema read-out; "dated by the
-                event · billed next cycle" is the same fact an operator can act on.
-            */}
-            <p className="alloy-os-addcharge__config">
-                {[
-                    t.responsibility,
-                    t.occursOn === "event_date" ? "dated by the event"
-                    : t.occursOn === "service_period_start" ? "dated to the service period"
-                    : "dated today",
-                    t.billableOn === "next_billing_cycle" ? "billed next cycle"
-                    : t.billableOn === "immediate" ? "billed immediately"
-                    : "billed on a configured offset",
-                    t.amountStrategy === "fixed" ? "fixed amount"
-                    : t.amountStrategy === "rate_derived" ? "priced from the rate"
-                    : "you set the amount",
-                ].join(" · ")}
-            </p>
+              * THE CONFIG STRIP IS GONE, and the semantics it described are untouched.
+              *
+              * It read "Household · dated by the event · billed next cycle · fixed amount" — four
+              * facts an operator cannot act on while adding a charge, describing rules the
+              * template already enforces. Responsibility is now a control below rather than a
+              * word here; the dating and billing rules still govern the charge exactly as they
+              * did, and the preview states the effect they produce.
+              */}
 
             {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
                 Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
@@ -410,13 +400,19 @@ export default function AddChargeCommand({
                 `reviewRequired` is the server's answer — the posting_review policy for this
                 template's service, OR'd with the template's own flag — so this states the act.
             */}
-            <Field label="Posting">
-                <Value locked>
-                    {t.reviewRequired
-                        ? "Creates a draft — not yet owed"
-                        : "Posts on confirm — owed immediately"}
-                </Value>
-            </Field>
+            {/*
+              * ONLY THE ANSWER THAT CHANGES THE OPERATOR'S DECISION.
+              *
+              * "Posts on confirm — owed immediately" described the ordinary case in
+              * implementation language; a review requirement is the case worth saying out loud,
+              * because it changes what happens when they press Confirm. The posting semantics
+              * themselves are unchanged — `reviewRequired` still governs.
+              */}
+            {t.reviewRequired ? (
+                <Field label="Posting">
+                    <Value locked>Creates a draft — not yet owed</Value>
+                </Field>
+            ) : null}
 
             <SectionHead ruled={false}>Charge to</SectionHead>
             {/*
@@ -470,9 +466,11 @@ export default function AddChargeCommand({
                     </>
                 ) : (
                     <>
-                        <p className="alloy-os-addcharge__draftnote">
-                            Posts on confirm — this is what the family will owe.
-                        </p>
+                        {/*
+                          * The preview below already says what the family will owe, in money.
+                          * Saying it again in prose was the card explaining itself rather than
+                          * showing the effect.
+                          */}
                         <p className="alloy-os-billing__line">
                             <span className="alloy-os-billing__line-label">Current balance</span>
                             <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
