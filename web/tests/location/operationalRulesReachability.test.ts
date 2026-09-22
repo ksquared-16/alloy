@@ -53,7 +53,10 @@ describe("1-2. Operational Rules is reachable, but no longer a primary destinati
          * capacity and ratio had moved to the object, and operating windows and
          * schedule rules had ZERO rows in the entire deployed database.
          */
-        expect(LOCATION_WORKSPACE_TABS.some((t) => t.key === CONCERN)).toBe(false);
+        // Widened deliberately: the key has left the primary union, so a narrow
+        // comparison is a type error. The runtime guard is what must survive.
+        const primary = LOCATION_WORKSPACE_TABS as readonly { key: string }[];
+        expect(primary.some((t) => t.key === CONCERN)).toBe(false);
     });
 
     it("1. is still a declared advanced destination, so the page is demoted and not deleted", () => {

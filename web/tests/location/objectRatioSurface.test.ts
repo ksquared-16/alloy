@@ -113,7 +113,11 @@ describe("ratio is authored on the object, canonically", () => {
 
 describe("Operational Rules is demoted, not deleted", () => {
     it("is absent from the primary Site tabs", () => {
-        expect(LOCATION_WORKSPACE_TABS.some((t) => t.key === "operational-rules")).toBe(false);
+        // Widened deliberately: the key is no longer in the primary union, so a
+        // narrow comparison is a type error rather than a runtime guard — and the
+        // guard is the point, because it must fail if someone re-adds the tab.
+        const primary = LOCATION_WORKSPACE_TABS as readonly { key: string }[];
+        expect(primary.some((t) => t.key === "operational-rules")).toBe(false);
     });
 
     it("remains a declared, routable advanced destination", () => {
