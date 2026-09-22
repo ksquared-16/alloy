@@ -158,7 +158,14 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after the consistency repair (2026-09-22).** Partner documentation, the contract and the
+**Updated after the rate class separation (2026-09-22).** Authenticated reads and writes now hold
+independent counters; the limits are unchanged (30/600/120 per 60 s) and the class is derived from
+the operation catalog rather than the HTTP verb. Partner documentation states the final contract.
+Both canonical gates passed. Thread 7 is **THREAD7_HUMAN_ACCEPTANCE_READY** — see
+`26-rate-class-acceptance-delta.md`. Next: final staging reconciliation, full reconciled-candidate
+certification, then explicit promotion authorization.
+
+Earlier: **Updated after the consistency repair (2026-09-22).** Partner documentation, the contract and the
 exported package now agree on scopes (13 grantable), operation counts (19 = 1 + 11 + 7), the
 authenticated-write rate policy, and the synchronization law. The counts are derived from runtime
 in a test rather than written by hand. One documented claim was found false and corrected: reads
