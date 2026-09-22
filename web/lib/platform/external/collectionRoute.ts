@@ -25,14 +25,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiError, invalidCredential, rateLimited } from "@/lib/platform/external/apiErrors";
 import { outcomeForStatus, recordApiActivity } from "@/lib/platform/external/apiActivity";
-import {
-    consumeRateLimit,
-    installationBucket,
-    RATE_LIMIT_POLICY,
-} from "@/lib/platform/external/rateLimit";
+import { authenticatedRateLimit, consumeRateLimit } from "@/lib/platform/external/rateLimit";
 import { identityHeaders, resolveRequestIdentity } from "@/lib/platform/external/requestContext";
 import { requireExternalPrincipal } from "@/lib/platform/external/externalRequest";
-import { requireOperationScope, type PublicOperationId } from "@/lib/platform/external/scopeCatalog";
+import {
+    accessForOperation,
+    requireOperationScope,
+    type PublicOperationId,
+} from "@/lib/platform/external/scopeCatalog";
 import { resolveBoundarySites } from "@/lib/platform/principal/attendanceAuthorityAdapter";
 import {
     buildPage,
@@ -148,11 +148,9 @@ export function externalCollectionRoute<TPublic>(def: CollectionDefinition<TPubl
         if (!scoped.ok) return fail(scoped.code, "forbidden_scope", scoped.message, ids);
 
         // 3. Budget, after authorization so an unauthorized caller cannot drain it.
-        const decision = await consumeRateLimit(
-            supabase,
-            installationBucket(ctx.installationId),
-            RATE_LIMIT_POLICY.authenticatedRead,
-        );
+        // The class comes from the catalog, not from this file being "the read one".
+        const budget = authenticatedRateLimit(ctx.installationId, accessForOperation(def.operationId));
+        const decision = await consumeRateLimit(supabase, budget.bucketKey, budget.policy);
         const limitHeaders = {
             "RateLimit-Limit": String(decision.limit),
             "RateLimit-Remaining": String(decision.remaining),

@@ -72,9 +72,32 @@ export function tokenExchangeBucket(clientId: string, clientIpHash: string): str
     return bucket(["token_exchange", clientId.trim(), clientIpHash]);
 }
 
-/** Key for authenticated traffic: the installation, not the token. */
-export function installationBucket(installationId: string): string {
-    return bucket(["api_read", installationId]);
+/**
+ * The budget governing one authenticated request: its counter AND its policy, together.
+ *
+ * ── WHY THESE ARE RETURNED AS A PAIR ──
+ *
+ * They used to be chosen separately. Every authenticated call site asked for the same
+ * `installationBucket(installationId)` — keyed `api_read` — and then passed whichever policy it
+ * thought applied. Reads and writes therefore advertised different limits while spending one
+ * counter, so 130 reads and zero writes left the next write refused with `remaining=0` while reads
+ * still had 467 of 600. Measured over HTTP, not inferred.
+ *
+ * The numbers were never the defect. Pairing is: a caller can no longer hold the write policy
+ * against the read counter, because it does not choose them independently.
+ *
+ * Token exchange keeps its own bucket and policy — it is keyed on the presented `client_id` and
+ * caller address rather than an installation, because there is no installation yet.
+ */
+export type AuthenticatedRateClass = "read" | "write";
+
+export function authenticatedRateLimit(
+    installationId: string,
+    rateClass: AuthenticatedRateClass,
+): { bucketKey: string; policy: RateLimitPolicy } {
+    return rateClass === "write"
+        ? { bucketKey: bucket(["api_write", installationId]), policy: RATE_LIMIT_POLICY.authenticatedWrite }
+        : { bucketKey: bucket(["api_read", installationId]), policy: RATE_LIMIT_POLICY.authenticatedRead };
 }
 
 /**

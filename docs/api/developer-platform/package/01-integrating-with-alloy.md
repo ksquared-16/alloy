@@ -426,17 +426,25 @@ human-readable `message`, and the request id.
 | `429` | Rate limit exceeded | Wait for `RateLimit-Reset`, then retry. |
 | `5xx` | Alloy failed | Retry with backoff. Submissions are safe to retry. |
 
-Reads and writes have **different limits but share one counter** per
-installation: 600 reads a minute, 120 writes a minute, both drawn from the same
-per-installation count. So a window spent paging collections can leave your next
-write refused without your having written anything. It rarely bites — 120 a
-minute is two a second, and attendance goes in batches — but if you drive a
-large backfill, interleave the writes rather than reading everything first.
+Token exchange, authenticated reads and authenticated writes have **independent
+rate budgets**:
+
+| Class | Limit | Window |
+| --- | --- | --- |
+| Token exchange | 30 | 60 s |
+| Authenticated reads | 600 | 60 s |
+| Authenticated writes | 120 | 60 s |
+
+Reads and writes are counted separately, so paging a large collection never eats
+into your ability to submit, and a backlog of submissions never stops you
+reading. Both are per installation.
 
 Every response carries `RateLimit-Limit`, `RateLimit-Remaining` and
-`RateLimit-Reset`, refusals included. `RateLimit-Limit` reflects the class of the
-request you just made, so you will see `600` on a read and `120` on a write. Use
-the headers rather than guessing.
+`RateLimit-Reset` for the budget that governed that request — you will see `600`
+on a read and `120` on a write. A `429` adds `Retry-After`. Use the headers
+rather than guessing.
+
+A `429` performs no work, so retrying after one is always safe.
 
 **An empty page is not an error.** It usually means the boundary, the scope or
 enrollment — check `GET /api/v1/context` first.

@@ -735,46 +735,42 @@ on `/api/v1`. No public endpoint currently returns 409; the status is reserved.
 ## 13. Rate limiting
 
 Durable and shared across server instances — a budget, not a per-process
-approximation. Three policies:
+approximation. **Three independent budgets:**
 
 | Surface | Limit | Window | Keyed on |
 | --- | --- | --- | --- |
 | Token exchange | 30 | 60 s | presented `client_id` + hashed caller address |
 | Authenticated reads | 600 | 60 s | Installation |
-| Authenticated writes | 120 | 60 s | Installation |
+| Authenticated governed writes | 120 | 60 s | Installation |
 
-**Reads and writes share one counter per Installation.** This is the part worth
-designing around, because the two limits above make it easy to assume otherwise:
-every authenticated request — read or write — increments the *same* per-
-Installation count, and each class simply compares that count against its own
-limit. So a partner that spends a window paging collections will find its next
-**write** refused at 120 without having written anything, while reads continue
-until 600.
+Each class holds its own counter. Reading does not consume write capacity and
+writing does not consume read capacity, so a partner that spends a window paging
+collections still has its full write budget, and a partner submitting a backlog
+of attendance still reads normally.
 
-In practice this rarely bites, because 120 writes a minute is two a second
-sustained and attendance is submitted in batches rather than one request per
-fact. But if you drive a large backfill, interleave the writes rather than
-reading the whole collection first.
+The window is a fixed 60-second interval aligned to the clock, not a sliding
+window measured from your first request. `RateLimit-Reset` tells you how many
+seconds remain in the current one.
 
 Every authenticated response carries `RateLimit-Limit`, `RateLimit-Remaining`
-and `RateLimit-Reset` — including refusals, so a client deciding whether to back
-off is never left guessing. `RateLimit-Limit` reflects the class of the request
-you just made, so the same Installation sees `600` on a read and `120` on a
-write.
+and `RateLimit-Reset` describing **the budget that governed that request** — so
+the same Installation sees `600` on a read and `120` on a write. A `429` also
+carries `Retry-After`, and names the class that ran out.
+
+Headers travel on refusals too, once the budget has been consulted: a `400` or a
+`403` raised after admission still reports what it spent. The one exception is
+deliberate — a request refused for a **missing scope** is rejected before the
+budget is consulted, so that an unauthorized caller cannot drain a budget it was
+never entitled to spend. Those responses carry no rate headers.
 
 The token budget is consumed **before** credential verification, so a
 credential-stuffing run cannot get free database work. It is never keyed on the
 secret: keying on the value being guessed would hand every wrong guess a fresh
 budget.
 
-Every response — success or refusal — carries `RateLimit-Limit`,
-`RateLimit-Remaining` and `RateLimit-Reset` (seconds). A 429 additionally carries
-`Retry-After`. Honour it; do not poll.
-
-These numbers are the current implementation. Treat the headers as authoritative
-and the table as indicative.
-
----
+A request refused with `429` performs no work at all — the budget is consulted
+before the body is parsed or any authority is resolved. Retrying after one is
+therefore always safe.
 
 ## 14. Governed submission, idempotency, correlation
 

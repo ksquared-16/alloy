@@ -83,28 +83,34 @@ describe("the package tells one consistent story", () => {
         expect(allPublicScopes().some((d) => d.scope === "context.read")).toBe(false);
     });
 
-    it("documents the real rate-limit policy, including the shared counter", () => {
+    it("documents the real rate-limit policy, and the independence of the classes", () => {
         const body = read(SPEC);
         for (const [label, policy] of [
             ["Token exchange", RATE_LIMIT_POLICY.tokenExchange],
             ["Authenticated reads", RATE_LIMIT_POLICY.authenticatedRead],
-            ["Authenticated writes", RATE_LIMIT_POLICY.authenticatedWrite],
+            ["Authenticated governed writes", RATE_LIMIT_POLICY.authenticatedWrite],
         ] as const) {
             expect(body, `${label} is missing from the rate table`).toContain(
                 `| ${label} | ${policy.limit} | ${policy.windowSeconds} s |`,
             );
         }
         /*
-         * The claim that actually matters. Both classes consume one per-installation counter, so
-         * "separate budgets" would be wrong in a way a partner would design around.
+         * The claim that actually matters, and it is now the opposite of what it once was: each
+         * class holds its own counter, proven over HTTP in rateLimitClasses.live.test.ts. If that
+         * separation were ever undone, this wording would become false in a way a partner would
+         * have designed around.
          */
-        expect(body).toMatch(/share one counter per Installation/i);
-        expect(read(GUIDE)).toMatch(/different limits but share one counter/i);
+        expect(body).toMatch(/three independent budgets/i);
+        expect(body).toMatch(/Reading does not consume write capacity/i);
+        expect(read(GUIDE)).toMatch(/independent\s*\n?\s*rate budgets/i);
     });
 
-    it("no document claims reads and writes have separate budgets", () => {
+    it("no document still describes the retired shared counter", () => {
         for (const file of [COVER, GUIDE, SPEC]) {
-            expect(read(file), `${file} claims separate budgets`).not.toMatch(/separate (rate )?budgets/i);
+            expect(read(file), `${file} still describes a shared counter`).not.toMatch(/share one counter/i);
+            expect(read(file), `${file} still warns about reads spending writes`).not.toMatch(
+                /reads? .{0,40}spending the write budget/i,
+            );
         }
     });
 

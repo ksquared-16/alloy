@@ -334,6 +334,22 @@ export function allKnownScopes(): PublicScopeDefinition[] {
 }
 
 /**
+ * Whether an operation READS or WRITES, decided by the catalog rather than by its HTTP verb.
+ *
+ * This is what the rate limiter classifies on. Deriving it from the method would be one `POST`
+ * away from wrong — token exchange is a POST that is neither — and deriving it per route would let
+ * a new operation pick its own class. The catalog already records `access` on every scope, so the
+ * answer exists; this is the one place that reads it.
+ *
+ * `getContext` holds no scope and is a read: it reports what the installation already has.
+ */
+export function accessForOperation(operationId: PublicOperationId): PublicAccess {
+    const scope = scopeForOperation(operationId);
+    if (scope === null) return "read";
+    return PUBLIC_SCOPES[scope].access;
+}
+
+/**
  * Map granted PUBLIC scopes to the internal permission keys they imply.
  *
  * Unknown scopes contribute nothing — a scope the catalog does not define cannot

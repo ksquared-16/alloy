@@ -23,10 +23,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiError, invalidCredential, rateLimited } from "@/lib/platform/external/apiErrors";
 import { outcomeForStatus, recordApiActivity } from "@/lib/platform/external/apiActivity";
-import { consumeRateLimit, installationBucket, RATE_LIMIT_POLICY } from "@/lib/platform/external/rateLimit";
+import { authenticatedRateLimit, consumeRateLimit } from "@/lib/platform/external/rateLimit";
 import { identityHeaders, resolveRequestIdentity } from "@/lib/platform/external/requestContext";
 import { requireExternalPrincipal } from "@/lib/platform/external/externalRequest";
-import { requireOperationScope } from "@/lib/platform/external/scopeCatalog";
+import { accessForOperation, requireOperationScope } from "@/lib/platform/external/scopeCatalog";
 import { resolveBoundarySites } from "@/lib/platform/principal/attendanceAuthorityAdapter";
 import { isoDateFilter, uuidFilter } from "@/lib/platform/external/collectionRoute";
 import { toPublicScheduleDay } from "@/lib/platform/external/resources/serviceStateResources";
@@ -85,11 +85,8 @@ export async function GET(request: NextRequest) {
     const scoped = requireOperationScope(ctx.principal, OPERATION_ID);
     if (!scoped.ok) return fail(scoped.code, "forbidden_scope", scoped.message);
 
-    const decision = await consumeRateLimit(
-        supabase,
-        installationBucket(ctx.installationId),
-        RATE_LIMIT_POLICY.authenticatedRead,
-    );
+    const budget = authenticatedRateLimit(ctx.installationId, accessForOperation(OPERATION_ID));
+    const decision = await consumeRateLimit(supabase, budget.bucketKey, budget.policy);
     const limitHeaders = {
         "RateLimit-Limit": String(decision.limit),
         "RateLimit-Remaining": String(decision.remaining),
