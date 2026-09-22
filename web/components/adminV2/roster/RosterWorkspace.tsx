@@ -349,6 +349,13 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
       setFocusRoomId(detail.roomLocationId);
       setAttendanceRoomId(detail.roomLocationId);
     }
+    /*
+     * The detail type has always promised that "site + room + date" travel across a
+     * handoff so context is never reset, and the date half of that promise was not
+     * kept — a link naming a day opened on today. Roster and Calendar share this
+     * anchor, so honouring it lands both lenses on the day the link meant.
+     */
+    if (detail.date) setRosterDay(detail.date);
     if (detail.filter) setRosterFilter(detail.filter as RosterFilterKind);
   }, []);
 
