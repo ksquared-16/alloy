@@ -171,25 +171,24 @@ That is the trap that once made a frame "improve" to 805 ms by doing less.
 
 ---
 
-## Phase 1 (provisioning DAG) — the max()-shaped promotion, confirmed
+## Phase 1 (provisioning DAG) — the max()-shaped promotion, confirmed (FINAL, n=21)
 
-Post-repair provisioning samples on `a1ecf609`, pinned full-attendance specimen.
-**n=11 of an in-flight 21-sample batch** — reported with that count rather than rounded up.
-Per Phase 13 these figures are **diagnostic only** and are not a product gate.
+Post-repair provisioning on `a1ecf609`, pinned full-attendance specimen, **21 of 21 usable cold
+samples**. Per Phase 13 these figures are **diagnostic only** and are not a product gate.
 
-| span | pre (`680e5765`, n=21) | post (`a1ecf609`, n=11) |
+| span | pre (`680e5765`, n=21) | post (`a1ecf609`, n=21) |
 |---|---|---|
-| **attendance_fold** end P50 | **898** (binds 21/21) | **704** (binds 2/11) |
-| **work_view_totals** end P50 | 758 (binds 0/21) | **789 (binds 9/11)** |
-| A′ frame = max(span.end) P50 | 898 | **812** |
+| **attendance_fold** end P50 | **898** (binds 21/21) | **703** (binds 3/21) |
+| **work_view_totals** end P50 | 758 (binds 0/21) | **788 (binds 18/21)** |
+| A′ frame = max(span.end) P50 | 898 | **789** |
 
-**Measured attendance saving: ~192 ms on `attendance_fold`** (898 → 704).
-**Frame saving: ~86 ms** (898 → 812).
+**Measured attendance saving: ~195 ms** on `attendance_fold` (898 → 703).
+**Frame saving: ~109 ms** (898 → 789).
 
 The difference between those two numbers is the whole point, and it was predicted before the
 repair was written: the DAG is **max()-shaped**, so speeding the binder promotes the runner-up.
-The provisioning DAG said at most ~140 ms was recoverable before `work_view_totals` took over. It
-took over. Attendance now binds in only 2 of 11 samples; `work_view_totals` binds in 9.
+The pre-repair DAG said at most ~140 ms was recoverable before `work_view_totals` took over. It
+took over — attendance now binds in only 3 of 21 samples, `work_view_totals` in 18.
 
 Per the dispatch, **the new binding owner was not optimised.** Max recoverable by attacking it is
 a further 85 ms, against a product gap of 6,614 ms — which is exactly why Phase 13 retires this
@@ -199,8 +198,8 @@ DAG as a product gate.
 
 | | |
 |---|---|
-| A′ provisioning frame | 812 ms |
+| A′ provisioning frame | **789 ms** |
 | real-page `FIRST_ORDER_VISIBLE_COMPLETE` | **7,614 ms** |
 
-Provisioning is **11%** of the operator-visible metric. Every further millisecond available inside
-it is worth less than 1.3% of the gap.
+Provisioning is **10%** of the operator-visible metric. Every further millisecond available inside
+it is worth at most 1.3% of the gap.
