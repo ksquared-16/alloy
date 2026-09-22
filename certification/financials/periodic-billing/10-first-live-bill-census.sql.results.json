@@ -1,0 +1,219 @@
+{
+  "trusted_host_action_id": "tha_1e00181ede18dc",
+  "query_hash": "15a126ea704e6004c93263aa9dacb7d57cbd7b4d1f3293f9d39b2aaa4fd4e09c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T02:25:35.237Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1e00181ede18dc",
+    "query_hash": "15a126ea704e6004c93263aa9dacb7d57cbd7b4d1f3293f9d39b2aaa4fd4e09c",
+    "authorization_id": "grnt_ae9f0c00d3cb4642",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T02:25:37.094Z",
+    "question_ids": [
+      "occurrences",
+      "attempts",
+      "specimen_charges",
+      "certhouse_guard",
+      "schedule_and_clock"
+    ],
+    "questions": {
+      "occurrences": {
+        "question_id": "occurrences",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "525abf56-f77e-4dae-8726-2ab044909bd8",
+                "due_at": "2026-09-22 01:13:18.353+00",
+                "status": "completed",
+                "attempt_count": 1,
+                "claimed_by": "worker-8f1d1122",
+                "lease_expires_at": null,
+                "completed_at": "2026-09-22 01:15:00.732+00",
+                "failure_reason": null
+              },
+              {
+                "id": "e57caa38-43b5-475e-8099-93467cc55ad2",
+                "due_at": "2026-09-22 02:18:30.366+00",
+                "status": "completed",
+                "attempt_count": 1,
+                "claimed_by": "worker-190321cc",
+                "lease_expires_at": null,
+                "completed_at": "2026-09-22 02:20:00.496+00",
+                "failure_reason": null
+              }
+            ]
+          }
+        ]
+      },
+      "attempts": {
+        "question_id": "attempts",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "occurrence_id": "525abf56-f77e-4dae-8726-2ab044909bd8",
+                "attempt_number": 1,
+                "worker_id": "worker-8f1d1122",
+                "outcome": "completed",
+                "started_at": "2026-09-22 01:15:01.586527+00",
+                "finished_at": "2026-09-22 01:15:02.226+00",
+                "diagnostic": {
+                  "lease": "applied",
+                  "counts": {
+                    "no_work_due": 2,
+                    "configuration_refused": 0,
+                    "normal_period_processed": 0,
+                    "short_catch_up_processed": 0,
+                    "catch_up_requires_operator": 0
+                  },
+                  "domain": "periodic_billing",
+                  "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                  "reason": "periodic billing: no work due",
+                  "evaluated_for": "2026-09-22",
+                  "periods_billed": [],
+                  "requires_operator": [],
+                  "assignments_considered": 2,
+                  "automatic_catch_up_limit": 2
+                }
+              },
+              {
+                "occurrence_id": "e57caa38-43b5-475e-8099-93467cc55ad2",
+                "attempt_number": 1,
+                "worker_id": "worker-190321cc",
+                "outcome": "completed",
+                "started_at": "2026-09-22 02:20:01.428666+00",
+                "finished_at": "2026-09-22 02:20:16.625+00",
+                "diagnostic": {
+                  "lease": "applied",
+                  "counts": {
+                    "no_work_due": 2,
+                    "configuration_refused": 0,
+                    "normal_period_processed": 1,
+                    "short_catch_up_processed": 1,
+                    "catch_up_requires_operator": 1
+                  },
+                  "domain": "periodic_billing",
+                  "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                  "reason": "periodic billing: 1 assignment(s) exceed the 2-period automatic catch-up limit and were not billed",
+                  "evaluated_for": "2026-09-22",
+                  "periods_billed": [
+                    "2026-09-22~2026-09-28",
+                    "2026-09-15~2026-09-21",
+                    "2026-09-22~2026-09-28"
+                  ],
+                  "requires_operator": [
+                    {
+                      "operator_action": "Converge these periods with Generate Tuition; automatic billing resumes once the outstanding set is within the limit.",
+                      "outstanding_periods": 3,
+                      "automatic_catch_up_limit": 2,
+                      "newest_outstanding_period": "2026-09-22~2026-09-28",
+                      "oldest_outstanding_period": "2026-09-08~2026-09-14",
+                      "financial_mutation_performed": false,
+                      "opportunity_customer_member_id": "e978987c-56d1-4972-af34-54ccc32f37e2"
+                    }
+                  ],
+                  "assignments_considered": 5,
+                  "automatic_catch_up_limit": 2
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "specimen_charges": {
+        "question_id": "specimen_charges",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "charge_id": "eaf6ff39-5e5f-436d-8c72-8c7a2ae767c1",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "amount_cents": 19500,
+                "due_date": "2026-10-02",
+                "charge_category": "tuition",
+                "created_at": "2026-09-22 02:20:04.972373+00"
+              },
+              {
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "charge_id": "c70b4a73-d76f-4138-a753-d2a2c0b78719",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "amount_cents": 19500,
+                "due_date": "2026-10-09",
+                "charge_category": "tuition",
+                "created_at": "2026-09-22 02:20:07.514179+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "charge_id": "14973262-05de-4a15-a1a7-bd0372ac3ffb",
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "amount_cents": 19500,
+                "due_date": "2026-09-25",
+                "charge_category": "tuition",
+                "created_at": "2026-09-22 02:20:10.630654+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "charge_id": "6948adda-b96f-4cfd-a2ae-ed33ad10f20e",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "amount_cents": 19500,
+                "due_date": "2026-10-02",
+                "charge_category": "tuition",
+                "created_at": "2026-09-22 02:20:12.840154+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "charge_id": "2c3703dc-6405-496a-afe5-8944777d3d28",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "amount_cents": 19500,
+                "due_date": "2026-10-09",
+                "charge_category": "tuition",
+                "created_at": "2026-09-22 02:20:16.243823+00"
+              }
+            ]
+          }
+        ]
+      },
+      "certhouse_guard": {
+        "question_id": "certhouse_guard",
+        "row_count": null,
+        "rows": [
+          {
+            "certa_count": 5,
+            "certb_count": 2,
+            "certhouse_max_created": "2026-09-20 20:55:08.905848+00"
+          }
+        ]
+      },
+      "schedule_and_clock": {
+        "question_id": "schedule_and_clock",
+        "row_count": null,
+        "rows": [
+          {
+            "next_due_at": "2026-09-23 02:18:30.366+00",
+            "wake_count": 85,
+            "last_wake_at": "2026-09-22 02:25:01.070505+00",
+            "now": "2026-09-22 02:25:36.969521+00"
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

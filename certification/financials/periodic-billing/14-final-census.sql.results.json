@@ -1,0 +1,118 @@
+{
+  "trusted_host_action_id": "tha_bd1c2981e1e046",
+  "query_hash": "cc7a1ecb4a187423cf0f59840c6b670b52286159c30236e3af71daa9db74ca6f",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T03:21:14.716Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_bd1c2981e1e046",
+    "query_hash": "cc7a1ecb4a187423cf0f59840c6b670b52286159c30236e3af71daa9db74ca6f",
+    "authorization_id": "grnt_afc960ea4daa4e2e",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T03:21:16.275Z",
+    "question_ids": [
+      "latest_attempt",
+      "charge_counts",
+      "three_consumers"
+    ],
+    "questions": {
+      "latest_attempt": {
+        "question_id": "latest_attempt",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "occurrence_id": "d1546650-2a43-4f47-ad0a-eb7b125ff6c4",
+                "worker_id": "worker-83ae9ac9",
+                "outcome": "completed",
+                "started_at": "2026-09-22 03:15:01.571086+00",
+                "counts": {
+                  "no_work_due": 7,
+                  "configuration_refused": 0,
+                  "normal_period_processed": 0,
+                  "short_catch_up_processed": 0,
+                  "catch_up_requires_operator": 0
+                },
+                "periods_billed": [],
+                "requires_operator": [],
+                "assignments_considered": 7
+              },
+              {
+                "occurrence_id": "1c1e307f-66d2-41de-9f5a-c2189ce7924a",
+                "worker_id": "worker-2d0071db",
+                "outcome": "completed",
+                "started_at": "2026-09-22 03:10:01.631474+00",
+                "counts": {
+                  "no_work_due": 6,
+                  "configuration_refused": 0,
+                  "normal_period_processed": 0,
+                  "short_catch_up_processed": 0,
+                  "catch_up_requires_operator": 1
+                },
+                "periods_billed": [],
+                "requires_operator": [
+                  {
+                    "operator_action": "Converge these periods with Generate Tuition; automatic billing resumes once the outstanding set is within the limit.",
+                    "outstanding_periods": 3,
+                    "automatic_catch_up_limit": 2,
+                    "newest_outstanding_period": "2026-09-22~2026-09-28",
+                    "oldest_outstanding_period": "2026-09-08~2026-09-14",
+                    "financial_mutation_performed": false,
+                    "opportunity_customer_member_id": "e978987c-56d1-4972-af34-54ccc32f37e2"
+                  }
+                ],
+                "assignments_considered": 7
+              }
+            ]
+          }
+        ]
+      },
+      "charge_counts": {
+        "question_id": "charge_counts",
+        "row_count": null,
+        "rows": [
+          {
+            "A": 2,
+            "B": 3,
+            "C": 4,
+            "D": 1,
+            "E": 2,
+            "certa": 5,
+            "certb": 2,
+            "certhouse_max_created": "2026-09-20 20:55:08.905848+00"
+          }
+        ]
+      },
+      "three_consumers": {
+        "question_id": "three_consumers",
+        "row_count": null,
+        "rows": [
+          {
+            "schedules_by_handler": [
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "n": 2,
+                "active": 2
+              }
+            ],
+            "periodic_billing_schedule": {
+              "id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+              "next_due_at": "2026-09-23 03:14:06.759+00",
+              "is_active": true
+            },
+            "clock_wakes": 96,
+            "now": "2026-09-22 03:21:16.197707+00"
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
