@@ -148,7 +148,7 @@ curl -X POST https://<alloy-host>/api/v1/oauth/token \
   "access_token": "alloy_at_EXAMPLEopaquevalue",
   "token_type": "Bearer",
   "expires_in": 900,
-  "scope": "context.read locations.read"
+  "scope": "locations.read children.read"
 }
 ```
 
@@ -229,10 +229,16 @@ wildcard: `children.read` does not imply `children.contact.read`, and no read
 scope implies any write. An Installation that needs two things is granted two
 scopes.
 
+**`GET /api/v1/context` requires no scope** — only a valid token. An Installation
+that cannot discover what it holds cannot diagnose why anything else was refused,
+so this is a capability inherent to holding a credential rather than a permission
+an operator grants. There is no `context.read` in the grant model.
+
+The eleven grantable scopes:
+
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
-| `context.read` | Read the calling Installation's own context | Anything about a person or the organization's configuration |
-| `locations.read` | Read sites and units inside the boundary | Any write; any other resource |
+| `locations.read` | Read authorized sites, rooms and operational units | Any write; any other resource |
 | `children.read` | Identity and lifecycle of children in service inside the boundary | Contact details, guardians, health, anything about an adult |
 | `households.read` | The household a visible child belongs to | Any member list; billing; siblings outside the boundary |
 | `relationships.read` | Adult↔child relationships and effective pickup authority | Contact points; any safeguarding detail or reason |
@@ -263,7 +269,7 @@ health check after an administrator changes access.
   "application": { "id": "…", "slug": "your-application", "environment": "sandbox" },
   "installation": { "id": "…", "status": "active" },
   "organization": { "id": "…" },
-  "scopes": ["context.read", "locations.read"],
+  "scopes": ["locations.read", "children.read"],
   "resource_boundary": { "mode": "org_wide" }
 }
 ```

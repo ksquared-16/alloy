@@ -80,9 +80,11 @@ GET /api/v1/context
 ```
 
 Returns the organization you are bound to, the scopes you were granted and the
-locations you may reach. It requires no scope beyond a valid token, deliberately:
-a caller that cannot discover what it holds cannot diagnose why something else
-was refused. **Call this first when anything is unexpected.**
+locations you may reach. It requires **no scope** beyond a valid token, and there
+is no `context.read` to ask for: a caller that cannot discover what it holds
+cannot diagnose why something else was refused, so this is inherent to holding a
+credential rather than a permission an operator grants.
+**Call this first when anything is unexpected.**
 
 ---
 

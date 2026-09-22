@@ -111,18 +111,21 @@ V1 scopes:
 
 | Scope | Grants |
 |---|---|
-| `context.read` | Read your own installation context |
-| `locations.read` | Read sites and rooms |
-| `children.read` | Read children in service within your boundary |
-| `households.read` | Read the household a visible child belongs to |
-| `relationships.read` | Read parents and guardians, and effective pickup authority |
-| `relationships.contact.read` | Read those adults' email and phone |
-| `enrollment.read` | Read enrollment agreements and room placements |
-| `schedule.read` | Read committed schedules and the dated projection |
-| `staff.read` | Read staff assigned within your boundary |
-| `staff.contact.read` | Read those staff members' email and phone |
-| `attendance.read` | Read attendance facts |
-| `attendance.write` | Record attendance facts |
+| `locations.read` | Read authorized sites, rooms, and operational units |
+| `children.read` | Read children currently in service within authorized locations |
+| `households.read` | Read the household shell for visible children |
+| `relationships.read` | Read visible child-adult relationships and effective pickup authority |
+| `relationships.contact.read` | Read email and phone for adults already visible through relationships |
+| `enrollment.read` | Read enrollment agreements and placements for visible children |
+| `schedule.read` | Read committed schedules and dated schedule projections for visible children |
+| `staff.read` | Read staff assigned to authorized locations |
+| `staff.contact.read` | Read email and phone for staff already visible through staff access |
+| `attendance.read` | Read attendance history for visible children |
+| `attendance.write` | Submit attendance facts for visible children |
+
+`GET /api/v1/context` needs no scope. Every installation can read its own
+context, because a caller that cannot discover what it holds cannot work out why
+anything else was refused. There is no `context.read` to request.
 
 Scopes match **exactly**. `children.read` does not imply
 `children.contact.read`-style access to anything else, and no read implies a
@@ -141,7 +144,10 @@ Rules that will surprise you if you skip them:
 
 ## Where to go next
 
+- [Integrating with Alloy](integrating.md) — the whole integration in one read:
+  identity, authority, the resource graph, synchronization, submission and limits
 - [Conventions](conventions.md) — resources vs operations, collections,
   idempotency, concurrency, errors, external IDs
-- [Locations](locations.md) — the first canonical resource, **live**
-- [Attendance example](attendance-example.md) — a full integration, contract only
+- [Locations](locations.md) — sites and rooms, and the vocabulary every other
+  resource uses to name a place
+- **API Reference** — every operation's parameters, fields, examples and errors

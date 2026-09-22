@@ -160,11 +160,24 @@ describe("the boundary and the scope", () => {
         expect(PUBLIC_SCOPES["attendance.read"]).not.toHaveProperty("internalPermissionKeys");
     });
 
-    it("an operator can read what the read scope grants", () => {
+    it("an operator can read what the read scope grants, and it never reads as a write", () => {
+        /*
+         * This used to require the literal phrase "read only". The operator copy is now frozen
+         * product text, so pinning one phrase makes a ratified wording change look like a
+         * regression. What must hold is the property the phrase was standing in for: the read
+         * scope presents as a read, and its words never promise the ability to record.
+         */
         const presented = presentScope("attendance.read");
         expect(presented.title).toBeTruthy();
-        expect(presented.detail).toMatch(/read only/i);
+        expect(presented.recognised).toBe(true);
         expect(presented.access).toBe("read");
+        expect(presented.detail).toMatch(/\bread\b/i);
+        expect(presented.detail).not.toMatch(/\b(record|submit|write|create)\b/i);
+
+        // And the write scope is unmistakably the other thing.
+        const write = presentScope("attendance.write");
+        expect(write.access).toBe("write");
+        expect(write.detail).toMatch(/\b(submit|record)\b/i);
     });
 
     it("the route resolves its sites from the same authority Locations uses", () => {

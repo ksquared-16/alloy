@@ -53,6 +53,20 @@ export type PublicScopeDefinition = {
      * and the query, not by an internal permission grant.
      */
     internalPermissionKeys?: readonly string[];
+    /**
+     * Whether an operator can GRANT this scope when installing an application.
+     *
+     * Defaults to true. `false` means the catalog still recognises the scope — an installation
+     * that already carries it keeps rendering normally — but it is not offered at install time and
+     * is not published as part of the partner grant model.
+     *
+     * There is exactly one of these, and the reason is worth stating: `context.read` never gated
+     * anything. `getContext` requires a valid token and no scope, because a caller that cannot
+     * discover what it holds cannot diagnose why anything else was refused. Offering a permission
+     * that grants nothing teaches operators that these checkboxes are decorative, which is the
+     * opposite of what an informed-consent surface is for.
+     */
+    grantable?: boolean;
 };
 
 /** The complete V1 external scope catalog. Small on purpose: it can grow compatibly, it cannot shrink. */
@@ -62,6 +76,8 @@ export const PUBLIC_SCOPES = {
         access: "read",
         summary: "Read the calling installation's own context.",
         alloyAuthority: "none — the installation describing itself",
+        // Recognised for compatibility, never offered. See `grantable` above.
+        grantable: false,
     },
     "locations.read": {
         scope: "locations.read",
@@ -247,8 +263,22 @@ export function requireOperationScope(
     };
 }
 
-/** Every scope a developer could be granted. Used by documentation and tests. */
+/**
+ * Every scope an operator can actually grant — the install-time permission model, and what the
+ * partner documentation publishes.
+ */
 export function allPublicScopes(): PublicScopeDefinition[] {
+    return Object.values(PUBLIC_SCOPES).filter((d) => d.grantable !== false);
+}
+
+/**
+ * Every scope the catalog RECOGNISES, grantable or not.
+ *
+ * The distinction matters for installations that already hold a scope which is no longer offered:
+ * they must keep presenting as a known, explainable permission rather than degrading to the
+ * "unrecognised" state reserved for strings the platform genuinely cannot explain.
+ */
+export function allKnownScopes(): PublicScopeDefinition[] {
     return Object.values(PUBLIC_SCOPES);
 }
 
