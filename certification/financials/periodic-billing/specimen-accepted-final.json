@@ -1,0 +1,41 @@
+[
+  {
+    "attempt": 1,
+    "resolutionKey": "9ae3ff05",
+    "sourceId": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+    "amountCents": 19500,
+    "status": 200,
+    "body": "{\"ok\":true,\"data\":{\"execution_result\":{\"state\":\"accepted\",\"amount_cents\":19500,\"currency_code\":\"USD\",\"cadence_key\":\"weekly\",\"effective_start\":\"2026-09-22\",\"source_id\":\"424c7a8a-5bd5-4c63-93f6-5591dc0afcd8\",\"config_version\":\"cd09fdc8\",\"idempotent\":false},\"affected_id\":\"ef1e0159-63b8-4879-8fb4-9e61aba0a283\"},\"correlation_id\":\"c345d0e3-5161-4119-8b9f-bc4fe083f187\"}"
+  },
+  {
+    "step": "accepted_term",
+    "accepted": {
+      "termId": "ef1e0159-63b8-4879-8fb4-9e61aba0a283",
+      "opportunityCustomerMemberId": "ef10654a-e4cf-494d-b38e-82900af1163e",
+      "customerMemberId": "bd5b59ae-bd04-4284-8d2a-5395960e11ab",
+      "enrollmentAgreementId": "771c085f-d145-4650-adee-4653db661975",
+      "termKind": "tuition",
+      "amountCents": 19500,
+      "currencyCode": "USD",
+      "cadenceKey": "weekly",
+      "effectiveStart": "2026-09-22",
+      "effectiveEnd": null,
+      "source": {
+        "entity": "commercial_tuition_rates",
+        "id": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8"
+      },
+      "variantId": "ee157cff-3546-4172-b591-984b96fbec10",
+      "offeringId": "fe7bb68f-1b36-432c-ae0b-e478dbc9f582",
+      "programKey": "school_age",
+      "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "payerType": "private_pay",
+      "state": "accepted",
+      "overrideReason": null,
+      "recommendedSourceId": "424c7a8a-5bd5-4c63-93f6-5591dc0afcd8",
+      "configVersion": "cd09fdc8",
+      "resolutionKey": "9ae3ff05",
+      "acceptedBy": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+      "acceptedAt": "2026-09-22T01:30:13.498746+00:00"
+    }
+  }
+]

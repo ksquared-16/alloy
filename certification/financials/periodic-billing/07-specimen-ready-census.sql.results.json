@@ -1,0 +1,125 @@
+{
+  "trusted_host_action_id": "tha_4fedea03a62b0a",
+  "query_hash": "de4227f2c7557674e701f7171c6496c1a94121cd58e128483ce514a72dded27d",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T01:30:45.535Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4fedea03a62b0a",
+    "query_hash": "de4227f2c7557674e701f7171c6496c1a94121cd58e128483ce514a72dded27d",
+    "authorization_id": "grnt_f4a2c8017cab4174",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T01:30:46.741Z",
+    "question_ids": [
+      "specimen",
+      "firefly_billable_assignments",
+      "certhouse_guard",
+      "schedule_state"
+    ],
+    "questions": {
+      "specimen": {
+        "question_id": "specimen",
+        "row_count": null,
+        "rows": [
+          {
+            "ocm": "ef10654a-e4cf-494d-b38e-82900af1163e",
+            "agreement": "771c085f-d145-4650-adee-4653db661975",
+            "terms": [
+              {
+                "term_id": "ef1e0159-63b8-4879-8fb4-9e61aba0a283",
+                "cadence": "weekly",
+                "amount_cents": 19500,
+                "effective_start": "2026-09-22",
+                "effective_end": null,
+                "state": "accepted",
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "superseded_at": null
+              }
+            ],
+            "tuition_charges": 0,
+            "today_utc": "2026-09-22"
+          }
+        ]
+      },
+      "firefly_billable_assignments": {
+        "question_id": "firefly_billable_assignments",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "ocm": "ef10654a-e4cf-494d-b38e-82900af1163e",
+                "cadence": "weekly",
+                "amount_cents": 19500,
+                "effective_start": "2026-09-22",
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "tuition_charges": 0
+              },
+              {
+                "ocm": "cf044308-3ee4-47ab-a8fb-205eb172aa48",
+                "cadence": "monthly",
+                "amount_cents": 145000,
+                "effective_start": "2026-09-01",
+                "agreement": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+                "tuition_charges": 2
+              },
+              {
+                "ocm": "79f8011d-a236-4054-bee7-af10f1dbc632",
+                "cadence": "weekly",
+                "amount_cents": 18500,
+                "effective_start": "2026-09-01",
+                "agreement": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+                "tuition_charges": 5
+              }
+            ]
+          }
+        ]
+      },
+      "certhouse_guard": {
+        "question_id": "certhouse_guard",
+        "row_count": null,
+        "rows": [
+          {
+            "certa_charges": 5,
+            "certb_charges": 2,
+            "certhouse_latest_charge_created": "2026-09-20 20:55:08.905848+00"
+          }
+        ]
+      },
+      "schedule_state": {
+        "question_id": "schedule_state",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+                "org_id": null,
+                "next_due_at": null,
+                "is_active": true,
+                "recurrence_kind": "one_time",
+                "label": "clock_activation_certification"
+              },
+              {
+                "id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "next_due_at": "2026-09-23 01:13:18.353+00",
+                "is_active": true,
+                "recurrence_kind": "daily",
+                "label": "financials_periodic_billing"
+              }
+            ],
+            "now": "2026-09-22 01:30:46.561476+00"
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}
