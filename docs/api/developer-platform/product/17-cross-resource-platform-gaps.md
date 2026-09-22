@@ -51,31 +51,45 @@ ledger is needed** — the representation can be derived from what the domain al
 
 | Resource | Lifecycle truth it already has | `updated_at` maintained by a trigger? |
 |---|---|---|
-| Locations | `is_active`, `status_key` | **No** — application-set only |
-| Children (`customer_members`) | `is_active`, `status_key` | **No** |
-| Households (`customers`) | `status_key` | **No** |
+| Locations | `is_active`, `status_key` | **Yes** — `trg_locations_updated_at` *(corrected 2026-09-22)* |
+| Children (`customer_members`) | `is_active`, `status_key` | **Yes** — `trg_customer_members_updated_at` *(corrected)* |
+| Households (`customers`) | `status_key` | **Yes** — `trg_customers_updated_at` *(corrected)* |
 | Placements | `end_date`, `status` (effective-dated, supersede-by-row) | **Yes** |
 | Enrollment agreements | `status`, `end_date` | **Yes** |
 | Staff (`employments`) | `employment_status`, `end_date`, `supersedes_employment_id` | **Yes** |
 | Attendance facts | none needed — append-only, correction/reversal are facts | n/a (no `updated_at`; `created_at` is total and immutable) |
-| Relationships (`customer_member_contacts`) | unmeasured — no rows in the certification tenant | unknown |
+| Relationships (`person_child_relationships`) | `status`, priority per edge; 1 507 rows | **Yes** — `trg_person_child_relationships_updated_at` |
+| Person identity (`persons`) | `archived_at`, `status_key` | **No** — the real gap *(found 2026-09-22)* |
+| Contacts (`customer_member_contacts`) | role rows, `is_active` | **No** — the real gap |
 
-### The blocker, named exactly
+### The blocker, named exactly — **re-measured and corrected, 2026-09-22**
 
-The representation half is decidable today. The **delivery** half is not, for three resources.
+> **The original statement of this blocker was wrong about the mechanism and wrong about the
+> tables.** It is preserved in outline because the general reasoning it contains is correct and
+> still load-bearing; only its subject was mistaken. The measured version is
+> `20-core-resource-decision-resolution.md` §1.
 
-`locations`, `customer_members` and `customers` have **no `BEFORE UPDATE` trigger maintaining
-`updated_at`** — the only trigger on `locations` is a hierarchy validator. In the certification
-tenant, **9 of 10 sampled locations have `updated_at = NULL`**. The shipped
-`list_external_locations` survives this by sorting and filtering on
-`COALESCE(updated_at, created_at)`, so bootstrap and paging are sound — but a lifecycle change that
-does not set `updated_at` **does not move the sort key**, and an incremental consumer never learns
-it happened.
+What the original got right: *a lifecycle change that does not advance `updated_at` does not move
+the sort key, and an incremental consumer never learns it happened.* That is exactly the failure
+mode, and `COALESCE(updated_at, created_at)` in `list_external_locations` does not save it.
 
-So the law cannot be certified for those resources until `updated_at` moves on lifecycle change.
-The remedy is a trigger on each of the three tables. **Slice 7.2 deliberately did not add it**:
-that is a change to shared domain tables used across the product, and the instruction for this
-phase was explicit — *"Do not change these domains in this phase."*
+What it got wrong: `locations`, `customer_members` and `customers` **do** have
+`BEFORE UPDATE … set_updated_at` triggers, and have since the March baseline. The observation that
+9 of 10 locations have `updated_at = NULL` is real, but its cause is not a missing trigger — those
+columns simply carry **no `DEFAULT now()`**, so a row is born NULL and stays NULL until something
+first updates it. A trigger cannot fire for an update that never happened. For those tables the
+coalesce is therefore *correct*, not a workaround, and **no repair is owed**.
+
+The genuine gap is on six person-side tables that have the column and no trigger at all —
+`persons`, `customer_persons`, `customer_member_contacts`, `customer_member_contact_roles`,
+`person_relationships`, `person_locations`. There an update *does* happen, the clock *does* stay
+NULL, and the coalesce falls back to a creation time in the past, so a synced partner never sees
+the change. `persons.archived_at` is the mutation most likely to be lost, which is the worst one
+to lose.
+
+The remedy is six triggers, no backfill and no new columns. **Slice 7.2 deliberately did not make
+it**, and that restraint was right for a different reason than the one recorded: the instruction
+for that phase was explicit — *"Do not change these domains in this phase."*
 
 **Disposition:** representation decided (below); delivery blocked on a bounded domain change that
 belongs with the People slice that first needs it, or its own migration slice.
@@ -244,7 +258,7 @@ there is a negotiation to model.
 
 | Gap | State | Blocks |
 |---|---|---|
-| 5A archive/delete | representation decided; **delivery blocked** on `updated_at` maintenance for locations/customer_members/customers | every people/enrollment resource |
+| 5A archive/delete | representation decided; **delivery blocked** on `set_updated_at` triggers for the six person-side tables — *not* locations/customer_members/customers, which were mis-named and need no repair *(corrected 2026-09-22)* | person identity, contacts and relationships only |
 | 5B public idempotency | **resolved by doctrine** (7.3); no store built, none needed | nothing |
 | 5C concurrency | law stated, nothing to build for V1 | nothing |
 | 5D external correlation | table exists; needs read exposure + more kinds | correlation-aware reads |

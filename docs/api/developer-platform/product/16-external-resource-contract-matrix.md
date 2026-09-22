@@ -88,6 +88,15 @@ code, the code wins and the correction is recorded.
 Classifications: `V1_READ_RESOURCE` · `V1_GOVERNED_OPERATION` · `EVENT_REQUIRED` ·
 `INCREMENTAL_SYNC_SUFFICIENT` · `LATER` · `INTERNAL_ONLY` · `UNRESOLVED`.
 
+> **The `EVENT_REQUIRED` column below is superseded for the Core Resource family
+> (2026-09-22).** Those classifications were assigned in Phase 2, *before* the exact incremental
+> sync law existed. Re-evaluated against the shipped `updated_since` + `sync_token` grammar,
+> **every** Core Resource is `INCREMENTAL_SYNC_SUFFICIENT_FOR_V1`: Children, Households,
+> Relationships, Enrollment, Placement, Schedule and Staff. No resource in the proposed expansion
+> requires events, so generic webhooks must not be built earlier than necessary. See
+> `20-core-resource-decision-resolution.md` §6 for the per-resource basis. A classification is not
+> preserved merely because this matrix once said it.
+
 | External concept | Canonical concept | Owner | Stable id | External use case | V1 read | V1 operation | Event | Sync | Tenant boundary | Location boundary | Existing read authority | Existing mutation authority | External adapter | External ID need | Archive/delete | Main blocker | Proposed V1 disposition | Confidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Context | installation description | platform | installation id | "what am I allowed to do" | **IMPLEMENTED** | n/a | no | n/a | installation | reports boundary | yes | n/a | yes | no | n/a | none | keep | High |

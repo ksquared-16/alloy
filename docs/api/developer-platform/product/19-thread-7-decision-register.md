@@ -17,26 +17,33 @@ supersedes: []
 
 Grouped by what each decision blocks. Evidence is from the implementation unless stated.
 
+> **Updated 2026-09-22 — Core Resource decision resolution.** D-02, D-03, D-04, D-05, D-06, D-07,
+> D-08 and D-11 are **resolved**; see `20-core-resource-decision-resolution.md` for the measured
+> basis of each. Two of them reversed their discovery recommendation on evidence (D-05 and the
+> mechanism behind D-08), and one safety hazard was found that no decision had named (pickup
+> authority versus safeguarding restrictions). Only **DD-1** and **DD-2** remain open, both stated
+> in §8 of that document. The rows below are kept as the historical question, not the answer.
+
 ### Blocks the first implementation slice
 
 | ID | Question | Why it matters | Evidence | Options | Recommendation | Consequence | Owner |
 |---|---|---|---|---|---|---|---|
 | **D-01** | Is Attendance read the first slice? | It is the only proposed item with **no** platform-gap dependency, because append-only facts need no archive law | `child_attendance_events` append-only; `attendanceFold` handles correction/reversal | (a) Attendance read first (b) archive law first | **(a)** — it proves the read pattern and unblocks nothing else's decisions | Sets the template every later read copies | Director |
-| **D-08** | What is the archive/delete law, and who makes `updated_at` move? | Representation is decidable from existing lifecycle truth. **Delivery is not**: `locations`, `customer_members` and `customers` have no trigger maintaining `updated_at`, and 9 of 10 sampled locations have it NULL | Measured in 7.2A; the only trigger on `locations` is a hierarchy validator | (a) add `BEFORE UPDATE` triggers to the three tables (b) have every writer set `updated_at` (c) a separate change feed | **(a)** — (b) is a rule nobody can enforce and (c) is the parallel ledger this law exists to avoid | A bounded migration on three shared domain tables. 7.2 deliberately did not make it: this phase was told not to change those domains | Director + domain |
+| ~~**D-08**~~ **RESOLVED** | What is the archive/delete law, and who makes `updated_at` move? | Representation is decidable from existing lifecycle truth. **Delivery is not**: `locations`, `customer_members` and `customers` have no trigger maintaining `updated_at`, and 9 of 10 sampled locations have it NULL | Measured in 7.2A; the only trigger on `locations` is a hierarchy validator | (a) add `BEFORE UPDATE` triggers to the three tables (b) have every writer set `updated_at` (c) a separate change feed | **(a)** — (b) is a rule nobody can enforce and (c) is the parallel ledger this law exists to avoid | A bounded migration on three shared domain tables. 7.2 deliberately did not make it: this phase was told not to change those domains | Director + domain |
 | ~~D-09~~ | *Resolved in slice 7.3 — see Resolved below.* | | | | | | |
 
 ### Blocks later V1
 
 | ID | Question | Why it matters | Evidence | Options | Recommendation | Consequence | Owner |
 |---|---|---|---|---|---|---|---|
-| **D-02** | Is Person an external resource distinct from Child, Guardian and Staff? | Three proposed resources overlap one internal identity | `persons` is org-scoped identity; Child is `customer_members`; Staff is Person+Employment composition | (a) no public Person; expose Child/Guardian/Staff as distinct resources (b) a Person resource that the others reference | **(a)** for V1 — every use case names a role, and a bare Person resource would expose identity with no operational meaning | Determines whether Relationships embeds or references contact identity | Product + Director |
-| **D-03** | Does Household deserve a first-class resource? | It anchors siblings and financial responsibility | `customers` is a real row with a stable id; `readHouseholdScopes` exists | (a) yes (b) fold into Child as `household_id` only | **(a)** — siblings are a first-class integration concept | Adds one resource to 7.5 | Product |
-| **D-04** | How are guardians represented? | Duplicating a guardian onto Child creates a second model of one fact | `customer_member_contacts` + `_contact_roles` + relationship types | (a) Relationships resource (b) embedded array on Child (c) both | **(a)**, with a reference from Child | PII lands in one resource with its own scope | Product |
-| **D-05** | Does the external schedule resource expose the committed assignment, the derived expectation view, or both? | They are different objects with different sync properties — the commitment is persisted and synchronizable, the expectation view is derived and is not | `schedule_assignments` is effective-dated and committed; `scheduleExpectationCore.ts` derives expectations from it plus configuration | (a) dated expectation projection only (b) committed assignments as a synced collection only (c) both | **(a) for V1** — a partner wants "which days is this child expected", and (b) can be added later without changing (a) | Determines whether Schedule joins `updated_since` at all | Domain + Director |
-| **D-06** | What does a location-restricted installation see for a child with no current placement? | Every people resource needs a boundary rule, and this is the gap in it | Boundary is location-based; placement is the child↔location join | (a) invisible (b) visible to org-wide installations only (c) visible with reduced fields | **(a)** — fail closed, and document it | Affects Children, Enrollment, Relationships | Director (security) |
-| **D-07** | How does the boundary apply to org-scoped employment? | Employment is organization-scoped; the boundary is location-scoped | `buildPersonEmploymentComposition` composes onto Person; primary location narrows | (a) staff visible if assigned to a location in the boundary (b) all staff to any installation | **(a)** | Determines the Staff query shape | Domain |
+| ~~**D-02**~~ **RESOLVED — no public Person** | Is Person an external resource distinct from Child, Guardian and Staff? | Three proposed resources overlap one internal identity | `persons` is org-scoped identity; Child is `customer_members`; Staff is Person+Employment composition | (a) no public Person; expose Child/Guardian/Staff as distinct resources (b) a Person resource that the others reference | **(a)** for V1 — every use case names a role, and a bare Person resource would expose identity with no operational meaning | Determines whether Relationships embeds or references contact identity | Product + Director |
+| ~~**D-03**~~ **RESOLVED — yes, thin anchor** | Does Household deserve a first-class resource? | It anchors siblings and financial responsibility | `customers` is a real row with a stable id; `readHouseholdScopes` exists | (a) yes (b) fold into Child as `household_id` only | **(a)** — siblings are a first-class integration concept | Adds one resource to 7.5 | Product |
+| ~~**D-04**~~ **RESOLVED — Relationships resource** | How are guardians represented? | Duplicating a guardian onto Child creates a second model of one fact | `customer_member_contacts` + `_contact_roles` + relationship types | (a) Relationships resource (b) embedded array on Child (c) both | **(a)**, with a reference from Child | PII lands in one resource with its own scope | Product |
+| ~~**D-05**~~ **RESOLVED — (c) both; discovery's (a) reversed** | Does the external schedule resource expose the committed assignment, the derived expectation view, or both? | They are different objects with different sync properties — the commitment is persisted and synchronizable, the expectation view is derived and is not | `schedule_assignments` is effective-dated and committed; `scheduleExpectationCore.ts` derives expectations from it plus configuration | (a) dated expectation projection only (b) committed assignments as a synced collection only (c) both | **(a) for V1** — a partner wants "which days is this child expected", and (b) can be added later without changing (a) | Determines whether Schedule joins `updated_since` at all | Domain + Director |
+| ~~**D-06**~~ **RESOLVED — invisible, in every boundary mode** | What does a location-restricted installation see for a child with no current placement? | Every people resource needs a boundary rule, and this is the gap in it | Boundary is location-based; placement is the child↔location join | (a) invisible (b) visible to org-wide installations only (c) visible with reduced fields | **(a)** — fail closed, and document it | Affects Children, Enrollment, Relationships | Director (security) |
+| ~~**D-07**~~ **RESOLVED — primary location must be in boundary** | How does the boundary apply to org-scoped employment? | Employment is organization-scoped; the boundary is location-scoped | `buildPersonEmploymentComposition` composes onto Person; primary location narrows | (a) staff visible if assigned to a location in the boundary (b) all staff to any installation | **(a)** | Determines the Staff query shape | Domain |
 | **D-10** | What is the event/webhook threshold and envelope? | Five resources classify `EVENT_REQUIRED`; V1 is incomplete without delivery | `workflow_events` is not exposable; no public vocabulary exists | (a) build the platform in V1 (b) ship reads first, events as 7.8 (c) no events in V1 | **(b)** — reads are useful alone; events are a separate product surface with real delivery cost | Determines whether V1 is "complete" without push | Director |
-| **D-11** | Is `children.read` too coarse? | It would bundle identity, contact detail, guardians and placement under one grant | No precedent yet — only three scopes exist | (a) split identity vs contact/PII (b) one scope per resource | **(a)** — least privilege matters most where child and guardian data meet | Adds scopes in 7.5 | Director (security) |
+| ~~**D-11**~~ **RESOLVED — three scopes** | Is `children.read` too coarse? | It would bundle identity, contact detail, guardians and placement under one grant | No precedent yet — only three scopes exist | (a) split identity vs contact/PII (b) one scope per resource | **(a)** — least privilege matters most where child and guardian data meet | Adds scopes in 7.5 | Director (security) |
 
 ### Does not block implementation
 
@@ -88,6 +95,33 @@ whose people model is still a proposal.
 
 **Would the proposed plan meet it?** Yes — 7.1 through 7.6 produce exactly the contracts above.
 Staff (7.7) and events (7.8) can follow the conversation rather than precede it.
+
+### Revision — 2026-09-22, after the Core Resource decision resolution
+
+**The threshold moves EARLIER, and acquires one caveat it did not have before.**
+
+Earlier, because the proposed Core Resource Expansion batch delivers the whole people, service-state
+and staff family together rather than as three sequential slices. On completion of that one batch,
+every row in the table above reads *shipped* — Staff included, which the table only ever rated
+*desirable*. There is no longer a 7.5 → 7.6 → 7.7 sequence to wait through.
+
+The caveat is load-bearing and must be stated in the package rather than discovered by a reader:
+
+> **Pickup authority is not exposed in V1.** The table above says pickup authority is
+> "operationally load-bearing in childcare", and that remains true. It is withheld because
+> `authorized_pickup` lives on the relationship roles while `may_not_pick_up` lives on
+> safeguarding restrictions — two active ones exist today — so publishing the role alone would
+> assert that someone may collect a child while a protective order says otherwise. Alloy will
+> publish guardian relationships, not collection authority, until **DD-1** is decided.
+
+**Consequence for the offline technical package:** it can be prepared one batch after Attendance
+operations instead of three slices later, and it must say plainly (a) that sync is polling-based by
+design with events deferred, and (b) that pickup verification is out of scope for V1. A package
+that implies either capability would be wrong in the direction that matters most.
+
+**What still requires provider-specific information** is unchanged and unaffected by these
+decisions: the provider's own record identifiers, its sync cadence and direction, and whether it
+expects push delivery. None of that is an Alloy contract question.
 
 ---
 

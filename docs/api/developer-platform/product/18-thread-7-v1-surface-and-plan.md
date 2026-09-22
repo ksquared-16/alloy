@@ -158,10 +158,16 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after slices 7.1–7.4.** Attendance read shipped in 7.1 and Attendance submission in
-7.4, which makes the public surface writable for the first time; no `READY` item remains, so the
-next slice must clear a decision or a domain gap rather than pick up available work. The people
-resources moved in the other direction: measurement found that `customer_members` and `customers`
+**Updated after slices 7.1–7.4, then again after the Core Resource decision resolution
+(2026-09-22).** Attendance read shipped in 7.1 and Attendance submission in 7.4, which makes the
+public surface writable for the first time. That left no `READY` item — the decision batch has
+since cleared it. D-02/03/04/05/06/07/08/11 are resolved in
+`20-core-resource-decision-resolution.md`, which promotes **Children, Households, Relationships,
+Enrollment, Placement, Schedule and Staff** to implementation-ready as a single grouped batch, and
+reduces D-08 to six `set_updated_at` triggers with no backfill. The `DOMAIN_GAP` recorded below for
+the people resources was **mis-diagnosed** — the customer-side tables are trigger-maintained and the
+read layer already coalesces a NULL clock to `created_at`; the real gap is on six person-side
+tables. The original text is kept for lineage: measurement found that `customer_members` and `customers`
 do not maintain `updated_at`, so they carry a `DOMAIN_GAP` that a decision alone cannot close.
 
 ---
@@ -218,9 +224,9 @@ Dependency-ordered. The preliminary 7A–7H sequence is **not** preserved: it op
 | **7.2 (partial)** | **Exact sync law shipped**; archive representation decided, delivery blocked on D-08 | 7.1 | the D-08 trigger migration, when authorized | none | `sync_token` + `since_token` on every collection | sync procedure documented | 23 + 16 live specs across both collections | no | every collection resumes exactly |
 | **7.3** | **Shipped as law.** D-09 resolved from doctrine; `idempotency_conflict` + `authenticatedWrite` added; **no store built — none needed** | none | **no** | none | error + budget documented | — | 6 contract specs | no | any governed operation |
 | ~~7.4 Attendance operations~~ | **Shipped.** `POST /api/v1/attendance-events`, scope `attendance.write`; batch, per-item outcomes, replay-safe | 7.1, 7.3 | no | `attendance.write` bound to the new operation | +1 operation | reference auto-renders | 23 live + 16 contract specs | **yes** — first external write | partners author facts; a second write copies this pattern |
-| **7.5 People reads** | Households → Children → Relationships | 7.2, decisions D-02/D-04/D-06/D-11 | possibly (lifecycle) | new read scopes | +5 operations | people model guide | boundary, PII allow-list, archive | **yes** — PII surface | enrollment can reference children |
-| **7.6 Service state** | Enrollment, Placements, Schedule projection | 7.5 | possibly | new read scopes | +4 operations | enrollment guide | effective-dating, supersession | no | attendance can be interpreted against expectation |
-| **7.7 Staff** | Staff composition read | 7.2, D-07 | no | new read scope | +2 operations | short guide | boundary via assignment | no | ratio/roster consumers |
+| **7.5 People reads** | **Decisions resolved; ready.** Households → Children → Relationships | 7.2, **D-08 trigger repair** | **yes — 6 triggers, no backfill** | `children.read`, `children.contact.read`, `relationships.read`, `households.read` | +4 operations | people model guide | boundary, PII allow-list, archive | **yes** — PII surface | enrollment can reference children |
+| **7.6 Service state** | **Decisions resolved; ready.** Enrollment, Placement, canonical Schedule assignments **+ a derived day projection** | 7.2 only — **not** 7.5 | no | `enrollment.read`, `schedule.read` | +4 operations | enrollment guide | effective-dating, supersession, **`subject_type='child'` filter** | no | attendance can be interpreted against expectation |
+| **7.7 Staff** | **Decisions resolved; ready.** Person ⋈ Employment as an external projection | 7.2, **D-08 trigger repair for identity sync** | no | `staff.read`, `staff.contact.read` | +2 operations | short guide | boundary via primary location | no | ratio/roster consumers |
 | **7.8 Events / webhooks** | Public event vocabulary + delivery | 7.5, 7.6, D-10 | yes | subscription management | event catalog | events guide | delivery, retry, replay, signature | **yes** — new product surface | `EVENT_REQUIRED` domains satisfied |
 | **7.9 Financials** | Charges + responsibility + balance view | 7.2, D-12 | possibly | new read scopes | +3 operations | financial model guide | responsibility split correctness | **yes** | later payment reads |
 | **7.10 Portal convergence** | Capability language, guides, examples | continuous | no | none | n/a | ongoing | parity gates | at product boundaries | the package in §6 |
