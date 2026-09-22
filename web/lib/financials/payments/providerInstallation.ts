@@ -69,8 +69,14 @@ type MerchantRow = {
     readiness: MerchantReadiness;
     ach_readiness: MerchantReadiness | null;
     readiness_checked_at: string | null;
-    /** What the provider said about WHY, as `persistReadiness` recorded it. Counts and state only. */
-    readiness_detail: { disabled_reason?: unknown; currently_due?: unknown; past_due?: unknown } | null;
+    /**
+     * What the provider said about WHY, as `persistReadiness` recorded it. Counts and state only.
+     *
+     * OPTIONAL on purpose: a merchant that has never been refreshed has nothing here, and a row read
+     * by an older caller does not select it. The sentence builder treats absent and empty the same
+     * way, so a missing detail degrades to the general wording rather than throwing.
+     */
+    readiness_detail?: { disabled_reason?: unknown; currently_due?: unknown; past_due?: unknown } | null;
 };
 
 const MERCHANT_COLUMNS =
