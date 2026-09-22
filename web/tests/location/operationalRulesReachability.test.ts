@@ -124,14 +124,31 @@ describe("3-8, 19-20. the panel uses the canonical authoring authority", () => {
         }
     });
 
-    it("20. no second capacity editor was introduced", () => {
-        // Exactly one component in the repository authors capacity_kind.
+    it("20. no second capacity AUTHORITY was introduced", () => {
+        /*
+         * SHARPENED, not relaxed. The object editor now writes capacity, so the
+         * old test — "the room panel must never call the capacity route" — would
+         * forbid the feature rather than protect it.
+         *
+         * What must remain true is that nothing outside the rule console names a
+         * capacity KIND. The object editor sends a number and an object; the
+         * server derives `operational` or `physical` from the object's role. A
+         * kind literal appearing in a panel would mean a second place deciding
+         * what a number means, which is the thing worth forbidding.
+         */
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const roomDetail = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         for (const src of [page, roomDetail]) {
             expect(src).not.toContain("capacity_kind");
-            expect(src).not.toContain("operational-config/capacity-rules");
+            for (const kind of ['"operational"', '"physical"', '"licensed"']) {
+                expect(src).not.toContain(`capacity_kind: ${kind}`);
+            }
         }
+        // The page still authors nothing at all.
+        expect(page).not.toContain("operational-config/capacity-rules");
+        // And the panel's only capacity call is the derived, object-level one.
+        const calls = roomDetail.match(/action: "[a-z_]*capacity[a-z_]*"/g) ?? [];
+        expect(calls).toEqual(['action: "set_object_capacity"']);
     });
 });
 

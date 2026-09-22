@@ -45,7 +45,7 @@ export type LocationConfigSection =
 export const LOCATION_CONFIG_SECTIONS: { key: LocationConfigSection; label: string }[] = [
     { key: "locations", label: "Locations" },
     { key: "programs", label: "Programs" },
-    { key: "rooms", label: "Rooms" },
+    { key: "rooms", label: "Spaces" },
     { key: "schedule_templates", label: "Schedule Templates" },
     { key: "operational_rules", label: "Operational Rules" },
 ];

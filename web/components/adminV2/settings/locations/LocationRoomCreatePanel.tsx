@@ -85,7 +85,7 @@ export default function LocationRoomCreatePanel({
         <div className="space-y-3" data-testid="locations-room-create">
             <ConfigObjectHeader
                 size="hero"
-                name="Add room"
+                name="Add space"
                 status={{ label: "Creating", tone: "attention" }}
                 facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                 actions={
@@ -103,7 +103,7 @@ export default function LocationRoomCreatePanel({
             <div className="space-y-2.5">
                 <ConfigEditorSection title="Room" testId="locations-room-create-identity">
                     <label className="block space-y-1">
-                        <span className="config-typo-field-label">Room name</span>
+                        <span className="config-typo-field-label">Name</span>
                         <input
                             type="text"
                             value={label}
@@ -189,7 +189,7 @@ export default function LocationRoomCreatePanel({
                 >
                     {programOptions.length === 0 ?
                         <p className="config-typo-sublabel">
-                            Offer Programs at this Location before assigning them to rooms.
+                            Offer Programs at this Location before assigning them to classrooms.
                         </p>
                     :   <div className="space-y-2" data-testid="locations-room-create-program-list">
                             {programOptions.map((program) => (
@@ -280,7 +280,7 @@ export default function LocationRoomCreatePanel({
                             })();
                         }}
                     >
-                        {saving ? "Adding…" : "Add room"}
+                        {saving ? "Adding…" : "Add space"}
                     </ConfigurationPrimaryButton>
                     <ConfigurationSecondaryButton onClick={onCancel} disabled={saving}>
                         Cancel

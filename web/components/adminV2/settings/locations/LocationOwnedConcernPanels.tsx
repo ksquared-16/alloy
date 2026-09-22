@@ -416,7 +416,7 @@ export function LocationPlacementPanel({
                                 onClick={onReviewRooms}
                                 data-testid="locations-placement-review-rooms"
                             >
-                                Review rooms →
+                                Review spaces →
                             </ConfigurationInlineButton>
                         </div>
                     </div>

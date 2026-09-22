@@ -119,21 +119,25 @@ describe("1-4. Type maps operator words to canonical roles", () => {
         expect(onCreate.mock.calls[0][0].unit_role).toBe("physical_space");
     });
 
-    it("4. Shared space sends shared_space", async () => {
+    it("4. a playground is an ordinary Physical space — no third type to choose", async () => {
+        // The decisive specimen. A director creating a playground should not have
+        // to know the word "shared space", and nothing downstream reads the
+        // difference: placement and scheduling exclude both roles, attendance
+        // offers both.
         const onCreate = await renderPanel();
-        await chooseType("shared_space");
+        await chooseType("physical_space");
         await typeName("Playground");
         await save();
         expect(onCreate).toHaveBeenCalled();
-        expect(onCreate.mock.calls[0][0].unit_role).toBe("shared_space");
+        expect(onCreate.mock.calls[0][0].unit_role).toBe("physical_space");
     });
 
     it("never shows database vocabulary to the operator", async () => {
         await renderPanel();
         const text = container!.textContent ?? "";
         expect(text).toContain("Classroom");
-        expect(text).toContain("Physical room");
-        expect(text).toContain("Shared space");
+        expect(text).toContain("Physical space");
+        expect(text).not.toContain("Shared space");
         expect(text).not.toContain("unit_role");
         expect(text).not.toContain("operational_group");
         expect(text).not.toContain("parent_location_id");
