@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import OperationsCalendarSurface from "@/components/adminV2/calendar/OperationsCalendarSurface";
 import OperationsWorkspaceShell, {
   type OperationsSite as RosterSite,
 } from "@/app/adminV2/operations/OperationsWorkspaceShell";
@@ -816,6 +817,34 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
               }
             />
             </div>
+          ) : null}
+
+          {/*
+           * CALENDAR — the same day, asked a different question.
+           *
+           * It shares `rosterDay` and `rosterServerToday` with Roster deliberately: moving
+           * between the two lenses must not move the operator's date, because they are two
+           * views of one operating day rather than two products that happen to have one.
+           */}
+          {mode === "work" && section === "calendar" ? (
+            <OperationsCalendarSurface
+              siteLocationId={siteId}
+              siteName={siteName}
+              day={rosterDay ?? rosterServerToday}
+              onDayChange={setRosterDay}
+              serverToday={rosterServerToday}
+              onServerToday={setRosterServerToday}
+              onOpenStaff={(personId) =>
+                focusRecordAndYield({
+                  entity_type: "persons",
+                  entity_id: personId,
+                  card_focus: {
+                    card_key: OPERATOR_FOCUS_CARDS.employment,
+                    item_id: personId,
+                  },
+                })
+              }
+            />
           ) : null}
 
           {mode === "work" && section === "attendance" ? (
