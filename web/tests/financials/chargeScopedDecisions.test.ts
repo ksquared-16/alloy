@@ -135,25 +135,36 @@ describe("the command offers the decisions and the host applies them", () => {
          * account's standing arrangement governs exactly as it did before these controls existed.
          */
         const card = code(CARD);
-        expect(card).toMatch(/useState<"account" \| "charge">\("account"\)/);
-        expect(card, "and the follow-up runs only under the charge scope")
-            .toMatch(/chargeScope === "charge" && chargeShares\.length > 0/);
+        expect(card, "the editor starts closed").toMatch(/const \[chargeToChanging, setChargeToChanging\] = useState\(false\)/);
+        expect(card, "and the follow-up runs only when it was opened and filled")
+            .toMatch(/chargeToChanging && chargeShares\.length > 0/);
     });
 
-    it("choosing the charge scope does not pre-fill the standing answer", () => {
+    it("opening the editor does not pre-fill the standing answer", () => {
         /*
          * A pre-filled copy gets committed unread, producing a charge-scoped duplicate of the
          * answer that already governed — an override that overrides nothing, and which hides the
          * next real change to the standing arrangement.
          */
         const card = code(CARD);
-        const onScope = card.slice(card.indexOf("onScope:"));
-        expect(onScope.slice(0, 700)).toMatch(/partyId: "", method: "percentage", value: ""/);
+        const onChanging = card.slice(card.indexOf("onChanging:"));
+        expect(onChanging.slice(0, 900)).toMatch(/partyId: "", method: "percentage", value: ""/);
     });
 
-    it("the reason is asked for only once a waiver is chosen", () => {
+    it("the reason is asked for only when one is owed", () => {
+        /*
+         * Declining a discount that WOULD otherwise have applied takes money's worth from a
+         * family and carries provenance. Declining one that was never going to apply is the
+         * truthful result, and asking for prose there teaches operators to type into a box that
+         * changes no money.
+         */
         const cmd = code(CMD);
-        expect(cmd).toMatch(/waivedPolicyIds\.length > 0 \?[\s\S]{0,600}data-addcharge-waiver-reason/);
+        expect(cmd).toMatch(/chargeDiscount\.reasonRequired \?[\s\S]{0,600}data-addcharge-waiver-reason/);
+        const card = code(CARD);
+        expect(card, "required only against a policy that would otherwise apply")
+            .toMatch(/chargeDiscountChoice === null && Boolean\(chargeDiscountSuppresses\)/);
+        expect(card, "and nothing is written when nothing would have applied")
+            .toMatch(/if \(chargeDiscountChoice === null && chargeDiscountSuppresses\)/);
     });
 
     it("remainder takes no number", () => {
@@ -170,23 +181,15 @@ describe("the command offers the decisions and the host applies them", () => {
         expect(cmd).toMatch(/type ShareMethod = "percentage" \| "fixed" \| "remainder"/);
     });
 
-    it("the preview states both decisions and computes neither", () => {
-        /*
-         * The preview is the only place the two decisions appear together, so it is where an
-         * operator sees what they are about to commit. What it must NOT do is put a number on
-         * them: what a waived policy would have been worth is the resolver's answer about a
-         * charge that does not exist yet, and a figure invented here would make this card a
-         * second reduction authority.
-         */
+    it("the preview states the decisions and computes neither", () => {
         const cmd = code(CMD);
         expect(cmd).toContain('data-addcharge-preview-responsibility="true"');
-        expect(cmd).toContain('data-addcharge-preview-waivers="true"');
-        expect(cmd, "a waived policy states applicability, not money")
-            .toMatch(/data-addcharge-preview-waivers[\s\S]{0,1200}does not apply/);
-        expect(cmd, "and the standing arrangement is declared untouched")
+        expect(cmd).toContain('data-addcharge-preview-discount="true"');
+        expect(cmd, "no discount is an answer, not an absence").toMatch(/selectedPolicyId[\s\S]{0,400}"None"/);
+        expect(cmd, "and the override declares its reach without naming the model")
             .toContain('data-addcharge-preview-standing="true"');
-        const waivers = cmd.slice(cmd.indexOf('data-addcharge-preview-waivers="true"'));
-        expect(waivers.slice(0, 1200), "no arithmetic on the waived amount")
+        const line = cmd.slice(cmd.indexOf('data-addcharge-preview-discount="true"'));
+        expect(line.slice(0, 900), "no arithmetic on the discount")
             .not.toMatch(/amountCents|\* 100|toFixed\(/);
     });
 
@@ -276,7 +279,7 @@ describe("two Waives, two grains, and they must not blur", () => {
     it("each surface says which grain it is about", () => {
         const cmd = code(CMD);
         expect(cmd, "Add Charge is explicit that it means this charge")
-            .toMatch(/waived for this charge/i);
+            .toMatch(/applies to this charge only/i);
         const labels = code("lib/financials/reductions/reductionReasonLabels.ts");
         expect(labels, "and the reason codes stay distinct")
             .toMatch(/excluded_by_charge_exception:\s*"Waived for this charge"/);

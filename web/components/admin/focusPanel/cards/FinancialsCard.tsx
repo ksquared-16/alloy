@@ -1740,16 +1740,88 @@ export default function FinancialsCard({
      * model: nothing is written that a later step has to reconcile or clean up. An operator who
      * abandons the command leaves no trace, because these are React state and nothing else.
      */
-    const [chargeScope, setChargeScope] = useState<"account" | "charge">("account");
+    /*
+     * CHANGING, NOT SCOPING. The operator opens the Charge to editor or leaves it closed; whether
+     * an override becomes a charge-scoped arrangement is this host's problem and always was.
+     */
+    const [chargeToChanging, setChargeToChanging] = useState(false);
     const [chargeShares, setChargeShares] = useState<
         Array<{ partyId: string; method: "percentage" | "fixed" | "remainder"; value: string }>
     >([]);
-    const [waivedPolicyIds, setWaivedPolicyIds] = useState<string[]>([]);
+    /*
+     * ONE DISCOUNT DECISION. `undefined` means "not yet answered — use what resolution says";
+     * a policy id means that one; `null` means No discount, which is an answer and not an absence.
+     */
+    const [chargeDiscountChoice, setChargeDiscountChoice] = useState<string | null | undefined>(undefined);
+    /*
+     * ── WHAT WOULD REDUCE THE CHARGE THE OPERATOR IS TYPING ──────────────────────────────────
+     *
+     * Asked of the ONE canonical resolver, about a charge that does not exist yet: the template's
+     * category, the amount entered, the child selected, the service date chosen. Re-asked when any
+     * of those change, because a discount that covered tuition may not cover a registration fee
+     * and a selection that was valid a keystroke ago must not survive into a charge it cannot
+     * reduce.
+     *
+     * `wouldApplyPolicyId` is the answer if the operator changes nothing — the canonical default —
+     * and it is also what tells "No discount" apart from a suppression: declining a discount that
+     * WOULD have applied is a decision, declining one that was never coming is the truth.
+     */
+    const [proposedDiscounts, setProposedDiscounts] = useState<{
+        options: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+        wouldApplyPolicyId: string | null;
+    }>({ options: [], wouldApplyPolicyId: null });
+    const chargeDiscountSuppresses = proposedDiscounts.wouldApplyPolicyId;
+
+    useEffect(() => {
+        if (overlay !== "add_charge" || !customerId) return;
+        const template = (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === pending?.templateId)
+            ?? (vm?.chargeTemplates ?? [])[0];
+        const categoryKey = template?.categoryKey ?? "";
+        /* A household charge names no child, and a child's discounts are not the account's. */
+        const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
+        if (!categoryKey || !memberId) {
+            setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            return;
+        }
+        const amountCents = Math.round(Number(chargeAmount || "0") * 100) || template?.amountCents || 0;
+        const serviceDate = chargeEventDate || new Date().toISOString().slice(0, 10);
+        let cancelled = false;
+        const query = new URLSearchParams({
+            customer_id: customerId,
+            customer_member_id: memberId,
+            category_key: categoryKey,
+            amount_cents: String(amountCents),
+            service_date: serviceDate,
+        });
+        void fetch(`/api/admin/financials/proposed-charge-discounts?${query.toString()}`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: {
+                options?: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+                wouldApplyPolicyId?: string | null;
+            } | null) => {
+                if (cancelled) return;
+                setProposedDiscounts({
+                    options: body?.options ?? [],
+                    wouldApplyPolicyId: body?.wouldApplyPolicyId ?? null,
+                });
+            })
+            .catch(() => {
+                /* FAIL CLOSED: offer nothing rather than a discount nothing confirmed. */
+                if (!cancelled) setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            });
+        return () => { cancelled = true; };
+        /*
+         * EVERY INPUT THE ANSWER DEPENDS ON. Charge type, child, amount and service date all move
+         * eligibility, and a selection that was valid a keystroke ago must not survive into a
+         * charge it cannot reduce.
+         */
+    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates]);
+
     const [waiverReason, setWaiverReason] = useState("");
     const resetChargeDecisions = useCallback(() => {
-        setChargeScope("account");
+        setChargeToChanging(false);
         setChargeShares([]);
-        setWaivedPolicyIds([]);
+        setChargeDiscountChoice(undefined);
         setWaiverReason("");
     }, []);
 
@@ -1802,7 +1874,7 @@ export default function FinancialsCard({
             };
 
             for (const chargeId of chargeIds) {
-                if (chargeScope === "charge" && chargeShares.length > 0) {
+                if (chargeToChanging && chargeShares.length > 0) {
                     /*
                      * THE SHARES ARE TRANSLATED, NOT COMPUTED. A percentage becomes basis points
                      * and an amount becomes cents because that is how the domain stores them; what
@@ -1829,18 +1901,28 @@ export default function FinancialsCard({
                     if (error) failures.push(`responsibility for this charge — ${error}`);
                 }
 
-                for (const policyId of waivedPolicyIds) {
+                /*
+                 * ── "NO DISCOUNT" WRITES SOMETHING ONLY WHEN IT MEANS SOMETHING ──────────────
+                 *
+                 * Declining a discount that WOULD otherwise have applied is a decision about a
+                 * real family's money, and it is recorded as a charge-level exclusion with its
+                 * reason. Choosing No discount where canonical resolution already says none
+                 * applies is the truthful result and writes NOTHING — an exclusion row there
+                 * would be a decision nobody made, against a policy that was never going to
+                 * reduce this charge, sitting in the record forever for somebody to explain.
+                 */
+                if (chargeDiscountChoice === null && chargeDiscountSuppresses) {
                     const error = await run("billing.waive_charge_discount", {
                         charge_id: chargeId,
-                        policy_id: policyId,
+                        policy_id: chargeDiscountSuppresses,
                         reason: waiverReason,
                     });
-                    if (error) failures.push(`waiving a discount — ${error}`);
+                    if (error) failures.push(`recording no discount — ${error}`);
                 }
             }
             return failures;
         },
-        [chargeInvocation, chargeScope, chargeShares, customerId, waivedPolicyIds, waiverReason],
+        [chargeDiscountChoice, chargeDiscountSuppresses, chargeInvocation, chargeShares, chargeToChanging, customerId, waiverReason],
     );
 
     const commit = useCallback(async () => {
@@ -3627,18 +3709,17 @@ export default function FinancialsCard({
                                                   id: party.personId,
                                                   label: party.name,
                                               })),
-                                          scope: chargeScope,
-                                          onScope: (scope: "account" | "charge") => {
-                                              setChargeScope(scope);
+                                          changing: chargeToChanging,
+                                          onChanging: (changing: boolean) => {
+                                              setChargeToChanging(changing);
                                               /*
-                                               * Choosing to divide this charge opens ONE empty
-                                               * share rather than a copy of the standing
-                                               * arrangement: a pre-filled copy would be committed
-                                               * unread, creating a charge-scoped duplicate of the
-                                               * answer that already governed — an override that
-                                               * overrides nothing and hides the next real change.
+                                               * Opening the editor offers ONE empty share rather
+                                               * than a copy of the standing answer: a pre-filled
+                                               * copy would be committed unread, creating an
+                                               * override that overrides nothing and hides the next
+                                               * real change to the arrangement it duplicated.
                                                */
-                                              if (scope === "charge" && chargeShares.length === 0) {
+                                              if (changing && chargeShares.length === 0) {
                                                   setChargeShares([
                                                       { partyId: "", method: "percentage", value: "" },
                                                   ]);
@@ -3666,18 +3747,44 @@ export default function FinancialsCard({
                                       },
                                   }
                                 : {}),
-                            /* Waiving is offered only where there is an authored policy to waive. */
-                            ...(expectedPolicies.length > 0
+                            /*
+                             * ── ONE DISCOUNT DECISION, OVER THE ELIGIBLE SET ────────────────
+                             *
+                             * The options are the resolver's answer about THIS proposed charge —
+                             * category, amount and child — so a policy the family receives but
+                             * which does not cover this charge type is not offered. That is §36
+                             * made structural: the operator cannot overrule policy impossibility
+                             * because the impossible option never reaches the control.
+                             */
+                            ...(proposedDiscounts.options.length > 0 || proposedDiscounts.wouldApplyPolicyId
                                 ? {
                                       chargeDiscount: {
-                                          policies: expectedPolicies,
-                                          waivedPolicyIds,
-                                          onToggleWaive: (policyId: string) =>
-                                              setWaivedPolicyIds((prior) =>
-                                                  prior.includes(policyId)
-                                                      ? prior.filter((id) => id !== policyId)
-                                                      : [...prior, policyId],
-                                              ),
+                                          options: proposedDiscounts.options.map((o) => ({
+                                              policyId: o.policyId,
+                                              label: o.basis === "percentage" && o.basisValue != null
+                                                  ? `${o.label} · ${o.basisValue}%`
+                                                  : o.label,
+                                          })),
+                                          /*
+                                           * UNANSWERED MEANS "WHAT RESOLUTION SAYS". The operator
+                                           * who changes nothing gets the discount that would have
+                                           * applied anyway, which is what "default to the
+                                           * canonical answer" means — and no exclusion is written
+                                           * for a decision they never made.
+                                           */
+                                          selectedPolicyId:
+                                              chargeDiscountChoice === undefined
+                                                  ? proposedDiscounts.wouldApplyPolicyId
+                                                  : chargeDiscountChoice,
+                                          onSelect: (policyId: string | null) => setChargeDiscountChoice(policyId),
+                                          /*
+                                           * A REASON ONLY WHERE ONE IS OWED. Declining a discount
+                                           * that WOULD otherwise apply takes money's worth from a
+                                           * family; declining one that was never going to apply
+                                           * is the truth and costs nothing to say.
+                                           */
+                                          reasonRequired:
+                                              chargeDiscountChoice === null && Boolean(chargeDiscountSuppresses),
                                           reason: waiverReason,
                                           onReason: setWaiverReason,
                                       },

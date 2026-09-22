@@ -167,10 +167,16 @@ describe("THE GATE — the operator surface states the per-child economics", () 
      */
     it("says the amount is per child and how many children receive one", () => {
         const cmd = src("components/operationalCards/AddChargeCommand.tsx");
-        const sum = cmd.slice(cmd.indexOf("data-addcharge-childsum"));
+        /*
+         * THE LIVE SUMMARY. `data-addcharge-childsum` belonged to the legacy "Also bill" checkbox
+         * row, which was unreachable — `unifiedTarget` is checked first and the host always
+         * supplies it — and was removed with the native checkboxes it carried. The unified target
+         * says the same two numbers under its own marker.
+         */
+        const sum = cmd.slice(cmd.indexOf("data-addcharge-targetsum"));
         const block = sum.slice(0, sum.indexOf("</p>"));
         expect(block, "per-child, not a total").toContain("per child");
-        expect(block, "the count is said out loud").toContain("selectedIds.length} children");
+        expect(block, "the count is said out loud").toContain("selectedChildIds.length} children");
         expect(block).toContain("each receives their own charge");
     });
 
@@ -181,8 +187,15 @@ describe("THE GATE — the operator surface states the per-child economics", () 
      */
     it("keeps the per-child hooks a mounted probe steers by", () => {
         const cmd = src("components/operationalCards/AddChargeCommand.tsx");
-        expect(cmd).toContain("data-addcharge-child=");
-        expect(cmd).toContain("data-addcharge-childsum");
+        /*
+         * The hooks a probe steers by are part of the contract, and they moved with the control.
+         * The unified target is one AlloyMultiSelect rather than a row of checkboxes, so a probe
+         * steers it by that testId and reads the result from the summary marker.
+         */
+        expect(cmd, "the target control is addressable").toContain('testId="addcharge-target"');
+        expect(cmd, "and the summary it produces is too").toContain("data-addcharge-targetsum");
+        expect(cmd, "no native checkbox survives for a financial decision")
+            .not.toMatch(/type="checkbox"/);
         const host = src("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(host).toContain('data-financials-entry-mode-tab={mode}');
         expect(host, "one command surface declares which mode it is in").toContain("data-financials-entry-mode={entryMode}");

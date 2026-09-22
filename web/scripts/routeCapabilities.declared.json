@@ -2345,6 +2345,14 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/financials/proposed-charge-discounts/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Which discounts would reduce a charge the operator is still typing. Calls the one canonical resolver with a hypothetical gross obligation - it re-implements no eligibility, writes nothing, and states no amount the resolver did not return."
+      }
+    },
     "app/api/admin/financials/provider/route.ts": {
       "GET": {
         "status": "declared",
