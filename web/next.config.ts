@@ -369,6 +369,7 @@ const nextConfig: NextConfig = {
        * The implementation stays under `/adminV2/*`, like every other operator surface here.
        */
       { source: "/workspace/qa/core-financials", destination: "/adminV2/system/qa/core-financials" },
+      { source: "/workspace/qa/staffing-v1", destination: "/adminV2/system/qa/staffing-v1" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
       /**
