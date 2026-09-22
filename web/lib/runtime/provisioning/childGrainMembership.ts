@@ -30,11 +30,13 @@ import {
     type ChildRowMembership,
 } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import {
-    acquireEnrollmentChildBase,
     emptyChildGrainTrace,
     type ChildGrainTrace,
-    type EnrollmentChildBase,
 } from "@/lib/queues/childGrainProcessInstanceQueue";
+import {
+    markWorkViewSpan,
+    type WorkViewTotalsTimeline,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 // From its own module, NOT from the provisioning answer — importing the answer here would make a cycle
 // out of a one-way dependency (the answer consumes this).
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
@@ -101,18 +103,16 @@ export async function countChildGrainMembersForLens(params: {
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * COUNTING SEVERAL LENSES OF THE SAME WORK UNIT
  *
- * Measured deployed at 445bc8b23, the three child lenses on WU-03 cost 1,537ms of the 646ms Work
- * View seed — the binding term of a frame whose target is 800ms. Each lens ran the full membership
- * projection, and three lenses meant THREE acquisitions of the same org's enrollment instances and
- * three resolutions of the same opportunities, children and program categories.
+ * WHAT WAS TRIED HERE, AND WHY IT IS GONE. A shared base acquisition once replaced this group's
+ * three per-lens acquisitions with one. It was measured on deployed bf3274774 over 21 paired and 21
+ * cold samples per arm, with exact member-set parity in every sample, and it made COMPLETE_FRAME
+ * 316ms SLOWER: the three acquisitions were ALREADY CONCURRENT, so their wall was one ~567ms lens
+ * rather than the 1,637ms their accumulated span suggested, and hoisting them produced a ~531ms
+ * serial prefix every group had to await. Fewer queries, more latency. The mechanism is retired;
+ * the instrumentation that proved it is not.
  *
- * The expensive thing was never the predicate. It was asking the database the same question once
- * per lens.
- *
- * SAME MEMBERSHIP ANSWER, CHEAPER ACQUISITION. Nothing below decides who is a member.
- * `childRowMembershipForLens` still reads the lens, `loadChildGrainProvisioningRows` still applies
- * the rule, and the Enrollment Definition's `isLiveEnrollmentParticipant` is still the only
- * liveness authority. The single change is that the rows those rules run over are acquired once.
+ * So this counts each lens with its own acquisition, concurrently, exactly as the evaluator always
+ * did — and records what each one cost, which is the only reason the failure was legible.
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /** What one lens cost, and what it answered. Diagnostic only. */
@@ -120,119 +120,43 @@ export type ChildLensMeasurement = {
     viewId: string;
     mode: "stages" | "participation";
     stages: number;
-    /** Wall of this lens alone — acquisition included only when it did its own. */
+    /** Wall of this lens, acquisition included. */
     ms: number;
     /** Members found; null when the lens refused. */
     outRows: number | null;
-    shared: boolean;
     acquisition: ChildGrainTrace;
 };
 
 export type ChildMembershipBatchMeasurement = {
-    shared: boolean;
-    baseScope: "all" | "stages" | "none";
-    baseStages: number;
-    baseMs: number;
-    base: ChildGrainTrace;
     lenses: ChildLensMeasurement[];
 };
 
 export function emptyChildMembershipBatchMeasurement(): ChildMembershipBatchMeasurement {
-    return { shared: false, baseScope: "none", baseStages: 0, baseMs: 0, base: emptyChildGrainTrace(), lenses: [] };
+    return { lenses: [] };
 }
 
 /**
- * The acquisition scope a set of lenses needs.
- *
- * A participation lens asks about the whole enrollment population, so any lens in that mode forces
- * the unscoped base. Otherwise the union of the stage sets is enough, and is strictly narrower.
- */
-export function childBaseScopeForLenses(
-    views: readonly WorkViewConfigV1Stored[],
-): { stageKeys: string[] | null } {
-    const stageKeys = new Set<string>();
-    for (const view of views) {
-        const membership = childRowMembershipForLens(view);
-        if (membership.mode === "participation") return { stageKeys: null };
-        for (const key of membership.stageKeys) {
-            const k = key.trim();
-            if (k) stageKeys.add(k);
-        }
-    }
-    return { stageKeys: [...stageKeys] };
-}
-
-/**
- * Count every child lens of one work unit.
+ * Count every child lens of one work unit, concurrently.
  *
  * Returns a count per view id, or null for a view whose own evaluation refused — the caller turns
- * that into UNKNOWN, never into a family number.
- *
- * `shareAcquisition: false` reproduces the per-lens behaviour exactly (each lens acquires its own
- * base), so the two arms can be measured against each other on one deployed lineage before either
- * is made the only one.
- *
- * A FAILED SHARED ACQUISITION FAILS EVERY LENS. That is honest: the acquisition is the read all of
- * them were already making, so a failure that would have refused one lens refuses all of them
- * either way. What must not happen — and does not — is a lens answering from a base that does not
- * cover it; both membership rules refuse that themselves.
+ * that into UNKNOWN, never into a family number. Each lens keeps its OWN failure, so one lens that
+ * cannot read still leaves the others answering.
  */
 export async function countChildGrainMembersForLenses(params: {
     supabase: SupabaseClient;
     orgId: string;
     workUnitId: string;
     views: readonly WorkViewConfigV1Stored[];
-    shareAcquisition: boolean;
-    /**
-     * A base the CALLER already acquired for this request. The child lenses of one surface are
-     * spread across count groups and the base is org-scoped, so a base acquired here could only
-     * ever be shared with the lenses of one group — often exactly one lens, which shares nothing.
-     * When the caller supplies one, no acquisition happens here at all.
-     */
-    base?: EnrollmentChildBase;
     measurement?: ChildMembershipBatchMeasurement;
+    /**
+     * Interval recorder. WHICH lens binds cannot be read off three durations that overlap — only
+     * off their intervals — and "which lens binds" is the whole question for this path.
+     */
+    timeline?: WorkViewTotalsTimeline;
+    group?: string;
 }): Promise<Map<string, number | null>> {
     const out = new Map<string, number | null>();
     if (!params.views.length) return out;
-
-    let base: EnrollmentChildBase | undefined = params.base;
-    if (base && params.measurement) {
-        params.measurement.shared = true;
-        params.measurement.baseScope = base.scope === "all" ? "all" : "stages";
-        params.measurement.baseStages = base.scope === "all" ? 0 : base.scope.stageKeys.length;
-        params.measurement.baseMs = 0; // acquired above this call; the caller reports its cost
-    }
-    if (!base && params.shareAcquisition) {
-        const scope = childBaseScopeForLenses(params.views);
-        const baseTrace = emptyChildGrainTrace();
-        const t0 = Date.now();
-        try {
-            base = await acquireEnrollmentChildBase({
-                supabase: params.supabase,
-                orgId: params.orgId,
-                workUnitId: params.workUnitId,
-                stageKeys: scope.stageKeys,
-                trace: baseTrace,
-            });
-        } catch {
-            if (params.measurement) {
-                params.measurement.shared = true;
-                params.measurement.baseScope = scope.stageKeys === null ? "all" : "stages";
-                params.measurement.baseStages = scope.stageKeys?.length ?? 0;
-                params.measurement.baseMs = Date.now() - t0;
-                params.measurement.base = baseTrace;
-            }
-            for (const view of params.views) out.set(view.id, null);
-            return out;
-        }
-        if (params.measurement) {
-            params.measurement.shared = true;
-            params.measurement.baseScope = base.scope === "all" ? "all" : "stages";
-            params.measurement.baseStages = base.scope === "all" ? 0 : base.scope.stageKeys.length;
-            params.measurement.baseMs = Date.now() - t0;
-            params.measurement.base = baseTrace;
-        }
-    }
 
     const counted = await Promise.all(
         params.views.map(async (view) => {
@@ -246,20 +170,19 @@ export async function countChildGrainMembersForLenses(params: {
                     orgId: params.orgId,
                     workUnitId: params.workUnitId,
                     membership,
-                    base,
                     trace,
                 });
                 count = rows.length;
             } catch {
                 count = null;
             }
+            markWorkViewSpan(params.timeline, `child:${view.id}`, t0, params.group ?? null);
             const measure: ChildLensMeasurement = {
                 viewId: view.id,
                 mode: membership.mode,
                 stages: membership.mode === "stages" ? membership.stageKeys.length : 0,
                 ms: Date.now() - t0,
                 outRows: count,
-                shared: base !== undefined,
                 acquisition: trace,
             };
             return { id: view.id, count, measure };

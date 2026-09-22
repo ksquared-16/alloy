@@ -100,6 +100,12 @@ const PI_SELECT =
  * PER-ACQUISITION INSTRUMENTATION. Diagnostic only — nothing here is read by a predicate, and an
  * absent trace changes no answer. It exists because "the child lenses cost 1.5s" is not a finding:
  * which leg, at what cardinality, repeated how many times, is.
+ *
+ * IT OUTLIVED THE REPAIR IT WAS BUILT FOR, AND THAT IS THE POINT. The shared-acquisition experiment
+ * this instrumentation shipped alongside was retired for making the frame 316ms SLOWER. It is what
+ * proved that: the accumulated `child_counts` of 1,637ms was a SUM OF CONCURRENT WORK whose real
+ * wall was one ~567ms lens, so de-duplicating three already-overlapping reads into one serial
+ * prefix could only lose. Without a per-lens number beside the aggregate, that is invisible.
  */
 export type ChildGrainTrace = {
     piMs: number;
@@ -137,7 +143,7 @@ export function emptyChildGrainTrace(): ChildGrainTrace {
     };
 }
 
-export type ResolvedRefs = {
+type ResolvedRefs = {
     oppById: Map<string, Record<string, unknown>>;
     cmById: Map<string, Record<string, unknown>>;
     catById: Map<string, { key?: string | null; label?: string | null }>;
@@ -299,88 +305,6 @@ async function resolveTrackRowRefs(params: {
 }
 
 /**
- * ONE ACQUISITION FOR EVERY CHILD LENS ON A WORK UNIT.
- *
- * WHAT THIS IS NOT. It is not a second definition of membership, and it decides nothing. Membership
- * is still decided by `processInstanceBelongsToLane` (stages) and `isLiveEnrollmentParticipant`
- * (participation), in the two functions below, over rows normalized by the same mapper. This only
- * stops each lens from issuing its own copy of the reads those predicates run over.
- *
- * WHY IT IS SOUND. Neither membership rule reads anything outside its own instance row and that
- * row's resolved refs:
- *
- *   - `resolveContextOpportunity(pi, refs)` is keyed by `pi.context_id`;
- *   - `toTrackRow(pi, opp, refs)` is keyed by `pi.subject_id` and `pi.metadata.program_category_id`;
- *   - `processInstanceBelongsToLane` reads `pi.stage_key` and that opportunity's `stage_key`;
- *   - `isLiveEnrollmentParticipant` reads the participant composed from those same two rows.
- *
- * The ref maps are therefore MONOTONE: resolving them over a superset of instances yields a superset
- * of entries, and every lookup a lens performs returns the identical value it would have found in
- * its own narrower resolution. So the rows a lens admits are unchanged — only the waiting is.
- *
- * SCOPE, AND WHY IT IS CARRIED. A `stages` acquisition is deliberately narrower than the org's whole
- * enrollment population, and handing that narrow base to a PARTICIPATION lens would silently answer a
- * different question — the 13-vs-8 failure mode exactly. The base therefore states its own scope and
- * `queryEnrollmentProcessInstanceParticipationRows` refuses one that is not `all`.
- */
-export type EnrollmentChildBase = {
-    /** `all` = every enrollment instance in the org; `stages` = that stage set plus null-stage riders. */
-    scope: "all" | { stageKeys: readonly string[] };
-    piRows: readonly PiRow[];
-    refs: ResolvedRefs;
-};
-
-/** PostgREST filter values are not parameterized, so a stage key that is not a plain token is not
- *  spliced into one — the acquisition simply widens to `all`, which is a correct superset. */
-const SAFE_STAGE_TOKEN = /^[A-Za-z0-9_-]+$/;
-
-export async function acquireEnrollmentChildBase(params: {
-    supabase: SupabaseClient;
-    orgId: string;
-    workUnitId: string;
-    /** Null = the participation superset (every enrollment instance in the org). */
-    stageKeys: readonly string[] | null;
-    trace?: ChildGrainTrace;
-}): Promise<EnrollmentChildBase> {
-    const requested = params.stageKeys
-        ? [...new Set(params.stageKeys.map((k) => k.trim()).filter(Boolean))]
-        : null;
-    const narrow = requested !== null && requested.length > 0 && requested.every((k) => SAFE_STAGE_TOKEN.test(k));
-
-    const tPi = Date.now();
-    let query = params.supabase
-        .from("process_instances")
-        .select(PI_SELECT)
-        .eq("org_id", params.orgId)
-        .eq("process_key", ENROLLMENT_PROCESS_KEY);
-    if (narrow) {
-        // Same admission as the per-stage query, unioned: this stage set OR no own stage (riding the
-        // family track). The effective-stage filter in the lens below still decides the lane.
-        query = query.or(`stage_key.in.(${requested!.join(",")}),stage_key.is.null`);
-    }
-    const { data: piData, error: piErr } = await withDbTiming(
-        "member.process_instances_base",
-        { scope: narrow ? requested!.join("|") : "all" },
-        async () => query,
-    );
-    if (piErr) throw new Error(`process_instances enrollment-base query failed: ${piErr.message}`);
-    const piRows = (piData ?? []) as PiRow[];
-    if (params.trace) {
-        params.trace.piMs = Date.now() - tPi;
-        params.trace.piRows = piRows.length;
-    }
-
-    const refs = await resolveTrackRowRefs({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        workUnitId: params.workUnitId,
-        piRows,
-        trace: params.trace,
-    });
-    return { scope: narrow ? { stageKeys: requested! } : "all", piRows, refs };
-}
-
-/**
  * The Opportunity a journey's context points at — through the participation when that is the anchor.
  *
  * One helper rather than the expression repeated at each membership rule, because the two rules
@@ -414,49 +338,31 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     orgId: string;
     workUnitId: string;
     stageKey: string;
-    /**
-     * A base already acquired for this org. Either scope serves this rule: `all` is a superset of
-     * this lane's admission set, and a `stages` base built from a union containing this stage
-     * admits exactly what the per-stage query admits (`stage_key = this` or null) plus instances at
-     * OTHER stages, every one of which the effective-stage filter below rejects.
-     */
-    base?: EnrollmentChildBase;
     trace?: ChildGrainTrace;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
     const stageKey = params.stageKey.trim();
     if (!stageKey) return [];
-    if (params.base && params.base.scope !== "all" && !params.base.scope.stageKeys.includes(stageKey)) {
-        throw new Error(`enrollment child base does not cover stage ${stageKey}`);
-    }
 
     // Membership is by EFFECTIVE stage (PI.stage_key ?? opportunity.stage_key), the same rule the
     // engine/metrics use. Fetch instances at this stage OR with no own stage (riding the family
     // track); the in-code filter below keeps only those whose effective stage matches this lane, so
     // a freshly-created child (null stage) surfaces in its household's stage lane (e.g. Lead).
-    let piRows: readonly PiRow[];
-    let refs: ResolvedRefs;
-    if (params.base) {
-        piRows = params.base.piRows;
-        refs = params.base.refs;
-    } else {
-        const tPi = Date.now();
-        const { data: piData, error: piErr } = await withDbTiming("member.process_instances", { stage: stageKey }, async () =>
-            params.supabase
-                .from("process_instances")
-                .select(PI_SELECT)
-                .eq("org_id", params.orgId)
-                .eq("process_key", ENROLLMENT_PROCESS_KEY)
-                .or(`stage_key.eq.${stageKey},stage_key.is.null`));
-        if (piErr) throw new Error(`process_instances enrollment-track query failed: ${piErr.message}`);
-        piRows = (piData ?? []) as PiRow[];
-        if (params.trace) {
-            params.trace.piMs += Date.now() - tPi;
-            params.trace.piRows += piRows.length;
-        }
-        if (!piRows.length) return [];
-        refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
+    const tPi = Date.now();
+    const { data: piData, error: piErr } = await withDbTiming("member.process_instances", { stage: stageKey }, async () =>
+        params.supabase
+            .from("process_instances")
+            .select(PI_SELECT)
+            .eq("org_id", params.orgId)
+            .eq("process_key", ENROLLMENT_PROCESS_KEY)
+            .or(`stage_key.eq.${stageKey},stage_key.is.null`));
+    if (piErr) throw new Error(`process_instances enrollment-track query failed: ${piErr.message}`);
+    const piRows = (piData ?? []) as PiRow[];
+    if (params.trace) {
+        params.trace.piMs += Date.now() - tPi;
+        params.trace.piRows += piRows.length;
     }
     if (!piRows.length) return [];
+    const refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
 
     const rows: OcmEnrollmentTrackQueryRow[] = [];
     for (const pi of piRows) {
@@ -494,39 +400,22 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
     supabase: SupabaseClient;
     orgId: string;
     workUnitId: string;
-    /**
-     * Must be the `all` base. A stage-scoped one omits live participations whose effective stage is
-     * outside that set — a smaller answer to a DIFFERENT question, which is the failure this module
-     * exists to prevent, so it is refused rather than used.
-     */
-    base?: EnrollmentChildBase;
     trace?: ChildGrainTrace;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
-    if (params.base && params.base.scope !== "all") {
-        throw new Error("participation membership requires an unscoped enrollment child base");
-    }
-    let piRows: readonly PiRow[];
-    let refs: ResolvedRefs;
-    if (params.base) {
-        piRows = params.base.piRows;
-        refs = params.base.refs;
-    } else {
-        const tPi = Date.now();
-        const { data: piData, error: piErr } = await params.supabase
-            .from("process_instances")
-            .select(PI_SELECT)
-            .eq("org_id", params.orgId)
-            .eq("process_key", ENROLLMENT_PROCESS_KEY);
-        if (piErr) throw new Error(`process_instances enrollment-participation query failed: ${piErr.message}`);
-        piRows = (piData ?? []) as PiRow[];
-        if (params.trace) {
-            params.trace.piMs += Date.now() - tPi;
-            params.trace.piRows += piRows.length;
-        }
-        if (!piRows.length) return [];
-        refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
+    const tPi = Date.now();
+    const { data: piData, error: piErr } = await params.supabase
+        .from("process_instances")
+        .select(PI_SELECT)
+        .eq("org_id", params.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY);
+    if (piErr) throw new Error(`process_instances enrollment-participation query failed: ${piErr.message}`);
+    const piRows = (piData ?? []) as PiRow[];
+    if (params.trace) {
+        params.trace.piMs += Date.now() - tPi;
+        params.trace.piRows += piRows.length;
     }
     if (!piRows.length) return [];
+    const refs = await resolveTrackRowRefs({ ...params, piRows, trace: params.trace });
 
     // In-scope instances only (context opportunity resolved in-org), then the
     // Definition's own liveness gate over the canonical participant shape.

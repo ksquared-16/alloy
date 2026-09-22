@@ -35,7 +35,6 @@ import {
     queryEnrollmentProcessInstanceParticipationRows,
     queryEnrollmentProcessInstanceTrackRows,
     type ChildGrainTrace,
-    type EnrollmentChildBase,
 } from "@/lib/queues/childGrainProcessInstanceQueue";
 
 /**
@@ -183,21 +182,14 @@ export async function loadChildGrainProvisioningRows(params: {
     orgId: string;
     workUnitId: string;
     membership: ChildRowMembership;
-    /**
-     * An enrollment child base already acquired for this org, shared with the other lenses of the
-     * same request. The membership rules below are unchanged and still decide every row; they just
-     * stop re-reading what a sibling lens has already read. The rule refuses a base that does not
-     * cover it.
-     */
-    base?: EnrollmentChildBase;
     trace?: ChildGrainTrace;
 }): Promise<ChildProvisioningRow[]> {
-    const { supabase, orgId, workUnitId, base, trace } = params;
+    const { supabase, orgId, workUnitId, trace } = params;
 
     let batches: (readonly unknown[])[];
     if (params.membership.mode === "participation") {
         batches = [
-            await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId, workUnitId, base, trace }),
+            await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId, workUnitId, trace }),
         ];
     } else {
         const stages = [...new Set(params.membership.stageKeys.map((s) => s.trim()).filter(Boolean))];
@@ -206,7 +198,7 @@ export async function loadChildGrainProvisioningRows(params: {
         if (!stages.length) return [];
         batches = await Promise.all(
             stages.map((stageKey) =>
-                queryEnrollmentProcessInstanceTrackRows({ supabase, orgId, workUnitId, stageKey, base, trace }),
+                queryEnrollmentProcessInstanceTrackRows({ supabase, orgId, workUnitId, stageKey, trace }),
             ),
         );
     }

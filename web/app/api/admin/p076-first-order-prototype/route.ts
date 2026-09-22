@@ -468,14 +468,6 @@ export async function GET(req: NextRequest) {
                   recordScopeImpossible: scopeAndTz[0].recordScopeImpossible,
                   viewerDisplayTimeZone: scopeAndTz[1],
                   activeWorkViewId: req.nextUrl.searchParams.get("active_view") ?? (shadowViewIds[0] ?? ""),
-                  /*
-                   * ARM SELECTOR. `child_batch=1` acquires the enrollment child base once for all
-                   * of a group's child lenses; absent, each lens acquires its own exactly as
-                   * production does. Both arms must return identical counts — measuring them on
-                   * ONE deployed lineage is the only way that claim is worth anything, and the
-                   * parity capture compares the two arms' `workViewValues` directly.
-                   */
-                  shareChildAcquisition: req.nextUrl.searchParams.get("child_batch") === "1",
               }
             : null;
 
