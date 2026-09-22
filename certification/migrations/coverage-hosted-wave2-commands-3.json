@@ -1,0 +1,25 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "date": "2027-04-02",
+  "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+  "phase": "3",
+  "transcript": [
+    {
+      "step": "M_cancel",
+      "action_key": "staff_coverage.cancel",
+      "request": {
+        "service_date": "2027-04-02",
+        "coverage_id": "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+        "reason_key": "qa_cleanup"
+      },
+      "http_status": 200,
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "blockers": null,
+      "affected_id": "956c7a37-fff7-430e-b6fe-f9b502729cf9",
+      "detail": null,
+      "at": "2026-09-22T01:35:58.269Z"
+    }
+  ]
+}
