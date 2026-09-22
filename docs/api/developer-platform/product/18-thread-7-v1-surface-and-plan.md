@@ -158,7 +158,18 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after the Partner Readiness batch (2026-09-22).** The boundary
+**Updated after the External Lifecycle batch (2026-09-22).** The V1 grant model is frozen at
+eleven scopes and `context.read` is retired from it. Six governed service-state operations are
+shipped and certified — start/end an enrollment, assign/move a placement, set/change a schedule —
+bringing the public surface to **nineteen operations across fifteen paths**, still with no PUT,
+PATCH or DELETE anywhere. Every resource is classified in
+`23-external-lifecycle-matrix.md`; Children and Relationships are `DOMAIN_OPERATION_GAP`,
+Locations and Households read-only by design, Staff ready but deliberately unshipped. The partner
+package is regenerated and exportable with one command. Both canonical gates passed. Thread 7 is
+**ready for promotion review** pending acceptance of `24-lifecycle-and-export-human-review.md`
+and reconciliation with staging.
+
+Earlier: **Updated after the Partner Readiness batch (2026-09-22).** The boundary
 resolver now pages to exhaustion, so the latent 200-location ceiling is closed.
 Partner documentation is converged on the surface that exists, a generic
 integration guide exists, and the offline partner package is assembled and
