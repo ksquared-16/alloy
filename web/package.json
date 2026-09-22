@@ -106,7 +106,9 @@
     "qa:developer-platform": "tsx --tsconfig tsconfig.json scripts/qa/developerPlatformQaFixture.ts",
     "check:runtime-mode-audience": "node scripts/checkRuntimeModeAudienceGating.mjs",
     "generate:governed-documents": "node scripts/generateGovernedDocuments.mjs",
-    "check:governed-documents": "node scripts/checkGovernedDocuments.mjs"
+    "check:governed-documents": "node scripts/checkGovernedDocuments.mjs",
+    "build:partner-package": "node scripts/buildPartnerPackage.mjs",
+    "check:partner-package": "node scripts/buildPartnerPackage.mjs --check"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",

@@ -1,13 +1,3 @@
----
-owner: platform
-status: canonical
-classification: PARTNER_READY
-audience: external developers, integration partners, technical evaluators
-last_reviewed: 2026-09-15
-document_version: 1.0
-supersedes: []
----
-
 # Alloy Developer Platform — Technical Specification
 
 **Every endpoint, field, status code and limit in this document was read from the

@@ -1,10 +1,3 @@
----
-owner: platform
-status: canonical
-last_reviewed: 2026-09-22
-supersedes: []
----
-
 # Integrating with Alloy
 
 A guide for any engineering team building against the Alloy public API. It
