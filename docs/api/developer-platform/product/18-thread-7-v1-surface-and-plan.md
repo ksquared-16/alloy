@@ -158,7 +158,15 @@ Person as an external resource distinct from Child, Guardian and Staff (**D-02**
 | Communications | `LATER` (V1: INTERNAL_ONLY) | Consent, sender identity and deliverability are obligations Alloy cannot delegate (D-13) |
 | Person as a resource | `DECISION_REQUIRED` | D-02 |
 
-**Updated after the Core Resource Expansion implementation batch (2026-09-22).** Groups 0–3 all
+**Updated after the Partner Readiness batch (2026-09-22).** The boundary
+resolver now pages to exhaustion, so the latent 200-location ceiling is closed.
+Partner documentation is converged on the surface that exists, a generic
+integration guide exists, and the offline partner package is assembled and
+guarded. Thread 7 is **ready for promotion review**, pending Director acceptance
+of the two reviews in `22-partner-readiness-human-review.md` and reconciliation
+with current staging. Nothing pushed, promoted or deployed.
+
+Earlier: **Updated after the Core Resource Expansion implementation batch (2026-09-22).** Groups 0–3 all
 certified: the six person-side triggers, People, Service state and Staff. The public surface is now
 **thirteen operations across nine resources**, all reads except the one attendance write. Both
 canonical gates — full `tsconfig.build.json` typecheck and production build — passed through the
