@@ -159,16 +159,9 @@ describeLive("External child visibility lifecycle", () => {
 
     /** One household, one child, one person, one agreement in `status`. */
     async function makeChild(label: string, agreements: { site: string; status: string }[]): Promise<string> {
-        const { data: maxC } = await supabase
-            .from("customers").select("customer_number").eq("org_id", ORG)
-            .order("customer_number", { ascending: false }).limit(1).maybeSingle();
-        const nextCustomer = Number((maxC as { customer_number: number } | null)?.customer_number ?? 0) + 1;
-
-        const cust = await supabase.from("customers")
-            .insert({ org_id: ORG, name: `VIS-${label}-${run}`, customer_number: nextCustomer })
-            .select("id").single();
-        expect(cust.error, `customer insert: ${cust.error?.message}`).toBeNull();
-        const customerId = (cust.data as { id: string }).id;
+        const customerId = await insertNumbered("customers", "customer_number", {
+            org_id: ORG, name: `VIS-${label}-${run}`,
+        });
         customerIds.push(customerId);
 
         const member = await supabase.from("customer_members")
@@ -179,18 +172,9 @@ describeLive("External child visibility lifecycle", () => {
         memberIds.push(memberId);
         householdByStatus.set(label, customerId);
 
-        const { data: maxP } = await supabase
-            .from("persons").select("person_number").eq("org_id", ORG)
-            .order("person_number", { ascending: false }).limit(1).maybeSingle();
-        const person = await supabase.from("persons")
-            .insert({
-                org_id: ORG,
-                person_number: Number((maxP as { person_number: number } | null)?.person_number ?? 0) + 1,
-                first_name: "Vis", last_name: label,
-            })
-            .select("id").single();
-        expect(person.error, `person insert: ${person.error?.message}`).toBeNull();
-        const personId = (person.data as { id: string }).id;
+        const personId = await insertNumbered("persons", "person_number", {
+            org_id: ORG, first_name: "Vis", last_name: label,
+        });
         personIds.push(personId);
 
         await supabase.from("person_child_relationships").insert({
@@ -206,19 +190,38 @@ describeLive("External child visibility lifecycle", () => {
         return memberId;
     }
 
+    /**
+     * Allocate a tenant-scoped sequence number and insert, retrying on collision.
+     *
+     * `max(n) + 1` races the other live suites, which run in parallel against the same
+     * certification tenant and allocate from the same columns. Two runs read the same maximum and
+     * the second loses to the unique index. Retrying with a freshly read maximum converges.
+     */
+    async function insertNumbered(
+        table: string,
+        numberColumn: string,
+        row: Record<string, unknown>,
+    ): Promise<string> {
+        let lastError = "";
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            const { data: top } = await supabase
+                .from(table).select(numberColumn).eq("org_id", ORG)
+                .order(numberColumn, { ascending: false }).limit(1).maybeSingle();
+            const base = Number((top as Record<string, number> | null)?.[numberColumn] ?? 0);
+            const candidate = base + 1 + attempt + Math.floor(Math.random() * 50);
+            const inserted = await supabase
+                .from(table).insert({ ...row, [numberColumn]: candidate }).select("id").single();
+            if (!inserted.error) return (inserted.data as { id: string }).id;
+            lastError = inserted.error.message;
+            if (!lastError.includes("duplicate key")) break;
+        }
+        throw new Error(`${table} insert failed after retries: ${lastError}`);
+    }
+
     async function makeSite(label: string): Promise<string> {
-        const { data: maxL } = await supabase
-            .from("locations").select("location_number").eq("org_id", ORG)
-            .order("location_number", { ascending: false }).limit(1).maybeSingle();
-        const inserted = await supabase.from("locations").insert({
-            org_id: ORG,
-            location_number: Number((maxL as { location_number: number } | null)?.location_number ?? 0) + 1,
-            label: `VIS-${label}-${run}`,
-            location_type: "site",
-            is_active: true,
-        }).select("id").single();
-        expect(inserted.error, `site insert: ${inserted.error?.message}`).toBeNull();
-        const id = (inserted.data as { id: string }).id;
+        const id = await insertNumbered("locations", "location_number", {
+            org_id: ORG, label: `VIS-${label}-${run}`, location_type: "site", is_active: true,
+        });
         locationIds.push(id);
         return id;
     }
