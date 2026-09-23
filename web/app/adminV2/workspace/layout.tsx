@@ -50,7 +50,9 @@ async function initialServerFrame(
         }
         const target = frameAddressFromPath(addr.pathname, addr.searchParams);
         if (!target) {
-            reason.why = "not_a_work_unit";
+            // Carry the path, so a pattern that disagrees with the browser's reading says which
+            // path it rejected rather than only that it rejected one.
+            reason.why = `not_a_work_unit:${addr.pathname}`;
             return null;
         }
         const { answer } = await frameForAddress(

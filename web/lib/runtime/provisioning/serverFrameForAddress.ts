@@ -31,8 +31,16 @@ export type ServerFrame = {
     settlement: Promise<ProvisioningSettlementPatch | null> | null;
 };
 
-/** The one work-unit route shape. A path that is not this composes nothing. */
-const WORK_UNIT_PATH = /^\/adminV2\/workspace\/work-unit\/([^/?#]+)/;
+/**
+ * The work-unit route shape — the SAME reading `attentionFromUrl` uses, deliberately.
+ *
+ * This was anchored and prefixed (`^\/adminV2\/workspace\/work-unit\/`), which made it a SECOND
+ * definition of "is this a work unit route". Deployed b283e341 reported
+ * `data-alloy-ssr-frame-reason="not_a_work_unit"` on the very page the client happily resolved:
+ * the header had arrived and the address was right, and only this pattern disagreed with the one
+ * the browser applies. Matching the same substring keeps both answers from drifting again.
+ */
+const WORK_UNIT_PATH = /\/workspace\/work-unit\/([^/?#]+)/;
 
 export type FrameAddress = {
     workUnitSlug: string;

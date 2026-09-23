@@ -38,6 +38,10 @@ test("p076 ssr probe", async ({ browser }) => {
         // "held" = showWorkUnit true (the surface should render), "current" = it did not.
         surfaceSlot: (html.match(/data-surface-slot=\\?"[a-z]+\\?"/g) ?? []).slice(0, 4),
         bootShell: count(/Thinking|boot-shell|AlloyOperationalBootShell/g),
+        // THE SERVER'S OWN ACCOUNT. Distinguishes "no frame was composed" (and why) from "a frame
+        // was composed and the surface still did not render" — opposite repairs.
+        ssrFrame: (html.match(/data-alloy-ssr-frame=\\?"[a-z]+\\?"/g) ?? []).slice(0, 3),
+        ssrFrameReason: (html.match(/data-alloy-ssr-frame-reason=\\?"[^"\\]+\\?"/g) ?? []).slice(0, 3),
         sectionIds: (html.match(/data-alloy-section-id=\\?"([A-Z0-9-]+)\\?"/g) ?? []).slice(0, 8),
     })}`);
     await ctx.close();
