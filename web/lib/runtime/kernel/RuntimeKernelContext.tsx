@@ -22,8 +22,6 @@ import { AttentionOwner, urlFromAttention, WORKSPACE_ATTENTION_TARGET, type Atte
 import { ProvisioningRuntime } from "./provisioning";
 import { FocusOwner, type FocusState } from "./focus";
 import { workUnitEntryResourceClient } from "./workUnitEntryResourceClient";
-import type { AttentionHydration } from "./attention";
-import type { PreparationTerminal, PreparationOutcome } from "./provisioning";
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 import { markFocusPanelDestinationCommit } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 
@@ -53,28 +51,13 @@ export function useCommittedFocus(): Readonly<FocusState> {
     return useSyncExternalStore(k.subscribeFocus, k.getFocus, k.getFocus);
 }
 
-/**
- * The frame the SERVER already composed for this address, if the route names a work unit.
- *
- * It is a plain serialized value handed down from the workspace layout — the only boundary that
- * both owns Focus Panel rendering and can learn the address (middleware forwards it). Null on every
- * route that is not a work unit, and on any compose that did not resolve.
- */
-export type InitialServerFrame = {
-    hydration: AttentionHydration;
-    snapshot: PreparationTerminal["snapshot"];
-    outcome: PreparationOutcome;
-} | null;
-
 export function RuntimeKernelProvider({
     tenant,
     principal,
-    initialFrame = null,
     children,
 }: {
     tenant: string;
     principal: string;
-    initialFrame?: InitialServerFrame;
     children: ReactNode;
 }) {
     const ref = useRef<RuntimeKernel | null>(null);
@@ -149,28 +132,6 @@ export function RuntimeKernelProvider({
                 notify();
             });
         });
-
-        /*
-         * THE SERVER'S FRAME, COMMITTED BEFORE THE FIRST RENDER.
-         *
-         * This runs in the server pass AND in the client's first render, from the same serialized
-         * prop, so both arrive at the identical attention ref and committed surface. Hydration then
-         * has nothing to correct — it attaches to markup that already says the right thing.
-         *
-         * Attention is hydrated first because Focus commits FOR an attention: seeding a surface
-         * whose ref nothing had asked for would leave K1 and K3 disagreeing about what the operator
-         * is looking at. `hydrate` is legal here for the same reason it is legal on a cold URL —
-         * this IS the cold load, and no attention exists yet.
-         */
-        if (initialFrame) {
-            try {
-                const seededRef = attention.hydrate(initialFrame.hydration);
-                focus.seedCommitted(seededRef, initialFrame.snapshot, initialFrame.outcome);
-            } catch {
-                // A seed that cannot be established leaves the client to do exactly what it did
-                // before: hydrate from the URL and prepare. Never fail the document for it.
-            }
-        }
 
         ref.current = {
             attention,

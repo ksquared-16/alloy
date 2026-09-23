@@ -55,18 +55,6 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const hydrated = useRef(false);
     useEffect(() => {
         if (hydrated.current || !orgId) return;
-        /*
-         * THE SERVER MAY ALREADY HAVE DONE THIS.
-         *
-         * When the workspace layout composed a frame for this address, the kernel provider hydrated
-         * attention from the SAME URL during the first render, so there is nothing left for a cold
-         * URL to establish. `hydrate` throws when attention exists — correctly, since a URL may
-         * never MOVE attention — so this asks first rather than catching the refusal.
-         */
-        if (kernel.attention.get()) {
-            hydrated.current = true;
-            return;
-        }
         const h = attentionFromUrl(
             new URL(window.location.href),
             { tenant: orgId, principal: principalUserId ?? "" },
