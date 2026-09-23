@@ -7,6 +7,8 @@ import {
 } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
 import { updateField } from "@/lib/forms/formBuilderSchema";
+import { RELATIONSHIP_ACTION_SCOPES, RELATIONSHIP_ACTION_SCOPE_LABELS } from "@/lib/admin/relationship/relationshipActionContract";
+import { addAnotherLabel } from "@/lib/forms/partyCollection";
 import {
     moveFieldBetweenSections,
     moveFieldWithinSection,
@@ -43,6 +45,82 @@ const ANSWER_TYPE_LABELS: Record<string, string> = {
     signature: "Signature",
     file_ref: "File upload",
 };
+
+/**
+ * The kinds of repeated person a form may collect, in the words an administrator uses.
+ *
+ * Each option carries the canonical relationship action, the subject and the default role — so
+ * choosing "Emergency contacts" settles all three at once rather than asking three questions whose
+ * wrong combination is silently possible. The keys are `RELATIONSHIP_ACTION_KEYS`; nothing here is
+ * a Forms-local vocabulary.
+ */
+const PARTY_KIND_PRESETS: Record<string, { action_key: string; subject: "person" | "child"; role?: string; scope?: string }> = {
+    add_emergency_contact: { action_key: "add_emergency_contact", subject: "person", role: "emergency_contact", scope: "this_child" },
+    add_authorized_pickup: { action_key: "add_authorized_pickup", subject: "person", role: "authorized_pickup", scope: "this_child" },
+    add_parent_guardian: { action_key: "add_parent_guardian", subject: "person", role: "guardian", scope: "household" },
+    add_billing_contact: { action_key: "add_billing_contact", subject: "person", role: "billing_contact", scope: "household" },
+    add_child: { action_key: "add_child", subject: "child", scope: "household" },
+};
+
+const PARTY_KIND_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+    { value: "add_emergency_contact", label: "Emergency contacts" },
+    { value: "add_authorized_pickup", label: "Authorized pickups" },
+    { value: "add_parent_guardian", label: "Parents and guardians" },
+    { value: "add_billing_contact", label: "Payers / billing contacts" },
+    { value: "add_child", label: "Children in the household (siblings)" },
+];
+
+/** Scope labels are the platform's own — a second wording would be a second meaning. */
+const PARTY_SCOPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = RELATIONSHIP_ACTION_SCOPES.map((sc) => ({
+    value: sc,
+    label: RELATIONSHIP_ACTION_SCOPE_LABELS[sc],
+}));
+
+function isPartyCollection(field: FormField): boolean {
+    return field.type === "group" && Boolean((field as { party_collection?: unknown }).party_collection);
+}
+
+function numberOrZero(raw: string): number {
+    const n = Number.parseInt(raw.trim(), 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/** Patch the party statement in place — the schema's own construct, never a parallel copy. */
+function updatePartyCollection(schema: FormSchemaV1, fieldId: string, patch: Record<string, unknown>): FormSchemaV1 {
+    return {
+        ...schema,
+        fields: schema.fields.map((f) => {
+            if (f.id !== fieldId || f.type !== "group") return f;
+            const current = ((f as { party_collection?: Record<string, unknown> }).party_collection ?? {}) as Record<string, unknown>;
+            const next: Record<string, unknown> = { ...current, ...patch };
+            // Presence, not value: a key the caller passed as undefined is being CLEARED, which is
+            // the only way to say "this kind has no role". An absent key still means "leave alone".
+            for (const key of Object.keys(next)) {
+                const cleared = next[key] === undefined || (typeof next[key] === "string" && (next[key] as string).trim() === "");
+                if (cleared) delete next[key];
+            }
+            return { ...f, party_collection: next } as FormField;
+        }),
+    };
+}
+
+function updatePartyRepeat(schema: FormSchemaV1, fieldId: string, patch: { min?: number; max?: number | null }): FormSchemaV1 {
+    return {
+        ...schema,
+        fields: schema.fields.map((f) => {
+            if (f.id !== fieldId || f.type !== "group") return f;
+            const rep = { min: f.repeat?.min ?? 0, ...(f.repeat?.max != null ? { max: f.repeat.max } : {}) } as { min: number; max?: number };
+            if (patch.min !== undefined) rep.min = patch.min;
+            if (patch.max !== undefined) {
+                if (patch.max === null || patch.max <= 0) delete rep.max;
+                else rep.max = patch.max;
+            }
+            // A maximum below the minimum is not a rule, it is an unsatisfiable form.
+            if (rep.max !== undefined && rep.max < rep.min) rep.max = rep.min;
+            return { ...f, repeat: rep } as FormField;
+        }),
+    };
+}
 
 const STORE_SUBJECT_OPTIONS = [
     { value: "processing_only", label: "Form field only" },
@@ -268,6 +346,9 @@ export default function ProcessingFormQuestionInspector({
     fieldLibrary,
     optionSets,
 }: Props) {
+    const party = (field as { party_collection?: { action_key?: string; subject?: "person" | "child"; role?: string; scope?: string; show_known?: boolean; allow_add?: boolean; add_another_label?: string } }).party_collection ?? null;
+    const partyMin = field.type === "group" ? (field.repeat?.min ?? 0) : 0;
+    const partyMax = field.type === "group" && field.repeat?.max != null ? String(field.repeat.max) : "";
     const storeSubject = storeSubjectFromField(field);
     const storeFieldOptions = destinationOptionsForSubject(storeSubject, fieldLibrary);
     const selectedCanonicalId = selectedDestinationId(field);
@@ -390,7 +471,13 @@ export default function ProcessingFormQuestionInspector({
                 </>
             ) : null}
 
-            {field.type !== "text_block" ? (
+            {/*
+              * A collection of people has no answer type and no single destination — where each
+              * entry goes is the relationship stated above, and "Form field only" beside it is a
+              * contradiction an administrator has to un-learn. Same for "who provides the answer":
+              * Alloy does not calculate a person.
+              */}
+            {field.type !== "text_block" && !isPartyCollection(field) ? (
                 <>
                     <AlloyInspectorDivider />
                     <AlloyInspectorGroup title="Answer">
@@ -517,6 +604,124 @@ export default function ProcessingFormQuestionInspector({
               * `derived` — through `updateField`. Nothing here is a second engine, and nothing here
               * is Enrollment-specific.
               */}
+            {/*
+              * REPEATED PEOPLE — the five things an administrator has to settle, in one place.
+              *
+              * WHAT are we collecting · WHO is each entry · HOW MANY may the family add · WHERE does
+              * each entry go · WHAT RELATIONSHIP does it confirm. Assembling that from ten unrelated
+              * scalar questions is how an emergency contact silently becomes household-wide.
+              *
+              * Every value written here is the platform's own relationship vocabulary
+              * (`RELATIONSHIP_ACTION_KEYS`, `RELATIONSHIP_ACTION_SCOPE_LABELS`). Forms states the
+              * intent; `lib/admin/relationship/` still performs every write.
+              */}
+            {isPartyCollection(field) ? (
+                <>
+                    <AlloyInspectorDivider />
+                    <AlloyInspectorGroup title="Each entry is a person">
+                        <div data-inspector-party-kind>
+                            <AlloyFieldLabel>What the family is listing</AlloyFieldLabel>
+                            {editable ? (
+                                <AlloySelect
+                                    value={party?.action_key ?? ""}
+                                    onChange={(action_key) =>
+                                        /*
+                                         * CHANGING THE KIND REPLACES THE ROLE AND SCOPE; IT DOES NOT MERGE THEM.
+                                         *
+                                         * A patch that only sets the keys its preset happens to have leaves the
+                                         * previous kind's behind — switching Emergency contacts to Siblings kept
+                                         * `role: "emergency_contact"` on a collection of children. The role and the
+                                         * scope belong to the kind, so they are cleared and re-stated together.
+                                         */
+                                        mutate((s2) =>
+                                            updatePartyCollection(s2, field.id, {
+                                                role: undefined,
+                                                scope: undefined,
+                                                ...(PARTY_KIND_PRESETS[action_key] ?? { action_key }),
+                                            }),
+                                        )
+                                    }
+                                    options={PARTY_KIND_OPTIONS}
+                                    testId="form-builder-party-kind"
+                                />
+                            ) : (
+                                <p className="text-[12px] font-medium text-alloy-midnight">
+                                    {PARTY_KIND_OPTIONS.find((o) => o.value === party?.action_key)?.label ?? "—"}
+                                </p>
+                            )}
+                            <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">
+                                {party?.subject === "child"
+                                    ? "Each entry is a child on this family's household."
+                                    : "Each entry is a person, related to this child in the role below."}
+                            </p>
+                        </div>
+                        <div data-inspector-party-scope>
+                            <AlloyFieldLabel>Who it applies to</AlloyFieldLabel>
+                            {editable ? (
+                                <AlloySelect
+                                    value={party?.scope ?? ""}
+                                    onChange={(scope) => mutate((s2) => updatePartyCollection(s2, field.id, { scope }))}
+                                    options={PARTY_SCOPE_OPTIONS}
+                                    testId="form-builder-party-scope"
+                                />
+                            ) : (
+                                <p className="text-[12px] font-medium text-alloy-midnight">
+                                    {PARTY_SCOPE_OPTIONS.find((o) => o.value === party?.scope)?.label ?? "—"}
+                                </p>
+                            )}
+                            <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">
+                                An authority this form collects is not widened beyond what is chosen here.
+                            </p>
+                        </div>
+                    </AlloyInspectorGroup>
+
+                    <AlloyInspectorDivider />
+                    <AlloyInspectorGroup title="How many the family may add">
+                        <div data-inspector-party-count className="flex gap-2">
+                            <div className="flex-1">
+                                <AlloyFieldLabel>At least</AlloyFieldLabel>
+                                <AlloyTextInput
+                                    value={String(partyMin)}
+                                    onChange={(v) => mutate((s2) => updatePartyRepeat(s2, field.id, { min: numberOrZero(v) }))}
+                                    testId="form-builder-party-min"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <AlloyFieldLabel>At most</AlloyFieldLabel>
+                                <AlloyTextInput
+                                    value={partyMax}
+                                    onChange={(v) => mutate((s2) => updatePartyRepeat(s2, field.id, { max: v.trim() === "" ? null : numberOrZero(v) }))}
+                                    testId="form-builder-party-max"
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                            Leave &ldquo;at most&rdquo; blank for no limit. A minimum is asked for at submit — the family is
+                            never shown blank entries to fill.
+                        </p>
+                        <AlloyCheckbox
+                            checked={party?.show_known !== false}
+                            onChange={(show_known) => mutate((s2) => updatePartyCollection(s2, field.id, { show_known }))}
+                            label="Show people Alloy already knows, for the family to confirm"
+                        />
+                        <AlloyCheckbox
+                            checked={party?.allow_add !== false}
+                            onChange={(allow_add) => mutate((s2) => updatePartyCollection(s2, field.id, { allow_add }))}
+                            label="The family may add someone new"
+                        />
+                        <div>
+                            <AlloyFieldLabel>Button the family sees</AlloyFieldLabel>
+                            <AlloyTextInput
+                                value={party?.add_another_label ?? ""}
+                                onChange={(add_another_label) => mutate((s2) => updatePartyCollection(s2, field.id, { add_another_label }))}
+                                placeholder={addAnotherLabel(field)}
+                                testId="form-builder-party-add-label"
+                            />
+                        </div>
+                    </AlloyInspectorGroup>
+                </>
+            ) : null}
+
             {field.type === "select" || field.type === "multiselect" ? (
                 <>
                     <AlloyInspectorDivider />
@@ -618,6 +823,9 @@ export default function ProcessingFormQuestionInspector({
                         ) : null}
                     </AlloyInspectorGroup>
 
+                    {/* Alloy does not calculate a person; a collection has no single answer source. */}
+                    {isPartyCollection(field) ? null : (
+                    <>
                     <AlloyInspectorDivider />
                     <AlloyInspectorGroup title="Who provides the answer">
                         <div data-inspector-derived>
@@ -691,6 +899,8 @@ export default function ProcessingFormQuestionInspector({
                             </p>
                         ) : null}
                     </AlloyInspectorGroup>
+                    </>
+                    )}
                 </>
             ) : null}
 

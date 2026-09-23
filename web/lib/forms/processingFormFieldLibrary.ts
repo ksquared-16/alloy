@@ -192,6 +192,8 @@ const BUILDER_TYPE_META: Record<BuilderFieldType, string> = {
     boolean: "Yes / No",
     signature: "Signature",
     file_ref: "File upload",
+    // A canonical field is never a party collection; the picker cannot offer one.
+    party_collection: "Repeated people",
 };
 
 const GROUP_META_LABEL: Record<ProcessingBuilderLibraryGroup, string> = {

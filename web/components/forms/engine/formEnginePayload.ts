@@ -1,4 +1,5 @@
 import type { FormField, FormGroupCollectionBinding, FormSchemaV1 } from "@/lib/forms/schema";
+import { preallocatesBlankRows } from "@/lib/forms/partyCollection";
 import type { FormPayload, FormPayloadGroupRow, FormPayloadSignature } from "@/lib/forms/validateSubmission";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 
@@ -41,6 +42,18 @@ function newGroupRow(field: FormField & { type: "group" }): FormPayloadGroupRow 
 }
 
 function buildMinimumRowsForGroupField(field: FormField & { type: "group" }): FormPayloadGroupRow[] {
+    /*
+     * A PARTY COLLECTION NEVER STARTS WITH BLANK PEOPLE.
+     *
+     * Seeding `repeat.min` empty rows is the paper form's three blank emergency-contact blocks
+     * rendered in HTML: the family is shown slots nobody asked for, an unused one persists into the
+     * draft, and the count means nothing. A minimum is a COMPLETION requirement — the renderer says
+     * what is still needed and the validator holds the submit — so a collection of people starts
+     * empty and every row in it is one a person deliberately added or one Alloy already knew.
+     *
+     * An unlabelled repeater keeps the old behaviour; nothing about existing forms changes.
+     */
+    if (!preallocatesBlankRows(field)) return [];
     const rep = field.repeat ?? { min: 0, max: undefined };
     const effectiveMin = Math.max(rep.min, field.required ? 1 : 0);
     const rows: FormPayloadGroupRow[] = [];

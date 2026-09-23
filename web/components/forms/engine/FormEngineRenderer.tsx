@@ -20,6 +20,7 @@ import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
 import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
+import { addAnotherLabel, allowsAdd, entryHeading, rowIsKnown, rowIsRemovable } from "@/lib/forms/partyCollection";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
 
 export type FormEngineOptionChoice = { value: string; label: string };
@@ -625,9 +626,9 @@ export function FormEngineRenderer({
                         <p className={clsx("text-sm text-neutral-600", loose && "text-[13px]")}>
                             Add at least {minEntries} {minEntries === 1 ? "entry" : "entries"}.
                             {rows.length === 0
-                                ? " Use Add item below to start."
+                                ? ` Use ${addAnotherLabel(field)} below to start.`
                                 : rows.length < minEntries
-                                  ? " Use Add item until the minimum is met."
+                                  ? ` Use ${addAnotherLabel(field)} until the minimum is met.`
                                   : null}
                         </p>
                     ) : null}
@@ -643,8 +644,17 @@ export function FormEngineRenderer({
                     ) : null}
                     {rows.map((row, idx) => (
                         <div key={row.instance_key} className="space-y-3 rounded-lg border border-neutral-200 p-3">
-                            <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                                {field.label} #{idx + 1}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                                    {entryHeading(field, idx)}
+                                </div>
+                                {/* A row Alloy already knows is labelled as such, so "correct this" and
+                                    "you added this" never look the same to a parent. */}
+                                {rowIsKnown(row) ? (
+                                    <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-600">
+                                        Already on file
+                                    </span>
+                                ) : null}
                             </div>
                             {field.fields.map((child) => {
                                 const getVal = (fid: string) =>
@@ -684,10 +694,11 @@ export function FormEngineRenderer({
                                     </div>
                                 );
                             })}
-                            {!readonly && rows.length > rep.min ? (
+                            {!readonly && rowIsRemovable(field, row, rows.length) ? (
                                 <button
                                     type="button"
-                                    className="text-xs text-red-700 underline"
+                                    className="min-h-[36px] text-xs text-red-700 underline"
+                                    data-party-remove={row.instance_key}
                                     onClick={() => updateRows(rows.filter((_, i) => i !== idx))}
                                 >
                                     Remove this entry
@@ -695,10 +706,11 @@ export function FormEngineRenderer({
                             ) : null}
                         </div>
                     ))}
-                    {!readonly && (rep.max === undefined || rows.length < rep.max) ? (
+                    {!readonly && allowsAdd(field) && (rep.max === undefined || rows.length < rep.max) ? (
                         <button
                             type="button"
-                            className="rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-white shadow-sm"
+                            data-party-add={field.id}
+                            className="min-h-[44px] rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-white shadow-sm"
                             onClick={() =>
                                 updateRows([
                                     ...rows,
@@ -713,7 +725,7 @@ export function FormEngineRenderer({
                                 ])
                             }
                         >
-                            Add item
+                            {addAnotherLabel(field)}
                         </button>
                     ) : null}
                 </div>

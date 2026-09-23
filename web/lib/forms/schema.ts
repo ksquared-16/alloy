@@ -107,6 +107,61 @@ export const formGroupCollectionBindingSchema = z
 
 export type FormGroupCollectionBinding = z.infer<typeof formGroupCollectionBindingSchema>;
 
+/**
+ * WHAT A REPEATED ENTRY IS A PERSON OF.
+ *
+ * A repeating group already knew how MANY entries to collect (`repeat`) and, when bound, which
+ * canonical collection they iterate (`collection_binding`). It never knew what each entry MEANS —
+ * so the only thing a participant could be shown was "Add item", and nothing downstream could say
+ * whether a row was a sibling, an emergency contact or a payer.
+ *
+ * This is that statement, and it is deliberately thin: every value here is the platform's own
+ * relationship vocabulary (`RELATIONSHIP_ACTION_KEYS`, `RelationshipActionScope`), not a second one
+ * invented for Forms. Forms declares the INTENT; the canonical owner still performs the write, and
+ * `lib/admin/relationship/` remains the only place a relationship is created.
+ *
+ * It says nothing about tables, ids or storage. A group without it is an ordinary repeater and
+ * behaves exactly as before.
+ */
+export const formPartyCollectionSchema = z
+    .object({
+        /** The canonical relationship action each entry expresses. Forms never performs it. */
+        action_key: z.enum([
+            "add_emergency_contact",
+            "add_authorized_pickup",
+            "add_billing_contact",
+            "add_parent_guardian",
+            "add_child",
+            "link_existing_person",
+            "link_existing_child",
+        ]),
+        /** Whether an entry is a person in their own right, or a child on the household. */
+        subject: z.enum(["person", "child"]),
+        /** Relationship role key where the action takes one (e.g. `emergency_contact`). */
+        role: z.string().min(1).optional(),
+        /** Who the relationship applies to. Values are `RelationshipActionScope`. */
+        scope: z
+            .enum([
+                "this_child",
+                "selected_children",
+                "all_children_in_household",
+                "this_opportunity",
+                "household",
+                "selected_enrollments",
+            ])
+            .optional(),
+        /** Show what Alloy already knows first, for confirmation, instead of asking again. */
+        show_known: z.boolean().default(true),
+        /** Whether the family may add entries beyond the known ones. */
+        allow_add: z.boolean().default(true),
+        /** The words the family reads. `add_another` is the button; a blank falls back to the label. */
+        add_another_label: z.string().min(1).optional(),
+        entry_label: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormPartyCollection = z.infer<typeof formPartyCollectionSchema>;
+
 export const formIterationContextSchema = z
     .object({
         scope: z.literal("collection_item"),
@@ -179,6 +234,8 @@ export type FormField =
           repeat?: FormRepeatRules;
           /** When set, repeat instances bind to a canonical collection provider. */
           collection_binding?: FormGroupCollectionBinding;
+          /** When set, each repeat instance is a PERSON or CHILD in a canonical relationship. */
+          party_collection?: FormPartyCollection;
       });
 
 const staticOptionRowSchema = z
@@ -269,6 +326,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
                 fields: z.array(formFieldSchema).min(1),
                 repeat: formRepeatRulesSchema.optional(),
                 collection_binding: formGroupCollectionBindingSchema.optional(),
+                party_collection: formPartyCollectionSchema.optional(),
             })
             .strict(),
     ])

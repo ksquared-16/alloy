@@ -359,3 +359,75 @@ registry-backed offer wins and the second is suppressed, rather than presenting 
 | repeated person · structured address · configuration-supplied | no | no | no | n/a | n/a |
 
 HUMAN ACCEPTANCE is Kelly's to set. Nothing in this run changes it.
+
+---
+
+# Repeated people / relationship collection — 2026-09-23
+
+## What already existed, and what did not
+
+Most of this primitive was already in the platform. The audit before any code changed:
+
+| layer | state before this slice |
+|---|---|
+| `FormSchemaV1` `group` + `repeat {min,max}` + `collection_binding` | **existed** |
+| payload `groups: Record<id, GroupRow[]>` with `instance_key` | **existed** — arrays, never `sibling_1_name` |
+| `GroupRow.collection.origin: "existing" \| "respondent_added"` | **existed** |
+| submission validation of group rows, nested groups, signatures | **existed** |
+| engine renderer add / remove rows | **existed** — but labelled "Add item" |
+| `payloadWithMinimumRepeatingGroups` | existed, and **pre-seeded blank rows** to satisfy `repeat.min` |
+| a statement of WHAT an entry is | **absent** |
+| Forms Studio authoring of any repeating group | **absent** |
+| participant conversation runtime | **flattens groups** into loose questions |
+
+So the gap was never the repetition. It was that a repeated entry had no meaning: nothing could say
+a row was a sibling rather than a payer, so the only button a family could be shown was "Add item",
+and the minimum was met by rendering the paper form's blank slots in HTML.
+
+## The primitive
+
+One optional block on the group the schema already had:
+
+```
+party_collection: {
+  action_key          // add_emergency_contact | add_child | add_parent_guardian | …
+  subject             // person | child
+  role?               // emergency_contact, guardian, …
+  scope?              // this_child | all_children_in_household | household | …
+  show_known          // confirm what Alloy knows instead of asking again
+  allow_add           // may the family add someone new
+  add_another_label?  // the words on the button
+  entry_label?
+}
+```
+
+Every value is the platform's own relationship vocabulary — `RELATIONSHIP_ACTION_KEYS` and
+`RelationshipActionScope`, verbatim. **A test fails if Forms ever grows a second list.** Forms states
+the intent; `lib/admin/relationship/` still performs every write.
+
+## Canonical mutation timing
+
+Clicking `+ Add emergency contact` creates nothing. It cannot: the participant path — the renderer,
+the payload helpers, the party module — contains **no canonical writer at all**, and a test asserts
+that. The measured chain is:
+
+```
+participant adds a row        → draft state, stable instance_key, no ids resolved
+submission                    → adaptSourceToRelatedRecordProposals  (read-only)
+                              → adaptFormSubmissionToRelatedRecordProposals
+operator reviews in Processing
+commit                        → POST …/related-record-proposals/{id}/commit
+                              → executeRelationshipProposalCommit
+                              → command runtime → relationshipExecutionAdapter
+                              → executeRelationshipAction   ← the only writer
+```
+
+`executeRelationshipProposalCommit` carries an `idempotency_key` and an `already_applied` outcome, so
+a replayed commit does not create a second person.
+
+## A form cannot delete a person
+
+A row whose `collection.origin` is `existing` is never offered a Remove control. Taking a known
+emergency contact off a form is the family saying they do not belong on **this paperwork** — it is
+not an instruction to delete them from the record, and a form that treated it as one would quietly
+destroy canonical data. The minimum still applies to rows the family owns.

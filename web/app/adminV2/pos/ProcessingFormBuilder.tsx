@@ -74,9 +74,18 @@ const QUESTION_TYPES: Array<{ type: BuilderFieldType; label: string; meta: strin
     { type: "multiselect", label: "Choose multiple", meta: "Select any that apply", category: "choice" },
     { type: "signature", label: "Signature", meta: "Draw or type signature", category: "capture" },
     { type: "file_ref", label: "File upload", meta: "Attach a document", category: "capture" },
+    /*
+     * The emergency contacts, the siblings, the authorized pickups.
+     *
+     * The schema has carried repeating groups all along; nothing in the builder could make one, so
+     * imported paperwork kept its three blank contact blocks or collapsed a list of people into a
+     * single long-text box. One menu entry, because that is how an administrator thinks about it.
+     */
+    { type: "party_collection", label: "Repeated people", meta: "A list of people the family can add to", category: "people" },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
+    people: "People",
     basic: "Basic",
     content: "Content",
     choice: "Choice",
@@ -398,9 +407,33 @@ export default function ProcessingFormBuilder({
         const label = QUESTION_TYPES.find((p) => p.type === type)?.label ?? "Question";
         const spec: BuilderFieldSpec = {
             type,
-            label: `Untitled ${label.toLowerCase()}`,
+            label: type === "party_collection" ? "Emergency contacts" : `Untitled ${label.toLowerCase()}`,
             sectionId: librarySectionId,
             ...(type === "select" || type === "multiselect" ? { options: [{ value: "option_1", label: "Option 1" }] } : {}),
+            /*
+             * A new collection of people arrives usable rather than empty: emergency contacts is
+             * the case every imported packet has, and a name and a phone number are what every one
+             * of them asks for. Each choice is editable in the inspector; none is a default the
+             * administrator cannot see or change.
+             */
+            ...(type === "party_collection"
+                ? {
+                      party_collection: {
+                          action_key: "add_emergency_contact",
+                          subject: "person" as const,
+                          role: "emergency_contact",
+                          scope: "this_child",
+                          show_known: true,
+                          allow_add: true,
+                          min: 1,
+                          fields: [
+                              { type: "short_text" as const, label: "Full name", required: true },
+                              { type: "short_text" as const, label: "Phone", required: true },
+                              { type: "short_text" as const, label: "Relationship to the child" },
+                          ],
+                      },
+                  }
+                : {}),
         };
         const { schema: next, fieldId } = addField(schema, spec);
         setSchema(next);

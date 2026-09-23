@@ -23,11 +23,36 @@ export type BuilderFieldType =
     | "multiselect"
     | "boolean"
     | "file_ref"
-    | "signature";
+    | "signature"
+    /**
+     * A repeated PERSON or CHILD — the emergency contacts, the siblings, the authorized pickups.
+     *
+     * It is the schema's existing `group` with `repeat` plus a `party_collection` statement. The
+     * builder exposes it as one answer type because that is how an administrator thinks about it:
+     * "collect a list of people", not "make a group, then make it repeat, then bind it".
+     */
+    | "party_collection";
+
+/** What one repeated-party collection collects, in the words the inspector uses. */
+export interface BuilderPartyCollectionSpec {
+    action_key: string;
+    subject: "person" | "child";
+    role?: string;
+    scope?: string;
+    show_known?: boolean;
+    allow_add?: boolean;
+    add_another_label?: string;
+    entry_label?: string;
+    min?: number;
+    max?: number;
+    /** The questions asked about each person. Scalar types only — a party never nests a party. */
+    fields?: Array<{ type: BuilderFieldType; label: string; required?: boolean }>;
+}
 
 export interface BuilderFieldSpec {
     type: BuilderFieldType;
     label: string;
+    party_collection?: BuilderPartyCollectionSpec;
     required?: boolean;
     description?: string;
     /** For select/multiselect — inline choices, when the vocabulary is this Form's own. */
@@ -121,6 +146,48 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
         ...(spec.derived?.kind ? { derived: { kind: spec.derived.kind, ...(spec.derived.source_key ? { source_key: spec.derived.source_key } : {}), ...(spec.derived.as_of_key ? { as_of_key: spec.derived.as_of_key } : {}) } } : {}),
     };
     switch (spec.type) {
+        case "party_collection": {
+            /*
+             * One answer type in the menu, the schema's existing repeater underneath.
+             *
+             * `party_collection` is what makes the entries PEOPLE rather than rows: it carries the
+             * canonical relationship action, the subject, the role and the scope, and the renderer
+             * reads it for the button words and for refusing to let a family delete someone Alloy
+             * already knows. The repetition itself is `repeat`, which the schema has always had.
+             */
+            const p = spec.party_collection;
+            const entryFields = (p?.fields ?? []).map((f, i) =>
+                fieldFromSpec(`${id}_${slug(f.label) || `field_${i + 1}`}`, {
+                    type: f.type,
+                    label: f.label,
+                    required: f.required,
+                }),
+            );
+            return {
+                ...base,
+                type: "group",
+                required: Boolean(spec.required),
+                fields: entryFields,
+                repeat: {
+                    min: Math.max(0, Math.trunc(p?.min ?? 0)),
+                    ...(p?.max != null && p.max > 0 ? { max: Math.trunc(p.max) } : {}),
+                },
+                ...(p
+                    ? {
+                          party_collection: {
+                              action_key: p.action_key,
+                              subject: p.subject,
+                              ...(p.role?.trim() ? { role: p.role.trim() } : {}),
+                              ...(p.scope?.trim() ? { scope: p.scope.trim() } : {}),
+                              show_known: p.show_known !== false,
+                              allow_add: p.allow_add !== false,
+                              ...(p.add_another_label?.trim() ? { add_another_label: p.add_another_label.trim() } : {}),
+                              ...(p.entry_label?.trim() ? { entry_label: p.entry_label.trim() } : {}),
+                          },
+                      }
+                    : {}),
+            } as FormField;
+        }
         case "short_text":
             return { ...base, type: "text" };
         case "long_text":
