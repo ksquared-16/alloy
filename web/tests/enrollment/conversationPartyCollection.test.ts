@@ -149,10 +149,17 @@ describe("the minimum is a completion requirement, never blank slots", () => {
         expect(need.state).toBe("missing");
     });
 
-    it("is satisfied once the family has added enough complete entries", () => {
+    it("becomes VALID once the family has added enough complete entries — and stays active", () => {
+        /*
+         * This asserted `requires_participant_action === false` until the mounted conversation
+         * showed what that meant: a family added one emergency contact and the collection vanished
+         * before they could add a second. Meeting the Form's minimum is validity; being finished is
+         * the family's own decision, and they have not made it yet.
+         */
         const need = collectionNeed(project({ [KEY]: [{ instance_key: "e1", origin: "respondent_added", values: { ec_name: "Jane", ec_phone: "555" } }] }))!;
-        expect(need.requires_participant_action).toBe(false);
-        expect(need.state).toBe("confirmed");
+        expect(need.party_collection!.valid).toBe(true);
+        expect(need.party_collection!.settled).toBe(false);
+        expect(need.requires_participant_action).toBe(true);
     });
 
     it("stays unsatisfied when a required answer on a family-added entry is blank", () => {
@@ -162,10 +169,20 @@ describe("the minimum is a completion requirement, never blank slots", () => {
 
     it("counts someone Alloy already knows toward the minimum without interrogating them", () => {
         // A known contact is evidence, not a questionnaire; it is not blocked on questions the
-        // family was never asked.
+        // family was never asked. It makes the collection VALID — the family still says when the
+        // list is finished.
         const known = { emergency_contacts: [{ instance_key: "k1", origin: "existing" as const, values: { ec_name: "Jane Smith" }, item_id: "person-1" }] };
         const need = collectionNeed(project({}, known))!;
+        expect(need.party_collection!.valid).toBe(true);
+        expect(need.requires_participant_action).toBe(true);
+    });
+
+    it("advances only once the family has confirmed the list is finished", () => {
+        const entries = [{ instance_key: "e1", origin: "respondent_added", values: { ec_name: "Jane", ec_phone: "555" } }];
+        const settledKey = `${KEY}:settled`;
+        const need = collectionNeed(project({ [KEY]: entries, [settledKey]: true }))!;
         expect(need.requires_participant_action).toBe(false);
+        expect(need.state).toBe("confirmed");
     });
 });
 
