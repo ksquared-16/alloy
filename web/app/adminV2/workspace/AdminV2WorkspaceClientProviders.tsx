@@ -38,6 +38,13 @@ interface AdminV2WorkspaceClientProvidersProps {
    * the Focus Panel can be rendered in the initial HTML rather than created by client execution.
    */
   initialFrame?: InitialServerFrame;
+  /**
+   * WHY the server frame is or is not present, rendered into the document as a diagnostic.
+   *
+   * Without it a null frame and a frame that failed to RENDER are indistinguishable from outside,
+   * and they call for opposite repairs — which is exactly the ambiguity that cost a diagnosis here.
+   */
+  initialFrameReason?: string;
   /** Server-resolved user → org → UTC display timezone. */
   initialViewerTimezone?: AdminViewerTimezoneValue;
   /** Org operational IANA for schedule defaults. */
@@ -61,6 +68,7 @@ export default function AdminV2WorkspaceClientProviders({
   orgId = null,
   accessScopeFingerprint,
   initialFrame = null,
+  initialFrameReason = "unset",
   initialViewerTimezone,
   initialOperationalTimezoneIana,
   workspaceRouteVm = EMPTY_WORKSPACE_ROUTE_VM,
@@ -122,6 +130,11 @@ export default function AdminV2WorkspaceClientProviders({
                           navigation and destroy the retention it exists to provide.
                           tenant/principal are the retention boundary: a retained context may never
                           cross a tenant. */}
+                      <span
+                        hidden
+                        data-alloy-ssr-frame={initialFrame ? "present" : "absent"}
+                        data-alloy-ssr-frame-reason={initialFrameReason}
+                      />
                       <RuntimeKernelProvider
                         tenant={typeof orgId === "string" ? orgId : ""}
                         principal={principalUserId ?? ""}

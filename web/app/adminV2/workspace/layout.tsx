@@ -31,18 +31,35 @@ export const dynamic = "force-dynamic";
  * Returns null for every route that is not a work unit, and for any compose that did not resolve —
  * in which case the client behaves exactly as it did before.
  */
-async function initialServerFrame(orgId: string | null, userId: string | null): Promise<InitialServerFrame> {
-    if (!orgId || !userId) return null;
+async function initialServerFrame(
+    orgId: string | null,
+    userId: string | null,
+    reason: { why: string },
+): Promise<InitialServerFrame> {
+    if (!orgId || !userId) {
+        reason.why = "no_identity";
+        return null;
+    }
     try {
         const h = await headers();
-        const addr = readForwardedAddress(h.get(ALLOY_PATHNAME_HEADER));
-        if (!addr) return null;
+        const forwarded = h.get(ALLOY_PATHNAME_HEADER);
+        const addr = readForwardedAddress(forwarded);
+        if (!addr) {
+            reason.why = "no_forwarded_address";
+            return null;
+        }
         const target = frameAddressFromPath(addr.pathname, addr.searchParams);
-        if (!target) return null;
+        if (!target) {
+            reason.why = "not_a_work_unit";
+            return null;
+        }
         const { answer } = await frameForAddress(
             target.workUnitSlug, target.workViewId, target.subjectId, target.cohort, target.aspect,
         );
-        if (!answer || answer.terminal === "error") return null;
+        if (!answer || answer.terminal === "error") {
+            reason.why = answer ? `terminal_${answer.terminal}` : "compose_null";
+            return null;
+        }
         /*
          * The attention ref comes from the SAME reader the browser's cold load uses, over the same
          * address, so both passes produce the identical ref and therefore the identical surfaceId.
@@ -54,13 +71,18 @@ async function initialServerFrame(orgId: string | null, userId: string | null): 
             { tenant: orgId, principal: userId },
             "direct_url",
         );
-        if (!hydration) return null;
+        if (!hydration) {
+            reason.why = "no_hydration_from_url";
+            return null;
+        }
+        reason.why = "seeded";
         return {
             hydration,
             snapshot: toRscPlainJson(answer),
             outcome: answer.terminal,
         } as InitialServerFrame;
-    } catch {
+    } catch (e) {
+        reason.why = `threw:${(e as Error)?.name ?? "error"}`;
         return null;
     }
 }
@@ -158,7 +180,8 @@ export default async function AdminV2WorkspaceLayout({
      * surface. It shares one request-scoped composition with the page, so the answer is produced
      * exactly once for this request.
      */
-    const initialFrame = await initialServerFrame(orgId, auth.user.id);
+    const frameReason = { why: "unset" };
+    const initialFrame = await initialServerFrame(orgId, auth.user.id, frameReason);
 
     if (process.env.NODE_ENV === "development") {
         const layoutMs =
@@ -185,6 +208,7 @@ export default async function AdminV2WorkspaceLayout({
             initialOperationalTimezoneIana={operationalTimezoneIana}
             workspaceRouteVm={workspaceRouteVm}
             initialFrame={initialFrame}
+            initialFrameReason={frameReason.why}
         >
             {children}
         </AdminV2WorkspaceClientProviders>

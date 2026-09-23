@@ -26,6 +26,19 @@ test("p076 ssr probe", async ({ browser }) => {
         cellReserved: count(/data-focus-panel-cell-reserved/g),
         queueRow: count(/alloy-os-queue|data-queue-row/g),
         osShell: count(/alloy-os-/g),
+        // Did the SERVER frame reach the flight payload at all? `initialFrame` is a prop on a
+        // client component, so a composed frame is serialized into the document even when nothing
+        // renders from it. This separates "the data never arrived" from "the data arrived and the
+        // surface still did not render" — opposite repairs.
+        frameHydrationKey: count(/initialFrame|\\"hydration\\"/g),
+        recordOfAttention: count(/recordOfAttention/g),
+        focusPanelSummaryDoc: count(/focusPanelSummaryDoc/g),
+        currentBusinessState: count(/currentBusinessState/g),
+        // `data-surface-slot` is what SurfaceHostProvider DECIDED during SSR:
+        // "held" = showWorkUnit true (the surface should render), "current" = it did not.
+        surfaceSlot: (html.match(/data-surface-slot=\\?"[a-z]+\\?"/g) ?? []).slice(0, 4),
+        bootShell: count(/Thinking|boot-shell|AlloyOperationalBootShell/g),
+        sectionIds: (html.match(/data-alloy-section-id=\\?"([A-Z0-9-]+)\\?"/g) ?? []).slice(0, 8),
     })}`);
     await ctx.close();
 });
