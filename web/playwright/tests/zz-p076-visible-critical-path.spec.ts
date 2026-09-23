@@ -240,6 +240,29 @@ test("p0-7.6 step2 deployed capture", async ({ page }) => {
             /** Parse/execute to interactive, then hydration's own tail. */
             toInteractiveMs: r(n.domInteractive - n.responseEnd),
             interactiveToDclMs: r(n.domContentLoadedEventEnd - n.domInteractive),
+            /*
+             * PAINT, WHICH IS THE ONLY SSR-NATIVE FRAME EVENT AVAILABLE WITHOUT TOUCHING THE APP.
+             *
+             * `WU-09.firstMs` is the first MUTATION in the Focus Panel region. That was the frame
+             * while the panel was created by client code, and it stopped being the frame the moment
+             * the panel arrived in server HTML — there is no creating mutation to observe, so it now
+             * reports some later change instead. Comparing it across the two architectures would
+             * compare two different events.
+             *
+             * First Contentful Paint is when the browser first painted content from a document
+             * that (proven separately, with JavaScript disabled) already contains the configured
+             * Focus Panel. It is a LOWER bound on when the panel itself painted, because shell
+             * content can paint a little earlier — so it is the reading most favourable to SSR,
+             * which is the right way round for a keep/revert decision.
+             */
+            firstPaint: (() => {
+                const e = performance.getEntriesByName("first-paint")[0];
+                return e ? r(e.startTime) : null;
+            })(),
+            firstContentfulPaint: (() => {
+                const e = performance.getEntriesByName("first-contentful-paint")[0];
+                return e ? r(e.startTime) : null;
+            })(),
         };
     });
 

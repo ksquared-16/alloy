@@ -67,3 +67,6 @@ web/.metadata_never_index
 # Playwright run artifacts at the repo root (machine state, not source).
 test-results/
 web/scripts/.h2-fixture-state.json
+
+# Generated partner/export artifacts — never committed.
+/dist/

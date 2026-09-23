@@ -404,6 +404,8 @@ export default function FocusPanelCardRenderer({
             density={model.density}
             gridSpan={model.span}
             data-universal-card-key={model.key}
+            // The canonical subject boundary (`context.subject.id`) the card composed against.
+            data-card-subject={drawerId}
             receded={receded}
             className={isPrimaryNextAction ? "alloy-os-ucard--primary-action" : undefined}
             footerAction={

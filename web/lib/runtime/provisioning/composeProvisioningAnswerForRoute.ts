@@ -193,6 +193,19 @@ export async function composeProvisioningAnswerForRoute(input: {
      * timezone come from the route GATE, which the composer deliberately does not receive.
      */
     const seedRef: { run: Promise<WorkViewTotalsSeed | null> | null } = { run: null };
+    /*
+     * OBSERVED, NOT AWAITED (Candidate A).
+     *
+     * Work View totals are FACTS, not geometry. Membership and order are decided by configuration
+     * and are final at the frame; only the VALUES are outstanding. Measured on deployed 31fb4b0c,
+     * waiting for them cost `join_wait_ms` P50 252ms of a 1,273ms frame — the largest remaining
+     * bounded term, and the last one with a mechanism.
+     *
+     * Same shape the cohort enrichment, the children roster and the card producers already use: the
+     * value is taken if it has landed by the commit boundary, and otherwise the field stays null,
+     * which the client already reads as "resolve these yourself" — never as zero.
+     */
+    const seedSettled: { value: WorkViewTotalsSeed | null } = { value: null };
     const seedDiag = {
         announce_offset_ms: null as number | null,
         seed_ms: null as number | null,
@@ -200,6 +213,8 @@ export async function composeProvisioningAnswerForRoute(input: {
         compose_end_offset_ms: null as number | null,
         overlap_ms: null as number | null,
         join_wait_ms: null as number | null,
+        /** 1 when the totals had landed by the commit boundary, 0 when they settle afterwards. */
+        seed_at_commit: null as number | null,
         outcome: "no_announcement",
         groups: null as number | null,
         totals: null as number | null,
@@ -262,6 +277,11 @@ export async function composeProvisioningAnswerForRoute(input: {
             })().catch(() => {
                 seedDiag.outcome = "seed_failed";
                 return null;
+            });
+            // Records the value if and when it lands. Reading `.value` at the commit boundary asks
+            // "did this arrive in time?" and nothing else.
+            void seedRef.run.then((v) => {
+                seedSettled.value = v;
             });
         },
         onSubjectResolved: ({ subjectId, orgId, customerId }) => {
@@ -605,22 +625,24 @@ export async function composeProvisioningAnswerForRoute(input: {
     }
 
     /*
-     * ── THE SEED JOIN, AND THE DOCUMENT WAIT IT COSTS ──
+     * ── THE SEED, READ RATHER THAN AWAITED ──
      *
-     * The seed has been running beside the rest of composition and the card producers. Whatever
-     * remains is ADDED DOCUMENT WAIT, and it is measured as exactly that rather than folded into
-     * page_total unattributed: the point of this change is to remove a ~1.6s post-document round
-     * trip, not to relocate it where it is harder to see.
+     * This used to await `seedRef.run`, and that wait was published honestly as `join_wait_ms` —
+     * P50 252ms on deployed 31fb4b0c. The original slice existed to remove a ~1.6s post-document
+     * round trip, and it still does: the seed is still computed, still started from the composer's
+     * announcement, and still delivered whenever it has landed. What is gone is the frame waiting
+     * for it.
      *
-     * There is no grace and no timeout here. A timeout would discard work already paid for and
-     * send the browser to fetch the same answer again; a grace would be the latency-hiding this
-     * slice exists to avoid. The honest cost is published as `join_wait_ms` and read directly off
-     * the deployed samples.
+     * Still no grace and no timeout. A seed that has not landed leaves the field null, which is the
+     * same honest state the client has always handled by resolving the counts itself. It is never
+     * an authoritative zero.
      */
-    const tSeedJoin = mark();
-    const seed = seedRef.run ? await seedRef.run : null;
+    const seed = seedSettled.value;
     if (timing) {
-        seedDiag.join_wait_ms = Math.round(performance.now() - tSeedJoin);
+        // Zero by construction now: the frame does not wait here. Kept so a reintroduced await
+        // shows up as a non-zero number in the deployed samples rather than silently.
+        seedDiag.join_wait_ms = 0;
+        seedDiag.seed_at_commit = seed ? 1 : 0;
         seedDiag.compose_end_offset_ms = Math.round(innerComposeMs);
         if (seedDiag.announce_offset_ms != null && seedDiag.seed_end_offset_ms != null) {
             // The part of the seed that ran while composition was still running.
@@ -685,6 +707,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                         compose_end_offset_ms: seedDiag.compose_end_offset_ms,
                         overlap_ms: seedDiag.overlap_ms,
                         join_wait_ms: seedDiag.join_wait_ms,
+                        seed_at_commit: seedDiag.seed_at_commit,
                         outcome: seedDiag.outcome,
                         groups: seedDiag.groups,
                         totals: seedDiag.totals,

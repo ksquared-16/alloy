@@ -22,18 +22,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiError, invalidCredential, rateLimited } from "@/lib/platform/external/apiErrors";
 import { outcomeForStatus, recordApiActivity } from "@/lib/platform/external/apiActivity";
-import {
-    consumeRateLimit,
-    installationBucket,
-    RATE_LIMIT_POLICY,
-} from "@/lib/platform/external/rateLimit";
+import { authenticatedRateLimit, consumeRateLimit } from "@/lib/platform/external/rateLimit";
 import { identityHeaders, resolveRequestIdentity } from "@/lib/platform/external/requestContext";
 import { requireExternalPrincipal } from "@/lib/platform/external/externalRequest";
-import { requireOperationScope } from "@/lib/platform/external/scopeCatalog";
+import { accessForOperation, requireOperationScope } from "@/lib/platform/external/scopeCatalog";
 import {
     buildPage,
-    decodeCursor,
     resolveLimit,
+    resolvePosition,
     resolveUpdatedSince,
 } from "@/lib/platform/external/collection";
 import {
@@ -102,11 +98,8 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const decision = await consumeRateLimit(
-        supabase,
-        installationBucket(ctx.installationId),
-        RATE_LIMIT_POLICY.authenticatedRead,
-    );
+    const budget = authenticatedRateLimit(ctx.installationId, accessForOperation(OPERATION_ID));
+    const decision = await consumeRateLimit(supabase, budget.bucketKey, budget.policy);
     const limitHeaders = {
         "RateLimit-Limit": String(decision.limit),
         "RateLimit-Remaining": String(decision.remaining),
@@ -135,18 +128,23 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const rawCursor = params.get("cursor");
-    const cursor = rawCursor ? decodeCursor(rawCursor) : null;
-    if (rawCursor && !cursor) {
+    // One position, from whichever token the caller supplied — a cursor within a pass, a sync
+    // token between passes. The SQL compares `(sort_key, id)` either way.
+    const positioned = resolvePosition(params.get("cursor"), params.get("since_token"));
+    if (!positioned.ok) {
+        const code = positioned.field === "cursor" ? "invalid_cursor" : "invalid_since_token";
         return finish(
             apiError({
-                code: "invalid_cursor", type: "invalid_request",
-                message: "The cursor is not valid. Restart pagination without one.",
+                code, type: "invalid_request",
+                message: positioned.field === "cursor"
+                    ? "The cursor is not valid. Restart pagination without one."
+                    : "The sync token is not valid. Restart with a full read.",
                 requestId: identity.requestId, headers: identityHeaders(identity),
             }),
-            { ...activityIds, errorCode: "invalid_cursor" },
+            { ...activityIds, errorCode: code },
         );
     }
+    const cursor = positioned.position;
 
     const watermark = resolveUpdatedSince(params.get("updated_since"));
     if (!watermark.ok) {
@@ -218,7 +216,11 @@ export async function GET(request: NextRequest) {
     const page = buildPage(rows, limitResult.limit, (row) => ({ sortKey: row.sort_key, id: row.id }));
 
     const response = NextResponse.json(
-        { data: page.data.map(toPublicLocation), next_cursor: page.next_cursor },
+        {
+            data: page.data.map(toPublicLocation),
+            next_cursor: page.next_cursor,
+            sync_token: page.sync_token,
+        },
         { status: 200, headers: { ...identityHeaders(identity), ...limitHeaders, "Cache-Control": "no-store" } },
     );
 

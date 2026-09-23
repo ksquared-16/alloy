@@ -27,6 +27,19 @@ export type UniversalCardProps = {
     children?: ReactNode;
     className?: string;
     "data-universal-card-key"?: string;
+    /**
+     * DIAGNOSTIC ONLY — which SUBJECT this card's content belongs to.
+     *
+     * The Focus Panel deliberately retains the previous subject's cards while the new one resolves,
+     * so "six cells, none reserved" is satisfied by subject A while subject B is selected. Any
+     * readiness probe built on geometry therefore measures the wrong record — Slice 4 proved exactly
+     * that and had to discard its own T5/T6 numbers.
+     *
+     * This carries the card's own subject into the DOM so a measurement can ask "is this B's content
+     * yet?" instead of "does a card exist?". It changes no behaviour, gates nothing, and is read only
+     * by instrumentation.
+     */
+    "data-card-subject"?: string;
     receded?: boolean;
     /**
      * WHICH OF THE THREE ELEVATED SIZES this card takes when it is raised into the depth layer.
@@ -91,6 +104,7 @@ export default function UniversalCard({
     children,
     className,
     "data-universal-card-key": cardKey,
+    "data-card-subject": cardSubject,
     receded = false,
 }: UniversalCardProps) {
     const hasBody = children != null && children !== false;
@@ -120,6 +134,7 @@ export default function UniversalCard({
             data-system5-card="true"
             data-universal-card-span={gridSpan ?? undefined}
             data-universal-card-key={cardKey}
+            data-card-subject={cardSubject ?? undefined}
         >
             <header className="alloy-os-ucard__header">
                 <UniversalCardIcon name={iconName ?? null} />
