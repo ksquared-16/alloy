@@ -64,6 +64,10 @@ function supabaseStub() {
         b.select = vi.fn(() => b);
         b.order = vi.fn(() => b);
         b.or = vi.fn(() => b);
+        b.is = vi.fn((c: string, v: unknown) => {
+            filters.push((r) => (v === null ? r[c] == null : r[c] === v));
+            return b;
+        });
         b.eq = vi.fn((c: string, v: unknown) => { filters.push((r) => r[c] === v); return b; });
         b.in = vi.fn((c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c] as never)); return b; });
         b.update = vi.fn(() => b);

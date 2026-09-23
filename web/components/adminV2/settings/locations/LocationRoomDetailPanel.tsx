@@ -133,6 +133,9 @@ export default function LocationRoomDetailPanel({
     const [editing, setEditing] = useState(false);
     const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
     const [ratioDraft, setRatioDraft] = useState<RatioDraftRow[]>([]);
+    const [confirmingArchive, setConfirmingArchive] = useState(false);
+    const [archiving, setArchiving] = useState(false);
+    const [archiveError, setArchiveError] = useState<string | null>(null);
 
     /** How this space's two ratio records stand to each other, if it is operational. */
     const ratioStandingFor = (entry: LocationHierarchyRow) =>
@@ -189,6 +192,8 @@ export default function LocationRoomDetailPanel({
         setRatioDraft(
             ratioSeedFor(next).map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })),
         );
+        setConfirmingArchive(false);
+        setArchiveError(null);
         setError(null);
     };
 
@@ -263,6 +268,35 @@ export default function LocationRoomDetailPanel({
         if (!res.ok) {
             const json = (await res.json().catch(() => ({}))) as { error?: string };
             throw new Error(json.error ?? `Could not save the staffing ratio (${res.status})`);
+        }
+    };
+
+    /**
+     * Archive, through the server's own evaluation.
+     *
+     * The refusal is the server's, by name — a client-side guess about whether a
+     * room still has children placed in it would be a suggestion, and the one
+     * that mattered would be the one it got wrong.
+     */
+    const archiveThisSpace = async () => {
+        if (!room) return;
+        setArchiving(true);
+        setArchiveError(null);
+        try {
+            const res = await fetch(`/api/admin/locations/${room.id}/archive`, {
+                method: "POST",
+                credentials: "include",
+            });
+            if (!res.ok) {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                throw new Error(json.error ?? `Could not archive this space (${res.status})`);
+            }
+            setConfirmingArchive(false);
+            await onCapacityChanged();
+        } catch (e) {
+            setArchiveError(e instanceof Error ? e.message : "Could not archive this space.");
+        } finally {
+            setArchiving(false);
         }
     };
 
@@ -646,16 +680,72 @@ export default function LocationRoomDetailPanel({
                     facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         canMutate ?
-                            <ConfigurationSecondaryButton
-                                onClick={beginEdit}
-                                data-testid="locations-room-toggle-edit"
-                            >
-                                Edit space
-                            </ConfigurationSecondaryButton>
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={beginEdit}
+                                    data-testid="locations-room-toggle-edit"
+                                >
+                                    Edit space
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationSecondaryButton
+                                    onClick={() => {
+                                        setArchiveError(null);
+                                        setConfirmingArchive(true);
+                                    }}
+                                    data-testid="locations-room-archive"
+                                >
+                                    Archive space
+                                </ConfigurationSecondaryButton>
+                            </div>
                         :   null
                     }
                     testId="locations-room-header"
                 />
+
+                {confirmingArchive ?
+                    <div
+                        className="rounded-lg border border-alloy-ember/35 bg-alloy-ember/[0.06] px-3 py-2.5 text-[12px] text-alloy-midnight"
+                        data-testid="locations-room-archive-confirm"
+                    >
+                        <p className="text-sm font-semibold">
+                            Archive {label.trim() || "this space"}?
+                        </p>
+                        <p className="mt-1 text-alloy-midnight/75">
+                            It leaves this site&rsquo;s spaces and stops being offered for assignments,
+                            scheduling and new configuration. Everything already recorded about it —
+                            attendance, placements, schedules — stays exactly as it is and keeps naming it.
+                        </p>
+                        <p className="mt-1 text-alloy-midnight/75">
+                            This is not the same as making a space <strong>Inactive</strong>. Inactive keeps
+                            it here, paused, for when it comes back.
+                        </p>
+                        {archiveError ?
+                            <p className="mt-2 text-sm text-red-800" role="alert" data-testid="locations-room-archive-error">
+                                {archiveError}
+                            </p>
+                        :   null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            <ConfigurationPrimaryButton
+                                className="config-primary-btn--sm"
+                                disabled={archiving}
+                                onClick={() => void archiveThisSpace()}
+                                data-testid="locations-room-archive-commit"
+                            >
+                                {archiving ? "Archiving…" : "Archive space"}
+                            </ConfigurationPrimaryButton>
+                            <ConfigurationSecondaryButton
+                                disabled={archiving}
+                                onClick={() => {
+                                    setConfirmingArchive(false);
+                                    setArchiveError(null);
+                                }}
+                                data-testid="locations-room-archive-cancel"
+                            >
+                                Keep it
+                            </ConfigurationSecondaryButton>
+                        </div>
+                    </div>
+                :   null}
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
                     {[

@@ -26,6 +26,9 @@ function supabaseStub() {
         b.select = vi.fn(() => b);
         b.eq = vi.fn((c: string, v: unknown) => { filters.push((r) => r[c] === v); return b; });
         b.in = vi.fn((c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c] as never)); return b; });
+        // The provider excludes archived locations; a fixture without the column
+        // is not archived, so `undefined` has to satisfy `is null` here too.
+        b.is = vi.fn((c: string, v: unknown) => { filters.push((r) => (v === null ? r[c] == null : r[c] === v)); return b; });
         b.then = (resolve: (v: unknown) => unknown) =>
             resolve({ data: db.locations.filter((r) => filters.every((f) => f(r))), error: null });
         return b;
