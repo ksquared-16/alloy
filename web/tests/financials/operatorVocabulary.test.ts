@@ -175,3 +175,68 @@ describe("no native control expresses a financial decision", () => {
         expect(read(DISCOUNT), "and so is adding a discount").toMatch(/testId="add-discount-policy"/);
     });
 });
+
+describe("the Add Charge preview is transaction-scoped", () => {
+    /*
+     * §58. The preview answers ONE question: what will this new charge do? The household's ledger
+     * is already behind the card — reproducing any of it here turns a proposed-transaction
+     * preview into a miniature ledger and buries the one thing the operator is deciding.
+     */
+    const previewBlock = () => {
+        const src = read(ADD_CHARGE)
+            .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+        const start = src.indexOf("<SectionHead ruled={false}>Preview</SectionHead>");
+        expect(start, "the preview exists").toBeGreaterThan(-1);
+        return src.slice(start, src.indexOf("<ActionRow>", start));
+    };
+
+    it("contains the proposed transaction and its consequence", () => {
+        const block = previewBlock();
+        expect(block, "the charge itself").toContain("specimen.amount");
+        expect(block, "its discount decision").toContain("data-addcharge-preview-discount");
+        expect(block, "the resulting responsibility").toContain("data-addcharge-preview-responsibility");
+        expect(block, "and the balance it moves").toContain("specimen.previewBefore");
+    });
+
+    it("does not reproduce the account's history", () => {
+        /*
+         * Not a string ban — a SOURCE ban. The preview may not reach the ledger rows, the payment
+         * list or the adjustment records, because those are the collections that would turn it
+         * into a ledger if anyone ever mapped one in.
+         */
+        const block = previewBlock();
+        for (const source of [
+            "evidence.ledger",
+            "evidence.payments",
+            "evidence.adjustments",
+            "allEntries",
+            "visiblePayments",
+            "ledgerRows",
+        ]) {
+            expect(block, `${source} is account history and belongs behind this card`)
+                .not.toContain(source);
+        }
+        expect(block, "and nothing iterates a historical collection")
+            .not.toMatch(/\.(ledger|payments|adjustments|entries)\s*\.map\(/);
+    });
+
+    it("renders no identifier as operator-facing text", () => {
+        /*
+         * THE BAN IS ON DISPLAY, not on lookup. The preview finds a discount's LABEL by matching
+         * `policyId` — an id used as a key is how a surface avoids re-stating a name, which is
+         * the opposite of leaking one. What must never happen is an id reaching the page, where
+         * it means nothing to an operator and everything to a support ticket.
+         */
+        const block = previewBlock();
+        const renderedExpressions = [...block.matchAll(/>\s*\{([^{}]+)\}/g)].map((m) => m[1]!.trim());
+        for (const expr of renderedExpressions) {
+            expect(
+                /(policy|arrangement|charge|correlation|assignment)_?id\s*$/i.test(expr),
+                `the preview renders the identifier \`${expr}\``,
+            ).toBe(false);
+        }
+        /* And no snake_case identifier field is rendered either. */
+        expect(block).not.toMatch(/>\s*\{[^{}]*_id\s*\}/);
+    });
+});
