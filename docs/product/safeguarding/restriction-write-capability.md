@@ -1,3 +1,10 @@
+---
+owner: product
+status: canonical
+last_reviewed: 2026-09-23
+supersedes: []
+---
+
 # Safeguarding restrictions — the governed write capability
 
 **Internal / operator documentation. Nothing here is partner-facing.**

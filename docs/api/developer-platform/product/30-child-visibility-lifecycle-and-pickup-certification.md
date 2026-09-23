@@ -1,7 +1,7 @@
 # Child visibility lifecycle, and the pickup hosted certification path
 
 Post-closeout hardening, run `erun_8a0e1fa29eaa157a`. Thread 7 remains **CLOSED**; this run resolves
-the two findings that hosted certification (`29-relationship-hosted-certification.md`) recorded, and
+the two findings that hosted relationship-privacy certification recorded, and
 retires the third as a no-op.
 
 ---
