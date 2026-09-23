@@ -1,0 +1,642 @@
+{
+  "trusted_host_action_id": "tha_f5f854a6a111e8",
+  "query_hash": "223662f79fc192f81642ff1e249244d1d532f33ee715ab69bcd56b24298f23cc",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-23T17:32:27.174Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f5f854a6a111e8",
+    "query_hash": "223662f79fc192f81642ff1e249244d1d532f33ee715ab69bcd56b24298f23cc",
+    "authorization_id": "grnt_b4153ed6856a42dd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-23T17:32:28.844Z",
+    "question_ids": [
+      "qa_space_cleanup_census"
+    ],
+    "questions": {
+      "qa_space_cleanup_census": {
+        "question_id": "qa_space_cleanup_census",
+        "row_count": null,
+        "rows": [
+          {
+            "north_campus_units": [
+              {
+                "id": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+                "label": "Infant A",
+                "role": "(null)",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-06-09 22:57:30.425479+00",
+                "updated_at": "2026-09-20 03:17:16.848107+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "capacity_review",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+                "label": "Infant B",
+                "role": "(null)",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-06-09 22:57:31.110099+00",
+                "updated_at": "2026-07-30 17:41:44.398119+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+                "label": "Toddler 1",
+                "role": "operational_group",
+                "parent_id": "222440dc-60fd-4a96-bd53-51bd26ed1e1d",
+                "parent_label": "Room 1",
+                "active": true,
+                "created_at": "2026-06-09 22:57:31.799687+00",
+                "updated_at": "2026-09-20 03:05:53.789199+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "label": "Toddler 2",
+                "role": "operational_group",
+                "parent_id": "222440dc-60fd-4a96-bd53-51bd26ed1e1d",
+                "parent_label": "Room 1",
+                "active": true,
+                "created_at": "2026-06-09 22:57:32.494541+00",
+                "updated_at": "2026-09-20 03:06:13.304963+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "1e141eb9-f2a3-4f4a-a4e8-13fe27159277",
+                "label": "Preschool 1",
+                "role": "(null)",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-06-09 22:57:33.164803+00",
+                "updated_at": "2026-07-16 23:51:43.775127+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "aebc7673-5a79-4715-8b69-c82d9aefee0d",
+                "label": "Preschool 2",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-06-09 22:57:33.855375+00",
+                "updated_at": "2026-09-22 22:34:46.507774+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "label": "Pre-K",
+                "role": "operational_group",
+                "parent_id": "222440dc-60fd-4a96-bd53-51bd26ed1e1d",
+                "parent_label": "Room 1",
+                "active": true,
+                "created_at": "2026-06-09 22:57:34.535553+00",
+                "updated_at": "2026-09-20 03:30:12.557678+00",
+                "metadata_keys": [
+                  "age_range_from",
+                  "age_range_to",
+                  "age_range_unit",
+                  "campus_room",
+                  "capacity",
+                  "category",
+                  "demo_seed_package",
+                  "is_demo_data",
+                  "seed_key",
+                  "seed_source",
+                  "semantic_kind",
+                  "student_teacher_ratio",
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "222440dc-60fd-4a96-bd53-51bd26ed1e1d",
+                "label": "Room 1",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-20 03:05:20.748083+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 3
+              },
+              {
+                "id": "3a05deac-df20-4e2c-90d6-2f823e61fd3f",
+                "label": "Playground",
+                "role": "shared_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-20 03:05:24.811912+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "ba05df72-53db-4e56-89aa-d45d62a01027",
+                "label": "QA Room 73122",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 18:22:54.435486+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 1
+              },
+              {
+                "id": "92207313-d1cc-4141-b56b-118b3c3bc644",
+                "label": "QA Toddler 73122",
+                "role": "operational_group",
+                "parent_id": "ba05df72-53db-4e56-89aa-d45d62a01027",
+                "parent_label": "QA Room 73122",
+                "active": true,
+                "created_at": "2026-09-22 18:22:58.461549+00",
+                "updated_at": "2026-09-22 18:23:07.19455+00",
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "50bceb7d-fed5-418d-9550-faa2fe5a549e",
+                "label": "QA Playground 73122",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 18:23:08.49966+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "7e78c696-c93c-41fc-9373-12c24d76f50e",
+                "label": "QA Room 58206",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:12:39.262918+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "62a8916c-de49-43dd-8bce-2dd5441a1651",
+                "label": "QA Group A 58206",
+                "role": "operational_group",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:12:42.006551+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "db53757a-9eab-44de-a2df-fd1466ea4957",
+                "label": "QA Group B 58206",
+                "role": "operational_group",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:13:20.318867+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "6056e4f3-125a-46e4-94a5-01a4b00244b1",
+                "label": "QA Yard 58206",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:14:32.019041+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "1d15889a-f6d4-4f03-9284-894def33c72a",
+                "label": "QA Room 06000",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:15:06.687228+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 2
+              },
+              {
+                "id": "e54a9d97-3c68-4a57-9ea3-530688f30eaf",
+                "label": "QA Group A 06000",
+                "role": "operational_group",
+                "parent_id": "1d15889a-f6d4-4f03-9284-894def33c72a",
+                "parent_label": "QA Room 06000",
+                "active": true,
+                "created_at": "2026-09-22 23:15:09.483771+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "1a1ad289-7d15-4178-8fb6-737e888f4211",
+                "label": "QA Group B 06000",
+                "role": "operational_group",
+                "parent_id": "1d15889a-f6d4-4f03-9284-894def33c72a",
+                "parent_label": "QA Room 06000",
+                "active": true,
+                "created_at": "2026-09-22 23:15:15.76455+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              },
+              {
+                "id": "88bdec35-446a-4115-9f02-57135baad1f8",
+                "label": "QA Yard 06000",
+                "role": "physical_space",
+                "parent_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "parent_label": "North Campus",
+                "active": true,
+                "created_at": "2026-09-22 23:15:20.450215+00",
+                "updated_at": null,
+                "metadata_keys": [
+                  "supported_program_keys"
+                ],
+                "children_count": 0
+              }
+            ],
+            "tables_referencing_locations": [
+              {
+                "table": "attendance_kiosk_devices",
+                "column": "site_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "from_room_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "room_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "site_location_id"
+              },
+              {
+                "table": "child_attendance_events",
+                "column": "to_room_location_id"
+              },
+              {
+                "table": "child_enrollment_agreements",
+                "column": "site_location_id"
+              },
+              {
+                "table": "child_placements",
+                "column": "room_location_id"
+              },
+              {
+                "table": "child_placements",
+                "column": "site_location_id"
+              },
+              {
+                "table": "childcare_capacity_rules",
+                "column": "room_location_id"
+              },
+              {
+                "table": "childcare_capacity_rules",
+                "column": "site_location_id"
+              },
+              {
+                "table": "childcare_operating_windows",
+                "column": "room_location_id"
+              },
+              {
+                "table": "childcare_operating_windows",
+                "column": "site_location_id"
+              },
+              {
+                "table": "childcare_rate_plans",
+                "column": "room_location_id"
+              },
+              {
+                "table": "childcare_rate_plans",
+                "column": "site_location_id"
+              },
+              {
+                "table": "childcare_ratio_rules",
+                "column": "room_location_id"
+              },
+              {
+                "table": "childcare_ratio_rules",
+                "column": "site_location_id"
+              },
+              {
+                "table": "childcare_schedule_rules",
+                "column": "room_location_id"
+              },
+              {
+                "table": "childcare_schedule_rules",
+                "column": "site_location_id"
+              },
+              {
+                "table": "commercial_addons",
+                "column": "location_id"
+              },
+              {
+                "table": "commercial_deposits",
+                "column": "location_id"
+              },
+              {
+                "table": "commercial_fees",
+                "column": "location_id"
+              },
+              {
+                "table": "commercial_policies",
+                "column": "location_id"
+              },
+              {
+                "table": "commercial_products",
+                "column": "location_id"
+              },
+              {
+                "table": "commercial_tuition_rates",
+                "column": "location_id"
+              },
+              {
+                "table": "communication_identity_location_bindings",
+                "column": "location_id"
+              },
+              {
+                "table": "communication_provider_bindings",
+                "column": "location_id"
+              },
+              {
+                "table": "communication_threads",
+                "column": "location_id"
+              },
+              {
+                "table": "configuration_consumptions",
+                "column": "location_id"
+              },
+              {
+                "table": "configuration_delivery_attempts",
+                "column": "location_id"
+              },
+              {
+                "table": "configuration_distribution_targets",
+                "column": "location_id"
+              },
+              {
+                "table": "consumption_events",
+                "column": "location_id"
+              },
+              {
+                "table": "employments",
+                "column": "primary_location_id"
+              },
+              {
+                "table": "enrollment_pricing_terms",
+                "column": "location_id"
+              },
+              {
+                "table": "financial_policies",
+                "column": "location_id"
+              },
+              {
+                "table": "integration_resource_refs",
+                "column": "location_id"
+              },
+              {
+                "table": "jobs",
+                "column": "location_id"
+              },
+              {
+                "table": "location_program_categories",
+                "column": "location_id"
+              },
+              {
+                "table": "location_tags",
+                "column": "location_id"
+              },
+              {
+                "table": "locations",
+                "column": "parent_location_id"
+              },
+              {
+                "table": "opportunities",
+                "column": "location_id"
+              },
+              {
+                "table": "person_locations",
+                "column": "location_id"
+              },
+              {
+                "table": "placement_candidates",
+                "column": "site_id"
+              },
+              {
+                "table": "resolved_obligations",
+                "column": "location_id"
+              },
+              {
+                "table": "schedule_assignments",
+                "column": "room_location_id"
+              },
+              {
+                "table": "schedule_assignments",
+                "column": "site_location_id"
+              },
+              {
+                "table": "schedule_patterns",
+                "column": "site_location_id"
+              },
+              {
+                "table": "schedules",
+                "column": "location_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "org_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "org_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "room_location_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "room_location_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "site_location_id"
+              },
+              {
+                "table": "staff_coverage_allocations",
+                "column": "site_location_id"
+              },
+              {
+                "table": "staff_presence_events",
+                "column": "room_location_id"
+              },
+              {
+                "table": "staff_presence_events",
+                "column": "site_location_id"
+              },
+              {
+                "table": "tour_availability_rules",
+                "column": "location_id"
+              },
+              {
+                "table": "tour_bookings",
+                "column": "location_id"
+              },
+              {
+                "table": "tour_invitations",
+                "column": "location_id"
+              },
+              {
+                "table": "tour_public_booking_links",
+                "column": "location_id"
+              },
+              {
+                "table": "user_site_access",
+                "column": "location_id"
+              }
+            ],
+            "observed_at": "2026-09-23 17:32:28.699381+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

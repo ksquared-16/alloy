@@ -66,17 +66,21 @@ not be asked for Programs, a schedule or a ratio — those belong to a group, no
 
 ---
 
-## 5. Set the staffing ratio — this is the one that was missing
+## 5. Set the staffing ratio — inside the same edit form
 
-On `Toddler AM`, find **Staffing ratio** and click **Set ratio**. Add two steps:
+Click **Edit space** on `Toddler AM`. Scroll to **Staffing ratio**, inside the same form as
+the name and capacity. Click **+ Add tier** twice and fill the two columns:
 
-- 1 staff for up to **5** children
-- 2 staff for up to **11** children
+| Staff | Children |
+|------:|---------:|
+| 1     | 5        |
+| 2     | 11       |
 
-Save.
+Then **Save space** — one button for the whole space.
 
 **You should see** `1:5 · 2:11`, written the way you say it. If it shows anything like
-`1:1 ≤ 5`, that is a FAIL — that was the old bug that made your ratios look lost.
+`1:1 ≤ 5`, that is a FAIL — that was the old bug that made your ratios look lost. You
+should never have been sent to another screen to set it.
 
 ☐ PASS ☐ FAIL
 
@@ -177,12 +181,13 @@ group sits in — all of it was set on the space itself.
 
 ---
 
-## 15. The advanced page still exists
+## 15. No rule-engine machinery in ordinary space management
 
-The rules engine has not been deleted. From a space, follow **Advanced rules and history →**.
+Look over a space's detail again.
 
-**You should see** the versioned rules page, with capacity history, licensed ceilings,
-ratios and future-dated changes — reachable when you want it, and never in your way.
+**You should NOT see** a *Capacity limits* section or an *Advanced rules and history* link.
+The versioned rule engine still exists underneath — history, effective dating and audit are
+all intact — but ordinary space management no longer sends you there.
 
 ☐ PASS ☐ FAIL
 
@@ -212,8 +217,13 @@ ratios and future-dated changes — reachable when you want it, and never in you
 
 ### Things you may notice, which are known
 
-- **Several spaces named "QA …"** at North Campus are mine from mounted testing. Delete
-  them or leave them; they change nothing.
+- **Eleven spaces named "QA …"** at North Campus were mine from mounted testing. Each was
+  proven to carry no real history — no attendance, placements, schedules, staff or
+  programs — and all eleven have been retired, along with the capacity and ratio rules they
+  owned. Alloy has no way to *delete* a space: the Locations API offers create and update
+  only. They are therefore deactivated rather than erased, and whether they still appear in
+  your list depends on that. If you see them marked Inactive, that is why, and removing them
+  for good needs a decision from you.
 - **Toddler 1 and Toddler 2** had their capacity recorded as a *licensed* ceiling by the
   old adoption flow, and that was corrected to ordinary capacity. Both read 10.
 - **Twelve other spaces** still carry an old ratio written as free text. Each will show
