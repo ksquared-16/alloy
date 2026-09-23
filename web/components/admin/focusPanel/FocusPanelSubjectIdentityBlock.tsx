@@ -85,10 +85,13 @@ export default function FocusPanelSubjectIdentityBlock({
                     >
                         {contextChips.map((chip) => (
                             <span
-                                key={`${chip.kind}-${chip.label}`}
+                                key={`${chip.kind}-${chip.reserved ? "reserved" : chip.label}`}
                                 className={[
                                     "alloy-os-fp-header-compact__context-chip",
                                     `alloy-os-fp-header-compact__context-chip--${chip.kind}`,
+                                    chip.reserved ?
+                                        "alloy-os-fp-header-compact__context-chip--reserved"
+                                    :   null,
                                     (chip.kind === "status" || chip.kind === "attention") && chip.tone ?
                                         `alloy-os-fp-header-compact__context-chip--tone-${chip.tone}`
                                     :   null,
@@ -98,12 +101,17 @@ export default function FocusPanelSubjectIdentityBlock({
                                 data-focus-panel-chip-kind={chip.kind}
                                 data-focus-panel-chip-count={chip.count ?? undefined}
                                 data-focus-panel-chip-tone={chip.tone ?? undefined}
+                                data-focus-panel-chip-reserved={chip.reserved ? "true" : undefined}
                                 data-focus-panel-status-readonly={
                                     chip.kind === "status" ? "true" : undefined
                                 }
-                                role={chip.kind === "status" ? "status" : undefined}
+                                // A reserved chip has no value to announce. Giving it role="status"
+                                // would announce an empty live region on every cold open.
+                                role={chip.kind === "status" && !chip.reserved ? "status" : undefined}
+                                aria-hidden={chip.reserved ? true : undefined}
                             >
-                                {chip.label}
+                                {/* UNKNOWN renders as nothing — never as a placeholder value. */}
+                                {chip.reserved ? null : chip.label}
                             </span>
                         ))}
                     </div>

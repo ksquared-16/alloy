@@ -9,14 +9,27 @@ function labelFromVmStatus(status: StatusControlVm): string | null {
 }
 
 /**
- * Single stable status label for Opportunity VM header — VM payload when ids match, else queue seed.
+ * THE STATUS LABEL HAS ONE OWNER: the drawer VM's status control, from the authored `status_defs`.
+ *
+ * This used to fall back to the queue preview seed, which reads the queue row's configured `status`
+ * display slot. That slot is bound per work unit and on `new-leads` resolves to the process STAGE,
+ * so the fallback answered a STATUS question with a STAGE and the header asserted it as settled.
+ * The owner then corrected it after the frame was complete.
+ *
+ * `null` now means UNKNOWN — the owner has not answered yet — and the header reserves the chip.
+ * It does NOT mean "no status": a record always has one. Callers must render absence as reserved
+ * geometry, never as an empty or missing chip.
  */
 export function resolveOpportunityVmStatusLabel(params: {
     drawerId: string | null | undefined;
     displayVm: OpportunityDrawerViewModel | null;
+    /**
+     * Accepted so callers keep one call shape, and deliberately NOT read. See the note above: the
+     * seed carries a different vocabulary than this label, so promoting it here is what produced
+     * the post-complete correction.
+     */
     queueSeedStatusLabel?: string | null;
 }): string | null {
-    const seed = params.queueSeedStatusLabel?.trim() || null;
     const vm =
         params.displayVm && params.drawerId ?
             String(params.displayVm.entity.id) === String(params.drawerId) ?
@@ -24,8 +37,7 @@ export function resolveOpportunityVmStatusLabel(params: {
             :   null
         :   null;
 
-    if (vm) {
-        return labelFromVmStatus(vm.header.status) ?? seed;
-    }
-    return seed;
+    // No owner yet → UNKNOWN. Never the seed.
+    if (!vm) return null;
+    return labelFromVmStatus(vm.header.status);
 }

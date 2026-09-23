@@ -79,7 +79,7 @@ describe("focusPanelDisplayLabels", () => {
         expect(chips[2]).toMatchObject({ label: "Downtown Campus", kind: "location" });
     });
 
-    it("builds seed-backed context chips for cold Focus Panel open", () => {
+    it("builds seed-backed context chips with the status chip RESERVED, not seeded", () => {
         const chips = buildFocusPanelContextChipsFromQueuePreviewSeed({
             title: "Jordan Lee",
             statusLabel: "New Lead",
@@ -87,8 +87,13 @@ describe("focusPanelDisplayLabels", () => {
             stageLabel: "New Leads",
             locationLabel: "North Campus",
         });
+        // Geometry is unchanged — still three chips, status first.
         expect(chips).toHaveLength(3);
-        expect(chips.map((chip) => chip.label)).toEqual(["New Lead", "New Leads", "North Campus"]);
+        expect(chips[0]).toMatchObject({ kind: "status", reserved: true, label: "" });
+        // The seed's own status text must not reach the chip row: it is a different vocabulary
+        // than the owner's, so rendering it guarantees a post-complete correction.
+        expect(chips.map((chip) => chip.label)).toEqual(["", "New Leads", "North Campus"]);
+        expect(chips.some((chip) => chip.label === "New Lead")).toBe(false);
     });
 
     it("resolves queue preview seed identity summary from attention/work or contact", () => {
