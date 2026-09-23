@@ -28,7 +28,6 @@ import {
     ConfigObjectHeader,
 } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import RoomOrganizationCalculationPanel from "@/components/adminV2/settings/locations/RoomOrganizationCalculationPanel";
-import RoomCapacitySection from "@/components/adminV2/settings/locations/RoomCapacitySection";
 import {
     ordinaryCapacityKindForRole,
     parseOrdinaryCapacityInput,
@@ -39,7 +38,17 @@ import type {
     ChildcareRatioRuleRow,
     ChildcareRatioRuleTierRow,
 } from "@/lib/childcareOperational/config/configRuleTypes";
-import SpaceRatioSection from "@/components/adminV2/settings/locations/SpaceRatioSection";
+import {
+    SpaceRatioRead,
+    SpaceRatioTierFields,
+    type RatioDraftRow,
+} from "@/components/adminV2/settings/locations/SpaceRatioSection";
+import {
+    planObjectRatioWrite,
+    readObjectRatioTiers,
+    resolveObjectRatioStanding,
+    validateRatioTiers,
+} from "@/lib/locations/objectRatio";
 import {
     presentRoomTopology,
     roomRailTopologySegments,
@@ -123,6 +132,7 @@ export default function LocationRoomDetailPanel({
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
     const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
+    const [ratioDraft, setRatioDraft] = useState<RatioDraftRow[]>([]);
 
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
         const md = (next.metadata ?? {}) as Record<string, unknown>;
@@ -145,6 +155,17 @@ export default function LocationRoomDetailPanel({
         const committed = committedRoomTopology(next, siteId);
         setRoomType(committed.roomType);
         setInsideId(committed.insideId);
+        // A conflict seeds NOTHING: choosing one of two disagreeing staffing
+        // records by default would decide a staffing-law question silently.
+        const standing = resolveObjectRatioStanding({
+            rules: ratioRules,
+            tierRows: ratioTiers,
+            roomLocationId: next.id,
+            legacyRaw: ((next.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
+            todayYmd,
+        });
+        const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
+        setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
         setError(null);
     };
 
@@ -205,6 +226,23 @@ export default function LocationRoomDetailPanel({
         }
     };
 
+    /** One ratio, through the canonical authoring service. */
+    const saveObjectRatio = async (
+        roomId: string,
+        tiers: readonly { requiredStaff: number; maxChildren: number }[],
+    ): Promise<void> => {
+        const res = await fetch("/api/admin/operational-config/ratio-rules", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "set_object_ratio", room_location_id: roomId, tiers }),
+        });
+        if (!res.ok) {
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(json.error ?? `Could not save the staffing ratio (${res.status})`);
+        }
+    };
+
     const beginEdit = () => setEditing(true);
     const cancelEdit = () => {
         if (!room) return;
@@ -254,6 +292,16 @@ export default function LocationRoomDetailPanel({
         kindFilter === "all" ? rooms
         : kindFilter === "operational" ? rooms.filter((r) => kindOf(r) === "operational_group")
         : rooms.filter((r) => kindOf(r) !== "operational_group");
+
+    /** How this space's two ratio records stand to each other, if it is operational. */
+    const ratioStandingFor = (entry: LocationHierarchyRow) =>
+        resolveObjectRatioStanding({
+            rules: ratioRules,
+            tierRows: ratioTiers,
+            roomLocationId: entry.id,
+            legacyRaw: ((entry.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
+            todayYmd,
+        });
 
     const operationalSpacesIn = (entry: LocationHierarchyRow): string[] =>
         rooms
@@ -430,6 +478,14 @@ export default function LocationRoomDetailPanel({
                     </ConfigEditorSection>
 
                     <ConfigEditorSection
+                        title="Staffing ratio"
+                        description="One step per staffing threshold. Two staff for up to 11 children is a different promise from two for up to 10, so each step is kept as you enter it."
+                        testId="locations-room-editor-ratio"
+                    >
+                        <SpaceRatioTierFields draft={ratioDraft} disabled={!canMutate} onChange={setRatioDraft} />
+                    </ConfigEditorSection>
+
+                    <ConfigEditorSection
                         title="Default schedule"
                         description="Optional default Schedule Definition for this space. Enrollment still chooses from the Location catalog."
                         testId="locations-room-editor-schedule"
@@ -489,6 +545,32 @@ export default function LocationRoomDetailPanel({
                                             if (parsed.value !== canonicalCapacityFor(room)) {
                                                 await saveObjectCapacity(room.id, roomType, parsed.value);
                                                 capacityWritten = true;
+                                            }
+                                            // Ratio rides in the SAME save. Only an
+                                            // operational space has one, and only a real
+                                            // change reaches the rule engine.
+                                            if (roleUsesProgramFields(roomType)) {
+                                                const rows = ratioDraft.filter(
+                                                    (d) => d.staff.trim() !== "" || d.children.trim() !== "",
+                                                );
+                                                const check = validateRatioTiers(
+                                                    rows.map((d) => ({
+                                                        requiredStaff: Number(d.staff),
+                                                        maxChildren: Number(d.children),
+                                                    })),
+                                                );
+                                                if (!check.ok) throw new Error(check.message);
+                                                const plan = planObjectRatioWrite({
+                                                    rules: ratioRules,
+                                                    tierRows: ratioTiers,
+                                                    roomLocationId: room.id,
+                                                    tiers: check.tiers,
+                                                    todayYmd,
+                                                });
+                                                if (plan.action !== "noop") {
+                                                    await saveObjectRatio(room.id, check.tiers);
+                                                    capacityWritten = true;
+                                                }
                                             }
                                             // `capacity` is deliberately NOT passed: an
                                             // ordinary save no longer writes
@@ -650,26 +732,16 @@ export default function LocationRoomDetailPanel({
                     ))}
                 </div>
 
+                {/*
+                  * Staffing ratio reads here and is EDITED in the space's own edit
+                  * form, beside name and capacity. The rule-engine sections that
+                  * used to sit below this point are gone from ordinary detail:
+                  * the engine, its history, its effective dating and its routes
+                  * are all intact, but space management stops advertising them.
+                  */}
                 {roleUsesProgramFields(committedRoomTopology(room, siteId).roomType) ?
-                    <SpaceRatioSection
-                        room={room}
-                        ratioRules={ratioRules}
-                        ratioTiers={ratioTiers}
-                        todayYmd={todayYmd}
-                        canMutate={canMutate}
-                        onSaved={onCapacityChanged}
-                    />
+                    <SpaceRatioRead standing={ratioStandingFor(room)} />
                 :   null}
-
-                <RoomCapacitySection
-                    room={room}
-                    siteId={siteId}
-                    capacityRules={capacityRules}
-                    todayYmd={todayYmd}
-                    canMutate={canMutate}
-                    onAdopted={onCapacityChanged}
-                    onSaveRoom={onSave}
-                />
 
                 <RoomOrganizationCalculationPanel roomId={room.id} />
             </div>
