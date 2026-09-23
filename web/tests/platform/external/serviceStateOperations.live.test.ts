@@ -164,6 +164,8 @@ describeLive("governed service-state operations, over the wire", () => {
         { path: "/api/v1/placements/move", scope: "enrollment.write", body: { enrollment_id: UNENROLLED_A, start_date: "2026-10-01" } },
         { path: "/api/v1/schedule-assignments", scope: "schedule.write", body: { enrollment_id: UNENROLLED_A, schedule_pattern_id: PATTERN_MWF, start_date: "2026-10-01" } },
         { path: "/api/v1/schedule-assignments/change", scope: "schedule.write", body: { enrollment_id: UNENROLLED_A, schedule_pattern_id: PATTERN_TT, start_date: "2026-10-01" } },
+        { path: "/api/v1/placements/cancel", scope: "enrollment.write", body: { placement_id: UNENROLLED_A } },
+        { path: "/api/v1/schedule-assignments/cancel", scope: "schedule.write", body: { schedule_assignment_id: UNENROLLED_A } },
     ];
 
     // ── AUTH ────────────────────────────────────────────────────────────────
@@ -348,6 +350,123 @@ describeLive("governed service-state operations, over the wire", () => {
             const row = page.data.find((r) => String(r.id) === enrollmentId)!;
             expect(row, "the ended enrollment must still be readable").toBeTruthy();
             expect(["ended", "canceled", "ending"]).toContain(String(row.status));
+        }, 60_000);
+    });
+
+    // ── MISTAKEN CREATION ───────────────────────────────────────────────────
+    //
+    // Supersession can only say "this was true, and then it changed". It closes the prior row on the
+    // day before the replacement starts, and the replacement must start strictly later — so the
+    // superseded row always asserts a non-empty period during which it was the truth. There is no
+    // arithmetic that makes that window empty. For a record that was never true at all, `move` and
+    // `change` therefore publish care that never happened.
+    //
+    // These prove the separate intent, and prove it is genuinely different from supersession.
+    describe("a record that should never have been effective", () => {
+        let enrollmentId = "";
+        let placementId = "";
+        let assignmentId = "";
+
+        it("sets up an enrollment to hang the mistakes on", async () => {
+            const created = await postOk("writer", "/api/v1/enrollments", {
+                child_id: UNENROLLED_B, site_id: RIVERSIDE, start_date: "2026-10-01",
+            });
+            enrollmentId = String(created.body.id);
+            expect(enrollmentId).toBeTruthy();
+        }, 60_000);
+
+        it("cancels a placement that was recorded by mistake, and keeps the row", async () => {
+            const made = await postOk("writer", "/api/v1/placements", {
+                enrollment_id: enrollmentId, start_date: "2026-10-01",
+            });
+            placementId = String(made.body.id);
+
+            const cancelled = await postOk("writer", "/api/v1/placements/cancel", { placement_id: placementId });
+            expect(cancelled.status).toBe(200);
+            expect(cancelled.body.status, "the record says it never took effect").toBe("canceled");
+            expect(String(cancelled.body.id), "the identifier a partner already holds still resolves").toBe(placementId);
+        }, 60_000);
+
+        it("the cancellation converges through the public read — nothing disappears", async () => {
+            const page = await get("writer", `/api/v1/placements?child_id=${UNENROLLED_B}&limit=50`);
+            const row = page.data.find((r) => String(r.id) === placementId);
+            expect(row, "a cancelled placement must stay readable, not vanish").toBeTruthy();
+            expect(String(row!.status)).toBe("canceled");
+        }, 60_000);
+
+        it("cancelling is idempotent, so an unconfirmed retry converges", async () => {
+            const again = await postOk("writer", "/api/v1/placements/cancel", { placement_id: placementId });
+            expect(again.status).toBe(200);
+            expect(String(again.body.status)).toBe("canceled");
+        }, 60_000);
+
+        it("a cancelled placement frees the slot, so the corrected one can start on the SAME day", async () => {
+            // This is what supersession cannot do: `move` requires a strictly later start, so the
+            // wrong room would keep asserting at least one real day of care.
+            const corrected = await postOk("writer", "/api/v1/placements", {
+                enrollment_id: enrollmentId, start_date: "2026-10-01",
+            });
+            expect(String(corrected.body.id), "a new placement, not the cancelled one").not.toBe(placementId);
+            expect(String(corrected.body.start_date)).toBe("2026-10-01");
+        }, 60_000);
+
+        it("cancels a schedule assignment that never applied", async () => {
+            const made = await postOk("writer", "/api/v1/schedule-assignments", {
+                enrollment_id: enrollmentId, schedule_pattern_id: PATTERN_MWF, start_date: "2026-11-02",
+            });
+            assignmentId = String(made.body.id);
+
+            const cancelled = await postOk("writer", "/api/v1/schedule-assignments/cancel", {
+                schedule_assignment_id: assignmentId,
+            });
+            expect(cancelled.status).toBe(200);
+            expect(String(cancelled.body.status)).toBe("canceled");
+        }, 60_000);
+
+        it("a cancelled assignment stops projecting derived days", async () => {
+            // The whole reason this matters: assignments expand into concrete expected days. An
+            // erroneous one left "valid until yesterday" bills expectations nobody ever owed.
+            const days = await get("writer", `/api/v1/schedule-days?from=2026-11-02&to=2026-11-08&child_id=${UNENROLLED_B}`);
+            expect(days.data.length, "a cancelled assignment must project nothing").toBe(0);
+        }, 60_000);
+
+        it("refuses to cancel a record that genuinely was effective and has closed", async () => {
+            // Denying a closed period retroactively would break everything derived from it —
+            // occupancy, ratios, invoices. That is a different problem and it is not solved here.
+            // Moving the corrected placement supersedes it, which is the honest "this WAS true"
+            // closure; cancelling that closed row must then be refused.
+            const moved = await postOk("writer", "/api/v1/placements/move", {
+                enrollment_id: enrollmentId, start_date: "2026-10-15",
+            });
+            expect(String(moved.body.id)).toBeTruthy();
+
+            const superseded = await supabase
+                .from("child_placements")
+                .select("id")
+                .eq("org_id", ORG)
+                .eq("enrollment_agreement_id", enrollmentId)
+                .eq("status", "superseded")
+                .limit(1);
+            const closedId = ((superseded.data ?? []) as { id: string }[])[0]?.id;
+            expect(closedId, "the move must have closed a prior placement").toBeTruthy();
+
+            const res = await post("writer", "/api/v1/placements/cancel", { placement_id: closedId });
+            expect(res.status, "a superseded row asserts real history; cancelling it must refuse").toBe(409);
+        }, 120_000);
+
+        it("refuses a record outside the boundary exactly as if it did not exist", async () => {
+            const invented = await post("writer", "/api/v1/placements/cancel", {
+                placement_id: "00000000-0000-4000-8000-ffffffffffff",
+            });
+            expect(invented.status).toBe(404);
+        }, 60_000);
+
+        it("the cancellation leaks nothing internal", async () => {
+            const res = await post("writer", "/api/v1/placements/cancel", { placement_id: placementId });
+            const body = (await res.text()).toLowerCase();
+            for (const leak of ["created_by", "updated_by", "metadata", "constraint", "child_placements", "supabase"]) {
+                expect(body, `cancellation leaked "${leak}"`).not.toContain(leak);
+            }
         }, 60_000);
     });
 

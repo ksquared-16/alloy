@@ -171,6 +171,34 @@ export async function resolveEnrollmentInAuthority(
     return { ok: true, value: { agreementId: row.id, siteLocationId: row.site_location_id, customerMemberId: row.customer_member_id } };
 }
 
+/**
+ * Resolve a placement or schedule-assignment row the caller already holds an id for.
+ *
+ * Authority is the row's own site, not the caller's claim about it: a partner may name any id, and
+ * one outside the boundary must be indistinguishable from one that does not exist. Both tables
+ * carry `site_location_id`, so one resolver serves both rather than two that could drift apart.
+ */
+export async function resolveServiceStateRowInAuthority(
+    ctx: OperationContext,
+    table: "child_placements" | "schedule_assignments",
+    rowId: string,
+): Promise<{ ok: true; value: { id: string; siteLocationId: string; status: string } } | { ok: false; error: OperationRefusal }> {
+    const { data, error } = await ctx.supabase
+        .from(table)
+        .select("id, site_location_id, status")
+        .eq("org_id", ctx.organizationId)
+        .eq("id", rowId)
+        .limit(1);
+    if (error) throw new Error(`${table} authority lookup failed`);
+    const row = ((data ?? []) as Array<{ id: string; site_location_id: string; status: string }>)[0];
+    if (!row) return { ok: false, error: OUTSIDE };
+
+    const site = await assertSiteInAuthority(ctx, row.site_location_id);
+    if (!site.ok) return site;
+
+    return { ok: true, value: { id: row.id, siteLocationId: row.site_location_id, status: row.status } };
+}
+
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
 
 export type PublicEnrollmentResult = {

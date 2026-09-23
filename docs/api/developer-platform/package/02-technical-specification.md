@@ -689,23 +689,41 @@ Not an oversight, and not a roadmap gap in most cases:
 
 ### How things end — and why `DELETE` is missing
 
-**No resource on this API supports physical deletion.** This is a complete
-lifecycle, not a missing feature. Do not wait for `DELETE` endpoints.
+**Canonical history is never destructively deleted.** Every resource you can
+create through this API offers a governed way to end, cancel, supersede, correct
+or reverse it — chosen to match what actually happened. Do not wait for `DELETE`
+endpoints: the operation you need already exists under a name that says which of
+those it is.
 
-| Resource | How it ends |
-| --- | --- |
-| Children | archived — `status` becomes `inactive` |
-| Relationships | ended by status |
-| Enrollment | effective end — `end_date` is set, or it is cancelled before it starts |
-| Placements | **superseded** — a new placement names the one it replaces |
-| Schedule assignments | **superseded** |
-| Staff | effective end |
-| Attendance | **reversed** — a reversal fact supersedes the original |
-| Locations, Households | not deletable through this API |
+That distinction is the point, and it is not pedantry. **A change and a mistake
+are different truths.** Superseding a placement says the child really was in that
+room until the move. Cancelling one says they never were. If the only tool were
+supersession, correcting a record created in error would publish a period of care
+that never happened — and you, having already synchronized the original, would
+have no way to tell the two apart afterwards.
 
-Supersession is why your mirror stays correct: the record you already stored is
-never rewritten or removed, so you learn about the change through ordinary
-incremental synchronization instead of diverging silently.
+| Resource | Ended normally | Never should have been effective |
+| --- | --- | --- |
+| Children | archived — `status` becomes `inactive` | — (identity is not created through this API) |
+| Relationships | ended by status | — |
+| Enrollment | effective end — `end_date` is set | **cancelled** before it starts, via `POST /enrollments/end` |
+| Placements | **superseded** — a new placement names the one it replaces | **cancelled** — `POST /placements/cancel` |
+| Schedule assignments | **superseded** | **cancelled** — `POST /schedule-assignments/cancel` |
+| Attendance | **reversed** — a reversal fact supersedes the original | **reversed** — the fact is a tombstone, never a deletion |
+| Staff | effective end | — |
+| Locations, Households | not deletable through this API | — |
+
+Nothing disappears in any of these. The record you already stored is never
+rewritten or removed; its `status` changes and you learn about it through ordinary
+incremental synchronization. Read `status` to decide what a record means:
+`superseded` and `ended` describe something that was true for a period, while
+`canceled` says it never took effect and nothing should be derived from it.
+
+One limit worth stating plainly rather than discovering: a record that has already
+closed cannot be cancelled. Once a placement or assignment has been superseded or
+ended, it asserts real history that occupancy and billing already depend on, and
+denying it retroactively would be a different and much larger operation than this
+one. Cancellation applies while a record is still effective.
 
 ### Answering the five questions for any resource
 

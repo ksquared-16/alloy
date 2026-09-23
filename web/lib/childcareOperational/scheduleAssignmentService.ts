@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { derivePlacementStatusFromStartDate } from "@/lib/childcareOperational/enrollmentOperationalStatus";
+import {
+    derivePlacementStatusFromStartDate,
+    isPlacementOperationalStatus,
+} from "@/lib/childcareOperational/enrollmentOperationalStatus";
 import type { ScheduleAssignmentRow } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 import {
     assertValidIsoDate,
@@ -356,4 +359,70 @@ export function assertNoOperationalScheduleAssignmentPatch(): void {
         "invalid_input",
         "Operational schedule changes must use supersedeScheduleAssignment, not update-in-place"
     );
+}
+
+/**
+ * Cancel a schedule assignment that should never have applied.
+ *
+ * The same asymmetry as placements: `supersedeScheduleAssignment` requires the replacement to start
+ * strictly after the prior row and closes the prior row the day before, so the superseded row always
+ * claims a non-empty period during which those were the child's hours. For an assignment recorded
+ * against the wrong child, or with a pattern that was never agreed, that claim is false — and it is
+ * not inert, because `project_external_schedule_days` expands assignments into concrete expected
+ * days. A wrong assignment left "valid until yesterday" projects attendance expectations that
+ * nobody ever owed.
+ *
+ * Cancelling moves the row to `canceled`, which the projection already excludes (it admits only
+ * `active` and `planned`), so the derived days stop without touching the projection. The row is
+ * retained and the actor recorded.
+ */
+export async function cancelScheduleAssignment(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        assignmentId: string;
+        actorUserId?: string | null;
+    }
+): Promise<ScheduleAssignmentRow> {
+    const { data: existing, error: readError } = await supabase
+        .from("schedule_assignments")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", input.assignmentId)
+        .maybeSingle();
+
+    if (readError) {
+        throw new OperationalEnrollmentServiceError("db_error", readError.message);
+    }
+    if (!existing) {
+        throw new OperationalEnrollmentServiceError("not_found", "Schedule assignment not found");
+    }
+
+    const prior = existing as ScheduleAssignmentRow;
+    if (prior.status === "canceled") {
+        return prior;
+    }
+    if (!isPlacementOperationalStatus(prior.status)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Only an operational schedule assignment can be cancelled; this one is already closed",
+            { status: prior.status }
+        );
+    }
+
+    const { data, error } = await supabase
+        .from("schedule_assignments")
+        .update({
+            status: "canceled",
+            updated_by: trimOrNull(input.actorUserId),
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.assignmentId)
+        .select("*")
+        .single();
+
+    if (error || !data) {
+        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "update failed");
+    }
+    return data as ScheduleAssignmentRow;
 }
