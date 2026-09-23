@@ -2360,14 +2360,6 @@
         "reason": "Which configured discount policies a household's children could be given. Reads commercial_policies through the canonical config reader and the live assignments beside them; writes nothing, decides no eligibility, and states no amount it did not read."
       }
     },
-    "app/api/admin/financials/autopay/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "Payments W5. Reading what a family has authorized is an ordinary Financials read; enrolling, pausing, resuming and revoking are registered actions behind fin.write. The route returns the arrangement and the LIVE amount due, resolved the same way the scheduled handler resolves it, so the surface cannot show a stale figure. fin.read cannot mutate anything here."
-      }
-    },
     "app/api/admin/financials/payment-methods/route.ts": {
       "GET": {
         "status": "declared",
@@ -5496,13 +5488,31 @@
         "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
+    "app/api/v1/enrollments/void/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
     "app/api/v1/placements/move/route.ts": {
       "POST": {
         "status": "none",
         "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits; the domain refuses in-place mutation of an effective-dated placement for every caller. The operation performs no domain logic of its own: it delegates to childPlacementService.supersedeChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
+    "app/api/v1/placements/cancel/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits; the domain refuses in-place mutation of an effective-dated placement for every caller. The operation performs no domain logic of its own: it delegates to childPlacementService.supersedeChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
     "app/api/v1/schedule-assignments/change/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-assignments/cancel/route.ts": {
       "POST": {
         "status": "none",
         "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
