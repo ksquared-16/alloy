@@ -154,11 +154,43 @@ export async function completeVmWithStageWork(
  * subject preparation (#6): since the reveal now waits for stage-work, warming the VM alone would
  * still leave a stage-work fetch on click — warm both. Fire-and-forget; failures are ignored.
  */
-export async function prewarmRecordWork(subjectId: string): Promise<void> {
+export async function prewarmRecordWork(
+    subjectId: string,
+    /**
+     * THE SCOPE THE SETTLED TRANSPORT WILL ASSERT — without it this warm is unreachable.
+     *
+     * `useRecordWorkRuntime` requests the record-work VM with
+     * `{ work_unit_id: "", department_id: "", attention_subject_id }`, which both adds
+     * `?attention_subject_id=` to the URL and puts the attention subject into the session-cache
+     * scope key. This prewarm passed `null`, so it fetched the bare URL under a DIFFERENT key.
+     *
+     * Measured on deployed 447abd94: hover issued
+     *   /api/admin/view-models/drawer/opportunity/<id>
+     * and the click that followed issued
+     *   /api/admin/view-models/drawer/opportunity/<id>?attention_subject_id=<id>
+     * — same endpoint, same record, 2.8s paid twice. The warm was produced and never consumable,
+     * which is why pointer intent moved queue-row switching only ~190ms against a 5.5-6.3s spread.
+     *
+     * Null keeps the previous bare-scope behaviour for callers that genuinely have no attention
+     * subject. It is NOT defaulted from `subjectId`: warming under a scope the consumer will not
+     * ask for is what produced the unreachable entry in the first place.
+     */
+    attentionSubjectId: string | null = null,
+): Promise<void> {
     const id = subjectId.trim();
     if (!id) return;
+    const attention = attentionSubjectId?.trim() || null;
+    /*
+     * Same shape as `useRecordWorkRuntime`'s `transportContext`, deliberately including the empty
+     * work-unit/department strings: that runtime asserts only the attention subject, the URL builder
+     * omits empty fields, and the cache scope is derived from the same object. Any other shape keys
+     * the entry somewhere the consumer will never look.
+     */
+    const warmContext = attention
+        ? { work_unit_id: "", department_id: "", attention_subject_id: attention }
+        : null;
     try {
-        const result = await loadOpportunityDrawerViaViewModel(id, null);
+        const result = await loadOpportunityDrawerViaViewModel(id, warmContext);
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
         await completeVmWithStageWork(result.preload.viewModel); // warms the stage-work resource too
     } catch {
