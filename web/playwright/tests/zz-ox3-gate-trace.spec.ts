@@ -48,10 +48,56 @@ test("ox3 gate trace", async ({ page }) => {
         return true;
     })()`);
     await page.waitForTimeout(800);
+    /*
+     * SEMANTIC MILESTONES, OBSERVED — not inferred from quiescence.
+     *
+     * T4 SELECTED_RECORD_AUTHORITATIVE: the header names the NEW subject. Captured as "the header
+     *    identity text differs from the one on screen before the click", which is the operator's
+     *    own test for "this is B now". Recorded only once.
+     * T5 FIRST_ACTIONABLE_MEANING: the header's primary action control is present and enabled, i.e.
+     *    the operator can actually continue work on B.
+     * T6 ALL_FIRST_ORDER_FACTS_RESOLVED: every configured cell carries content — no cell is still
+     *    reserved. Reserved cells are honest UNKNOWN, so this is the point at which first-order
+     *    truth has landed rather than the point at which the DOM stops moving.
+     */
     await page.evaluate(`(() => {
-        window.__ox3.clickAt = Math.round(performance.now());
-        window.__ox3.gateAtClick = (window.__ALLOY_REVEAL_GATE_DIAG__||[]).length;
-        window.__ox3.target.click();
+        const HEADER = '[data-alloy-os-focus-panel-header="true"]';
+        const idText = () => (document.querySelector(HEADER)?.textContent || '').replace(/\\s+/g,' ').trim().slice(0,80);
+        const w = window.__ox3;
+        w.identityBefore = idText();
+        w.milestones = {};
+        w.clickAt = Math.round(performance.now());
+        const mark = (k) => { if (w.milestones[k] == null) w.milestones[k] = Math.round(performance.now()) - w.clickAt; };
+        /*
+         * SUBJECT-BOUND, NOT GEOMETRY-BOUND.
+         *
+         * The panel retains A's cards while B resolves, so "six cells, none reserved" and "an enabled
+         * header action" are both satisfied by A while B is selected — Slice 4 measured exactly that
+         * and had to throw its T5/T6 away. Every milestone below is therefore keyed to B's own id,
+         * read from data-card-subject, which each card now carries from context.subject.id.
+         */
+        const bodySubject = () => document.querySelector('[data-focus-panel-body-subject]')?.getAttribute('data-focus-panel-body-subject') || null;
+        w.subjectBefore = bodySubject();
+        const cardsFor = (id) => id ? document.querySelectorAll('[data-card-subject="' + id + '"]').length : 0;
+        w.__mo = new MutationObserver(() => {
+            const nowSubject = bodySubject();
+            const isB = nowSubject && nowSubject !== w.subjectBefore;
+            if (idText() && idText() !== w.identityBefore && isB) mark('T4_authoritative');
+            if (w.milestones.T4_authoritative == null) return;
+            // T5: the operator can act on B — an enabled header action WHILE the body is bound to B
+            // and at least one card has actually composed against B.
+            const act = document.querySelector(HEADER + ' [data-alloy-os-fp-header-actions="true"] button:not([disabled])');
+            if (act && cardsFor(nowSubject) >= 1) mark('T5_actionable');
+            // T6: every configured cell carries B's content — no cell still showing A, none reserved.
+            const cells = document.querySelectorAll('.alloy-os-ucard').length;
+            const reserved = document.querySelectorAll('[data-focus-panel-cell-reserved="true"]').length;
+            if (cells >= 6 && reserved === 0 && cardsFor(nowSubject) >= cells) mark('T6_first_order');
+            w.cardsB = cardsFor(nowSubject);
+            w.cellsTotal = cells;
+        });
+        w.__mo.observe(document, { childList: true, subtree: true, attributes: true, characterData: true });
+        w.gateAtClick = (window.__ALLOY_REVEAL_GATE_DIAG__||[]).length;
+        w.target.click();
         return true;
     })()`);
     await page.waitForTimeout(14000);
@@ -81,6 +127,11 @@ test("ox3 gate trace", async ({ page }) => {
             postClickRequests: app.filter((r) => r.rel >= -50).sort((a, b) => a.rel - b.rel).slice(0, 25)
                 .map((r) => ({ ...r, subject: subjectOf(r.path) })),
             selectedHeader: selected,
+            milestones: (w.__ox3 as unknown as { milestones?: Record<string, number> }).milestones ?? null,
+            identityBefore: (w.__ox3 as unknown as { identityBefore?: string }).identityBefore ?? null,
+            subjectBefore: (w.__ox3 as unknown as { subjectBefore?: string }).subjectBefore ?? null,
+            cardsBoundToB: (w.__ox3 as unknown as { cardsB?: number }).cardsB ?? null,
+            cellsTotal: (w.__ox3 as unknown as { cellsTotal?: number }).cellsTotal ?? null,
         };
     });
     console.log(`[gate] ${JSON.stringify(out)}`);
