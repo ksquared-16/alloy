@@ -35,7 +35,20 @@ export type PartyCollectionResponse =
     | { readonly action: "remove"; readonly group_field_id: string; readonly instance_key: string };
 
 export type ApplyPartyCollectionResult =
-    | { readonly ok: true; readonly outcome: "added" | "edited" | "removed"; readonly instance_key: string }
+    | {
+          readonly ok: true;
+          readonly outcome: "added" | "edited" | "removed";
+          readonly instance_key: string;
+          /**
+           * The session's shared values AFTER the write.
+           *
+           * Returned because the objective is re-resolved immediately afterwards, and a
+           * packet-anchored objective is resolved against a session the caller supplies. Handing
+           * back the pre-write row would redraw the collection without the person just added — the
+           * parent would click Add, watch the card refresh, and see nothing happen.
+           */
+          readonly sharedValues: Record<string, unknown>;
+      }
     | { readonly ok: false; readonly error: string };
 
 export function parsePartyCollectionResponse(raw: unknown): PartyCollectionResponse | null {
@@ -134,5 +147,5 @@ export async function applyPartyCollectionResponse(
         .eq("org_id", input.orgId);
     if (writeError) return { ok: false, error: "Could not save that just now" };
 
-    return { ok: true, outcome, instance_key: touched };
+    return { ok: true, outcome, instance_key: touched, sharedValues: { ...sharedValues, [key]: next } };
 }

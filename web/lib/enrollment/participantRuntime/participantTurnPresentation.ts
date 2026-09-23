@@ -508,6 +508,17 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
     // The canonical key names the fact; the imported label only describes where it was printed.
     const label = naturalFieldLabel(turn.label, (turn as { canonical_key?: string | null }).canonical_key ?? null);
 
+    /*
+     * A COLLECTION ALREADY HAS ITS SENTENCE.
+     *
+     * This function re-composes wording from the LABEL for every turn, which is right for a single
+     * fact and wrong for a list of people: it produced "What is your Emergency contacts?" — a plural
+     * heading wrapped in a singular question. The runtime already built the right sentence for a
+     * collection (`deterministicPrompt`), and the card beside it lists the people, so the words are
+     * taken as given rather than rebuilt here.
+     */
+    if (turn.party_collection && turn.prompt?.trim()) return turn.prompt.trim();
+
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
         // "birthday", not "date of birth" — a specialist sitting next to a parent does not read

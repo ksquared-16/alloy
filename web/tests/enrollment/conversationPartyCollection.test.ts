@@ -269,33 +269,28 @@ describe("a declared collection drives the conversation's existing party offer",
         ...over,
     });
 
-    it("offers the declared role and shows who already holds it", async () => {
+    it("does NOT also offer a declared role — the collection card owns it", async () => {
+        /*
+         * MEASURED in the mounted conversation: a family finished the emergency-contact collection
+         * and was then asked "Would you like to add an emergency contact?" — the same obligation
+         * twice, in two different interactions. A declared collection has a card; this path is for
+         * paperwork that declared nothing.
+         */
         const { nextPartyOffer } = await import("@/lib/enrollment/participantRuntime/partyOfferPlan");
-        const offer = nextPartyOffer({ parties, slots: [], declines: {}, declaredCollections: [declared()] })!;
-        expect(offer.role).toBe("emergency_contact");
-        expect(offer.existing.map((p) => (p as { display_name: string }).display_name)).toEqual(["Jane Smith"]);
-        expect(offer.is_additional).toBe(true);
-        expect(offer.minimum).toBe(1);
+        const slots = [
+            { slot_id: "s1", role: "emergency_contact", ordinal: 1, field_ids: ["e1"] },
+            { slot_id: "s2", role: "emergency_contact", ordinal: 2, field_ids: ["e2"] },
+        ] as never[];
+        expect(nextPartyOffer({ parties, slots, declines: {}, declaredCollections: [declared()] })).toBeNull();
     });
 
-    it("stays open when the Form set no ceiling — the family decides how many people exist", async () => {
+    it("still offers a role the declaration does not cover", async () => {
         const { nextPartyOffer } = await import("@/lib/enrollment/participantRuntime/partyOfferPlan");
-        expect(nextPartyOffer({ parties, slots: [], declines: {}, declaredCollections: [declared()] })!.remaining_capacity).toBeGreaterThan(1);
-    });
-
-    it("closes once the declared maximum is reached", async () => {
-        const { nextPartyOffer } = await import("@/lib/enrollment/participantRuntime/partyOfferPlan");
-        expect(nextPartyOffer({ parties, slots: [], declines: {}, declaredCollections: [declared({ max: 1 })] })).toBeNull();
-    });
-
-    it("does not offer a collection the Form closed to additions", async () => {
-        const { nextPartyOffer } = await import("@/lib/enrollment/participantRuntime/partyOfferPlan");
-        expect(nextPartyOffer({ parties, slots: [], declines: {}, declaredCollections: [declared({ allow_add: false })] })).toBeNull();
-    });
-
-    it("honours a decline the participant already gave", async () => {
-        const { nextPartyOffer } = await import("@/lib/enrollment/participantRuntime/partyOfferPlan");
-        expect(nextPartyOffer({ parties, slots: [], declines: { emergency_contact: { declined_at: "now" } }, declaredCollections: [declared()] })).toBeNull();
+        const slots = [
+            { slot_id: "s1", role: "guardian", ordinal: 1, field_ids: ["g1"] },
+            { slot_id: "s2", role: "guardian", ordinal: 2, field_ids: ["g2"] },
+        ] as never[];
+        expect(nextPartyOffer({ parties, slots, declines: {}, declaredCollections: [declared()] })?.role).toBe("guardian");
     });
 
     it("leaves slot-inferred offers working for paperwork that declared nothing", async () => {

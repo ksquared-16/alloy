@@ -141,3 +141,72 @@ describe("the apply path writes drafts and nothing else", () => {
         expect(apply).toContain("item_id");
     });
 });
+
+describe("a collection is asked in words, not in schema vocabulary", () => {
+    /*
+     * Measured in the mounted conversation: the scalar stem produced "What is your Emergency
+     * contacts?" — a plural fact wrapped in a singular question. A collection asks who these people
+     * are; the card beside the sentence already lists the ones Alloy knows.
+     */
+    const need = (over: Record<string, unknown> = {}) =>
+        ({
+            identity: { key: "k", canonical_key: null },
+            occurrences: [{ label: "Emergency contacts" }],
+            state: "missing",
+            current_value: null,
+            party_collection: { label: "Emergency contacts", min: 1, entries: [], ...over },
+        }) as never;
+
+    it("asks who, rather than what", async () => {
+        const { deterministicPrompt } = await import("@/lib/enrollment/participantRuntime/selectNextParticipantTurn");
+        const prompt = deterministicPrompt(need());
+        expect(prompt).not.toContain("What is");
+        expect(prompt).toBe("Who should we list under emergency contacts?");
+    });
+
+    it("offers rather than demands when the Form asks for none", async () => {
+        const { deterministicPrompt } = await import("@/lib/enrollment/participantRuntime/selectNextParticipantTurn");
+        expect(deterministicPrompt(need({ min: 0 }))).toBe("Is there anyone to list under emergency contacts?");
+    });
+
+    it("speaks to what is already there once the list is not empty", async () => {
+        const { deterministicPrompt } = await import("@/lib/enrollment/participantRuntime/selectNextParticipantTurn");
+        expect(deterministicPrompt(need({ entries: [{ instance_key: "e1", origin: "existing", values: {} }] })))
+            .toBe("Here is what we have for emergency contacts. Anyone to add?");
+    });
+
+    it("leaves an ordinary question's wording exactly as it was", async () => {
+        const { deterministicPrompt } = await import("@/lib/enrollment/participantRuntime/selectNextParticipantTurn");
+        const scalar = { identity: { key: "k", canonical_key: null }, occurrences: [{ label: "Date of birth" }], state: "missing", current_value: null } as never;
+        expect(deterministicPrompt(scalar)).toBe("What is Date of birth?");
+    });
+});
+
+describe("the card shows the collection's own sentence", () => {
+    /*
+     * `participantQuestion` re-composes wording from the label for every turn. That is right for a
+     * single fact and wrong for a list of people — it produced "What is your Emergency contacts?"
+     * in the mounted conversation, and the deterministic sentence built for the collection was
+     * never reached. Found by reading the running product, not the code.
+     */
+    it("uses the collection prompt rather than rebuilding one from the label", async () => {
+        const { participantQuestion } = await import("@/lib/enrollment/participantRuntime/participantTurnPresentation");
+        const objective = {
+            next_turn: {
+                ...(turnWithCollection() as unknown as Record<string, unknown>),
+                prompt: "Who should we list under emergency contacts?",
+            },
+            subject_display_name: "Lennon",
+        } as never;
+        expect(participantQuestion(objective)).toBe("Who should we list under emergency contacts?");
+    });
+
+    it("leaves an ordinary question's composition alone", async () => {
+        const { participantQuestion } = await import("@/lib/enrollment/participantRuntime/participantTurnPresentation");
+        const objective = {
+            next_turn: { kind: "collect_missing_value", prompt: "ignored", label: "Favourite foods", proposed_value: null, field_ids: [], input_type: "text" },
+            subject_display_name: "Lennon",
+        } as never;
+        expect(participantQuestion(objective)).not.toBe("ignored");
+    });
+});

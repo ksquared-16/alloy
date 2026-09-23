@@ -40,6 +40,23 @@ import type { PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferP
  */
 export function deterministicPrompt(need: EnrollmentInformationNeed): string {
     const label = need.occurrences[0]?.label?.trim() || need.identity.canonical_key || "this detail";
+    /*
+     * A COLLECTION IS NOT A "WHAT IS".
+     *
+     * The scalar stem produced "What is your Emergency contacts?" — a plural fact wrapped in a
+     * singular question, which is the school's heading with grammar bolted onto it. A collection
+     * asks who these people ARE, and the card beside the sentence already lists the ones Alloy
+     * knows, so the words only have to name the list and say whether anything is still needed.
+     */
+    const collection = need.party_collection;
+    if (collection) {
+        if (collection.entries.length === 0) {
+            return collection.min > 0
+                ? `Who should we list under ${lowerFirst(collection.label)}?`
+                : `Is there anyone to list under ${lowerFirst(collection.label)}?`;
+        }
+        return `Here is what we have for ${lowerFirst(collection.label)}. Anyone to add?`;
+    }
     if (need.state === "known_requires_confirmation") {
         return `We have ${label} as ${formatValue(need.current_value)}. Is that correct?`;
     }
@@ -236,4 +253,13 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
         proposed_value: null,
         resolves_occurrences: 0,
     };
+}
+
+
+/** "Emergency contacts" reads as a heading mid-sentence; "emergency contacts" reads as speech. */
+function lowerFirst(label: string): string {
+    const t = (label ?? "").trim();
+    if (!t) return "this list";
+    // An ALL-CAPS or CamelCase label is someone's deliberate spelling and is left alone.
+    return /^[A-Z][a-z]/.test(t) ? t[0]!.toLowerCase() + t.slice(1) : t;
 }

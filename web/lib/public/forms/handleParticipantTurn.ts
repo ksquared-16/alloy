@@ -206,10 +206,19 @@ export async function handleParticipantTurn(
         });
         if (!applied.ok) return publicErr(applied.error, 409, { code: "party_collection_refused" });
 
+        /*
+         * Re-resolve against the session AS IT NOW IS.
+         *
+         * A packet-anchored objective is resolved from a session the caller supplies, and the row
+         * this request read is already one write out of date. Passing it back unchanged redrew the
+         * collection without the person just added — the parent clicks Add, the card refreshes, and
+         * nothing appears to have happened.
+         */
         const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.orgId,
             processInstanceId: access.processInstanceId,
             canonicalValues: canonical.values,
+            preloadedSession: { ...access.session, shared_values: applied.sharedValues } as typeof access.session,
         });
         if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
         const collectionResponse = publicOk({

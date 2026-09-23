@@ -119,31 +119,20 @@ export type PartyOfferPlanInput = {
  */
 export function nextPartyOffer(input: PartyOfferPlanInput): PartyOffer | null {
     /*
-     * A DECLARED COLLECTION IS ASKED BEFORE AN INFERRED ONE, AND INSTEAD OF IT.
+     * A DECLARED COLLECTION IS NOT OFFERED HERE — IT HAS A CARD.
      *
-     * Where the Form actually says "collect emergency contacts, at least one, the family may add
-     * more", that statement decides the offer — its minimum, its ceiling and whether adding is
-     * allowed at all. Counting how many boxes the source PDF happened to print is the fallback for
-     * paperwork that never said.
+     * MEASURED, in the mounted conversation: a family finished the emergency-contact collection and
+     * was then asked "Would you like to add an emergency contact?" — the same obligation, a second
+     * time, in a different interaction. The previous slice routed declared collections into this
+     * offer because the conversation had no other way to show them; now it does, and the collection
+     * card owns them end to end (known people, add, edit, remove, minimum).
+     *
+     * So a declared role SUPPRESSES the inferred offer rather than producing one. Paperwork that
+     * declared nothing keeps the slot-capacity fallback exactly as before — which is the whole
+     * reason this path still exists.
      */
-    const declaredByRole = new Map((input.declaredCollections ?? []).map((d) => [d.role, d]));
-    for (const declared of input.declaredCollections ?? []) {
-        if (!declared.allow_add) continue;
-        if (input.declines[declared.role]) continue;
-        const existing = declared.show_known ? input.parties.filter((p) => p.roles.includes(declared.role)) : [];
-        if (declared.max != null && existing.length >= declared.max) continue;
-        return {
-            role: declared.role,
-            role_label: declared.role_label,
-            existing,
-            // No declared maximum means the family decides; the offer stays open.
-            remaining_capacity: declared.max == null ? Number.MAX_SAFE_INTEGER : declared.max - existing.length,
-            is_additional: existing.length > 0,
-            minimum: declared.min,
-        };
-    }
-
-    const roles = [...new Set(input.slots.map((s) => s.role))].filter((role) => !declaredByRole.has(role));
+    const declaredRoles = new Set((input.declaredCollections ?? []).map((d) => d.role));
+    const roles = [...new Set(input.slots.map((s) => s.role))].filter((role) => !declaredRoles.has(role));
     /*
      * THE DEFINITIONS' OWN AUTHORED ORDER.
      *
