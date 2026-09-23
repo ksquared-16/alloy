@@ -44,6 +44,14 @@ export async function GET(request: NextRequest) {
         q = q.or("is_active.is.null,is_active.eq.true");
     }
 
+    /*
+     * Archived locations are never part of a configuration list, and unlike
+     * inactive ones there is no opt-in: `includeInactive` means "show me the
+     * paused ones too", which is a different question from "show me the ones I
+     * retired". Historical labels resolve by id elsewhere.
+     */
+    q = q.is("archived_at", null);
+
     if (locationTypes.length === 1) {
         q = q.eq("location_type", locationTypes[0]);
     } else if (locationTypes.length > 1) {

@@ -133,6 +133,40 @@ export default function LocationRoomDetailPanel({
     const [editing, setEditing] = useState(false);
     const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
     const [ratioDraft, setRatioDraft] = useState<RatioDraftRow[]>([]);
+    const [confirmingArchive, setConfirmingArchive] = useState(false);
+    const [archiving, setArchiving] = useState(false);
+    const [archiveError, setArchiveError] = useState<string | null>(null);
+
+    /** How this space's two ratio records stand to each other, if it is operational. */
+    const ratioStandingFor = (entry: LocationHierarchyRow) =>
+        resolveObjectRatioStanding({
+            rules: ratioRules,
+            tierRows: ratioTiers,
+            roomLocationId: entry.id,
+            legacyRaw: ((entry.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
+            todayYmd,
+        });
+
+    /**
+     * What the ratio editor opens with.
+     *
+     *   conflict      → NOTHING. Two disagreeing staffing records are a question
+     *                   about staffing law, and pre-filling one would answer it
+     *                   by accident the moment someone pressed Save.
+     *   legacy only   → the recorded tiers, so confirming them is one click.
+     *                   Reading them is not deciding anything: no canonical rule
+     *                   contradicts them yet.
+     *   otherwise     → whatever is canonically in force.
+     *
+     * Seeded at open rather than only at hydrate, so the form always reflects
+     * what the operator can see at the moment they ask to edit.
+     */
+    const ratioSeedFor = (entry: LocationHierarchyRow) => {
+        const standing = ratioStandingFor(entry);
+        if (standing.state === "conflict") return [];
+        if (standing.state === "legacy_only") return standing.legacy;
+        return readObjectRatioTiers(standing) ?? [];
+    };
 
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
         const md = (next.metadata ?? {}) as Record<string, unknown>;
@@ -155,17 +189,11 @@ export default function LocationRoomDetailPanel({
         const committed = committedRoomTopology(next, siteId);
         setRoomType(committed.roomType);
         setInsideId(committed.insideId);
-        // A conflict seeds NOTHING: choosing one of two disagreeing staffing
-        // records by default would decide a staffing-law question silently.
-        const standing = resolveObjectRatioStanding({
-            rules: ratioRules,
-            tierRows: ratioTiers,
-            roomLocationId: next.id,
-            legacyRaw: ((next.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
-            todayYmd,
-        });
-        const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
-        setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
+        setRatioDraft(
+            ratioSeedFor(next).map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })),
+        );
+        setConfirmingArchive(false);
+        setArchiveError(null);
         setError(null);
     };
 
@@ -244,20 +272,39 @@ export default function LocationRoomDetailPanel({
     };
 
     /**
-     * Seed the ratio draft when the form OPENS, not only when the space changes.
+     * Archive, through the server's own evaluation.
      *
-     * Hydration runs on a room change, which can happen before the canonical
-     * rules have loaded — the read state recomputes every render and was right,
-     * while the edit form kept an empty draft and said "No staffing ratio set"
-     * about a space visibly showing 1:5 · 2:11. Seeding here reads whatever is
-     * current at the moment the operator asks to edit.
+     * The refusal is the server's, by name — a client-side guess about whether a
+     * room still has children placed in it would be a suggestion, and the one
+     * that mattered would be the one it got wrong.
      */
+    const archiveThisSpace = async () => {
+        if (!room) return;
+        setArchiving(true);
+        setArchiveError(null);
+        try {
+            const res = await fetch(`/api/admin/locations/${room.id}/archive`, {
+                method: "POST",
+                credentials: "include",
+            });
+            if (!res.ok) {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                throw new Error(json.error ?? `Could not archive this space (${res.status})`);
+            }
+            setConfirmingArchive(false);
+            await onCapacityChanged();
+        } catch (e) {
+            setArchiveError(e instanceof Error ? e.message : "Could not archive this space.");
+        } finally {
+            setArchiving(false);
+        }
+    };
+
     const beginEdit = () => {
         if (room) {
-            const standing = ratioStandingFor(room);
-            // A conflict still seeds nothing: see the hydrate path.
-            const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
-            setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
+            setRatioDraft(
+                ratioSeedFor(room).map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })),
+            );
         }
         setEditing(true);
     };
@@ -309,16 +356,6 @@ export default function LocationRoomDetailPanel({
         kindFilter === "all" ? rooms
         : kindFilter === "operational" ? rooms.filter((r) => kindOf(r) === "operational_group")
         : rooms.filter((r) => kindOf(r) !== "operational_group");
-
-    /** How this space's two ratio records stand to each other, if it is operational. */
-    const ratioStandingFor = (entry: LocationHierarchyRow) =>
-        resolveObjectRatioStanding({
-            rules: ratioRules,
-            tierRows: ratioTiers,
-            roomLocationId: entry.id,
-            legacyRaw: ((entry.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
-            todayYmd,
-        });
 
     const operationalSpacesIn = (entry: LocationHierarchyRow): string[] =>
         rooms
@@ -643,16 +680,72 @@ export default function LocationRoomDetailPanel({
                     facts={[siteLabel ? `At ${siteLabel}` : ""].filter(Boolean)}
                     actions={
                         canMutate ?
-                            <ConfigurationSecondaryButton
-                                onClick={beginEdit}
-                                data-testid="locations-room-toggle-edit"
-                            >
-                                Edit space
-                            </ConfigurationSecondaryButton>
+                            <div className="flex flex-wrap gap-2">
+                                <ConfigurationSecondaryButton
+                                    onClick={beginEdit}
+                                    data-testid="locations-room-toggle-edit"
+                                >
+                                    Edit space
+                                </ConfigurationSecondaryButton>
+                                <ConfigurationSecondaryButton
+                                    onClick={() => {
+                                        setArchiveError(null);
+                                        setConfirmingArchive(true);
+                                    }}
+                                    data-testid="locations-room-archive"
+                                >
+                                    Archive space
+                                </ConfigurationSecondaryButton>
+                            </div>
                         :   null
                     }
                     testId="locations-room-header"
                 />
+
+                {confirmingArchive ?
+                    <div
+                        className="rounded-lg border border-alloy-ember/35 bg-alloy-ember/[0.06] px-3 py-2.5 text-[12px] text-alloy-midnight"
+                        data-testid="locations-room-archive-confirm"
+                    >
+                        <p className="text-sm font-semibold">
+                            Archive {label.trim() || "this space"}?
+                        </p>
+                        <p className="mt-1 text-alloy-midnight/75">
+                            It leaves this site&rsquo;s spaces and stops being offered for assignments,
+                            scheduling and new configuration. Everything already recorded about it —
+                            attendance, placements, schedules — stays exactly as it is and keeps naming it.
+                        </p>
+                        <p className="mt-1 text-alloy-midnight/75">
+                            This is not the same as making a space <strong>Inactive</strong>. Inactive keeps
+                            it here, paused, for when it comes back.
+                        </p>
+                        {archiveError ?
+                            <p className="mt-2 text-sm text-red-800" role="alert" data-testid="locations-room-archive-error">
+                                {archiveError}
+                            </p>
+                        :   null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            <ConfigurationPrimaryButton
+                                className="config-primary-btn--sm"
+                                disabled={archiving}
+                                onClick={() => void archiveThisSpace()}
+                                data-testid="locations-room-archive-commit"
+                            >
+                                {archiving ? "Archiving…" : "Archive space"}
+                            </ConfigurationPrimaryButton>
+                            <ConfigurationSecondaryButton
+                                disabled={archiving}
+                                onClick={() => {
+                                    setConfirmingArchive(false);
+                                    setArchiveError(null);
+                                }}
+                                data-testid="locations-room-archive-cancel"
+                            >
+                                Keep it
+                            </ConfigurationSecondaryButton>
+                        </div>
+                    </div>
+                :   null}
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="locations-room-ops">
                     {[

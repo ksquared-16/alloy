@@ -52,7 +52,7 @@ function supabaseStub() {
     const build = (table: string) => {
         const builder: Record<string, unknown> = {};
         const chain = () => builder;
-        for (const m of ["select", "eq", "in", "or", "order", "neq"]) builder[m] = vi.fn(chain);
+        for (const m of ["select", "eq", "in", "or", "order", "neq", "is"]) builder[m] = vi.fn(chain);
         builder.update = vi.fn((payload: Record<string, unknown>) => {
             if (table === "locations") captured.update = payload;
             return builder;

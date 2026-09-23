@@ -31,7 +31,7 @@ import {
 
 /** Columns selected to build a CanonicalLocation. */
 export const CANONICAL_LOCATION_SELECT =
-    "id, org_id, label, location_number, location_type, parent_location_id, unit_role, status_key, is_active, is_primary, address1, address2, city, state, postal_code, country, lat, lng, metadata";
+    "id, org_id, label, location_number, location_type, parent_location_id, unit_role, status_key, is_active, archived_at, is_primary, address1, address2, city, state, postal_code, country, lat, lng, metadata";
 
 /** Raw `locations` row as returned by PostgREST (all fields optional/defensive). */
 type RawLocationRow = Record<string, unknown>;
@@ -154,6 +154,21 @@ async function fetchOrgLocationRows(
     if (restrictToSiteIds) {
         query = query.in("id", restrictToSiteIds as string[]);
     }
+    /*
+     * ARCHIVED LOCATIONS LEAVE EVERY COLLECTION.
+     *
+     * This is the single read behind the Spaces rail, placement options, staff
+     * classroom pickers, the attendance room list and site ancestry, so filtering
+     * here is what makes "archived disappears from current configuration" true
+     * everywhere at once rather than in five places that can drift.
+     *
+     * Note what is NOT filtered: `resolveLocationById` below. A historical
+     * attendance record or placement still has to resolve its room's label, and
+     * archive exists to keep that readable. Collections answer "what does this
+     * site have"; a single id answers "what was this", and the second question
+     * stays answerable forever.
+     */
+    query = query.is("archived_at", null);
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return ((data ?? []) as RawLocationRow[]).map(normalizeLocationRow).filter((l) => l.id !== "");
