@@ -22,7 +22,7 @@ integration partner under agreement.
 
 It is not yet classified for unrestricted public release. That is a statement
 about Alloy's overall deployment posture, not about the contract below: the
-public API described here is independently certified, and the outstanding items
+public API described here is independently verified, and the outstanding items
 are internal hardening work on surfaces that have nothing to do with `/api/v1`.
 An application principal holds no session and cannot reach them. Alloy tracks
 those items internally and will reclassify this document when they close; the
@@ -89,22 +89,45 @@ truth. There is currently **no public API for managing correlations**.
 
 ## 2. The public surface, complete
 
-Three endpoints exist. This is the entire public API.
+Nineteen operations across fifteen paths. This is the entire public API.
 
 | Method | Path | Operation | Scope required |
 | --- | --- | --- | --- |
 | POST | `/api/v1/oauth/token` | `issueAccessToken` | none (the only unauthenticated endpoint) |
 | GET | `/api/v1/context` | `getContext` | none beyond a valid token |
 | GET | `/api/v1/locations` | `listLocations` | `locations.read` |
+| GET | `/api/v1/children` | `listChildren` | `children.read` |
+| GET | `/api/v1/households` | `listHouseholds` | `households.read` |
+| GET | `/api/v1/relationships` | `listRelationships` | `relationships.read` |
+| GET | `/api/v1/enrollments` | `listEnrollments` | `enrollment.read` |
+| POST | `/api/v1/enrollments` | `startEnrollment` | `enrollment.write` |
+| POST | `/api/v1/enrollments/end` | `endEnrollment` | `enrollment.write` |
+| GET | `/api/v1/placements` | `listPlacements` | `enrollment.read` |
+| POST | `/api/v1/placements` | `assignPlacement` | `enrollment.write` |
+| POST | `/api/v1/placements/move` | `movePlacement` | `enrollment.write` |
+| GET | `/api/v1/schedule-assignments` | `listScheduleAssignments` | `schedule.read` |
+| POST | `/api/v1/schedule-assignments` | `setScheduleAssignment` | `schedule.write` |
+| POST | `/api/v1/schedule-assignments/change` | `changeScheduleAssignment` | `schedule.write` |
+| GET | `/api/v1/schedule-days` | `listScheduleDays` | `schedule.read` |
+| GET | `/api/v1/staff` | `listStaff` | `staff.read` |
+| GET | `/api/v1/attendance-events` | `listAttendanceEvents` | `attendance.read` |
+| POST | `/api/v1/attendance-events` | `submitAttendanceEvents` | `attendance.write` |
 
-There is **no public Attendance mutation endpoint**, no public child, staff,
-household or webhook resource, and no public correlation API. Internal AdminV2
+**One** is the unauthenticated token exchange, **eleven** are authenticated
+reads, and **seven** are governed domain writes. The writes are **named
+operations**, not a CRUD surface: there is no `PUT`, no `PATCH` and no `DELETE`
+anywhere in this contract. A change is a supersession and an ending is an ending
+— see §11a.
+
+There is no public webhook resource, no self-service correlation API, and no
+public Communications or Financials contract. Alloy's internal administrative
 routes are not part of this contract and are not reachable with a bearer token.
 
 The governed contract artifact is
 [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json) (OpenAPI
-3.1.0, `info.version` 1.0.0). It contains exactly these three paths with exactly
-these operation ids, and a drift guard enforces coverage in both directions.
+3.1.0, `info.version` 1.0.0). It contains exactly these paths with exactly these
+operation ids, and a drift guard enforces coverage in both directions — a
+documented path with no route, or a route with no documentation, fails the build.
 
 ---
 
@@ -144,7 +167,7 @@ curl -X POST https://<alloy-host>/api/v1/oauth/token \
   "access_token": "alloy_at_EXAMPLEopaquevalue",
   "token_type": "Bearer",
   "expires_in": 900,
-  "scope": "context.read locations.read"
+  "scope": "locations.read children.read"
 }
 ```
 
@@ -220,19 +243,40 @@ empty page, never a borrowed row.
 
 ## 5. Scopes
 
-| Scope | What it permits | What it does not | Current `/api/v1` consumer |
-| --- | --- | --- | --- |
-| `context.read` | Read the calling Installation's own context | Anything about a person or the organization's configuration | `GET /api/v1/context` |
-| `locations.read` | Read sites and units inside the boundary | Any write; any other resource | `GET /api/v1/locations` |
-| `attendance.write` | Submit attendance events for children at authorized locations | — | **None. There is no public Attendance endpoint.** |
+Scopes are matched **exactly**. There is no hierarchy, no prefix matching and no
+wildcard: `children.read` does not imply `children.contact.read`, and no read
+scope implies any write. An Installation that needs two things is granted two
+scopes.
 
-**`attendance.write` is vocabulary, not a callable operation.** The scope exists
-because Alloy's internal attendance authority already consumes resolved Developer
-Platform authority, and it maps to the internal permission `attendance.record`.
-Granting it to an Installation today enables nothing externally. Do not design a
-partner integration that assumes a public attendance write exists.
+**`GET /api/v1/context` requires no scope** — only a valid token. An Installation
+that cannot discover what it holds cannot diagnose why anything else was refused,
+so this is a capability inherent to holding a credential rather than a permission
+an operator grants. There is no `context.read` in the grant model.
 
-The catalog is deliberately small: it can grow compatibly, and it cannot shrink.
+The thirteen grantable scopes:
+
+| Scope | What it permits | What it does not |
+| --- | --- | --- |
+| `locations.read` | Read authorized sites, rooms and operational units | Any write; any other resource |
+| `children.read` | Identity and lifecycle of children in service inside the boundary | Contact details, guardians, health, anything about an adult |
+| `households.read` | The household a visible child belongs to | Any member list; billing; siblings outside the boundary |
+| `relationships.read` | Adult↔child relationships and effective pickup authority | Contact points; any safeguarding detail or reason |
+| `relationships.contact.read` | Email and phone for those adults | Anything `relationships.read` does not already permit |
+| `enrollment.read` | Enrollment agreements and room placements | Schedules; anything about an adult |
+| `schedule.read` | Committed schedule assignments and the dated projection | Staff schedules; anything about an adult |
+| `staff.read` | Staff identity, role and employment status inside the boundary | Pay, payroll, HR, contact points |
+| `staff.contact.read` | Email and phone for visible staff | Anything `staff.read` does not already permit |
+| `attendance.read` | Read attendance facts for children inside the boundary | Authoring a fact |
+| `attendance.write` | Submit attendance facts for children inside the boundary | Reading anyone's attendance history |
+| `enrollment.write` | Start and end enrollment, and assign or move placement, for authorized children | Reading anything; creating children or households; schedules |
+| `schedule.write` | Set and change committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
+
+The last pair is worth stating plainly, because it is the clearest demonstration
+of what exact matching means: an Installation granted only `attendance.write` can
+record that a child arrived and **cannot read back a single attendance record** —
+not even the one it just wrote.
+
+The catalog is deliberately small. It can grow compatibly; it cannot shrink.
 
 ---
 
@@ -246,7 +290,7 @@ health check after an administrator changes access.
   "application": { "id": "…", "slug": "your-application", "environment": "sandbox" },
   "installation": { "id": "…", "status": "active" },
   "organization": { "id": "…" },
-  "scopes": ["context.read", "locations.read"],
+  "scopes": ["locations.read", "children.read"],
   "resource_boundary": { "mode": "org_wide" }
 }
 ```
@@ -279,7 +323,7 @@ or vendor premises are excluded in SQL, not by client-side filtering.
 
 **Timezone is not part of the public Location contract.** Internal location
 records carry timezone information; it is deliberately not published here, and
-this exclusion is certified.
+this exclusion is deliberate and is asserted by a test.
 
 **Parameters**
 
@@ -295,26 +339,373 @@ this exclusion is certified.
 **Response**
 
 ```json
-{ "data": [ { "id": "…", "type": "site", "…": "…" } ], "next_cursor": "…" }
+{
+  "data": [ { "id": "…", "type": "site", "…": "…" } ],
+  "next_cursor": "…",
+  "sync_token": "…"
+}
 ```
 
 `next_cursor` is `null` on the last page. Ordering is deterministic and stable
 across pages: paging with `limit=2` twice returns the same rows, in the same
 order, as one `limit=200` call.
 
-### Incremental synchronization
+### The collection and synchronization law
 
-1. Full read: page with `limit` + `cursor` until `next_cursor` is `null`.
-2. Record the highest `updated_at` you saw.
-3. Next run: `GET /api/v1/locations?updated_since=<that timestamp>`.
+**This grammar is identical on every persisted collection in this
+specification** — Locations, Children, Households, Relationships, Enrollments,
+Placements, Schedule assignments and Staff. Implement it once. The only exception
+is `/api/v1/schedule-days`, which is derived and says so by shape (§9.4).
 
-`updated_since` **does not detect deletion.** A location that disappears from the
-organization does not appear in an incremental page as a tombstone. Reconcile
-with a periodic full read if your model requires removal.
+| Parameter | Purpose |
+| --- | --- |
+| `limit` | Page size. Default 50, maximum 200, clamped rather than refused. |
+| `cursor` | Position **within** a pass. Pass back the `next_cursor` you received. |
+| `since_token` | Position **between** passes. Pass back the `sync_token` from the last page you consumed. |
+| `updated_since` | Everything changed strictly after an instant. ISO-8601 with offset or `Z`. |
+
+**Bootstrap**
+
+1. Call with `limit` and no position.
+2. Follow `next_cursor` until it is `null`.
+3. Keep the `sync_token` from the last page you fully consumed.
+
+**Continue incrementally**
+
+4. Call again with `since_token=<the token you kept>`.
+5. Follow `next_cursor` through that pass as before, keeping the new
+   `sync_token` at the end.
+
+**Prefer `since_token` to `updated_since`.** Both resume, but a token identifies
+a single row, so two records sharing a timestamp cannot be skipped or repeated.
+`updated_since` is a wall-clock instant and cannot make that guarantee; use it
+when you are reconciling against a time you chose rather than a position Alloy
+gave you.
+
+A cursor is a **position, never a permission**. Presenting a cursor obtained
+under wider authority does not widen a narrower Installation — every page
+re-applies the boundary.
+
+**Neither mechanism detects deletion.** A record that ceases to exist does not
+appear as a tombstone. In practice Alloy does not remove these records: lifecycle
+is expressed as an observable change on the record itself — `status` becoming
+`inactive`, an `end_date` being set, an employment becoming `ended` — which a
+polling consumer converges on normally. Reconcile with a periodic full read if
+your model requires certainty about removal.
 
 ---
 
-## 8. Errors
+## 8. People
+
+Three resources, and the rules that govern them are the part most worth reading
+carefully, because the intuitive design is not the one Alloy implements.
+
+### 8.1 What makes a child visible
+
+**Enrollment is what makes a child visible, and nothing else does.** A child appears on the public API only when an
+enrollment agreement places them at a site inside your boundary. Belonging to the
+organization is not enough — and this holds even for an organization-wide
+Installation, because being organization-wide widens which *sites* you reach, not
+what counts as participation in service.
+
+The practical consequence for your planning: **expect fewer children than the
+organization has records for.** If a child you expect is absent, check their
+enrollment before reporting a defect.
+
+### 8.2 `GET /api/v1/children`
+
+Requires `children.read`.
+
+| Field | Notes |
+| --- | --- |
+| `id` | Alloy's identifier |
+| `external_id` | Your identifier for this child, if mapped. Yours only. |
+| `first_name`, `last_name`, `display_name` | |
+| `date_of_birth` | |
+| `household_id` | Read with `GET /api/v1/households` |
+| `status` | `active` or `inactive` — poll this to learn a child left service |
+| `status_key` | The operator-facing lifecycle label, when set |
+
+Filters: `household_id`, `child_id`, `external_id`. Plus the standard collection
+parameters.
+
+**Never present**, on this or any other endpoint: health, allergy, medical,
+dietary and safeguarding information. These are not fields Alloy withholds from
+you — they are not part of this contract at all.
+
+### 8.3 `GET /api/v1/households`
+
+Requires `households.read`.
+
+A household is an **anchor for grouping siblings, not a grant of access to
+them.** It appears because one of its children is already visible to you, and it
+widens nothing: a sibling enrolled only at a site outside your boundary does not
+appear in `/children`, and the household response contains no member list, no
+count and no identifier that would reveal one exists.
+
+To list the children of a household that you may see:
+`GET /api/v1/children?household_id=…`. That answer is filtered to your authority,
+which is the point of asking it that way.
+
+| Field | Notes |
+| --- | --- |
+| `id`, `name`, `household_type`, `status_key` | |
+
+Billing and payment information is never part of this resource.
+
+### 8.4 `GET /api/v1/relationships`
+
+Requires `relationships.read`. Contact points additionally require
+`relationships.contact.read`.
+
+A relationship is an **edge with its own identity**, not a flag on a child or on
+a person. The same adult can hold a different relationship to each of their
+children — a parent to one, an emergency contact to another — and flattening that
+into booleans would lose the distinction the model exists to keep.
+
+A relationship is visible exactly when its child is. This resource never widens
+the set of people you can see.
+
+| Field | Notes |
+| --- | --- |
+| `id` | The relationship's own identifier |
+| `child_id`, `household_id`, `person_id` | `person_id` is stable across every relationship that adult holds |
+| `first_name`, `last_name` | |
+| `email`, `phone` | **Absent entirely** without `relationships.contact.read` — not present-and-empty |
+| `relationship_type`, `priority`, `status` | |
+| `pickup_authorized` | See below |
+
+#### `pickup_authorized`
+
+This is an **effective answer computed by Alloy at read time**, not a stored
+flag. It is `true` only when all three hold:
+
+1. collection authority has been granted for this adult and this child;
+2. nothing currently withdraws it;
+3. the child is inside your boundary.
+
+Anything else is `false`. It **fails closed** — where Alloy cannot be certain the
+answer is safe, the answer is `false`.
+
+**No reason is returned, and none can be requested.** Do not infer one from other
+fields, and do not treat `false` as a data error: it is the answer. If your
+workflow needs to know why, that conversation belongs with the operator rather
+than with this API. Alloy does not publish the underlying authority in any form,
+because doing so could contradict the computed result — and because the reasons
+are frequently safeguarding matters that no integration should carry.
+
+---
+
+## 9. Service state
+
+Alloy keeps three service commitments separate, and so does this API, because
+they change independently: a child can move room without their enrollment
+changing, and change schedule without moving room.
+
+| Resource | Answers | Scope |
+| --- | --- | --- |
+| `GET /api/v1/enrollments` | Is this child enrolled, at which site, from when? | `enrollment.read` |
+| `GET /api/v1/placements` | Which room, from when? | `enrollment.read` |
+| `GET /api/v1/schedule-assignments` | Which recurring pattern applies? | `schedule.read` |
+| `GET /api/v1/schedule-days` | Who is expected on Tuesday? | `schedule.read` |
+
+Synchronize whichever you actually depend on; there is no need to take all four.
+
+### 9.1 Enrollments
+
+`id`, `child_id`, `household_id`, `site_location_id`, `status`, `start_date`,
+`end_date`. `end_date` is null while the agreement is open — poll for it to learn
+that enrollment has ended.
+
+### 9.2 Placements
+
+`id`, `enrollment_id`, `child_id`, `site_location_id`, `room_location_id`,
+`program_category_id`, `status`, `start_date`, `end_date`,
+`supersedes_placement_id`.
+
+**Corrections arrive as new rows.** A corrected placement is a new record naming
+the one it replaces in `supersedes_placement_id`, rather than an edit to the
+original. A copy you already stored is therefore never silently wrong — you
+receive the correction through ordinary incremental synchronization.
+
+Sites and rooms are Location identifiers from `GET /api/v1/locations`. There is
+no second room vocabulary to learn.
+
+### 9.3 Schedule assignments — the canonical schedule
+
+`id`, `enrollment_id`, `child_id`, `site_location_id`, `room_location_id`,
+`schedule_pattern_id`, `pattern_label`, `schedule_type_key`, `weekdays`,
+`status`, `commitment_kind`, `is_primary`, `start_date`, `end_date`,
+`supersedes_assignment_id`.
+
+`weekdays` uses `0` for Sunday. This resource is **persisted committed
+authority** and participates fully in incremental synchronization: use it when
+you hold standing schedule intent and need to be told when it changes.
+
+Only children appear here. Staff schedules are not part of this resource.
+
+### 9.4 Schedule days — a derived projection
+
+`GET /api/v1/schedule-days?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+These rows are **generated** from committed schedule assignments and their
+patterns. They are not stored, have no identifier of their own, and have no
+change history — so this endpoint deliberately returns **no cursor and no sync
+token**.
+
+Do not attempt to synchronize it incrementally. There is nothing to checkpoint
+against, and a watermark this endpoint could not honour would be worse than none.
+If you need change detection, synchronize `/schedule-assignments` and re-project
+the window yourself; every returned day names its source in
+`schedule_assignment_id` so that you can.
+
+The window is required and may not exceed **92 days**. The same window over the
+same committed schedules always returns the same days in the same order. The
+response carries `from`, `to` and `derived_from` so that a stored copy still
+identifies itself as derived months later.
+
+---
+
+## 10. Staff
+
+`GET /api/v1/staff` — requires `staff.read`; contact points additionally require
+`staff.contact.read`.
+
+**Staff is a composition, not a second identity system.** Alloy models a staff
+member as a person together with an employment, and this resource presents them
+as one object: `id` is the employment and `person_id` is the human. Someone
+employed twice appears as two records sharing one `person_id`.
+
+Visibility follows the **assignment**, not the organization. Employment is
+organization-wide, but a staff member appears only when their primary location is
+inside your boundary; someone with no assigned location does not appear at all.
+
+| Field | Notes |
+| --- | --- |
+| `id` | The employment identifier — the stable key for this engagement |
+| `person_id` | The human |
+| `external_employee_id`, `badge_number` | |
+| `first_name`, `last_name` | |
+| `email`, `phone` | Absent without `staff.contact.read` |
+| `employment_status` | `pending_start`, `active`, `ending`, `ended`, `canceled` |
+| `employment_type`, `position_label` | |
+| `primary_location_id` | A Location identifier |
+| `start_date`, `end_date` | |
+
+**Never present:** compensation, pay rate, payroll, tax, HR records,
+safeguarding, medical information, and Alloy's own internal access permissions.
+An application role is not an employment role and the two are never conflated.
+
+---
+
+## 11. Attendance
+
+Attendance is an **append-only history of facts**. This is the one place the
+public API both reads and writes, and the shape of both follows from that.
+
+### 11.1 `GET /api/v1/attendance-events`
+
+Requires `attendance.read`. Facts are ordered by when Alloy recorded them, which
+for an append-only resource is also the last-modified time — so incremental
+synchronization here is exact.
+
+A correction or a reversal is **itself a fact**, carrying a reference to the
+event it supersedes. Nothing is edited and nothing disappears: to compute current
+truth, fold the history in order and let later facts supersede earlier ones.
+
+### 11.2 `POST /api/v1/attendance-events`
+
+Requires `attendance.write`. See §14 for submission semantics, per-item outcomes
+and retry behaviour.
+
+Four event kinds may be submitted: `check_in`, `check_out`, `absence` and
+`room_transfer`. Others exist inside Alloy as derived states and are not things a
+producer asserts.
+
+---
+
+## 11a. Reads, writes, and lifecycle operations
+
+Before you design a write, understand what Alloy offers and what it deliberately
+does not.
+
+### What a permission means
+
+- **`.read`** — permission to read that canonical resource. Nothing else.
+- **`.write`** — permission to invoke specific **named operations** on that
+  resource. It is not permission to read, and it is not a generic mutation right.
+- **No read implies a write, and no write implies a read.** An integration
+  granted `enrollment.write` can start and end enrollments and cannot read a
+  single one.
+
+### There is no CRUD contract
+
+The public API has **no `PUT`, no `PATCH` and no `DELETE`** on any resource, and
+none is planned. Creation, change and ending happen through named operations that
+express intent:
+
+| You want to | You call |
+| --- | --- |
+| Enroll a child | `POST /api/v1/enrollments` |
+| End an enrollment | `POST /api/v1/enrollments/end` |
+| Assign a room | `POST /api/v1/placements` |
+| Move a room | `POST /api/v1/placements/move` |
+| Set a schedule | `POST /api/v1/schedule-assignments` |
+| Change a schedule | `POST /api/v1/schedule-assignments/change` |
+| Record attendance | `POST /api/v1/attendance-events` |
+
+You never send `status_key` or an end date as a field edit. `POST .../end` is one
+intent with three possible canonical outcomes — cancel, mark ending, close — and
+Alloy chooses between them from the record's current state. That is deliberate:
+deciding wrongly which one applies would leave a child enrolled.
+
+### Why some resources have no write at all
+
+Not an oversight, and not a roadmap gap in most cases:
+
+| Resource | Why |
+| --- | --- |
+| **Locations** | Site and room topology is how an organization describes itself, and every other resource names a place using it. An operator configures it. |
+| **Children** | Creating a child asserts a new human being. Nothing in a create call distinguishes "new child" from "child you already have, spelled differently", and the cost of guessing wrong is a duplicate person. Identity-resolved intake is the right shape, and it does not exist yet. |
+| **Households** | A household is an account carrying financial responsibility this API does not expose at all. |
+| **Relationships** | A genuine gap rather than a decision. If it is built, pickup authority will remain a derived answer — an operation may grant the underlying role, never write the effective flag. |
+| **Staff** | Canonical authority exists; externalizing it is a separate decision, because onboarding a person is adjacent to compensation and eligibility authorities this API excludes. |
+| **Schedule days** | Derived. Changing a day means changing the assignment it came from. |
+
+### How things end — and why `DELETE` is missing
+
+**No resource on this API supports physical deletion.** This is a complete
+lifecycle, not a missing feature. Do not wait for `DELETE` endpoints.
+
+| Resource | How it ends |
+| --- | --- |
+| Children | archived — `status` becomes `inactive` |
+| Relationships | ended by status |
+| Enrollment | effective end — `end_date` is set, or it is cancelled before it starts |
+| Placements | **superseded** — a new placement names the one it replaces |
+| Schedule assignments | **superseded** |
+| Staff | effective end |
+| Attendance | **reversed** — a reversal fact supersedes the original |
+| Locations, Households | not deletable through this API |
+
+Supersession is why your mirror stays correct: the record you already stored is
+never rewritten or removed, so you learn about the change through ordinary
+incremental synchronization instead of diverging silently.
+
+### Answering the five questions for any resource
+
+For anything on this API you can determine, without asking Alloy:
+
+1. **Can I create it?** — is there a `POST` for it in the reference?
+2. **Can I change it?** — is there a named change operation (`/move`,
+   `/change`), or a correction fact?
+3. **How do I end it?** — the table above.
+4. **Can I delete it?** — no.
+5. **What permission do I need?** — the `x-required-scope` on the operation.
+
+---
+
+## 12. Errors
 
 Every refusal uses one envelope:
 
@@ -351,55 +742,119 @@ on `/api/v1`. No public endpoint currently returns 409; the status is reserved.
 
 ---
 
-## 9. Rate limiting
+## 13. Rate limiting
 
 Durable and shared across server instances — a budget, not a per-process
-approximation. Two policies:
+approximation. **Three independent budgets:**
 
 | Surface | Limit | Window | Keyed on |
 | --- | --- | --- | --- |
 | Token exchange | 30 | 60 s | presented `client_id` + hashed caller address |
 | Authenticated reads | 600 | 60 s | Installation |
+| Authenticated governed writes | 120 | 60 s | Installation |
+
+Each class holds its own counter. Reading does not consume write capacity and
+writing does not consume read capacity, so a partner that spends a window paging
+collections still has its full write budget, and a partner submitting a backlog
+of attendance still reads normally.
+
+The window is a fixed 60-second interval aligned to the clock, not a sliding
+window measured from your first request. `RateLimit-Reset` tells you how many
+seconds remain in the current one.
+
+Every authenticated response carries `RateLimit-Limit`, `RateLimit-Remaining`
+and `RateLimit-Reset` describing **the budget that governed that request** — so
+the same Installation sees `600` on a read and `120` on a write. A `429` also
+carries `Retry-After`, and names the class that ran out.
+
+Headers travel on refusals too, once the budget has been consulted: a `400` or a
+`403` raised after admission still reports what it spent. The one exception is
+deliberate — a request refused for a **missing scope** is rejected before the
+budget is consulted, so that an unauthorized caller cannot drain a budget it was
+never entitled to spend. Those responses carry no rate headers.
 
 The token budget is consumed **before** credential verification, so a
 credential-stuffing run cannot get free database work. It is never keyed on the
 secret: keying on the value being guessed would hand every wrong guess a fresh
 budget.
 
-Every response — success or refusal — carries `RateLimit-Limit`,
-`RateLimit-Remaining` and `RateLimit-Reset` (seconds). A 429 additionally carries
-`Retry-After`. Honour it; do not poll.
+A request refused with `429` performs no work at all — the budget is consulted
+before the body is parsed or any authority is resolved. Retrying after one is
+therefore always safe.
 
-These numbers are the current implementation. Treat the headers as authoritative
-and the table as indicative.
+## 14. Governed submission, idempotency, correlation
 
----
+Seven governed writes exist (§2). This section covers the one whose shape is
+different from the rest — **Attendance submission** — and the idempotency and
+correlation rules that apply to all of them. The service-state operations are
+described in §9 and §11a.
 
-## 10. Mutations, idempotency, correlation
+### Attendance is fact submission, not CRUD
 
-**The public domain API is read-only today** beyond token exchange. There is no
-public mutation endpoint, so mutation idempotency and optimistic concurrency are
-not currently exercised by anything a partner can call. Alloy has ratified
-doctrine for governed external mutation; that is **future architecture, not
-current capability**, and this document deliberately gives no examples against
-endpoints that do not exist.
+`POST /api/v1/attendance-events` is Attendance's **only** write, and it appends
+facts. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on the public
+surface. Attendance is an
+append-only history: a mistake is corrected by recording a **correction** or a
+**reversal** that supersedes the earlier fact, never by editing or removing it.
+This is why a partner's mirror of attendance can always be reconciled — nothing
+it received has silently ceased to exist.
 
-Correlation works like this:
+### A batch is not a transaction
+
+A submission carries up to 200 events. Each one receives its **own outcome**, and
+the call returns `200` even when some items were refused:
+
+| Outcome | Meaning |
+| --- | --- |
+| `accepted` | The fact was recorded. |
+| `replayed` | This exact fact was already recorded. Not an error — your retry worked. |
+| `conflict` | The same identity was submitted before with different content. |
+| `pending_mapping` | A referenced child or location is not mapped for this Installation. |
+| `rejected` | The item was not valid. |
+
+A batch that reported one status for a partial result would be a batch nobody
+could reconcile, which is why the per-item shape is part of the contract rather
+than a convenience.
+
+### Idempotency is derived, not supplied
+
+You do not send an idempotency key. Replay identity is derived from **your own
+event identifier** on each submitted fact, scoped to your Installation. Submit
+the same event identifier twice and the second returns `replayed` against the
+same underlying fact.
+
+The practical consequence: **if a submission times out, retry it unchanged.** You
+cannot create a duplicate by retrying, and you do not need to reconcile first.
+Two callers submitting the same event simultaneously converge on one fact.
+
+Because the identity is yours and scoped to you, one partner can never replay,
+collide with, or overwrite another partner's submission.
+
+### Correlation
 
 ```text
-Partner's own identifier
-        ↕   Installation-scoped correlation
+Your identifier
+        ↕   correlation, recorded per Installation
 Alloy's canonical identifier
 ```
 
-Correlation is recorded per Installation, so two partners may hold different
-identifiers for the same Alloy record without either becoming a second source of
-truth. There is **no public self-service correlation API**; correlations are
-established by Alloy-side integration code today.
+A correlation belongs to the Installation that holds it. Two partners may carry
+different identifiers for the same Alloy record without either becoming a second
+source of truth, and **your identifiers are never visible to another
+Installation** — nor are theirs to you. Where a resource exposes `external_id`,
+it is yours and only yours.
+
+Referencing a resource by an identifier you have not mapped yields
+`pending_mapping` rather than a guess. Referencing one that maps to a resource
+outside your boundary is refused: a valid identifier is not a key to something
+you were not granted.
+
+There is no public self-service correlation API today; correlations are
+established with Alloy during onboarding.
 
 ---
 
-## 11. Quickstart
+## 15. Quickstart
 
 1. An administrator opens **Organization → Integrations** and adds your
    Application, choosing capabilities and either org-wide or selected-location
@@ -409,8 +864,13 @@ established by Alloy-side integration code today.
    `POST /api/v1/oauth/token` with `grant_type=client_credentials`.
 4. Confirm who you are: `GET /api/v1/context`.
 5. List what you may reach: `GET /api/v1/locations?limit=50`.
-6. Page with `next_cursor` until it is `null`; record the highest `updated_at`.
-7. Later: `GET /api/v1/locations?updated_since=<watermark>`.
+6. Page with `next_cursor` until it is `null`, then store the `sync_token` from
+   the last page you durably processed.
+7. Later: `GET /api/v1/locations?since_token=<stored token>`, and page that pass
+   the same way. Replace the stored token only after you have processed the pass.
+
+Use `updated_since` only when you deliberately want time-based reconciliation
+against a moment you chose — see §7.
 
 ```bash
 TOKEN=$(curl -s -X POST https://<alloy-host>/api/v1/oauth/token \
@@ -426,65 +886,123 @@ Identifiers and secrets above are fictitious.
 
 ---
 
-## 12. Capability matrix
+## 16. Capability matrix
 
 | Capability | Maturity |
 | --- | --- |
 | OAuth-style token exchange | **IMPLEMENTED_EXTERNAL** |
 | Installation context | **IMPLEMENTED_EXTERNAL** |
-| Location read | **IMPLEMENTED_EXTERNAL** |
-| Incremental Location sync (`updated_since`) | **IMPLEMENTED_EXTERNAL** |
+| Location read (sites and units) | **IMPLEMENTED_EXTERNAL** |
+| Children, Households, Relationships read | **IMPLEMENTED_EXTERNAL** |
+| Effective pickup authority | **IMPLEMENTED_EXTERNAL** |
+| Enrollment and Placement read | **IMPLEMENTED_EXTERNAL** |
+| Schedule assignment read | **IMPLEMENTED_EXTERNAL** |
+| Dated schedule projection | **IMPLEMENTED_EXTERNAL** (derived; not synchronizable) |
+| Staff read (person + employment composition) | **IMPLEMENTED_EXTERNAL** |
+| Attendance read | **IMPLEMENTED_EXTERNAL** |
+| Attendance governed submission | **IMPLEMENTED_EXTERNAL** |
+| Incremental sync on every persisted collection | **IMPLEMENTED_EXTERNAL** |
+| Derived idempotency and safe retry | **IMPLEMENTED_EXTERNAL** |
 | Durable rate limiting | **IMPLEMENTED_EXTERNAL** |
-| External resource correlation | **IMPLEMENTED_INTERNAL_FOUNDATION** — substrate exists, no public API |
-| Application principal → domain authority | **IMPLEMENTED_INTERNAL_FOUNDATION** |
-| Public Attendance ingestion | **RATIFIED_NOT_IMPLEMENTED** — scope and internal adapter exist; no endpoint |
-| Governed external mutation / idempotency | **RATIFIED_NOT_IMPLEMENTED** |
-| Public child / staff / household resources | **FUTURE_UNRATIFIED** |
-| Public webhooks / event delivery | **FUTURE_UNRATIFIED** |
+| External resource correlation | **IMPLEMENTED_INTERNAL_FOUNDATION** — established during onboarding; no public management API |
+| Public webhooks / event delivery | **NOT_REQUIRED_FOR_V1** — polling is sufficient for every resource above |
 | Correlation management API | **FUTURE_UNRATIFIED** |
+| Communications | **INTERNAL_ONLY** |
+| Financials | **NOT_EXTERNALIZED** |
 | SSO / deep linking | **FUTURE_UNRATIFIED** |
-| Classroom Coach adapter | **PROVIDER_DEPENDENT** |
 
 ---
 
-## 13. Domain readiness
+## 17. Domain readiness
 
 Four independent dimensions. A domain can be fully authoritative inside Alloy and
-still have no public contract — that is the normal state today, and collapsing
-these columns is how an integration plan acquires endpoints that do not exist.
+still have no public contract — collapsing these columns is how an integration
+plan acquires endpoints that do not exist.
 
-| Domain | Canonical Alloy authority | Developer Platform authority support | Implemented `/api/v1` | Partner readiness |
-| --- | --- | --- | --- | --- |
-| Organization / install context | COMPLETE | COMPLETE | **IMPLEMENTED** | Ready |
-| Locations (sites, units) | COMPLETE | COMPLETE | **IMPLEMENTED** | Ready |
-| Rooms / operational groups | COMPLETE | COMPLETE (as `unit_role`) | **IMPLEMENTED** (within Locations) | Ready |
-| Attendance | COMPLETE | COMPLETE (internal adapter) | **NOT IMPLEMENTED** | Provider-dependent |
-| People / staff | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Children | COMPLETE | Correlation substrate only | NOT IMPLEMENTED | Not ready |
-| Households / guardians | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Relationships | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Enrollment / placement | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Schedules | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Communications | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| Financials | COMPLETE | Not extended externally | NOT IMPLEMENTED | Not ready |
-| External correlation | COMPLETE | COMPLETE | NOT IMPLEMENTED (no public API) | Internal only |
-| Events / webhooks | — | Not ratified | NOT IMPLEMENTED | Not ready |
-| SSO / deep linking | — | Not ratified | NOT IMPLEMENTED | Not ready |
+| Domain | Canonical Alloy authority | Implemented `/api/v1` | Partner readiness |
+| --- | --- | --- | --- |
+| Organization / install context | COMPLETE | **IMPLEMENTED** | Ready |
+| Locations (sites, units) | COMPLETE | **IMPLEMENTED** | Ready |
+| Rooms / operational groups | COMPLETE | **IMPLEMENTED** (as Location `unit`) | Ready |
+| Children | COMPLETE | **IMPLEMENTED** | Ready |
+| Households | COMPLETE | **IMPLEMENTED** | Ready |
+| Relationships / guardians | COMPLETE | **IMPLEMENTED** | Ready |
+| Pickup authority | COMPLETE | **IMPLEMENTED** (effective answer only) | Ready |
+| Enrollment | COMPLETE | **IMPLEMENTED** | Ready |
+| Placement | COMPLETE | **IMPLEMENTED** | Ready |
+| Schedules | COMPLETE | **IMPLEMENTED** (committed + derived projection) | Ready |
+| Staff | COMPLETE | **IMPLEMENTED** (composition) | Ready |
+| Attendance read | COMPLETE | **IMPLEMENTED** | Ready |
+| Attendance submission | COMPLETE | **IMPLEMENTED** | Ready |
+| External correlation | COMPLETE | Established during onboarding | Ready, no self-service API |
+| Communications | COMPLETE | NOT IMPLEMENTED | Internal only for V1 |
+| Financials | COMPLETE | NOT IMPLEMENTED | Not externalized |
+| Events / webhooks | — | NOT IMPLEMENTED | Not required for V1 |
+| SSO / deep linking | — | NOT IMPLEMENTED | Not ratified |
 
 ---
 
-## 14. How this document was verified
+## 18. Current limitations
 
-Read from the implementation, then executed over HTTP against a running server
-by
-`web/tests/platform/external/publicApiQuickstart.live.test.ts` — **15 scenarios,
-all passing**: token exchange and its refusals, context shape and its exclusions,
-the Location field set, deterministic paging and cursor resume, incremental sync
-including the ambiguous-timestamp refusal, boundary enforcement and the
-filter-cannot-widen rule, scope-versus-boundary separation, the absence of
-caller-controlled tenant selection, revoked-credential behaviour, the single
-error envelope with request-id correlation, and API Activity recording without
-token or secret material.
+Stated plainly, because an integration designed around an assumption Alloy does
+not meet is more expensive to correct later than to plan around now.
 
-The parity ledger and certification record for this specification are held
-internally by Alloy engineering.
+1. **Synchronization is polling and checkpoint based.** There are no webhooks and
+   no push delivery. Every resource in this specification converges through
+   `since_token` / `updated_since`, and none requires events to be correct. What
+   polling costs you is latency, not accuracy — choose your interval accordingly.
+
+2. **Deletion is not delivered as a tombstone.** Lifecycle is observable as a
+   change on the record (§7). Periodic full reconciliation is the only way to be
+   certain about removal.
+
+3. **`/schedule-days` cannot be synchronized.** It is derived and bounded to a
+   92-day window. Synchronize `/schedule-assignments` instead.
+
+4. **Pickup authority is an answer without a reason**, and deliberately so. No
+   endpoint exposes why it is `false`.
+
+5. **No health, allergy, medical, dietary or safeguarding data is available** on
+   any endpoint, under any scope.
+
+6. **Communications is internal only.** Alloy does not expose messaging, consent
+   or deliverability externally in V1.
+
+7. **Financials is not externalized.** Charges, balances and payment state have
+   no public contract.
+
+8. **Correlation has no self-service API.** Mappings between your identifiers and
+   Alloy's are established with Alloy during onboarding.
+
+9. **A child with no enrollment is not visible**, in any boundary mode. This is
+   the rule most likely to surprise, and it is intentional (§8.1).
+
+10. **Only four attendance event kinds may be submitted.** Other attendance
+    states exist inside Alloy as derived values and are not producer assertions.
+
+---
+
+## 19. How this document was verified
+
+Every endpoint, field, parameter, status code and limit in this document was read
+from the running implementation and then exercised over HTTP against a live
+server — not transcribed from a design.
+
+That exercise covers, for each resource: authentication and its refusals; the
+scope requirement and the fact that a neighbouring scope does not satisfy it;
+tenant isolation; boundary enforcement, including that a filter narrows and never
+widens and that a valid identifier outside the boundary is refused; deterministic
+paging and cursor resume; incremental continuation with no gap and no repeat;
+the published field set and the absence of everything excluded from it; and
+identifier correlation remaining private to the installation that owns it.
+
+For attendance submission it additionally covers per-item outcomes, replay of an
+identical submission, conflicting submission under the same identity, correction
+and reversal, and concurrent submission converging on a single fact.
+
+Where this document says a field is not published, that absence is asserted by a
+test rather than left to review.
+
+If you find a discrepancy between this document and the API's behaviour, treat it
+as a defect in this document and tell us — it is written to be the thing you can
+rely on.

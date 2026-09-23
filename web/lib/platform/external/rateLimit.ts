@@ -44,6 +44,21 @@ export const RATE_LIMIT_POLICY = {
     tokenExchange: { limit: 30, windowSeconds: 60 },
     /** Authenticated reads. A partner paging a collection is normal traffic. */
     authenticatedRead: { limit: 600, windowSeconds: 60 },
+    /**
+     * Authenticated writes. Tighter than reads, and deliberately not tight.
+     *
+     * The shape of external write traffic is known from the one write Alloy already accepts
+     * internally: a producer syncs a day of attendance as a small number of BATCHES, not one
+     * request per fact. So the budget is per request, a batch spends one, and a provider
+     * reconciling a busy site spends a handful — 120 a minute is two a second sustained, which is
+     * generous for submitting facts and five times tighter than reading them.
+     *
+     * It is not tighter still because retries are safe here: every public operation derives a
+     * durable idempotency identity, so a client that retries a timeout replays rather than
+     * duplicates. Punishing that retry would push clients toward the one behaviour — giving up and
+     * resubmitting later with a new identity — that the idempotency contract exists to prevent.
+     */
+    authenticatedWrite: { limit: 120, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 function bucket(parts: readonly string[]): string {
@@ -57,9 +72,32 @@ export function tokenExchangeBucket(clientId: string, clientIpHash: string): str
     return bucket(["token_exchange", clientId.trim(), clientIpHash]);
 }
 
-/** Key for authenticated traffic: the installation, not the token. */
-export function installationBucket(installationId: string): string {
-    return bucket(["api_read", installationId]);
+/**
+ * The budget governing one authenticated request: its counter AND its policy, together.
+ *
+ * ── WHY THESE ARE RETURNED AS A PAIR ──
+ *
+ * They used to be chosen separately. Every authenticated call site asked for the same
+ * `installationBucket(installationId)` — keyed `api_read` — and then passed whichever policy it
+ * thought applied. Reads and writes therefore advertised different limits while spending one
+ * counter, so 130 reads and zero writes left the next write refused with `remaining=0` while reads
+ * still had 467 of 600. Measured over HTTP, not inferred.
+ *
+ * The numbers were never the defect. Pairing is: a caller can no longer hold the write policy
+ * against the read counter, because it does not choose them independently.
+ *
+ * Token exchange keeps its own bucket and policy — it is keyed on the presented `client_id` and
+ * caller address rather than an installation, because there is no installation yet.
+ */
+export type AuthenticatedRateClass = "read" | "write";
+
+export function authenticatedRateLimit(
+    installationId: string,
+    rateClass: AuthenticatedRateClass,
+): { bucketKey: string; policy: RateLimitPolicy } {
+    return rateClass === "write"
+        ? { bucketKey: bucket(["api_write", installationId]), policy: RATE_LIMIT_POLICY.authenticatedWrite }
+        : { bucketKey: bucket(["api_read", installationId]), policy: RATE_LIMIT_POLICY.authenticatedRead };
 }
 
 /**

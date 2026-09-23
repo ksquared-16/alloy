@@ -250,6 +250,38 @@ describeLive("public API quickstart, over the wire", () => {
         expect(["site", "unit"]).toContain(row.type);
     });
 
+    it("locations follow the same platform sync law as every other collection", async () => {
+        /*
+         * One grammar, not one per resource. Slice 7.2 gave every collection an exact checkpoint:
+         * a sync token is returned on every page including the last, and resuming from it lands
+         * strictly after the row it names. Locations is the older resource, so it is the one that
+         * proves the law was applied rather than bolted onto the newest endpoint.
+         */
+        const accessToken = await bearer("orgwide");
+        const first = (await (await get("/api/v1/locations?limit=2", accessToken)).json()) as {
+            data: { id: string }[]; next_cursor: string | null; sync_token: string | null;
+        };
+        expect(first.sync_token, "every page offers a checkpoint").toBeTruthy();
+
+        const resumed = (await (await get(
+            `/api/v1/locations?limit=5&since_token=${encodeURIComponent(first.sync_token!)}`,
+            accessToken,
+        )).json()) as { data: { id: string }[] };
+        const firstIds = new Set(first.data.map((r) => r.id));
+        for (const row of resumed.data) {
+            expect(firstIds.has(row.id), "a location was delivered twice across passes").toBe(false);
+        }
+
+        const straight = (await (await get("/api/v1/locations?limit=7", accessToken)).json()) as {
+            data: { id: string }[];
+        };
+        expect([...first.data, ...resumed.data].map((r) => r.id).slice(0, straight.data.length))
+            .toEqual(straight.data.map((r) => r.id));
+
+        const bad = await get("/api/v1/locations?since_token=nonsense", accessToken);
+        expect(bad.status).toBe(400);
+    });
+
     it("step 4 — pages deterministically and the cursor resumes where it stopped", async () => {
         const accessToken = await bearer("orgwide");
         const first = await get("/api/v1/locations?limit=2", accessToken);

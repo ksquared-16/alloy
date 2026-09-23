@@ -141,10 +141,12 @@ curl "https://<alloy-host>/api/v1/locations?updated_since=2026-01-01T00:00:00Z" 
 guessed, because the same string means a different instant depending on who reads
 it, and guessing would skip or re-deliver rows at every boundary.
 
-**Rewind your checkpoint slightly.** `updated_at` is wall-clock and not
-transactionally ordered, so two rows written in one operation can land either
-side of an exact watermark. Re-request from a few minutes before your last value
-and treat results as upserts keyed by `id`.
+**Prefer `since_token` for ordinary incremental sync.** A sync token identifies
+an exact row, so two records sharing a timestamp cannot be skipped or repeated
+and there is nothing to rewind. `updated_since` is wall-clock and not
+transactionally ordered, so it is the right tool only when you deliberately want
+to reconcile against a moment *you* chose — and then you should re-request from
+a little before that moment and treat results as upserts keyed by `id`.
 
 A future timestamp is valid and simply matches nothing.
 
@@ -166,8 +168,15 @@ If you hold your own location identifiers, correlate them on your side. Alloy
 does not accept a partner identifier as a substitute for canonical identity, and
 no provider alias appears on this resource.
 
-## What is not here yet
+## What is not here
 
-No `POST`, `PATCH` or `DELETE` — this resource is read-only. No children, people,
-households or enrolment. Those are described in
-[Conventions](conventions.md) as contract only, and no endpoint serves them.
+No `POST`, `PATCH` or `DELETE` — this resource is read-only, and Locations are
+configured by the operator rather than by an integration.
+
+Children, households, relationships, enrolment, placement, schedules, staff and
+attendance are **live resources with their own endpoints**; see the API
+Reference. What Locations gives them is the shared vocabulary: every one of those
+resources refers to a site or a room by the identifiers on this page, so there is
+no second location model to learn.
+
+Timezone is deliberately not published on this resource.

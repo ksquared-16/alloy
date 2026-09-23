@@ -37,18 +37,71 @@ export type ScopePresentation = {
     recognised: boolean;
 };
 
+/**
+ * FROZEN OPERATOR COPY.
+ *
+ * These sentences are the permission model as an operator experiences it, and they are ratified
+ * rather than editorial. Changing one changes what a childcare operator believes they approved, so
+ * a change here is a product decision, not a wording tweak.
+ *
+ * Each says what the integration may READ, and — where it matters — what it still may not.
+ */
 const PRESENTATION: Record<string, { title: string; detail: string }> = {
     "context.read": {
         title: "Connection details",
-        detail: "See which organization and locations this integration is connected to.",
+        detail: "See which organization and locations this integration is connected to. Every integration can do this; it is not a permission you grant separately.",
     },
     "locations.read": {
         title: "Locations",
-        detail: "View your sites and the rooms within them. No addresses or access codes are shared.",
+        detail: "Read authorized sites, rooms, and operational units.",
+    },
+    "children.read": {
+        title: "Children in service",
+        detail: "Read children currently in service within authorized locations. No health, allergy or safeguarding information is ever included.",
+    },
+    "households.read": {
+        title: "Households",
+        detail: "Read the household shell for visible children. This does not reveal siblings at locations you have not authorized.",
+    },
+    "relationships.read": {
+        title: "Parents and guardians",
+        detail: "Read visible child-adult relationships and effective pickup authority. Reasons are never shared — only the answer.",
+    },
+    "relationships.contact.read": {
+        title: "Parent and guardian contact details",
+        detail: "Read email and phone for adults already visible through relationships. This is a separate permission from seeing who they are.",
+    },
+    "enrollment.read": {
+        title: "Enrollment and placement",
+        detail: "Read enrollment agreements and placements for visible children.",
+    },
+    "schedule.read": {
+        title: "Schedules",
+        detail: "Read committed schedules and dated schedule projections for visible children.",
+    },
+    "staff.read": {
+        title: "Staff",
+        detail: "Read staff assigned to authorized locations. Pay, payroll and HR records are never shared.",
+    },
+    "staff.contact.read": {
+        title: "Staff contact details",
+        detail: "Read email and phone for staff already visible through staff access.",
+    },
+    "enrollment.write": {
+        title: "Manage enrollment and placement",
+        detail: "Start and end enrollments, and assign or move a child's room, at authorized locations. This does not allow reading anything, creating children, or changing schedules.",
+    },
+    "schedule.write": {
+        title: "Manage schedules",
+        detail: "Set and change a child's committed schedule at authorized locations. This does not allow reading anything, or changing enrollment or placement.",
+    },
+    "attendance.read": {
+        title: "Attendance history",
+        detail: "Read attendance history for visible children.",
     },
     "attendance.write": {
-        title: "Attendance",
-        detail: "Record children arriving, leaving and moving between rooms at the locations you allow.",
+        title: "Record attendance",
+        detail: "Submit attendance facts for visible children.",
     },
 };
 
