@@ -95,10 +95,34 @@ describeLive("Safeguarding restriction write capability", () => {
         return { rows: (JSON.parse(raw) as { data: Rel[] }).data, raw };
     }
 
-    async function nextNumber(table: string, column: string): Promise<number> {
-        const { data } = await supabase.from(table).select(column).eq("org_id", ORG)
-            .order(column, { ascending: false }).limit(1).maybeSingle();
-        return Number((data as Record<string, number> | null)?.[column] ?? 0) + 1;
+    /**
+     * Allocate a tenant-scoped sequence number and insert, retrying on collision.
+     *
+     * `max(n) + 1` is not safe here: the other live suites run in parallel against the same
+     * certification tenant and allocate from the same columns, so two runs read the same maximum
+     * and the second loses to `ux_customers_org_customer_number`. It surfaces only when the suites
+     * are run together, which is exactly how CI runs them. Retrying with a freshly read maximum and
+     * a jitter makes the allocation converge instead of racing.
+     */
+    async function insertNumbered(
+        table: string,
+        numberColumn: string,
+        row: Record<string, unknown>,
+    ): Promise<string> {
+        let lastError = "";
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+            const { data: top } = await supabase
+                .from(table).select(numberColumn).eq("org_id", ORG)
+                .order(numberColumn, { ascending: false }).limit(1).maybeSingle();
+            const base = Number((top as Record<string, number> | null)?.[numberColumn] ?? 0);
+            const candidate = base + 1 + attempt + Math.floor(Math.random() * 50);
+            const inserted = await supabase
+                .from(table).insert({ ...row, [numberColumn]: candidate }).select("id").single();
+            if (!inserted.error) return (inserted.data as { id: string }).id;
+            lastError = inserted.error.message;
+            if (!lastError.includes("duplicate key")) break;
+        }
+        throw new Error(`${table} insert failed after retries: ${lastError}`);
     }
 
     beforeAll(async () => {
@@ -110,19 +134,14 @@ describeLive("Safeguarding restriction write capability", () => {
         actorUserId = users?.users?.[0]?.id ?? "";
         expect(actorUserId, "a certification auth user must exist").toBeTruthy();
 
-        const site = await supabase.from("locations").insert({
-            org_id: ORG, location_number: await nextNumber("locations", "location_number"),
-            label: `SG-site-${run}`, location_type: "site", is_active: true,
-        }).select("id").single();
-        expect(site.error, `site: ${site.error?.message}`).toBeNull();
-        siteId = (site.data as { id: string }).id;
+        siteId = await insertNumbered("locations", "location_number", {
+            org_id: ORG, label: `SG-site-${run}`, location_type: "site", is_active: true,
+        });
         cleanup.push({ table: "locations", ids: [siteId] });
 
-        const cust = await supabase.from("customers").insert({
-            org_id: ORG, name: `SG-household-${run}`, customer_number: await nextNumber("customers", "customer_number"),
-        }).select("id").single();
-        expect(cust.error, `customer: ${cust.error?.message}`).toBeNull();
-        customerId = (cust.data as { id: string }).id;
+        customerId = await insertNumbered("customers", "customer_number", {
+            org_id: ORG, name: `SG-household-${run}`,
+        });
 
         const member = await supabase.from("customer_members").insert({
             org_id: ORG, customer_id: customerId, display_name: `SG child ${run}`, is_active: true,
@@ -130,12 +149,9 @@ describeLive("Safeguarding restriction write capability", () => {
         expect(member.error, `member: ${member.error?.message}`).toBeNull();
         childId = (member.data as { id: string }).id;
 
-        const person = await supabase.from("persons").insert({
-            org_id: ORG, person_number: await nextNumber("persons", "person_number"),
-            first_name: "Sg", last_name: `Guardian${run}`,
-        }).select("id").single();
-        expect(person.error, `person: ${person.error?.message}`).toBeNull();
-        personId = (person.data as { id: string }).id;
+        personId = await insertNumbered("persons", "person_number", {
+            org_id: ORG, first_name: "Sg", last_name: `Guardian${run}`,
+        });
 
         // Enrollment is what makes the child externally visible at all.
         await supabase.from("child_enrollment_agreements").insert({
