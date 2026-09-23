@@ -5,6 +5,7 @@ import {
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
+import { partyCollectionGroupRows } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
@@ -193,6 +194,39 @@ export async function POST(
             ...payloadToValidate,
             values: { ...((payloadToValidate.values ?? {}) as Record<string, unknown>), ...derivedValues },
         };
+    }
+
+    /*
+     * REPEATED PEOPLE ARE PROJECTED HERE, FOR THE SAME REASON DERIVED VALUES ARE.
+     *
+     * This is the moment the payload means something. A packet step's draft is created when the
+     * participant first arrives at the step — before they have said who their emergency contacts
+     * are — and nothing rewrites it afterwards: the review screen reads it, and this route
+     * validates whatever the client echoed back. So a family could add two contacts, watch them
+     * persist across a resume, and still be told "Please review your answer for Emergency
+     * contacts", because the draft still described a form nobody had filled in.
+     *
+     * The conversation's own collection state is the truth for those groups, and
+     * `partyCollectionGroupRows` is the single projection from it into the Form's repeating-group
+     * shape — the same one the draft route uses. A client-supplied group still wins for its own
+     * collection, so the conventional renderer keeps ownership of anything it authored.
+     */
+    if (ctx.packet) {
+        const { data: psRow } = await supabase
+            .from("form_packet_sessions")
+            .select("shared_values")
+            .eq("id", ctx.packet.packet_session_id)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const sharedValues = ((psRow as { shared_values?: unknown } | null)?.shared_values ?? {}) as Record<string, unknown>;
+        const conversationGroups = partyCollectionGroupRows(schema, sharedValues, ctx.formDefinitionId);
+        if (Object.keys(conversationGroups).length > 0) {
+            const clientGroups = (payloadToValidate.groups ?? {}) as Record<string, unknown>;
+            payloadToValidate = {
+                ...payloadToValidate,
+                groups: { ...conversationGroups, ...clientGroups },
+            };
+        }
     }
 
     const validated = validateFormPayload({

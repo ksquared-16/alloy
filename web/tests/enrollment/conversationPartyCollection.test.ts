@@ -630,3 +630,46 @@ describe("a family's answers are not lost to a key that drifted", () => {
         expect(readPartySettled({ "party:other:household_children:settled": true }, FD, "emergency_contacts")).toBe(false);
     });
 });
+
+describe("the submit route is where the collection has to arrive", () => {
+    /*
+     * MEASURED by watching the participant's own network traffic: clicking "Review paperwork" makes
+     * NO request at all. The packet step's draft is created when the participant first arrives at
+     * the step — before they have said who their emergency contacts are — the review screen simply
+     * reads it, and `POST …/submissions/{id}/submit` validates whatever the client echoed back.
+     *
+     * So a family could add two contacts, watch them survive a resume, and still be told "Please
+     * review your answer for Emergency contacts": the draft still described a form nobody had
+     * filled in. The projection has to run at the moment the payload means something, which is the
+     * same moment derived values are filled.
+     */
+    const route = readFileSync(
+        new URL("../../app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts", import.meta.url).pathname,
+        "utf8",
+    );
+
+    it("projects the conversation's collections before validating", () => {
+        const at = route.indexOf("const validated = validateFormPayload({");
+        expect(at).toBeGreaterThan(0);
+        const before = route.slice(Math.max(0, at - 1800), at);
+        expect(before, "submit validates a payload the conversation never reached").toContain("partyCollectionGroupRows");
+    });
+
+    it("reads the collection state from the packet session, not from the client", () => {
+        const at = route.lastIndexOf("partyCollectionGroupRows(");
+        const around = route.slice(Math.max(0, at - 900), at + 300);
+        expect(around).toContain('.from("form_packet_sessions")');
+        expect(around).toContain("shared_values");
+    });
+
+    it("reuses the one projection rather than adding a second adapter", () => {
+        // Same helper as the draft route; there is exactly one conversation -> group-rows mapping.
+        expect(route).toContain('from "@/lib/enrollment/informationNeeds/participantPartyCollection"');
+        expect(route).not.toMatch(/conversationToGroups|partyRowsFor[A-Z]/);
+    });
+
+    it("lets a client-supplied group keep ownership of its own collection", () => {
+        const at = route.indexOf("groups: { ...conversationGroups, ...clientGroups }");
+        expect(at).toBeGreaterThan(0);
+    });
+});
