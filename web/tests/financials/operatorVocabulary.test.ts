@@ -99,6 +99,42 @@ describe("the product says what the operator is deciding", () => {
     });
 });
 
+describe("Add Charge answers who owes exactly once", () => {
+    it("there is one Charge to section, not a Responsibility field above it", () => {
+        /*
+         * The card said it twice: "Charge to · Responsibility: Household", then a second section
+         * with the actual parties and amounts. Two headings, two renderings, one fact — and an
+         * operator reading them had to work out whether they disagreed.
+         *
+         * The survivor is the one that can be ACTED on: it names the parties, carries the
+         * standing source quietly, and offers Change.
+         */
+        const src = read(ADD_CHARGE)
+            .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+            .replace(/\/\*[\s\S]*?\*\//g, "");
+        expect((src.match(/<SectionHead[^>]*>Charge to<\/SectionHead>/g) ?? []).length).toBe(1);
+        expect(src, "no Responsibility field restates it")
+            .not.toMatch(/<Field label="Responsibility">/);
+        expect(src, "and there is one way to change it")
+            .toMatch(/data-addcharge-change-charge-to="true"/);
+    });
+
+    it("the answer leads with the people, not with the model", () => {
+        /*
+         * "The account's arrangement: Cert Certhouse $18.00" leads with the mechanism and makes
+         * the operator step over it to reach the person who owes.
+         */
+        const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const fn = card.slice(card.indexOf("function summariseHouseholdArrangement"));
+        const body = fn.slice(0, fn.indexOf("\n}"));
+        expect(body, "the model is not the first thing said")
+            .not.toMatch(/`The account's arrangement:/);
+        expect(body, "the source is said second").toContain("household responsibility");
+        expect(body, "and too many parties are counted rather than truncated")
+            .toMatch(/shares\.length > 2/);
+    });
+});
+
 describe("no native control expresses a financial decision", () => {
     const SURFACES = [
         ADD_CHARGE,

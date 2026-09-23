@@ -483,17 +483,22 @@ export default function AddChargeCommand({
                 </Field>
             ) : null}
 
-            <SectionHead ruled={false}>Charge to</SectionHead>
             {/*
-                RESPONSIBILITY IS SHOWN, NOT OFFERED — unless configuration says the operator may
-                choose it. `operator_selectable` is the only targeting that puts a decision in the
-                operator's hands; everything else is a resolved result they need to see and cannot
-                change, so it reads as a stated value rather than an inert control.
+                ── ONE ANSWER TO "WHO OWES THIS", NOT TWO ──────────────────────────────────────
+
+                This block said it first — "Charge to · Responsibility: Household" — and the
+                section below said it again with the actual parties and amounts. Two headings,
+                two renderings, one fact, and an operator reading them had to work out whether
+                they disagreed.
+
+                The section below survives because it is the one that can be ACTED on: it names
+                the parties, carries the standing source quietly, and offers Change. What was
+                here was the same truth with less of it.
+
+                `operator_selectable` targeting is not lost — a template that puts the payer in
+                the operator's hands reaches the same Change control, which is where choosing
+                one belongs.
             */}
-            <Field label="Responsibility">
-                <Value>{specimen.chargeTo}</Value>
-                {t.payerTargeting === "operator_selectable" ? <Hint>you may target a payer</Hint> : null}
-            </Field>
 
             {/*
                 ── WHO OWES THIS ONE ────────────────────────────────────────────────────────────
@@ -513,6 +518,12 @@ export default function AddChargeCommand({
                 <div data-addcharge-charge-responsibility="section">
                     <SectionHead ruled={false}>Charge to</SectionHead>
                     <Field label="">
+                        {/*
+                            WHO OWES, THEN WHERE IT COMES FROM — in that order and at that weight.
+                            The parties and their amounts are the answer; that the answer is the
+                            account's standing one is context, said quietly beneath it rather than
+                            wrapped around it as "The account's arrangement: …".
+                        */}
                         <span className="alloy-os-addcharge__chargeto" data-addcharge-charge-to="summary">
                             <Value>{controls.chargeResponsibility.standingSummary}</Value>
                             {!controls.chargeResponsibility.changing ? (

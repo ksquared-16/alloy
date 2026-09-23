@@ -133,7 +133,17 @@ type Props = {
  */
 
 
-/** The account's own arrangement in one line — what a charge-scoped override would depart from. */
+/**
+ * WHO OWES, AND WHERE THAT ANSWER COMES FROM — in that order.
+ *
+ * This read "The account's arrangement: Cert Certhouse $18.00", which leads with the model and
+ * makes the operator step over it to reach the people. `Charge to` asks who owes; the parties are
+ * the answer, and that the answer is the account's standing one is CONTEXT — true, worth saying,
+ * and said second.
+ *
+ * "2 responsible parties" when there are too many to name: the card has one line, and a truthful
+ * count beats a truncated list of people.
+ */
 function summariseHouseholdArrangement(body: unknown): string {
     const household = (body as {
         household?: {
@@ -146,8 +156,10 @@ function summariseHouseholdArrangement(body: unknown): string {
         } | null;
     } | null)?.household;
     const shares = household?.shares ?? [];
-    if (shares.length === 0) return "The account has no standing arrangement.";
-    return `The account's arrangement: ${shares
+    if (shares.length === 0) return "No standing responsibility on record";
+    /* Beyond two, naming everybody costs more room than the row has and says less. */
+    if (shares.length > 2) return `${shares.length} responsible parties · household responsibility`;
+    return `${shares
         .map((share) => {
             const who = (share.name ?? "").trim() || "Unnamed";
             if (share.method === "percentage" && share.percentBasisPoints != null) {
@@ -159,7 +171,7 @@ function summariseHouseholdArrangement(body: unknown): string {
             if (share.method === "remainder") return `${who} remainder`;
             return who;
         })
-        .join(" · ")}.`;
+        .join(" · ")} · household responsibility`;
 }
 
 /**
