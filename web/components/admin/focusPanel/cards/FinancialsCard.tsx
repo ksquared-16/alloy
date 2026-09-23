@@ -83,6 +83,21 @@ type Props = {
      * summary: balance, due, past due, `Payment`, `Add charge`, and nothing else in the header.
      */
     summaryVariant?: "period" | "account";
+    /**
+     * ── THE ACCOUNT WORKSPACE OPENS ON DETAILS ────────────────────────────────────────────────
+     *
+     * The Focus Panel shows a compact card and reaches Details through an action, because there
+     * Financials is context beside other work. A workspace whose whole subject IS the account has
+     * nothing to reach FROM — the operator selected the account; Details is what they asked for.
+     *
+     * Accounts passed `showDetailsAction={false}`, which left `onDetails` undefined and the
+     * `detail` surface unreachable. And the compact relationship row, the discount gear, Manage
+     * payments and the responsibility gear all live on that surface — so the workspace had no way
+     * to any of them, and grew its own ledger composition underneath to compensate.
+     *
+     * This is not a second mode. It is the same surface, entered at open rather than on request.
+     */
+    detailsAreTheSurface?: boolean;
 };
 
 /**
@@ -262,6 +277,7 @@ export default function FinancialsCard({
     coordination,
     showDetailsAction = true,
     summaryVariant = "period",
+    detailsAreTheSurface = false,
 }: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
@@ -350,11 +366,35 @@ export default function FinancialsCard({
      * was cleared.
      */
     const [extraChildIds, setExtraChildIds] = useState<string[]>([]);
-    const [stack, setStack] = useState<FinancialsSurface[]>([]);
+    const [stack, setStack] = useState<FinancialsSurface[]>(
+        /*
+         * The workspace host starts ON Details; the Focus Panel starts compact and pushes it. Same
+         * stack either way, so every depth card, every dismissal and the whole escape-ownership
+         * doctrine behave identically in both hosts.
+         */
+        detailsAreTheSurface ? [{ kind: "detail" }] : [],
+    );
     const surface = stack.length ? stack[stack.length - 1] : null;
     const overlay = surface?.kind ?? null;
     const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);
-    const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
+    const pop = useCallback(
+        () =>
+            setStack((st) => {
+                /*
+                 * ── DETAILS IS A FLOOR IN THE WORKSPACE, NOT A LAYER ─────────────────────────
+                 *
+                 * Dismissing a depth card must return the operator to the account they were
+                 * working, and in the workspace that account IS Details — popping past it would
+                 * strand them on a compact summary they never asked for and cannot leave, because
+                 * the workspace has no Details action to get back.
+                 *
+                 * In the Focus Panel there is one, so Details stays an ordinary layer there.
+                 */
+                if (detailsAreTheSurface && st.length <= 1) return st;
+                return st.slice(0, -1);
+            }),
+        [detailsAreTheSurface],
+    );
 
     /*
      * ── FOCUS RETURNS TO THE CONTROL THAT OPENED THE DEPTH CARD ───────────────────────────────
