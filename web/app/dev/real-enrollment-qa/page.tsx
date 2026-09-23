@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { classifyPublicRuntime, isHostedRuntime } from "@/lib/publicAppUrl";
 import { parseQaWalkthrough } from "@/lib/qa/parseQaWalkthrough";
 
+import ParticipantLinkLauncher from "./ParticipantLinkLauncher";
 import QaWalkthroughReader from "./QaWalkthroughReader";
 
 /**
@@ -69,5 +70,16 @@ export default async function RealEnrollmentQaPage() {
         );
     }
 
-    return <QaWalkthroughReader blocks={parseQaWalkthrough(markdown)} />;
+    return (
+        <>
+            {/*
+             * The one thing the document cannot carry: a link that is still alive when it is read.
+             * Placed above the script because Part F's first instruction is to open one.
+             */}
+            <div className="mx-auto max-w-3xl px-6 pt-10">
+                <ParticipantLinkLauncher />
+            </div>
+            <QaWalkthroughReader blocks={parseQaWalkthrough(markdown)} />
+        </>
+    );
 }

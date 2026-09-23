@@ -708,13 +708,16 @@ Kelly's certified specimen.
 > **Where the launch button is NOT.** The operator action *Send enrollment packet* only appears
 > once a child reaches **Enrolled**. Touree is at **Enrolling**, so the action is not on her record
 > and you cannot start this from the record header today. **That is a real finding and it is written
-> up below — it is not something you need to work around.** A participant link has been launched for
-> you instead, and step F0 tells you where the product shows it.
+> up below — it is not something you need to work around.** The button at the top of this page calls
+> the same operator endpoint that action would, so you can run the pass while the gap stands.
 
 ## F0 — your starting point
 
-**DO** Open the participant link you were given with this walkthrough. It is an ordinary
-`http://127.0.0.1:3014/forms/embed/…` address. No login — this is what a parent sees.
+**DO** At the top of this page, click **Get a fresh participant link**, then open the link it gives
+you. No login — this is what a parent sees.
+
+> **Take a new link for every run.** A link carries one session, and a session you have already
+> submitted stays submitted. The button is there so you never have to ask anyone for a token.
 
 **EXPECT** A page headed *ZZ QA Family Packet* and a question about children in the household.
 
@@ -813,9 +816,9 @@ being unable to submit · sideways scrolling or controls you cannot tap at 390px
 ## Running it again
 
 The same packet can be reused, but **start each run on a fresh participant link** — a link carries a
-session, and a finished session stays finished. Ask for a new link rather than reusing a submitted
-one. Nothing you do to *Disposable0913 Family* needs cleaning up; do not point this at any other
-family.
+session, and a finished session stays finished. Click **Get a fresh participant link** at the top of
+this page again; you never need to ask anyone for one. Nothing you do to *Disposable0913 Family*
+needs cleaning up, and the button only ever points at that family.
 
 ## What is NOT covered here
 
