@@ -511,8 +511,8 @@
         "tags": [
           "People"
         ],
-        "summary": "List children in service",
-        "description": "Children participating in service at locations within your boundary. Requires the `children.read` scope.\n\n**Enrollment is what makes a child visible.** A child appears here only when an enrollment agreement places them at a site you can reach. Belonging to the organization is not enough, and this holds even for organization-wide installations \u2014 being organization-wide widens which SITES you reach, not what counts as participation in service. If you expect a child and do not see one, check their enrollment first.\n\n**What this resource is not.** It carries identity and lifecycle only. Health, allergy, medical and safeguarding information is never returned by any endpoint in this API. Guardians and contact details are a separate resource with a separate scope: see `GET /api/v1/relationships`.\n\n**Lifecycle.** Poll `status`. A child leaving service becomes `inactive`; records are not removed from history without an observable change first.\n\n**Your own identifiers.** If you have mapped a child to your own system, `external_id` returns YOUR mapping and only yours. You may also filter by it. Another installation's identifier for the same child is never visible to you.",
+        "summary": "List enrolled children",
+        "description": "Children participating in service at locations within your boundary. Requires the `children.read` scope.\n\n**Enrollment is what makes a child visible.** A child appears here only when an enrollment agreement places them at a site you can reach. An enrollment CANCELLED BEFORE IT BEGAN never makes a child visible \u2014 that family was never a participant in service. Every other status does, including `ended`, so your attendance and billing history stays resolvable. Belonging to the organization is not enough, and this holds even for organization-wide installations \u2014 being organization-wide widens which SITES you reach, not what counts as participation in service. If you expect a child and do not see one, check their enrollment first.\n\n**What this resource is not.** It carries identity and lifecycle only. Health, allergy, medical and safeguarding information is never returned by any endpoint in this API. Guardians and contact details are a separate resource with a separate scope: see `GET /api/v1/relationships`.\n\n**Lifecycle.** Poll `status`. A child leaving service becomes `inactive`. Visibility itself can end in one case \u2014 a `pending_start` enrollment that is cancelled \u2014 and it is never silent: the enrollment remains readable, turns `canceled`, and its `updated_at` advances, so `GET /api/v1/enrollments?updated_since=...` delivers the change on a normal sync pass. Read `/enrollments` when a child stops appearing here; do not treat it as data loss. A child with commitments at two sites stays visible while any one is uncancelled.\n\n**Your own identifiers.** If you have mapped a child to your own system, `external_id` returns YOUR mapping and only yours. You may also filter by it. Another installation's identifier for the same child is never visible to you.",
         "security": [
           {
             "bearerAuth": []
@@ -2931,7 +2931,7 @@
       },
       "Child": {
         "type": "object",
-        "description": "A child participating in service. Identity and lifecycle only \u2014 health, allergy and safeguarding information is never part of this resource.",
+        "description": "A child with an enrollment that was not cancelled before it began. Identity and lifecycle only \u2014 health, allergy and safeguarding information is never part of this resource.",
         "properties": {
           "id": {
             "type": "string",
