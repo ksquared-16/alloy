@@ -279,6 +279,30 @@ describeLive("Safeguarding restriction write capability", () => {
         });
     });
 
+    it("a FUTURE restriction can still be lifted before it takes effect", async () => {
+        // Hosted certification found this refused outright: the default end (today) fell before
+        // `effective_from`, and `effective_to >= effective_from` is a database constraint. A court
+        // order withdrawn before it takes effect is ordinary, so the window clamps forward instead.
+        const added = await addChildSafeguardingRestriction(supabase, {
+            orgId: ORG, actorUserId, childCustomerMemberId: childId,
+            restrictionKind: "protective_or_restraining_order", operationalEffect: "may_not_pick_up",
+            affectedPersonId: personId, evidenceBasis: "operator_entry",
+            effectiveFrom: shiftDays(7),
+        });
+        expect(added.ok, added.ok ? "" : added.error).toBe(true);
+        if (!added.ok) return;
+
+        const ended = await endChildSafeguardingRestriction(supabase, {
+            orgId: ORG, actorUserId, restrictionId: String(added.value.id),
+        });
+        expect(ended.ok, ended.ok ? "" : ended.error).toBe(true);
+        if (!ended.ok) return;
+        expect(ended.value.status).toBe("revoked");
+        // Clamped forward so the row stays constraint-valid and never comes into force.
+        expect(ended.value.effective_to).toBe(shiftDays(7));
+        expect((await publicRelationships()).rows[0].pickup_authorized).toBe(true);
+    });
+
     it("a restriction naming no person does not bar a specific adult by itself", async () => {
         const added = await addChildSafeguardingRestriction(supabase, {
             orgId: ORG, actorUserId, childCustomerMemberId: childId,

@@ -212,17 +212,24 @@ export async function endChildSafeguardingRestriction(
             .select(OPERATOR_COLUMNS).eq("id", input.restrictionId).eq("org_id", input.orgId).single();
         return { ok: true, value: (unchanged ?? {}) as unknown as Record<string, unknown> };
     }
-    // `effective_to >= effective_from` is a database constraint; refuse with a reason rather than
-    // a constraint name when an operator back-dates the end before the start.
-    if (current.effective_from && endedOn < current.effective_from) {
-        return { ok: false, code: "invalid_date_range", error: "ended_on must not precede effective_from." };
-    }
+    /*
+     * A restriction that has NOT STARTED YET can still be lifted — a court order withdrawn before
+     * it takes effect is an ordinary thing to record, and hosted certification found the opposite:
+     * ending a future-dated restriction was refused outright because the default end (today) fell
+     * before its `effective_from`, and `effective_to >= effective_from` is a database constraint.
+     *
+     * Refusing was the wrong answer to the right constraint. Revocation is decided by `status`, not
+     * by the dates, so the window is clamped forward to the day the restriction would have begun:
+     * it never comes into force, the row stays constraint-valid, and "revoked" still says why.
+     */
+    const effectiveTo =
+        current.effective_from && endedOn < current.effective_from ? current.effective_from : endedOn;
 
     const { data, error } = await supabase
         .from("child_safeguarding_restrictions")
         .update({
             status: "revoked",
-            effective_to: endedOn,
+            effective_to: effectiveTo,
             updated_at: new Date().toISOString(),
             updated_by: input.actorUserId,
         })
