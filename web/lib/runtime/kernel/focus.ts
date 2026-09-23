@@ -144,41 +144,6 @@ export class FocusOwner {
     }
 
     /**
-     * ← THE SERVER'S COMMIT. The one way a surface may exist without a client preparation.
-     *
-     * The server composes the frame for the address being rendered and commits it here, so the
-     * Focus Panel exists in the initial HTML instead of waiting for the browser to execute code.
-     * Measured before this seam: 220,640 bytes of server HTML carrying zero surface markup, and
-     * FIRST_AUTHORITATIVE_FRAME at 1,364ms.
-     *
-     * It is NOT a second Focus authority. It takes the same `(ref, snapshot, outcome)` an ordinary
-     * commit takes, builds the surface through the same `surfaceIdFor`, and refuses to touch a
-     * Focus that has already committed — so it can only ever establish the FIRST surface, and only
-     * where none exists. Every later movement goes through the preparation lifecycle unchanged.
-     *
-     * The same provider code runs in the server pass and the client's first render with the same
-     * serialized props, so both produce the identical surfaceId and snapshot. That is what makes
-     * hydration an enhancement of this markup rather than a replacement of it.
-     */
-    seedCommitted(ref: AttentionRef, snapshot: FocusSurface["snapshot"], outcome: PreparationOutcome): void {
-        if (this.state.current || this.state.incoming || this.state.outgoing) return;
-        this.state = {
-            current: {
-                surfaceId: surfaceIdFor(ref),
-                ref,
-                snapshot,
-                outcome,
-                commitVersion: ++this.commitVersion,
-            },
-            outgoing: null,
-            incoming: null,
-            phase: "stable",
-            desired: ref,
-            projectedUrl: this.projectUrl(ref),
-        };
-    }
-
-    /**
      * ← K1. Focus reads attention to know what it must catch up to. It NEVER writes it.
      *
      * On a surface-scope movement the current surface becomes `outgoing` and visibly yields — it is

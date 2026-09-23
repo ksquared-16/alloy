@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 
 import { getCachedJwks } from "@/lib/auth/jwksCache";
 import { NextResponse, type NextRequest } from "next/server";
-import { ALLOY_PATHNAME_HEADER } from "@/lib/http/alloyPathnameHeader";
 import { externalRedirectUrl } from "@/lib/http/requestOrigin";
 import { authCookieNameFor } from "@/lib/supabase/browserTransport";
 import {
@@ -83,26 +82,9 @@ export async function middleware(request: NextRequest) {
         return res;
     }
 
-    /*
-     * THE PATHNAME, FORWARDED TO THE SERVER COMPONENTS.
-     *
-     * A layout receives params only for its OWN dynamic segments, and the workspace layout has
-     * none — the work-unit slug lives in a child segment, and `searchParams` reach a page but never
-     * a layout. So the boundary that OWNS Focus Panel rendering could not know which surface it was
-     * rendering, and the frame could only be composed by a DESCENDANT, where it is too late to
-     * server-render anything above it.
-     *
-     * This is the documented way to close that: middleware copies the request headers and adds the
-     * address, and every `NextResponse.next({ request: { headers } })` below forwards the same copy.
-     * It carries the path and the query only — no identity, no token, nothing the request did not
-     * already state about itself.
-     */
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set(ALLOY_PATHNAME_HEADER, `${pathname}${request.nextUrl.search}`);
-
     let response = NextResponse.next({
         request: {
-            headers: requestHeaders,
+            headers: request.headers,
         },
     });
 
@@ -154,8 +136,7 @@ export async function middleware(request: NextRequest) {
                 );
                 response = NextResponse.next({
                     request: {
-                        // The same copy, so the address survives a cookie refresh.
-                        headers: requestHeaders,
+                        headers: request.headers,
                     },
                 });
                 cookiesToSet.forEach(({ name, value, options }) =>
