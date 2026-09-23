@@ -266,8 +266,12 @@ export default function PaymentMethodsSection({
                     data-testid="payment-methods-empty"
                     className="rounded-md border border-dashed border-alloy-stone/30 px-3 py-3"
                 >
-                    <p className="text-sm text-alloy-midnight/65">No payment method on file.</p>
-                    <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                    {/*
+                      * THE STATE, then the hint. Both were gray, so "no payment method on file" —
+                      * which is the fact an operator came to check — read like disabled chrome.
+                      */}
+                    <p className="alloy-os-depthcard__value">No payment method on file.</p>
+                    <p className="alloy-os-depthcard__hint mt-0.5">
                         Add a card or a bank account above to collect from this family automatically.
                     </p>
                 </div>

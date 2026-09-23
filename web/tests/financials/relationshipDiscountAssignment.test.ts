@@ -20,7 +20,7 @@ const code = (rel: string) =>
     read(rel).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const sql = (rel: string) => readFileSync(join(process.cwd(), "..", rel), "utf8");
 
-const MIGRATION = "supabase/migrations/20261017120000_commercial_policy_assignments.sql";
+const MIGRATION = "supabase/migrations/20261020120000_commercial_policy_assignments.sql";
 const SERVICE = "lib/financials/reductions/commercialPolicyAssignmentService.ts";
 const RESOLVER = "lib/financials/reductions/resolveFinancialReductions.ts";
 const ELIGIBILITY = "lib/financials/reductions/resolveReductionEligibility.ts";

@@ -547,10 +547,17 @@ export default function FinancialsDiscountPanel({
                         {childRows.map((child) => (
                             <div
                                 key={child.ocmId}
-                                className="mt-3 border-t border-alloy-stone/10 pt-2"
+                                className="alloy-os-depthcard__unit"
                                 data-financials-discount-child={child.ocmId}
                             >
-                                <p className="text-[12px] font-medium text-alloy-midnight">{child.label}</p>
+                                {/*
+                                  * IDENTITY LEADS THE UNIT. The child's name is what an operator
+                                  * is looking for when they open this card, and it was set at the
+                                  * same weight as the metadata under it.
+                                  */}
+                                <p className="alloy-os-depthcard__identity">
+                                    <span className="alloy-os-depthcard__identity-name">{child.label}</span>
+                                </p>
 
                                 {child.lines.length === 0 ? (
                                     /*
@@ -558,22 +565,24 @@ export default function FinancialsDiscountPanel({
                                      * an operator came to give a discount to, and one word plus a
                                      * door is the whole of what that state needs.
                                      */
-                                    <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-none-for-child="true">
+                                    <p className="alloy-os-depthcard__value" data-financials-discount-none-for-child="true">
                                         No discount
                                     </p>
                                 ) : (
                                     child.lines.map((line) => (
                                         <div key={line.policyId} className="mt-1 pl-2" data-financials-discount-line={line.policyId}>
-                                            <p className="text-[11px] text-alloy-midnight/70">
-                                                <span className="font-medium">{line.policyLabel}</span>
+                                            {/* THE STATE, at full strength — this is what the card is for. */}
+                                            <p className="alloy-os-depthcard__value">
+                                                <span>{line.policyLabel}</span>
                                                 {line.rate ? (
                                                     <span data-financials-discount-rate={child.ocmId}>{" · "}{line.rate}</span>
                                                 ) : null}
                                             </p>
-                                            <p className="text-[11px] text-alloy-midnight/55">
+                                            <p className="alloy-os-depthcard__label">
                                                 Expected {money(Math.abs(line.expectedCents), line.currencyCode)}
+                                                {/* WHY it is that, which is genuinely secondary. */}
                                                 {line.why ? (
-                                                    <span className="text-alloy-midnight/40"> · {line.why}</span>
+                                                    <span className="alloy-os-depthcard__hint"> · {line.why}</span>
                                                 ) : null}
                                             </p>
 
@@ -638,7 +647,7 @@ export default function FinancialsDiscountPanel({
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="mt-0.5 flex gap-3">
+                                                <div className="alloy-os-depthcard__actionrow">
                                                     {/*
                                                       * REMOVE vs WAIVE, and the authority decides
                                                       * which is offered. An assignment an operator
@@ -653,7 +662,7 @@ export default function FinancialsDiscountPanel({
                                                             type="button"
                                                             disabled={busy}
                                                             data-financials-remove-discount={line.assignmentId}
-                                                            className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                            className="alloy-os-depthcard__action--quiet"
                                                             onClick={() => void runAssignment("end", {
                                                                 ocmId: child.ocmId,
                                                                 assignmentId: line.assignmentId!,
@@ -666,7 +675,7 @@ export default function FinancialsDiscountPanel({
                                                         type="button"
                                                         disabled={busy}
                                                         data-add-policy-exception={line.policyId}
-                                                        className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                        className="alloy-os-depthcard__action--quiet"
                                                         onClick={() => setDraft({ policyId: line.policyId, ocmId: child.ocmId, reason: "" })}
                                                     >
                                                         Waive discount <span aria-hidden>&rarr;</span>
@@ -737,7 +746,7 @@ export default function FinancialsDiscountPanel({
                                         type="button"
                                         disabled={busy}
                                         data-financials-add-discount={child.ocmId}
-                                        className="mt-1 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                        className="alloy-os-depthcard__action mt-1 inline-block"
                                         onClick={() => setAddingFor({ ocmId: child.ocmId, memberId: child.memberId ?? "", label: child.label })}
                                     >
                                         Add discount <span aria-hidden>&rarr;</span>

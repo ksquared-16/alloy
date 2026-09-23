@@ -592,9 +592,12 @@ export default function FinancialsResponsibilityPanel({
               * paid money is unaffected, so it is said there, quietly, beside the field that
               * causes it.
               */}
-            <p className="mt-0.5 text-[11px] text-alloy-midnight/55" data-financials-responsibility-question="true">
-                Who owes for this account?
-            </p>
+            {/*
+              * THE TITLE ALREADY SAYS IT. "Who owes for this account?" restated the card's own
+              * header in a sentence, which is a line of gray between the operator and the first
+              * control. What the card cannot say through labels alone is the reconciliation
+              * truth, and that lives with the effective date where it is acted on.
+              */}
 
             {/*
               * APPLIES TO — the arrangement's scope, stated before the date it takes effect.
@@ -663,14 +666,14 @@ export default function FinancialsResponsibilityPanel({
                             data-financials-scope-arrangement={scopeArrangement.authoredAtRequestedScope ? "authored" : "inherited"}
                             data-financials-scope-arrangement-id={scopeArrangement.arrangement.id}
                         >
-                            <span className="block text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                            <span className="alloy-os-depthcard__section block">
                                 {scopeArrangement.authoredAtRequestedScope
                                     ? effectiveMemberId
                                         ? "Current · this child"
                                         : "Current"
                                     : "Current · inherited from the household"}
                             </span>
-                            <span className="block text-[11px] text-alloy-midnight/70">
+                            <span className="alloy-os-depthcard__value block">
                                 {scopeArrangement.arrangement.shares
                                     .map((sh) => `${sh.name}${sh.amountCents != null ? ` · ${money(sh.amountCents)}` : ""}`)
                                     .join(" · ")}
@@ -688,7 +691,7 @@ export default function FinancialsResponsibilityPanel({
                               * outcome and must not wear the same warning.
                               */}
                             {scopeArrangement.authoredAtRequestedScope ? (
-                                <span className="block text-[10px] text-alloy-midnight/45" data-financials-scope-supersedes="true">
+                                <span className="alloy-os-depthcard__hint block" data-financials-scope-supersedes="true">
                                     Saving replaces this arrangement.
                                 </span>
                             ) : null}
@@ -737,7 +740,7 @@ export default function FinancialsResponsibilityPanel({
                   * used to open the card lives here instead — next to the field that causes it,
                   * read at the moment it matters rather than skipped at the top.
                   */}
-                <span className="mt-0.5 block text-[10px] text-alloy-midnight/45" data-financials-responsibility-effective-note="true">
+                <span className="alloy-os-depthcard__hint mt-0.5 block" data-financials-responsibility-effective-note="true">
                     Applies from this date onward. Money already paid is not moved.
                 </span>
             </label>
@@ -753,24 +756,22 @@ export default function FinancialsResponsibilityPanel({
               * would be a button that does nothing.
               */}
             {shares.length > 0 ? (
-                <p
-                    className="mt-3 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45"
-                    data-financials-responsibility-shares-head="true"
-                >
+                <p className="alloy-os-depthcard__section" data-financials-responsibility-shares-head="true">
                     Responsible parties
                 </p>
             ) : null}
             {shares.length === 0 ? (
-                <p className="mt-2 text-[11px] text-alloy-midnight/55" data-financials-responsibility-no-parties="true">
+                <p className="alloy-os-depthcard__label mt-2" data-financials-responsibility-no-parties="true">
                     Nobody on this account can be made responsible yet. Add a parent or guardian to the
                     household first.
                 </p>
             ) : null}
             {shares.map((share, i) => (
-                <label key={share.responsiblePartyId} className="mt-2 block text-[11px] text-alloy-midnight/60">
-                    {share.name}
+                <label key={share.responsiblePartyId} className="mt-2 block">
+                    {/* A responsible party is a person, named at a person's weight. */}
+                    <span className="alloy-os-depthcard__identity-name">{share.name}</span>
                     {share.roleLabel ? (
-                        <span className="ml-1 text-alloy-midnight/40">{share.roleLabel}</span>
+                        <span className="alloy-os-depthcard__hint ml-1">{share.roleLabel}</span>
                     ) : null}
                     <span className="mt-0.5 flex items-center gap-1.5">
                         <AlloySelect

@@ -632,11 +632,25 @@ describe("every centred card ends the same way", () => {
 });
 
 describe("the responsibility card reads like Alloy", () => {
-    it("the question replaces the doctrine paragraph", () => {
+    it("the title carries the task, and no sentence restates it", () => {
+        /*
+         * THIS RULE TIGHTENED. It once required the question "Who owes for this account?" as the
+         * replacement for a doctrine paragraph — a real improvement at the time. The card's own
+         * header already says RESPONSIBILITY, so the question restated it in a line of gray
+         * between the operator and the first control, and both are now gone.
+         *
+         * What must not come back is either: the paragraph, or a sentence that says what the
+         * title says.
+         */
         const panel = code(RESP);
-        expect(panel).toContain("Who owes for this account?");
-        expect(panel, "the paragraph is gone")
+        expect(panel, "the doctrine paragraph is gone")
             .not.toContain("Who contractually owes this account, from a date.");
+        expect(panel, "and so is the question that replaced it")
+            .not.toContain("Who owes for this account?");
+        /* The labels do the work instead. */
+        expect(panel).toContain("Applies to");
+        expect(panel).toContain("Effective from");
+        expect(panel).toContain("Responsible parties");
     });
 
     it("but the doctrine itself is not lost — it moved to the mechanism", () => {

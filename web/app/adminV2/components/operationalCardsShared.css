@@ -1994,6 +1994,98 @@
  * on one line.
  */
 /*
+ * ── THE DEPTH CARDS' TEXT HIERARCHY ───────────────────────────────────────────────────────────
+ *
+ * Responsibility, Discounts and Payments were written in Tailwind opacities — `text-alloy-midnight/55`
+ * for almost everything — so a section heading, a current balance, a person's name, a helper
+ * sentence and a piece of metadata all arrived at the same weight and the same gray. The cards
+ * worked and could not be scanned: there was nothing for the eye to land on.
+ *
+ * This is NOT a new scale. It is the grammar the strong cards beside them already use —
+ * `.alloy-os-billingdetail__group` for section labels, `.alloy-os-billing__line-label` for row
+ * labels, `.alloy-os-billing__line-value` for values — named here so a depth card can reach it
+ * without every panel re-deriving it from opacities.
+ *
+ * THE RULE THE CARDS BROKE: muted gray is for genuinely secondary explanation. Current financial
+ * truth — who owes, what they owe, which discount applies, what is on file — is PRIMARY, and
+ * primary content takes the normal foreground. A current arrangement rendered at 55% opacity
+ * reads as disabled, which is the one thing it is not.
+ */
+.alloy-os-depthcard__section {
+  margin: 12px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+/* A fact the operator is reading, not a hint. Full foreground, the way a value is written. */
+.alloy-os-depthcard__value {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-depthcard__label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Genuinely secondary: why something is, what will happen next. Never the state itself. */
+.alloy-os-depthcard__hint {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+/*
+ * ONE CHILD, ONE UNIT. The discount card's rows were separated by nothing but margin, so two
+ * children read as one list of six lines. A rule and a little air make each a thing.
+ */
+.alloy-os-depthcard__unit {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-depthcard__unit:first-of-type {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: 0;
+}
+/* Identity leads the unit: the avatar and the name on one baseline. */
+.alloy-os-depthcard__identity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-depthcard__identity-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/*
+ * ACTIONS READ AS ACTIONS, and not all at one weight. The card's own offer — Add discount — is
+ * the first-class one; the corrective beside it is quieter. Neither becomes a filled button:
+ * a depth card full of Bend Pine fills would shout louder than the command that opened it.
+ */
+.alloy-os-depthcard__action {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-depthcard__action:hover { text-decoration: underline; }
+.alloy-os-depthcard__action:disabled { opacity: 0.5; }
+.alloy-os-depthcard__action--quiet {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-depthcard__action--quiet:hover { text-decoration: underline; }
+.alloy-os-depthcard__actionrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 5px;
+}
+
+/*
  * ── THE DEPTH CARDS' SHARED ACTION ROW ────────────────────────────────────────────────────────
  *
  * Responsibility, Discounts, Payments, Add Charge and Payment are one family of centred cards.
