@@ -11,7 +11,8 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
-import { useEffect, useId, useMemo } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
+import type { FocusPanelSummaryDocProjection } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
@@ -213,6 +214,7 @@ export function ProvisionedWorkUnitSurface() {
      * (e.g. straight after a Work View switch), which is the pre-existing cold-open behaviour.
      */
     const attentionSubject = useAttentionSubject();
+    const lastSummaryDocRef = useRef<typeof op extends never ? never : NonNullable<typeof op>["focusPanelSummaryDoc"] | null>(null);
     const identitySeed = useMemo(
         () =>
             focusPanelSeedForSubject(
@@ -245,6 +247,39 @@ export function ProvisionedWorkUnitSurface() {
     // attribute, never by guessing a side.
     const cohortSelected =
         snapshot.terminal === "error" ? null : hasOperatorSelectedWorkView(snapshot);
+    /*
+     * PROGRESSIVE AUTHORITATIVE COMMIT — identity commits now, facts commit when they are B's.
+     *
+     * Measured on deployed eb896a8c: the selected subject reached this provider only when the
+     * hover-started provisioning answer completed (14/14 samples committed within ~2ms of it), which
+     * is P50 ~1,094ms of the operator's wait, and the panel then held the PRIOR subject until the
+     * new record VM was complete, a further ~1,052ms. Between them they are essentially the whole
+     * J5 wait, and both are the same policy: wait for a complete answer before showing anything.
+     *
+     * The queue selection already knows WHICH record is selected, and the published Summary
+     * composition is layout configuration for the scope rather than any record's business truth. So
+     * identity and geometry can commit immediately and truthfully.
+     *
+     * What may NOT come early is any FACT. While the committed answer still describes the previous
+     * subject, `factsOp` is null, so every fact-bearing prop below resolves to null and the panel
+     * renders reserved UNKNOWN rather than the previous subject's values. That is the line this
+     * repair must not cross: an early B identity over A's values would be the mixed-subject frame
+     * the atomic-subject contract forbids, and is worse than the latency it removes.
+     */
+    const selectedSubjectId =
+        attentionSubject ?? (op ? String(op.recordOfAttention.id) : null);
+    const answerDescribesSelection =
+        op != null && selectedSubjectId != null
+        && String(op.recordOfAttention.id) === String(selectedSubjectId);
+    const factsOp = answerDescribesSelection ? op : null;
+    /*
+     * The published composition is scope configuration, so it survives a subject change. Retaining
+     * the last one is what lets the configured cells exist at commit instead of the panel waiting
+     * for a layout it already has. It is never a source of business truth.
+     */
+    if (op?.focusPanelSummaryDoc) lastSummaryDocRef.current = op.focusPanelSummaryDoc;
+    const retainedSummaryDoc = op?.focusPanelSummaryDoc ?? lastSummaryDocRef.current;
+
     const firstRowKeys = effectiveModel.queue.rows[0]?.rowConfig;
     return (
         <div
@@ -317,30 +352,30 @@ export function ProvisionedWorkUnitSurface() {
                     // ONE Focus Panel path. The committed subject is the Record of Attention when a
                     // cohort was paged, and the NAMED subject when one was not — same panel, same
                     // provider, no second composition and no fabricated row to hang the person off.
-                    subjectId={op ? op.recordOfAttention.id : contextual ? contextual.subject.id : null}
+                    subjectId={selectedSubjectId ?? (contextual ? contextual.subject.id : null)}
                     // How the subject was reached, which is what decides when the panel is resolved.
                     // A contextual subject has no stage to report, and that is an answer, not a gap.
                     attentionKind={contextual ? "contextual" : "operational"}
                     identitySeed={identitySeed}
                     situation={
-                        op
+                        factsOp
                             ? {
-                                  stageKey: op.currentBusinessState.stageKey,
-                                  stageLabel: op.currentBusinessState.stageLabel,
-                                  purpose: op.currentBusinessState.purpose,
-                                  workTemplateLabel: op.currentBusinessState.workTemplateLabel,
-                                  required: op.currentBusinessState.required,
+                                  stageKey: factsOp.currentBusinessState.stageKey,
+                                  stageLabel: factsOp.currentBusinessState.stageLabel,
+                                  purpose: factsOp.currentBusinessState.purpose,
+                                  workTemplateLabel: factsOp.currentBusinessState.workTemplateLabel,
+                                  required: factsOp.currentBusinessState.required,
                               }
                             : null
                     }
                     decision={
-                        op
+                        factsOp
                             ? {
-                                  workViewId: op.contextFrame.workViewId,
-                                  workViewLabel: op.contextFrame.workViewLabel,
-                                  scopeState: op.focusPanelScopeState,
-                                  destinationViewId: op.focusPanelOutOfView?.destinationViewId ?? null,
-                                  destinationViewLabel: op.focusPanelOutOfView?.destinationViewLabel ?? null,
+                                  workViewId: factsOp.contextFrame.workViewId,
+                                  workViewLabel: factsOp.contextFrame.workViewLabel,
+                                  scopeState: factsOp.focusPanelScopeState,
+                                  destinationViewId: factsOp.focusPanelOutOfView?.destinationViewId ?? null,
+                                  destinationViewLabel: factsOp.focusPanelOutOfView?.destinationViewLabel ?? null,
                               }
                             : null
                     }
@@ -348,38 +383,38 @@ export function ProvisionedWorkUnitSurface() {
                     // stage that configures none. The panel renders that absence; it does not stand in
                     // for it, and `actionAbsence` is what keeps it from reading as "still loading".
                     action={
-                        op?.primaryAction
-                            ? { actionRef: op.primaryAction.actionRef, label: op.primaryAction.label }
+                        factsOp?.primaryAction
+                            ? { actionRef: factsOp.primaryAction.actionRef, label: factsOp.primaryAction.label }
                             : null
                     }
                     actionAbsence={
-                        op && !op.primaryAction && op.primaryActionAbsence
+                        factsOp && !factsOp.primaryAction && factsOp.primaryActionAbsence
                             ? {
-                                  code: op.primaryActionAbsence,
-                                  message: CHILD_PRIMARY_ACTION_ABSENCE_COPY[op.primaryActionAbsence],
+                                  code: factsOp.primaryActionAbsence,
+                                  message: CHILD_PRIMARY_ACTION_ABSENCE_COPY[factsOp.primaryActionAbsence],
                               }
                             : null
                     }
-                    stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
-                    operationalProjection={op ? op.focusPanelOperationalProjection ?? null : null}
-                    workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
+                    stageWorkRuntime={factsOp ? factsOp.focusPanelStageWork?.stage_work_runtime ?? null : null}
+                    operationalProjection={factsOp ? factsOp.focusPanelOperationalProjection ?? null : null}
+                    workIntentRuntime={factsOp ? factsOp.focusPanelStageWork?.work_intent_runtime ?? null : null}
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
-                    subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
+                    subjectIdentityTruth={factsOp ? factsOp.subjectIdentityTruth ?? null : null}
                     // The participation the ANSWER resolved — identity only, carried so the browser
                     // can mount the participant-scoped cards from truth it already has.
-                    resolvedParticipant={op ? op.resolvedParticipant ?? null : null}
+                    resolvedParticipant={factsOp ? factsOp.resolvedParticipant ?? null : null}
                     // The tour signal the ANSWER resolved. Null means NOT ESTABLISHED, never
                     // "no tour" — same object, same navigation, so it cannot drift from the
                     // participant beside it.
-                    resolvedTour={op ? op.resolvedTour ?? null : null}
+                    resolvedTour={factsOp ? factsOp.resolvedTour ?? null : null}
                     // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
                     // the panel never infers what the subject is. A contextual answer resolves it too
                     // (from the subject's entity class rather than a lens's Row Grain), so it is carried
                     // here as well — the alternative is the panel falling back to "a committed subject
                     // is an opportunity", which is the assumption this field exists to retire.
                     subjectGrain={
-                        op
-                            ? op.subjectGrain ?? null
+                        factsOp
+                            ? factsOp.subjectGrain ?? null
                             : contextual
                               ? {
                                     grain: contextual.subject.grain,
@@ -389,7 +424,7 @@ export function ProvisionedWorkUnitSurface() {
                     }
                     // A — the published Summary composition for the committed scope: the panel presents
                     // the PUBLISHED composition at commit, not the code default standing in for a fetch.
-                    summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}
+                    summaryDocSeed={retainedSummaryDoc}
                 >
                     <WorkUnitSurfaceBodyFromModel model={effectiveModel} intents={intents} />
                 </OperationalSubjectProvider>
