@@ -687,3 +687,137 @@ and the child record still shows **Program —**.
 
    It is also why the Part E specimen is reached through the packet's own distribution link rather
    than through an email. The conversation on the other end is identical; only the delivery differs.
+
+---
+
+# PART F — REPEATED PEOPLE IN THE ENROLLMENT CONVERSATION
+
+**What this part is asking you.** A family's paperwork names other people — brothers and sisters,
+the people we may call in an emergency. Alloy already knows some of them. Does the conversation
+show you the ones it knows, let you add the ones it doesn't, and let you say when you're finished?
+
+**The QA family is disposable.** *Disposable0913 Family*. Nothing here touches a real household or
+Kelly's certified specimen.
+
+| | who |
+|---|---|
+| the child enrolling | **Touree Disposable0913** |
+| a brother or sister Alloy already knows | **Bea Disposable0913** |
+| an emergency contact Alloy already knows | **Corinne Vasquez** |
+
+> **Where the launch button is NOT.** The operator action *Send enrollment packet* only appears
+> once a child reaches **Enrolled**. Touree is at **Enrolling**, so the action is not on her record
+> and you cannot start this from the record header today. **That is a real finding and it is written
+> up below — it is not something you need to work around.** A participant link has been launched for
+> you instead, and step F0 tells you where the product shows it.
+
+## F0 — your starting point
+
+**DO** Open the participant link you were given with this walkthrough. It is an ordinary
+`http://127.0.0.1:3014/forms/embed/…` address. No login — this is what a parent sees.
+
+**EXPECT** A page headed *ZZ QA Family Packet* and a question about children in the household.
+
+**DO** To see that Alloy is tracking this properly on the operator side, open
+**http://127.0.0.1:3014/workspace → Registration → Touree Disposable0913**.
+
+**EXPECT** The household card lists **Tourqa Disposable0913** (parent) and **Corinne Vasquez**, with
+counts for *Children*, *Other parents*, *Emergency contacts*. This is the canonical truth the
+conversation is about to reuse.
+
+## F1 — brothers and sisters
+
+**DO** Read the first question.
+
+**EXPECT** *"Here is what we have for children in your household. Anyone to add?"* — and beneath it a
+card reading **Bea Disposable0913 · Already on file** with a **Review** link.
+
+**STOP AND REPORT IF** Bea is missing, or **Touree herself is listed** — a child is not her own
+sibling.
+
+**STOP AND REPORT IF** Bea has a **Remove** control. A form may not delete someone from the record.
+
+**DO** Click **Add children in your household**.
+
+> That button wording is clumsy and I want you to see it rather than have it quietly fixed under
+> you. It should read something like *Add another child*. **Report it; it is a genuine defect.**
+> The emergency-contact equivalent reads correctly.
+
+**EXPECT** A small form with **Full name** and **Date of birth**, focus already in the name box,
+**Add** greyed out until the required answer is there.
+
+**DO** Type a name — *Dax Disposable0913* — and click **Add**.
+
+**EXPECT** Bea AND Dax, side by side. Bea still says *Already on file*; Dax says *Added here* and
+has **Edit** and **Remove**.
+
+**STOP AND REPORT IF** the conversation moves on by itself here. Adding one person must not decide
+you are finished.
+
+**DO** Click **That's everyone**.
+
+**EXPECT** The conversation moves to emergency contacts.
+
+## F2 — emergency contacts
+
+**EXPECT** *"Here is what we have for emergency contacts. Anyone to add?"* and a card reading
+**Corinne Vasquez · Already on file** with her phone number and **Review** — and **no Remove**.
+
+**DO** Click **Add emergency contact**. Add **Evan Cole** with any phone number.
+Click **Add emergency contact** again. Add **Farrah Nolan**.
+
+**EXPECT** Three cards: Corinne (*Already on file*), Evan and Farrah (*Added here*).
+
+**DO** Click **Remove** on **Evan** only.
+
+**EXPECT** Corinne and Farrah remain, unchanged. Farrah's phone number is still Farrah's.
+
+**STOP AND REPORT IF** removing Evan changes anyone else's answers, or leaves an empty row behind.
+
+## F3 — leave and come back
+
+**DO** Close the tab. Open the same link again.
+
+**EXPECT** Corinne (*Already on file*) and Farrah (*Added here*). **Evan does not come back.** The
+collection is still open and **Add emergency contact** is still offered.
+
+**STOP AND REPORT IF** anything was lost, Evan returned, or the conversation skipped past the
+collection as though you had already finished.
+
+**DO** Click **That's everyone**.
+
+## F4 — finish the paperwork
+
+**DO** Click **Review paperwork**, then **Everything looks good**, then **Sign and finish**.
+
+**EXPECT** *"You're all set. Touree Disposable0913's enrollment paperwork has been submitted."*
+
+**STOP AND REPORT IF** you are told *"Please review your answer for Emergency contacts"* — that was
+the defect this work closed, and its return is the single most important thing to catch.
+
+## F5 — on a phone
+
+**DO** Reopen a fresh link, press **⌘⌥I** for devtools, click the device-toolbar icon, choose
+**iPhone 14 Pro** (390px). Repeat F1 and F2 briefly.
+
+**EXPECT** Cards readable, **Add…** easy to hit, **Remove** reachable, and **nothing scrolling
+sideways**.
+
+## What counts as failure
+
+Any of: a known person missing · Touree listed as her own sibling · a **Remove** on someone already
+on file · blank unused rows · the conversation advancing after the first person · one person's
+answers moving to another · a removed person returning after a resume · anything lost on resume ·
+being unable to submit · sideways scrolling or controls you cannot tap at 390px.
+
+## Running it again
+
+The same packet can be reused, but **start each run on a fresh participant link** — a link carries a
+session, and a finished session stays finished. Ask for a new link rather than reusing a submitted
+one. Nothing you do to *Disposable0913 Family* needs cleaning up; do not point this at any other
+family.
+
+## What is NOT covered here
+
+The operator half. Nothing in this part asks you to review or approve what the family submitted —
+turning these people into canonical records still has no proven path, and you should not expect one.
