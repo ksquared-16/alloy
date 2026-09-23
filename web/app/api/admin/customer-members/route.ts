@@ -225,7 +225,13 @@ export async function POST(request: NextRequest) {
                 dob,
                 person_id,
                 is_active: body.is_active !== false,
-                metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
+                /*
+                 * `customer_members.metadata` is NOT NULL, so sending an explicit null made EVERY
+                 * create through this route fail with a constraint violation — "null value in
+                 * column metadata violates not-null constraint" — rather than with anything an
+                 * operator could act on. An absent metadata is an empty object, not a null.
+                 */
+                metadata: body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata) ? body.metadata : {},
             })
             .select(RESPONSE_COLUMNS)
             .single();

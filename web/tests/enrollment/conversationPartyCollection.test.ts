@@ -11,6 +11,8 @@
  * it: a second repeater implementation, and a second participant draft to keep in step.
  */
 
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import type { FormSchemaV1 } from "@/lib/forms/schema";
@@ -473,5 +475,63 @@ describe("a sibling collection has no relationship role, and still renders", () 
     it("is not offered through the role-based party path, because it names no role", async () => {
         const { declaredPartyCollectionsForForms } = await import("@/lib/enrollment/participantRuntime/declaredPartyCollections");
         expect(declaredPartyCollectionsForForms([{ schema: SIBLINGS }])).toHaveLength(0);
+    });
+});
+
+describe("a household's other children are the known entries of a child collection", () => {
+    /*
+     * MEASURED against a real family: the known sibling did not appear at all. `resolveChildParties`
+     * answers who is related to this child in a ROLE, which cannot answer who else is a child of
+     * the same household — a different canonical edge. A collection of children names no role, so
+     * the role-based mapper skipped it entirely.
+     */
+    const CHILD_SCHEMA = {
+        schema_version: 1, title: "Enrolment",
+        fields: [{
+            id: "household_children", type: "group", label: "Children in your household", required: false, repeat: { min: 0 },
+            party_collection: { action_key: "add_child", subject: "child", show_known: true, allow_add: true },
+            fields: [{ id: "sib_name", type: "text", label: "Full name", required: true }],
+        }],
+        sections: [{ id: "s1", title: "Household", field_ids: ["household_children"] }],
+    } as unknown as FormSchemaV1;
+
+    const household = [
+        { id: "cm-rio", display_name: "Rio Alvarez" },
+        { id: "cm-noa", display_name: "Noa Alvarez" },
+    ];
+
+    it("surfaces every other child on the household", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        const known = knownPartyEntriesFromParties(CHILD_SCHEMA, [], household);
+        expect(known.household_children).toHaveLength(2);
+        expect(known.household_children!.map((e) => e.values.sib_name)).toEqual(["Rio Alvarez", "Noa Alvarez"]);
+    });
+
+    it("carries the canonical child id, which is what stops a duplicate create", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        const known = knownPartyEntriesFromParties(CHILD_SCHEMA, [], household);
+        expect(known.household_children![0]!.item_id).toBe("cm-rio");
+        expect(known.household_children![0]!.origin).toBe("existing");
+    });
+
+    it("offers nothing when the household has no other children", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        expect(knownPartyEntriesFromParties(CHILD_SCHEMA, [], [])).toEqual({});
+    });
+
+    it("excludes the enrollment subject — a child is not their own sibling", async () => {
+        /*
+         * The exclusion is done by the canonical read, by id. Asserted at that boundary because a
+         * family shown their own child in the sibling list would reasonably conclude Alloy has them
+         * twice.
+         */
+        const resolver = readFileSync(new URL("../../lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective.ts", import.meta.url).pathname, "utf8");
+        expect(resolver).toContain("excludeMemberId");
+        expect(resolver).toContain("r.id !== input.excludeMemberId");
+    });
+
+    it("does not put household children into a person collection", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        expect(knownPartyEntriesFromParties(SCHEMA, [], household).emergency_contacts ?? []).toHaveLength(0);
     });
 });

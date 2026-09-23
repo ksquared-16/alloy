@@ -185,6 +185,8 @@ export type ParticipantObjectiveContext = {
     readonly parties?: readonly ChildParty[];
     readonly partyCandidates?: readonly ChildParty[];
     readonly customerId?: string | null;
+    /** The household's other children — the known entries of a collection of children. */
+    readonly householdChildren?: readonly { readonly id: string; readonly display_name: string }[];
 };
 
 /** Recompute the objective from known post-write state — zero queries, same result shape. */
@@ -202,7 +204,7 @@ export function recomputeParticipantObjectiveFromContext(
              * them. Read from `person_child_relationships` by `resolveChildParties` — the canonical
              * graph — so the conversation shows what Alloy knows instead of asking for it again.
              */
-            knownPartyEntries: knownPartyEntriesForForms(context.needsContext.forms, context.parties ?? []),
+            knownPartyEntries: knownPartyEntriesForForms(context.needsContext.forms, context.parties ?? [], context.householdChildren ?? []),
         },
     );
     return buildParticipantObjective(context.progress, needs, {
@@ -339,6 +341,7 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
             parties: partyContext.parties,
             partyCandidates: partyContext.candidates,
             customerId: partyContext.customerId,
+            householdChildren: partyContext.siblings,
         },
     };
 }
@@ -429,9 +432,9 @@ async function resolveTenantPartyRoles(
 async function resolveChildPartyContext(
     supabase: SupabaseClient,
     input: { readonly orgId: string; readonly customerMemberId: string | null },
-): Promise<{ parties: readonly ChildParty[]; candidates: readonly ChildParty[]; customerId: string | null }> {
+): Promise<{ parties: readonly ChildParty[]; candidates: readonly ChildParty[]; customerId: string | null; siblings: Array<{ id: string; display_name: string }> }> {
     const childId = (input.customerMemberId ?? "").trim();
-    if (!childId) return { parties: [], candidates: [], customerId: null };
+    if (!childId) return { parties: [], candidates: [], customerId: null, siblings: [] };
     try {
         const [parties, { data: child }] = await Promise.all([
             resolveChildParties(supabase, { orgId: input.orgId, customerMemberId: childId }),
@@ -450,9 +453,46 @@ async function resolveChildPartyContext(
                   excludePersonIds: new Set(parties.map((p) => p.person_id)),
               })
             : [];
-        return { parties, candidates, customerId };
+        const siblings = customerId
+            ? await resolveHouseholdSiblings(supabase, { orgId: input.orgId, customerId, excludeMemberId: childId })
+            : [];
+        return { parties, candidates, customerId, siblings };
     } catch {
-        return { parties: [], candidates: [], customerId: null };
+        return { parties: [], candidates: [], customerId: null, siblings: [] };
+    }
+}
+
+/**
+ * The other children on this household — the people a "siblings" collection already knows.
+ *
+ * `resolveChildParties` answers who is RELATED TO this child as a person in a role; it cannot
+ * answer who else is a child of the same household, because that is a different edge. So the
+ * household's own members are read here, from `customer_members`, which is the canonical child
+ * record and the same table the operator surfaces list from.
+ *
+ * The enrollment subject is excluded by id. A child is not their own sibling, and a family shown
+ * their own child in that list would reasonably conclude Alloy has them twice.
+ */
+async function resolveHouseholdSiblings(
+    supabase: SupabaseClient,
+    input: { readonly orgId: string; readonly customerId: string; readonly excludeMemberId: string },
+): Promise<Array<{ id: string; display_name: string }>> {
+    try {
+        const { data } = await supabase
+            .from("customer_members")
+            .select("id, display_name, first_name, last_name, is_active")
+            .eq("org_id", input.orgId)
+            .eq("customer_id", input.customerId);
+        return (data ?? [])
+            .map((r) => r as { id?: string; display_name?: string; first_name?: string; last_name?: string; is_active?: boolean })
+            .filter((r) => r.id && r.id !== input.excludeMemberId && r.is_active !== false)
+            .map((r) => ({
+                id: String(r.id),
+                display_name: String(r.display_name ?? [r.first_name, r.last_name].filter(Boolean).join(" ")).trim(),
+            }))
+            .filter((r) => r.display_name);
+    } catch {
+        return [];
     }
 }
 
@@ -467,10 +507,11 @@ async function resolveChildPartyContext(
 function knownPartyEntriesForForms(
     forms: readonly { readonly schema: import("@/lib/forms/schema").FormSchemaV1 }[],
     parties: readonly ChildParty[],
+    householdChildren: readonly { readonly id: string; readonly display_name: string }[],
 ): Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]> {
     const out: Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]> = {};
     for (const form of forms) {
-        for (const [groupId, entries] of Object.entries(knownPartyEntriesFromParties(form.schema, parties))) {
+        for (const [groupId, entries] of Object.entries(knownPartyEntriesFromParties(form.schema, parties, householdChildren))) {
             if (!out[groupId]) out[groupId] = entries;
         }
     }

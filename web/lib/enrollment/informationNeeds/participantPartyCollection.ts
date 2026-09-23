@@ -328,10 +328,30 @@ function readEntryFieldOptions(field: FormField): { value: string; label: string
 export function knownPartyEntriesFromParties(
     schema: Pick<FormSchemaV1, "fields">,
     parties: readonly { readonly person_id: string; readonly full_name: string; readonly phone: string | null; readonly roles: readonly string[] }[],
+    /**
+     * The household's other children.
+     *
+     * A separate read because it is a different canonical edge: `resolveChildParties` answers who
+     * is related to this child in a ROLE, which cannot answer who else is a child of the same
+     * household. A collection of children names no role, so without this it had no known entries at
+     * all — measured in the mounted conversation against a real family, where the known sibling
+     * simply did not appear.
+     */
+    householdChildren: readonly { readonly id: string; readonly display_name: string }[] = [],
 ): Record<string, ParticipantPartyEntry[]> {
     const out: Record<string, ParticipantPartyEntry[]> = {};
     for (const group of partyCollectionGroups(schema)) {
         const party = partyCollectionOf(group);
+        if (party?.subject === "child") {
+            if (!householdChildren.length) continue;
+            out[group.id] = householdChildren.map((c) => ({
+                instance_key: `known:${c.id}`,
+                origin: "existing" as const,
+                item_id: c.id,
+                values: entryValuesForKnownChild(group.fields, c),
+            }));
+            continue;
+        }
         const role = party?.role?.trim();
         if (!role) continue;
         const holders = parties.filter((p) => p.roles.includes(role));
@@ -416,4 +436,20 @@ export function readPartySettled(
     groupFieldId: string,
 ): boolean {
     return sharedValues[partyCollectionSettledKey(formDefinitionId, groupFieldId)] === true;
+}
+
+/** Which of a child collection's questions a household child already answers. */
+function entryValuesForKnownChild(
+    fields: readonly FormField[],
+    child: { readonly display_name: string },
+): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
+    for (const f of fields) {
+        if (f.type === "group") continue;
+        const key = f.field_source?.field_key?.toLowerCase() ?? "";
+        if ((key.includes("name") || /\bname\b/.test(f.label.toLowerCase())) && child.display_name) {
+            values[f.id] = child.display_name;
+        }
+    }
+    return values;
 }
