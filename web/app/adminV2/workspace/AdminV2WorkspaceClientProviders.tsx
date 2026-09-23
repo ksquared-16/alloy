@@ -14,7 +14,7 @@ import { OperationalModeEntryProvider } from "@/lib/adminV2/runtime/operationalS
 import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
-import { RuntimeKernelProvider } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import { RuntimeKernelProvider, type InitialServerFrame } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import OperatorFocusAttentionListener from "@/components/adminV2/OperatorFocusAttentionListener";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -33,6 +33,11 @@ interface AdminV2WorkspaceClientProvidersProps {
   orgId?: string | null;
   /** Dept/site scope fingerprint — isolates sessionStorage snapshots when access narrows. */
   accessScopeFingerprint: string;
+  /**
+   * The frame the server composed for this address, when the route names a work unit. It exists so
+   * the Focus Panel can be rendered in the initial HTML rather than created by client execution.
+   */
+  initialFrame?: InitialServerFrame;
   /** Server-resolved user → org → UTC display timezone. */
   initialViewerTimezone?: AdminViewerTimezoneValue;
   /** Org operational IANA for schedule defaults. */
@@ -55,6 +60,7 @@ export default function AdminV2WorkspaceClientProviders({
   orgName = null,
   orgId = null,
   accessScopeFingerprint,
+  initialFrame = null,
   initialViewerTimezone,
   initialOperationalTimezoneIana,
   workspaceRouteVm = EMPTY_WORKSPACE_ROUTE_VM,
@@ -119,6 +125,7 @@ export default function AdminV2WorkspaceClientProviders({
                       <RuntimeKernelProvider
                         tenant={typeof orgId === "string" ? orgId : ""}
                         principal={principalUserId ?? ""}
+                        initialFrame={initialFrame}
                       >
                         {/* Surface Host (NAV-1 (A)) — the canonical client-context owner of
                             operational-surface focus. Always mounted; no flag, no parallel mode.
