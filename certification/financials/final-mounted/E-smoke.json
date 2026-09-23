@@ -1,0 +1,17 @@
+{
+  "smoke": {
+    "prepaidNamed": true,
+    "prepaidSeparateFromBalance": true,
+    "paymentControl": true,
+    "paymentColor": "rgb(0, 162, 131)",
+    "paymentColorVar": "",
+    "billingPeriodPresent": false,
+    "glAccountColumn": true,
+    "autopayOnSurface": false,
+    "nativeFinancialControls": 0
+  },
+  "payShell": [
+    "payment"
+  ],
+  "adjust": {}
+}
