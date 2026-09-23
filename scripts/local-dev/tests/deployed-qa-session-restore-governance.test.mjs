@@ -374,6 +374,41 @@ test("a mint that writes nothing is not a restore, however well it verifies", ()
     assert.equal(out.verified_at, null);
 });
 
+test("a successful restore says WHERE the session is", () => {
+    /*
+     * THE DEFECT THIS CLOSES, MEASURED. A certification lane needed the session this action mints.
+     * The result told it the target, the base url, the project ref, that the artifact was written
+     * and that verification passed — everything except the one fact it needed. So the lane computed
+     * the conventional path, and the conventional path was wrong: `defaultAuthRoot()` joins `auth`
+     * onto ALLOY_RUNTIME_ROOT when it is set, so a gateway-rooted executor writes
+     * `<root>/gateway/auth/deployed/<target>/storage-state.json` while an unrooted consumer looks
+     * under `~/.local/state/alloy-dev/auth/`.
+     *
+     * It found a stale unrelated file there, loaded it into Playwright, landed on /login and
+     * reported the environment blocked — while a valid session minted four minutes earlier sat at
+     * the rooted path. The action was truthful and unusable at the same time.
+     *
+     * A conventional path is not a contract when the runtime boundary can move it.
+     */
+    const { mint, stat } = writingMint();
+    const out = executeRestoreDeployedQaSessionSync({
+        action: action(), grant: { id: "g" }, grantCheck: grantAll,
+        read: envRead(REF), fetchJson: fetchRef(REF), mint, stat,
+        verify: () => ({ ok: true }), authRoot: "/runtime/root/auth",
+    });
+    assert.equal(out.ok, true);
+    assert.equal(
+        typeof out.storage_state_path === "string" && out.storage_state_path.length > 0,
+        true,
+        "a successful restore must return the artifact location",
+    );
+    /* And it must be the path the action actually stamped — the rooted one, not a convention. */
+    assert.equal(out.storage_state_path.startsWith("/runtime/root/auth/"), true);
+    assert.equal(out.storage_state_path.endsWith("/storage-state.json"), true);
+    /* The location is a path, never the session itself: no cookie or token may ride the result. */
+    assert.equal(/cookie|token|password|authorization/i.test(JSON.stringify(out)), false);
+});
+
 test("storage_written is measured off the file, not asserted", () => {
     const { mint, stat } = writingMint();
     const out = executeRestoreDeployedQaSessionSync({
