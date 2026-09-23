@@ -100,21 +100,35 @@ describe("ratio is authored on the object, canonically", () => {
         expect(src).toContain("staff for up to");
     });
 
-    it("the edit form seeds its tiers when it OPENS, not only on a room change", () => {
-        // Hydration can run before the canonical rules have loaded, which left
-        // the form saying "No staffing ratio set" about a space visibly showing
-        // 1:5 - 2:11. Found by mounting, not by a unit test.
+    it("states the three seeding cases in one place", () => {
+        /*
+         * CORRECTION. An earlier commit claimed a hydration defect here: a space
+         * read 1:5 - 2:11 while its editor opened empty. That was not a defect —
+         * the space was in CONFLICT, and an empty editor is the designed
+         * behaviour, because pre-filling one of two disagreeing staffing records
+         * would answer a staffing-law question the moment someone pressed Save.
+         *
+         * What the investigation did find is this: a LEGACY-ONLY space also
+         * opened empty, which loses the one-click confirmation the operator is
+         * told to expect. That is fixed, and the rule now lives in one function
+         * rather than being restated at each call site.
+         */
         const src = read(PANEL);
-        const open = src.slice(src.indexOf("const beginEdit"), src.indexOf("const beginEdit") + 600);
-        expect(open).toContain("ratioStandingFor(room)");
-        expect(open).toContain("setRatioDraft");
+        const seed = src.slice(src.indexOf("const ratioSeedFor"), src.indexOf("const ratioSeedFor") + 500);
+        expect(seed).toContain('standing.state === "conflict"');
+        expect(seed).toContain('standing.state === "legacy_only"');
+        expect(seed).toContain("readObjectRatioTiers(standing)");
+        // Both the room change and the Edit click go through the same rule.
+        expect(src).toContain("ratioSeedFor(next)");
+        expect(src).toContain("ratioSeedFor(room)");
     });
 
-    it("a conflict hydrates the edit form with NEITHER record", () => {
+    it("a conflict seeds the edit form with NEITHER record", () => {
         // Seeding one of two disagreeing staffing records would decide a
         // staffing-law question silently, on nothing but form convenience.
         const src = read(PANEL);
-        expect(src).toContain('standing.state === "conflict" ? [] :');
+        const seed = src.slice(src.indexOf("const ratioSeedFor"), src.indexOf("const ratioSeedFor") + 500);
+        expect(seed).toContain('if (standing.state === "conflict") return [];');
     });
 
     it("the tier grid labels Staff and Children once, not around every input", () => {
