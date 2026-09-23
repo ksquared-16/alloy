@@ -10,8 +10,61 @@ import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTi
 import { loadEntityLabelsMapForOrgId, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { composeWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { AlloyOperationalBootShell } from "@/components/admin/workspace/AlloyOperationalBootShell";
+import { headers } from "next/headers";
+import { ALLOY_PATHNAME_HEADER, readForwardedAddress } from "@/lib/http/alloyPathnameHeader";
+import { frameAddressFromPath, frameForAddress } from "@/lib/runtime/provisioning/serverFrameForAddress";
+import { attentionFromUrl } from "@/lib/runtime/kernel/attention";
+import type { InitialServerFrame } from "@/lib/runtime/kernel/RuntimeKernelContext";
+import { toRscPlainJson } from "@/lib/runtime/toRscPlainJson";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * THE FRAME, COMPOSED AT THE BOUNDARY THAT RENDERS IT.
+ *
+ * This layout mounts `SurfaceHostProvider`, which owns Focus Panel rendering. It is an ANCESTOR of
+ * the work-unit page segment, so it could never see the answer that segment composed — and the
+ * server emitted no Focus Panel markup at all. Middleware forwards the address; this reads it and
+ * composes the same frame, through the same request-scoped composer the page uses, so the two share
+ * ONE composition rather than each paying for their own.
+ *
+ * Returns null for every route that is not a work unit, and for any compose that did not resolve —
+ * in which case the client behaves exactly as it did before.
+ */
+async function initialServerFrame(orgId: string | null, userId: string | null): Promise<InitialServerFrame> {
+    if (!orgId || !userId) return null;
+    try {
+        const h = await headers();
+        const addr = readForwardedAddress(h.get(ALLOY_PATHNAME_HEADER));
+        if (!addr) return null;
+        const target = frameAddressFromPath(addr.pathname, addr.searchParams);
+        if (!target) return null;
+        const { answer } = await frameForAddress(
+            target.workUnitSlug, target.workViewId, target.subjectId, target.cohort, target.aspect,
+        );
+        if (!answer || answer.terminal === "error") return null;
+        /*
+         * The attention ref comes from the SAME reader the browser's cold load uses, over the same
+         * address, so both passes produce the identical ref and therefore the identical surfaceId.
+         * Deriving it any other way here is how a server frame and its hydration come to disagree
+         * about which surface they are.
+         */
+        const hydration = attentionFromUrl(
+            new URL(`${addr.pathname}?${addr.searchParams.toString()}`, "https://alloy.local"),
+            { tenant: orgId, principal: userId },
+            "direct_url",
+        );
+        if (!hydration) return null;
+        return {
+            hydration,
+            snapshot: toRscPlainJson(answer),
+            outcome: answer.terminal,
+        } as InitialServerFrame;
+    } catch {
+        return null;
+    }
+}
+
 
 async function loadOrgDisplayName(orgId: string): Promise<string | null> {
     try {
@@ -100,6 +153,13 @@ export default async function AdminV2WorkspaceLayout({
         lifecycleCards: [],
     });
 
+    /*
+     * Composed here rather than in the page segment, because this is the boundary that renders the
+     * surface. It shares one request-scoped composition with the page, so the answer is produced
+     * exactly once for this request.
+     */
+    const initialFrame = await initialServerFrame(orgId, auth.user.id);
+
     if (process.env.NODE_ENV === "development") {
         const layoutMs =
             typeof performance !== "undefined" ? Math.round(performance.now() - layoutT0) : null;
@@ -124,6 +184,7 @@ export default async function AdminV2WorkspaceLayout({
             initialViewerTimezone={viewerTimezone}
             initialOperationalTimezoneIana={operationalTimezoneIana}
             workspaceRouteVm={workspaceRouteVm}
+            initialFrame={initialFrame}
         >
             {children}
         </AdminV2WorkspaceClientProviders>
