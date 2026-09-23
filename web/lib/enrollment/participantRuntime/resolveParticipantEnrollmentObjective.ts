@@ -46,6 +46,9 @@ import {
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 import { declaredPartyCollectionsForForms } from "@/lib/enrollment/participantRuntime/declaredPartyCollections";
 import { knownPartyEntriesFromParties } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+// One owner for "who does Alloy already know here" — the submit seam and the document renderer
+// read the SAME resolution, which is what keeps the card and the completed artifact in agreement.
+import { resolveHouseholdSiblings } from "@/lib/enrollment/informationNeeds/sessionKnownPartyEntries";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type {
@@ -475,41 +478,6 @@ async function resolveChildPartyContext(
         return { parties: [], candidates: [], customerId: null, siblings: [] };
     }
 }
-
-/**
- * The other children on this household — the people a "siblings" collection already knows.
- *
- * `resolveChildParties` answers who is RELATED TO this child as a person in a role; it cannot
- * answer who else is a child of the same household, because that is a different edge. So the
- * household's own members are read here, from `customer_members`, which is the canonical child
- * record and the same table the operator surfaces list from.
- *
- * The enrollment subject is excluded by id. A child is not their own sibling, and a family shown
- * their own child in that list would reasonably conclude Alloy has them twice.
- */
-async function resolveHouseholdSiblings(
-    supabase: SupabaseClient,
-    input: { readonly orgId: string; readonly customerId: string; readonly excludeMemberId: string },
-): Promise<Array<{ id: string; display_name: string }>> {
-    try {
-        const { data } = await supabase
-            .from("customer_members")
-            .select("id, display_name, first_name, last_name, is_active")
-            .eq("org_id", input.orgId)
-            .eq("customer_id", input.customerId);
-        return (data ?? [])
-            .map((r) => r as { id?: string; display_name?: string; first_name?: string; last_name?: string; is_active?: boolean })
-            .filter((r) => r.id && r.id !== input.excludeMemberId && r.is_active !== false)
-            .map((r) => ({
-                id: String(r.id),
-                display_name: String(r.display_name ?? [r.first_name, r.last_name].filter(Boolean).join(" ")).trim(),
-            }))
-            .filter((r) => r.display_name);
-    } catch {
-        return [];
-    }
-}
-
 
 /**
  * Known entries across every Form in the packet, keyed by collection group id.

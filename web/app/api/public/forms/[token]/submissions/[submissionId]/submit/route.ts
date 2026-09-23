@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
 import { partyCollectionGroupRows } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+import { resolveSessionKnownPartyEntries } from "@/lib/enrollment/informationNeeds/sessionKnownPartyEntries";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
@@ -214,17 +215,38 @@ export async function POST(
     if (ctx.packet) {
         const { data: psRow } = await supabase
             .from("form_packet_sessions")
-            .select("shared_values")
+            .select("shared_values, process_instance_id, crm_snapshot")
             .eq("id", ctx.packet.packet_session_id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         const sharedValues = ((psRow as { shared_values?: unknown } | null)?.shared_values ?? {}) as Record<string, unknown>;
-        const conversationGroups = partyCollectionGroupRows(schema, sharedValues, ctx.formDefinitionId);
+        /*
+         * AND THE PEOPLE ALLOY ALREADY KNEW.
+         *
+         * A known sibling and a known emergency contact are part of the obligation the family
+         * satisfied — they read them, they confirmed them, they settled the collection on them.
+         * Reuse spared the family retyping and spared the record a duplicate; it was never a
+         * decision to leave them off the completed paperwork. Without this the payload carried only
+         * what the family typed, and the school's evidence of who may collect their child was a
+         * heading with nothing under it.
+         */
+        const knownEntries = await resolveSessionKnownPartyEntries(supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: (psRow as { process_instance_id?: string | null } | null)?.process_instance_id ?? null,
+            session: psRow,
+            schema,
+        });
+        const conversationGroups = partyCollectionGroupRows(schema, sharedValues, ctx.formDefinitionId, knownEntries);
         if (Object.keys(conversationGroups).length > 0) {
             const clientGroups = (payloadToValidate.groups ?? {}) as Record<string, unknown>;
+            /*
+             * The conversation owns a DECLARED collection; the client echo of it is an older read.
+             * Only group ids the schema declares as `party_collection` appear on the left, so every
+             * other group the client authored survives untouched.
+             */
             payloadToValidate = {
                 ...payloadToValidate,
-                groups: { ...conversationGroups, ...clientGroups },
+                groups: { ...clientGroups, ...conversationGroups },
             };
         }
     }

@@ -97,7 +97,15 @@ export type ParticipantObjectiveWire = {
             readonly max: number | null;
             readonly valid: boolean;
             readonly settled: boolean;
-            readonly entry_fields: readonly { field_id: string; label: string; type: string; required: boolean; options: readonly { value: string; label: string }[] }[];
+            readonly entry_fields: readonly {
+                field_id: string;
+                label: string;
+                type: string;
+                required: boolean;
+                options: readonly { value: string; label: string }[];
+                /** What the question means, where the platform has a primitive for it. */
+                semantic: "phone" | null;
+            }[];
             readonly entries: readonly {
                 instance_key: string;
                 origin: "existing" | "respondent_added";
@@ -741,6 +749,9 @@ export function participantObjectiveWireModel(
                           type: f.type,
                           required: f.required,
                           options: f.options ?? [],
+                          // The editor needs to know a phone is a phone; it cannot re-derive that
+                          // from an authored `text` type without inventing a fourth sniffing rule.
+                          semantic: f.semantic ?? null,
                       })),
                       entries: turn.need.party_collection.entries.map((e, i) => ({
                           instance_key: e.instance_key,
@@ -832,6 +843,14 @@ function optionsForNeed(
 
 
 /** The one line of detail a card shows under a person's name — never their whole entry. */
+/**
+ * The line under an entry's name.
+ *
+ * Through `displayValue`, like every other value a parent reads. It used to return the stored string
+ * verbatim, which is how a known contact's `(541) 555-7788` and a contact the family had just typed
+ * as `5415557788` appeared one above the other on the same card. Neither value was wrong — nothing
+ * was formatting either of them.
+ */
 function collectionEntrySummary(
     collection: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyCollection,
     entry: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry,
@@ -839,7 +858,7 @@ function collectionEntrySummary(
     for (const f of collection.entry_fields) {
         if (/name/i.test(f.label)) continue;
         const v = entry.values[f.field_id];
-        if (typeof v === "string" && v.trim()) return v.trim();
+        if (typeof v === "string" && v.trim()) return displayValue(v.trim());
     }
     return null;
 }

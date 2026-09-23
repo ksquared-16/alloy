@@ -56,7 +56,12 @@ type SubmissionRow = {
     id: string;
     org_id: string;
     status: string;
-    payload: { values?: Record<string, unknown>; signatures?: Record<string, unknown> } | null;
+    payload: {
+        values?: Record<string, unknown>;
+        signatures?: Record<string, unknown>;
+        /** Repeating-group rows — where a collection of people actually lives. */
+        groups?: Record<string, unknown>;
+    } | null;
     form_definition_version_id: string;
     person_id: string | null;
     customer_id: string | null;
@@ -354,6 +359,19 @@ async function persistComposedSignedArtifact(
         schema,
         // The SUBMITTED values, exactly — the stored copy must correspond to what was signed.
         values: (input.sub.payload?.values ?? {}) as Record<string, unknown>,
+        /*
+         * AND THE SUBMITTED ROWS, WHICH ARE THE OTHER HALF OF WHAT WAS SIGNED.
+         *
+         * A repeating group's answers live in `groups`, not in `values`, so passing only `values`
+         * filed the organisation's completed paperwork without the family's emergency contacts on
+         * it. The live render was repaired first and this was not, which is the worse of the two to
+         * leave: the screen showed the parent a document naming four people and the copy kept as
+         * evidence named none of them.
+         *
+         * The payload is read exactly as submitted — convergence, known-person reuse and removal
+         * have all already happened upstream — so the stored copy corresponds to what was signed.
+         */
+        groups: (input.sub.payload?.groups ?? {}) as Parameters<typeof composeGeneratedDocument>[0]["groups"],
         provenance: {
             form_definition_id: input.formDefinitionId,
             form_definition_version_id: input.sub.form_definition_version_id,

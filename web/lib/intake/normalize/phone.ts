@@ -1,4 +1,5 @@
 import { normalizePhoneDigitsCompat } from "@/lib/identity";
+import { formatPhoneNumber } from "@/lib/format/phoneNumber";
 
 export const INTAKE_PHONE_BARE_RE = /\b\d{10}\b/;
 
@@ -14,9 +15,15 @@ export function isValidPhone(raw: string): boolean {
     return normalizePhoneDigits(raw).length === 10;
 }
 
+/**
+ * Display a phone number.
+ *
+ * Delegates to the platform primitive rather than holding a second copy of the layout: this used to
+ * format exactly ten digits and return everything else untouched, so a value stored as `+15415557788`
+ * reached a parent as `+15415557788`.
+ */
 export function formatPhoneDisplay(digits10: string): string {
-    if (digits10.length !== 10) return digits10;
-    return `(${digits10.slice(0, 3)}) ${digits10.slice(3, 6)}-${digits10.slice(6)}`;
+    return formatPhoneNumber(digits10);
 }
 
 function trimLine(v: string): string {

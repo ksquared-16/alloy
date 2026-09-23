@@ -461,13 +461,20 @@ Every DO and EXPECT below was driven on the real runtime against a fresh v11 con
 
 **E1. OPENING.**
 
-**DO** — Open:
+**DO** — Open a fresh conversation.
 
-```
-https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/UWFa8BNwm_CDLLTBJxyLaAaWxwXRLuy9MlhDnKLIY94
-```
+> **The link below is dead.** It was written when this part was, and a link carries one session —
+> that one has long since been used. It is left here only because the shape of the URL is worth
+> seeing. Take a live one from **Get a fresh participant link** at the top of
+> `/dev/real-enrollment-qa`; following the dead link lands you in a DIFFERENT family's paperwork,
+> which is how one certification pass came to be run against the wrong child.
+>
+> ```
+> https://vacilandos-mac-mini.tail2aa1af.ts.net:3014/forms/embed/…  ← expired, do not use
+> ```
 
-A fresh, unused conversation for **Lennon Kurzman**.
+A fresh, unused conversation. (Part E was originally driven against **Lennon Kurzman**; the button
+opens the **Disposable0913** family, and everything below reads the same with that child's name.)
 
 **EXPECT** — the conversation, immediately. Not a page of form fields that turns into a
 conversation.
@@ -789,14 +796,44 @@ collection as though you had already finished.
 
 **DO** Click **That's everyone**.
 
-## F4 — finish the paperwork
+## F4 — finish the paperwork, and READ IT
 
-**DO** Click **Review paperwork**, then **Everything looks good**, then **Sign and finish**.
+**DO** Click **Review paperwork**.
+
+**EXPECT** — the document, with the people **on it**:
+
+```
+    ZZ QA Family Linked
+    YOUR FAMILY
+    Children in your household
+      Bea Disposable0913
+      Dax Disposable0913
+    Emergency contacts
+      Corinne Vasquez
+        Phone: (541) 555-7788
+      Farrah Nolan
+        Phone: (321) 352-5132
+```
+
+Four people. **Bea and Corinne are there even though you never typed them** — reuse of someone
+Alloy already knows spares you re-entering them, it does not take them off the paperwork. The
+contact you **removed** is not there.
+
+**STOP AND REPORT IF** you see a heading with a lone **–** under it, or with nothing under it. That
+was the defect this part closed: the conversation was right, the submission was right, and the
+document the school keeps named nobody.
+
+**DO** Click **View larger**.
+
+**EXPECT** — the same four people, same phone formatting. Both views draw one document; if they
+disagree, that is worth reporting on its own.
+
+**DO** Close, then **Everything looks good**, then **Sign and finish**.
 
 **EXPECT** *"You're all set. Touree Disposable0913's enrollment paperwork has been submitted."*
 
 **STOP AND REPORT IF** you are told *"Please review your answer for Emergency contacts"* — that was
-the defect this work closed, and its return is the single most important thing to catch.
+an earlier defect this work closed, and its return is the single most important thing to catch.
 
 ## F5 — on a phone
 
@@ -819,6 +856,21 @@ The same packet can be reused, but **start each run on a fresh participant link*
 session, and a finished session stays finished. Click **Get a fresh participant link** at the top of
 this page again; you never need to ask anyone for one. Nothing you do to *Disposable0913 Family*
 needs cleaning up, and the button only ever points at that family.
+
+## The short rerun — four steps
+
+If you only have a few minutes, this is the part worth repeating. It covers both defects reported
+against the last pass.
+
+1. **Type an unformatted phone number.** On an emergency contact, type `3213525132` — ten bare
+   digits, no brackets, no dashes.
+2. **Watch it format as you type.** The box should read **(321) 352-5132** before you leave it, and
+   the card underneath should show the same. It must look no different from the known contact's
+   **(541) 555-7788** — one number, one reading, whether Alloy already had it or you just typed it.
+3. **Submit.** Settle the collection, **Review paperwork**, **Everything looks good**, **Sign and
+   finish**.
+4. **Read the document.** Every repeated person by name, with their details under them — the two
+   you typed AND the two Alloy already knew. Phones formatted. No heading with a dash under it.
 
 ## What is NOT covered here
 

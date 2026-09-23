@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, type FormEvent } from "react";
 import clsx from "clsx";
+import { formatPhoneAsTyped, phoneStorageValue } from "@/lib/format/phoneNumber";
 import { InlineFieldTokenText } from "@/components/forms/inline/InlineFieldTokenText";
 import { sortDocumentBlocks, type DocumentBlock } from "@/lib/forms/documentComposition";
 import { fieldById as schemaFieldById, resolveDocumentComposition } from "@/lib/forms/documentCompositionAuthoring";
@@ -165,14 +166,25 @@ export function FormEngineRenderer({
                     const strVal = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
                     const emailLike = fieldUsesEmailShape(field);
                     const phoneLike = fieldUsesPhoneShape(field);
-                    const inputType = loose && emailLike ? "email" : "text";
+                    /*
+                     * A phone-shaped field is a phone field on this renderer too.
+                     *
+                     * The shape was already detected — it only reached `autoComplete`, so the box
+                     * behaved like free text and a typed number stayed as typed. The platform
+                     * primitive formats what is shown and stores the canonical digits, which is the
+                     * same contract the Enrollment Conversation's entry editor follows.
+                     */
+                    const inputType = loose && emailLike ? "email" : phoneLike ? "tel" : "text";
                     const autoComplete =
                         loose && emailLike ? "email" : loose && phoneLike ? "tel" : undefined;
+                    // One value, two readings: what the box SHOWS, and what the payload STORES.
+                    const toCell = (v: string) => (phoneLike ? phoneStorageValue(v) : v);
+                    const shownVal = phoneLike ? formatPhoneAsTyped(strVal) : strVal;
                     const embedAutofillFix =
                         loose ?
                             {
                                 onInput: (e: FormEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-                                    onCellChange(field.id, e.currentTarget.value);
+                                    onCellChange(field.id, toCell(e.currentTarget.value));
                                 },
                             }
                         :   {};
@@ -195,14 +207,15 @@ export function FormEngineRenderer({
                                 />
                             :   <input
                                     type={inputType}
+                                    inputMode={phoneLike ? "tel" : undefined}
                                     autoComplete={autoComplete}
                                     className={clsx(
                                         "w-full rounded border px-2 py-1.5 text-sm",
                                         fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
                                     )}
-                                    value={strVal}
+                                    value={shownVal}
                                     placeholder={ph}
-                                    onChange={(e) => onCellChange(field.id, e.target.value)}
+                                    onChange={(e) => onCellChange(field.id, toCell(e.target.value))}
                                     {...embedAutofillFix}
                                     onBlur={
                                         loose && emailLike ?

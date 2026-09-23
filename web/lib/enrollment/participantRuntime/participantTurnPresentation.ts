@@ -15,7 +15,7 @@
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
-import { formatPhoneDisplay } from "@/lib/intake/normalize/phone";
+import { formatPhoneNumber, isFormattablePhoneNumber } from "@/lib/format/phoneNumber";
 
 /**
  * The control a turn needs.
@@ -295,8 +295,11 @@ export function displayValue(value: unknown): string {
      * disagree about. But that is a storage decision, and it was reaching the parent verbatim in
      * the correction surface, where it reads as a serial number rather than the number they gave.
      * Formatting is presentation, so it happens here and the stored value never changes.
+     *
+     * Through the platform primitive, so a number stored as `+15415557788` by an earlier canonical
+     * writer reads the same as one the family typed, and an international number is left alone.
      */
-    if (/^\d{10}$/.test(raw)) return formatPhoneDisplay(raw);
+    if (isFormattablePhoneNumber(raw)) return formatPhoneNumber(raw);
     return raw;
 }
 

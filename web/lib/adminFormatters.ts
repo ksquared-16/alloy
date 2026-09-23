@@ -5,6 +5,7 @@ import {
     formatQueueRecordDateDisplay as formatQueueRecordDateDisplayPresentation,
     parsePresentationDateInput,
 } from "@/lib/presentation/presentationDateFormat";
+import { formatPhoneNumber } from "@/lib/format/phoneNumber";
 
 /**
  * Shared formatting helpers for admin portal.
@@ -201,15 +202,16 @@ export function formatFrequencyLabel(cadence: string | null | undefined, interva
     return n === 1 ? "Every 1 month" : `Every ${n} months`;
 }
 
-/** Format US phone for display: (541) 654-3217. Uses last 10 digits when country code 1 is present. */
+/**
+ * Format US phone for display: (541) 654-3217. Empty reads as an em dash.
+ *
+ * The layout comes from the platform primitive. This used to format the LAST ten digits of whatever
+ * it was given, which meant `+442071838750` printed as `(207) 183-8750` — a London number shown as
+ * an Oregon one. A number the primitive cannot read as NANP is now shown as stored.
+ */
 export function formatPhoneUS(value: string | null | undefined): string {
     if (value == null || value === "") return "—";
-    const digits = String(value).replace(/\D/g, "");
-    if (digits.length < 10) return String(value).trim() || "—";
-    const area = digits.slice(-10, -7);
-    const mid = digits.slice(-7, -4);
-    const last = digits.slice(-4);
-    return `(${area}) ${mid}-${last}`;
+    return formatPhoneNumber(value) || "—";
 }
 
 /** Format US phone for editable inputs; empty string when no value. */

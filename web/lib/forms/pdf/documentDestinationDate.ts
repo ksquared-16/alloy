@@ -26,7 +26,7 @@
  * Pure.
  */
 
-import { formatPhoneDisplay } from "@/lib/intake/normalize/phone";
+import { formatPhoneNumber, isFormattablePhoneNumber } from "@/lib/format/phoneNumber";
 import { formatDisplayDate, parsePresentationDateInput } from "@/lib/presentation/presentationDateFormat";
 
 /**
@@ -71,7 +71,7 @@ export function formatValueForDocumentDestination(
      * The canonical value stays exactly as stored; this is the destination deciding how the fact
      * appears on paper, which is the same job `date_format` already does for a date.
      */
-    if (/^\d{10}$/.test(raw)) return formatPhoneDisplay(raw);
+    if (isFormattablePhoneNumber(raw)) return formatPhoneNumber(raw);
     if (!isStoredDate(raw)) return value;
     if (format === "iso") return raw;
 

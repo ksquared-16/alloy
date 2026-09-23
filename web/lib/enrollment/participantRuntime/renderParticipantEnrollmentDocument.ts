@@ -36,7 +36,11 @@ import {
 } from "@/lib/forms/pdf/fidelityMappingContract";
 import { loadPublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { participantPrefillValues } from "@/lib/public/forms/resolvePublicFormEmbedContext";
-import { resolveChildParties } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
+import { partyCollectionGroupRows } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+import {
+    resolveSessionChildContext,
+    resolveSessionKnownPartyEntries,
+} from "@/lib/enrollment/informationNeeds/sessionKnownPartyEntries";
 import { resolveArtifactValues } from "@/lib/enrollment/participantRuntime/resolveArtifactValues";
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
@@ -213,7 +217,8 @@ export async function renderParticipantEnrollmentDocument(
         resolveActiveArtifact(supabase, { orgId: input.orgId, sessionId: input.sessionId }),
         supabase
             .from("form_packet_sessions")
-            .select("shared_values, process_instance_id")
+            // `crm_snapshot` is how a journeyless packet names its child — see the known-party resolver.
+            .select("shared_values, process_instance_id, crm_snapshot")
             .eq("id", input.sessionId)
             .eq("org_id", input.orgId)
             .maybeSingle(),
@@ -265,10 +270,18 @@ export async function renderParticipantEnrollmentDocument(
          * decided before that branch. Putting the party projection anywhere downstream would mean
          * two integration points and two chances to disagree.
          */
-        resolvePartiesForSession(supabase, input.orgId, sessionRow as { process_instance_id?: string | null }),
+        resolveSessionChildContext(supabase, {
+            orgId: input.orgId,
+            processInstanceId: (sessionRow as { process_instance_id?: string | null }).process_instance_id,
+            session: sessionRow,
+        }).then((ctx) => ctx.parties),
     ]);
     const payload = (draftResult.data as {
-        payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown> };
+        payload?: {
+            values?: Record<string, unknown>;
+            signatures?: Record<string, unknown>;
+            groups?: Record<string, unknown>;
+        };
     } | null)?.payload;
     const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
     /*
@@ -308,6 +321,33 @@ export async function renderParticipantEnrollmentDocument(
     });
     const values: Record<string, unknown> = { ...resolved.values };
 
+    /*
+     * REPEATED PEOPLE REACH THE DOCUMENT THE SAME WAY THE SCALARS DO.
+     *
+     * A repeating group's answers live in `groups[groupId]`, a namespace `values` cannot hold, so
+     * every assembly above passes straight over them. The draft carries whatever was last projected
+     * into it; the conversation's own collection state is the live truth for a declared collection,
+     * and the people Alloy already knew are part of the list the family confirmed. All three
+     * readers — the card, the submitted payload and this document — now resolve that list through
+     * the same projection, so the completed record cannot name a different set of people than the
+     * family reviewed.
+     */
+    const knownEntries = await resolveSessionKnownPartyEntries(supabase, {
+        orgId: input.orgId,
+        processInstanceId: (sessionRow as { process_instance_id?: string | null }).process_instance_id,
+        session: sessionRow,
+        schema,
+    });
+    const groups: Record<string, unknown> = {
+        ...(payload?.groups ?? {}),
+        ...partyCollectionGroupRows(
+            schema,
+            ((sessionRow as { shared_values?: unknown }).shared_values ?? {}) as Record<string, unknown>,
+            artifact.formDefinitionId,
+            knownEntries,
+        ),
+    };
+
     if (!mapping) {
         /*
          * COMPOSED. Alloy's completed record of an intake whose source had no layout to recover:
@@ -324,6 +364,7 @@ export async function renderParticipantEnrollmentDocument(
         const composed = await composeGeneratedDocument({
             schema,
             values,
+            groups: groups as Parameters<typeof composeGeneratedDocument>[0]["groups"],
             signatures,
             provenance: {
                 form_definition_id: artifact.formDefinitionId,
@@ -385,34 +426,6 @@ export async function renderParticipantEnrollmentDocument(
         fillReport: { applied: filled.applied, missed: filled.missed },
         resolvedValues: values,
     };
-}
-
-/**
- * The canonical parties for the child this session is about.
- *
- * Never throws: with no parties the projection fills nothing and every party destination renders
- * blank, which is the truthful state before the conversation has collected anyone.
- */
-async function resolvePartiesForSession(
-    supabase: SupabaseClient,
-    orgId: string,
-    sessionRow: { process_instance_id?: string | null },
-) {
-    try {
-        const processInstanceId = String(sessionRow.process_instance_id ?? "").trim();
-        if (!processInstanceId) return [];
-        const { data } = await supabase
-            .from("process_instances")
-            .select("subject_id")
-            .eq("org_id", orgId)
-            .eq("id", processInstanceId)
-            .maybeSingle();
-        const childId = String((data as { subject_id?: string } | null)?.subject_id ?? "").trim();
-        if (!childId) return [];
-        return await resolveChildParties(supabase, { orgId, customerMemberId: childId });
-    } catch {
-        return [];
-    }
 }
 
 /**

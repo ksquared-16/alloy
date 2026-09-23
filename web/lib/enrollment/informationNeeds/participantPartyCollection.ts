@@ -33,6 +33,7 @@
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 import { partyCollectionOf, addAnotherLabel, entryHeading } from "@/lib/forms/partyCollection";
+import { fieldMeansPhone } from "@/lib/format/phoneNumber";
 
 /** One person in a collection, as the conversation holds them. */
 export type ParticipantPartyEntry = {
@@ -52,6 +53,15 @@ export type ParticipantPartyEntryField = {
     readonly type: string;
     readonly required: boolean;
     readonly options?: readonly { value: string; label: string }[];
+    /**
+     * What this question MEANS, where the platform has a primitive for it.
+     *
+     * A collection's questions are authored as plain text fields, so "Phone" arrived at the entry
+     * editor indistinguishable from "Relationship to the child" and was typed, stored and shown as
+     * raw digits beside a known contact's punctuated number. The semantic is resolved once, here,
+     * from the same binding-then-label precedence every other participant surface uses.
+     */
+    readonly semantic?: "phone";
 };
 
 /** The whole obligation, as one conversational topic. */
@@ -211,6 +221,9 @@ export function projectPartyCollection(
                 type: f.type === "text" && (f as { multiline?: boolean }).multiline === true ? "long_text" : f.type,
                 required: f.required === true,
                 ...(readEntryFieldOptions(f).length ? { options: readEntryFieldOptions(f) } : {}),
+                ...(fieldMeansPhone({ fieldKey: f.field_source?.field_key ?? null, type: f.type, label: f.label })
+                    ? { semantic: "phone" as const }
+                    : {}),
             })),
         entries: [...entries],
     };
@@ -278,11 +291,30 @@ export function partyCollectionGroupRows(
     schema: Pick<FormSchemaV1, "fields">,
     sharedValues: Readonly<Record<string, unknown>>,
     formDefinitionId: string,
+    /**
+     * People Alloy already knew, by collection group id.
+     *
+     * KNOWN PEOPLE ARE EVIDENCE, NOT ABSENCE. Reuse of a known person exists so the family does not
+     * retype them and so nothing canonical is duplicated — it was never a decision that they vanish
+     * from the completed paperwork. The projection held only what the SESSION had written, so a
+     * family who confirmed a known sibling and a known emergency contact and added nobody produced a
+     * payload with no rows at all, and a completed document with two empty headings. Measured in
+     * human QA against the Disposable0913 family.
+     *
+     * Merged through `mergeKnownEntries`, the same function the card uses, so the artifact contains
+     * exactly the list the family reviewed — in the same order, deduplicated by `item_id` the same
+     * way. `origin` and `item_id` travel with each row, which is what keeps the proposal pipeline
+     * from recreating someone who already exists.
+     */
+    knownEntries: Readonly<Record<string, readonly ParticipantPartyEntry[]>> = {},
 ): Record<string, FormPayloadGroupRow[]> {
     const out: Record<string, FormPayloadGroupRow[]> = {};
     for (const group of partyCollectionGroups(schema)) {
         const party = partyCollectionOf(group)!;
-        const entries = readPartyEntries(sharedValues, formDefinitionId, group.id);
+        const held = readPartyEntries(sharedValues, formDefinitionId, group.id);
+        const entries = mergeKnownEntries(knownEntries[group.id] ?? [], held, {
+            showKnown: party.show_known !== false,
+        });
         if (!entries.length) continue;
         out[group.id] = entries.map((e) => ({
             instance_key: e.instance_key,

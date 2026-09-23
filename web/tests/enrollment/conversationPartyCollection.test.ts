@@ -526,9 +526,16 @@ describe("a household's other children are the known entries of a child collecti
          * family shown their own child in the sibling list would reasonably conclude Alloy has them
          * twice.
          */
-        const resolver = readFileSync(new URL("../../lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective.ts", import.meta.url).pathname, "utf8");
+        // The read now has ONE owner, shared with the submit seam and the document renderer, so
+        // the card and the completed artifact cannot disagree about who the siblings are.
+        const resolver = readFileSync(new URL("../../lib/enrollment/informationNeeds/sessionKnownPartyEntries.ts", import.meta.url).pathname, "utf8");
         expect(resolver).toContain("excludeMemberId");
         expect(resolver).toContain("r.id !== input.excludeMemberId");
+        const objective = readFileSync(new URL("../../lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective.ts", import.meta.url).pathname, "utf8");
+        expect(objective, "a second copy of the sibling read would be a second chance to disagree").not.toContain(
+            "r.id !== input.excludeMemberId",
+        );
+        expect(objective).toContain("resolveHouseholdSiblings");
     });
 
     it("does not put household children into a person collection", async () => {
@@ -580,19 +587,28 @@ describe("a packet step's draft is refreshed from the conversation, not frozen a
     it("re-projects collections onto an existing draft before returning it", () => {
         const at = route.indexOf("const { org_id: _o, ...rest } = full;");
         expect(at).toBeGreaterThan(0);
-        const before = route.slice(Math.max(0, at - 1800), at);
+        const before = route.slice(Math.max(0, at - 2600), at);
         expect(before, "an existing draft is returned without the conversation's collections").toContain(
             "partyCollectionGroupRows",
         );
         expect(before).toContain('.from("form_submissions")');
     });
 
-    it("lets a client-supplied group win for its own collection", () => {
-        // Still one-way, still once per request: the two surfaces never fight over one list.
+    it("re-projection wins over what the draft already held", () => {
+        /*
+         * CORRECTED. This asserted the opposite — that a draft's existing groups survive the
+         * re-projection — and that is precisely what made the refresh a no-op for every visit after
+         * the first: the draft acquires the collection once, keeps it forever, and a person added
+         * afterwards never reaches the payload again.
+         *
+         * Only group ids the schema DECLARES as a `party_collection` appear in `refreshedGroups`,
+         * so nothing the conventional renderer authors is touched here; for a declared collection
+         * the conversation is the sole author and a draft copy of it is an older read.
+         */
         const at = route.indexOf("const nextPayload = { ...existingPayload, groups:");
         expect(at).toBeGreaterThan(0);
         const line = route.slice(at, route.indexOf("\n", at));
-        expect(line.indexOf("refreshedGroups")).toBeLessThan(line.indexOf("existingGroups"));
+        expect(line.indexOf("existingGroups")).toBeLessThan(line.indexOf("refreshedGroups"));
     });
 
     it("writes nothing when the conversation holds no collections", () => {
@@ -657,9 +673,21 @@ describe("the submit route is where the collection has to arrive", () => {
 
     it("reads the collection state from the packet session, not from the client", () => {
         const at = route.lastIndexOf("partyCollectionGroupRows(");
-        const around = route.slice(Math.max(0, at - 900), at + 300);
+        const around = route.slice(Math.max(0, at - 1600), at + 300);
         expect(around).toContain('.from("form_packet_sessions")');
         expect(around).toContain("shared_values");
+    });
+
+    it("carries the people Alloy already knew into the payload as evidence", () => {
+        /*
+         * Reuse of a known person spares the family retyping and spares the record a duplicate. It
+         * was never a decision to leave them off the completed paperwork — measured in human QA,
+         * where a confirmed sibling and a confirmed emergency contact reached the school as two
+         * empty headings.
+         */
+        expect(route).toContain("resolveSessionKnownPartyEntries");
+        const at = route.lastIndexOf("partyCollectionGroupRows(");
+        expect(route.slice(at, at + 200)).toContain("knownEntries");
     });
 
     it("reuses the one projection rather than adding a second adapter", () => {
@@ -668,8 +696,14 @@ describe("the submit route is where the collection has to arrive", () => {
         expect(route).not.toMatch(/conversationToGroups|partyRowsFor[A-Z]/);
     });
 
-    it("lets a client-supplied group keep ownership of its own collection", () => {
-        const at = route.indexOf("groups: { ...conversationGroups, ...clientGroups }");
+    it("lets the conversation own a collection it declared", () => {
+        /*
+         * CORRECTED, same reason as the draft route above. The client echo of a declared collection
+         * is a copy of the draft, not a second author, and letting it win discarded the projection
+         * that had just been computed from the session. `conversationGroups` is keyed only by group
+         * ids the schema declares as a `party_collection`, so every other group survives untouched.
+         */
+        const at = route.indexOf("groups: { ...clientGroups, ...conversationGroups }");
         expect(at).toBeGreaterThan(0);
     });
 });

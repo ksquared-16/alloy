@@ -14,6 +14,7 @@ import {
     sharedValuesToFieldIds,
 } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { partyCollectionGroupRows } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+import { resolveSessionKnownPartyEntries } from "@/lib/enrollment/informationNeeds/sessionKnownPartyEntries";
 import { parsePrefillFieldMapFromMetadata } from "@/lib/forms/prefill/prefillFieldMap";
 import { resolveFormPrefillPayload } from "@/lib/forms/prefill/resolveFormPrefillPayload";
 import { shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
@@ -125,14 +126,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return publicErr(e instanceof Error ? e.message : "Launch metadata resolve failed", 400);
     }
 
-    let packetSessionRow: { shared_values: unknown; crm_snapshot: unknown } | null = null;
+    let packetSessionRow: { shared_values: unknown; crm_snapshot: unknown; process_instance_id?: string | null } | null = null;
     // Participant attribution: on a Family Packet the resolving link owns WHO is answering, so a
     // shared session's snapshot never overrides it. See resolveParticipantFksForPacketDraft.
     const namesRecipient = linkNamesRecipientPerson(ctx.linkMetadata);
     if (ctx.packet) {
         const { data: psRow } = await supabase
             .from("form_packet_sessions")
-            .select("shared_values, crm_snapshot")
+            .select("shared_values, crm_snapshot, process_instance_id")
             .eq("id", ctx.packet.packet_session_id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
@@ -183,10 +184,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
          * client-supplied group (the conventional renderer's own rows) still wins for its group, so
          * the two surfaces never fight over one collection.
          */
-        const conversationGroups = partyCollectionGroupRows(schema, sv, ctx.formDefinitionId);
+        const knownEntries = await resolveSessionKnownPartyEntries(supabase, {
+            orgId: ctx.orgId,
+            processInstanceId: packetSessionRow.process_instance_id ?? null,
+            session: packetSessionRow,
+            schema,
+        });
+        const conversationGroups = partyCollectionGroupRows(schema, sv, ctx.formDefinitionId, knownEntries);
         if (Object.keys(conversationGroups).length) {
             const clientGroups = (payload.groups ?? {}) as Record<string, unknown>;
-            payload = { ...payload, groups: { ...conversationGroups, ...clientGroups } };
+            /*
+             * FOR A DECLARED COLLECTION, THE CONVERSATION IS THE OWNER.
+             *
+             * `conversationGroups` is keyed only by group ids the schema declares as a
+             * `party_collection`, and inside a packet those are collected by the conversation and by
+             * nothing else — so a client echo of them is a copy of an older read, never a second
+             * author. Letting the echo win is how a person added after the draft first acquired its
+             * groups could never reach the payload again: the draft below keeps what it has, the
+             * client sends that back, and the family's newest contact is silently the one that
+             * existed a minute earlier. Any group the schema does NOT declare as a collection is
+             * untouched here, so the conventional renderer keeps everything it authors.
+             */
+            payload = { ...payload, groups: { ...clientGroups, ...conversationGroups } };
         }
     }
 
@@ -226,13 +245,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     schema,
                     (packetSessionRow?.shared_values ?? {}) as Record<string, unknown>,
                     ctx.formDefinitionId,
+                    await resolveSessionKnownPartyEntries(supabase, {
+                        orgId: ctx.orgId,
+                        processInstanceId: packetSessionRow?.process_instance_id ?? null,
+                        session: packetSessionRow,
+                        schema,
+                    }),
                 );
                 if (Object.keys(refreshedGroups).length) {
                     const existingPayload = (full.payload && typeof full.payload === "object" && !Array.isArray(full.payload)
                         ? (full.payload as Record<string, unknown>)
                         : { values: {} }) as Record<string, unknown>;
                     const existingGroups = (existingPayload.groups ?? {}) as Record<string, unknown>;
-                    const nextPayload = { ...existingPayload, groups: { ...refreshedGroups, ...existingGroups } };
+                    // The re-projection is the point of this block: a draft that already holds a
+                    // collection's rows holds the rows as they were, and keeping those would make
+                    // this refresh a no-op for every visit after the first.
+                    const nextPayload = { ...existingPayload, groups: { ...existingGroups, ...refreshedGroups } };
                     const { error: refreshErr } = await supabase
                         .from("form_submissions")
                         .update({ payload: nextPayload })

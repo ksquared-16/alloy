@@ -23,9 +23,11 @@
 import { createHash } from "crypto";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { FormSchemaV1, FormField } from "@/lib/forms/schema";
+import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatValueForDocumentDestination } from "@/lib/forms/pdf/documentDestinationDate";
 import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
+import { entryHeading } from "@/lib/forms/partyCollection";
 
 /**
  * The layout's own version.
@@ -139,6 +141,47 @@ function displayAnswer(field: FormField, raw: unknown): string {
 }
 
 /**
+ * The name this entry goes by on the page.
+ *
+ * A person is named, not numbered. The first answered question whose label reads as a name carries
+ * the entry; a row with no name falls back to the collection's own authored entry label, which is
+ * the same wording the family saw on screen. Never `instance_key`, never an origin, never anything
+ * that exists for Alloy's bookkeeping rather than for the reader.
+ */
+function entryTitle(group: FormField & { type: "group" }, row: FormPayloadGroupRow, index: number): string {
+    const values = (row.values ?? {}) as Record<string, unknown>;
+    const named = (predicate: (f: FormField) => boolean): string | null => {
+        for (const f of group.fields) {
+            if (f.type === "group" || !predicate(f)) continue;
+            const v = values[f.id];
+            if (typeof v === "string" && v.trim()) return v.trim();
+        }
+        return null;
+    };
+    return named((f) => /name/i.test(f.label)) ?? named(() => true) ?? entryHeading(group, index);
+}
+
+/** The questions of one entry that actually have an answer, in the order the Form asks them. */
+function answeredEntryFields(
+    group: FormField & { type: "group" },
+    row: FormPayloadGroupRow,
+    titleShown: string,
+): Array<{ readonly label: string; readonly answer: string }> {
+    const values = (row.values ?? {}) as Record<string, unknown>;
+    const out: Array<{ label: string; answer: string }> = [];
+    for (const f of group.fields) {
+        if (f.type === "group" || !isRenderableValueField(f)) continue;
+        const raw = values[f.id];
+        if (raw === undefined || raw === null || raw === "") continue;
+        const answer = displayAnswer(f, raw);
+        // The name is already the entry's heading; repeating it as "Full name: Bea" is noise.
+        if (answer === titleShown) continue;
+        out.push({ label: presentableQuestion(f.label), answer });
+    }
+    return out;
+}
+
+/**
  * Text the standard fonts can actually draw.
  *
  * The standard PDF fonts encode WinAnsi (Latin-1), and pdf-lib throws on anything outside it — a
@@ -212,6 +255,19 @@ export async function composeGeneratedDocument(input: {
     provenance: GeneratedDocumentProvenance;
     /** Field id → the captured signature, when the participant has signed that block. */
     signatures?: Readonly<Record<string, ComposedSignatureMark>>;
+    /**
+     * Group field id → the rows that group actually holds.
+     *
+     * REPEATED CONTENT HAS ITS OWN NAMESPACE, AND THIS COMPOSER WAS NOT READING IT.
+     *
+     * A Form payload keeps a repeating group's answers in `groups[groupId]`, never in `values` —
+     * `values[groupId]` does not exist and never could, because one group holds many rows of many
+     * fields. The composer looked only at `values`, so a group reached `displayAnswer(undefined)`
+     * and the family's emergency contacts printed as the heading "Emergency contacts" followed by a
+     * single em dash. Measured in human QA: the participant flow was correct, the submission JSON
+     * was correct, and the school's completed paperwork named nobody.
+     */
+    groups?: Readonly<Record<string, readonly FormPayloadGroupRow[]>>;
 }): Promise<ComposedGeneratedDocument> {
     const pdf = await PDFDocument.create();
     const body = await pdf.embedFont(StandardFonts.Helvetica);
@@ -362,6 +418,49 @@ export async function composeGeneratedDocument(input: {
                 const label = (field.label ?? "Attachment").replace(/\s*[:?]\s*$/, "");
                 const provided = input.values[field.id];
                 draw(`${label}: ${provided ? "Provided" : "To be provided"}`, { font: body, size: 10, gap: 6 });
+                continue;
+            }
+
+            if (field.type === "group") {
+                /*
+                 * REPEATED PEOPLE, AS PEOPLE.
+                 *
+                 * One block per entry: who they are, then what the Form asked about them. The rows
+                 * are whatever the payload holds — known and family-added alike, and a row the
+                 * family removed is simply not in it, so nothing here decides who belongs.
+                 *
+                 * Deliberately absent: `instance_key`, `origin`, `item_id`, provider refs. Those are
+                 * how Alloy keeps a known person from being created twice; a parent reading their
+                 * completed paperwork has no use for them and a school's record is not the place to
+                 * publish internal identity.
+                 */
+                const rows = input.groups?.[field.id] ?? [];
+                const heading = presentableQuestion(field.label);
+                if (heading) {
+                    reserve(11 * 1.38 + 30);
+                    draw(heading, { font: bold, size: 11, gap: 5 });
+                }
+                if (!rows.length) {
+                    /*
+                     * An empty collection says so in words. It used to print a lone em dash, which
+                     * on paper is indistinguishable from a question nobody got round to answering.
+                     */
+                    draw("None provided.", { font: italic, size: 9.5, color: quiet, gap: 10 });
+                    continue;
+                }
+                rows.forEach((row, index) => {
+                    const title = entryTitle(field, row, index);
+                    const entries = answeredEntryFields(field, row, title);
+                    // Keep a person's name with at least their first detail rather than orphaning it.
+                    reserve(10.5 * 1.38 + (entries.length ? 9 * 1.38 + 4 : 0) + 8);
+                    draw(title, { font: bold, size: 10.5, gap: 2 });
+                    for (const entry of entries) {
+                        answeredCount += 1;
+                        draw(`${entry.label}: ${entry.answer}`, { font: body, size: 9.5, gap: 1 });
+                    }
+                    y -= 8;
+                });
+                y -= 2;
                 continue;
             }
 

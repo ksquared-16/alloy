@@ -30,6 +30,7 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { formatPhoneAsTyped, phoneStorageValue } from "@/lib/format/phoneNumber";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     controlForTurn,
@@ -2145,9 +2146,17 @@ function TypedAnswer({
                     <input
                         id="enrollment-turn-value"
                         type={control.inputType}
-                        value={text}
+                        inputMode={control.inputType === "tel" ? "tel" : undefined}
+                        /*
+                         * The same phone primitive the collection editor uses. A scalar phone turn
+                         * and a phone inside a person's details are the same question asked in two
+                         * places, and they must not format differently.
+                         */
+                        value={control.inputType === "tel" ? formatPhoneAsTyped(text) : text}
                         disabled={busy}
-                        onChange={(e) => setText(e.target.value)}
+                        onChange={(e) =>
+                            setText(control.inputType === "tel" ? phoneStorageValue(e.target.value) : e.target.value)
+                        }
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && ready) onSubmit(text.trim(), shown);
                         }}
@@ -2186,7 +2195,14 @@ function PartyCollectionEntryEditor({
     onCancel,
     onSave,
 }: {
-    readonly fields: readonly { field_id: string; label: string; type: string; required: boolean; options: readonly { value: string; label: string }[] }[];
+    readonly fields: readonly {
+        field_id: string;
+        label: string;
+        type: string;
+        required: boolean;
+        options: readonly { value: string; label: string }[];
+        semantic: "phone" | null;
+    }[];
     readonly initial: Record<string, unknown>;
     readonly busy: boolean;
     readonly saveLabel: string;
@@ -2234,10 +2250,35 @@ function PartyCollectionEntryEditor({
                             <input
                                 id={id}
                                 ref={i === 0 ? firstRef : undefined}
-                                type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
-                                value={value}
+                                /*
+                                 * A PHONE QUESTION IS A PHONE FIELD.
+                                 *
+                                 * The collection's questions are authored as plain text, so this
+                                 * box gave a parent no keypad, no shape and no feedback — they
+                                 * typed `5415557788` and that is exactly what the card, and then
+                                 * the completed paperwork, showed. The value formats as it is
+                                 * typed, and what gets STORED is still the canonical ten digits:
+                                 * the brackets are how the number reads, not what it is.
+                                 */
+                                type={
+                                    f.semantic === "phone" ? "tel"
+                                    : f.type === "date" ? "date"
+                                    : f.type === "number" ? "number"
+                                    : "text"
+                                }
+                                inputMode={f.semantic === "phone" ? "tel" : undefined}
+                                autoComplete={f.semantic === "phone" ? "tel" : undefined}
+                                value={f.semantic === "phone" ? formatPhoneAsTyped(value) : value}
                                 disabled={busy}
-                                onChange={(e) => setValues((p) => ({ ...p, [f.field_id]: e.target.value }))}
+                                onChange={(e) =>
+                                    setValues((p) => ({
+                                        ...p,
+                                        [f.field_id]:
+                                            f.semantic === "phone"
+                                                ? phoneStorageValue(e.target.value)
+                                                : e.target.value,
+                                    }))
+                                }
                                 /*
                                  * Enter saves the PERSON. Without this it submitted the surrounding
                                  * conversation composer, which answers a different question
