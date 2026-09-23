@@ -1,0 +1,89 @@
+{
+  "trusted_host_action_id": "tha_c3732d5e2d795c",
+  "query_hash": "1c10a42f17bfda10cdb585cee8e2500d8b17c2326fcbb73993c8c5cfdb983c1b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-20T22:08:45.947Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c3732d5e2d795c",
+    "query_hash": "1c10a42f17bfda10cdb585cee8e2500d8b17c2326fcbb73993c8c5cfdb983c1b",
+    "authorization_id": "grnt_26a51d7356eb462a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-20T22:08:47.109Z",
+    "question_ids": [
+      "defs_employment",
+      "values_employment",
+      "defs_entity_types_in_use",
+      "values_entity_types_in_use",
+      "cert_shaped_defs_any_entity",
+      "cert_shaped_entity_types",
+      "defs_shadowing_native_employment",
+      "employments_total"
+    ],
+    "questions": {
+      "defs_employment": {
+        "question_id": "defs_employment",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "values_employment": {
+        "question_id": "values_employment",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "defs_entity_types_in_use": {
+        "question_id": "defs_entity_types_in_use",
+        "row_count": null,
+        "rows": [
+          "customer customer_member inquiry_child job location opportunity person person_child_relationship schedule vendor"
+        ]
+      },
+      "values_entity_types_in_use": {
+        "question_id": "values_entity_types_in_use",
+        "row_count": null,
+        "rows": [
+          "customer_member location opportunity person"
+        ]
+      },
+      "cert_shaped_defs_any_entity": {
+        "question_id": "cert_shaped_defs_any_entity",
+        "row_count": null,
+        "rows": [
+          3
+        ]
+      },
+      "cert_shaped_entity_types": {
+        "question_id": "cert_shaped_entity_types",
+        "row_count": null,
+        "rows": [
+          "location vendor"
+        ]
+      },
+      "defs_shadowing_native_employment": {
+        "question_id": "defs_shadowing_native_employment",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "employments_total": {
+        "question_id": "employments_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

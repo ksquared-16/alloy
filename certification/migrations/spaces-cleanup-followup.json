@@ -1,0 +1,15 @@
+{
+  "qaSample": [
+    "QA Group A 06000",
+    "Operational · QA Room 06000 · Inactive · 10 capacity",
+    "QA Group A 58206",
+    "Operational · Inactive · 10 capacity",
+    "QA Group B 06000",
+    "Operational · QA Room 06000 · Inactive · 10 capacity",
+    "QA Group B 58206",
+    "Operational · Inactive · 10 capacity"
+  ],
+  "inactiveCount": 11,
+  "ratioSectionWithExistingTiers": "Staffing ratio | One step per staffing threshold. Two staff for up to 11 children is a different promise from two for up to 10, so each step is kept as you enter it. | No staffing ratio set for this space. | + Add tier",
+  "tierRows": 0
+}

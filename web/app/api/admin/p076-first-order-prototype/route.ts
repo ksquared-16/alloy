@@ -530,8 +530,25 @@ export async function GET(req: NextRequest) {
                     insight: c.insight.state,
                     facts: Object.fromEntries(Object.entries(c.facts).map(([fk, f]) => [fk, f.state === "known" ? { state: f.state, value: f.value } : { state: f.state }])),
                 }])),
+                /*
+                 * STATE AND VALUE, not state alone.
+                 *
+                 * The previous echo emitted only `state`, so a KPI reading `known` proved the
+                 * capability ran and nothing about WHAT it answered. Parity against the operator's
+                 * frame needs the number: "known" is compatible with 6 and with 600. The value is
+                 * emitted only when the state actually carries one, so an UNKNOWN or UNAVAILABLE
+                 * slot cannot acquire a value here that the projection never produced.
+                 */
                 kpiStates: Object.fromEntries(Object.entries(p.kpiValues).map(([k, f]) => [k, f.state])),
+                kpiValues: Object.fromEntries(Object.entries(p.kpiValues).map(([k, f]) => [
+                    k, { state: f.state, value: f.state === "known" ? f.value : null },
+                ])),
                 workViewStates: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [k, f.state])),
+                workViewValues: Object.fromEntries(Object.entries(p.workViewTotals).map(([k, f]) => [
+                    k, { state: f.state, value: f.state === "known" ? f.value : null },
+                ])),
+                workViewDiagnostics: r.workViewDiagnostics ?? null,
+                attendanceDiagnostics: r.attendanceDiagnostics ?? null,
                 serializedBytes: new TextEncoder().encode(JSON.stringify(p)).length,
             };
         } catch (e) {

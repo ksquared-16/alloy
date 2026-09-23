@@ -1345,6 +1345,30 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   pointer-events: none;
 }
 
+/*
+ * RESERVED CHIP — the fact is not known yet, and this holds its place.
+ *
+ * The chip row must have the same shape before and after the owner answers, so the reserved chip
+ * keeps the real chip's height and a min-width in the range a status label occupies. It carries no
+ * text: an UNKNOWN status is not a placeholder value, an ellipsis or a dash, because each of those
+ * reads as a fact the record does not have. Chip-row analogue of `ReservedFocusPanelCell`.
+ */
+.alloy-os-fp-header-compact__context-chip--reserved {
+  min-width: 4.5rem;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 22%, #fff);
+  color: transparent;
+  pointer-events: none;
+}
+
+/* The reserved chip is scaffolding, not content — it must not animate attention to itself. */
+@media (prefers-reduced-motion: no-preference) {
+  .alloy-os-fp-header-compact__context-chip--reserved {
+    transition: none;
+  }
+}
+
 .alloy-os-fp-header-compact__context-chip--process,
 .alloy-os-fp-header-compact__context-chip--location {
   border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, var(--alloy-os-border, #e5e9ef));

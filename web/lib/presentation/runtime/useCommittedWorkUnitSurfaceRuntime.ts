@@ -82,7 +82,13 @@ function prewarmSubjectDestination(
     recordRevealGateEvent("subject_warm_emitted", id);
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
     const opportunity = opportunityId?.trim();
-    if (opportunity) void prewarmRecordWork(opportunity);
+    /*
+     * `id` (the SUBJECT) is the attention subject the click will commit — family-grain rows make it
+     * the opportunity id, child-grain rows a participation id — and it is exactly what
+     * `useRecordWorkRuntime` will send as `attention_subject_id`. Passing it warms the entry the
+     * consumer actually looks up instead of an unreachable bare-scope twin.
+     */
+    if (opportunity) void prewarmRecordWork(opportunity, id);
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
@@ -341,6 +347,32 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
 
     const openRecord = useCallback(
         (row: QueueRowModel) => {
+            /*
+             * THE SELECTED RECORD OUTRANKS SPECULATION FROM THE INSTANT OF THE CLICK.
+             *
+             * The reveal gate and its consumer already exist: `prewarmSubjectDestination` returns
+             * early while `isWorkUnitPrimaryRevealActive()`, and `useRecordWorkRuntime` ends the
+             * window on every completion path when the selected VM applies. What was missing is an
+             * arm at SELECTION time. The gate was armed only at surface mount and on a committed
+             * TARGET change — deliberately not on subject movement — so a row switch armed it only
+             * once `useRecordWorkRuntime` noticed the new subject, a commit later.
+             *
+             * The adjacent-subject effect re-runs the moment `selectedSubjectId` changes and
+             * schedules its warms on `requestIdleCallback`, which fires on the idle immediately
+             * after the click's synchronous commit. Measured on deployed 2fcb4ddb: neighbour
+             * provisioning and VM requests for OTHER subjects began ~85ms after the click, ahead of
+             * the arm, and ran 2.5-5.1s against the record the operator had actually selected.
+             *
+             * This is the SAME race the mount arm above already documents ("before the sibling-view
+             * answer prewarm's idle callback can fire ... the commit-time arm above lands after the
+             * prewarm"), and the same remedy: arm earlier. Arming here is synchronous with the
+             * gesture, so the idle callback finds the window already open.
+             *
+             * No new gate, no new scheduler, no change to what the gate means. Pre-selection intent
+             * warming is untouched — it runs before this point — and the Slice-2 warm entry stays
+             * consumable because the selected record never loads through the prewarm scheduler.
+             */
+            beginWorkUnitPrimaryReveal();
             // A SUBJECT-scope movement — cannot express a lens/target change (compile-enforced).
             // This is the WHOLE gesture: committed Focus becomes the sole subject owner, and the
             // inline Record Work Runtime resolves that subject into the VM. No drawer state is written

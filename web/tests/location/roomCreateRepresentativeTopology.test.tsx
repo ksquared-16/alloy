@@ -116,7 +116,6 @@ async function addRoomThroughTheProduct(steps: {
                 programOptions={[]}
                 schedulePatterns={[]}
                 insideOptions={eligibleInsideOptions(asHierarchyRows(), SITE)}
-                acceptsLegacyCapacity
                 onCancel={() => {}}
                 onCreate={async (input) => { captured = input; }}
             />,
@@ -197,11 +196,13 @@ describe("16. the representative topology, built through Add Room", () => {
         expect(d.status).toBe(200);
         expect(byLabel("Toddler 2").parent_location_id).toBe(room1.id);
 
-        // E — Shared space.
-        const e = await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
+        // E — Playground. A PHYSICAL SPACE now: the operator no longer has to
+        // classify it as a technical "shared space" to make it work, and every
+        // downstream consumer behaves identically either way.
+        const e = await addRoomThroughTheProduct({ name: "Playground", type: "physical_space" });
         expect(e.status).toBe(200);
         const play = byLabel("Playground");
-        expect(play.unit_role).toBe("shared_space");
+        expect(play.unit_role).toBe("physical_space");
         expect(play.parent_location_id).toBe(SITE);
 
         expect(db.locations).toHaveLength(6);
@@ -260,7 +261,7 @@ describe("17. downstream consumers read the created topology correctly", () => {
         const room1 = byLabel("Room 1");
         await addRoomThroughTheProduct({ name: "Toddler 1", inside: String(room1.id) });
         await addRoomThroughTheProduct({ name: "Toddler 2", inside: String(room1.id) });
-        await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
+        await addRoomThroughTheProduct({ name: "Playground", type: "physical_space" });
     });
 
     const canonicalRooms = () => {
@@ -287,7 +288,7 @@ describe("17. downstream consumers read the created topology correctly", () => {
         expect(placeable).not.toContain("Room 1");
     });
 
-    it("16. Assignment excludes the shared space from classroom placement", () => {
+    it("16. Assignment excludes the playground from classroom placement", () => {
         expect(placeableRooms(canonicalRooms()).map((r) => r.name)).not.toContain("Playground");
     });
 
@@ -325,23 +326,23 @@ describe("13. what was created is what the list explains", () => {
         await addRoomThroughTheProduct({ name: "Toddler 1", inside: String(room1.id) });
         await addRoomThroughTheProduct({ name: "Toddler 2", inside: String(room1.id) });
         await addRoomThroughTheProduct({ name: "Infant Room" });
-        await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
+        await addRoomThroughTheProduct({ name: "Playground", type: "physical_space" });
 
         const rows = asHierarchyRows();
         const subtitleOf = (label: string) =>
             presentRoomTopology(rows.find((r) => r.label === label)!, rows).subtitle;
 
-        expect(subtitleOf("Room 1")).toBe("Physical room · North Campus");
-        expect(subtitleOf("Toddler 1")).toBe("Classroom · Room 1 · North Campus");
-        expect(subtitleOf("Toddler 2")).toBe("Classroom · Room 1 · North Campus");
-        expect(subtitleOf("Infant Room")).toBe("Classroom · North Campus");
-        expect(subtitleOf("Playground")).toBe("Shared space · North Campus");
+        expect(subtitleOf("Room 1")).toBe("Physical · North Campus");
+        expect(subtitleOf("Toddler 1")).toBe("Operational · Room 1 · North Campus");
+        expect(subtitleOf("Toddler 2")).toBe("Operational · Room 1 · North Campus");
+        expect(subtitleOf("Infant Room")).toBe("Operational · North Campus");
+        expect(subtitleOf("Playground")).toBe("Physical · North Campus");
     });
 
     it("leaves no blank subtitle, no em dash, and no unit called Room", async () => {
         await addRoomThroughTheProduct({ name: "Room 1", type: "physical_space" });
         await addRoomThroughTheProduct({ name: "Toddler 1", inside: String(byLabel("Room 1").id) });
-        await addRoomThroughTheProduct({ name: "Playground", type: "shared_space" });
+        await addRoomThroughTheProduct({ name: "Playground", type: "physical_space" });
 
         const rows = asHierarchyRows();
         for (const r of rows.filter((x) => x.location_type === "unit")) {
@@ -351,7 +352,7 @@ describe("13. what was created is what the list explains", () => {
             expect(s).not.toContain("undefined");
         }
         // The distinction the topology model exists for: not every unit is a Classroom.
-        expect(presentRoomTopology(rows.find((r) => r.label === "Room 1")!, rows).typeLabel).toBe("Physical room");
-        expect(presentRoomTopology(rows.find((r) => r.label === "Playground")!, rows).typeLabel).toBe("Shared space");
+        expect(presentRoomTopology(rows.find((r) => r.label === "Room 1")!, rows).typeLabel).toBe("Physical");
+        expect(presentRoomTopology(rows.find((r) => r.label === "Playground")!, rows).typeLabel).toBe("Physical");
     });
 });

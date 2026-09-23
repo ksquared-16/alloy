@@ -19,9 +19,17 @@
  *     either lands nowhere or lands somewhere they should not be. Both are worse than prose.
  */
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+    API_REFERENCE_PATH as REFERENCE_PATH,
+    API_REFERENCE_SLUG as REFERENCE_SLUG,
+    DOCUMENTATION_BASE_PATH as BASE_PATH,
+} from "@/lib/developerDocs/documentationRoutes";
+import {
+    GOVERNED_DOCUMENT_SOURCES,
+    GOVERNED_OPENAPI_DOCUMENT,
+} from "@/lib/developerDocs/governedDocuments.generated";
 import { parseMarkdownDocument, type MarkdownDocument } from "@/lib/developerDocs/markdown";
 
 export type DocumentationSection = {
@@ -45,18 +53,6 @@ export const DOCUMENTATION_SECTIONS: readonly DocumentationSection[] = [
         file: "docs/api/developer-platform/guide/README.md",
     },
     {
-        slug: "authentication",
-        title: "Applications, installations and credentials",
-        blurb: "Where a client id comes from, how the secret is issued, and how a token is exchanged.",
-        file: "docs/api/developer-platform/02-identity-installation-credential.md",
-    },
-    {
-        slug: "scopes",
-        title: "Scopes and location boundaries",
-        blurb: "What a scope grants, what a boundary narrows, and why the two are different questions.",
-        file: "docs/api/developer-platform/03-authorization-scopes-boundaries.md",
-    },
-    {
         slug: "locations",
         title: "Locations",
         blurb: "The first canonical resource — fields, paging, and incremental reads.",
@@ -69,21 +65,47 @@ export const DOCUMENTATION_SECTIONS: readonly DocumentationSection[] = [
         file: "docs/api/developer-platform/guide/conventions.md",
     },
     {
+        slug: "integrating",
+        title: "Integrating with Alloy",
+        blurb: "The whole integration in one read: identity, authority, the resource graph, sync, submission and limits.",
+        file: "docs/api/developer-platform/guide/integrating.md",
+    },
+    {
         slug: "specification",
         title: "Full specification",
-        blurb: "Every endpoint, field, status code and limit, read from the implementation.",
+        blurb: "Authentication, scopes, boundaries, every field and limit — read from the implementation.",
         file: "docs/api/developer-platform/external/alloy-developer-platform-specification.md",
     },
 ] as const;
 
-export const DOCUMENTATION_BASE_PATH = "/organization/integrations/documentation";
-export const API_REFERENCE_PATH = "/api/admin/integrations/openapi";
-
-const REPO_ROOT = path.resolve(process.cwd(), "..");
+export {
+    API_REFERENCE_PATH,
+    API_REFERENCE_SLUG,
+    DOCUMENTATION_BASE_PATH,
+    DOCUMENTATION_LABEL,
+    INTEGRATIONS_PATH,
+    RAW_OPENAPI_PATH,
+} from "@/lib/developerDocs/documentationRoutes";
 
 export function documentationSection(slug: string): DocumentationSection | null {
     return DOCUMENTATION_SECTIONS.find((s) => s.slug === slug) ?? null;
 }
+
+/**
+ * Everything the documentation rail offers, in reading order.
+ *
+ * The reference is a rendered route rather than a governed Markdown file, so it is a navigation
+ * entry without a registry entry — and keeping the two lists separate is what stops a slug that
+ * has no document behind it from resolving to one.
+ */
+export const DOCUMENTATION_NAV: readonly { slug: string; title: string; href: string }[] = [
+    ...DOCUMENTATION_SECTIONS.map((section) => ({
+        slug: section.slug,
+        title: section.title,
+        href: `${BASE_PATH}/${section.slug}`,
+    })),
+    { slug: REFERENCE_SLUG, title: "API Reference", href: REFERENCE_PATH },
+];
 
 export type LoadedDocument = {
     section: DocumentationSection;
@@ -101,12 +123,16 @@ export type LoadedDocument = {
 export function loadDocument(slug: string): LoadedDocument | null {
     const section = documentationSection(slug);
     if (!section) return null;
-    let source: string;
-    try {
-        source = readFileSync(path.join(REPO_ROOT, section.file), "utf8");
-    } catch {
-        return null;
-    }
+    /*
+     * Read from the embedded artifact, not from disk.
+     *
+     * This used to be `readFileSync(path.join(process.cwd(), "..", section.file))`. That path is
+     * built at runtime and resolves outside `outputFileTracingRoot`, so a deployed serverless
+     * runtime had none of these files: every lookup failed, every page called `notFound()`, and
+     * every documentation destination answered 404 while working perfectly in development.
+     */
+    const source = GOVERNED_DOCUMENT_SOURCES[section.file];
+    if (source === undefined) return null;
     const document = parseMarkdownDocument(source);
     return { section, document, classification: document.frontmatter.classification ?? null };
 }
@@ -130,10 +156,10 @@ export function resolveDocumentationLink(href: string, fromFile: string): string
     const [pathPart, hash] = trimmed.split("#");
     const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), pathPart));
     const target = DOCUMENTATION_SECTIONS.find((s) => s.file === resolved);
-    if (target) return `${DOCUMENTATION_BASE_PATH}/${target.slug}${hash ? `#${hash}` : ""}`;
+    if (target) return `${BASE_PATH}/${target.slug}${hash ? `#${hash}` : ""}`;
 
     // The governed OpenAPI document has a product home of its own.
-    if (resolved === "docs/api/openapi/alloy-public-api.v1.json") return API_REFERENCE_PATH;
+    if (resolved === "docs/api/openapi/alloy-public-api.v1.json") return REFERENCE_PATH;
     return null;
 }
 
@@ -148,9 +174,9 @@ export type PublicOperation = { method: string; path: string; summary: string };
  */
 export function publicOperations(): PublicOperation[] {
     try {
-        const spec = JSON.parse(
-            readFileSync(path.join(REPO_ROOT, "docs/api/openapi/alloy-public-api.v1.json"), "utf8"),
-        ) as { paths?: Record<string, Record<string, { summary?: string }>> };
+        const spec = JSON.parse(GOVERNED_OPENAPI_DOCUMENT) as {
+            paths?: Record<string, Record<string, { summary?: string }>>;
+        };
         const methods = new Set(["get", "post", "put", "patch", "delete"]);
         return Object.entries(spec.paths ?? {}).flatMap(([route, operations]) =>
             Object.entries(operations)

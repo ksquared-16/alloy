@@ -176,6 +176,15 @@ export type FocusPanelContextChip = {
     tone?: FocusPanelStatusTone;
     /** Attention chips only — the count behind the label, so consumers never parse it back out. */
     count?: number;
+    /**
+     * The chip's fact is NOT YET KNOWN, and this chip is holding its place until the owner answers.
+     *
+     * A reserved chip renders the geometry and no value. It is the chip-row equivalent of
+     * `ReservedFocusPanelCell` in the card grid: the configured element is always present, and
+     * readiness decides content — never whether the element exists. UNKNOWN is not a value, so a
+     * reserved chip must never be given a label to display.
+     */
+    reserved?: boolean;
 };
 
 /**
@@ -258,17 +267,42 @@ export function resolveFocusPanelEffectiveStageChip(record: Record<string, unkno
     return parts.map((p) => formatFocusPanelChipLabel(p) ?? p).join(" · ");
 }
 
-/** Seed-backed header chips for cold Focus Panel open (queue row → panel). */
+/**
+ * Seed-backed header chips for cold Focus Panel open (queue row → panel).
+ *
+ * THE STATUS CHIP IS RESERVED, NOT SEEDED — and that is the whole point of this function.
+ *
+ * The seed's `statusLabel` comes from the queue row's CONFIGURED `status` display slot, and that
+ * slot is bound per work unit. On `new-leads` it is bound to `queue_row.stage_label`, so what
+ * arrived here was the process STAGE ("Lead") and it was rendered in the chip that means RECORD
+ * STATUS. The owner (the drawer VM's status control, from the authored `status_defs`) then answered
+ * "New Lead" and corrected the chip ~2.9s AFTER the frame was already complete — measured 14/14 on
+ * deployed staging, the only post-complete correction on this header.
+ *
+ * Seeding from the row's status field instead does not fix it: that field carries "New" for the
+ * same record, which is a third spelling and corrects just the same. The row simply has no value
+ * equal to the owner's, so there is nothing here that can honestly fill this chip.
+ *
+ * So it stays UNKNOWN until its owner answers. UNKNOWN IS NOT A VALUE — it is rendered as a
+ * reserved chip that holds the row's geometry and displays nothing, which turns the later arrival
+ * into a FILL (unknown → known) rather than a CORRECTION (known → different known).
+ *
+ * Process and location are unchanged: they are seeded from fields the row does own, and neither was
+ * observed to correct.
+ */
 export function buildFocusPanelContextChipsFromQueuePreviewSeed(
     seed: OpportunityDrawerQueuePreviewSeed | null | undefined,
 ): FocusPanelContextChip[] {
     if (!seed) return [];
-    return buildFocusPanelContextChips({
-        statusLabel: formatFocusPanelDisplayLabel(seed.statusLabel) ?? seed.statusLabel ?? null,
-        statusKey: seed.statusKey ?? null,
-        processLabel: formatFocusPanelDisplayLabel(seed.stageLabel) ?? seed.stageLabel ?? null,
-        locationLabel: seed.locationLabel ?? null,
-    });
+    return [
+        { label: "", kind: "status", reserved: true },
+        ...buildFocusPanelContextChips({
+            statusLabel: null,
+            statusKey: seed.statusKey ?? null,
+            processLabel: formatFocusPanelDisplayLabel(seed.stageLabel) ?? seed.stageLabel ?? null,
+            locationLabel: seed.locationLabel ?? null,
+        }),
+    ];
 }
 
 /** Header identity summary from queue preview seed — contact, attention, or work context. */

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run verify:module-imports && npm run check:service-client-principal && npm run check:unauthenticated-side-effects && npm run check:route-capabilities && npm run check:runtime-mode-audience",
+    "prebuild": "npm run verify:module-imports && npm run check:service-client-principal && npm run check:unauthenticated-side-effects && npm run check:route-capabilities && npm run check:runtime-mode-audience && npm run check:governed-documents",
     "build": "next build",
     "verify:module-imports": "tsx --tsconfig tsconfig.json scripts/verifyWebModuleImports.ts",
     "check:service-client-principal": "node scripts/checkServiceClientPrincipal.mjs",
@@ -104,7 +104,12 @@
     "test:playwright-current-work": "playwright test playwright/tests/current-work-journey.spec.ts",
     "dev:certify:enrollment-e2e": "NODE_ENV=test tsx --tsconfig tsconfig.json scripts/certifyEnrollmentE2E.ts",
     "qa:developer-platform": "tsx --tsconfig tsconfig.json scripts/qa/developerPlatformQaFixture.ts",
-    "check:runtime-mode-audience": "node scripts/checkRuntimeModeAudienceGating.mjs"
+    "check:runtime-mode-audience": "node scripts/checkRuntimeModeAudienceGating.mjs",
+    "generate:governed-documents": "node scripts/generateGovernedDocuments.mjs",
+    "check:governed-documents": "node scripts/checkGovernedDocuments.mjs",
+    "build:partner-package": "node scripts/buildPartnerPackage.mjs",
+    "check:partner-package": "node scripts/buildPartnerPackage.mjs --check",
+    "export:partner-package": "node scripts/exportPartnerPackage.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",

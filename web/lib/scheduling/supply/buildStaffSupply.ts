@@ -62,6 +62,17 @@ export type StaffSupplyCell = {
     scheduledStaff: ScheduledStaffMember[];
 };
 
+/**
+ * An assignment that could not be classified for staffing. It is NOT counted as
+ * supply and it is NOT silently dropped — a staffing answer computed over work the
+ * platform could not classify is a guess wearing a number.
+ */
+export type UnresolvedStaffSupply = {
+    assignmentId: string;
+    personId: string;
+    reason: "missing_assignment_type";
+};
+
 export type StaffSupplyReadModel = {
     siteLocationId: string;
     dateStart: string;
@@ -70,10 +81,17 @@ export type StaffSupplyReadModel = {
     members: ScheduledStaffMember[];
     /** Indexed by `${roomLocationId ?? "__site__"}|${date}`. */
     cells: StaffSupplyCell[];
+    /**
+     * Non-empty means the site's supply reading is CONFIGURATION-INVALID rather than
+     * complete. The migration gate is meant to make this unreachable for live supply;
+     * it is surfaced anyway because "unreachable" is a claim about today's data.
+     */
+    unresolved: UnresolvedStaffSupply[];
 };
 
 type StaffAssignmentRow = {
     id: string;
+    operational_assignment_type_id: string | null;
     subject_person_id: string | null;
     site_location_id: string | null;
     room_location_id: string | null;
@@ -137,7 +155,7 @@ export async function buildStaffSupply(
     const { data: assignmentData, error: assignmentError } = await supabase
         .from("schedule_assignments")
         .select(
-            "id, subject_person_id, site_location_id, room_location_id, schedule_pattern_id, start_date, end_date, status, is_primary"
+            "id, operational_assignment_type_id, subject_person_id, site_location_id, room_location_id, schedule_pattern_id, start_date, end_date, status, is_primary"
         )
         .eq("org_id", orgId)
         .eq("site_location_id", siteLocationId)
@@ -155,8 +173,51 @@ export async function buildStaffSupply(
 
     const dates = enumerateDates(dateStart, dateEnd);
     if (rows.length === 0) {
-        return { siteLocationId, dateStart, dateEnd, members: [], cells: [] };
+        return { siteLocationId, dateStart, dateEnd, members: [], cells: [], unresolved: [] };
     }
+
+    /*
+     * PARTICIPATION IS THE LAST FILTER, NOT A REPLACEMENT FOR THE OTHERS.
+     *
+     * Org, site, staff subject, commitment kind, operational status, effective dates
+     * and employment coverage all still apply exactly as before. An Assignment Type
+     * saying `supply` does not make an ended assignment or an unemployed person count.
+     *
+     * A type classified `none` is an intentional operator decision that this work is
+     * not staffing. A MISSING type is not a decision at all, so it is reported as
+     * unresolved rather than quietly treated as `none` — the difference between
+     * "we decided this doesn't count" and "we never asked" is the whole point of the
+     * classification.
+     */
+    const typeIds = [...new Set(rows.map((r) => r.operational_assignment_type_id).filter((v): v is string => Boolean(v)))];
+    const participationByType = new Map<string, string>();
+    if (typeIds.length > 0) {
+        const { data: typeRows, error: typeError } = await supabase
+            .from("operational_assignment_types")
+            .select("id, staffing_participation")
+            .eq("org_id", orgId)
+            .in("id", typeIds);
+        if (typeError) {
+            throw new OperationalEnrollmentServiceError("db_error", typeError.message);
+        }
+        for (const t of (typeRows ?? []) as { id: string; staffing_participation: string | null }[]) {
+            participationByType.set(t.id, t.staffing_participation ?? "none");
+        }
+    }
+
+    const unresolved: UnresolvedStaffSupply[] = [];
+    const contributesSupply = (row: StaffAssignmentRow): boolean => {
+        const typeId = row.operational_assignment_type_id;
+        if (!typeId) {
+            unresolved.push({
+                assignmentId: row.id,
+                personId: String(row.subject_person_id),
+                reason: "missing_assignment_type",
+            });
+            return false;
+        }
+        return participationByType.get(typeId) === "supply";
+    };
 
     const personIds = [...new Set(rows.map((r) => String(r.subject_person_id)))];
     const patternIds = [...new Set(rows.map((r) => r.schedule_pattern_id).filter((v): v is string => Boolean(v)))];
@@ -276,10 +337,17 @@ export async function buildStaffSupply(
 
     const memberByAssignment = new Map(members.map((m) => [m.assignmentId, m]));
 
+    // Evaluated once, before the day loop, so an unresolved assignment is reported
+    // once rather than once per date in the window.
+    const supplyEligible = new Set(rows.filter((r) => contributesSupply(r)).map((r) => r.id));
+
     const cellByKey = new Map<string, StaffSupplyCell>();
     for (const date of dates) {
         const weekday = weekdayOf(date);
         for (const row of rows) {
+            // …the Assignment Type must classify this work as staffing supply…
+            if (!supplyEligible.has(row.id)) continue;
+
             // Effective dating: the assignment must cover the day…
             if (row.start_date > date) continue;
             if (row.end_date != null && row.end_date < date) continue;
@@ -317,5 +385,5 @@ export async function buildStaffSupply(
         (a, b) => a.date.localeCompare(b.date) || (a.roomLocationId ?? "").localeCompare(b.roomLocationId ?? "")
     );
 
-    return { siteLocationId, dateStart, dateEnd, members, cells };
+    return { siteLocationId, dateStart, dateEnd, members, cells, unresolved };
 }

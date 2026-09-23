@@ -1,0 +1,121 @@
+{
+  "base": "https://staging.workwithalloy.com",
+  "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+  "at": "2026-09-22T18:22:45.911Z",
+  "checks": [
+    {
+      "name": "1_spaces_not_rooms",
+      "tabSaysSpaces": true,
+      "noRoomsTab": true,
+      "addButton": "+ Add space"
+    },
+    {
+      "name": "2_3_add_physical_space",
+      "typeOptions": [
+        "Classroom",
+        "Physical space"
+      ],
+      "onlyTwoTypes": true,
+      "noSharedSpace": true,
+      "detailText": true
+    },
+    {
+      "name": "4_physical_space_capacity_on_object",
+      "type": "TypePhysical space",
+      "capacity": "Capacity24",
+      "programsCardAbsent": true
+    },
+    {
+      "name": "5_6_7_classroom_inside_with_capacity",
+      "type": "TypeClassroom",
+      "inside": "InsideQA Room 73122",
+      "capacity": "Capacity10",
+      "typeOptions": [
+        "Classroom",
+        "Physical space"
+      ]
+    },
+    {
+      "name": "7b_capacity_persists_on_reopen",
+      "capacity": "Capacity10"
+    },
+    {
+      "name": "8_canonical_operational_rule_exists",
+      "status": 200,
+      "mine": [
+        {
+          "id": "7fc74193-84f2-49ef-a75e-945924e17f35",
+          "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+          "scope_type": "room",
+          "site_location_id": null,
+          "program_category_id": null,
+          "room_location_id": "92207313-d1cc-4141-b56b-118b3c3bc644",
+          "age_group_key": null,
+          "capacity_kind": "operational",
+          "capacity": 10,
+          "effective_start": "2026-09-22",
+          "effective_end": null,
+          "source_key": "config",
+          "metadata": {
+            "authored_via": "object_editor"
+          },
+          "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+          "created_at": "2026-09-22T18:22:59.686898+00:00",
+          "updated_at": "2026-09-22T18:22:59.686898+00:00"
+        }
+      ]
+    },
+    {
+      "name": "9_same_day_edit",
+      "capacity": "Capacity10"
+    },
+    {
+      "name": "10_playground_is_a_physical_space",
+      "type": "TypePhysical space",
+      "capacity": "CapacityNot set"
+    },
+    {
+      "name": "11_12_roles_downstream_filters_read",
+      "status": 200,
+      "playground": {
+        "label": "QA Playground 73122"
+      },
+      "classroom": {
+        "label": "QA Toddler 73122"
+      },
+      "physical": {
+        "label": "QA Room 73122"
+      },
+      "note": "exclusion proven by unit suites; this records the role those filters read"
+    },
+    {
+      "name": "13_list_agrees_with_detail",
+      "classroom": "QA Toddler 73122 ·  · Classroom · QA Room 73122 · Active · 12 capacity",
+      "physical": "QA Room 73122 ·  · Physical space · Active · 24 capacity",
+      "playground": "QA Playground 73122 ·  · Physical space · Active",
+      "noSharedSpaceAnywhere": true
+    },
+    {
+      "name": "14_15_advanced_rules_reachable",
+      "saysAdvanced": true,
+      "stillHasCapacityRules": true,
+      "stillHasRatios": true,
+      "noPrecedenceJargon": true,
+      "noFallbackJargon": true
+    },
+    {
+      "name": "runtime_errors",
+      "consoleErrors": [],
+      "pageErrors": []
+    }
+  ],
+  "created": {
+    "ROOM1": "QA Room 73122",
+    "TOD1": "QA Toddler 73122",
+    "PLAY": "QA Playground 73122",
+    "room1Id": "ba05df72-53db-4e56-89aa-d45d62a01027",
+    "tod1Id": "92207313-d1cc-4141-b56b-118b3c3bc644",
+    "playId": null
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "at": "2026-09-22T23:15:02.392Z",
+  "checks": [
+    {
+      "name": "1_no_operational_rules_tab",
+      "hasSpacesTab": true,
+      "operationalRulesTabPresent": false
+    },
+    {
+      "name": "2_kind_filter",
+      "all": "All 16",
+      "operational": "Operational 9",
+      "physical": "Physical 7"
+    },
+    {
+      "name": "2b_filter_narrows",
+      "summaryAfterPhysical": [
+        "Spaces",
+        "",
+        "7 spaces",
+        "",
+        "+ Add space",
+        "All 16",
+        "Operational 9",
+        "Physical 7"
+      ]
+    },
+    {
+      "name": "3_physical_space",
+      "kindOptions": [
+        "Operational",
+        "Physical"
+      ],
+      "kind": "KindPhysical",
+      "capacity": "Capacity24"
+    },
+    {
+      "name": "4_operational_space",
+      "kind": "KindOperational",
+      "physicalSpace": "Physical spaceQA Room 06000",
+      "capacity": "Capacity10"
+    },
+    {
+      "name": "6_ratio_1_5_and_2_11",
+      "read": "1:5 · 2:11 |  | 1 staff for up to 5 children · 2 staff for up to 11 children"
+    },
+    {
+      "name": "6b_canonical_ratio_rule",
+      "found": true,
+      "via": "object_editor",
+      "scope": "room",
+      "start": "2026-09-22",
+      "tiers": [
+        "1:5",
+        "2:11"
+      ]
+    },
+    {
+      "name": "7_second_operational",
+      "physicalSpace": "Physical spaceQA Room 06000"
+    },
+    {
+      "name": "8_physical_shows_both",
+      "kind": "KindPhysical",
+      "operationalSpaces": "Operational spacesQA Group A 06000, QA Group B 06000",
+      "capacity": "Capacity24",
+      "noProgramsCard": true,
+      "noRatioSection": true
+    },
+    {
+      "name": "9_playground",
+      "kind": "KindPhysical",
+      "capacity": "CapacityNot set",
+      "noOperational": true
+    },
+    {
+      "name": "10_infant_a_conflict",
+      "review": "Ratio needs review |  | Recorded earlier: 1:5 · 2:11 |  | Configured now: 1:4 · 2:8 · 3:12 |  | These disagree. Only you can say which is right for this room. |  | Review ratio",
+      "readTiers": "1:4 · 2:8 · 3:12\n\n1 staff for up to 4 children · 2 staff for up to 8 children · 3 staff for up to 12 children"
+    },
+    {
+      "name": "11_advanced_still_reachable",
+      "resolved": true,
+      "notNormalisedToOverview": true
+    },
+    {
+      "name": "runtime_errors",
+      "consoleErrors": [],
+      "pageErrors": []
+    }
+  ],
+  "created": {
+    "ROOM": "QA Room 06000",
+    "OP1": "QA Group A 06000",
+    "OP2": "QA Group B 06000",
+    "PLAY": "QA Yard 06000",
+    "roomId": "1d15889a-f6d4-4f03-9284-894def33c72a",
+    "op1Id": "e54a9d97-3c68-4a57-9ea3-530688f30eaf"
+  }
+}

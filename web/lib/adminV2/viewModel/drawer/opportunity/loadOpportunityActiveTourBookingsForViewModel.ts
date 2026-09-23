@@ -27,6 +27,34 @@ export async function loadOpportunityTourProjectionForViewModel(
     const oid = opportunityId.trim();
     if (!oid) return { active: [], operatorRelevant: null };
 
+    try {
+        return await loadOpportunityTourProjectionStrict(supabase, orgId, oid);
+    } catch {
+        /*
+         * LENIENT, and deliberately so for SETTLEMENT: the drawer must still paint when the tour
+         * leg fails. Unchanged behaviour — but see the strict variant below, which commit-critical
+         * uses because a first-paint claim of "no tour" that came from a failed read is a
+         * KNOWN_ZERO nobody established.
+         */
+        return { active: [], operatorRelevant: null };
+    }
+}
+
+/**
+ * THE SAME QUERY AND THE SAME PROJECTION — but a failed read RAISES instead of reading as empty.
+ *
+ * One owner, two explicit failure policies. Settlement keeps the lenient one above. Commit-critical
+ * takes this one and, on failure, omits the signal entirely so it stays settlement-owned rather
+ * than publishing an empty the answer never established. UNKNOWN != ZERO.
+ */
+export async function loadOpportunityTourProjectionStrict(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string
+): Promise<{ active: TourBookingRow[]; operatorRelevant: TourBookingRow | null }> {
+    const oid = opportunityId.trim();
+    if (!oid) return { active: [], operatorRelevant: null };
+
     const { data: rows, error } = await supabase
         .from("tour_bookings")
         .select("*")
@@ -35,7 +63,7 @@ export async function loadOpportunityTourProjectionForViewModel(
         .order("start_at", { ascending: false })
         .limit(50);
 
-    if (error) return { active: [], operatorRelevant: null };
+    if (error) throw new Error(`tour_bookings_read_failed: ${error.message}`);
 
     const all = (rows ?? []) as TourBookingRow[];
     return {

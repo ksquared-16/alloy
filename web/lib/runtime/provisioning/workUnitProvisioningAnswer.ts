@@ -34,6 +34,7 @@
  * action the answer does not claim `operational`.
  */
 import { canonicalLocationDisplay, resolveLocationById } from "@/lib/location/canonicalLocationProvider";
+import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -104,6 +105,7 @@ import {
     queueRowContextOf,
     type EnrichableProjectionRow,
 } from "./operationalProjectionEnrichment";
+import { attachPartialQueueRowContextToRows } from "@/lib/workUnits/buildPartialQueueRowContext";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { queueRowSurfaceIdForDepartment } from "@/lib/presentation/runtime/workUnitSurfaceConfigFetch";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
@@ -425,6 +427,14 @@ export type ProvisioningAnswer = ProvisioningAnswerCountSeed &
        * drawer settled, ~3.5s later, to learn what the answer already carried.
        */
       resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+      /**
+       * The tour signal the ANSWER resolved, or null when it did not.
+       *
+       * Null is NOT "no tour" — it is "not established". The collapsed Business Process card's
+       * activity preview falls back to a scheduled tour, so publishing an unestablished empty here
+       * would state an authoritative "no activity" the answer never computed.
+       */
+      resolvedTour?: OperationalContextSignals["tour"] | null;
 
           /** A — the published Summary composition for the committed scope (see {@link FocusPanelSummaryDocProjection}). */
           focusPanelSummaryDoc: FocusPanelSummaryDocProjection | null;
@@ -1422,6 +1432,7 @@ export async function composeWorkUnitProvisioningAnswer(
         // (`process_instances.stage_key ?? opportunities.stage_key`). Re-running the opportunity lens over
         // child rows would evaluate the wrong predicate against the wrong subject.
         page = childRows.slice(0, PROVISIONING_ROW_PAGE_CAP) as unknown as OperationalProjectionRow[];
+        markSpan("geometry_page_ready_ms", t0);
     } else {
         // ── ONE Operational Projection. The lens is evaluated exactly once. ──
         // Effective Process Position MUST be attached BEFORE the evaluator: case-grain
@@ -1481,6 +1492,55 @@ export async function composeWorkUnitProvisioningAnswer(
     // CHILD ROWS: enrich the FAMILY opportunity(s) on the page so commit-critical Household /
     // Children cards can know person + sibling roster while Attention stays on the child.
     // Keys are opportunity ids (drawer_open / contextId), never participation ids.
+    /*
+     * WHAT IS TRUE NOW — never what will be true later.
+     *
+     * The commit frame publishes the geometry the moment it is decided (`geometry_identity_ms`,
+     * P50 138ms deployed) instead of holding it for facts that do not select it. A fact that has
+     * ALREADY landed by then is published as KNOWN; one that has not is published as UNKNOWN and
+     * settled by its own owner afterwards.
+     *
+     * This never awaits. The callback fires when (and only when) the promise settles, so reading
+     * `.value` at the commit boundary asks "did this land in time?" and nothing else. Reading it
+     * before the promise settles yields `null`, which is the honest answer — NOT zero, NOT empty.
+     *
+     * The rejection handler is deliberate and separate from the caller's own degrade: an unawaited
+     * promise that rejects must not surface as an unhandled rejection and take down the request
+     * that no longer depends on it.
+     */
+    const settledNow = <T,>(p: Promise<T>): { value: T | null } => {
+        const ref: { value: T | null } = { value: null };
+        void p.then(
+            (v) => {
+                ref.value = v;
+            },
+            () => {
+                /* an unavailable fact stays UNKNOWN; the owner that needs it degrades honestly */
+            },
+        );
+        return ref;
+    };
+
+    /*
+     * THE QUEUE META, NAMED ONCE.
+     *
+     * Enrichment builds the row context from this, and — since the commit frame no longer waits for
+     * enrichment — so does the PARTIAL context the frame publishes when the enriched rows have not
+     * landed yet. Two literals would be two definitions of what a queue row knows about itself, and
+     * the partial frame would drift from the settled one in exactly the fields an operator reads.
+     */
+    const enrichmentQueueMeta = {
+        key: activeView.id,
+        label: activeView.label,
+        lifecycle_key: process.key,
+        subject_grain: "case" as const,
+        // Configured stages are the only runtime stage vocabulary, so the row pill can name the
+        // stage a record actually holds in the operator's own words.
+        stage_labels_by_key: Object.fromEntries(
+            stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
+        ),
+    };
+
     const enrichedPromise: Promise<readonly Record<string, unknown>[]> =
         childRows
             ? (async () => {
@@ -1509,17 +1569,7 @@ export async function composeWorkUnitProvisioningAnswer(
                       currentUserId: req.currentUserId ?? null,
                       onPhase: (name, ms) => { spans[name] = ms; },
                       rows: familyPage as unknown as EnrichableProjectionRow[],
-                      queue: {
-                          key: activeView.id,
-                          label: activeView.label,
-                          lifecycle_key: process.key,
-                          subject_grain: "case",
-                          stage_labels_by_key: Object.fromEntries(
-                              stages
-                                  .filter((s) => s.key.trim() && s.label.trim())
-                                  .map((s) => [s.key.trim(), s.label.trim()]),
-                          ),
-                      },
+                      queue: enrichmentQueueMeta,
                   }) as unknown as Promise<readonly Record<string, unknown>[]>;
               })()
             : (enrichOperationalProjectionRows({
@@ -1529,21 +1579,17 @@ export async function composeWorkUnitProvisioningAnswer(
                   currentUserId: req.currentUserId ?? null,
                   onPhase: (name, ms) => { spans[name] = ms; },
                   rows: page as unknown as EnrichableProjectionRow[],
-                  queue: {
-                      key: activeView.id,
-                      label: activeView.label,
-                      lifecycle_key: process.key,
-                      subject_grain: "case",
-                      // Configured stages are the only runtime stage vocabulary, so the row pill can
-                      // name the stage a record actually holds in the operator's own words.
-                      stage_labels_by_key: Object.fromEntries(
-                          stages
-                              .filter((s) => s.key.trim() && s.label.trim())
-                              .map((s) => [s.key.trim(), s.label.trim()])
-                      ),
-                  },
+                  queue: enrichmentQueueMeta,
               }) as unknown as Promise<readonly Record<string, unknown>[]>);
     void enrichedPromise.catch(() => {});
+    /*
+     * The enriched cohort, observed rather than awaited. `cohort_rows_wait_ms` was P50 660ms of the
+     * 1,596ms the frame spent holding an already-decided geometry, and every field enrichment adds —
+     * `_customer_name`, the sibling summary, `personal_seen` — is a SETTLEMENT-owned signal, not a
+     * geometry input. When it has landed the frame publishes it; when it has not, the row publishes
+     * the partial context it can honestly derive from its own columns.
+     */
+    const enrichedSettled = settledNow(enrichedPromise);
 
     // ── U-O6 AUTHORITATIVE EMPTY — a workable place, never confused with error. Gated on the PAGE
     //    (enrichment is 1:1, page in = page out), so it does not wait on enrichment. ──
@@ -1652,19 +1698,47 @@ export async function composeWorkUnitProvisioningAnswer(
      * BELOW every refusal site — so awaiting this on the refusal path serialises nothing on the
      * operational path, which awaits exactly what it awaited before, in the same order.
      */
-    let cohortRowsMemo: Promise<{
-        enriched: readonly Record<string, unknown>[];
-        rows: ProvisioningRow[];
-        presentation: OperationalPresentation;
-    }> | null = null;
-    const cohortRowsOnce = () =>
-        (cohortRowsMemo ??= (async () => {
-        const enriched = await enrichedPromise;
-        // Child rows are published from the PROVIDER's own normalization — the same rows membership was
-        // decided over — with a PI-NATIVE presentation context. Leaving `context` null was not the neutral
-        // choice it looked like: a queue row renders entirely from its context, so thirteen children
-        // rendered as thirteen raw participation UUIDs. The context carries only what a child row knows,
-        // and leaves every Settlement-owned signal null rather than borrowing the family's.
+    /*
+     * PRESENTATION, MEMOISED AND INDEPENDENT OF ENRICHMENT.
+     *
+     * `presentationPromise` already ran CONCURRENTLY with projection and enrichment, and its own
+     * branch costs 3ms (`presentation_branch_ms`, P50 deployed d3cad7ec). It was joined INSIDE the
+     * cohort await, so nothing could have the presentation without also paying the 660ms enrichment
+     * wait — a dependency of sequencing, not of meaning. Joined here it is available to the commit
+     * frame on its own terms, and both timing assignments still happen exactly once.
+     */
+    let presentationMemo: Promise<OperationalPresentation> | null = null;
+    const presentationOnce = () =>
+        (presentationMemo ??= (async () => {
+            const presentation = await presentationPromise;
+            timings.presentation_ms = now() - tPres;
+            // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
+            // `timings.spans` here would write to undefined and then be overwritten by that
+            // assignment. The `.then` above was attached BEFORE this await, so it has already run.
+            if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
+            return presentation;
+        })());
+
+    /*
+     * ONE ROW BUILDER, TWO SOURCES.
+     *
+     * `familySource` is the ENRICHED cohort when it has landed by the commit boundary, and the RAW
+     * evaluated page when it has not. Both are opportunity rows carrying the same columns —
+     * enrichment only OVERLAYS Settlement-owned signals (`_customer_name`, the sibling summary,
+     * `personal_seen`) onto them. Building the rows through ONE function is what stops the
+     * progressive frame and the settled cohort from becoming two definitions of a queue row.
+     *
+     * Child rows never read `familySource` at all. They are published from the PROVIDER's own
+     * normalization — the same rows membership was decided over — with a PI-NATIVE presentation
+     * context. Leaving `context` null was not the neutral choice it looked like: a queue row renders
+     * entirely from its context, so thirteen children rendered as thirteen raw participation UUIDs.
+     * The context carries only what a child row knows, and leaves every Settlement-owned signal null
+     * rather than borrowing the family's.
+     */
+    const buildQueueRows = (
+        familySource: readonly Record<string, unknown>[],
+        presentation: OperationalPresentation,
+    ): ProvisioningRow[] => {
         const stageLabelsByKey = Object.fromEntries(
             stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
         );
@@ -1692,7 +1766,7 @@ export async function composeWorkUnitProvisioningAnswer(
                           : {}),
                   };
               })
-            : enriched.map((r) => ({
+            : familySource.map((r) => ({
                   id: String((r as Record<string, unknown>).id),
                   stageKey: strOrNull((r as Record<string, unknown>).stage_key),
                   statusKey: strOrNull((r as Record<string, unknown>).status_key),
@@ -1700,14 +1774,6 @@ export async function composeWorkUnitProvisioningAnswer(
                   title: strOrNull((r as Record<string, unknown>).name),
                   context: queueRowContextOf(r as Record<string, unknown>),
               }));
-        // Join: await the presentation branch that ran CONCURRENTLY with projection + enrichment above.
-        // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
-        const presentation = await presentationPromise;
-        timings.presentation_ms = now() - tPres;
-        // Into the local `spans`, which becomes `timings.spans` at the end — assigning to
-        // `timings.spans` here would write to undefined and then be overwritten by that assignment.
-        // The `.then` above was attached BEFORE this await, so it has already run when we get here.
-        if (presentationBranchMs != null) spans.presentation_branch_ms = presentationBranchMs;
 
         // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
         // Canonical config owner = the matched published variant (not a second Work View authority).
@@ -1732,7 +1798,23 @@ export async function composeWorkUnitProvisioningAnswer(
                 }
             }
         }
-            return { enriched, rows, presentation };
+        return rows;
+    };
+
+    let cohortRowsMemo: Promise<{
+        enriched: readonly Record<string, unknown>[];
+        rows: ProvisioningRow[];
+        presentation: OperationalPresentation;
+    }> | null = null;
+    /**
+     * THE SETTLED COHORT — every Settlement-owned signal resolved. Used by the refusal path, which
+     * has no frame to publish progressively and therefore nothing to gain from partial rows.
+     */
+    const cohortRowsOnce = () =>
+        (cohortRowsMemo ??= (async () => {
+            const enriched = await enrichedPromise;
+            const presentation = await presentationOnce();
+            return { enriched, rows: buildQueueRows(enriched, presentation), presentation };
         })());
 
     /*
@@ -1947,6 +2029,19 @@ export async function composeWorkUnitProvisioningAnswer(
             markSpan("document_children_failed_ms", t_document_children);
             return null;
         });
+    /*
+     * OBSERVED, NOT AWAITED. The chain is already fully overlapped — everything else finishes while
+     * it is still in flight — so what the old await cost was its INCREMENTAL tail:
+     * `document_children_tail_ms` P50 786ms on deployed d3cad7ec, the single largest block between
+     * a decided geometry and a published frame.
+     *
+     * The absent state is not a degradation invented here. It is the contract this chain already
+     * declares: a rejection resolves to null, the key stays ABSENT, and the card reads absent as
+     * "not loaded" — which must never be confused with the authoritative `[]` meaning this family
+     * has no children. Not waiting simply reaches that same honest state sooner and lets Settlement
+     * fill it, instead of holding the whole surface for one card's roster.
+     */
+    const documentChildrenSettled = settledNow(documentChildrenP);
 
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
@@ -2110,6 +2205,19 @@ export async function composeWorkUnitProvisioningAnswer(
             : null;
         familyMissionPrimaryAbsence = actionRef ? null : "work_template_has_no_action";
     }
+    /*
+     * GEOMETRY IDENTITY — the offset at which the surface could state its final geometry.
+     *
+     * The published Focus Panel composition is selected by `workViewId` + `stage.key`, so once the
+     * chosen subject and its stage are known, card membership, order and presentation are decided.
+     * Every configured FACT may still be UNKNOWN at this point; none of them selects geometry.
+     *
+     * Measured against `cohort_rows_done_ms` (682ms P50), which is the enriched cohort the QUEUE
+     * needs — CRM, children and personal-seen projections plus presentation rows. The SELECTOR
+     * consumes only `{id, entityId, entityType, sortIndex}`. This span exists to show what the
+     * frame would actually have to wait for, rather than inferring it from the enriched path.
+     */
+    markSpan("geometry_identity_ms", t0);
 
     // ── COMMIT-CRITICAL FOCUS PANEL — the answer OWNS the operational Current Work projection. ──
     // Progress + requirements + blocked/status are part of Situation→Decision→Action, so the useful
@@ -2156,8 +2264,40 @@ export async function composeWorkUnitProvisioningAnswer(
                       (req.departmentConfigHeldIds ?? []).includes(String(wuRow.department_id ?? "")),
           }).catch(() => null /* stage-work is additive to the commit — never fail the operational answer on it */);
 
-    // ── JOIN: enrichment (queue rows) + presentation + actions + stage-work, all kicked off above. ──
-    const { enriched, rows, presentation } = await joinWait("cohort_rows", cohortRowsOnce());
+    /*
+     * ── THE COMMIT FRAME NO LONGER WAITS FOR THE COHORT. ────────────────────────────────────────
+     *
+     * This was `await joinWait("cohort_rows", cohortRowsOnce())`: P50 660ms of waiting
+     * (`cohort_rows_wait_ms`, deployed d3cad7ec) for signals that do not select geometry. Measured
+     * on that same build, the geometry was already decided at 138ms and `composition_ready` did not
+     * arrive until 1,734ms — 1,596ms spent holding a frame nothing could still change.
+     *
+     * What enrichment adds is `_customer_name`, the sibling summary and `personal_seen`: every one
+     * a SETTLEMENT-owned signal. So the frame publishes what has landed and states the rest as
+     * UNKNOWN, rather than publishing nothing until all of it has.
+     *
+     * The rows stay HONEST either way. When enrichment has not landed the page is attached through
+     * `attachPartialQueueRowContextToRows` — the SAME derivation enrichment itself applies, over the
+     * same `enrichmentQueueMeta`, reading only columns the raw row already carries. It is pure
+     * (`enrich_row_context_ms` P50 0ms) and adds no read. What is absent is absent, not zero: a row
+     * with no resolved customer name renders its title, exactly as the honest fallback already does.
+     *
+     * `enriched` degrades to the raw page for the same reason — both carry `customer_id` and the
+     * identity columns the subject snapshot reads; only the overlay is missing.
+     */
+    const presentation = await joinWait("commit_presentation", presentationOnce());
+    const enrichedAtCommit = enrichedSettled.value;
+    spans.cohort_enriched_at_commit = enrichedAtCommit ? 1 : 0;
+    const enriched: readonly Record<string, unknown>[] =
+        enrichedAtCommit ?? (page as unknown as readonly Record<string, unknown>[]);
+    const rows = buildQueueRows(
+        enrichedAtCommit
+            ?? (attachPartialQueueRowContextToRows(
+                   page as unknown as Record<string, unknown>[],
+                   enrichmentQueueMeta,
+               ) as readonly Record<string, unknown>[]),
+        presentation,
+    );
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
     const actionsProjection = await joinWait("actions_projection", actionsProjectionPromise);
     let focusPanelStageWork = await joinWait("focus_panel_stage_work", focusPanelStageWorkPromise);
@@ -2468,22 +2608,18 @@ export async function composeWorkUnitProvisioningAnswer(
           : null;
 
     /*
-     * AWAITED HERE — before the commit-critical context is built, which is the whole point.
+     * READ HERE — before the commit-critical context is built, which is still the whole point.
      *
-     * The first attempt awaited this AFTER `buildCommitCriticalOperationalContext` and folded the
-     * rows only into the answer payload. Even had it run, the COMMIT context would still have
-     * carried the children-less bag, the commit predicate would still have been false, and the
-     * card would still have waited for the drawer — the slice would have measured as a no-op. It
-     * also never used the folded value at all: the variable was declared and dropped.
+     * An earlier slice folded these rows AFTER `buildCommitCriticalOperationalContext` and learned
+     * that the commit context then carried the children-less bag anyway, so the card waited for the
+     * drawer regardless. That ordering requirement is unchanged: whatever HAS landed must be folded
+     * before the commit context is built, or folding it buys nothing.
      *
-     * Everything above this line ran while the chain was in flight, so what the await costs is the
-     * INCREMENTAL tail past the existing critical work, not the chain's ~706ms serial length.
-     * `document_children_ms` is the chain; `document_children_tail_ms` is what this slice actually
-     * added.
+     * What changed is that the frame no longer BLOCKS on it. `document_children_at_commit` records
+     * which of the two states this request published, so the trade is measured rather than assumed.
      */
-    const t_children_join = now();
-    const documentChildren = await documentChildrenP;
-    markSpan("document_children_tail_ms", t_children_join);
+    const documentChildren = documentChildrenSettled.value;
+    spans.document_children_at_commit = documentChildren ? 1 : 0;
 
     /*
      * INTO THE IDENTITY BAG, BY THE DOMAIN COMPOSER — not named by the platform builder.

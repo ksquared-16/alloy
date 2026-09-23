@@ -19,11 +19,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiError, invalidCredential, rateLimited } from "@/lib/platform/external/apiErrors";
 import { outcomeForStatus, recordApiActivity } from "@/lib/platform/external/apiActivity";
-import {
-    consumeRateLimit,
-    installationBucket,
-    RATE_LIMIT_POLICY,
-} from "@/lib/platform/external/rateLimit";
+import { authenticatedRateLimit, consumeRateLimit } from "@/lib/platform/external/rateLimit";
+import { accessForOperation } from "@/lib/platform/external/scopeCatalog";
 import { identityHeaders, resolveRequestIdentity } from "@/lib/platform/external/requestContext";
 import { requireExternalPrincipal } from "@/lib/platform/external/externalRequest";
 
@@ -80,11 +77,8 @@ export async function GET(request: NextRequest) {
 
     const ctx = auth.context;
 
-    const decision = await consumeRateLimit(
-        supabase,
-        installationBucket(ctx.installationId),
-        RATE_LIMIT_POLICY.authenticatedRead,
-    );
+    const budget = authenticatedRateLimit(ctx.installationId, accessForOperation(OPERATION_ID));
+    const decision = await consumeRateLimit(supabase, budget.bucketKey, budget.policy);
 
     const limitHeaders = {
         "RateLimit-Limit": String(decision.limit),

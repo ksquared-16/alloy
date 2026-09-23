@@ -1,0 +1,79 @@
+{
+  "trusted_host_action_id": "tha_22c7fadedca444",
+  "query_hash": "8b4093e21e642e7c6df0416b61d8fdc6a9f5bfee131f0603c1fcc895b98d98e4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T14:43:14.662Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_22c7fadedca444",
+    "query_hash": "8b4093e21e642e7c6df0416b61d8fdc6a9f5bfee131f0603c1fcc895b98d98e4",
+    "authorization_id": "grnt_9c975dea8e464dba",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T14:43:16.580Z",
+    "question_ids": [
+      "child_placement"
+    ],
+    "questions": {
+      "child_placement": {
+        "question_id": "child_placement",
+        "row_count": null,
+        "rows": [
+          {
+            "children": [
+              {
+                "assignment_id": "9d81581a-256e-42d6-a717-23a89a10a087",
+                "agreement": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+                "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "room": "4de42d04-86fc-4519-b5bd-f45eb8671429",
+                "pattern": "a405e9a1-1f1f-4585-9fec-04608a312e3b",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              {
+                "assignment_id": "e10dcea5-0edb-4a6b-bd53-2b9d98e5da96",
+                "agreement": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+                "site": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+                "room": "4de42d04-86fc-4519-b5bd-f45eb8671429",
+                "pattern": "a405e9a1-1f1f-4585-9fec-04608a312e3b",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              {
+                "assignment_id": "e67c62b7-fcae-4aca-858f-87f03067e10e",
+                "agreement": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+                "site": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+                "room": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+                "pattern": "07a0ac51-82de-467a-8a26-1378884eaadd",
+                "weekdays": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              }
+            ],
+            "observed_at": "2026-09-22 14:43:16.449141+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -197,9 +197,14 @@ describeLive("assignment-scoped teacher authority — live", () => {
         }
         await supabase.from("user_person_links").delete().eq("org_id", ORG).in("person_id", [TEACHER_PERSON, OTHER_PERSON]);
         await supabase.from("employments").delete().in("id", [EMPLOYMENT_A, EMPLOYMENT_B]);
-        if (writtenEventIds.length) {
-            await supabase.from("child_attendance_events").delete().in("id", writtenEventIds);
-        }
+        /*
+         * The attendance facts this suite authored are NOT removed, because they cannot be:
+         * `child_attendance_events` refuses DELETE — "append-only: record a correction or reversal
+         * event instead". The delete that used to stand here returned an error nobody read, so the
+         * suite believed it cleaned up and did not. Removing it changes no behaviour and removes a
+         * false belief; the facts are marked by this suite's own provenance and stay, as every
+         * canonical attendance fact does.
+         */
         for (const id of createdUserIds) {
             await supabase.auth.admin.deleteUser(id).catch(() => undefined);
         }

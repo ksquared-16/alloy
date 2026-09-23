@@ -1,0 +1,83 @@
+{
+  "at": "2026-09-23T18:06:50.740Z",
+  "checks": [
+    {
+      "name": "1_collection_clean",
+      "qaRowsVisible": 14,
+      "all": "All 20",
+      "operational": "Operational 11",
+      "physical": "Physical 9",
+      "rows": [
+        "Spaces",
+        "20 spaces",
+        "+ Add space",
+        "All 20",
+        "Operational 11",
+        "Physical 9",
+        "Infant A",
+        "Operational · Active · capacity needs review · 1 program",
+        "Infant B",
+        "Operational · Active · capacity needs review · 1 program",
+        "Playground",
+        "Physical · Active",
+        "Pre-K",
+        "Operational · Room 1 · Active · capacity needs review · 1 program",
+        "Preschool 1",
+        "Operational · Active · capacity needs review · 1 program",
+        "Preschool 2",
+        "Physical · Active · capacity needs review · 1 program",
+        "QA Group A 06000",
+        "Operational · QA Room 06000 · Inactive · 10 capacity",
+        "QA Group A 58206",
+        "Operational · Inactive · 10 capacity",
+        "QA Group B 06000",
+        "Operational · QA Room 06000 · Inactive · 10 capacity"
+      ]
+    },
+    {
+      "name": "2_operational_read",
+      "kind": "KindOperational",
+      "ratio": null,
+      "hasCapacityLimits": false,
+      "hasAdvancedLink": false
+    },
+    {
+      "name": "3_ratio_in_edit_form",
+      "hasRatioSection": true,
+      "hasStaffColumn": true,
+      "hasChildrenColumn": false,
+      "hasAddTier": true,
+      "oneSaveButton": 1
+    },
+    {
+      "name": "4_saved_with_the_space",
+      "ratio": "STAFFING RATIO |  | 1:5 · 2:11"
+    },
+    {
+      "name": "5_reload_and_canonical",
+      "read": "STAFFING RATIO |  | 1:5 · 2:11",
+      "canonical": {
+        "found": true,
+        "via": "object_editor",
+        "tiers": [
+          "1:5",
+          "2:11"
+        ]
+      }
+    },
+    {
+      "name": "6_physical_has_no_ratio",
+      "ratioSection": 0,
+      "ratioFields": 0
+    },
+    {
+      "name": "7_infant_a_conflict",
+      "review": "Ratio needs review |  | Recorded earlier: 1:5 · 2:11 |  | Configured now: 1:4 · 2:8 · 3:12 |  | These disagree. Only you can say which is right for this space."
+    },
+    {
+      "name": "runtime_errors",
+      "consoleErrors": [],
+      "pageErrors": []
+    }
+  ]
+}

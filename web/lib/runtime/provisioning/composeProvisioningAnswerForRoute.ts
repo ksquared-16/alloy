@@ -33,10 +33,28 @@ import { resolveFinancialSubjectId } from "@/lib/adminV2/runtime/focusPanel/fina
 import { resolveSoleEnrollmentParticipantForOpportunity } from "@/lib/adminV2/runtime/operationalContext/resolveParticipationSubjectForOpportunity";
 import { projectFocusPanelCardProducers } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardProducers";
 import { buildCommitCriticalOperationalContext } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { loadOpportunityTourProjectionStrict } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityActiveTourBookingsForViewModel";
+import { buildTourSignalFromBookings } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
+import {
+    applyProvisioningSettlement,
+    type ProvisioningSettlementPatch,
+} from "@/lib/runtime/provisioning/provisioningSettlement";
+
+export {
+    applyProvisioningSettlement,
+    settlementMatchesFrame,
+    type ProvisioningSettlementPatch,
+} from "@/lib/runtime/provisioning/provisioningSettlement";
 
 export type RouteProvisioningResult =
-    | { ok: true; answer: ProvisioningAnswer }
+    | {
+          ok: true;
+          answer: ProvisioningAnswer;
+          /** Present only when `deferSettlement` was asked for; null on every settled path. */
+          settlement?: Promise<ProvisioningSettlementPatch | null> | null;
+      }
     | { ok: false; gate: AdminRouteGateFailure };
 
 /**
@@ -58,6 +76,12 @@ export async function composeProvisioningAnswerForRoute(input: {
     departmentConfigHeldIds?: readonly string[];
     /** S5-3 — published Summary records the client states it holds (`id:version`). */
     summaryConfigHeldIds?: readonly string[];
+    /**
+     * PHASE 1 ONLY. Return as soon as the frame is composed and hand the capability settlement back
+     * as a promise, instead of holding the answer until the producers finish. Only a caller that can
+     * deliver a SECOND payload may ask for this.
+     */
+    deferSettlement?: boolean;
 }): Promise<RouteProvisioningResult> {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
@@ -135,6 +159,15 @@ export async function composeProvisioningAnswerForRoute(input: {
      */
     const earlyRef: { run: Promise<EarlyProducerRun | null> | null } = { run: null };
     /*
+     * THE TOUR SIGNAL, RESOLVED BY THE ANSWER.
+     *
+     * Started beside the participant read rather than after it: the two are independent, and the
+     * collapsed Business Process card needs this one. `null` here means NOT RESOLVED — a failed
+     * read must never reach the surface as "no tour".
+     */
+    const tourRef: { run: Promise<{ active: TourBookingRow[]; operatorRelevant: TourBookingRow | null } | null> | null } =
+        { run: null };
+    /*
      * THE OVERLAP'S OWN INSTRUMENT — because the existing spans structurally cannot see it.
      *
      * `inner_compose_ms` and `card_producers_ms` measure two ADJACENT blocks. That was a complete
@@ -160,6 +193,19 @@ export async function composeProvisioningAnswerForRoute(input: {
      * timezone come from the route GATE, which the composer deliberately does not receive.
      */
     const seedRef: { run: Promise<WorkViewTotalsSeed | null> | null } = { run: null };
+    /*
+     * OBSERVED, NOT AWAITED (Candidate A).
+     *
+     * Work View totals are FACTS, not geometry. Membership and order are decided by configuration
+     * and are final at the frame; only the VALUES are outstanding. Measured on deployed 31fb4b0c,
+     * waiting for them cost `join_wait_ms` P50 252ms of a 1,273ms frame — the largest remaining
+     * bounded term, and the last one with a mechanism.
+     *
+     * Same shape the cohort enrichment, the children roster and the card producers already use: the
+     * value is taken if it has landed by the commit boundary, and otherwise the field stays null,
+     * which the client already reads as "resolve these yourself" — never as zero.
+     */
+    const seedSettled: { value: WorkViewTotalsSeed | null } = { value: null };
     const seedDiag = {
         announce_offset_ms: null as number | null,
         seed_ms: null as number | null,
@@ -167,6 +213,8 @@ export async function composeProvisioningAnswerForRoute(input: {
         compose_end_offset_ms: null as number | null,
         overlap_ms: null as number | null,
         join_wait_ms: null as number | null,
+        /** 1 when the totals had landed by the commit boundary, 0 when they settle afterwards. */
+        seed_at_commit: null as number | null,
         outcome: "no_announcement",
         groups: null as number | null,
         totals: null as number | null,
@@ -186,7 +234,7 @@ export async function composeProvisioningAnswerForRoute(input: {
         participant_reads: 0,
     };
 
-    const answer = await composeWorkUnitProvisioningAnswer({
+    let answer = await composeWorkUnitProvisioningAnswer({
         onWorkViewCountTargetsResolved: (targets) => {
             if (seedRef.run) return;
             const tSeed = mark();
@@ -230,8 +278,20 @@ export async function composeProvisioningAnswerForRoute(input: {
                 seedDiag.outcome = "seed_failed";
                 return null;
             });
+            // Records the value if and when it lands. Reading `.value` at the commit boundary asks
+            // "did this arrive in time?" and nothing else.
+            void seedRef.run.then((v) => {
+                seedSettled.value = v;
+            });
         },
         onSubjectResolved: ({ subjectId, orgId, customerId }) => {
+            if (!tourRef.run && subjectId) {
+                // Settled to null on failure, so the signal stays settlement-owned rather than
+                // publishing an empty nobody established.
+                tourRef.run = loadOpportunityTourProjectionStrict(supabase, orgId, subjectId)
+                    .then((v) => v)
+                    .catch(() => null);
+            }
             if (earlyRef.run || !subjectId) return;
             /*
              * Participant, then producers — the whole prerequisite chain, started as soon as the
@@ -346,171 +406,243 @@ export async function composeProvisioningAnswerForRoute(input: {
      * The context is rebuilt from the ANSWER — the same fields, through the same builder the browser
      * used — rather than threaded out of the assembler, so the assembler keeps no producer edge.
      */
-    const tProducers = mark();
-    if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
-        /*
-         * THE PARTICIPANT, RESOLVED HERE SO THE PRODUCERS BELOW CAN ANSWER.
-         *
-         * These producers already ran on this path; measured on deployed 50f2601be they cost 674ms
-         * and produced Financials ONLY, because `attendance_ms` and `health_ms` were null on every
-         * sample — no authoritative participantScope existed at commit, so both returned
-         * `unavailable` and the browser had to wait for a second round trip to learn a fact the
-         * database already held.
-         *
-         * One read, through the existing owner, scoped to this org and this opportunity. It
-         * refuses to guess: two enrolled children resolve to nothing rather than to the first.
-         */
-        const attentionId = answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null;
-        /*
-         * JOIN — AND THE SPECULATION IS VERIFIED, NEVER ASSUMED.
-         *
-         * The early run was keyed to the subject and household the composer announced before the
-         * children shell. Two things can still change underneath it: the answer can settle on a
-         * different record, and on a CHILD-GRAIN surface the household id can fall back to
-         * `childComposition.family.customerId`, which resolves later than the subject row.
-         *
-         * Both are checked against the composed truth below. Any mismatch discards the whole
-         * speculative run — participant AND producer cards together, never half of it — and the
-         * canonical path runs for the real identities. An early answer for one customer must never
-         * describe another.
-         */
-        const early = earlyRef.run ? await earlyRef.run : null;
-        const earlySubjectMatches = !!early && !!attentionId && early.subjectId === attentionId;
-        /*
-         * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
-         * the same identity to decide that Attendance, Health and Children are mountable at all.
-         * Without it the answer ships their CONTENT and the client still reserves their cells.
-         */
-        const resolvedParticipant = earlySubjectMatches
-            ? early!.participant
-            : attentionId
-              ? await (async () => {
-                    overlapDiag.participant_reads += 1;
-                    return resolveSoleEnrollmentParticipantForOpportunity({
-                        supabase,
-                        orgId: gate.orgId,
-                        opportunityId: attentionId,
-                    });
-                })()
-              : null;
-        answer.resolvedParticipant = resolvedParticipant;
-        const commitContext = buildCommitCriticalOperationalContext({
-                    mode: "work",
-                    subjectId: answer.recordOfAttention?.id ?? "",
-                    title: "",
-                    statusLabel: answer.currentBusinessState?.stageLabel ?? null,
-                    statusKey: answer.currentBusinessState?.stageKey ?? null,
-                    canMutate: hasPortalAdminMutateAccess(gate.roleKeys ?? []),
-                    perspective: null,
-                    stageWorkRuntime: answer.focusPanelStageWork?.stage_work_runtime ?? null,
-                    situation: answer.currentBusinessState
-                        ? {
-                              stageKey: answer.currentBusinessState.stageKey,
-                              stageLabel: answer.currentBusinessState.stageLabel,
-                              purpose: answer.currentBusinessState.purpose ?? null,
-                          }
-                        : null,
-                    primaryAction: answer.primaryAction
-                        ? { actionRef: answer.primaryAction.actionRef, label: answer.primaryAction.label }
-                        : null,
-                    subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
-                    subjectGrain: answer.subjectGrain,
-                    resolvedParticipant,
-        });
-        /*
-         * The canonical household answer, from the composed truth. This is the value the early run
-         * gambled on; comparing them is what makes the gamble safe on child grain, where
-         * `householdCustomerId` can fall back to the family row after the subject row is read.
-         */
-        const canonicalFinancialSubjectId = (() => {
-            // Same promise as the settled frame: a malformed truth costs Financials, not the answer.
-            try {
-                return resolveFinancialSubjectId(commitContext);
-            } catch {
-                return null;
-            }
-        })();
-        const earlyRunUsable =
-            earlySubjectMatches && early!.financialSubjectId === canonicalFinancialSubjectId;
-        answer.focusPanelOperationalProjection = {
-            ...answer.focusPanelOperationalProjection,
-            cards: earlyRunUsable
-                ? early!.cards
-                : await (async () => {
-                      overlapDiag.producer_invocations += 1;
-                      return projectFocusPanelCardProducers({
-                          supabase,
-                          orgId: gate.orgId,
-                          timingOriginMs: tInner,
-                          // The route's OWN resolved authority — the same canonical bundle the
-                          // endpoint uses.
-                          access: gate.access,
-                          context: commitContext,
-                          financialSubjectId: canonicalFinancialSubjectId,
-                      });
-                  })(),
-        };
-        cardProducersMs = timing ? performance.now() - tProducers : 0;
-        /*
-         * THE OUTCOME, NAMED BY THE JOIN THAT ACTUALLY DECIDED IT.
-         *
-         * The branches stay distinct because each implies a different repair: a subject mismatch
-         * means the announcement fired on the wrong record, a customer mismatch means child-grain
-         * household fallback moved underneath the speculation, and `early_failed` means the
-         * speculative chain threw. Collapsing them into "not used" would hide which is happening,
-         * and only one of the three would be worth fixing.
-         */
-        overlapDiag.outcome = !earlyRef.run
-            ? "no_announcement"
-            : overlapDiag.early_rejected || !early
-              ? "early_failed"
-              : !earlySubjectMatches
-                ? "subject_mismatch"
-                : !earlyRunUsable
-                  ? "customer_mismatch"
-                  : "used";
-        if (
-            timing &&
-            overlapDiag.early_end_offset_ms != null &&
-            overlapDiag.announce_offset_ms != null
-        ) {
-            const composeEnd = overlapDiag.compose_end_offset_ms ?? 0;
+    /*
+     * ── SETTLEMENT, SEPARATED FROM THE FRAME ────────────────────────────────────────────────────
+     *
+     * Everything below resolves FACTS — the participation identity, the tour signal, and the card
+     * producers' attendance / health / financials answers. None of it selects geometry, and measured
+     * on deployed a5eb2f29 the join cost `card_producers_ms` P50 740ms, which was the binder between
+     * a decided geometry (144ms) and a committed frame (1,983ms).
+     *
+     * It is a CLOSURE rather than straight-line code so the same body can run two ways: awaited and
+     * applied inline (the HTTP seam, whose caller expects one settled answer), or started and
+     * handed back as a promise (the RSC route, which emits the frame first and streams this after).
+     * One body, so the two paths cannot drift into two answers.
+     *
+     * It returns a PATCH instead of mutating `answer`, because by the time it resolves on the
+     * deferred path the frame has already been serialized and sent.
+     */
+    let patch: ProvisioningSettlementPatch | null = null;
+    const runSettlement = async (): Promise<ProvisioningSettlementPatch | null> => {
+        const tProducers = mark();
+        if (answer.terminal === "operational" && answer.focusPanelOperationalProjection) {
             /*
-             * Overlap is the part of the early run that ran WHILE composition was still running —
-             * announcement to whichever ended first. The tail is whatever ran after composition
-             * finished, clamped at zero: a run that finished early has no tail, not a negative one.
+             * THE PARTICIPANT, RESOLVED HERE SO THE PRODUCERS BELOW CAN ANSWER.
+             *
+             * These producers already ran on this path; measured on deployed 50f2601be they cost 674ms
+             * and produced Financials ONLY, because `attendance_ms` and `health_ms` were null on every
+             * sample — no authoritative participantScope existed at commit, so both returned
+             * `unavailable` and the browser had to wait for a second round trip to learn a fact the
+             * database already held.
+             *
+             * One read, through the existing owner, scoped to this org and this opportunity. It
+             * refuses to guess: two enrolled children resolve to nothing rather than to the first.
              */
-            overlapDiag.overlap_ms = Math.max(
-                0,
-                Math.round(
-                    Math.min(overlapDiag.early_end_offset_ms, composeEnd) -
-                        overlapDiag.announce_offset_ms,
-                ),
-            );
-            overlapDiag.tail_ms = Math.max(
-                0,
-                Math.round(overlapDiag.early_end_offset_ms - composeEnd),
-            );
+            const attentionId = answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null;
+            /*
+             * JOIN — AND THE SPECULATION IS VERIFIED, NEVER ASSUMED.
+             *
+             * The early run was keyed to the subject and household the composer announced before the
+             * children shell. Two things can still change underneath it: the answer can settle on a
+             * different record, and on a CHILD-GRAIN surface the household id can fall back to
+             * `childComposition.family.customerId`, which resolves later than the subject row.
+             *
+             * Both are checked against the composed truth below. Any mismatch discards the whole
+             * speculative run — participant AND producer cards together, never half of it — and the
+             * canonical path runs for the real identities. An early answer for one customer must never
+             * describe another.
+             */
+            const early = earlyRef.run ? await earlyRef.run : null;
+            const earlySubjectMatches = !!early && !!attentionId && early.subjectId === attentionId;
+            /*
+             * CARRIED TO THE BROWSER. The producers below consume this server-side; the browser needs
+             * the same identity to decide that Attendance, Health and Children are mountable at all.
+             * Without it the answer ships their CONTENT and the client still reserves their cells.
+             */
+            const resolvedParticipant = earlySubjectMatches
+                ? early!.participant
+                : attentionId
+                  ? await (async () => {
+                        overlapDiag.participant_reads += 1;
+                        return resolveSoleEnrollmentParticipantForOpportunity({
+                            supabase,
+                            orgId: gate.orgId,
+                            opportunityId: attentionId,
+                        });
+                    })()
+                  : null;
+            // COLLECTED, not written: the frame may already have been emitted.
+            /*
+             * Map through the ONE canonical mapping owner settlement uses, so the commit answer and the
+             * settled answer cannot drift. Omitted entirely when the read did not resolve.
+             */
+            const tourProjection = tourRef.run ? await tourRef.run : null;
+            const resolvedTour = tourProjection
+                ? buildTourSignalFromBookings({
+                      activeBookings: tourProjection.active,
+                      operatorRelevantBooking: tourProjection.operatorRelevant,
+                      truth: (answer.subjectIdentityTruth ?? {}) as Record<string, unknown>,
+                  })
+                : null;
+            // COLLECTED, not written — see above.
+            const commitContext = buildCommitCriticalOperationalContext({
+                        mode: "work",
+                        subjectId: answer.recordOfAttention?.id ?? "",
+                        title: "",
+                        statusLabel: answer.currentBusinessState?.stageLabel ?? null,
+                        statusKey: answer.currentBusinessState?.stageKey ?? null,
+                        canMutate: hasPortalAdminMutateAccess(gate.roleKeys ?? []),
+                        perspective: null,
+                        stageWorkRuntime: answer.focusPanelStageWork?.stage_work_runtime ?? null,
+                        situation: answer.currentBusinessState
+                            ? {
+                                  stageKey: answer.currentBusinessState.stageKey,
+                                  stageLabel: answer.currentBusinessState.stageLabel,
+                                  purpose: answer.currentBusinessState.purpose ?? null,
+                              }
+                            : null,
+                        primaryAction: answer.primaryAction
+                            ? { actionRef: answer.primaryAction.actionRef, label: answer.primaryAction.label }
+                            : null,
+                        subjectIdentityTruth: answer.subjectIdentityTruth ?? null,
+                        subjectGrain: answer.subjectGrain,
+                        resolvedParticipant,
+                        resolvedTour,
+            });
+            /*
+             * The canonical household answer, from the composed truth. This is the value the early run
+             * gambled on; comparing them is what makes the gamble safe on child grain, where
+             * `householdCustomerId` can fall back to the family row after the subject row is read.
+             */
+            const canonicalFinancialSubjectId = (() => {
+                // Same promise as the settled frame: a malformed truth costs Financials, not the answer.
+                try {
+                    return resolveFinancialSubjectId(commitContext);
+                } catch {
+                    return null;
+                }
+            })();
+            const earlyRunUsable =
+                earlySubjectMatches && early!.financialSubjectId === canonicalFinancialSubjectId;
+            const settledCards = earlyRunUsable
+                    ? early!.cards
+                    : await (async () => {
+                          overlapDiag.producer_invocations += 1;
+                          return projectFocusPanelCardProducers({
+                              supabase,
+                              orgId: gate.orgId,
+                              timingOriginMs: tInner,
+                              // The route's OWN resolved authority — the same canonical bundle the
+                              // endpoint uses.
+                              access: gate.access,
+                              context: commitContext,
+                              financialSubjectId: canonicalFinancialSubjectId,
+                          });
+                      })();
+            patch = {
+                navigation: {
+                    target: input.rawSlug,
+                    lens: requestedWorkViewId ?? null,
+                    subject: input.requestedSubjectId ?? null,
+                    cohort: input.cohort ?? null,
+                    aspect: input.aspect ?? null,
+                },
+                identity: {
+                    subjectId: answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null,
+                    stageKey: answer.currentBusinessState?.stageKey ?? null,
+                    workViewId: answer.contextFrame?.workViewId ?? null,
+                },
+                resolvedParticipant,
+                resolvedTour,
+                cards: settledCards,
+            };
+            cardProducersMs = timing ? performance.now() - tProducers : 0;
+            /*
+             * THE OUTCOME, NAMED BY THE JOIN THAT ACTUALLY DECIDED IT.
+             *
+             * The branches stay distinct because each implies a different repair: a subject mismatch
+             * means the announcement fired on the wrong record, a customer mismatch means child-grain
+             * household fallback moved underneath the speculation, and `early_failed` means the
+             * speculative chain threw. Collapsing them into "not used" would hide which is happening,
+             * and only one of the three would be worth fixing.
+             */
+            overlapDiag.outcome = !earlyRef.run
+                ? "no_announcement"
+                : overlapDiag.early_rejected || !early
+                  ? "early_failed"
+                  : !earlySubjectMatches
+                    ? "subject_mismatch"
+                    : !earlyRunUsable
+                      ? "customer_mismatch"
+                      : "used";
+            if (
+                timing &&
+                overlapDiag.early_end_offset_ms != null &&
+                overlapDiag.announce_offset_ms != null
+            ) {
+                const composeEnd = overlapDiag.compose_end_offset_ms ?? 0;
+                /*
+                 * Overlap is the part of the early run that ran WHILE composition was still running —
+                 * announcement to whichever ended first. The tail is whatever ran after composition
+                 * finished, clamped at zero: a run that finished early has no tail, not a negative one.
+                 */
+                overlapDiag.overlap_ms = Math.max(
+                    0,
+                    Math.round(
+                        Math.min(overlapDiag.early_end_offset_ms, composeEnd) -
+                            overlapDiag.announce_offset_ms,
+                    ),
+                );
+                overlapDiag.tail_ms = Math.max(
+                    0,
+                    Math.round(overlapDiag.early_end_offset_ms - composeEnd),
+                );
+            }
         }
+        return patch;
+    };
+
+    /*
+     * THE FORK. `deferSettlement` is the RSC route saying "emit the frame now, stream the rest".
+     * Every other caller — the HTTP seam most of all — still gets ONE fully settled answer, because
+     * its consumer has no second delivery to wait for.
+     */
+    const settlementNavigation: ProvisioningSettlementPatch["navigation"] = {
+        target: input.rawSlug,
+        lens: requestedWorkViewId ?? null,
+        subject: input.requestedSubjectId ?? null,
+        cohort: input.cohort ?? null,
+        aspect: input.aspect ?? null,
+    };
+    let deferredSettlement: Promise<ProvisioningSettlementPatch | null> | null = null;
+    if (input.deferSettlement) {
+        // Started, never awaited. The rejection handler keeps an unawaited failure from surfacing
+        // as an unhandled rejection on a request that has already answered.
+        deferredSettlement = runSettlement().catch(() => null);
+    } else {
+        const settled = await runSettlement();
+        if (settled) answer = applyProvisioningSettlement(answer, settled, settlementNavigation);
     }
 
     /*
-     * ── THE SEED JOIN, AND THE DOCUMENT WAIT IT COSTS ──
+     * ── THE SEED, READ RATHER THAN AWAITED ──
      *
-     * The seed has been running beside the rest of composition and the card producers. Whatever
-     * remains is ADDED DOCUMENT WAIT, and it is measured as exactly that rather than folded into
-     * page_total unattributed: the point of this change is to remove a ~1.6s post-document round
-     * trip, not to relocate it where it is harder to see.
+     * This used to await `seedRef.run`, and that wait was published honestly as `join_wait_ms` —
+     * P50 252ms on deployed 31fb4b0c. The original slice existed to remove a ~1.6s post-document
+     * round trip, and it still does: the seed is still computed, still started from the composer's
+     * announcement, and still delivered whenever it has landed. What is gone is the frame waiting
+     * for it.
      *
-     * There is no grace and no timeout here. A timeout would discard work already paid for and
-     * send the browser to fetch the same answer again; a grace would be the latency-hiding this
-     * slice exists to avoid. The honest cost is published as `join_wait_ms` and read directly off
-     * the deployed samples.
+     * Still no grace and no timeout. A seed that has not landed leaves the field null, which is the
+     * same honest state the client has always handled by resolving the counts itself. It is never
+     * an authoritative zero.
      */
-    const tSeedJoin = mark();
-    const seed = seedRef.run ? await seedRef.run : null;
+    const seed = seedSettled.value;
     if (timing) {
-        seedDiag.join_wait_ms = Math.round(performance.now() - tSeedJoin);
+        // Zero by construction now: the frame does not wait here. Kept so a reintroduced await
+        // shows up as a non-zero number in the deployed samples rather than silently.
+        seedDiag.join_wait_ms = 0;
+        seedDiag.seed_at_commit = seed ? 1 : 0;
         seedDiag.compose_end_offset_ms = Math.round(innerComposeMs);
         if (seedDiag.announce_offset_ms != null && seedDiag.seed_end_offset_ms != null) {
             // The part of the seed that ran while composition was still running.
@@ -575,6 +707,7 @@ export async function composeProvisioningAnswerForRoute(input: {
                         compose_end_offset_ms: seedDiag.compose_end_offset_ms,
                         overlap_ms: seedDiag.overlap_ms,
                         join_wait_ms: seedDiag.join_wait_ms,
+                        seed_at_commit: seedDiag.seed_at_commit,
                         outcome: seedDiag.outcome,
                         groups: seedDiag.groups,
                         totals: seedDiag.totals,
@@ -599,5 +732,5 @@ export async function composeProvisioningAnswerForRoute(input: {
         }
     }
 
-    return { ok: true, answer };
+    return { ok: true, answer, settlement: deferredSettlement };
 }

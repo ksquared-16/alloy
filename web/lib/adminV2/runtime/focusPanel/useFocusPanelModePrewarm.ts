@@ -7,6 +7,7 @@ import {
     type FocusPanelMode,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { scheduleDrawerVmPrewarm } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { perfAlloyOsRuntimeMark } from "@/lib/perf/adminV2PerfLog";
 
 /**
@@ -67,18 +68,48 @@ export function useFocusPanelModePrewarm({ enabled, activeMode, subjectId, prewa
 
         if (warmedSubjectRef.current === subjectId) return;
 
+        /*
+         * NON-ACTIVE MODE PREWARM IS SPECULATION, AND SPECULATION WAITS FOR THE SELECTED RECORD.
+         *
+         * This warmed every mode the operator is NOT looking at on an idle callback keyed to the
+         * subject, so a queue-row switch in Work mode eagerly loaded the whole Activity data set —
+         * the family-workspace VM, its first thread's messages, and the legacy tab metadata — for a
+         * surface nobody had opened. `requestIdleCallback` fires on the first idle after the click,
+         * which is precisely while the selected record is awaiting its own network, so it competed
+         * with the record the operator actually selected.
+         *
+         * Measured on deployed 5a24b636, per warm row switch:
+         *   communications/family-workspace ~1,444ms
+         *   communications/threads         ~1,212ms
+         *   communications/drawer-recipients ~1,076ms
+         *
+         * The scheduler that already owns this law exists — "prewarm must never compete with the
+         * primary reveal" — and neighbour warming already goes through it. This work simply did
+         * not. Routing it there defers it while the selected record's reveal window is open and
+         * drains it one at a time afterwards, so the Activity switch stays warm (Part 6: the
+         * operator must never wait for Activity) without paying for it during selection.
+         *
+         * No new scheduler, cache or gate: the active mode still warms immediately above, and the
+         * release boundary is the existing one — the selected VM applying.
+         */
         const cancel = scheduleAdminV2BackgroundWork(
             () => {
                 warmedSubjectRef.current = subjectId;
                 for (const mode of selectFocusPanelModesToPrewarm(activeMode)) {
-                    try {
-                        prewarm?.[mode]?.();
-                    } catch {
-                        /* non-fatal — warm failures never block mode switch */
-                    }
-                    perfAlloyOsRuntimeMark("focus_panel_mode_ready", {
-                        entity_id: subjectId,
-                        tab: mode,
+                    scheduleDrawerVmPrewarm({
+                        key: `focusmode:${subjectId}:${mode}`,
+                        reason: "focus_panel_mode_prewarm",
+                        run: () => {
+                            try {
+                                prewarm?.[mode]?.();
+                            } catch {
+                                /* non-fatal — warm failures never block mode switch */
+                            }
+                            perfAlloyOsRuntimeMark("focus_panel_mode_ready", {
+                                entity_id: subjectId,
+                                tab: mode,
+                            });
+                        },
                     });
                 }
             },

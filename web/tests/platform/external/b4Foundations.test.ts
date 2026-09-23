@@ -12,9 +12,25 @@ import { evaluateInstallationHealth } from "@/lib/platform/admin/installationHea
 import { INTEGRATIONS_ADMIN_OPERATIONS } from "@/lib/platform/admin/integrationsAdminAuth";
 
 describe("updated_since watermark", () => {
-    it("accepts an explicit offset or Z", () => {
-        expect(resolveUpdatedSince("2026-01-01T00:00:00Z")).toEqual({ ok: true, since: "2026-01-01T00:00:00.000Z" });
+    it("accepts an explicit offset or Z, and returns the caller's own value", () => {
+        expect(resolveUpdatedSince("2026-01-01T00:00:00Z")).toEqual({ ok: true, since: "2026-01-01T00:00:00Z" });
         expect(resolveUpdatedSince("2026-01-01T00:00:00+02:00").ok).toBe(true);
+    });
+
+    it("preserves sub-millisecond precision, because rounding it moves the watermark backwards", () => {
+        /*
+         * THE DEFECT THIS PINS. The watermark used to be re-serialized through a JavaScript Date,
+         * which holds milliseconds, while Postgres stores timestamptz to microseconds. A caller
+         * checkpointing at …:04.346845Z was asking again from …:04.346Z — earlier than where they
+         * actually stopped — so the boundary row came back a second time. Measured in Thread 7
+         * slice 7.1 and documented then as at-least-once; slice 7.2 removed the cause.
+         */
+        expect(resolveUpdatedSince("2026-03-02T08:15:04.346845Z")).toEqual({
+            ok: true,
+            since: "2026-03-02T08:15:04.346845Z",
+        });
+        const microseconds = resolveUpdatedSince("2026-03-02T08:15:04.346845+00:00");
+        expect(microseconds.ok && microseconds.since).toBe("2026-03-02T08:15:04.346845+00:00");
     });
 
     it("refuses a timestamp with no timezone rather than guessing UTC", () => {

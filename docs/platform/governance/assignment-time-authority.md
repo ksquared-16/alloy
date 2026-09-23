@@ -75,3 +75,45 @@ This slice did not implement day-specific Coverage, did not activate
 `staffing_participation`, did not change staffing sufficiency from whole-day evaluation,
 and did not create a Calendar, Time Off or payroll semantics. Those remain future work
 under the approved Staffing/Scheduling/Coverage V1 model.
+
+## Staffing participation — what an Assignment Type decides
+
+`operational_assignment_types.staffing_participation` governs **baseline Staff supply
+participation**, and nothing else yet.
+
+| value | meaning today |
+|---|---|
+| `supply` | Assignments of this type contribute baseline Staff supply, **subject to every other eligibility rule** — org, site, staff subject, commitment kind, operational status, effective dates, employment coverage, room/site semantics |
+| `none` | **intentionally** excluded from Staff supply. A legitimate steady state, not a gap |
+| `demand` | reserved, configured vocabulary. **NOT activated** as the gate for child-demand arithmetic |
+
+**`none` means a decision was made.** Until this slice it was also what you got by
+saying nothing, which is how `recurring_service` — the type carrying every Staff
+assignment — came to be `none` while the runtime counted its work anyway. Authoring a
+Staff-capable type now requires an intentional choice, and an unrelated edit (a rename,
+an icon change) no longer resets participation.
+
+**Child demand is unchanged.** It continues to derive from its existing authority —
+agreements, patterns and placements — which has never read Assignment Type. Activating
+`demand` would require deciding what participation means for an Assignment with **no
+type**, and today every active child Assignment is untyped. That decision is not made
+here and this slice does not depend on it.
+
+**An untyped Assignment is not implicitly one of the enum values.** It has no
+classification at all. For Staff that is configuration-invalid: such an assignment is
+excluded from supply and reported as unresolved rather than counted or silently
+dropped. `staff_supply_participation_unresolved()` names any Assignment Type still
+carrying live Staff supply while unclassified, and it reasons over usage rather than
+over a hardcoded key — a hardcoded `recurring_service` check would already have missed
+the certification stack, whose staffing type is called `staff_classroom`.
+
+Coverage, Availability, Presence and Readiness remain separate facts. Staffing remains
+whole-day.
+
+## Day-specific Coverage is a different authority
+
+An Assignment says what someone's recurring days and hours are. It deliberately does not
+say where they were planned on one particular Tuesday — that is
+[Coverage](staff-coverage-authority.md), a separate day-specific fact with its own
+lifecycle. Coverage never writes back to the Assignment, and as of Slice 3 it does not
+participate in staffing supply arithmetic.

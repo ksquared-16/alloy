@@ -1,0 +1,249 @@
+{
+  "trusted_host_action_id": "tha_7b016a1328d4b3",
+  "query_hash": "cac819918af1bd695cbf4e45de3d2084101c81ad6c07f968ce6e553265241025",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-21T03:47:58.874Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_7b016a1328d4b3",
+    "query_hash": "cac819918af1bd695cbf4e45de3d2084101c81ad6c07f968ce6e553265241025",
+    "authorization_id": "grnt_2f964ce250334c57",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-21T03:48:00.349Z",
+    "question_ids": [
+      "tbl_windows",
+      "tbl_exceptions",
+      "ck_windows_weekday_range",
+      "ck_windows_time_order",
+      "ck_windows_effective_order",
+      "ck_exceptions_kind",
+      "ck_exceptions_shape",
+      "no_unique_on_weekday",
+      "pk_windows",
+      "pk_exceptions",
+      "fk_org_both",
+      "fk_employment_both",
+      "no_person_id_column",
+      "org_id_not_null_both",
+      "idx_windows_employment",
+      "idx_windows_effective",
+      "idx_exceptions_date",
+      "rls_enabled_windows",
+      "rls_enabled_exceptions",
+      "policies_total",
+      "select_policies_org_scoped",
+      "permissive_true_policies",
+      "write_policies_naming_manager",
+      "authenticated_write_grants",
+      "no_is_ready_column",
+      "no_schedule_or_presence_columns",
+      "ledger_has_20260927120000",
+      "employments_total"
+    ],
+    "questions": {
+      "tbl_windows": {
+        "question_id": "tbl_windows",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "tbl_exceptions": {
+        "question_id": "tbl_exceptions",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_windows_weekday_range": {
+        "question_id": "ck_windows_weekday_range",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_windows_time_order": {
+        "question_id": "ck_windows_time_order",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_windows_effective_order": {
+        "question_id": "ck_windows_effective_order",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_exceptions_kind": {
+        "question_id": "ck_exceptions_kind",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ck_exceptions_shape": {
+        "question_id": "ck_exceptions_shape",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "no_unique_on_weekday": {
+        "question_id": "no_unique_on_weekday",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "pk_windows": {
+        "question_id": "pk_windows",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "pk_exceptions": {
+        "question_id": "pk_exceptions",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "fk_org_both": {
+        "question_id": "fk_org_both",
+        "row_count": null,
+        "rows": [
+          2
+        ]
+      },
+      "fk_employment_both": {
+        "question_id": "fk_employment_both",
+        "row_count": null,
+        "rows": [
+          2
+        ]
+      },
+      "no_person_id_column": {
+        "question_id": "no_person_id_column",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "org_id_not_null_both": {
+        "question_id": "org_id_not_null_both",
+        "row_count": null,
+        "rows": [
+          2
+        ]
+      },
+      "idx_windows_employment": {
+        "question_id": "idx_windows_employment",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_windows_effective": {
+        "question_id": "idx_windows_effective",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "idx_exceptions_date": {
+        "question_id": "idx_exceptions_date",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_windows": {
+        "question_id": "rls_enabled_windows",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "rls_enabled_exceptions": {
+        "question_id": "rls_enabled_exceptions",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "policies_total": {
+        "question_id": "policies_total",
+        "row_count": null,
+        "rows": [
+          10
+        ]
+      },
+      "select_policies_org_scoped": {
+        "question_id": "select_policies_org_scoped",
+        "row_count": null,
+        "rows": [
+          2
+        ]
+      },
+      "permissive_true_policies": {
+        "question_id": "permissive_true_policies",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "write_policies_naming_manager": {
+        "question_id": "write_policies_naming_manager",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "authenticated_write_grants": {
+        "question_id": "authenticated_write_grants",
+        "row_count": null,
+        "rows": [
+          0
+        ]
+      },
+      "no_is_ready_column": {
+        "question_id": "no_is_ready_column",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "no_schedule_or_presence_columns": {
+        "question_id": "no_schedule_or_presence_columns",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "ledger_has_20260927120000": {
+        "question_id": "ledger_has_20260927120000",
+        "row_count": null,
+        "rows": [
+          true
+        ]
+      },
+      "employments_total": {
+        "question_id": "employments_total",
+        "row_count": null,
+        "rows": [
+          4
+        ]
+      }
+    },
+    "row_count": 28
+  }
+}

@@ -273,18 +273,6 @@ function buildOperationalContextSignals(
      */
     const relevantBooking =
         (subjectVm.summaries.operator_relevant_tour_booking as TourBookingRow | null | undefined) ?? null;
-    const nextBooking = (tourBookings[0] as TourBookingRow | undefined) ?? relevantBooking ?? undefined;
-    const attendance = nextBooking ? readAttendanceConfirmation(nextBooking.metadata) : null;
-    const confirmedBy = attendance?.confirmed_by_person_id
-        ? truthScalarName(truth)
-        : null;
-    const parentConfirmationLabel = nextBooking
-        ? attendance?.status === "confirmed_by_parent"
-            ? confirmedBy
-                ? `Confirmed by ${confirmedBy}`
-                : "Confirmed by parent"
-            : attendanceStatusLabel(attendance?.status ?? "awaiting_response")
-        : null;
 
     return {
         work: {
@@ -299,23 +287,67 @@ function buildOperationalContextSignals(
             primaryReason: trimOrNull(attention?.primary_reason),
             reasonCount: attention?.reason_count ?? 0,
         },
-        tour: {
-            scheduled: tourBookings.length > 0,
-            startAt: trimOrNull(nextBooking?.start_at),
-            // Keep raw booking status_key for command/eligibility seams — What's Next must not
-            // render this under Primary contact (see buildWhatsNextContextFacts).
-            statusLabel: trimOrNull(nextBooking?.status_key),
-            // The same value, under a name that says what it is. Command presentation and
-            // eligibility read `statusKey`; `statusLabel` stays for its existing readers.
-            // From the operator-relevant booking, so a concluded tour still states what it was.
-            statusKey:
-                (trimOrNull(relevantBooking?.status_key ?? nextBooking?.status_key) as TourBookingStatusKey | null)
-                ?? null,
-            bookingId: trimOrNull(nextBooking?.id),
-            parentConfirmationLabel,
-        },
+        tour: buildTourSignalFromBookings({
+            activeBookings: tourBookings as TourBookingRow[],
+            operatorRelevantBooking: relevantBooking,
+            truth,
+        }),
         communications: buildCommunicationsSignal(subjectVm),
         billing: buildBillingSignal(truth),
+    };
+}
+
+/**
+ * THE TOUR SIGNAL — ONE OWNER, composed from the canonical booking projection.
+ *
+ * Extracted from this function's body so that COMMIT-CRITICAL can state the same answer settlement
+ * states, without reproducing settlement arithmetic in A'. Both callers pass the output of
+ * `loadOpportunityTourProjectionForViewModel`, which is the canonical query owner; this is the
+ * canonical MAPPING owner. There is no second truth system, only two callers of one function.
+ *
+ * WHY IT MATTERS: the collapsed Business Process card's activity preview falls back to a
+ * "Tour scheduled" item when truth carries no canonical activity entries. With the signal
+ * settlement-owned, that item — and the activity count rendered beside it — appeared only when the
+ * drawer answered, which is a legitimate UNKNOWN -> KNOWN correction and was the last thing
+ * blocking first-paint authority.
+ */
+export function buildTourSignalFromBookings(input: {
+    activeBookings: readonly TourBookingRow[];
+    operatorRelevantBooking: TourBookingRow | null;
+    truth: Record<string, unknown>;
+}): OperationalContextSignals["tour"] {
+    const active = input.activeBookings;
+    const relevantBooking = input.operatorRelevantBooking;
+    /*
+     * The first ACTIVE booking speaks for "is a tour scheduled"; the operator-relevant one speaks
+     * for "what was it", so a concluded tour still states its status. Order preserved exactly as
+     * settlement had it — this is a move, not a rewrite.
+     */
+    const nextBooking = (active[0] as TourBookingRow | undefined) ?? relevantBooking ?? undefined;
+    const attendance = nextBooking ? readAttendanceConfirmation(nextBooking.metadata) : null;
+    const confirmedBy = attendance?.confirmed_by_person_id ? truthScalarName(input.truth) : null;
+    const parentConfirmationLabel = nextBooking
+        ? attendance?.status === "confirmed_by_parent"
+            ? confirmedBy
+                ? `Confirmed by ${confirmedBy}`
+                : "Confirmed by parent"
+            : attendanceStatusLabel(attendance?.status ?? "awaiting_response")
+        : null;
+
+    return {
+        scheduled: active.length > 0,
+        startAt: trimOrNull(nextBooking?.start_at),
+        // Keep raw booking status_key for command/eligibility seams — What's Next must not
+        // render this under Primary contact (see buildWhatsNextContextFacts).
+        statusLabel: trimOrNull(nextBooking?.status_key),
+        // The same value, under a name that says what it is. Command presentation and
+        // eligibility read `statusKey`; `statusLabel` stays for its existing readers.
+        // From the operator-relevant booking, so a concluded tour still states what it was.
+        statusKey:
+            (trimOrNull(relevantBooking?.status_key ?? nextBooking?.status_key) as TourBookingStatusKey | null)
+            ?? null,
+        bookingId: trimOrNull(nextBooking?.id),
+        parentConfirmationLabel,
     };
 }
 

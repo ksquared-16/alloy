@@ -17,6 +17,13 @@
  * nothing server-side to drag with it.
  */
 
+/*
+ * TYPE-ONLY, therefore erased. The rule this file enforces is about VALUE imports reaching the
+ * browser bundle; a `import type` emits nothing at all, so the diagnostic shape can be named from
+ * its owner rather than copied here and left to drift from it.
+ */
+import type { ChildMembershipBatchMeasurement } from "@/lib/runtime/provisioning/childGrainMembership";
+
 /** One configured view's count, as both the endpoint and the seed report it. */
 export type WorkViewTotalRow = {
     workUnitId: string;
@@ -44,7 +51,57 @@ export type WorkViewTotalsSpans = {
     child_views: number;
     lane_views: number;
     unknown_views: number;
+    /**
+     * One entry per group that had child lenses: which lenses ran, in which membership mode, what
+     * each acquisition cost and at what cardinality. Diagnostic only — no predicate reads it.
+     *
+     * `child_counts` alone says the child lenses cost 1.5s. It cannot say whether that is one
+     * expensive projection or three copies of the same reads, and those have opposite repairs.
+     */
+    child_batches: ChildMembershipBatchMeasurement[];
 };
+
+/**
+ * ONE NODE OF THE WORK VIEW CRITICAL PATH, AS AN INTERVAL.
+ *
+ * WHY DURATIONS WERE NOT ENOUGH. Every span above is a DURATION, and durations accumulated across
+ * concurrent work cannot be added: `child_counts` summed to 1,637ms over three lenses whose real
+ * wall was one ~567ms lens, and a repair built on the sum made the frame 316ms slower. A duration
+ * says how long something took. Only an INTERVAL says whether anything waited for it.
+ *
+ * `start` and `end` are offsets in milliseconds from the moment Work View totals began, so two
+ * nodes overlap exactly when their intervals do, and the critical path is readable rather than
+ * inferred.
+ */
+export type WorkViewTimelineMark = {
+    /** `deptUnits` | `locator` | `seed` | `group` | `child:<viewId>` | `population` | `epp` | `tours` | `aggregate` */
+    node: string;
+    /** `<workUnitId>::<queueKey>` for anything inside a count group; null above the groups. */
+    group: string | null;
+    start: number;
+    end: number;
+};
+
+export type WorkViewTotalsTimeline = {
+    /** Absolute epoch of the Work View totals start; marks are offsets from it. */
+    t0: number;
+    marks: WorkViewTimelineMark[];
+};
+
+export function newWorkViewTotalsTimeline(t0: number = Date.now()): WorkViewTotalsTimeline {
+    return { t0, marks: [] };
+}
+
+/** Record one interval. `startedAt` is an absolute `Date.now()`, converted here so no caller does. */
+export function markWorkViewSpan(
+    timeline: WorkViewTotalsTimeline | undefined,
+    node: string,
+    startedAt: number,
+    group: string | null = null,
+): void {
+    if (!timeline) return;
+    timeline.marks.push({ node, group, start: startedAt - timeline.t0, end: Date.now() - timeline.t0 });
+}
 
 export function emptyWorkViewTotalsSpans(): WorkViewTotalsSpans {
     return {
@@ -57,6 +114,7 @@ export function emptyWorkViewTotalsSpans(): WorkViewTotalsSpans {
         child_views: 0,
         lane_views: 0,
         unknown_views: 0,
+        child_batches: [],
     };
 }
 

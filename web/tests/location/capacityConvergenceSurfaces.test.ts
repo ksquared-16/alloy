@@ -194,18 +194,23 @@ describe("17-19. Add Room stops growing ambiguous debt, by site readiness", () =
         expect(siteAcceptsLegacyCapacityCapture([TOD1], [rule("someone-elses-room")])).toBe(true);
     });
 
-    it("19. the create panel omits the input rather than showing one that is ignored", () => {
+    it("19. the create panel always offers Capacity, and it is never the legacy field", () => {
+        // INVERTED. The panel used to withdraw the input once a site had reached
+        // the canonical path, because the only thing it could write was untyped
+        // debt. It now writes a typed rule, so withholding it would withhold the
+        // feature rather than protect the data.
         const src = read("components/adminV2/settings/locations/LocationRoomCreatePanel.tsx");
-        expect(src).toContain("acceptsLegacyCapacity ?");
-        expect(src).toContain("locations-room-create-capacity-canonical");
-        // And the payload can never carry a legacy capacity once the site moved on.
-        expect(src).toContain("acceptsLegacyCapacity ? capacity.trim() || null : null");
+        expect(src).not.toContain("acceptsLegacyCapacity");
+        expect(src).not.toContain("locations-room-create-capacity-canonical");
+        expect(src).toContain("locations-room-create-capacity");
     });
 
-    it("19. Add Room grew no typed rule authoring of its own", () => {
+    it("19. Add Space still decides no capacity KIND of its own", () => {
         const src = read("components/adminV2/settings/locations/LocationRoomCreatePanel.tsx");
         expect(src).not.toContain("capacity_kind");
+        // It hands the number and the object to the server, which derives the rest.
         expect(src).not.toContain("operational-config/capacity-rules");
+        expect(src).toContain("parseOrdinaryCapacityInput");
     });
 });
 

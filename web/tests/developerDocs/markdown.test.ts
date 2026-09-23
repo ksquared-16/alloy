@@ -121,14 +121,28 @@ describe("the constructs the governed guides use", () => {
         expect(new Set(doc.outline.map((o) => o.id)).size).toBe(doc.outline.length);
     });
 
-    it("a blockquote becomes a callout, and the warning marker chooses the tone", () => {
+    it("a blockquote becomes a callout, and the marker chooses the tone", () => {
+        /*
+         * Parser behaviour, proven on the parser's own input. This used to assert the tone by
+         * finding a specific warning in the getting-started guide and matching its wording — so
+         * the day that guide stopped warning about unimplemented endpoints, a passing parser
+         * looked broken. A test of the renderer should not be a lock on what the documentation
+         * currently says.
+         */
+        const [warning] = parseBlocks("> ## ⚠ Mind this\n>\n> Body text.");
+        expect(warning).toMatchObject({ type: "callout", tone: "warning" });
+        expect(plainText((warning as Extract<BlockNode, { type: "callout" }>).title ?? []))
+            .toContain("Mind this");
+
+        const [note] = parseBlocks("> ## Just so you know\n>\n> Body text.");
+        expect(note).toMatchObject({ type: "callout", tone: "note" });
+    });
+
+    it("the getting-started guide still opens with a callout a reader cannot miss", () => {
+        // Content-level expectation, kept separate from the parser's own contract above.
         const doc = parseMarkdownDocument(read(GETTING_STARTED));
         const callouts = doc.blocks.filter((b) => b.type === "callout");
-        expect(callouts.length).toBeGreaterThan(0);
-        const warning = callouts.find((c) => c.type === "callout" && c.tone === "warning");
-        expect(warning, "the partially-implemented warning is a callout").toBeTruthy();
-        expect(plainText((warning as Extract<BlockNode, { type: "callout" }>).title ?? []))
-            .toContain("Partially implemented");
+        expect(callouts.length, "the orientation banner must survive as a callout").toBeGreaterThan(0);
     });
 
     it("lists parse, including nested items", () => {

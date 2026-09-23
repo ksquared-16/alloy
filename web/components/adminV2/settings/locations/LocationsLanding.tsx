@@ -76,7 +76,7 @@ export default function LocationsLanding({
                 </ConfigWorkspaceCard>
                 <ConfigWorkspaceCard compact className="h-full" testId="locations-landing-rooms-count">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
-                        Rooms
+                        Spaces
                     </p>
                     <p className="mt-1.5 text-lg font-semibold tracking-tight text-alloy-midnight">
                         {collection.totalRooms}
@@ -102,7 +102,7 @@ export default function LocationsLanding({
             <ConfigWorkspaceCard compact testId="locations-list-card">
                 <p className="text-sm font-semibold text-alloy-midnight">Locations at a glance</p>
                 <p className="mt-0.5 text-[12px] text-alloy-midnight/50">
-                    Select a Location in the collection to configure Programs, Rooms, and schedules.
+                    Select a Location in the collection to configure Programs, Spaces, and schedules.
                 </p>
 
                 {glanceRows.length === 0 ?
@@ -112,7 +112,7 @@ export default function LocationsLanding({
                         </p>
                         <p className="mt-1 text-sm text-alloy-midnight/55">
                             {collection.locationCount === 0 ?
-                                "Locations are where Programs, Rooms, and schedule definitions come together."
+                                "Locations are where Programs, Spaces, and schedule definitions come together."
                             :   "Include inactive Locations from the collection filters if needed."}
                         </p>
                         {canMutate && collection.locationCount === 0 ?
@@ -147,7 +147,7 @@ export default function LocationsLanding({
                                     <span className="shrink-0 text-sm text-alloy-midnight/55">
                                         {[
                                             `${location.activeProgramCount} ${location.activeProgramCount === 1 ? "Program" : "Programs"}`,
-                                            `${location.activeRoomCount} ${location.activeRoomCount === 1 ? "Room" : "Rooms"}`,
+                                            `${location.activeRoomCount} ${location.activeRoomCount === 1 ? "Space" : "Spaces"}`,
                                             // Coverage, not a seat sum: adding a physical
                                             // room's seats to the classrooms inside it was
                                             // never a capacity anyone could act on.

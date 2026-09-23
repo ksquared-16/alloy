@@ -296,7 +296,11 @@ async function cleanupConsumers() {
  * then decides.
  */
 const CONSUMERS = [
-    { key: BILLING_PERIODIC_HANDLER_KEY, domain: "periodic_billing", ref: { billing_period_id: "bp-1" }, productized: false },
+    /*
+     * PRODUCTIZED BY FINANCIALS PERIODIC BILLING. Its `domain_ref` is the real shape its handler
+     * reads, and like Autopay it answers in its own vocabulary rather than `not_productized_v1`.
+     */
+    { key: BILLING_PERIODIC_HANDLER_KEY, domain: "periodic_billing", ref: { billing_period_id: "bp-1" }, productized: true },
     { key: CHARGE_AGING_HANDLER_KEY, domain: "charge_aging", ref: { as_of: "2026-09-21" }, productized: false },
     {
         key: AUTOPAY_HANDLER_KEY,
@@ -388,14 +392,16 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
 
             if (c.productized) {
                 /*
-                 * A PRODUCTIZED CONSUMER ANSWERS IN ITS OWN VOCABULARY. Autopay resolved the
-                 * arrangement the reference named, found none, and reported a truthful no-collection
-                 * — which is a COMPLETED run, not a failure. That is the contract's central rule and
-                 * the reason this still counts toward `result.completed`.
+                 * A PRODUCTIZED CONSUMER ANSWERS IN ITS OWN VOCABULARY — it evaluated real domain
+                 * state, found nothing the reference named, and said so. That is a COMPLETED run,
+                 * not a failure, which is the contract's central rule and why it still counts
+                 * toward `result.completed`.
+                 *
+                 * What is asserted is the BOUNDARY, not each domain's wording: the handler ran, it
+                 * is no longer claiming to be a stub, and its own suite owns what it then decides.
                  */
                 expect(diag.mutation, "a productized consumer no longer claims to be a stub").toBeUndefined();
-                expect(diag.collected).toBe(false);
-                expect(diag.no_collection_reason).toBe("arrangement_missing");
+                expect(Object.keys(diag).length, "it reported something of its own").toBeGreaterThan(0);
             } else {
                 // The opaque reference was handed back untouched.
                 expect(diag.domain_ref_keys).toEqual(Object.keys(c.ref).sort());
@@ -457,7 +463,7 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
      * narrowed to the two that are still stubs rather than deleted. Autopay is asserted separately,
      * as a productized consumer that still returns a COMPLETED evaluation.
      */
-    it("the two remaining V1 stubs mutate nothing, and Autopay is no longer one of them", async () => {
+    it("whatever remains a V1 stub mutates nothing, and the productized consumers are not stubs", async () => {
         const past = new Date(Date.now() - 60_000).toISOString();
         for (const c of CONSUMERS) {
             await db.from("scheduled_work").insert({
@@ -491,15 +497,22 @@ describe.runIf(LIVE)("governed scheduled work — three consumers, one runtime",
 
         /* `as const` narrows these to literals, and the rows carry a plain string. */
         const stubKeys: string[] = CONSUMERS.filter((c) => !c.productized).map((c) => c.key);
+        /*
+         * DERIVED FROM THE FLAGS, not from a frozen count. Consumers get productized one at a time —
+         * Autopay first, then Periodic Billing — and a hard-coded "two stubs" makes the NEXT one
+         * edit this assertion instead of simply flipping its flag.
+         */
         const stubDiags = rows.filter((r) => stubKeys.includes(r.handler_key)).map((r) => r.diagnostic?.mutation);
-        expect(stubDiags.length).toBeGreaterThanOrEqual(2);
-        expect(new Set(stubDiags)).toEqual(new Set(["not_productized_v1"]));
+        expect(stubDiags.length).toBeGreaterThanOrEqual(stubKeys.length);
+        if (stubKeys.length) expect(new Set(stubDiags)).toEqual(new Set(["not_productized_v1"]));
 
-        const autopay = rows.filter((r) => r.handler_key === AUTOPAY_HANDLER_KEY);
-        expect(autopay.length).toBeGreaterThanOrEqual(1);
-        for (const r of autopay) {
-            expect(r.diagnostic?.mutation, "Autopay is productized and must not claim otherwise").toBeUndefined();
-            expect(r.diagnostic?.domain).toBe("autopay");
+        for (const c of CONSUMERS.filter((x) => x.productized)) {
+            const mine = rows.filter((r) => r.handler_key === c.key);
+            expect(mine.length, `${c.domain} ran`).toBeGreaterThanOrEqual(1);
+            for (const r of mine) {
+                expect(r.diagnostic?.mutation, `${c.domain} is productized and must not claim otherwise`).toBeUndefined();
+                expect(r.diagnostic?.domain).toBe(c.domain);
+            }
         }
     });
 });

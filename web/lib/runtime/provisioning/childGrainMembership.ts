@@ -29,6 +29,14 @@ import {
     type ChildProvisioningRow,
     type ChildRowMembership,
 } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
+import {
+    emptyChildGrainTrace,
+    type ChildGrainTrace,
+} from "@/lib/queues/childGrainProcessInstanceQueue";
+import {
+    markWorkViewSpan,
+    type WorkViewTotalsTimeline,
+} from "@/lib/runtime/provisioning/workViewTotalsSeedContract";
 // From its own module, NOT from the provisioning answer — importing the answer here would make a cycle
 // out of a one-way dependency (the answer consumes this).
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
@@ -90,4 +98,100 @@ export async function countChildGrainMembersForLens(params: {
 }): Promise<number> {
     const rows = await loadChildGrainMembersForLens(params);
     return rows.length;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * COUNTING SEVERAL LENSES OF THE SAME WORK UNIT
+ *
+ * WHAT WAS TRIED HERE, AND WHY IT IS GONE. A shared base acquisition once replaced this group's
+ * three per-lens acquisitions with one. It was measured on deployed bf3274774 over 21 paired and 21
+ * cold samples per arm, with exact member-set parity in every sample, and it made COMPLETE_FRAME
+ * 316ms SLOWER: the three acquisitions were ALREADY CONCURRENT, so their wall was one ~567ms lens
+ * rather than the 1,637ms their accumulated span suggested, and hoisting them produced a ~531ms
+ * serial prefix every group had to await. Fewer queries, more latency. The mechanism is retired;
+ * the instrumentation that proved it is not.
+ *
+ * So this counts each lens with its own acquisition, concurrently, exactly as the evaluator always
+ * did — and records what each one cost, which is the only reason the failure was legible.
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** What one lens cost, and what it answered. Diagnostic only. */
+export type ChildLensMeasurement = {
+    viewId: string;
+    mode: "stages" | "participation";
+    stages: number;
+    /** Wall of this lens, acquisition included. */
+    ms: number;
+    /** Members found; null when the lens refused. */
+    outRows: number | null;
+    acquisition: ChildGrainTrace;
+};
+
+export type ChildMembershipBatchMeasurement = {
+    lenses: ChildLensMeasurement[];
+};
+
+export function emptyChildMembershipBatchMeasurement(): ChildMembershipBatchMeasurement {
+    return { lenses: [] };
+}
+
+/**
+ * Count every child lens of one work unit, concurrently.
+ *
+ * Returns a count per view id, or null for a view whose own evaluation refused — the caller turns
+ * that into UNKNOWN, never into a family number. Each lens keeps its OWN failure, so one lens that
+ * cannot read still leaves the others answering.
+ */
+export async function countChildGrainMembersForLenses(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    workUnitId: string;
+    views: readonly WorkViewConfigV1Stored[];
+    measurement?: ChildMembershipBatchMeasurement;
+    /**
+     * Interval recorder. WHICH lens binds cannot be read off three durations that overlap — only
+     * off their intervals — and "which lens binds" is the whole question for this path.
+     */
+    timeline?: WorkViewTotalsTimeline;
+    group?: string;
+}): Promise<Map<string, number | null>> {
+    const out = new Map<string, number | null>();
+    if (!params.views.length) return out;
+
+    const counted = await Promise.all(
+        params.views.map(async (view) => {
+            const membership = childRowMembershipForLens(view);
+            const trace = emptyChildGrainTrace();
+            const t0 = Date.now();
+            let count: number | null;
+            try {
+                const rows = await loadChildGrainProvisioningRows({
+                    supabase: params.supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    membership,
+                    trace,
+                });
+                count = rows.length;
+            } catch {
+                count = null;
+            }
+            markWorkViewSpan(params.timeline, `child:${view.id}`, t0, params.group ?? null);
+            const measure: ChildLensMeasurement = {
+                viewId: view.id,
+                mode: membership.mode,
+                stages: membership.mode === "stages" ? membership.stageKeys.length : 0,
+                ms: Date.now() - t0,
+                outRows: count,
+                acquisition: trace,
+            };
+            return { id: view.id, count, measure };
+        }),
+    );
+
+    for (const { id, count, measure } of counted) {
+        out.set(id, count);
+        params.measurement?.lenses.push(measure);
+    }
+    return out;
 }

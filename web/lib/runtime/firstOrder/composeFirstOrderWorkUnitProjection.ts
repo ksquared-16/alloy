@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { newAttendanceTrace } from "@/lib/adminV2/runtime/focusPanel/attendance/attendanceTrace";
 import { buildAttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import { readAccountPrepaidPosition } from "@/lib/financials/prepaid/readAccountPrepaidPosition";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
@@ -100,6 +101,10 @@ export type FirstOrderComposeResult = {
     projection: FirstOrderWorkUnitProjection;
     timing: FirstOrderComposeTiming;
     plan: FirstOrderPlan;
+    /** Diagnostic decomposition of the Work View evaluator, when it ran. Never product state. */
+    workViewDiagnostics?: unknown;
+    /** Diagnostic decomposition of the attendance fold, when it ran. Never product state. */
+    attendanceDiagnostics?: unknown;
 };
 
 /**
@@ -194,6 +199,13 @@ export async function composeFirstOrderWorkUnitProjection(
     );
     const planMs = at();
 
+    /*
+     * ATTENDANCE IS THE BINDING FIRST-ORDER TERM AND HAS NEVER BEEN DECOMPOSED. The ~125ms it used
+     * to cost was the fail-closed branch; a specimen with an active enrolment measures 1,111-1,147ms.
+     * This records its internal intervals so the DAG can be read rather than inferred.
+     */
+    const attendanceTrace = newAttendanceTrace();
+
     // ── EXECUTE ────────────────────────────────────────────────────────────────────────────────
     const run = async <T,>(name: FirstOrderPrerequisiteKey, fn: () => Promise<T>): Promise<T | null> => {
         executedResolvers.push(name);
@@ -254,6 +266,7 @@ export async function composeFirstOrderWorkUnitProjection(
             populationPromise,
             maybe("attendance_fold", () => buildAttendanceCardVM(supabase, {
                 orgId, customerMemberId: input.customerMemberId!, recentDays: 5,
+                trace: attendanceTrace,
             })),
             maybe("health_profile", () =>
                 loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [input.customerMemberId!])),
@@ -459,5 +472,9 @@ export async function composeFirstOrderWorkUnitProjection(
         projection,
         timing: { planMs, readDagMs, assemblyMs, totalMs: at(), spans, executedResolvers, queryCount },
         plan,
+        workViewDiagnostics: workViewTotalsRead && workViewTotalsRead.status === "ok"
+            ? workViewTotalsRead.diagnostics
+            : null,
+        attendanceDiagnostics: attendanceTrace.marks.length ? attendanceTrace : null,
     };
 }
