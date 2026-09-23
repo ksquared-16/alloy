@@ -41,9 +41,25 @@ describe("active, inactive and archived are three different things", () => {
 
     it("archiving does not touch is_active, so a paused space stays paused in the record", () => {
         const service = read("lib/locations/archiveSpaceService.ts");
-        const update = service.slice(service.indexOf(".update({"), service.indexOf(".update({") + 200);
+        // The payload only — the prose below it explains why is_active is left
+        // alone, and would otherwise trip this.
+        const update = service.slice(service.indexOf(".update({"), service.indexOf(".update({") + 60);
         expect(update).toContain("archived_at");
         expect(update).not.toContain("is_active");
+    });
+
+    it("writes ONLY archived_at, because locations has no other column to write", () => {
+        /*
+         * Found by mounting, not by a lock: the first version also set
+         * `updated_by`, which locations does not have, and PostgREST failed the
+         * whole archive with "Could not find the 'updated_by' column". A
+         * source-string assertion cannot catch a wrong column name — only a real
+         * schema can — so this pins the payload to exactly one key.
+         */
+        const service = read("lib/locations/archiveSpaceService.ts");
+        const update = service.slice(service.indexOf(".update({"), service.indexOf(".update({") + 120);
+        expect(update).toContain("{ archived_at: archivedAt }");
+        expect(update).not.toContain("updated_by");
     });
 });
 
