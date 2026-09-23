@@ -7,6 +7,10 @@ import { ChevronRight } from "lucide-react";
 import { derived, neutral } from "@/styles/tokens/colors";
 
 import {
+    DOCUMENTATION_LABEL,
+    documentationTitle,
+} from "@/lib/developerDocs/documentationRoutes";
+import {
     ADMIN_SETTINGS_SUBPATH_PREFIX,
     CANONICAL_ADMIN_CONFIG_LANDING,
     normalizeToCanonicalAdminPath,
@@ -109,6 +113,36 @@ function crumbsForPath(path: string): Crumb[] {
 
     if (tail === "/placement-priority" || tail.startsWith("/placement-priority")) {
         base.push({ label: "Waitlist Ranking Policy", href: null });
+        return base;
+    }
+
+    /*
+     * Integrations, and Developer Documentation beneath it.
+     *
+     * Without this the fallback at the bottom printed the raw path tail, so an operator reading a
+     * guide saw "Organization › integrations/documentation/getting-started" — a route, not a place.
+     * Documentation also opens in its own tab, where the breadcrumb is the only thing on screen
+     * that says where the reader is and how to get back.
+     */
+    if (tail === "/integrations" || tail.startsWith("/integrations/")) {
+        const integrations = `${CANONICAL_ADMIN_CONFIG_LANDING}/integrations`;
+        const rest = tail.slice("/integrations".length).replace(/^\//, "").replace(/\/$/, "");
+        if (rest === "") {
+            base.push({ label: "Integrations", href: null });
+            return base;
+        }
+        base.push({ label: "Integrations", href: integrations });
+        const [first, second] = rest.split("/");
+        if (first !== "documentation") {
+            base.push({ label: documentationTitle(first), href: null });
+            return base;
+        }
+        if (!second) {
+            base.push({ label: DOCUMENTATION_LABEL, href: null });
+            return base;
+        }
+        base.push({ label: DOCUMENTATION_LABEL, href: `${integrations}/documentation` });
+        base.push({ label: documentationTitle(second), href: null });
         return base;
     }
 

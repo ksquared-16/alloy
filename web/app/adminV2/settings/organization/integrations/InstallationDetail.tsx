@@ -40,6 +40,7 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 
 import { CapabilityEditor, LocationAccessEditor } from "./AccessEditor";
+import { CredentialSecretDialog, type RevealedCredential } from "./CredentialSecretDialog";
 import {
     accessSummary,
     Badge,
@@ -60,8 +61,6 @@ type ActivityEntry = {
     requestId: string | null;
 };
 
-type Revealed = { secret: string; clientId?: string; overlapUntil?: string; kind: "issued" | "rotated" };
-
 const ACTIVITY_FILTERS = [
     { key: "all", label: "All" },
     { key: "success", label: "Success" },
@@ -79,7 +78,7 @@ export default function InstallationDetail({
 }) {
     const [activity, setActivity] = useState<ActivityEntry[]>([]);
     const [filter, setFilter] = useState<"all" | "success" | "failure">("all");
-    const [revealed, setRevealed] = useState<Revealed | null>(null);
+    const [revealed, setRevealed] = useState<RevealedCredential | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [editing, setEditing] = useState<"none" | "locations" | "capabilities">("none");
@@ -247,8 +246,6 @@ export default function InstallationDetail({
                             {message}
                         </p>
                     )}
-
-                    {revealed && <SecretReveal revealed={revealed} onDismiss={() => setRevealed(null)} />}
 
                     <div className="grid items-start gap-2.5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
                         {/* ── ACCESS ───────────────────────────────────────────────────────── */}
@@ -565,63 +562,16 @@ export default function InstallationDetail({
                     </div>
                 </main>
             </ConfigurationShell>
-        </div>
-    );
-}
 
-/**
- * The one and only time a secret is visible.
- *
- * Deliberately not persisted anywhere: no storage API is touched, and dismissing
- * removes it from state. There is no server endpoint that could show it again.
- */
-function SecretReveal({ revealed, onDismiss }: { revealed: Revealed; onDismiss: () => void }) {
-    const [copied, setCopied] = useState(false);
-    return (
-        <div
-            className="rounded-xl border border-alloy-ember/30 bg-alloy-ember/[0.05] p-3.5"
-            data-testid="credential-secret-reveal"
-        >
-            <p className="text-[13px] font-semibold text-alloy-midnight">
-                {revealed.kind === "rotated" ? "New secret" : "Client secret"} — shown once
-            </p>
-            <p className="mt-1 text-[12px] leading-[1.6] text-alloy-midnight/70">
-                Copy it now. Alloy stores only a hash, so this value cannot be shown again. If it is
-                lost, rotate the credential to issue a new one.
-            </p>
-            {revealed.clientId && (
-                <p className="mt-2 text-[11.5px]" data-testid="credential-client-id">
-                    <span className="text-alloy-midnight/45">Client ID: </span>
-                    <span className="font-mono text-alloy-midnight/80" data-testid="credential-client-id-value">{revealed.clientId}</span>
-                </p>
-            )}
-            <code
-                className="mt-2 block break-all rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-2 font-mono text-[12px] text-alloy-midnight"
-                data-testid="credential-secret-value"
-            >
-                {revealed.secret}
-            </code>
-            {revealed.overlapUntil && (
-                <p className="mt-2 text-[11.5px] text-alloy-midnight/70" data-testid="credential-rotation-overlap">
-                    The previous secret keeps working until {revealed.overlapUntil.slice(0, 16).replace("T", " ")}.
-                    Deploy this one before then.
-                </p>
-            )}
-            <div className="mt-2.5 flex gap-1.5">
-                <button
-                    type="button"
-                    className="config-primary-btn config-primary-btn--sm"
-                    data-testid="credential-secret-copy"
-                    onClick={() => {
-                        void navigator.clipboard?.writeText(revealed.secret).then(() => setCopied(true)).catch(() => setCopied(false));
-                    }}
-                >
-                    {copied ? "Copied" : "Copy"}
-                </button>
-                <button type="button" className="config-secondary-btn config-secondary-btn--sm" data-testid="credential-secret-dismiss" onClick={onDismiss}>
-                    Done
-                </button>
-            </div>
+            {/*
+              * The secret is a dialog, not a panel in the page.
+              *
+              * Rendered last and portaled from inside: on Done it unmounts, the value leaves state,
+              * and Installation detail is exactly the page it was before — with the Credentials
+              * card already refreshed, because issuing reloaded the installation before this
+              * appeared.
+              */}
+            {revealed && <CredentialSecretDialog revealed={revealed} onDone={() => setRevealed(null)} />}
         </div>
     );
 }

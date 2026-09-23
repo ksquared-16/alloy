@@ -7,10 +7,10 @@ supersedes: []
 
 # Alloy API — Conventions
 
-> ⚠ **Mixed status.** The error envelope, rate-limit headers and request
-> correlation described here are **implemented**. Collections, idempotency,
-> concurrency and external IDs are **contract only** — no endpoint exercises them
-> yet, because no domain resource is exposed.
+> Everything on this page is **implemented and exercised** by live endpoints:
+> the collection grammar on every persisted resource, the error envelope,
+> rate-limit headers, request correlation, external identifiers, and the
+> idempotency behaviour of attendance submission.
 
 ## Resources vs Operations
 
@@ -23,8 +23,8 @@ Alloy does not let you drive a state machine by assigning to a column. Reads are
 resources; meaningful changes are **operations** with names.
 
 ```http
-POST /v1/attendance/events        ✅  an intent, with a name
-PATCH /v1/attendance/{id}         ❌  does not exist, and will not
+POST /api/v1/attendance-events    ✅  an intent, with a name
+PATCH /api/v1/attendance-events   ❌  does not exist, and will not
 ```
 
 A `PATCH` exists only for bounded field corrections with no operational
@@ -40,14 +40,21 @@ itself, so no API could offer you an edit.
 Every collection shares one grammar.
 
 ```http
-GET /v1/children?limit=50&cursor=<opaque>&updated_since=2026-09-01T00:00:00Z
+GET /api/v1/children?limit=50&cursor=<opaque>&since_token=<opaque>
 ```
 
 | | |
 |---|---|
 | Pagination | Cursor. Pass `next_cursor` back as `cursor`. No offsets. |
-| Page size | `limit`, default 50, maximum 200 |
-| Sort | `updated_at` ascending, `id` as tiebreak — stable and deterministic |
+| Page size | `limit`, default 50, maximum 200 — clamped, not refused |
+| Sort | last-changed ascending, `id` as tiebreak — stable and deterministic |
+| Resume between passes | `since_token`. Pass back the `sync_token` from the last page you consumed. |
+| Changed since an instant | `updated_since`, ISO-8601 with offset or `Z` |
+
+Prefer `since_token` over `updated_since`: a token identifies a single row, so
+two records sharing a timestamp cannot be skipped or repeated. A cursor is a
+position, never a permission — presenting one issued under wider authority does
+not widen a narrower installation.
 | Filtering | Specific named filters per resource. No query language. |
 | Archived | Excluded by default; use `include_archived=true` and read `status` |
 
@@ -71,7 +78,7 @@ make that safe.
 **Required on every mutation.** A `POST` without `Idempotency-Key` is rejected.
 
 ```http
-POST /v1/attendance/events
+POST /api/v1/attendance-events
 Idempotency-Key: 3f9c1e77-2b40-4a8e-9f1a-5c2d8e6b7a01
 ```
 

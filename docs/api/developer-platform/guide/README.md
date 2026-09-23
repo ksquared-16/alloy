@@ -7,7 +7,7 @@ supersedes: []
 
 # Alloy API — Getting Started
 
-> ## ⚠ Partially implemented — read this before you build
+> ## What is callable today — read this before you build
 >
 > **Implemented and callable:** the application, installation and credential
 > model; token exchange at `POST /api/v1/oauth/token`; bearer authentication;
@@ -17,15 +17,19 @@ supersedes: []
 > [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json), whose
 > coverage is enforced by a drift guard in both directions.
 >
-> **Contract only, NOT callable:** the remaining domain resources (children,
-> people, enrollment, schedules), every governed operation, attendance
-> ingestion, webhooks, and anything Classroom Coach. The sections below that
-> describe them state the intended contract so you can design against it — they
-> do not describe a live endpoint, and no credential can reach one.
+> **Also callable:** Children, Households and Relationships; Enrollments,
+> Placements, Schedule assignments and the dated Schedule-days projection; Staff;
+> Attendance read and Attendance submission. Thirteen operations in total — see
+> the API Reference for each one's parameters, fields and errors.
 >
-> **Not yet safe to issue production credentials.** Three security prerequisites
-> remain open; see
-> [`../product/08-slice-b2-external-boundary.md`](../product/08-slice-b2-external-boundary.md).
+> **Not callable:** webhooks and event delivery (polling is the V1 posture and is
+> sufficient for every resource above), Communications, Financials, and any
+> self-service correlation management. Nothing in these guides describes an
+> endpoint that does not exist.
+>
+> **Credential posture.** Sandbox credentials are issued today. Ask your Alloy
+> contact before planning a production cutover; the contract below is not
+> expected to change when that happens.
 
 ## The model, in four words
 
@@ -107,11 +111,26 @@ V1 scopes:
 
 | Scope | Grants |
 |---|---|
-| `context.read` | Read your own installation context |
-| `locations.read` | Read locations |
-| `children.read` | Read child records within your boundary |
-| `attendance.read` | Read attendance facts |
-| `attendance.write` | Record attendance facts |
+| `locations.read` | Read authorized sites, rooms, and operational units |
+| `children.read` | Read children currently in service within authorized locations |
+| `households.read` | Read the household shell for visible children |
+| `relationships.read` | Read visible child-adult relationships and effective pickup authority |
+| `relationships.contact.read` | Read email and phone for adults already visible through relationships |
+| `enrollment.read` | Read enrollment agreements and placements for visible children |
+| `schedule.read` | Read committed schedules and dated schedule projections for visible children |
+| `staff.read` | Read staff assigned to authorized locations |
+| `staff.contact.read` | Read email and phone for staff already visible through staff access |
+| `attendance.read` | Read attendance history for visible children |
+| `attendance.write` | Submit attendance facts for visible children |
+
+`GET /api/v1/context` needs no scope. Every installation can read its own
+context, because a caller that cannot discover what it holds cannot work out why
+anything else was refused. There is no `context.read` to request.
+
+Scopes match **exactly**. `children.read` does not imply
+`children.contact.read`-style access to anything else, and no read implies a
+write. An installation granted only `attendance.write` can record that a child
+arrived and cannot read back a single attendance record.
 
 Rules that will surprise you if you skip them:
 
@@ -125,7 +144,10 @@ Rules that will surprise you if you skip them:
 
 ## Where to go next
 
+- [Integrating with Alloy](integrating.md) — the whole integration in one read:
+  identity, authority, the resource graph, synchronization, submission and limits
 - [Conventions](conventions.md) — resources vs operations, collections,
   idempotency, concurrency, errors, external IDs
-- [Locations](locations.md) — the first canonical resource, **live**
-- [Attendance example](attendance-example.md) — a full integration, contract only
+- [Locations](locations.md) — sites and rooms, and the vocabulary every other
+  resource uses to name a place
+- **API Reference** — every operation's parameters, fields, examples and errors

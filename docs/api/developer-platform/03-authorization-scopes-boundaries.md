@@ -49,7 +49,7 @@ Rejected alternatives:
 
 | External scope | Grants | Maps to internal |
 |---|---|---|
-| `context.read` | Read the installation's own context | none (self-describing) |
+| ~~`context.read`~~ | *Retired from the grant model 2026-09-22 — `GET /api/v1/context` needs only a valid token. Still recognised so existing installations do not degrade.* | none (self-describing) |
 | `locations.read` | Read locations | location read authority |
 | `children.read` | Read child records in boundary | child read authority |
 | `attendance.read` | Read attendance facts | `attendance.read` |

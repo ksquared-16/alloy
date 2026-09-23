@@ -75,3 +75,50 @@ export async function resolveIntegrationResourceRef(params: {
 
     return { ok: true, resourceType: params.resourceType, alloyResourceId: target };
 }
+
+/**
+ * The reverse direction: which external identifiers does THIS installation use for these resources?
+ *
+ * The forward resolver above answers "what does the partner's id mean here" and is the one that
+ * must never guess. This one is decoration on a read: a partner listing attendance facts should not
+ * have to hold a second lookup table to recognise its own children. Same table, same installation
+ * scoping, same `active` rule — there is no second mapping system, and no alias from another
+ * installation can be returned because the query is scoped to this one.
+ *
+ * A resource with no active alias simply has none; that is a fact about the mapping, not a failure.
+ */
+export async function externalIdsForResources(params: {
+    supabase: SupabaseClient;
+    installationId: string;
+    orgId: string;
+    resourceType: IntegrationResourceType;
+    alloyResourceIds: readonly string[];
+}): Promise<ReadonlyMap<string, string>> {
+    const ids = [...new Set(params.alloyResourceIds.filter(Boolean))];
+    if (ids.length === 0 || !params.installationId || !params.orgId) return new Map();
+
+    const targetColumn =
+        params.resourceType === "child" ? "child_customer_member_id" : "location_id";
+
+    const { data, error } = await params.supabase
+        .from("integration_resource_refs")
+        .select(`external_id, ${targetColumn}`)
+        .eq("installation_id", params.installationId)
+        .eq("org_id", params.orgId)
+        .eq("resource_type", params.resourceType)
+        .eq("status", "active")
+        .in(targetColumn, ids);
+
+    // A lookup failure yields no aliases rather than an error: the attendance facts are true with
+    // or without the partner's own name for the child, and failing the read would be the larger
+    // harm.
+    if (error || !data) return new Map();
+
+    const out = new Map<string, string>();
+    for (const row of data as Array<Record<string, string | null>>) {
+        const target = row[targetColumn];
+        const externalId = row.external_id;
+        if (target && externalId) out.set(target, externalId);
+    }
+    return out;
+}

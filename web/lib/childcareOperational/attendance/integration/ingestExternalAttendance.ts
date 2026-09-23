@@ -407,9 +407,39 @@ async function upsertEvidence(
         .insert(row)
         .select("id")
         .single();
+    if (!error) return { id: (data as { id: string } | null)?.id ?? "", error: null };
+
+    /*
+     * THE ONE RACE THE INBOX HAD, AND WHY IT MATTERED OUTSIDE.
+     *
+     * The canonical write has been race-free since capture hardening: it inserts through an RPC
+     * with ON CONFLICT DO NOTHING on (org_id, idempotency_key) and re-reads, so two simultaneous
+     * deliveries of one event converge on one fact. The evidence row in FRONT of it did not. Both
+     * requests looked for a prior row, neither found one, and both inserted — so the loser hit the
+     * partial unique index on this table and was reported as `evidence_write_failed`.
+     *
+     * Nothing was ever written twice; the canonical ledger was protected the whole time. What was
+     * wrong was the ANSWER: a partner whose retry raced its own original was told its fact had been
+     * rejected, when the fact existed. Measured through the public contract in Thread 7 slice 7.4 —
+     * concurrent identical submissions returned `accepted` and `rejected`.
+     *
+     * So losing that insert is not a failure, it is evidence that someone else got there first.
+     * Re-read the row they made and carry on: if they have already finished, the caller learns this
+     * is a replay; if they are still in flight, the RPC below converges both onto one fact.
+     */
+    const existing = await supabase
+        .from("attendance_integration_events")
+        .select("id")
+        .eq("provider_key", args.providerKey)
+        .eq("provider_event_id", args.event.externalEventId)
+        .eq("installation_id", args.author.installationId)
+        .limit(1);
+    const raced = ((existing.data ?? []) as Array<{ id: string }>)[0];
+    if (raced?.id) return { id: raced.id, error: null };
+
     // Surfaced, never swallowed: a fixture or a constraint that quietly refuses
     // this row would otherwise produce a suite of vacuous passes.
-    return { id: (data as { id: string } | null)?.id ?? "", error: error?.message ?? null };
+    return { id: "", error: error.message };
 }
 
 async function setDisposition(
