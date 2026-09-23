@@ -108,3 +108,22 @@ describe("one child's identity cannot become another's", () => {
             .not.toContain("childImageFor");
     });
 });
+
+describe("the reads belong to the surface that uses them", () => {
+    it("the compact card issues no administration read", () => {
+        /*
+         * The compact card does not render the relationship row, so reading each child's
+         * responsibility and discount position for it was two round trips whose answers nothing
+         * displayed — issued for every Financials card on the panel, including ones an operator
+         * never opens.
+         *
+         * The root lifecycle's stale guarantee caught it: that test asserts the compact card
+         * issues NO request for the initial account, and the reason it failed was the reason the
+         * reads should not have been there.
+         */
+        const card = code(CARD);
+        expect(card).toMatch(/const detailInPlay = overlay === "detail" \|\| detailsAreTheSurface;/);
+        expect(card, "and the read is gated on it")
+            .toMatch(/if \(!customerId \|\| !detailInPlay\) return;/);
+    });
+});

@@ -479,7 +479,20 @@ export default function FinancialsCard({
     const [discountPositionBody, setDiscountPositionBody] = useState<FamilyPosition | null>(null);
 
     useEffect(() => {
-        if (!customerId) return;
+        /*
+         * ── ONLY WHEN THE SURFACE THAT USES IT IS IN PLAY ────────────────────────────────────
+         *
+         * The compact card does not render the relationship row, so reading each child's
+         * responsibility and discount position for it was two round trips whose answers nothing
+         * displayed — issued for every Financials card on the panel, including the ones an
+         * operator never opens.
+         *
+         * Caught by the root lifecycle's stale guarantee, which asserts the compact card issues
+         * NO request for the initial account: the reads made it fail, and the reason it failed was
+         * the reason they should not have been there.
+         */
+        const detailInPlay = overlay === "detail" || detailsAreTheSurface;
+        if (!customerId || !detailInPlay) return;
         let cancelled = false;
         setAdminPositionsLoading(true);
         /*
@@ -541,7 +554,7 @@ export default function FinancialsCard({
          * in the list so a card that resolves its subjects after this read re-labels rather than
          * leaving the discount row naming ids.
          */
-    }, [customerId, vm?.subjects]);
+    }, [customerId, detailsAreTheSurface, overlay, vm?.subjects]);
 
     /*
      * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
