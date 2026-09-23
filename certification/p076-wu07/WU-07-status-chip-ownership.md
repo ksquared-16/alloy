@@ -63,3 +63,50 @@ The queue row projection renders `row_status_label = "New"` where the authored s
 `"New Lead"`. Anywhere a work unit binds its status slot to `opportunity.status_label`, operators see
 a status label that is not the authored one. This is a projection defect, not a header defect, and is
 **not** fixed here.
+
+---
+
+# VERIFIED ON THE DEPLOYED FIX — `3bff6e7c`
+
+Same instrument, same route, same session conditions. n = 14 before, n = 14 after, no signed-out
+samples in either set.
+
+| | before `9620b05b` | after `3bff6e7c` |
+|---|---|---|
+| `POST_COMPLETE_AUTHORITATIVE_CORRECTION` P50 | **1** | **0** |
+| values | `[1] × 14` | `[0] × 14` |
+| the correction | STATUS `"Lead"` → `"New Lead"` ×14 | none |
+
+**TARGET MET.** Zero post-complete corrections, deterministic across every sample.
+
+The STATUS series is now `<reserved>` → `"New Lead"` in 14/14: the operator never reads a status
+the record does not have, and the arrival is a fill in place.
+
+## Geometry held — the status chip is never inserted
+
+This is the check that distinguishes a real fix from trading one defect for another. A subject
+reading empty is ambiguous on its own: the chip may be *absent* (so the value arriving INSERTS a
+chip and shifts layout) or *present and reserved* (so it fills in place). Measured directly:
+
+| | at the frame | at settle |
+|---|---|---|
+| status chips | **1** | **1** |
+| of which reserved | 1 | 0 |
+
+14/14 identical. The status chip exists at the frame and the same chip carries the value later.
+
+## Disclosed, not hidden
+
+- **Two other chips are still inserted after the frame.** Total chips go 1 at the frame → 3 at
+  settle; location and attention arrive at ~4.5s. This is pre-existing — location filled at ~4.0s
+  in the before set and was equally absent at the frame — and is neither caused nor fixed here. It
+  remains open geometry debt for those chips.
+- **`PROCESS` never renders** on this route, before or after.
+- **Frame time: P50 1,108 → 1,162ms (+54ms).** Ranges overlap heavily (before 1,012–2,515;
+  after 965–5,869, with the faster single sample in the after set). At n = 14 per side on a shared,
+  loaded host this is not a distinguishable regression, and it is recorded rather than dropped.
+- **The deliberate trade:** the operator previously saw a status chip at ~1s that was wrong in kind
+  (a stage presented as a status); they now see a reserved chip until ~4.5s. Removing a false
+  assertion is the intended outcome, but the chip is blank for longer, and that is a real cost.
+  Closing it means giving the frame a value the owner actually owns — a server-compose change, not
+  a header change.
