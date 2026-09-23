@@ -772,6 +772,28 @@
         "helper": "assertAttendanceReadAllowed"
       }
     },
+    "app/api/admin/children/[childId]/safeguarding-restrictions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "crm.customers.read",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Reading the safeguarding restrictions recorded for one child. `crm.customers.read` is enforced by `requireCrmPeopleCapability`, narrowed by `canViewSafeguarding` to owner/admin/ops \u2014 the table's RLS select policy, which deliberately omits `manager` because a child's protective order must not read like ordinary profile content. Admin routes hold a service-role client and bypass RLS, so these checks are the enforcement, not the policy."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "crm.customers.write",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Authoring or lifting a child safeguarding restriction. `crm.customers.write` is the catalogued capability for changing family and person records and is enforced here by `requireCrmPeopleCapability`, but it is deliberately NOT the whole gate: that key is held by admin AND ops in every organization, and revoking a protective order is the moment a barred adult becomes collectable again. `canManageSafeguarding` is the floor beneath it \u2014 owner/admin only, mirroring the table's own RLS write policy (`has_org_role(org_id, ARRAY['owner','admin'])`). The conjunction is strictly narrower than either gate alone. The domain's own key, `crm.customers.safeguarding.manage`, is declared in lib/safeguarding/safeguardingRestriction.ts and cannot be named here: it is not seeded into permission_definitions (that catalog is frozen at a measured width and seeding it is a Director-owned Access & Identity step), so gating on it would resolve to false for every caller forever."
+      }
+    },
+    "app/api/admin/children/[childId]/safeguarding-restrictions/[restrictionId]/end/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "crm.customers.write",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Authoring or lifting a child safeguarding restriction. `crm.customers.write` is the catalogued capability for changing family and person records and is enforced here by `requireCrmPeopleCapability`, but it is deliberately NOT the whole gate: that key is held by admin AND ops in every organization, and revoking a protective order is the moment a barred adult becomes collectable again. `canManageSafeguarding` is the floor beneath it \u2014 owner/admin only, mirroring the table's own RLS write policy (`has_org_role(org_id, ARRAY['owner','admin'])`). The conjunction is strictly narrower than either gate alone. The domain's own key, `crm.customers.safeguarding.manage`, is declared in lib/safeguarding/safeguardingRestriction.ts and cannot be named here: it is not seeded into permission_definitions (that catalog is frozen at a measured width and seeding it is a Director-owned Access & Identity step), so gating on it would resolve to false for every caller forever."
+      }
+    },
     "app/api/admin/commands/[commandKey]/route.ts": {
       "GET": {
         "status": "pending"
