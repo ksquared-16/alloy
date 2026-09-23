@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
@@ -113,6 +114,7 @@ function basisWithoutPolicyName(explanation: string | null, policyName: string):
 export default function FinancialsDiscountPanel({
     customerId,
     childLabelFor,
+    childImageFor,
     hostedOpen,
     onHostedClose,
     initialPosition,
@@ -145,6 +147,12 @@ export default function FinancialsDiscountPanel({
     initialPosition?: FamilyPosition | null;
     /** Names the relationship in the operator's words. The panel never invents a label. */
     childLabelFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
+    /**
+     * CANONICAL IDENTITY, SUPPLIED — never resolved here. The host holds the view model whose
+     * subjects carry an already-authorized reference; this panel renders what it is given and
+     * falls through to the canonical initials avatar when there is none.
+     */
+    childImageFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
     /** Re-read committed truth. This panel reports no success of its own. */
     onCommitted: () => Promise<void> | void;
 }) {
@@ -342,6 +350,7 @@ export default function FinancialsDiscountPanel({
             ocmId: string;
             memberId: string | null;
             label: string;
+            imageUrl: string | null;
             lines: Array<{
                 policyId: string;
                 policyLabel: string;
@@ -362,6 +371,7 @@ export default function FinancialsDiscountPanel({
                     ocmId: sub.opportunityCustomerMemberId,
                     memberId: sub.customerMemberId,
                     label: label(sub),
+                    imageUrl: childImageFor?.(sub.opportunityCustomerMemberId, sub.customerMemberId) ?? null,
                     lines: [],
                 };
                 const assigned = (assignedByMember[sub.customerMemberId ?? ""] ?? [])
@@ -404,6 +414,7 @@ export default function FinancialsDiscountPanel({
                         list.some((a) => a.opportunityCustomerMemberId === n.opportunityCustomerMemberId),
                     )?.[0] ?? null,
                 label: childLabelFor?.(n.opportunityCustomerMemberId, null) ?? HOUSEHOLD_LABEL,
+                imageUrl: childImageFor?.(n.opportunityCustomerMemberId, null) ?? null,
                 lines: [],
             });
         }
@@ -556,6 +567,18 @@ export default function FinancialsDiscountPanel({
                                   * same weight as the metadata under it.
                                   */}
                                 <p className="alloy-os-depthcard__identity">
+                                    {/*
+                                      * THE CANONICAL AVATAR, at Financials density. Small enough to
+                                      * be recognition rather than decoration, and the same component
+                                      * every other Alloy surface uses — so a child looks like
+                                      * themselves here, in Records and on the card.
+                                      */}
+                                    <IdentityAvatar
+                                        name={child.label}
+                                        imageUrl={child.imageUrl}
+                                        size={22}
+                                        allowZoom={false}
+                                    />
                                     <span className="alloy-os-depthcard__identity-name">{child.label}</span>
                                 </p>
 

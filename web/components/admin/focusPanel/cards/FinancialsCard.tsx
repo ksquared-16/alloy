@@ -3956,6 +3956,16 @@ export default function FinancialsCard({
                                 (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
                                     ?.displayName ?? null
                             }
+                            /*
+                             * CANONICAL IDENTITY, LOOKED UP BY THE CHILD'S OWN ID. Keyed rather
+                             * than positional: a list resolved by index puts one sibling's face on
+                             * another the first time the two lists are ordered differently, and
+                             * they are ordered by different things.
+                             */
+                            childImageFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.imageUrl ?? null
+                            }
                             hostedOpen
                             onHostedClose={pop}
                             onCommitted={async () => {

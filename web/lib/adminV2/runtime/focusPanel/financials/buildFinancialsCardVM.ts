@@ -174,6 +174,10 @@ export type FinancialsSubject = {
     customerMemberId: string;
     agreementId: string;
     displayName: string;
+    /** Canonical identity key. The photo is resolved per actor by the route, never here. */
+    personId?: string | null;
+    /** Canonical, already-authorized avatar reference. Null renders initials. */
+    imageUrl?: string | null;
     /** Agreement status — a closed agreement still owns its history. */
     agreementStatus: string;
 };
@@ -1206,7 +1210,8 @@ async function buildFinancialsCardVMInner(
         clock.time("members_ms", () =>
             supabase
                 .from("customer_members")
-                .select("id, first_name, last_name, display_name")
+                /* `person_id` carries canonical identity — the key the shared photo projection uses. */
+                .select("id, first_name, last_name, display_name, person_id")
                 .eq("org_id", args.orgId)
                 .in("id", memberIds),
         ).catch(() => ({ data: [] as unknown })),
@@ -1358,11 +1363,26 @@ async function buildFinancialsCardVMInner(
         const thisActive = (a.status ?? "").trim().toLowerCase() === "active";
         if (!heldActive && thisActive) subjectByMember.set(a.customer_member_id, a);
     }
+    /*
+     * ── IDENTITY TRAVELS WITH THE SUBJECT, AND THE IMAGE IS RESOLVED ELSEWHERE ────────────────
+     *
+     * `personId` is carried here and the PHOTO is not. This builder holds a service-role client
+     * and no actor, and a resolved photo URL is authorized per actor per request — minting one
+     * here would either leak an unauthorized reference or bake a signed URL into a cached view
+     * model. The route that has the actor projects it onto these subjects through the shared
+     * document helper, which is the same path Records and the Focus Panel already use.
+     */
+    const personIdByMember = new Map(
+        ((memberRows ?? []) as unknown as Array<Record<string, unknown>>).map((m) => [t(m.id), t(m.person_id) || null]),
+    );
     vm.subjects = [...subjectByMember.values()].map((a) => ({
         customerMemberId: a.customer_member_id,
         agreementId: a.id,
         displayName: nameByMember.get(a.customer_member_id) ?? "Child",
         agreementStatus: a.status,
+        personId: personIdByMember.get(a.customer_member_id) ?? null,
+        /* Filled by the route that holds the actor. Null renders the canonical initials fallback. */
+        imageUrl: null as string | null,
     }));
 
     if (chargeResult.error) {
