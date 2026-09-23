@@ -60,6 +60,18 @@ test("p077 header corrections", async ({ page }) => {
             // the latency track certified. After THIS, a value change is post-complete.
             if (marks.frameAt == null && document.querySelectorAll(".alloy-os-ucard").length >= 6) {
                 marks.frameAt = now;
+                /*
+                 * GEOMETRY AT THE FRAME. A subject reading "" is ambiguous on its own: the chip may
+                 * be ABSENT, or present and reserved. Those are different outcomes — one is an
+                 * insertion when the value lands (a layout shift), the other is a fill in place.
+                 * Record the chip census at the frame so the two can be told apart.
+                 */
+                const store = w.__hc as Record<string, unknown>;
+                store.chipsAtFrame = document.querySelectorAll(`${HEADER} [data-focus-panel-chip-kind]`).length;
+                store.statusChipAtFrame = document.querySelectorAll(`${HEADER} [data-focus-panel-chip-kind="status"]`).length;
+                store.reservedStatusAtFrame = document.querySelectorAll(
+                    `${HEADER} [data-focus-panel-chip-kind="status"][data-focus-panel-chip-reserved="true"]`,
+                ).length;
             }
             for (const k of Object.keys(READ)) {
                 const v = READ[k]();
@@ -97,9 +109,17 @@ test("p077 header corrections", async ({ page }) => {
                 });
             }
         }
+        const HEADER2 = '[data-alloy-os-focus-panel-header="true"]';
+        const store = hc as unknown as Record<string, unknown>;
         return {
             signedOut: /login|sign in/i.test(document.title) || !!document.querySelector('input[type="password"]'),
             marks: hc.marks,
+            chipsAtFrame: store.chipsAtFrame ?? null,
+            statusChipAtFrame: store.statusChipAtFrame ?? null,
+            reservedStatusAtFrame: store.reservedStatusAtFrame ?? null,
+            // Settled census, to compare against the frame census: equal counts = no insertion.
+            chipsFinal: document.querySelectorAll(`${HEADER2} [data-focus-panel-chip-kind]`).length,
+            statusChipFinal: document.querySelectorAll(`${HEADER2} [data-focus-panel-chip-kind="status"]`).length,
             frameAt,
             series: hc.series,
             corrections,
