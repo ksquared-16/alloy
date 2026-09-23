@@ -5488,6 +5488,12 @@
         "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
     },
+    "app/api/v1/enrollments/void/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
     "app/api/v1/placements/move/route.ts": {
       "POST": {
         "status": "none",

@@ -336,7 +336,35 @@ export async function supersedeScheduleAssignment(
         .select("*")
         .single();
 
+    /*
+     * RACE RECOVERY.
+     *
+     * `ux_schedule_assignments_one_operational_primary_child` now enforces the invariant the reader
+     * has always assumed, which means two simultaneous changes can no longer both insert — and the
+     * loser must not receive a raw unique violation as a 500. Losing the race is evidence that
+     * someone got there first, not an error a partner should have to interpret.
+     *
+     * So the current operational assignment is re-read. If it already says what this caller asked
+     * for, that IS the caller's outcome and it converges. If it says something else, two operators
+     * genuinely disagreed, and a truthful conflict is the honest answer — never a silent overwrite
+     * and never an arbitrary winner.
+     */
     if (error || !data) {
+        const winner = await getOperationalScheduleAssignmentForAgreement(
+            supabase,
+            input.orgId,
+            input.enrollmentAgreementId
+        );
+        if (winner && winner.schedule_pattern_id === schedulePatternId && winner.start_date === newStartDate) {
+            return winner;
+        }
+        if (winner) {
+            throw new OperationalEnrollmentServiceError(
+                "conflict",
+                "Another schedule change for this enrollment was committed first; re-read it before changing again",
+                { assignment_id: winner.id }
+            );
+        }
         throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "insert failed");
     }
     const assignment = data as ScheduleAssignmentRow;

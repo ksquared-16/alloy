@@ -265,6 +265,13 @@ export const PUBLIC_OPERATIONS = {
         scope: "enrollment.write",
         route: "/api/v1/enrollments/end",
     },
+    // Voiding is the same capability as starting or ending an enrollment — deciding whether a child
+    // is in service. It is guarded by evidence, not by a separate scope.
+    voidEnrollment: {
+        operationId: "voidEnrollment",
+        scope: "enrollment.write",
+        route: "/api/v1/enrollments/void",
+    },
     assignPlacement: { operationId: "assignPlacement", scope: "enrollment.write", route: "/api/v1/placements" },
     movePlacement: { operationId: "movePlacement", scope: "enrollment.write", route: "/api/v1/placements/move" },
     // Cancelling a placement is the same capability as creating or moving one — deciding where a

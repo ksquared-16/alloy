@@ -2004,6 +2004,124 @@
         }
       }
     },
+    "/api/v1/enrollments/void": {
+      "post": {
+        "operationId": "voidEnrollment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Void an enrollment that never represented service",
+        "description": "Records that an enrollment was created or activated in error and never represented service. Requires the `enrollment.write` scope.\n\n**Three endings, and they are not interchangeable.** `ended` says service happened and concluded. `canceled` says a commitment was withdrawn before it began. `voided` says the record was never real at all. `POST /enrollments/end` reaches the first two; only this reaches the third. Ending a mistaken enrollment would assert that care was delivered, and would keep the child on your roster as genuine history.\n\n**It is refused where it would be a lie.** If attendance was recorded under the enrollment then a child actually arrived, and no operator decision changes that. Alloy checks its own attendance ledger \u2014 reversed and superseded facts do not count \u2014 and returns `409` if any effective fact remains. Use `POST /enrollments/end` for history you regret; this is for records that were never true. A `canceled` enrollment is also refused: it already tells a narrower true story.\n\n**What it does to the rest.** The child stops being visible through this enrollment: they leave `GET /api/v1/children`, their household leaves `GET /api/v1/households` and their edges leave `GET /api/v1/relationships`, exactly as a cancellation does. Any placement or schedule assignment still attached is cancelled in the same act, so nothing operational is left pointing at an enrollment that says it was never valid.\n\n**Nothing disappears.** The enrollment stays readable on `GET /api/v1/enrollments` with `status: \"voided\"`, and its update clock advances, so the transition reaches you on a normal `updated_since` or `since_token` pass. Treat a child leaving `/children` as a signal to read `/enrollments`.\n\n**Safe to retry.** Voiding an already-voided enrollment returns it unchanged with `200`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The enrollment that should never have represented service.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string",
+                    "description": "The enrollment recorded in error."
+                  }
+                },
+                "required": [
+                  "enrollment_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/placements/move": {
       "post": {
         "operationId": "movePlacement",

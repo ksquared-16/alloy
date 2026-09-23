@@ -311,7 +311,7 @@ describeLive("the public rate classes are independent", () => {
     // ── CLASSIFICATION ──────────────────────────────────────────────────────
     it("every public operation is classified by the catalog, not by its verb", () => {
         const WRITES = new Set([
-            "submitAttendanceEvents", "startEnrollment", "endEnrollment",
+            "submitAttendanceEvents", "startEnrollment", "endEnrollment", "voidEnrollment",
             "assignPlacement", "movePlacement", "cancelPlacement",
             "setScheduleAssignment", "changeScheduleAssignment", "cancelScheduleAssignment",
         ]);
@@ -320,7 +320,7 @@ describeLive("the public rate classes are independent", () => {
             const expected = WRITES.has(id) ? "write" : "read";
             expect(accessForOperation(id), `${id} is classified ${accessForOperation(id)}`).toBe(expected);
         }
-        // All nine governed writes accounted for, and nothing else claiming the write budget.
+        // All ten governed writes accounted for, and nothing else claiming the write budget.
         const writes = (Object.keys(PUBLIC_OPERATIONS) as PublicOperationId[])
             .filter((id) => id !== "issueAccessToken" && accessForOperation(id) === "write");
         expect(writes.sort()).toEqual([...WRITES].sort());

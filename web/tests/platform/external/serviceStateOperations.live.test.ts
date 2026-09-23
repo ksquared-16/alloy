@@ -144,11 +144,21 @@ describeLive("governed service-state operations, over the wire", () => {
         // Remove everything this suite authored, innermost first.
         for (const child of [UNENROLLED_A, UNENROLLED_B]) {
             const agreements = await supabase.from("child_enrollment_agreements").select("id").eq("org_id", ORG).eq("customer_member_id", child);
+            /*
+             * One agreement at a time, tolerating refusals.
+             *
+             * `child_attendance_events` is append-only — a trigger refuses DELETE — and the foreign
+             * key from attendance to agreement is ON DELETE CASCADE. So an agreement that ever
+             * recorded a fact CANNOT be deleted, and a single bulk delete for the child fails
+             * wholesale because of it. That took every other agreement down with it: the suite
+             * stopped cleaning up at all and degraded a little on every run, which reads as flakiness
+             * rather than as the one undeletable row it is.
+             */
             for (const row of (agreements.data ?? []) as { id: string }[]) {
                 await supabase.from("schedule_assignments").delete().eq("enrollment_agreement_id", row.id);
                 await supabase.from("child_placements").delete().eq("enrollment_agreement_id", row.id);
+                await supabase.from("child_enrollment_agreements").delete().eq("org_id", ORG).eq("id", row.id);
             }
-            await supabase.from("child_enrollment_agreements").delete().eq("org_id", ORG).eq("customer_member_id", child);
         }
         for (const id of installationIds) {
             await supabase.from("integration_resource_refs").delete().eq("installation_id", id);
@@ -164,6 +174,7 @@ describeLive("governed service-state operations, over the wire", () => {
         { path: "/api/v1/placements/move", scope: "enrollment.write", body: { enrollment_id: UNENROLLED_A, start_date: "2026-10-01" } },
         { path: "/api/v1/schedule-assignments", scope: "schedule.write", body: { enrollment_id: UNENROLLED_A, schedule_pattern_id: PATTERN_MWF, start_date: "2026-10-01" } },
         { path: "/api/v1/schedule-assignments/change", scope: "schedule.write", body: { enrollment_id: UNENROLLED_A, schedule_pattern_id: PATTERN_TT, start_date: "2026-10-01" } },
+        { path: "/api/v1/enrollments/void", scope: "enrollment.write", body: { enrollment_id: UNENROLLED_A } },
         { path: "/api/v1/placements/cancel", scope: "enrollment.write", body: { placement_id: UNENROLLED_A } },
         { path: "/api/v1/schedule-assignments/cancel", scope: "schedule.write", body: { schedule_assignment_id: UNENROLLED_A } },
     ];
@@ -252,9 +263,14 @@ describeLive("governed service-state operations, over the wire", () => {
             expect(again.status, "a retry must not create a second record").toBe(200);
             expect(again.body.id).toBe(enrollmentId);
 
+            // OPERATIONAL rows, not every row ever written. Convergence means a retry created no
+            // second LIVE enrollment; terminal history for this child is irrelevant to that claim
+            // and cannot always be cleaned away — an agreement that ever recorded attendance can
+            // never be deleted, because the attendance ledger is append-only.
             const rows = await supabase.from("child_enrollment_agreements")
-                .select("id").eq("org_id", ORG).eq("customer_member_id", UNENROLLED_A);
-            expect((rows.data ?? []).length, "exactly one agreement must exist").toBe(1);
+                .select("id").eq("org_id", ORG).eq("customer_member_id", UNENROLLED_A)
+                .in("status", ["pending_start", "active", "ending"]);
+            expect((rows.data ?? []).length, "exactly one operational agreement must exist").toBe(1);
         }, 60_000);
 
         it("the enrollment converges through the public read", async () => {
@@ -468,6 +484,188 @@ describeLive("governed service-state operations, over the wire", () => {
                 expect(body, `cancellation leaked "${leak}"`).not.toContain(leak);
             }
         }, 60_000);
+    });
+
+    // ── ENROLLMENT VOID ─────────────────────────────────────────────────────
+    //
+    // The third ending. `ended` asserts service happened; `canceled` asserts a commitment was
+    // withdrawn before it began. Neither is true of a record created against the wrong child, and
+    // ending one is not harmless — under the visibility law an `ended` agreement keeps publishing
+    // the child to partners as genuine history.
+    describe("an enrollment that never represented service", () => {
+        let voidable = "";
+        /*
+         * Reuses the suite's mapped child rather than creating one.
+         *
+         * An earlier version made its own child and household, and that churn in `/children` and
+         * `/households` broke `coreResources`' bootstrap-and-resume paging walks intermittently —
+         * those require a quiescent collection, and a row appearing then vanishing mid-walk is
+         * exactly what they cannot tolerate. The VISIBILITY consequence of `voided` is certified in
+         * childVisibilityLifecycle.live, which owns that law and runs against its own isolated
+         * sites, so nothing is lost by keeping this block to the operation itself.
+         */
+        it("voids an enrollment recorded in error, and keeps the row", async () => {
+            const created = await postOk("writer", "/api/v1/enrollments", {
+                child_id: UNENROLLED_A, site_id: RIVERSIDE, start_date: "2026-09-01",
+            });
+            voidable = String(created.body.id);
+            expect(String(created.body.status), "start date in the past makes it active").toBe("active");
+
+            const voided = await postOk("writer", "/api/v1/enrollments/void", { enrollment_id: voidable });
+            expect(voided.status).toBe(200);
+            expect(String(voided.body.status)).toBe("voided");
+            expect(String(voided.body.id), "the identifier a partner holds still resolves").toBe(voidable);
+        }, 60_000);
+
+        // The VISIBILITY consequence of `voided` is certified in childVisibilityLifecycle.live,
+        // which owns that law and runs against its own isolated sites. Asserting it here as well
+        // meant this suite churned the shared roster while coreResources was paging it, which
+        // surfaced as intermittent "bootstraps, pages and resumes without a gap" failures in a
+        // suite neither of them had changed. One claim, one owner.
+
+        it("but the enrollment itself stays readable, and the void arrives on a sync pass", async () => {
+            const since = new Date(Date.now() - 120_000).toISOString();
+            const page = await get("writer", `/api/v1/enrollments?child_id=${UNENROLLED_A}&limit=50`);
+            const row = page.data.find((r) => String(r.id) === voidable);
+            expect(row, "a voided enrollment must never disappear").toBeTruthy();
+            expect(String(row!.status)).toBe("voided");
+
+            const synced = await get("writer",
+                `/api/v1/enrollments?child_id=${UNENROLLED_A}&updated_since=${encodeURIComponent(since)}&limit=50`);
+            expect(synced.data.some((r) => String(r.id) === voidable), "the transition must reach a partner").toBe(true);
+        }, 60_000);
+
+        it("voiding converges on retry", async () => {
+            const again = await postOk("writer", "/api/v1/enrollments/void", { enrollment_id: voidable });
+            expect(again.status).toBe(200);
+            expect(String(again.body.status)).toBe("voided");
+        }, 60_000);
+
+        it("two simultaneous voids converge on one answer", async () => {
+            const created = await postOk("writer", "/api/v1/enrollments", {
+                child_id: UNENROLLED_A, site_id: RIVERSIDE, start_date: "2026-09-01",
+            });
+            const id = String(created.body.id);
+            const [a, b] = await Promise.all([
+                post("writer", "/api/v1/enrollments/void", { enrollment_id: id }),
+                post("writer", "/api/v1/enrollments/void", { enrollment_id: id }),
+            ]);
+            for (const res of [a, b]) expect([200], `concurrent void returned ${res.status}`).toContain(res.status);
+            const bodies = await Promise.all([a.json(), b.json()] as const);
+            for (const body of bodies) expect(String((body as { status: string }).status)).toBe("voided");
+        }, 120_000);
+
+        it("dependent placements and schedule assignments do not survive the void", async () => {
+            const created = await postOk("writer", "/api/v1/enrollments", {
+                child_id: UNENROLLED_A, site_id: RIVERSIDE, start_date: "2026-09-01",
+            });
+            const id = String(created.body.id);
+            await postOk("writer", "/api/v1/placements", { enrollment_id: id, start_date: "2026-09-01" });
+            await postOk("writer", "/api/v1/schedule-assignments", {
+                enrollment_id: id, schedule_pattern_id: PATTERN_MWF, start_date: "2026-09-01",
+            });
+            await postOk("writer", "/api/v1/enrollments/void", { enrollment_id: id });
+
+            // Nothing operational may still point at an enrollment that says it was never valid.
+            for (const table of ["child_placements", "schedule_assignments"] as const) {
+                const { data } = await supabase.from(table).select("status")
+                    .eq("org_id", ORG).eq("enrollment_agreement_id", id);
+                const statuses = ((data ?? []) as { status: string }[]).map((r) => r.status);
+                expect(statuses.length, `${table} rows were created`).toBeGreaterThan(0);
+                for (const st of statuses) {
+                    expect(["canceled"], `${table} left ${st} attached to a voided enrollment`).toContain(st);
+                }
+            }
+        }, 120_000);
+
+        it("REFUSES to void an enrollment that attendance proves was real", async () => {
+            /*
+             * The guard that stops void becoming a way to rewrite inconvenient history.
+             *
+             * This uses an enrollment that ALREADY carries real attendance rather than inserting a
+             * fixture, for a reason worth recording: `child_attendance_events` is append-only,
+             * enforced by a trigger that refuses DELETE. An enrollment with attendance therefore can
+             * never be cleaned up, so a suite that manufactures one poisons its own tenant a little
+             * more on every run. Real evidence is also the better test.
+             */
+            const { data: withAttendance } = await supabase
+                .from("child_attendance_events")
+                .select("enrollment_agreement_id")
+                .eq("org_id", ORG)
+                .not("enrollment_agreement_id", "is", null)
+                .limit(1)
+                .maybeSingle();
+            const agreementId = (withAttendance as { enrollment_agreement_id: string } | null)?.enrollment_agreement_id;
+            expect(agreementId, "the certification tenant must hold at least one attended enrollment").toBeTruthy();
+
+            const res = await post("writer", "/api/v1/enrollments/void", { enrollment_id: agreementId });
+            // 409 when the writer can reach it, 404 when it sits outside this installation's
+            // boundary — never 200, which is the assertion that matters: service that happened
+            // cannot be renamed a mistake.
+            expect([404, 409], `voiding an attended enrollment returned ${res.status}`).toContain(res.status);
+            expect(res.status, "attendance proves service occurred").not.toBe(200);
+        }, 120_000);
+
+        it("refuses to void a cancelled enrollment, which already tells a truer story", async () => {
+            const created = await postOk("writer", "/api/v1/enrollments", {
+                child_id: UNENROLLED_A, site_id: RIVERSIDE, start_date: "2027-01-04",
+            });
+            const id = String(created.body.id);
+            await postOk("writer", "/api/v1/enrollments/end", { enrollment_id: id });
+            const res = await post("writer", "/api/v1/enrollments/void", { enrollment_id: id });
+            expect(res.status).toBe(409);
+        }, 120_000);
+
+        it("refuses an enrollment outside the boundary exactly as if it did not exist", async () => {
+            const res = await post("writer", "/api/v1/enrollments/void", {
+                enrollment_id: "00000000-0000-4000-8000-ffffffffffff",
+            });
+            expect(res.status).toBe(404);
+        }, 60_000);
+
+        describe("one operational schedule assignment per enrollment", () => {
+            it("two simultaneous changes cannot produce two operational rows, and neither caller gets a 500", async () => {
+                const created = await postOk("writer", "/api/v1/enrollments", {
+                    child_id: UNENROLLED_A, site_id: RIVERSIDE, start_date: "2026-10-01",
+                });
+                const id = String(created.body.id);
+                await postOk("writer", "/api/v1/schedule-assignments", {
+                    enrollment_id: id, schedule_pattern_id: PATTERN_MWF, start_date: "2026-10-05",
+                });
+
+                const [a, b] = await Promise.all([
+                    post("writer", "/api/v1/schedule-assignments/change", {
+                        enrollment_id: id, schedule_pattern_id: PATTERN_TT, start_date: "2026-10-12",
+                    }),
+                    post("writer", "/api/v1/schedule-assignments/change", {
+                        enrollment_id: id, schedule_pattern_id: PATTERN_TT, start_date: "2026-10-12",
+                    }),
+                ]);
+                for (const res of [a, b]) {
+                    expect([200, 201, 409], `concurrent change returned ${res.status}`).toContain(res.status);
+                    expect(res.status, "a raw unique violation must never reach a partner").not.toBe(500);
+                }
+
+                const { data } = await supabase.from("schedule_assignments")
+                    .select("id").eq("org_id", ORG).eq("enrollment_agreement_id", id)
+                    .eq("subject_type", "child").eq("is_primary", true)
+                    .in("status", ["planned", "active", "ending"]);
+                expect((data ?? []).length, "the invariant the canonical reader assumes").toBe(1);
+            }, 180_000);
+
+            it("the canonical reader still answers after the race, rather than wedging", async () => {
+                // Two operational rows would make every later read of this agreement a 500.
+                const page = await get("writer", `/api/v1/schedule-assignments?child_id=${UNENROLLED_A}&limit=50`);
+                expect(page.data.length).toBeGreaterThan(0);
+                const res = await post("writer", "/api/v1/schedule-assignments/change", {
+                    enrollment_id: String(page.data[0].enrollment_id ?? ""), schedule_pattern_id: PATTERN_MWF,
+                    start_date: "2026-10-19",
+                });
+                expect([200, 201, 404, 409, 422]).toContain(res.status);
+                expect(res.status).not.toBe(500);
+            }, 120_000);
+            });
+
     });
 
     // ── CONCURRENCY ─────────────────────────────────────────────────────────

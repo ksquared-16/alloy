@@ -706,12 +706,37 @@ have no way to tell the two apart afterwards.
 | --- | --- | --- |
 | Children | archived — `status` becomes `inactive` | — (identity is not created through this API) |
 | Relationships | ended by status | — |
-| Enrollment | effective end — `end_date` is set | **cancelled** before it starts, via `POST /enrollments/end` |
+| Enrollment | effective end — `end_date` is set | **cancelled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
 | Placements | **superseded** — a new placement names the one it replaces | **cancelled** — `POST /placements/cancel` |
 | Schedule assignments | **superseded** | **cancelled** — `POST /schedule-assignments/cancel` |
 | Attendance | **reversed** — a reversal fact supersedes the original | **reversed** — the fact is a tombstone, never a deletion |
 | Staff | effective end | — |
 | Locations, Households | not deletable through this API | — |
+
+### The six words, and which one you want
+
+Each names a different thing that happened. Reading `status` tells you which, so you
+never have to guess why a record changed.
+
+| Word | What it asserts | When Alloy uses it |
+| --- | --- | --- |
+| **end** | It was true, and then it concluded | A child finishes their time with the service |
+| **cancel** | A planned commitment was withdrawn before it became true | A family signs and then withdraws before the first day |
+| **supersede** | It was true, and a new state replaced it | A child moves rooms, or a schedule changes |
+| **void** | The record was created in error and was never true | An enrollment recorded against the wrong child |
+| **reverse** | A recorded fact did not happen | A check-in that was never real |
+| **correct** | The fact happened, but a recorded detail was wrong | A check-in with the wrong time or room |
+
+The pairs that are easy to confuse are worth stating plainly. **Cancel and void are
+not synonyms**: cancelling says a commitment existed and was withdrawn in time,
+voiding says the record never represented anything. **Supersede and void are not
+synonyms either**: superseding keeps asserting that the old state was real for the
+period it covered, which is exactly what you do not want to publish about a record
+that was a mistake.
+
+Voiding an enrollment is deliberately hard to misuse. If Alloy holds attendance for
+it, a child actually arrived, and the request is refused with `409` — real history
+cannot be rewritten by calling it a mistake.
 
 Nothing disappears in any of these. The record you already stored is never
 rewritten or removed; its `status` changes and you learn about it through ordinary

@@ -151,6 +151,7 @@ describe("public OpenAPI drift guard", () => {
             "/api/v1/context",
             "/api/v1/enrollments",
             "/api/v1/enrollments/end",
+            "/api/v1/enrollments/void",
             "/api/v1/households",
             "/api/v1/locations",
             "/api/v1/oauth/token",

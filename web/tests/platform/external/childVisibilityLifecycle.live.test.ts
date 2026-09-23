@@ -77,6 +77,7 @@ const LIFECYCLE: readonly { status: string; visible: boolean; because: string }[
     { status: "ending", visible: true, because: "still in service, with a known last day" },
     { status: "ended", visible: true, because: "served and concluded; attendance history still resolves" },
     { status: "canceled", visible: false, because: "withdrawn before service began; never a participant" },
+    { status: "voided", visible: false, because: "recorded in error; never represented service at all" },
 ];
 
 const run = Date.now();
