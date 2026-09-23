@@ -44,6 +44,7 @@ import {
     type PartySlotDestination,
 } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
+import { declaredPartyCollectionsForForms } from "@/lib/enrollment/participantRuntime/declaredPartyCollections";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type {
@@ -119,8 +120,16 @@ function buildParticipantObjective(
     const partySlots = (context?.forms ?? []).flatMap((f) => artifactSlotsForProjection(f.schema, []));
     // The same destinations at ATTRIBUTE grain — which box holds the name, the phone, the address.
     const partySlotDestinations = (context?.forms ?? []).flatMap((f) => artifactPartySlots(f.schema, []));
+    /*
+     * WHAT THE FORM SAID, BEFORE WHAT THE PAPER PRINTED.
+     *
+     * A normalized Form declares its collections of people outright — the role, the minimum, the
+     * ceiling, whether the family may add another. That statement drives the offer for the roles it
+     * names; artifact slot capacity remains the fallback for imported paperwork that never said.
+     */
+    const declaredCollections = declaredPartyCollectionsForForms(context?.forms ?? []);
     const partyOffer: PartyOffer | null = context
-        ? nextPartyOffer({ parties, slots: partySlots, declines: context.partyDeclines ?? {} })
+        ? nextPartyOffer({ parties, slots: partySlots, declines: context.partyDeclines ?? {}, declaredCollections })
         : null;
 
     return {

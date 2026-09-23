@@ -78,12 +78,37 @@ export type PartyOffer = {
     readonly minimum: number;
 };
 
+/**
+ * A collection of people the FORM declared, rather than one inferred from printed boxes.
+ *
+ * An imported packet says how many emergency-contact rows it can print, and that capacity is all a
+ * slot-derived offer has ever had to go on. A normalized Form says the thing directly:
+ * `party_collection` names the role, whether the family may add another, and the minimum and
+ * maximum the organization actually wants — so a collection authored in Forms Studio drives the
+ * same conversational offer without anyone counting boxes.
+ *
+ * Deliberately the SAME `PartyOffer` the slot path produces. The conversation already knows how to
+ * offer a role, show who holds it, accept another person and record a decline; a declared
+ * collection is a better SOURCE for that offer, not a second implementation of it.
+ */
+export type DeclaredPartyCollection = {
+    readonly role: string;
+    readonly role_label: string;
+    /** `repeat.max` — absent means the family decides how many people exist. */
+    readonly max: number | null;
+    readonly min: number;
+    readonly allow_add: boolean;
+    readonly show_known: boolean;
+};
+
 export type PartyOfferPlanInput = {
     readonly parties: readonly ChildParty[];
     readonly slots: readonly ArtifactPartySlot[];
     readonly declines: PartyOfferDeclines;
     /** Configured semantic requirements by role. Absent means none, and therefore minimum 0. */
     readonly requirements?: Readonly<Record<string, SemanticPartyRequirement>>;
+    /** Collections the Form declared. These outrank slot capacity for the roles they name. */
+    readonly declaredCollections?: readonly DeclaredPartyCollection[];
 };
 
 /**
@@ -93,7 +118,32 @@ export type PartyOfferPlanInput = {
  * when it has no canonical definition to write. Nothing here inspects a field label.
  */
 export function nextPartyOffer(input: PartyOfferPlanInput): PartyOffer | null {
-    const roles = [...new Set(input.slots.map((s) => s.role))];
+    /*
+     * A DECLARED COLLECTION IS ASKED BEFORE AN INFERRED ONE, AND INSTEAD OF IT.
+     *
+     * Where the Form actually says "collect emergency contacts, at least one, the family may add
+     * more", that statement decides the offer — its minimum, its ceiling and whether adding is
+     * allowed at all. Counting how many boxes the source PDF happened to print is the fallback for
+     * paperwork that never said.
+     */
+    const declaredByRole = new Map((input.declaredCollections ?? []).map((d) => [d.role, d]));
+    for (const declared of input.declaredCollections ?? []) {
+        if (!declared.allow_add) continue;
+        if (input.declines[declared.role]) continue;
+        const existing = declared.show_known ? input.parties.filter((p) => p.roles.includes(declared.role)) : [];
+        if (declared.max != null && existing.length >= declared.max) continue;
+        return {
+            role: declared.role,
+            role_label: declared.role_label,
+            existing,
+            // No declared maximum means the family decides; the offer stays open.
+            remaining_capacity: declared.max == null ? Number.MAX_SAFE_INTEGER : declared.max - existing.length,
+            is_additional: existing.length > 0,
+            minimum: declared.min,
+        };
+    }
+
+    const roles = [...new Set(input.slots.map((s) => s.role))].filter((role) => !declaredByRole.has(role));
     /*
      * THE DEFINITIONS' OWN AUTHORED ORDER.
      *

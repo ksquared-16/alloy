@@ -128,6 +128,14 @@ export type EnrollmentInformationNeed = {
     readonly value_origin: EnrollmentValueOrigin | null;
     /** True when the participant must still do something: supply or confirm. */
     readonly requires_participant_action: boolean;
+    /**
+     * When this need is a COLLECTION OF PEOPLE rather than a single fact.
+     *
+     * Carries the Form's own `party_collection` declaration and the entries currently held, so the
+     * conversation can present one topic — cards for the people, a button to add another — instead
+     * of the collection's child questions asked as unrelated scalars.
+     */
+    readonly party_collection?: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyCollection;
 };
 
 export type EnrollmentInformationNeeds = {

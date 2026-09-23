@@ -20,6 +20,16 @@ import {
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
+import {
+    partyCollectionChildFieldIds,
+    partyCollectionGroups,
+    projectPartyCollection,
+    readPartyEntries,
+    mergeKnownEntries,
+    partyCollectionSatisfied,
+    partyCollectionStateKey,
+    type ParticipantPartyEntry,
+} from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -64,6 +74,14 @@ export type ProjectNeedsInput = {
     readonly sharedValues: Readonly<Record<string, unknown>>;
     /** Canonical record prefill, by the same shared key. Lower precedence than session values. */
     readonly canonicalValues?: Readonly<Record<string, unknown>>;
+    /**
+     * People Alloy already knows for a party collection, keyed by the collection's group field id.
+     *
+     * Resolved by the CALLER from the canonical relationship read model, never matched here — a
+     * Forms-local person matcher is exactly the second identity system this must not become. Absent
+     * means "nothing known", which fails closed: the family is asked rather than shown a guess.
+     */
+    readonly knownPartyEntries?: Readonly<Record<string, readonly ParticipantPartyEntry[]>>;
     readonly confirmations: EnrollmentNeedConfirmationMap;
     /**
      * Needs the participant was asked about and chose to leave blank.
@@ -158,7 +176,21 @@ export function projectEnrollmentInformationNeeds(
 
         const sourceFieldNames = sourceFieldNamesByFieldId(form.pdfMapping as SourceFieldMapping);
 
+        /*
+         * A COLLECTION OF PEOPLE IS ONE OBLIGATION, NOT N LOOSE QUESTIONS.
+         *
+         * `walkScalarFormFields` descends into every group and visits each child alone, so a
+         * repeated emergency-contact collection arrived as "Full name?", "Phone?", "Relationship to
+         * the child?" — asked once each, with no repetition and nothing to say the three answers
+         * belong to one person. The children of a party collection are therefore skipped here and
+         * the collection is projected once, below, carrying its own declaration.
+         *
+         * Only PARTY collections are excluded. An ordinary repeating group still flattens exactly
+         * as it did, because nothing has declared what its rows mean.
+         */
+        const partyChildIds = partyCollectionChildFieldIds(form.schema);
         walkScalarFormFields(form.schema, (field) => {
+            if (partyChildIds.has(field.id)) return;
             // Not a participant need unless the participant is the one who supplies it. Display-only
             // prose was the first case — without it a handbook paragraph became an artifact-specific
             // item called "Page 3" and counted against the parent. Placed-not-asked destinations and
@@ -272,7 +304,8 @@ export function projectEnrollmentInformationNeeds(
      */
     pruneInvisibleOccurrences(byKey, input);
 
-    return [...byKey.values()].map((acc) => finalize(acc, input));
+    const scalar = [...byKey.values()].map((acc) => finalize(acc, input));
+    return [...scalar, ...projectPartyCollectionNeeds(input)];
 }
 
 /**
@@ -528,4 +561,71 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         value_origin: input.provenance?.[identity.key]?.origin ?? null,
         requires_participant_action: state === "known_requires_confirmation",
     };
+}
+
+
+/**
+ * One need per party collection — the obligation, not its questions.
+ *
+ * The state vocabulary is the one the rest of the runtime already speaks: a collection whose
+ * minimum is met and whose family-added entries are complete is `confirmed`; anything else is
+ * `missing` and still the participant's work. `optional` is true when the Form asks for none,
+ * because a collection with no minimum is a place to add people, not a demand to.
+ */
+function projectPartyCollectionNeeds(input: ProjectNeedsInput): EnrollmentInformationNeed[] {
+    const out: EnrollmentInformationNeed[] = [];
+    for (const form of input.forms) {
+        for (const group of partyCollectionGroups(form.schema)) {
+            const held = readPartyEntries(input.sharedValues, form.form_definition_id, group.id);
+            const base = projectPartyCollection(group, held);
+            if (!base) continue;
+            const known = input.knownPartyEntries?.[group.id] ?? [];
+            const entries = mergeKnownEntries(known, held, { showKnown: base.show_known });
+            const collection = { ...base, entries };
+            const satisfied = partyCollectionSatisfied(collection);
+            const key = `party:${form.form_definition_id}:${group.id}`;
+            out.push({
+                identity: {
+                    key,
+                    scope: "shared",
+                    subject_party: null,
+                    journey_subject_id: input.subjectId,
+                    entity_type: collection.subject === "child" ? "customer_member" : "person",
+                    subject_entity_type: collection.subject === "child" ? "customer_member" : "person",
+                    field_key: group.id,
+                    shared_value_key: null,
+                    session_value_key: partyCollectionStateKey(form.form_definition_id, group.id),
+                    collection_mode: "participant",
+                    label: group.label,
+                } as unknown as EnrollmentNeedIdentity,
+                scope: "shared" as EnrollmentInformationNeed["scope"],
+                subject_id: input.subjectId,
+                state: satisfied ? "confirmed" : "missing",
+                occurrence_count: 1,
+                occurrences: [
+                    {
+                        requirement_id: form.requirement_id,
+                        form_definition_id: form.form_definition_id,
+                        form_definition_version_id: form.form_definition_version_id,
+                        session_item_id: form.session_item_id,
+                        form_field_id: group.id,
+                        label: group.label,
+                        required: collection.min > 0,
+                        section_title: null,
+                        field_type: "party_collection",
+                        options: [],
+                    },
+                ],
+                optional: collection.min === 0,
+                requirement_ids: [form.requirement_id],
+                has_value: entries.length > 0,
+                current_value: entries,
+                value_source: entries.length ? "session_shared_value" : "none",
+                value_origin: null,
+                requires_participant_action: !satisfied,
+                party_collection: collection,
+            } as EnrollmentInformationNeed);
+        }
+    }
+    return out;
 }

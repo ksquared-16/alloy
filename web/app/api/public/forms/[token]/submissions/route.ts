@@ -13,6 +13,7 @@ import {
     processScopedAnswersToFieldIds,
     sharedValuesToFieldIds,
 } from "@/lib/forms/packets/sharedValuesToFieldIds";
+import { partyCollectionGroupRows } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { parsePrefillFieldMapFromMetadata } from "@/lib/forms/prefill/prefillFieldMap";
 import { resolveFormPrefillPayload } from "@/lib/forms/prefill/resolveFormPrefillPayload";
 import { shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return publicErr("Invalid JSON", 400);
     }
 
-    const payload =
+    let payload =
         body.payload && typeof body.payload === "object" && !Array.isArray(body.payload)
             ? (body.payload as Record<string, unknown>)
             : { values: {} };
@@ -169,6 +170,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             ...processScopedAnswersToFieldIds(schema, sv, ctx.formDefinitionId),
             ...clientVals,
         };
+        /*
+         * THE ONE CONVERGENCE SEAM FOR REPEATED PEOPLE.
+         *
+         * The conversation holds a collection as its own ordered list in `shared_values`, because a
+         * list of people is not a scalar fact and the conversation has exactly one answer store.
+         * Here — once, at submit, in one direction — that list becomes the Form payload's own
+         * `groups[groupId]` rows, which is what the submission validator, the collection envelope
+         * and the related-record proposal adapter already consume.
+         *
+         * This is NOT synchronisation: there is no second participant draft being kept in step. A
+         * client-supplied group (the conventional renderer's own rows) still wins for its group, so
+         * the two surfaces never fight over one collection.
+         */
+        const conversationGroups = partyCollectionGroupRows(schema, sv, ctx.formDefinitionId);
+        if (Object.keys(conversationGroups).length) {
+            const clientGroups = (payload.groups ?? {}) as Record<string, unknown>;
+            payload = { ...payload, groups: { ...conversationGroups, ...clientGroups } };
+        }
     }
 
     if (ctx.packet) {
