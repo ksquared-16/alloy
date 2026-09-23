@@ -243,7 +243,24 @@ export default function LocationRoomDetailPanel({
         }
     };
 
-    const beginEdit = () => setEditing(true);
+    /**
+     * Seed the ratio draft when the form OPENS, not only when the space changes.
+     *
+     * Hydration runs on a room change, which can happen before the canonical
+     * rules have loaded — the read state recomputes every render and was right,
+     * while the edit form kept an empty draft and said "No staffing ratio set"
+     * about a space visibly showing 1:5 · 2:11. Seeding here reads whatever is
+     * current at the moment the operator asks to edit.
+     */
+    const beginEdit = () => {
+        if (room) {
+            const standing = ratioStandingFor(room);
+            // A conflict still seeds nothing: see the hydrate path.
+            const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
+            setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
+        }
+        setEditing(true);
+    };
     const cancelEdit = () => {
         if (!room) return;
         hydrateFromRoom(room);

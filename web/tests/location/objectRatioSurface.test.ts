@@ -100,6 +100,16 @@ describe("ratio is authored on the object, canonically", () => {
         expect(src).toContain("staff for up to");
     });
 
+    it("the edit form seeds its tiers when it OPENS, not only on a room change", () => {
+        // Hydration can run before the canonical rules have loaded, which left
+        // the form saying "No staffing ratio set" about a space visibly showing
+        // 1:5 - 2:11. Found by mounting, not by a unit test.
+        const src = read(PANEL);
+        const open = src.slice(src.indexOf("const beginEdit"), src.indexOf("const beginEdit") + 600);
+        expect(open).toContain("ratioStandingFor(room)");
+        expect(open).toContain("setRatioDraft");
+    });
+
     it("a conflict hydrates the edit form with NEITHER record", () => {
         // Seeding one of two disagreeing staffing records would decide a
         // staffing-law question silently, on nothing but form convenience.
