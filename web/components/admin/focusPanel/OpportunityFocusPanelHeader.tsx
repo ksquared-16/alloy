@@ -114,6 +114,14 @@ export default function OpportunityFocusPanelHeader({
                   ? "Tour Scheduled"
                   : stageOrStatus;
         return [
+            /*
+             * The status chip is CONFIGURED GEOMETRY: it is always present, and readiness decides
+             * its content. When the owner has not answered (`resolveOpportunityVmStatusLabel`
+             * returns null = UNKNOWN) it holds its place as a reserved chip, so the chip row has
+             * the same shape before and after the value arrives and the later arrival is a fill,
+             * not an insertion.
+             */
+            ...(statusWithTour ? [] : [{ label: "", kind: "status" as const, reserved: true }]),
             ...buildFocusPanelContextChips({
                 statusLabel: statusWithTour,
                 statusKey: currentStatusKey,
