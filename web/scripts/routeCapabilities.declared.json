@@ -5453,6 +5453,12 @@
         "status": "none",
         "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
       }
+    },
+    "app/api/admin/locations/[id]/archive/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Admin-only Space archive. Authorization is the adminV2 context plus an explicit role === 'admin' check in the handler, and the archive is refused server-side by decideSpaceArchive before any write. It grants no capability of its own."
+      }
     }
   },
   "ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT": {
