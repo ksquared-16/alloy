@@ -15,7 +15,7 @@ import { test } from "@playwright/test";
  * simply was not armed for this event; if they were suppressed the hypothesis is already wrong and
  * the contention is somewhere else.
  */
-test("ox3 gate trace", async ({ page }) => {
+test("ox7 cold control", async ({ page }) => {
     test.setTimeout(240_000);
     await page.addInitScript(() => {
         const w = window as unknown as Record<string, unknown>;
@@ -47,18 +47,20 @@ test("ox3 gate trace", async ({ page }) => {
     await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 120_000 });
     await page.waitForTimeout(15000);
 
-    // Pointer intent, then click — the real operator sequence Slice 2 established.
+    /*
+     * COLD CONTROL — the SAME probe with the pointer-intent prewarm removed.
+     *
+     * Every warm sample has the provisioning answer already in flight when the click lands, so a warm
+     * number cannot say whether the immediate identity commit depends on that answer having been
+     * started early. Selecting the row without hovering it first removes the only difference.
+     */
     await page.evaluate(`(() => {
         const rows=[...document.querySelectorAll('.alloy-os-queue-row-card')];
         if (rows.length < 2) return false;
         const cur = rows.findIndex(r=>r.getAttribute('aria-selected')==='true'||r.className.includes('--selected'));
         window.__ox3.target = rows[cur>=0?(cur+1)%rows.length:1];
-        for (const t of ["pointerover","mouseover","pointerenter","mouseenter"]) {
-            window.__ox3.target.dispatchEvent(new MouseEvent(t, { bubbles: true }));
-        }
         return true;
     })()`);
-    await page.waitForTimeout(800);
     /*
      * SEMANTIC MILESTONES, OBSERVED — not inferred from quiescence.
      *
@@ -169,5 +171,5 @@ test("ox3 gate trace", async ({ page }) => {
             cellsTotal: (w.__ox3 as unknown as { cellsTotal?: number }).cellsTotal ?? null,
         };
     });
-    console.log(`[gate] ${JSON.stringify(out)}`);
+    console.log(`[cold] ${JSON.stringify(out)}`);
 });
