@@ -131,7 +131,7 @@ export function readPartyEntries(
     formDefinitionId: string,
     groupFieldId: string,
 ): ParticipantPartyEntry[] {
-    const raw = sharedValues[partyCollectionStateKey(formDefinitionId, groupFieldId)];
+    const raw = readPartyStateValue(sharedValues, formDefinitionId, groupFieldId);
     if (!Array.isArray(raw)) return [];
     const out: ParticipantPartyEntry[] = [];
     for (const item of raw) {
@@ -430,12 +430,39 @@ export function partyCollectionSettledKey(formDefinitionId: string, groupFieldId
     return `${partyCollectionStateKey(formDefinitionId, groupFieldId)}:settled`;
 }
 
+/**
+ * The stored value for one collection, by its OWN identity rather than by a string prefix.
+ *
+ * The exact key is tried first. When it misses, the group id decides: a schema declares which
+ * collections exist, and two halves of the system disagreeing about which form-definition id to
+ * write into a key is not a reason to lose a family's answers. The conversation writes the key and
+ * the submission seam reads it; if those ever drift, the failure is silent and total — the parent
+ * fills in their emergency contacts, reaches the review step, and is told the group is incomplete
+ * while the answers sit safely in the session. Measured exactly that way.
+ *
+ * The group id is unique within a schema, so this cannot match a different collection.
+ */
+function readPartyStateValue(
+    sharedValues: Readonly<Record<string, unknown>>,
+    formDefinitionId: string,
+    groupFieldId: string,
+    suffix = "",
+): unknown {
+    const exact = sharedValues[`${partyCollectionStateKey(formDefinitionId, groupFieldId)}${suffix}`];
+    if (exact !== undefined) return exact;
+    const tail = `:${groupFieldId}${suffix}`;
+    for (const [key, value] of Object.entries(sharedValues)) {
+        if (key.startsWith("party:") && key.endsWith(tail)) return value;
+    }
+    return undefined;
+}
+
 export function readPartySettled(
     sharedValues: Readonly<Record<string, unknown>>,
     formDefinitionId: string,
     groupFieldId: string,
 ): boolean {
-    return sharedValues[partyCollectionSettledKey(formDefinitionId, groupFieldId)] === true;
+    return readPartyStateValue(sharedValues, formDefinitionId, groupFieldId, ":settled") === true;
 }
 
 /** Which of a child collection's questions a household child already answers. */

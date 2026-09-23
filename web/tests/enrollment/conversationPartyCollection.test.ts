@@ -22,6 +22,7 @@ import {
     partyCollectionGroupRows,
     partyCollectionStateKey,
     readPartyEntries,
+    readPartySettled,
     type ParticipantPartyEntry,
 } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 
@@ -560,5 +561,72 @@ describe("every reading of the objective knows the same people", () => {
         // Parties and household children are the two canonical reads; both feed the mapper.
         expect(resolver).toContain("partyContext.parties");
         expect(resolver).toContain("partyContext.siblings");
+    });
+});
+
+describe("a packet step's draft is refreshed from the conversation, not frozen at creation", () => {
+    /*
+     * MEASURED end to end: the family filled in their emergency contacts, reached the review step,
+     * and submit refused the group as incomplete — while the answers sat safely in the session all
+     * along. A packet step's draft is created the FIRST time the participant reaches it, which is
+     * before they have said who anyone is, so the convergence that runs at creation had nothing to
+     * write and the draft was returned untouched on every request after.
+     */
+    const route = readFileSync(
+        new URL("../../app/api/public/forms/[token]/submissions/route.ts", import.meta.url).pathname,
+        "utf8",
+    );
+
+    it("re-projects collections onto an existing draft before returning it", () => {
+        const at = route.indexOf("const { org_id: _o, ...rest } = full;");
+        expect(at).toBeGreaterThan(0);
+        const before = route.slice(Math.max(0, at - 1800), at);
+        expect(before, "an existing draft is returned without the conversation's collections").toContain(
+            "partyCollectionGroupRows",
+        );
+        expect(before).toContain('.from("form_submissions")');
+    });
+
+    it("lets a client-supplied group win for its own collection", () => {
+        // Still one-way, still once per request: the two surfaces never fight over one list.
+        const at = route.indexOf("const nextPayload = { ...existingPayload, groups:");
+        expect(at).toBeGreaterThan(0);
+        const line = route.slice(at, route.indexOf("\n", at));
+        expect(line.indexOf("refreshedGroups")).toBeLessThan(line.indexOf("existingGroups"));
+    });
+
+    it("writes nothing when the conversation holds no collections", () => {
+        expect(route).toContain("if (Object.keys(refreshedGroups).length)");
+    });
+});
+
+describe("a family's answers are not lost to a key that drifted", () => {
+    /*
+     * MEASURED: the conversation wrote `party:<formDefinitionId>:emergency_contacts` and the
+     * submission seam looked for the same key with a different id in the middle. The failure was
+     * silent and total — the parent filled in their contacts, reached the review step, and was told
+     * the group was incomplete while the answers sat safely in the session.
+     *
+     * The group id is unique within a schema, so it can decide on its own.
+     */
+    const rowsFor = (key: string) => ({ [key]: [{ instance_key: "e1", origin: "respondent_added", values: { ec_name: "Farrah" } }] });
+
+    it("reads the exact key when it matches", () => {
+        const entries = readPartyEntries(rowsFor(partyCollectionStateKey(FD, "emergency_contacts")), FD, "emergency_contacts");
+        expect(entries.map((e) => e.values.ec_name)).toEqual(["Farrah"]);
+    });
+
+    it("still finds the collection when the form-definition half of the key differs", () => {
+        const entries = readPartyEntries(rowsFor("party:some-other-definition-id:emergency_contacts"), FD, "emergency_contacts");
+        expect(entries.map((e) => e.values.ec_name)).toEqual(["Farrah"]);
+    });
+
+    it("does not match a different collection", () => {
+        expect(readPartyEntries(rowsFor("party:x:household_children"), FD, "emergency_contacts")).toHaveLength(0);
+    });
+
+    it("recovers the settled marker the same way", () => {
+        expect(readPartySettled({ "party:other:emergency_contacts:settled": true }, FD, "emergency_contacts")).toBe(true);
+        expect(readPartySettled({ "party:other:household_children:settled": true }, FD, "emergency_contacts")).toBe(false);
     });
 });

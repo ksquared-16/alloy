@@ -208,6 +208,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 .maybeSingle();
             if (exSub) {
                 const full = exSub as Record<string, unknown>;
+                /*
+                 * THE DRAFT IS OLDER THAN THE CONVERSATION.
+                 *
+                 * A packet step's draft is created the first time the participant reaches it, which
+                 * is BEFORE they have told us who their emergency contacts are. Returning it
+                 * untouched meant the collection the family had just filled in never reached the
+                 * payload: the review step showed nothing, and submit refused the group as
+                 * incomplete — while the answers sat safely in the session all along.
+                 *
+                 * So the conversation's collections are re-projected onto the existing draft here.
+                 * Still one-way and still once per request: the session is the source of truth for
+                 * a collection, and a client-supplied group for the same collection still wins, so
+                 * the two surfaces never fight over one list.
+                 */
+                const refreshedGroups = partyCollectionGroupRows(
+                    schema,
+                    (packetSessionRow?.shared_values ?? {}) as Record<string, unknown>,
+                    ctx.formDefinitionId,
+                );
+                if (Object.keys(refreshedGroups).length) {
+                    const existingPayload = (full.payload && typeof full.payload === "object" && !Array.isArray(full.payload)
+                        ? (full.payload as Record<string, unknown>)
+                        : { values: {} }) as Record<string, unknown>;
+                    const existingGroups = (existingPayload.groups ?? {}) as Record<string, unknown>;
+                    const nextPayload = { ...existingPayload, groups: { ...refreshedGroups, ...existingGroups } };
+                    const { error: refreshErr } = await supabase
+                        .from("form_submissions")
+                        .update({ payload: nextPayload })
+                        .eq("id", existingSid)
+                        .eq("org_id", ctx.orgId)
+                        .eq("status", "draft");
+                    if (!refreshErr) full.payload = nextPayload;
+                }
                 const { org_id: _o, ...rest } = full;
                 void _o;
                 return publicOk(rest, 201);
