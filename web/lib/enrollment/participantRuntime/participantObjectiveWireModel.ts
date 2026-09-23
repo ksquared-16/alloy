@@ -95,6 +95,8 @@ export type ParticipantObjectiveWire = {
             readonly allow_add: boolean;
             readonly min: number;
             readonly max: number | null;
+            readonly valid: boolean;
+            readonly settled: boolean;
             readonly entry_fields: readonly { field_id: string; label: string; type: string; required: boolean; options: readonly { value: string; label: string }[] }[];
             readonly entries: readonly {
                 instance_key: string;
@@ -730,6 +732,9 @@ export function participantObjectiveWireModel(
                       allow_add: turn.need.party_collection.allow_add,
                       min: turn.need.party_collection.min,
                       max: turn.need.party_collection.max,
+                      // Two states, never conflated: enough people, and the family saying so.
+                      valid: turn.need.party_collection.valid === true,
+                      settled: turn.need.party_collection.settled === true,
                       entry_fields: turn.need.party_collection.entry_fields.map((f) => ({
                           field_id: f.field_id,
                           label: f.label,

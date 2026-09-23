@@ -26,7 +26,9 @@ import {
     projectPartyCollection,
     readPartyEntries,
     mergeKnownEntries,
-    partyCollectionSatisfied,
+    partyCollectionComplete,
+    partyCollectionValid,
+    readPartySettled,
     partyCollectionStateKey,
     type ParticipantPartyEntry,
 } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
@@ -582,7 +584,17 @@ function projectPartyCollectionNeeds(input: ProjectNeedsInput): EnrollmentInform
             const known = input.knownPartyEntries?.[group.id] ?? [];
             const entries = mergeKnownEntries(known, held, { showKnown: base.show_known });
             const collection = { ...base, entries };
-            const satisfied = partyCollectionSatisfied(collection);
+            /*
+             * VALIDITY AND FINALITY, KEPT APART.
+             *
+             * The minimum being met does not mean the family is finished — a list of people is
+             * open-ended, and only they know when it ends. The need therefore stays the
+             * participant's work until they say "that's everyone", which is what stops the
+             * collection vanishing the moment a first contact is added.
+             */
+            const settledMarker = readPartySettled(input.sharedValues, form.form_definition_id, group.id);
+            const valid = partyCollectionValid(collection);
+            const satisfied = partyCollectionComplete(collection, settledMarker);
             const key = `party:${form.form_definition_id}:${group.id}`;
             out.push({
                 identity: {
@@ -623,7 +635,7 @@ function projectPartyCollectionNeeds(input: ProjectNeedsInput): EnrollmentInform
                 value_source: entries.length ? "session_shared_value" : "none",
                 value_origin: null,
                 requires_participant_action: !satisfied,
-                party_collection: collection,
+                party_collection: { ...collection, valid, settled: settledMarker },
             } as EnrollmentInformationNeed);
         }
     }

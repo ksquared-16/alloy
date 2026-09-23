@@ -1132,6 +1132,7 @@ export function EnrollmentConversationCard({
             party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
             /** Add, correct or take one person off a collection. Draft state only — never canonical. */
             partyCollection?:
+                | { action: "settle"; group_field_id: string }
                 | { action: "add"; group_field_id: string; values: Record<string, unknown> }
                 | { action: "edit"; group_field_id: string; instance_key: string; values: Record<string, unknown> }
                 | { action: "remove"; group_field_id: string; instance_key: string };
@@ -1499,16 +1500,31 @@ export function EnrollmentConversationCard({
                         </ul>
                     )}
 
-                    {/* Settling the collection is a separate act from adding to it. */}
-                    {!editingEntry && stillNeeded === 0 ? (
+                    {/*
+                      * FINISHING IS A SEPARATE ACT FROM ADDING.
+                      *
+                      * The collection used to disappear the moment its minimum was met, so a family
+                      * who added one emergency contact never got to add a second. A list of people
+                      * is open-ended and only the family knows when it ends — so the conversation
+                      * waits here until they say so.
+                      *
+                      * Offered only once the Form's requirement is actually met: below the minimum
+                      * there is nothing to finish, and the guidance above says what is still needed.
+                      */}
+                    {!editingEntry && collection.valid ? (
                         <button
                             type="button"
                             disabled={busy}
                             data-participant-collection-done={collection.group_field_id}
-                            onClick={() => void submit({ text: "yes", settledAs: "That's everyone" })}
+                            onClick={() =>
+                                void submit({
+                                    partyCollection: { action: "settle", group_field_id: collection.group_field_id },
+                                    settledAs: "That's everyone",
+                                })
+                            }
                             className="flex min-h-[44px] items-center self-start rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
                         >
-                            That&rsquo;s everyone
+                            {collection.entries.length === 0 ? "No one to add" : "That\u2019s everyone"}
                         </button>
                     ) : null}
                 </div>

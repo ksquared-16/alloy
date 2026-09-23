@@ -69,6 +69,10 @@ export type ParticipantPartyCollection = {
     readonly max: number | null;
     readonly entry_fields: readonly ParticipantPartyEntryField[];
     readonly entries: readonly ParticipantPartyEntry[];
+    /** Enough people, correctly filled — the Form's requirement, not the family's decision. */
+    readonly valid?: boolean;
+    /** The family has said that is everyone. Absent means they have not been asked yet. */
+    readonly settled?: boolean;
 };
 
 /**
@@ -213,13 +217,14 @@ export function projectPartyCollection(
 }
 
 /**
- * Whether the family still owes work on this collection.
+ * Whether the collection holds enough, correctly filled, people.
  *
- * The minimum is a completion requirement, which is why no blank rows are ever created to meet it:
- * the obligation is open until enough entries EXIST, and an entry exists only because someone added
- * it or because Alloy already knew the person.
+ * VALIDITY ONLY — not whether the family is finished. The minimum is a completion requirement,
+ * which is why no blank rows are ever created to meet it: the obligation is open until enough
+ * entries EXIST, and an entry exists only because someone added it or because Alloy already knew
+ * the person.
  */
-export function partyCollectionSatisfied(collection: ParticipantPartyCollection): boolean {
+export function partyCollectionValid(collection: ParticipantPartyCollection): boolean {
     const usable = collection.entries.filter((e) => e.origin === "existing" || entryHasAnyAnswer(e));
     if (usable.length < collection.min) return false;
     // Every required question on a family-added entry must be answered; a known entry is evidence,
@@ -357,4 +362,58 @@ function entryValuesForKnownPerson(
         else if (isPhone && person.phone) values[f.id] = person.phone;
     }
     return values;
+}
+
+
+/**
+ * SATISFYING THE MINIMUM IS NOT THE SAME AS BEING FINISHED.
+ *
+ * MEASURED, in the mounted conversation: a family added one emergency contact and the collection
+ * vanished — the minimum was met, the need went `confirmed`, and the turn moved on before anyone
+ * could add a second. A list of people is open-ended by nature; only the family knows when it ends.
+ *
+ * So two independent states. `partyCollectionValid` asks whether the Form's requirement is met.
+ * This asks whether the PARTICIPANT has said they are done. The conversation may advance only when
+ * both hold, and a collection with no maximum is never finished on the family's behalf.
+ *
+ * A maximum is the one exception worth naming: when the Form says no more may be added and the
+ * list is full, there is nothing left to decide and nothing left to add, so the collection is
+ * finished by its own terms rather than by guessing.
+ */
+export function partyCollectionSettled(
+    collection: ParticipantPartyCollection,
+    settledMarker: boolean,
+): boolean {
+    if (!partyCollectionValid(collection)) return false;
+    if (settledMarker) return true;
+    if (!collection.allow_add) return true;
+    return collection.max != null && collection.entries.length >= collection.max;
+}
+
+/** The whole obligation: enough people, AND the family has said that is everyone. */
+export function partyCollectionComplete(
+    collection: ParticipantPartyCollection,
+    settledMarker: boolean,
+): boolean {
+    return partyCollectionValid(collection) && partyCollectionSettled(collection, settledMarker);
+}
+
+/**
+ * Where the family's "that is everyone" is remembered.
+ *
+ * Beside the entries and scoped by the same collection identity, because it is a fact about THIS
+ * collection and about nothing else. A separate key rather than a wrapper around the list so that
+ * a session written before this existed still reads correctly — its entries are an array, and an
+ * absent marker is honestly "they have not said".
+ */
+export function partyCollectionSettledKey(formDefinitionId: string, groupFieldId: string): string {
+    return `${partyCollectionStateKey(formDefinitionId, groupFieldId)}:settled`;
+}
+
+export function readPartySettled(
+    sharedValues: Readonly<Record<string, unknown>>,
+    formDefinitionId: string,
+    groupFieldId: string,
+): boolean {
+    return sharedValues[partyCollectionSettledKey(formDefinitionId, groupFieldId)] === true;
 }

@@ -29,7 +29,7 @@ import {
     applyPartyCollectionResponse,
     parsePartyCollectionResponse,
 } from "@/lib/enrollment/participantRuntime/applyPartyCollectionResponse";
-import { knownPartyEntriesFromParties } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+import { knownPartyEntriesFromParties, partyCollectionGroups } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import type { StructuredCandidate } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
@@ -197,12 +197,16 @@ export async function handleParticipantTurn(
             current.context.needsContext.forms[0]!.schema,
             (current.context.parties ?? []) as never,
         )[collectionBody.group_field_id];
+        // The Form's own minimum, so a settle below it is refused here and not only hidden on screen.
+        const declaredGroup = partyCollectionGroups(current.context.needsContext.forms[0]!.schema)
+            .find((g) => g.id === collectionBody.group_field_id);
         const applied = await applyPartyCollectionResponse(supabase, {
             orgId: access.orgId,
             sessionId: access.sessionId,
             formDefinitionId,
             response: collectionBody,
             knownEntries: known ?? [],
+            minimumEntries: declaredGroup?.repeat?.min ?? 0,
         });
         if (!applied.ok) return publicErr(applied.error, 409, { code: "party_collection_refused" });
 
