@@ -222,7 +222,20 @@ describe("the compose's own semantics are untouched", () => {
              *                    FIRST_AUTHORITATIVE_FRAME off the producer join.
              */
             "runSettlement",
-            "seedRef.run",
+            /*
+             * `seedRef.run` USED TO BE AWAITED HERE, and Candidate A removed that await.
+             *
+             * It was the honest price of delivering Work View totals with the document, published
+             * as `join_wait_ms` — P50 252ms of a 1,273ms frame on deployed 31fb4b0c. The totals are
+             * FACTS: membership and order come from configuration and are final at the frame, and
+             * only the values were outstanding. They are still computed and still started from the
+             * composer's announcement; the frame simply no longer waits for them, and an unlanded
+             * seed leaves the field null, which the client already reads as "resolve these
+             * yourself" rather than as zero.
+             *
+             * Its absence from this list is the assertion. Restoring the await would put the frame
+             * back behind the totals while every latency number still looked healthy.
+             */
         ]);
         /*
          * THE SEED MUST START FROM THE ANNOUNCEMENT, NOT FROM THE FINISHED ANSWER.
@@ -239,7 +252,12 @@ describe("the compose's own semantics are untouched", () => {
         expect(seedCallAt).toBeGreaterThan(listenerAt);
         // The listener is an ARGUMENT to the compose call, so the seed sits inside it.
         expect(seedCallAt).toBeGreaterThan(composeAt);
-        expect(ROUTE_CODE.indexOf("await seedRef.run")).toBeGreaterThan(seedCallAt);
+        /*
+         * The join is gone (Candidate A), so the ordering that survives is: the seed is READ after
+         * it is started, and never awaited. `seedSettled.value` is that read.
+         */
+        expect(ROUTE_CODE).not.toContain("await seedRef.run");
+        expect(ROUTE_CODE.indexOf("const seed = seedSettled.value")).toBeGreaterThan(seedCallAt);
         // The two IIFEs exist to COUNT, and for nothing else. An IIFE that wrapped real new work
         // would be a serial addition wearing a diagnostic's clothes.
         expect((ROUTE_CODE.match(/await \(async \(\) => \{/g) ?? []).length).toBe(2);

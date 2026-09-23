@@ -143,6 +143,12 @@ export type RouteTimingMarks = {
             overlap_ms: number | null;
             /** ADDED DOCUMENT WAIT: what was left after everything else finished. */
             join_wait_ms: number | null;
+            /**
+             * 1 when the Work View totals had landed by the commit boundary, 0 when they settle
+             * afterwards. Candidate A stopped the frame waiting for them, so `join_wait_ms` is now
+             * zero by construction; this is what says whether the values were actually there.
+             */
+            seed_at_commit?: number | null;
             /** resolved | seed_failed | no_announcement | a specific unavailable reason. */
             outcome: string;
             /** Distinct (work unit, queue key) lanes the seed evaluated. */
