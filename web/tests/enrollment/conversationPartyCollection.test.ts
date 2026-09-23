@@ -535,3 +535,30 @@ describe("a household's other children are the known entries of a child collecti
         expect(knownPartyEntriesFromParties(SCHEMA, [], household).emergency_contacts ?? []).toHaveLength(0);
     });
 });
+
+describe("every reading of the objective knows the same people", () => {
+    /*
+     * MEASURED against a real family: the known sibling was visible on load and DISAPPEARED the
+     * moment the parent added someone. The post-write recompute passed known entries; the primary
+     * resolver assembled its needs without them. Two readings of one objective disagreeing about
+     * who exists is worse than neither having them — a parent watched Alloy forget their daughter.
+     */
+    const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, "utf8");
+    const resolver = read("lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective.ts");
+
+    it("passes known entries everywhere the needs are assembled", () => {
+        const calls = resolver.split("assembleEnrollmentInformationNeeds(").slice(1);
+        expect(calls.length, "expected both the primary resolve and the post-write recompute").toBeGreaterThanOrEqual(2);
+        for (const [i, call] of calls.entries()) {
+            const args = call.slice(0, call.indexOf("        );") >= 0 ? call.indexOf("        );") : 900);
+            expect(args, `assembleEnrollmentInformationNeeds call ${i + 1} omits knownPartyEntries`).toContain("knownPartyEntries");
+        }
+    });
+
+    it("resolves them from the canonical graph in both, not from a cached copy", () => {
+        expect(resolver).toContain("knownPartyEntriesForForms");
+        // Parties and household children are the two canonical reads; both feed the mapper.
+        expect(resolver).toContain("partyContext.parties");
+        expect(resolver).toContain("partyContext.siblings");
+    });
+});

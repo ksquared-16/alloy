@@ -322,6 +322,20 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
             assembleEnrollmentInformationNeeds(contextWithRoles, {
                 requiresConfirmation,
                 canonicalValues: input.canonicalValues,
+                /*
+                 * KNOWN PEOPLE BELONG TO EVERY READING OF THE OBJECTIVE, NOT JUST THE RECOMPUTE.
+                 *
+                 * MEASURED in the mounted conversation against a real family: the known sibling was
+                 * visible on load and DISAPPEARED the moment the parent added someone — because this
+                 * resolver assembled the needs without them while the post-write recompute passed
+                 * them. Two readings of the same objective disagreeing about who exists is worse
+                 * than neither having them: a parent watched Alloy forget their daughter.
+                 */
+                knownPartyEntries: knownPartyEntriesForForms(
+                    contextWithRoles.forms,
+                    partyContext.parties,
+                    partyContext.siblings,
+                ),
             }),
             {
                 forms: contextWithRoles.forms,
