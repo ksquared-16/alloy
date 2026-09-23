@@ -107,9 +107,14 @@ export async function archiveSpace(
     if (!decision.ok) return decision;
 
     const archivedAt = new Date().toISOString();
+    // `locations` has no updated_by column — writing one fails the whole archive
+    // with a schema-cache error, which is how this was first found. The actor is
+    // therefore not recorded on the row; `archived_by` is noted debt rather than
+    // invented here, and it matches the platform's own `persons.archived_at`,
+    // which records the moment and not the hand.
     const { error: updateErr } = await supabase
         .from("locations")
-        .update({ archived_at: archivedAt, updated_by: input.actorUserId ?? null })
+        .update({ archived_at: archivedAt })
         .eq("org_id", input.orgId)
         .eq("id", input.locationId);
     if (updateErr) throw new Error(updateErr.message);
