@@ -258,7 +258,7 @@ The thirteen grantable scopes:
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
 | `locations.read` | Read authorized sites, rooms and operational units | Any write; any other resource |
-| `children.read` | Identity and lifecycle of children in service inside the boundary | Contact details, guardians, health, anything about an adult |
+| `children.read` | Identity and lifecycle of enrolled children inside the boundary | Contact details, guardians, health, anything about an adult |
 | `households.read` | The household a visible child belongs to | Any member list; billing; siblings outside the boundary |
 | `relationships.read` | Adult↔child relationships and effective pickup authority | Contact points; any safeguarding detail or reason |
 | `relationships.contact.read` | Email and phone for those adults | Anything `relationships.read` does not already permit |
@@ -411,6 +411,31 @@ what counts as participation in service.
 The practical consequence for your planning: **expect fewer children than the
 organization has records for.** If a child you expect is absent, check their
 enrollment before reporting a defect.
+
+**An enrollment that was cancelled before it began never makes a child visible.**
+A family who signed and then withdrew before their child's first day was never a
+participant in service, so no record of them reaches this API. Every other state
+does make a child visible, including one that has `ended`: service happened, and
+your attendance and billing history must still be able to resolve who the child
+was. Concretely:
+
+| Enrollment status | Child visible | Why |
+| --- | --- | --- |
+| `pending_start` | Yes | Committed. You need the roster before the first day. |
+| `active` | Yes | In service. |
+| `ending` | Yes | Still in service, with a known last day. |
+| `ended` | Yes | Served and concluded — history stays resolvable. |
+| `canceled` | **No** | Withdrawn before service began; never a participant. |
+
+**Visibility can end, and you will see it end.** The one path is a `pending_start`
+enrollment that is cancelled: the child then leaves `GET /api/v1/children`, their
+household leaves `GET /api/v1/households`, and their relationships leave
+`GET /api/v1/relationships`. This is never silent — the enrollment itself remains
+readable and turns `canceled`, and cancelling bumps its `updated_at`, so a normal
+`GET /api/v1/enrollments?updated_since=...` pass delivers the change. **Treat a
+child's disappearance from `/children` as a signal to read `/enrollments`, not as
+data loss.** A child with commitments at two sites stays visible while any one of
+them is uncancelled.
 
 ### 8.2 `GET /api/v1/children`
 
