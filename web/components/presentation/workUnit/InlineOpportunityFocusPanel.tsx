@@ -80,6 +80,7 @@ import {
     resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { FocusPanelRenderedSubjectProvider } from "@/components/admin/focusPanel/focusPanelRenderedSubjectContext";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import {
     beginDrawerTabPrefetchEpoch,
@@ -869,6 +870,17 @@ export function InlineOpportunityFocusPanel() {
                     }
                 >
                     {/* STABLE body surface. Subject changes inside it; it is not rebuilt per subject. */}
+                    <FocusPanelRenderedSubjectProvider
+                        /*
+                         * The payload the cards are ACTUALLY rendering, which is not
+                         * `bodyRenderKey`. That id is the committed operational snapshot and moves
+                         * to the destination fast, while `visible` (resolved ?? heldPrior) is what
+                         * is on screen — so during a hold this correctly names the PRIOR subject
+                         * and only becomes the destination at the atomic swap. Feeding a diagnostic
+                         * from the fast id would label the prior subject's cards as the new one.
+                         */
+                        value={visible ? String(visible.displayVm.entity.id) : null}
+                    >
                     <div
                         key="focus-panel-body"
                         data-focus-panel-body-subject={bodyRenderKey}
@@ -926,6 +938,7 @@ export function InlineOpportunityFocusPanel() {
                             <AlloyThinkingLabel size="sm" />
                         </div>}
                     </div>
+                    </FocusPanelRenderedSubjectProvider>
                 </div>
                 {resolved ?
                     <div className="shrink-0 overflow-visible">
