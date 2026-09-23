@@ -431,3 +431,54 @@ A row whose `collection.origin` is `existing` is never offered a Remove control.
 emergency contact off a form is the family saying they do not belong on **this paperwork** — it is
 not an instruction to delete them from the record, and a form that treated it as one would quietly
 destroy canonical data. The minimum still applies to rows the family owns.
+
+---
+
+# Conversation runtime — repeated people (2026-09-23)
+
+## Where the semantics were lost
+
+`walkScalarFormFields` descends into every group and visits each child alone. A repeated
+emergency-contact collection therefore reached a parent as three unrelated questions — "Full
+name?", "Phone?", "Relationship to the child?" — asked **once each**, with no repetition, no entry
+identity, and nothing to say those answers belonged to one person. The `party_collection`
+declaration the Form already carried was never read on this path.
+
+## One semantic model, two presentations
+
+| | conventional Form renderer | Enrollment conversation |
+|---|---|---|
+| reads | `party_collection` | `party_collection` |
+| draws | bordered entry blocks + Add button | a collection need + the existing `collect_party` offer |
+| state | `payload.groups[id]` rows | one reserved `shared_values` key per collection |
+| converges | already the payload | at submit, once, via `partyCollectionGroupRows` |
+
+## Not a second repeater
+
+The conversation already knew how to offer a role, show who holds it, accept another person and
+record a decline — `partyOfferPlan` and the `collect_party` turn. What it had to **infer** was
+which roles and how many, by counting the boxes an imported PDF happened to print. A declared
+collection now drives that same `PartyOffer`: same apply, same decline, same presentation. Slot
+capacity remains the fallback for paperwork that declared nothing.
+
+## Known entries
+
+Identity comes from `resolveChildParties`, which reads `person_child_relationships` directly. No
+Forms-local person matcher exists. `item_id` (the canonical person id) is what keeps one person
+from being listed twice, and what stops a known person being proposed downstream as a new one.
+
+## State and convergence
+
+A list of people is not a scalar fact, so the conversation holds it under one reserved
+`shared_values` key carrying the ordered list with `instance_key` and `origin`. **There is no second
+participant draft to synchronise.** At submit — once, in one direction — that list becomes the Form
+payload's own `groups[groupId]` rows, the shape `validateSubmission`, the collection envelope and
+the related-record proposal adapter already consume.
+
+## NOT DONE in this slice
+
+- The conversation **card** does not yet draw entry cards with an inline "+ Add another"; the
+  offer path is wired but its browser presentation is uncertified.
+- No mounted specimen (household with a known sibling and a known emergency contact) was exercised
+  end to end.
+- Mobile presentation of a collection is unproven.

@@ -45,6 +45,7 @@ import {
 } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import { nextPartyOffer, readPartyOfferDeclines, type PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 import { declaredPartyCollectionsForForms } from "@/lib/enrollment/participantRuntime/declaredPartyCollections";
+import { knownPartyEntriesFromParties } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { resolveChildParties, resolveHouseholdCandidates, type ChildParty } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type {
@@ -196,6 +197,12 @@ export function recomputeParticipantObjectiveFromContext(
         {
             requiresConfirmation: context.requiresConfirmation,
             canonicalValues: context.canonicalValues,
+            /*
+             * The people already related to this child, as entries of the collections that ask for
+             * them. Read from `person_child_relationships` by `resolveChildParties` — the canonical
+             * graph — so the conversation shows what Alloy knows instead of asking for it again.
+             */
+            knownPartyEntries: knownPartyEntriesForForms(context.needsContext.forms, context.parties ?? []),
         },
     );
     return buildParticipantObjective(context.progress, needs, {
@@ -447,4 +454,25 @@ async function resolveChildPartyContext(
     } catch {
         return { parties: [], candidates: [], customerId: null };
     }
+}
+
+
+/**
+ * Known entries across every Form in the packet, keyed by collection group id.
+ *
+ * One packet can carry the same collection on more than one Form; the family is one family, so the
+ * entries are resolved per group and a later Form cannot contradict an earlier one about who
+ * exists.
+ */
+function knownPartyEntriesForForms(
+    forms: readonly { readonly schema: import("@/lib/forms/schema").FormSchemaV1 }[],
+    parties: readonly ChildParty[],
+): Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]> {
+    const out: Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]> = {};
+    for (const form of forms) {
+        for (const [groupId, entries] of Object.entries(knownPartyEntriesFromParties(form.schema, parties))) {
+            if (!out[groupId]) out[groupId] = entries;
+        }
+    }
+    return out;
 }

@@ -96,6 +96,8 @@ export function assembleEnrollmentInformationNeeds(
     input: {
         requiresConfirmation?: ReadonlySet<string>;
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /** Known people for each party collection, read from the canonical relationship graph. */
+        knownPartyEntries?: Readonly<Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]>>;
     },
 ): EnrollmentInformationNeeds {
     const { prog, session, subjectId, forms } = context;
@@ -121,6 +123,8 @@ export function assembleEnrollmentInformationNeeds(
         provenance: readEnrollmentValueProvenance(session.metadata),
         partyRoles: context.partyRoles,
         requiresConfirmation: input.requiresConfirmation,
+        // What Alloy already knows, from the canonical relationship graph the caller read.
+        ...(input.knownPartyEntries ? { knownPartyEntries: input.knownPartyEntries } : {}),
     });
     return {
         process_instance_id: prog.process_instance_id,

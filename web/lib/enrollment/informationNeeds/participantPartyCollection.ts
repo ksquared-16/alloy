@@ -307,3 +307,54 @@ function readEntryFieldOptions(field: FormField): { value: string; label: string
         return [{ value: r.value, label: r.label }];
     });
 }
+
+/**
+ * People Alloy already knows, as entries of the collections that ask for them.
+ *
+ * The identities come from `resolveChildParties`, which reads `person_child_relationships`
+ * directly — the canonical relationship graph, not a Forms-local matcher. This function decides
+ * nothing about WHO someone is; it only decides which box a known person's name and phone are
+ * shown in, and it does that from the entry field's own canonical binding where the Form declared
+ * one, falling back to the field's words only when it did not.
+ *
+ * `item_id` is the canonical person id, which is what keeps a known person from being listed twice
+ * and, downstream, from being proposed as a new person.
+ */
+export function knownPartyEntriesFromParties(
+    schema: Pick<FormSchemaV1, "fields">,
+    parties: readonly { readonly person_id: string; readonly full_name: string; readonly phone: string | null; readonly roles: readonly string[] }[],
+): Record<string, ParticipantPartyEntry[]> {
+    const out: Record<string, ParticipantPartyEntry[]> = {};
+    for (const group of partyCollectionGroups(schema)) {
+        const party = partyCollectionOf(group);
+        const role = party?.role?.trim();
+        if (!role) continue;
+        const holders = parties.filter((p) => p.roles.includes(role));
+        if (!holders.length) continue;
+        out[group.id] = holders.map((p) => ({
+            instance_key: `known:${p.person_id}`,
+            origin: "existing" as const,
+            item_id: p.person_id,
+            values: entryValuesForKnownPerson(group.fields, p),
+        }));
+    }
+    return out;
+}
+
+/** Which of this entry's questions a known person already answers. */
+function entryValuesForKnownPerson(
+    fields: readonly FormField[],
+    person: { readonly full_name: string; readonly phone: string | null },
+): Record<string, unknown> {
+    const values: Record<string, unknown> = {};
+    for (const f of fields) {
+        if (f.type === "group") continue;
+        const key = f.field_source?.field_key?.toLowerCase() ?? "";
+        const label = f.label.toLowerCase();
+        const isName = key.includes("name") || /\bname\b/.test(label);
+        const isPhone = key.includes("phone") || /\bphone\b|\bmobile\b|\bcell\b/.test(label);
+        if (isName && person.full_name) values[f.id] = person.full_name;
+        else if (isPhone && person.phone) values[f.id] = person.phone;
+    }
+    return values;
+}

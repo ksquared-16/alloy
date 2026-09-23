@@ -318,3 +318,70 @@ describe("a declared collection drives the conversation's existing party offer",
         expect(declaredList[0]!.max).toBeNull();
     });
 });
+
+describe("known people come from the canonical relationship graph, not a Forms matcher", () => {
+    /*
+     * Identity is `resolveChildParties`' answer — read straight from `person_child_relationships`.
+     * Nothing here decides WHO someone is; it decides only which box a known person's name and
+     * phone appear in, from the entry field's own binding where the Form declared one.
+     */
+    const parties = [
+        { person_id: "person-1", full_name: "Jane Smith", phone: "(541) 555-1234", roles: ["emergency_contact"] },
+        { person_id: "person-2", full_name: "Sam Okafor", phone: null, roles: ["guardian"] },
+    ];
+
+    it("maps a known holder of the role into the collection's own questions", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        const known = knownPartyEntriesFromParties(SCHEMA, parties);
+        expect(known.emergency_contacts).toHaveLength(1);
+        expect(known.emergency_contacts![0]!.values.ec_name).toBe("Jane Smith");
+        expect(known.emergency_contacts![0]!.values.ec_phone).toBe("(541) 555-1234");
+    });
+
+    it("carries the canonical person id, which is what stops a duplicate", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        const known = knownPartyEntriesFromParties(SCHEMA, parties);
+        expect(known.emergency_contacts![0]!.item_id).toBe("person-1");
+        expect(known.emergency_contacts![0]!.origin).toBe("existing");
+    });
+
+    it("does not put a guardian into the emergency-contact collection", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        const names = knownPartyEntriesFromParties(SCHEMA, parties).emergency_contacts!.map((e) => e.values.ec_name);
+        expect(names).not.toContain("Sam Okafor");
+    });
+
+    it("offers nothing when nobody holds the role — the family is asked, not shown a guess", async () => {
+        const { knownPartyEntriesFromParties } = await import("@/lib/enrollment/informationNeeds/participantPartyCollection");
+        expect(knownPartyEntriesFromParties(SCHEMA, [])).toEqual({});
+    });
+});
+
+describe("a known person is never removed from Alloy through the conversation", () => {
+    it("keeps a known entry out of the removable set", async () => {
+        /*
+         * The Form renderer already refuses this; the conversation must refuse it for the same
+         * reason. Saying someone does not belong on THIS paperwork is not an instruction to delete
+         * them from the record.
+         */
+        const { rowIsRemovable } = await import("@/lib/forms/partyCollection");
+        const group = SCHEMA.fields.find((f) => f.id === "emergency_contacts")!;
+        const known = { instance_key: "known:person-1", values: {}, collection: { provider_ref: "x", origin: "existing" as const, iteration_entity_type: "person" } };
+        const added = { instance_key: "e2", values: {}, collection: { provider_ref: "x", origin: "respondent_added" as const, iteration_entity_type: "person" } };
+        expect(rowIsRemovable(group, known, 5)).toBe(false);
+        expect(rowIsRemovable(group, added, 5)).toBe(true);
+    });
+
+    it("creates no canonical entity while the participant is still answering", async () => {
+        // The whole conversation collection path is pure; the only writer is the reviewed commit.
+        const { readFileSync } = await import("node:fs");
+        const read = (rel: string) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, "utf8");
+        const WRITERS = /createAdminClient|executeRelationshipAction|\.insert\(/;
+        for (const f of [
+            "lib/enrollment/informationNeeds/participantPartyCollection.ts",
+            "lib/enrollment/participantRuntime/declaredPartyCollections.ts",
+        ]) {
+            expect(read(f), `${f} can write canonical data from the participant path`).not.toMatch(WRITERS);
+        }
+    });
+});
