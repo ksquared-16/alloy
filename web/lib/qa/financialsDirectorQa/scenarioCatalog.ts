@@ -1816,11 +1816,7 @@ export const CORE_RUNNABLE_SCENARIOS = SCENARIOS.filter((s) => SCENARIO_PROGRAM[
  * authority is real and proven, and whose operator surface is deliberately not in Core.
  */
 export const CORE_DEFERRALS = Object.freeze([
-    {
-        key: "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED",
-        statement:
-            "A FIXED responsibility share is operator-authorable end to end. Percentage and remainder share methods exist in the arrangement authority and are enforced there, and no operator surface authors them in Core. An operator can divide an obligation by amount today; dividing it by proportion is a Payments-era surface.",
-    },
+
     {
         key: "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
         statement:

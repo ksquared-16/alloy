@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import {
+    documentActorFromAdminParts,
+    projectResolvedProfilePhotosOntoRows,
+} from "@/lib/documents/projectPersonProfilePhotos";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
@@ -74,6 +78,43 @@ export async function GET(request: NextRequest) {
             mark,
         });
         mark("read");
+
+        /*
+         * ── CANONICAL IDENTITY, RESOLVED WHERE THE ACTOR IS ──────────────────────────────────
+         *
+         * A resolved photo URL is authorized per actor per request. The view-model builder holds a
+         * service-role client and no actor, so resolving there would either leak an unauthorized
+         * reference or bake a signed URL into a cached model — which is why it carries `personId`
+         * and leaves `imageUrl` null.
+         *
+         * This is the SHARED projection Records and the Focus Panel already use, not a Financials
+         * resolver: the same child resolves the same photo on every surface, and a child whose
+         * person has none falls through to the canonical initials avatar.
+         */
+        const subjects = (vm as { subjects?: Array<Record<string, unknown>> }).subjects ?? [];
+        if (subjects.length > 0) {
+            const withPhotos = await projectResolvedProfilePhotosOntoRows({
+                supabase: createAdminClient(),
+                orgId: ctx.orgId,
+                actor: documentActorFromAdminParts({
+                    ok: true,
+                    userId: ctx.userId,
+                    orgId: ctx.orgId,
+                    role: ctx.role,
+                }),
+                rows: subjects.map((s) => ({ ...s, person_id: (s.personId as string | null) ?? null })) as Array<
+                    Record<string, unknown>
+                >,
+            });
+            withPhotos.forEach((row, index) => {
+                const subject = subjects[index];
+                if (subject) {
+                    subject.imageUrl = ((row as Record<string, unknown>).resolved_photo_url as string | null) ?? null;
+                }
+            });
+        }
+        mark("identity");
+
         const body = JSON.stringify({ ok: true, vm });
         mark("serialize");
         return new NextResponse(body, {

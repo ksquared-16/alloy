@@ -141,15 +141,34 @@ describe("read-back distinguishes inherited from authored", () => {
     });
 
     it("never presents the household's arrangement as child-authored", () => {
+        /*
+         * THE DISTINCTION, NOT THE SENTENCE. This used to read as running prose in the middle of
+         * a form — "Household responsibility. Cert Certhouse $18.00 · from Sep 18, 2026 · saving
+         * supersedes it" — five facts an operator had to parse to learn what they were replacing.
+         * Same truths, given a label and a shape.
+         *
+         * What must never collapse is inherited vs authored: showing the household's arrangement
+         * as though this child had been given it deliberately is the misreading this exists to
+         * prevent, and it is now carried by BOTH the marker and the visible words.
+         */
         expect(panel).toContain("authoredAtRequestedScope");
-        expect(panel).toContain("No child-specific arrangement — household responsibility applies.");
-        expect(panel).toContain("Overrides household responsibility.");
-        expect(panel).toContain('data-financials-scope-arrangement');
+        expect(panel, "the grain is marked for a frame to read")
+            .toMatch(/data-financials-scope-arrangement=\{scopeArrangement\.authoredAtRequestedScope \? "authored" : "inherited"\}/);
+        expect(panel, "and said out loud when it is the household's")
+            .toMatch(/Current · inherited from the household/);
+        expect(panel, "and when it is this child's own").toMatch(/Current · this child/);
     });
 
     it("says whether saving creates or supersedes", () => {
         expect(panel).toContain("Nothing governs this scope yet — saving creates the first arrangement.");
-        expect(panel).toContain("saving supersedes it");
+        /*
+         * "Saving replaces this arrangement" is said ONLY where it is true. An inherited
+         * arrangement is not superseded by authoring here — a new child-scoped one sits beneath
+         * it — so the warning is inside the authored branch and nowhere else.
+         */
+        expect(panel).toContain("Saving replaces this arrangement.");
+        expect(panel, "and only for an arrangement authored at this scope")
+            .toMatch(/scopeArrangement\.authoredAtRequestedScope \? \([\s\S]{0,400}Saving replaces this arrangement/);
     });
 
     it("does not reimplement specificity in React", () => {
@@ -193,9 +212,25 @@ describe("one writer, three intents", () => {
         }
     });
 
-    it("authors fixed shares only", () => {
+    it("authors all three canonical share methods", () => {
+        /*
+         * THIS LOCK USED TO ASSERT THE OPPOSITE, and retiring it is the point.
+         *
+         * `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` recorded that fixed shares were
+         * operator-authorable while percentage and remainder existed in the arrangement authority
+         * with no authoring surface. The authority was never the gap — it has always validated
+         * basis points, refused totals over 100% and refused a second remainder — so the deferral
+         * was about this panel, and this panel now offers all three.
+         *
+         * What must stay true is that the panel sends what the operator CHOSE rather than one
+         * method for everything, which is what it used to do.
+         */
         const panel = strip(src(PANEL));
-        expect(panel, "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED").not.toMatch(/percent_basis_points|"percentage"|"remainder"/);
+        expect(panel, "percentage is authorable").toMatch(/percent_basis_points/);
+        expect(panel, "remainder is authorable").toMatch(/"remainder"/);
+        expect(panel, "fixed is still authorable").toMatch(/amount_cents/);
+        expect(panel, "the method comes from the operator's choice, not a constant")
+            .toMatch(/method: "remainder"[\s\S]{0,400}method: "percentage"[\s\S]{0,400}method: "fixed"/);
     });
 });
 

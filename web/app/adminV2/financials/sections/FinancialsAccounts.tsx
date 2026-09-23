@@ -59,7 +59,6 @@ import {
 } from "@/components/workspace/workspaceTokens";
 import FinancialsAccountDetail from "@/app/adminV2/financials/FinancialsAccountDetail";
 import { FinancialCommandHost } from "@/components/financials/FinancialCommandChannel";
-import FinancialsAccountWorkspaceDetail from "@/app/adminV2/financials/FinancialsAccountWorkspaceDetail";
 import { money, moneyExact } from "@/app/adminV2/financials/financialsFormat";
 import type { FinancialsReadState } from "@/app/adminV2/financials/useFinancialsReads";
 import {
@@ -605,11 +604,22 @@ export default function FinancialsAccounts({
                                     showDetailsAction={false}
                                     summaryVariant="account"
                                 />
-                                <FinancialsAccountWorkspaceDetail
-                                    customerId={selected}
-                                    householdName={selectedAccount?.householdName ?? null}
-                                    currencyCode={selectedAccount?.currencyCode}
-                                />
+                                {/*
+                                  * ── THE LEDGER COMES WITH THE ACCOUNT NOW ────────────────────
+                                  *
+                                  * `FinancialsAccountWorkspaceDetail` was a second ledger: its own
+                                  * lens bar, its own period grouping, its own rows and an inline
+                                  * Responsibility editor — roughly a thousand lines answering
+                                  * questions the shared Details surface already answers, from the
+                                  * same canonical view model.
+                                  *
+                                  * It existed because this host passed `showDetailsAction={false}`,
+                                  * which left the shared surface unreachable. The card above now
+                                  * OPENS on Details, so the ledger, the lenses, the relationship
+                                  * row and all three management doors arrive with it — one
+                                  * implementation, two hosts, and no way for them to drift apart
+                                  * again.
+                                  */}
                             </div>
                             </FinancialCommandHost>
                         </div>

@@ -235,10 +235,16 @@ describe("the program each scenario belongs to", () => {
         }
     });
 
-    /* The three deferrals are stated in the catalog, not only in a certification document. */
-    it("states the three accepted Core deferrals in full", () => {
+    /* The remaining deferrals are stated in the catalog, not only in a certification document. */
+    it("states the accepted Core deferrals in full", () => {
+        /*
+         * SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED is gone, and its absence is the point. It
+         * recorded that percentage and remainder existed in the arrangement authority with no
+         * operator surface; the Responsibility depth card now authors all three, so the deferral
+         * describes nothing. A deferral kept after the thing it deferred has shipped is worse than
+         * none — it tells a reader a capability is missing when it is not.
+         */
         expect(CORE_DEFERRALS.map((d) => d.key)).toEqual([
-            "SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED",
             "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
             "DEPOSIT_OPERATOR_PRODUCTIZATION_GAP",
         ]);
