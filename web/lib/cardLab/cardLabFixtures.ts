@@ -622,6 +622,10 @@ export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
     note: "Zoo field trip",
     previewBefore: "$255",
     previewAfter: "$295",
+    previewGross: "$40.00",
+    previewDiscountAmount: null,
+    previewNet: "$40.00",
+    previewPostedBalance: "$295.00",
 };
 
 /** Safety Signals — configured projections of canonical health facts. */

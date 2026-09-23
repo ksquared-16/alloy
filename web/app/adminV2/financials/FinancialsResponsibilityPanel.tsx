@@ -27,8 +27,14 @@
  */
 import { useCallback, useEffect, useState } from "react";
 
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
+import {
+    reconcileResponsibilityShares,
+    type ResponsibilityShareMethod,
+    type ShareDraft,
+} from "@/lib/financials/responsibility/reconcileResponsibilityShares";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { isPostedStatus } from "@/lib/financials/billableSource";
 
@@ -83,62 +89,14 @@ async function readScopeArrangement(
     }
 }
 
-type ShareMethod = "percentage" | "fixed" | "remainder";
+/* The canonical vocabulary, imported rather than restated beside the rule that uses it. */
+type ShareMethod = ResponsibilityShareMethod;
 
 const SHARE_METHOD_OPTIONS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
     { value: "percentage", label: "Percentage" },
     { value: "fixed", label: "Fixed amount" },
     { value: "remainder", label: "Remainder" },
 ];
-
-/**
- * WHETHER THIS ARRANGEMENT RECONCILES, said in the operator's terms before they press Confirm.
- *
- * The canonical service refuses a total over 100%, a second remainder, and a duplicate party — so
- * this is not a second rulebook, it is the same rules stated early enough to be useful. A form
- * that let an operator fill in 70/40 and then showed them a server error would be making them
- * discover a rule the product already knew.
- */
-function reconcileShares(shares: readonly ShareDraft[]): { ok: boolean; message: string | null } {
-    const used = shares.filter((s) => s.method === "remainder" || s.amount.trim() !== "");
-    if (used.length === 0) return { ok: false, message: "Name at least one responsible party." };
-
-    const remainders = used.filter((s) => s.method === "remainder");
-    if (remainders.length > 1) return { ok: false, message: "Only one party can take the remainder." };
-
-    const percentTotal = used
-        .filter((s) => s.method === "percentage")
-        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    if (percentTotal > 100) {
-        return { ok: false, message: `The percentages total ${percentTotal}%.` };
-    }
-    if (used.some((s) => s.method !== "remainder" && !(Number(s.amount) >= 0))) {
-        return { ok: false, message: "Every share needs a number." };
-    }
-
-    const hasPercent = used.some((s) => s.method === "percentage");
-    if (hasPercent && percentTotal < 100 && remainders.length === 0) {
-        return { ok: true, message: `${100 - percentTotal}% is not assigned to anyone.` };
-    }
-    return { ok: true, message: null };
-}
-
-type ShareDraft = {
-    responsiblePartyId: string;
-    name: string;
-    /** Their relationship to the account, shown so the operator knows which person this is. */
-    roleLabel: string | null;
-    /**
-     * How this party's share is expressed. The canonical authority has always accepted all three;
-     * what was missing was anywhere for an operator to say which one they meant.
-     */
-    method: ShareMethod;
-    /**
-     * What the operator typed: cents for `fixed`, whole percent for `percentage`, ignored for
-     * `remainder` — a remainder is defined by the others, so there is nothing to type.
-     */
-    amount: string;
-};
 
 type PreviewPayload = { summary?: string; changes?: string[] } | null;
 
@@ -372,7 +330,7 @@ export default function FinancialsResponsibilityPanel({
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
     /* The same rules the service enforces, stated early enough for the operator to act on. */
-    const reconciliation = reconcileShares(shares);
+    const reconciliation = reconcileResponsibilityShares(shares);
     /*
      * ── WHICH SCOPE THIS ARRANGEMENT GOVERNS ──────────────────────────────────────────────────
      *
@@ -727,13 +685,19 @@ export default function FinancialsResponsibilityPanel({
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
                 Effective from
-                <input
-                    type="date"
-                    value={effectiveStart}
-                    onChange={(e) => setEffectiveStart(e.target.value)}
-                    data-financials-responsibility-effective="true"
-                    className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs"
-                />
+                {/*
+                  * The canonical date control, not the browser's. Same stored `YYYY-MM-DD` and the
+                  * same effective-dating authority — only the widget changed, so this field stops
+                  * being the one platform-styled thing on a card of Alloy controls.
+                  */}
+                <span data-financials-responsibility-effective="true" className="mt-0.5 block">
+                    <AlloyDateInput
+                        value={effectiveStart}
+                        onChange={setEffectiveStart}
+                        aria-label="Effective from"
+                        testId="financials-responsibility-effective"
+                    />
+                </span>
                 {/*
                   * THE DOCTRINE, SAID WHERE THE MECHANISM IS. Effective dating is exactly why a
                   * new arrangement cannot disturb what has already been paid, so the warning that
