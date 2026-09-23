@@ -102,24 +102,72 @@ describe("one authority, consulted by every parent that can steal the gesture", 
 });
 
 describe("both hosts return focus to the control that opened the card", () => {
+    /*
+     * ONE RULE, TWO SHAPES — and the shape is forced, not chosen.
+     *
+     * Accounts renders its depth card beside the gear, so it keeps a ref and focuses it on close.
+     * The Financials card returns early for a depth surface, which unmounts Details and removes
+     * the gear from the document: a ref there would hold a detached node, so the host records the
+     * control as a SELECTOR and refocuses it once Details is back. Asserting one spelling across
+     * both would force the second host into a mechanism that cannot work there. What must hold in
+     * both is the rule: something remembers the opener, and every dismissal path restores it.
+     */
     const HOSTS = [
-        ["components/operationalCards/FinancialsDetailCard.tsx", "Details"],
-        ["app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx", "Accounts"],
+        {
+            rel: "components/admin/focusPanel/cards/FinancialsCard.tsx",
+            name: "Details (depth host)",
+            /* The gear that opened it is named on the way in... */
+            records: /adminFocusSelector\.current = selector/,
+            /* ...and refocused on the way out, from a live query rather than a dead ref. */
+            restores: /document\.querySelector<HTMLElement>\(selector\)[\s\S]{0,80}focus\(\)/,
+        },
+        {
+            rel: "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx",
+            name: "Accounts",
+            records: /ref=\{manage\w*GearRef\}/,
+            restores: /GearRef\.current\?\.focus\(\)/,
+        },
     ] as const;
 
-    it.each(HOSTS)("%s", (rel) => {
-        const host = code(rel);
-        expect(host, "the gear is addressable").toMatch(/ref=\{manage\w*GearRef\}/);
-        expect(host, "and the close path focuses it").toMatch(/GearRef\.current\?\.focus\(\)/);
-        expect(host, "every dismissal routes through that path").toMatch(/onHostedClose=\{close\w*\}/);
+    it.each(HOSTS.map((h) => [h.name, h] as const))("%s", (_name, host) => {
+        const source = code(host.rel);
+        expect(source, "the opening control is remembered").toMatch(host.records);
+        expect(source, "and the close path focuses it").toMatch(host.restores);
+    });
+
+    it("the Details gears stay findable by the marker the host restores through", () => {
+        /*
+         * A selector-based restore is only as good as the markers it names. If a gear loses its
+         * data attribute the restore silently focuses nothing — no error, just a keyboard
+         * operator back at <body>. So the markers the host queries must exist where it looks.
+         */
+        const host = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const detail = code("components/operationalCards/FinancialsDetailCard.tsx");
+        for (const marker of [
+            'data-financials-manage-payments="open"',
+            'data-financials-manage-responsibility="gear"',
+            'data-financials-manage-discounts="gear"',
+        ]) {
+            expect(host, `the host restores through ${marker}`).toContain(marker);
+            expect(detail, `and Details actually renders ${marker}`).toContain(marker);
+        }
     });
 
     it("neither host drifts from the other on dismissal", () => {
-        /* Details and Accounts must not acquire separate depth behaviour. */
-        for (const [rel] of HOSTS) {
+        /*
+         * Details and Accounts must not acquire separate depth behaviour. Both wrap the panel in a
+         * marked depth card, and both take Escape off the panel rather than leaving it to bubble
+         * into a second dismissal.
+         */
+        for (const rel of [
+            "components/admin/focusPanel/cards/FinancialsCard.tsx",
+            "app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx",
+        ]) {
             const host = code(rel);
-            expect(host).toContain('data-financials-manage-responsibility="depth-card"');
-            expect(host).toMatch(/e\.key !== "Escape"/);
+            expect(host, `${rel} wraps the panel in a depth card`).toContain(
+                'data-financials-manage-responsibility="depth-card"',
+            );
+            expect(host, `${rel} guards Escape`).toMatch(/key !== "Escape"/);
         }
     });
 });

@@ -74,6 +74,20 @@ describe("the Manage Responsibility panel", () => {
      * guarantee on this surface.
      */
     it("cannot confirm before the action has said what will change", () => {
-        expect(panel).toMatch(/disabled=\{busy !== null \|\| !preview\}/);
+        /*
+         * ASSERTED AS A REQUIREMENT, NOT AS A LITERAL. The first version pinned the exact
+         * expression `disabled={busy !== null || !preview}`, so ADDING a guard broke it — the
+         * panel now also refuses an arrangement whose shares cannot reconcile, which is strictly
+         * more careful than what the lock demanded. A lock that reddens when the code becomes
+         * safer is testing the spelling rather than the rule.
+         *
+         * What must remain true: Confirm is disabled while busy, and disabled until a preview
+         * exists. Further guards are welcome.
+         */
+        const confirm = panel.slice(panel.indexOf('data-financials-responsibility-confirm') - 600,
+                                    panel.indexOf('data-financials-responsibility-confirm'));
+        expect(confirm, "Confirm is guarded at all").toMatch(/disabled=\{/);
+        expect(confirm, "nothing is committed that has not been previewed").toContain("!preview");
+        expect(confirm, "and not while a call is in flight").toContain("busy !== null");
     });
 });

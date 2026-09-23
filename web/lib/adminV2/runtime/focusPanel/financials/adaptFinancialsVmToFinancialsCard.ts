@@ -166,7 +166,13 @@ export function adaptFinancialsVmToFinancialsCard(input: {
     const payers: FinancialsPayer[] = vm.payers.map((p) => ({
         name: p.name,
         share: p.share ?? "",
-        method: p.method ?? "No method on file",
+        /*
+         * THE CANONICAL SENTENCE FOR THIS STATE, not a shorter one meaning the same thing.
+         * `paymentSubjectModel` and the payment-methods surface both say "No payment method on
+         * file"; this said "No method on file", so the same fact wore two names depending on
+         * which surface an operator happened to read it on.
+         */
+        method: p.method ?? "No payment method on file",
     }));
 
     return {

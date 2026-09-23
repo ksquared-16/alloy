@@ -69,6 +69,10 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "billing.apply_discounts",
     "billing.except_commercial_policy",
     "billing.end_commercial_policy_exception",
+    "billing.assign_commercial_policy",
+    "billing.end_commercial_policy_assignment",
+    "billing.waive_charge_discount",
+    "billing.restore_charge_discount",
     "billing.adjust_account",
     "billing.reverse_adjustment",
     "billing.configure_responsibility",
@@ -432,6 +436,87 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "amount is the term's, never the caller's and never a re-resolved catalog price; a "
             + "payload carrying one is refused. Creates drafts only — posting stays separate — and is "
             + "safe to retry, because the occurrence converges on a database unique index.",
+    }),
+    /*
+     * ── GIVING AND REFUSING A CONFIGURED POLICY ────────────────────────────
+     *
+     * Four acts, two grains. A RELATIONSHIP either receives an authored policy
+     * or has it waived; a CHARGE either has one excluded or restored. Giving is
+     * ordinary billing — the organisation set the rate and wrote the
+     * eligibility, so assigning decides nothing about what the discount is
+     * worth. Refusing increases what a real family owes and takes the grant
+     * that governs changing what is owed.
+     */
+    def({
+        capabilityKey: "billing.assign_commercial_policy",
+        canonicalCommandKey: "billing.assign_commercial_policy",
+        operatorLabel: "Add discount",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.assign_commercial_policy",
+        implementationStatus: "production",
+        reason:
+            "Records that one commercial relationship receives a configured commercial policy. "
+            + "Carries policy identity and provenance only — never a rate, amount, basis or cap, "
+            + "which stay in commercial_policies and are the organisation's to author.",
+    }),
+    def({
+        capabilityKey: "billing.end_commercial_policy_assignment",
+        canonicalCommandKey: "billing.end_commercial_policy_assignment",
+        operatorLabel: "Remove discount",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.end_commercial_policy_assignment",
+        implementationStatus: "production",
+        reason:
+            "Ends a relationship's assignment from a date. The row stays — that somebody gave this "
+            + "family this discount, and for how long, is what makes the money already reduced "
+            + "explainable.",
+    }),
+    def({
+        capabilityKey: "billing.waive_charge_discount",
+        canonicalCommandKey: "billing.waive_charge_discount",
+        operatorLabel: "Waive discount for this charge",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.waive_charge_discount",
+        implementationStatus: "production",
+        reason:
+            "Records that an otherwise-applicable policy does not reduce ONE charge, with a reason. "
+            + "The alternative operators reached for was an offsetting adjustment, which leaves the "
+            + "discount resolving as applied everywhere and reads as a decision about the family.",
+    }),
+    def({
+        capabilityKey: "billing.restore_charge_discount",
+        canonicalCommandKey: "billing.restore_charge_discount",
+        operatorLabel: "Restore discount for this charge",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["customer", "opportunity_customer_member"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "billing.restore_charge_discount",
+        implementationStatus: "production",
+        reason:
+            "Lifts a charge-level waiver. A waiver nobody can undo is a waiver operators work "
+            + "around with the adjustment the waiver exists to replace.",
     }),
     // ── Reductions: what legitimately lowers what a family owes ────────────
     def({

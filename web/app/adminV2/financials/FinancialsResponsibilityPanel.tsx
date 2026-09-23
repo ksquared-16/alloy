@@ -83,12 +83,60 @@ async function readScopeArrangement(
     }
 }
 
+type ShareMethod = "percentage" | "fixed" | "remainder";
+
+const SHARE_METHOD_OPTIONS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
+    { value: "percentage", label: "Percentage" },
+    { value: "fixed", label: "Fixed amount" },
+    { value: "remainder", label: "Remainder" },
+];
+
+/**
+ * WHETHER THIS ARRANGEMENT RECONCILES, said in the operator's terms before they press Confirm.
+ *
+ * The canonical service refuses a total over 100%, a second remainder, and a duplicate party — so
+ * this is not a second rulebook, it is the same rules stated early enough to be useful. A form
+ * that let an operator fill in 70/40 and then showed them a server error would be making them
+ * discover a rule the product already knew.
+ */
+function reconcileShares(shares: readonly ShareDraft[]): { ok: boolean; message: string | null } {
+    const used = shares.filter((s) => s.method === "remainder" || s.amount.trim() !== "");
+    if (used.length === 0) return { ok: false, message: "Name at least one responsible party." };
+
+    const remainders = used.filter((s) => s.method === "remainder");
+    if (remainders.length > 1) return { ok: false, message: "Only one party can take the remainder." };
+
+    const percentTotal = used
+        .filter((s) => s.method === "percentage")
+        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    if (percentTotal > 100) {
+        return { ok: false, message: `The percentages total ${percentTotal}%.` };
+    }
+    if (used.some((s) => s.method !== "remainder" && !(Number(s.amount) >= 0))) {
+        return { ok: false, message: "Every share needs a number." };
+    }
+
+    const hasPercent = used.some((s) => s.method === "percentage");
+    if (hasPercent && percentTotal < 100 && remainders.length === 0) {
+        return { ok: true, message: `${100 - percentTotal}% is not assigned to anyone.` };
+    }
+    return { ok: true, message: null };
+}
+
 type ShareDraft = {
     responsiblePartyId: string;
     name: string;
     /** Their relationship to the account, shown so the operator knows which person this is. */
     roleLabel: string | null;
-    /** Cents the operator is assigning. Empty means they have not said yet. */
+    /**
+     * How this party's share is expressed. The canonical authority has always accepted all three;
+     * what was missing was anywhere for an operator to say which one they meant.
+     */
+    method: ShareMethod;
+    /**
+     * What the operator typed: cents for `fixed`, whole percent for `percentage`, ignored for
+     * `remainder` — a remainder is defined by the others, so there is nothing to type.
+     */
     amount: string;
 };
 
@@ -137,13 +185,29 @@ async function callAction(
                  * state exactly, and the others stay available to the capability rather than being
                  * approximated here.
                  */
+                /*
+                 * EACH SHARE IN THE METHOD THE OPERATOR CHOSE. This used to send `fixed` for
+                 * everything, because fixed was the only method the surface offered — the action
+                 * accepted all three the whole time. A remainder carries no number: it is defined
+                 * by what the others leave.
+                 */
                 shares: args.shares
-                    .filter((s) => s.amount.trim() !== "")
-                    .map((s) => ({
-                        responsible_party_id: s.responsiblePartyId,
-                        method: "fixed",
-                        amount_cents: Math.round(Number(s.amount) * 100),
-                    })),
+                    .filter((s) => s.method === "remainder" || s.amount.trim() !== "")
+                    .map((s) =>
+                        s.method === "remainder"
+                            ? { responsible_party_id: s.responsiblePartyId, method: "remainder" }
+                            : s.method === "percentage"
+                              ? {
+                                    responsible_party_id: s.responsiblePartyId,
+                                    method: "percentage",
+                                    percent_basis_points: Math.round(Number(s.amount) * 100),
+                                }
+                              : {
+                                    responsible_party_id: s.responsiblePartyId,
+                                    method: "fixed",
+                                    amount_cents: Math.round(Number(s.amount) * 100),
+                                },
+                    ),
             },
         }),
     });
@@ -188,7 +252,7 @@ async function loadCandidates(
 ): Promise<{ candidates: ShareDraft[]; error: string | null }> {
     const fallback = existing
         .filter((p) => p.personId)
-        .map((p) => ({ responsiblePartyId: p.personId as string, name: p.name, roleLabel: null, amount: "" }));
+        .map((p) => ({ responsiblePartyId: p.personId as string, name: p.name, roleLabel: null, method: "fixed" as ShareMethod, amount: "" }));
     if (!customerId && !chargeId) return { candidates: fallback, error: null };
 
     const params = new URLSearchParams();
@@ -212,6 +276,7 @@ async function loadCandidates(
         }
         const candidates = (body.candidates ?? [])
             .map((c) => ({
+                method: "fixed" as ShareMethod,
                 responsiblePartyId: c.personId != null ? String(c.personId) : "",
                 name: c.name != null ? String(c.name) : "Responsible party",
                 roleLabel: c.roleLabel != null ? String(c.roleLabel) : null,
@@ -306,6 +371,8 @@ export default function FinancialsResponsibilityPanel({
     );
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
+    /* The same rules the service enforces, stated early enough for the operator to act on. */
+    const reconciliation = reconcileShares(shares);
     /*
      * ── WHICH SCOPE THIS ARRANGEMENT GOVERNS ──────────────────────────────────────────────────
      *
@@ -503,11 +570,34 @@ export default function FinancialsResponsibilityPanel({
             tabIndex={-1}
             ref={(el) => el?.focus({ preventScroll: true })}
         >
-            <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
-            <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                {/* The law this intent obeys, said where the operator is about to act on it. */}
-                Who contractually owes this account, from a date. Changing it does not change who has already paid.
-            </p>
+            {/*
+              * THE TITLE BELONGS TO THE OUTERMOST SURFACE. Hosted as a depth card, the card's own
+              * header already says "Responsibility", and repeating "Manage responsibility" beneath
+              * it made the card look like it contained a second, smaller card. Inline on Accounts
+              * there is no outer header, so the heading is what names the section.
+              */}
+            {hosted ? null : (
+                <p className="text-sm font-semibold text-alloy-midnight">Manage responsibility</p>
+            )}
+            {/*
+              * ── THE QUESTION, NOT THE DOCTRINE ────────────────────────────────────────────
+              *
+              * This was two sentences: what the card decides, and the warning that it does not
+              * move money already paid. The second is real and must not be lost — an operator who
+              * reads "change who owes" as "move that receipt" will come here to fix a misapplied
+              * payment and it will not do that.
+              *
+              * But a doctrine paragraph at the top of a form is read once and skipped after, and
+              * the warning belongs where the mechanism is: the EFFECTIVE DATE is precisely why
+              * paid money is unaffected, so it is said there, quietly, beside the field that
+              * causes it.
+              */}
+            {/*
+              * THE TITLE ALREADY SAYS IT. "Who owes for this account?" restated the card's own
+              * header in a sentence, which is a line of gray between the operator and the first
+              * control. What the card cannot say through labels alone is the reconciliation
+              * truth, and that lives with the effective date where it is acted on.
+              */}
 
             {/*
               * APPLIES TO — the arrangement's scope, stated before the date it takes effect.
@@ -557,27 +647,56 @@ export default function FinancialsResponsibilityPanel({
                     {scopeLoading ? (
                         <span className="mt-1 block text-[11px] text-alloy-midnight/45">Reading what applies…</span>
                     ) : scopeArrangement?.arrangement ? (
+                        <>
+                        {/*
+                          * ── WHAT STANDS TODAY, AS A LABELLED FACT ──────────────────────────
+                          *
+                          * This was one sentence carrying five things — the grain, the parties,
+                          * the amounts, the dates and a warning that saving supersedes it — and
+                          * it sat in the middle of a form as running prose, so the operator had
+                          * to parse it to learn what they were about to replace.
+                          *
+                          * Same truths, given a label and a shape. Nothing is dropped: the grain
+                          * still distinguishes an arrangement authored AT this scope from the
+                          * household's reaching a child that has none, because showing inherited
+                          * money as deliberately given is the misreading this exists to prevent.
+                          */}
                         <span
-                            className="mt-1 block text-[11px] text-alloy-midnight/55"
+                            className="mt-1 block"
                             data-financials-scope-arrangement={scopeArrangement.authoredAtRequestedScope ? "authored" : "inherited"}
                             data-financials-scope-arrangement-id={scopeArrangement.arrangement.id}
                         >
-                            {scopeArrangement.authoredAtRequestedScope
-                                ? effectiveMemberId
-                                    ? "Overrides household responsibility."
-                                    : "Household responsibility."
-                                : "No child-specific arrangement — household responsibility applies."}{" "}
-                            {scopeArrangement.arrangement.shares
-                                .map((sh) => `${sh.name}${sh.amountCents != null ? ` ${money(sh.amountCents)}` : ""}`)
-                                .join(" · ")}
-                            {scopeArrangement.arrangement.effectiveStart
-                                ? ` · from ${formatDisplayDate(scopeArrangement.arrangement.effectiveStart)}`
-                                : ""}
-                            {scopeArrangement.arrangement.effectiveEnd
-                                ? ` until ${formatDisplayDate(scopeArrangement.arrangement.effectiveEnd)}`
-                                : ""}
-                            {scopeArrangement.authoredAtRequestedScope ? " · saving supersedes it" : ""}
+                            <span className="alloy-os-depthcard__section block">
+                                {scopeArrangement.authoredAtRequestedScope
+                                    ? effectiveMemberId
+                                        ? "Current · this child"
+                                        : "Current"
+                                    : "Current · inherited from the household"}
+                            </span>
+                            <span className="alloy-os-depthcard__value block">
+                                {scopeArrangement.arrangement.shares
+                                    .map((sh) => `${sh.name}${sh.amountCents != null ? ` · ${money(sh.amountCents)}` : ""}`)
+                                    .join(" · ")}
+                                {scopeArrangement.arrangement.effectiveStart
+                                    ? ` · since ${formatDisplayDate(scopeArrangement.arrangement.effectiveStart)}`
+                                    : ""}
+                                {scopeArrangement.arrangement.effectiveEnd
+                                    ? ` · until ${formatDisplayDate(scopeArrangement.arrangement.effectiveEnd)}`
+                                    : ""}
+                            </span>
+                            {/*
+                              * SAVING REPLACES IT — said only when it is true. An inherited
+                              * arrangement is not superseded by authoring one here; a new
+                              * child-scoped arrangement sits beneath it, which is a different
+                              * outcome and must not wear the same warning.
+                              */}
+                            {scopeArrangement.authoredAtRequestedScope ? (
+                                <span className="alloy-os-depthcard__hint block" data-financials-scope-supersedes="true">
+                                    Saving replaces this arrangement.
+                                </span>
+                            ) : null}
                         </span>
+                        </>
                     ) : (
                         <span className="mt-1 block text-[11px] text-alloy-midnight/55" data-financials-scope-arrangement="none">
                             Nothing governs this scope yet — saving creates the first arrangement.
@@ -615,35 +734,106 @@ export default function FinancialsResponsibilityPanel({
                     data-financials-responsibility-effective="true"
                     className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs"
                 />
+                {/*
+                  * THE DOCTRINE, SAID WHERE THE MECHANISM IS. Effective dating is exactly why a
+                  * new arrangement cannot disturb what has already been paid, so the warning that
+                  * used to open the card lives here instead — next to the field that causes it,
+                  * read at the moment it matters rather than skipped at the top.
+                  */}
+                <span className="alloy-os-depthcard__hint mt-0.5 block" data-financials-responsibility-effective-note="true">
+                    Applies from this date onward. Money already paid is not moved.
+                </span>
             </label>
 
+            {/*
+              * THE ONE PIECE OF HIERARCHY THE CARD WAS MISSING. Below "Effective from" came a
+              * run of labelled rows with no statement of what they collectively are, so the
+              * arrangement's shares read as more fields rather than as the division itself.
+              *
+              * There is deliberately no "add a party" control beside it: every party on the
+              * account is already a row. A party who is not on the account cannot be made
+              * responsible from here, and a control that could only offer someone already listed
+              * would be a button that does nothing.
+              */}
+            {shares.length > 0 ? (
+                <p className="alloy-os-depthcard__section" data-financials-responsibility-shares-head="true">
+                    Responsible parties
+                </p>
+            ) : null}
             {shares.length === 0 ? (
-                <p className="mt-2 text-[11px] text-alloy-midnight/55" data-financials-responsibility-no-parties="true">
+                <p className="alloy-os-depthcard__label mt-2" data-financials-responsibility-no-parties="true">
                     Nobody on this account can be made responsible yet. Add a parent or guardian to the
                     household first.
                 </p>
             ) : null}
             {shares.map((share, i) => (
-                <label key={share.responsiblePartyId} className="mt-2 block text-[11px] text-alloy-midnight/60">
-                    {share.name}
+                <label key={share.responsiblePartyId} className="mt-2 block">
+                    {/* A responsible party is a person, named at a person's weight. */}
+                    <span className="alloy-os-depthcard__identity-name">{share.name}</span>
                     {share.roleLabel ? (
-                        <span className="ml-1 text-alloy-midnight/40">{share.roleLabel}</span>
+                        <span className="alloy-os-depthcard__hint ml-1">{share.roleLabel}</span>
                     ) : null}
-                    <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="Amount"
-                        value={share.amount}
-                        onChange={(e) =>
-                            setShares((prev) =>
-                                prev.map((s, j) => (j === i ? { ...s, amount: e.target.value } : s)),
-                            )
-                        }
-                        data-financials-responsibility-share={share.responsiblePartyId}
-                        className="mt-0.5 block w-full rounded border border-alloy-stone/20 px-2 py-1 text-xs tabular-nums"
-                    />
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                        <AlloySelect
+                            value={share.method}
+                            onChange={(next) =>
+                                setShares((prev) =>
+                                    prev.map((s, j) =>
+                                        j === i
+                                            ? { ...s, method: next as ShareMethod, amount: next === "remainder" ? "" : s.amount }
+                                            : s,
+                                    ),
+                                )
+                            }
+                            options={SHARE_METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                            allowEmpty={false}
+                            density="compact"
+                            aria-label={`How ${share.name} shares`}
+                            testId={`responsibility-share-method-${share.responsiblePartyId}`}
+                            className="min-w-0 flex-1"
+                        />
+                        {/*
+                          * A REMAINDER HAS NOTHING TO TYPE. It is defined by what the other shares
+                          * leave, so offering an amount box beside it would invite a number the
+                          * authority would then ignore.
+                          */}
+                        {share.method === "remainder" ? (
+                            <span
+                                className="flex-1 text-[11px] text-alloy-midnight/45"
+                                data-financials-responsibility-share={share.responsiblePartyId}
+                                data-share-method="remainder"
+                            >
+                                whatever the others leave
+                            </span>
+                        ) : (
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder={share.method === "percentage" ? "%" : "Amount"}
+                                value={share.amount}
+                                onChange={(e) =>
+                                    setShares((prev) =>
+                                        prev.map((s, j) => (j === i ? { ...s, amount: e.target.value } : s)),
+                                    )
+                                }
+                                data-financials-responsibility-share={share.responsiblePartyId}
+                                data-share-method={share.method}
+                                className="mt-0 block w-full flex-1 rounded border border-alloy-stone/20 px-2 py-1 text-xs tabular-nums"
+                            />
+                        )}
+                    </span>
                 </label>
             ))}
+
+            {/* Whether it reconciles, before Confirm rather than after it. */}
+            {reconciliation.message ? (
+                <p
+                    className={`mt-1.5 text-[11px] ${reconciliation.ok ? "text-alloy-midnight/50" : "text-alloy-ember"}`}
+                    data-financials-responsibility-reconciliation={reconciliation.ok ? "ok" : "invalid"}
+                >
+                    {reconciliation.message}
+                </p>
+            ) : null}
 
             {/*
               * THE ACTION'S OWN PREVIEW, not a guess assembled here. The only change made to it is
@@ -670,12 +860,17 @@ export default function FinancialsResponsibilityPanel({
                 </p>
             ) : null}
 
-            <div className="mt-3 flex items-center gap-2">
+            {/*
+              * THE FAMILY'S ACTION ROW. Every centred card in this family ends the same way —
+              * a ruled row with its actions in it — so an operator learns one place to look for
+              * "how do I finish, and how do I get out" and it is the same place on all of them.
+              */}
+            <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
                 <button
                     type="button"
                     className="rounded border border-alloy-stone/20 px-2 py-1 text-xs text-alloy-midnight/70"
                     onClick={() => void run("preview")}
-                    disabled={busy !== null}
+                    disabled={busy !== null || !reconciliation.ok}
                     data-financials-responsibility-preview-btn="true"
                 >
                     {busy === "preview" ? "Checking…" : "Preview"}
@@ -684,14 +879,20 @@ export default function FinancialsResponsibilityPanel({
                     type="button"
                     className={WS_ACTION_PRIMARY}
                     onClick={() => void run("execute")}
-                    disabled={busy !== null || !preview}
+                    /*
+                     * AN ARRANGEMENT THAT CANNOT RECONCILE CANNOT BE CONFIRMED. The service would
+                     * refuse it anyway; refusing here means the operator learns it while they can
+                     * still see what they typed.
+                     */
+                    disabled={busy !== null || !preview || !reconciliation.ok}
                     data-financials-responsibility-confirm="true"
                 >
                     {busy === "execute" ? "Saving…" : "Confirm"}
                 </button>
                 <button
                     type="button"
-                    className="text-xs text-alloy-midnight/50 hover:underline"
+                    className="alloy-os-depthcard__close"
+                    data-financials-responsibility-cancel="true"
                     onClick={() => setOpen(false)}
                     disabled={busy !== null}
                 >

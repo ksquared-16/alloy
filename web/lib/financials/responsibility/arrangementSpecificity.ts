@@ -23,16 +23,43 @@
 export type ArrangementCandidate = {
     id: string;
     customerMemberId: string | null;
+    /**
+     * The third grain. When set, this arrangement governs exactly this charge — a one-off fee one
+     * parent agreed to cover, without rewriting what either parent owes for anything else.
+     */
+    chargeId?: string | null;
     effectiveStart: string | null;
     effectiveEnd: string | null;
 };
 
 /** Does this arrangement apply to the asked-about grain at all? */
 export function arrangementAppliesTo(
-    candidate: Pick<ArrangementCandidate, "customerMemberId">,
+    candidate: Pick<ArrangementCandidate, "customerMemberId" | "chargeId">,
     /** The child being asked about, or null to ask only about the household grain. */
     customerMemberId: string | null,
+    /** The charge being asked about, or null when the question is not about one charge. */
+    chargeId: string | null = null,
 ): boolean {
+    /*
+     * A CHARGE-SCOPED ARRANGEMENT ANSWERS ONE QUESTION AND NO OTHER.
+     *
+     * It is not an answer to "what does this household arrange", nor to another charge's question
+     * — the whole reason it exists is to leave both of those alone. So it applies only when the
+     * caller asked about exactly its charge, and it never leaks upward into a standing answer.
+     */
+    const candidateCharge = candidate.chargeId ?? null;
+    if (candidateCharge !== null) {
+        if (chargeId === null || candidateCharge !== chargeId) return false;
+        /*
+         * AND IT MUST STILL BE ABOUT THE SAME CHILD. In practice a caller derives both the child
+         * and the charge from one charge, so the two always agree — but this is a shared
+         * authority with several consumers, and a charge-scoped arrangement that answered another
+         * child's question because the charge id happened to match would be making a stranger
+         * responsible on a coincidence.
+         */
+        return candidate.customerMemberId === null || candidate.customerMemberId === customerMemberId;
+    }
+
     if (candidate.customerMemberId === null) return true;
     /*
      * A child-scoped arrangement is NOT an answer to a household-grain question. Asking "what does
@@ -61,18 +88,30 @@ export function arrangementInForceOn(
  */
 export function pickGoverningArrangement<T extends ArrangementCandidate>(
     candidates: readonly T[],
-    args: { customerMemberId: string | null; onDate?: string },
+    args: { customerMemberId: string | null; chargeId?: string | null; onDate?: string },
 ): T | null {
     const eligible = candidates
-        .filter((c) => arrangementAppliesTo(c, args.customerMemberId))
+        .filter((c) => arrangementAppliesTo(c, args.customerMemberId, args.chargeId ?? null))
         .filter((c) => (args.onDate ? arrangementInForceOn(c, args.onDate) : true));
     if (eligible.length === 0) return null;
     return [...eligible].sort(compareBySpecificityThenStart)[0]!;
 }
 
-/** Most specific first; within a grain, the latest start first. */
+/**
+ * Most specific first; within a grain, the latest start first.
+ *
+ * CHARGE > CHILD > HOUSEHOLD. The ladder is decided here and nowhere else — a component that
+ * ranked these itself would be a second opinion about who owes money, and two consumers asking
+ * the same question would eventually get two answers.
+ */
+export function arrangementSpecificityRank(a: Pick<ArrangementCandidate, "customerMemberId" | "chargeId">): number {
+    if ((a.chargeId ?? null) !== null) return 2;
+    if (a.customerMemberId !== null) return 1;
+    return 0;
+}
+
 export function compareBySpecificityThenStart(a: ArrangementCandidate, b: ArrangementCandidate): number {
-    const specificity = Number(b.customerMemberId !== null) - Number(a.customerMemberId !== null);
+    const specificity = arrangementSpecificityRank(b) - arrangementSpecificityRank(a);
     if (specificity !== 0) return specificity;
     return (a.effectiveStart ?? "") < (b.effectiveStart ?? "") ? 1 : -1;
 }

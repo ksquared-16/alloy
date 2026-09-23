@@ -1,0 +1,35 @@
+{
+  "counts": {
+    "generated": 1,
+    "unchanged": 1,
+    "alreadyPosted": 0,
+    "notDue": 3,
+    "refused": 0,
+    "errors": 0
+  },
+  "unchanged": null,
+  "notDue": [
+    {
+      "kind": "not_due",
+      "assignmentId": "329ca704-4a36-4dbc-93db-04a94af5c758",
+      "periodKey": "2026-09-01~2026-09-07",
+      "periodLabel": "Sep 1–7, 2026",
+      "reason": "term_not_yet_effective"
+    },
+    {
+      "kind": "not_due",
+      "assignmentId": "329ca704-4a36-4dbc-93db-04a94af5c758",
+      "periodKey": "2026-09-08~2026-09-14",
+      "periodLabel": "Sep 8–14, 2026",
+      "reason": "term_not_yet_effective"
+    },
+    {
+      "kind": "not_due",
+      "assignmentId": "329ca704-4a36-4dbc-93db-04a94af5c758",
+      "periodKey": "2026-09-15~2026-09-21",
+      "periodLabel": "Sep 15–21, 2026",
+      "reason": "term_not_yet_effective"
+    }
+  ],
+  "raw": "{\"period_key\":\"2026-09\",\"cadence_key\":\"weekly\",\"service_period\":{\"start\":\"2026-09-01\",\"end\":\"2026-09-30\"},\"counts\":{\"generated\":1,\"unchanged\":1,\"alreadyPosted\":0,\"notDue\":3,\"refused\":0,\"errors\":0},\"total_amount_cents\":19500,\"refused_outcomes\":[],\"not_due_outcomes\":[{\"kind\":\"not_due\",\"assignmentId\":\"329ca704-4a36-4dbc-93db-04a94af5c758\",\"periodKey\":\"2026-09-01~2026-09-07\",\"periodLabel\":\"Sep 1–7, 2026\",\"reason\":\"term_not_yet_effective\"},{\"kind\":\"not_due\",\"assignmentId\":\"329ca704-4a36-4dbc-93db-04a94af5c758\",\"periodKey\":\"2026-09-08~2026-09-14\",\"periodLabel\":\"Sep 8–14, 2026\",\"reason\":\"term_not_yet_effective\"},{\"kind\":\"not_due\",\"assignmentId\":\"329ca704-4a36-4dbc-93db-04a94af5c758\",\"periodKey\":\"2026-09-15~2026-09-21\",\"periodLabel\":\"Sep 15–21, 2026\",\"reason\":\"term_not_yet_effective\"}],\"error_outcomes\":[],\"already_posted_outcomes\":[]}"
+}

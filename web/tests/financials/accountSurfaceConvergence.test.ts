@@ -142,13 +142,24 @@ describe("F7 · one truth, two grains", () => {
      * figures the card said, under different labels. Order is the thing being locked now, because
      * order is what was wrong.
      */
-    it("leads with the summary card and puts the detail directly beneath it", () => {
+    it("composes the account rather than re-implementing it", () => {
+        /*
+         * SUMMARY ABOVE, DETAIL BELOW — still true, and no longer two components. The shared card
+         * renders both halves in that order; what this host must never do again is re-implement
+         * either of them, which is precisely what the second component was.
+         */
         const src = read(ACCOUNTS);
         const summaryAt = src.indexOf("<FinancialsAccountDetail");
-        const detailAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
         expect(summaryAt, "the command-bearing card is composed, not re-implemented").toBeGreaterThan(-1);
-        expect(detailAt, "the expanded detail is rendered").toBeGreaterThan(-1);
-        expect(summaryAt, "summary above, detail below").toBeLessThan(detailAt);
+        expect(src, "and nothing beside it re-renders the ledger")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
+
+        /* The order now lives where the surface is built, and is asserted there. */
+        const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
+        const stats = detail.indexOf('<Stat label="Current balance"');
+        const lenses = detail.indexOf('data-financials-lenses="true"');
+        expect(stats, "the summary leads").toBeGreaterThan(-1);
+        expect(lenses, "and the ledger follows it").toBeGreaterThan(stats);
     });
 
     it("carries exactly one summary, not two", () => {
@@ -221,13 +232,21 @@ describe("F7 · one truth, two grains", () => {
      * The shared border is drawn by the placement and suppressed on the card within it.
      */
     it("renders the summary and the account body as one surface", () => {
+        /*
+         * THE BODY IS NO LONGER A SIBLING — it is the same surface, opened.
+         *
+         * This asserted two components inside one bordered placement, summary first. That shape
+         * existed because the workspace could not reach the shared Details surface, so it grew a
+         * second ledger beside the card. One component renders both halves now, and the placement
+         * still draws exactly one account surface around it.
+         */
         const src = read(ACCOUNTS);
         const surfaceAt = src.indexOf("alloy-accounts-account-card");
         expect(surfaceAt, "the placement draws one account surface").toBeGreaterThan(-1);
         const summaryAt = src.indexOf("<FinancialsAccountDetail");
-        const bodyAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
-        expect(summaryAt).toBeGreaterThan(surfaceAt);
-        expect(bodyAt, "both live inside that surface, summary first").toBeGreaterThan(summaryAt);
+        expect(summaryAt, "and the account lives inside it").toBeGreaterThan(surfaceAt);
+        expect(src, "with no second body component beside it")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
 
         const css = read("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain(".alloy-accounts-account-card");
@@ -237,7 +256,8 @@ describe("F7 · one truth, two grains", () => {
 
     /* The lenses and the account body are not a second workspace panel with its own chrome. */
     it("gives the account body no card chrome of its own", () => {
-        const detail = read(WORKSPACE_DETAIL);
+        /* Now read from the shared surface, which is what renders the body in both hosts. */
+        const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
         expect(detail, "the lens region is a divider, not a panel").toContain('data-financials-lenses="true"');
         expect(detail).not.toMatch(/data-financials-lenses="true"[^>]*rounded-xl/);
         expect(detail).not.toMatch(/<section className="rounded-xl border/);
@@ -248,12 +268,27 @@ describe("F7 · one truth, two grains", () => {
      * is what the placement passes, never a second component or a second truth.
      */
     it("keeps the Focus Panel compact and Accounts expanded", () => {
+        /*
+         * THE RULE SURVIVES AND IS BETTER SATISFIED. "One presentation system, two depths — the
+         * difference is what the placement passes, never a second component or a second truth."
+         *
+         * The old shape honoured the second half and broke the first: Accounts was expanded by
+         * rendering a DIFFERENT component beside the card. The difference is now only a prop.
+         */
         const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(card, "the drill-down is on by default, so the Focus Panel keeps it")
             .toContain("showDetailsAction = true");
+        expect(card, "and the workspace opens on the shared surface instead")
+            .toContain("detailsAreTheSurface");
+        const summary = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(summary, "the account placement asks for it").toMatch(
+            /detailsAreTheSurface=\{summaryVariant === "account"\}/,
+        );
         const accounts = read(ACCOUNTS);
-        expect(accounts, "and Accounts turns it off").toContain("showDetailsAction={false}");
-        expect(accounts, "Accounts shows the body without asking").toContain("<FinancialsAccountWorkspaceDetail");
+        expect(accounts, "and Accounts still declines the drill-down action")
+            .toContain("showDetailsAction={false}");
+        expect(accounts, "without a second component to show the body")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
         /* Nothing in the Focus Panel path opts into the expanded body. */
         expect(card).not.toContain("alloy-accounts-account-card");
     });
@@ -1694,16 +1729,31 @@ describe("F38 · the entry command previews the act it will perform", () => {
         expect(cmd, "the posting line is a decision, not a constant").toMatch(
             /t\.reviewRequired[\s\S]{0,200}Creates a draft/,
         );
-        expect(cmd, "and the other branch states the act").toMatch(/Posts on confirm/);
         /*
-         * The draft sentence still exists — it is the truth under a configured boundary. What must
-         * not exist is a path to it that does not go through the boundary, so it is located INSIDE
-         * the conditional rather than merely present in the file.
+         * THE RULE IS "NO UNCONDITIONAL DRAFT CLAIM", NOT A PARTICULAR SENTENCE.
+         *
+         * This used to require the words "Posts on confirm" on the other branch. That copy was
+         * removed deliberately: naming the ordinary case in implementation language told the
+         * operator nothing they had to decide, while the review boundary is the case that changes
+         * what pressing Confirm does. Requiring the removed sentence back would be asking the
+         * command to say more, not to say it more truthfully — the spelling, not the rule.
+         *
+         * What must hold: every draft claim sits inside the boundary fork, and the balance line
+         * forks too, so an unchanged balance is never shown for a charge that posts on confirm.
          */
-        const branch = cmd.indexOf("t.reviewRequired ? (");
-        const draftNote = cmd.indexOf("Creates a draft — the balance does not change until it posts.");
-        expect(branch, "the preview forks on the boundary").toBeGreaterThan(-1);
-        expect(draftNote, "and the draft sentence lives inside that fork").toBeGreaterThan(branch);
+        const draftClaims = [...cmd.matchAll(/Creates a draft/g)].map((m) => m.index ?? -1);
+        expect(draftClaims.length, "the draft sentence exists").toBeGreaterThan(0);
+        for (const at of draftClaims) {
+            const enclosing = cmd.lastIndexOf("t.reviewRequired ? (", at);
+            expect(enclosing, "every draft claim is inside a boundary fork").toBeGreaterThan(-1);
+        }
+        /* Both arms are authored: the fork is a real decision, not a conditional with one answer. */
+        expect(cmd, "the balance preview forks on the same boundary").toMatch(
+            /t\.reviewRequired \? \([\s\S]{0,900}\) : \(/,
+        );
+        expect(cmd, "and no draft is claimed outside the fork").not.toMatch(
+            /reviewRequired[\s\S]{0,40}\?[\s\S]{0,40}null[\s\S]{0,120}Creates a draft/,
+        );
     });
 });
 

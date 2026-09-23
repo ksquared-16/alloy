@@ -125,8 +125,12 @@ const configureResponsibility: RegisteredAction = {
     /** The division, before anyone is made responsible for it. */
     async buildPreview({ payload }) {
         const shares = (Array.isArray(payload?.shares) ? payload!.shares : []) as Array<Record<string, unknown>>;
+        /* A charge-scoped arrangement reads identically to a standing one unless the scope is said. */
+        const scope = t(payload?.charge_id) ? "for this charge" : "for the account";
         return {
-            summary: `${shares.length} responsible ${shares.length === 1 ? "party" : "parties"} from ${t(payload?.effective_start)}.`,
+            summary:
+                `${shares.length} responsible ${shares.length === 1 ? "party" : "parties"} ${scope}, `
+                + `from ${t(payload?.effective_start)}.`,
             changes: shares.map((s) =>
                 s.method === "percentage"
                     ? `${Number(s.percent_basis_points ?? 0) / 100}% · ${t(s.responsible_party_id)}`
@@ -154,6 +158,16 @@ const configureResponsibility: RegisteredAction = {
                 orgId: ctx.orgId,
                 customerId: t(payload?.customer_id),
                 customerMemberId: t(payload?.customer_member_id) || null,
+                /*
+                 * ── THE CHARGE THIS ARRANGEMENT GOVERNS, WHEN IT GOVERNS EXACTLY ONE ──────────
+                 *
+                 * The column, the no-overlap constraint and the per-scope supersession were built
+                 * for this and then nothing could reach them: the action never read a charge id,
+                 * so every arrangement the product could author was standing. A charge-scoped
+                 * arrangement is the narrowest of CHARGE > CHILD > HOUSEHOLD and must not close
+                 * the standing answers — the service handles that, per scope.
+                 */
+                chargeId: t(payload?.charge_id) || null,
                 opportunityCustomerMemberId: t(payload?.opportunity_customer_member_id) || null,
                 effectiveStart: t(payload?.effective_start),
                 effectiveEnd: t(payload?.effective_end) || null,

@@ -1,0 +1,34 @@
+{
+  "build": {
+    "gitSha": "20c3dd7e2ee5c293df210011825734f36e45ff59",
+    "gitBranch": "staging",
+    "gitMessage": "Merge pull request #1189 from ksquared-16/agent/financials-11c-slice3\n\nfix(financials): automation bills the periods it decided were due",
+    "vercelEnv": "preview",
+    "vercelUrl": "workwithalloy-k8qzdd3qr-kellys-projects-2fc9d5eb.vercel.app",
+    "vercelDeploymentId": "dpl_DzTkwzW5VWLBffDwaBQcLTa3uiTR",
+    "nodeEnv": "production",
+    "supabaseProjectRef": "ikaxilmwmrmbagoidedu"
+  },
+  "before": {
+    "automatic_billing_active": true,
+    "schedule_exists": true,
+    "next_evaluation_at": "2026-09-23T02:18:30.366+00:00",
+    "automatic_catch_up_period_limit": 2
+  },
+  "req": {
+    "status": 200,
+    "body": {
+      "outcome": "evaluation_requested",
+      "scheduleId": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+      "handlerKey": "financials.periodic_billing.evaluate",
+      "previousNextDueAt": "2026-09-23T02:18:30.366+00:00",
+      "nextDueAt": "2026-09-22T02:57:17.855Z"
+    }
+  },
+  "after": {
+    "automatic_billing_active": true,
+    "schedule_exists": true,
+    "next_evaluation_at": "2026-09-22T02:57:17.855+00:00",
+    "automatic_catch_up_period_limit": 2
+  }
+}

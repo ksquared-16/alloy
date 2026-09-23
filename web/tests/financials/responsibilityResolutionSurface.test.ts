@@ -78,8 +78,26 @@ describe("THE GATE — the two intents stay two commands", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(card, "the row commands are the charge-grain pair").toContain("resolveResponsibility");
         expect(card).toContain("reallocateResponsibility");
-        expect(card, "configuring an arrangement is not done from a row")
-            .not.toContain("billing.configure_responsibility");
+        /*
+         * WHAT "OUT OF THE CHARGE-GRAIN SURFACE" MEANS, now that the file has a second legitimate
+         * caller. A charge-scoped arrangement is authored when a charge is CREATED — the operator
+         * says who owes this one, and the host writes it against the charge id the create returned.
+         * That is the narrowest scope of CHARGE > CHILD > HOUSEHOLD and is the approved model.
+         *
+         * The rule this lock exists for is unchanged: a LEDGER ROW's resolve/reallocate must not
+         * quietly author arrangements, or "Resolve responsibility" becomes a second authoring
+         * surface with none of the authoring rules. So the command may appear exactly once, in the
+         * post-charge orchestration, and nowhere near the row action.
+         */
+        const configures = [...card.matchAll(/billing\.configure_responsibility/g)].map((m) => m.index ?? -1);
+        expect(configures.length, "one caller, not a family of them").toBe(1);
+        const orchestration = card.indexOf("const applyChargeDecisions");
+        const rowAction = card.indexOf("const runRowAction");
+        expect(orchestration, "the post-charge orchestration exists").toBeGreaterThan(-1);
+        expect(configures[0], "and the only configure call is inside it").toBeGreaterThan(orchestration);
+        if (rowAction > orchestration) {
+            expect(configures[0], "before the row action, never inside it").toBeLessThan(rowAction);
+        }
     });
 
     /* Reallocation demands a stated reason before the operator can commit it. */
