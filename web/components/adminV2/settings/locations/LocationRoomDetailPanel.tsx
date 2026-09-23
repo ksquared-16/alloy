@@ -134,6 +134,37 @@ export default function LocationRoomDetailPanel({
     const [kindFilter, setKindFilter] = useState<"all" | "operational" | "physical">("all");
     const [ratioDraft, setRatioDraft] = useState<RatioDraftRow[]>([]);
 
+    /** How this space's two ratio records stand to each other, if it is operational. */
+    const ratioStandingFor = (entry: LocationHierarchyRow) =>
+        resolveObjectRatioStanding({
+            rules: ratioRules,
+            tierRows: ratioTiers,
+            roomLocationId: entry.id,
+            legacyRaw: ((entry.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
+            todayYmd,
+        });
+
+    /**
+     * What the ratio editor opens with.
+     *
+     *   conflict      → NOTHING. Two disagreeing staffing records are a question
+     *                   about staffing law, and pre-filling one would answer it
+     *                   by accident the moment someone pressed Save.
+     *   legacy only   → the recorded tiers, so confirming them is one click.
+     *                   Reading them is not deciding anything: no canonical rule
+     *                   contradicts them yet.
+     *   otherwise     → whatever is canonically in force.
+     *
+     * Seeded at open rather than only at hydrate, so the form always reflects
+     * what the operator can see at the moment they ask to edit.
+     */
+    const ratioSeedFor = (entry: LocationHierarchyRow) => {
+        const standing = ratioStandingFor(entry);
+        if (standing.state === "conflict") return [];
+        if (standing.state === "legacy_only") return standing.legacy;
+        return readObjectRatioTiers(standing) ?? [];
+    };
+
     const hydrateFromRoom = (next: LocationHierarchyRow) => {
         const md = (next.metadata ?? {}) as Record<string, unknown>;
         setLabel((next.label ?? "").trim());
@@ -155,17 +186,9 @@ export default function LocationRoomDetailPanel({
         const committed = committedRoomTopology(next, siteId);
         setRoomType(committed.roomType);
         setInsideId(committed.insideId);
-        // A conflict seeds NOTHING: choosing one of two disagreeing staffing
-        // records by default would decide a staffing-law question silently.
-        const standing = resolveObjectRatioStanding({
-            rules: ratioRules,
-            tierRows: ratioTiers,
-            roomLocationId: next.id,
-            legacyRaw: ((next.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
-            todayYmd,
-        });
-        const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
-        setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
+        setRatioDraft(
+            ratioSeedFor(next).map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })),
+        );
         setError(null);
     };
 
@@ -243,21 +266,11 @@ export default function LocationRoomDetailPanel({
         }
     };
 
-    /**
-     * Seed the ratio draft when the form OPENS, not only when the space changes.
-     *
-     * Hydration runs on a room change, which can happen before the canonical
-     * rules have loaded — the read state recomputes every render and was right,
-     * while the edit form kept an empty draft and said "No staffing ratio set"
-     * about a space visibly showing 1:5 · 2:11. Seeding here reads whatever is
-     * current at the moment the operator asks to edit.
-     */
     const beginEdit = () => {
         if (room) {
-            const standing = ratioStandingFor(room);
-            // A conflict still seeds nothing: see the hydrate path.
-            const seed = standing.state === "conflict" ? [] : (readObjectRatioTiers(standing) ?? []);
-            setRatioDraft(seed.map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })));
+            setRatioDraft(
+                ratioSeedFor(room).map((t) => ({ staff: String(t.requiredStaff), children: String(t.maxChildren) })),
+            );
         }
         setEditing(true);
     };
@@ -309,16 +322,6 @@ export default function LocationRoomDetailPanel({
         kindFilter === "all" ? rooms
         : kindFilter === "operational" ? rooms.filter((r) => kindOf(r) === "operational_group")
         : rooms.filter((r) => kindOf(r) !== "operational_group");
-
-    /** How this space's two ratio records stand to each other, if it is operational. */
-    const ratioStandingFor = (entry: LocationHierarchyRow) =>
-        resolveObjectRatioStanding({
-            rules: ratioRules,
-            tierRows: ratioTiers,
-            roomLocationId: entry.id,
-            legacyRaw: ((entry.metadata ?? {}) as Record<string, unknown>).student_teacher_ratio,
-            todayYmd,
-        });
 
     const operationalSpacesIn = (entry: LocationHierarchyRow): string[] =>
         rooms
