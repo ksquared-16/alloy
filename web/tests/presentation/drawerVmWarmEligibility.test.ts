@@ -86,7 +86,10 @@ describe("the call sites consume the rule instead of re-deriving it", () => {
     it("the subject warm takes an explicit opportunity and never defaults it from the subject", () => {
         expect(workUnitRuntime).toContain("opportunityId: string | null");
         // The VM warm must be reached through the explicit opportunity, not the subject id.
-        expect(workUnitRuntime).toContain("if (opportunity) void prewarmRecordWork(opportunity)");
+        // Still reached through the explicit opportunity — the surviving obligation. The second
+        // argument is the ATTENTION SUBJECT (the subject id), not a second opportunity default:
+        // the warm must key on the scope the settled transport will assert.
+        expect(workUnitRuntime).toContain("if (opportunity) void prewarmRecordWork(opportunity, id)");
         expect(workUnitRuntime).not.toContain("void prewarmRecordWork(id);");
     });
 

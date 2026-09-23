@@ -82,7 +82,13 @@ function prewarmSubjectDestination(
     recordRevealGateEvent("subject_warm_emitted", id);
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
     const opportunity = opportunityId?.trim();
-    if (opportunity) void prewarmRecordWork(opportunity);
+    /*
+     * `id` (the SUBJECT) is the attention subject the click will commit — family-grain rows make it
+     * the opportunity id, child-grain rows a participation id — and it is exactly what
+     * `useRecordWorkRuntime` will send as `attention_subject_id`. Passing it warms the entry the
+     * consumer actually looks up instead of an unreachable bare-scope twin.
+     */
+    if (opportunity) void prewarmRecordWork(opportunity, id);
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
