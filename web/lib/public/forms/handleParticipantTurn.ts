@@ -25,6 +25,11 @@ import {
 } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
+import {
+    applyPartyCollectionResponse,
+    parsePartyCollectionResponse,
+} from "@/lib/enrollment/participantRuntime/applyPartyCollectionResponse";
+import { knownPartyEntriesFromParties } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import type { StructuredCandidate } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
@@ -67,6 +72,7 @@ export type ParticipantTurnBody = {
     confirm_group?: unknown;
     edit_fact?: unknown;
     party?: unknown;
+    party_collection?: unknown;
 };
 
 export async function handleParticipantTurn(
@@ -176,6 +182,46 @@ export async function handleParticipantTurn(
      * reused person is addressed by a handle matched against the candidates the server published.
      * Everything durable is written through the canonical relationship service.
      */
+    /*
+     * ONE PERSON IN A COLLECTION — added, corrected or taken off this form.
+     *
+     * Writes only the conversation's own answer store. Nothing canonical moves here; a Person, a
+     * Child and a relationship are still written once, by the canonical relationship command,
+     * behind the operator-reviewed Processing commit.
+     */
+    const collectionBody = parsePartyCollectionResponse(body.party_collection);
+    if (collectionBody) {
+        const formDefinitionId = current.context.needsContext.forms[0]?.form_definition_id ?? null;
+        if (!formDefinitionId) return publicErr("No form is active for this session", 409);
+        const known = knownPartyEntriesFromParties(
+            current.context.needsContext.forms[0]!.schema,
+            (current.context.parties ?? []) as never,
+        )[collectionBody.group_field_id];
+        const applied = await applyPartyCollectionResponse(supabase, {
+            orgId: access.orgId,
+            sessionId: access.sessionId,
+            formDefinitionId,
+            response: collectionBody,
+            knownEntries: known ?? [],
+        });
+        if (!applied.ok) return publicErr(applied.error, 409, { code: "party_collection_refused" });
+
+        const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.orgId,
+            processInstanceId: access.processInstanceId,
+            canonicalValues: canonical.values,
+        });
+        if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
+        const collectionResponse = publicOk({
+            outcome: { action: applied.outcome, instance_key: applied.instance_key },
+            objective: participantObjectiveWireModel(after.value, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        collectionResponse.headers.set("Server-Timing", timing.header());
+        return collectionResponse;
+    }
+
     const partyBody = body.party;
     if (partyBody != null && typeof partyBody === "object" && !Array.isArray(partyBody)) {
         const applied = await applyPartyResponse(supabase, {

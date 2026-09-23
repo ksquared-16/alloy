@@ -385,3 +385,81 @@ describe("a known person is never removed from Alloy through the conversation", 
         }
     });
 });
+
+
+describe("a sibling collection has no relationship role, and still renders", () => {
+    /*
+     * Children in a household are collected as `add_child` with subject `child` and NO role — the
+     * relationship is household membership, not a role on this child. The declaration itself is
+     * sufficient authority to render the collection; routing it through the role-only party-offer
+     * path would make siblings disappear from the conversation entirely.
+     *
+     * Found by planting: gating the projection on `party.role` left every existing test green,
+     * because they all describe emergency contacts.
+     */
+    const SIBLINGS = {
+        schema_version: 1,
+        title: "Enrolment",
+        fields: [
+            {
+                id: "household_children",
+                type: "group",
+                label: "Children in your household",
+                required: false,
+                repeat: { min: 0 },
+                party_collection: { action_key: "add_child", subject: "child", show_known: true, allow_add: true },
+                fields: [
+                    { id: "sib_name", type: "text", label: "Full name", required: true },
+                    { id: "sib_dob", type: "date", label: "Date of birth", required: false },
+                ],
+            },
+        ],
+        sections: [{ id: "s1", title: "Household", field_ids: ["household_children"] }],
+    } as unknown as FormSchemaV1;
+
+    const SIB_FORM = { requirement_id: "r1", form_definition_id: FD, form_definition_version_id: "v1", session_item_id: "si1", schema: SIBLINGS } as never;
+
+    const projectSiblings = (sharedValues: Record<string, unknown> = {}, known?: Record<string, ParticipantPartyEntry[]>) =>
+        projectEnrollmentInformationNeeds({
+            forms: [SIB_FORM], subjectId: CHILD, sharedValues, confirmations: {} as never,
+            ...(known ? { knownPartyEntries: known } : {}),
+        });
+
+    it("projects the collection even though no role is declared", () => {
+        const need = projectSiblings().find((n) => n.party_collection?.group_field_id === "household_children");
+        expect(need, "a roleless sibling collection did not reach the conversation").toBeTruthy();
+        expect(need!.party_collection!.subject).toBe("child");
+        expect(need!.party_collection!.role).toBeNull();
+    });
+
+    it("still does not ask its child fields as loose questions", () => {
+        expect(projectSiblings().some((n) => n.occurrences.some((o) => o.form_field_id === "sib_name"))).toBe(false);
+    });
+
+    it("shows a known sibling without asking the family to retype them", () => {
+        const known = { household_children: [{ instance_key: "known:cm-2", origin: "existing" as const, values: { sib_name: "Emma Smith" }, item_id: "cm-2" }] };
+        const c = projectSiblings({}, known).find((n) => n.party_collection)!.party_collection!;
+        expect(c.entries).toHaveLength(1);
+        expect(c.entries[0]!.origin).toBe("existing");
+        expect(c.entries[0]!.item_id).toBe("cm-2");
+    });
+
+    it("keeps a known sibling and a newly added child as two distinct entries", () => {
+        const known = { household_children: [{ instance_key: "known:cm-2", origin: "existing" as const, values: { sib_name: "Emma Smith" }, item_id: "cm-2" }] };
+        const held = { [partyCollectionStateKey(FD, "household_children")]: [{ instance_key: "n1", origin: "respondent_added", values: { sib_name: "Noah Smith" } }] };
+        const c = projectSiblings(held, known).find((n) => n.party_collection)!.party_collection!;
+        expect(c.entries.map((e) => e.values.sib_name)).toEqual(["Emma Smith", "Noah Smith"]);
+        expect(c.entries.map((e) => e.origin)).toEqual(["existing", "respondent_added"]);
+    });
+
+    it("converges to group rows with the child entity, not a person", () => {
+        const held = { [partyCollectionStateKey(FD, "household_children")]: [{ instance_key: "n1", origin: "respondent_added", values: { sib_name: "Noah Smith" } }] };
+        const rows = partyCollectionGroupRows(SIBLINGS, held, FD);
+        expect(rows.household_children![0]!.collection?.iteration_entity_type).toBe("customer_member");
+    });
+
+    it("is not offered through the role-based party path, because it names no role", async () => {
+        const { declaredPartyCollectionsForForms } = await import("@/lib/enrollment/participantRuntime/declaredPartyCollections");
+        expect(declaredPartyCollectionsForForms([{ schema: SIBLINGS }])).toHaveLength(0);
+    });
+});

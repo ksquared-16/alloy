@@ -36,6 +36,7 @@ import {
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { enrollmentConfirmationPolicy } from "@/lib/enrollment/participantRuntime/enrollmentConfirmationPolicy";
+import { entryDisplayName } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
 import {
     participantConversationGroup,
     type ParticipantConversationGroup,
@@ -86,6 +87,24 @@ export type ParticipantObjectiveWire = {
         /** The control type to render when a deterministic input is needed. */
         readonly input_type: string | null;
         readonly label: string | null;
+        /** The people this turn collects, when the turn is a collection rather than a question. */
+        readonly party_collection?: {
+            readonly group_field_id: string;
+            readonly label: string;
+            readonly add_another_label: string;
+            readonly allow_add: boolean;
+            readonly min: number;
+            readonly max: number | null;
+            readonly entry_fields: readonly { field_id: string; label: string; type: string; required: boolean; options: readonly { value: string; label: string }[] }[];
+            readonly entries: readonly {
+                instance_key: string;
+                origin: "existing" | "respondent_added";
+                display_name: string;
+                summary: string | null;
+                values: Record<string, unknown>;
+                complete: boolean;
+            }[];
+        } | null;
         /**
          * WHOSE fact this is, and which canonical fact it is.
          *
@@ -694,6 +713,40 @@ export function participantObjectiveWireModel(
                     needs: objective.needs.needs,
                 }),
             }),
+            /*
+             * THE WHOLE COLLECTION, because the person grouping IS the interaction.
+             *
+             * A scalar turn sends one label and one control; a collection has to send the people,
+             * so the card can draw who Alloy already knows beside who the family added and offer
+             * one button to add another. Entry values travel so a card can show a summary and an
+             * editor can open on the right person — nothing here is a second state model, it is the
+             * same list the session already holds.
+             */
+            party_collection: turn.need?.party_collection
+                ? {
+                      group_field_id: turn.need.party_collection.group_field_id,
+                      label: turn.need.party_collection.label,
+                      add_another_label: turn.need.party_collection.add_another_label,
+                      allow_add: turn.need.party_collection.allow_add,
+                      min: turn.need.party_collection.min,
+                      max: turn.need.party_collection.max,
+                      entry_fields: turn.need.party_collection.entry_fields.map((f) => ({
+                          field_id: f.field_id,
+                          label: f.label,
+                          type: f.type,
+                          required: f.required,
+                          options: f.options ?? [],
+                      })),
+                      entries: turn.need.party_collection.entries.map((e, i) => ({
+                          instance_key: e.instance_key,
+                          origin: e.origin,
+                          display_name: entryDisplayName(turn.need!.party_collection!, e, i),
+                          summary: collectionEntrySummary(turn.need!.party_collection!, e),
+                          values: { ...e.values },
+                          complete: collectionEntryComplete(turn.need!.party_collection!, e),
+                      })),
+                  }
+                : null,
             party: turn.party
                 ? {
                       role_label: turn.party.role_label,
@@ -770,4 +823,37 @@ function optionsForNeed(
     const need = objective.next_turn.need;
     if (!need) return [];
     return need.occurrences.find((o) => o.form_field_id === formFieldId)?.options ?? [];
+}
+
+
+/** The one line of detail a card shows under a person's name — never their whole entry. */
+function collectionEntrySummary(
+    collection: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyCollection,
+    entry: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry,
+): string | null {
+    for (const f of collection.entry_fields) {
+        if (/name/i.test(f.label)) continue;
+        const v = entry.values[f.field_id];
+        if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return null;
+}
+
+/**
+ * Whether a family-added entry has everything the Form asks for.
+ *
+ * A known entry is evidence rather than a questionnaire, so it is never "incomplete": Alloy is not
+ * going to withhold the family's progress over a question it never asked them.
+ */
+function collectionEntryComplete(
+    collection: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyCollection,
+    entry: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry,
+): boolean {
+    if (entry.origin === "existing") return true;
+    for (const f of collection.entry_fields) {
+        if (!f.required) continue;
+        const v = entry.values[f.field_id];
+        if (v === undefined || v === null || String(v).trim() === "") return false;
+    }
+    return true;
 }

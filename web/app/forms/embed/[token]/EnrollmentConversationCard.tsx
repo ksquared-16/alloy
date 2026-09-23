@@ -28,7 +28,7 @@
  * bottom where a reply belongs. See `ParticipantThread.tsx` and `ParticipantComposer.tsx`.
  */
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -1025,6 +1025,12 @@ export function EnrollmentConversationCard({
     /** Documents attached in this sitting, by field id — the upload row's own done-state. */
     /** The parent chose "Someone else" and is giving a new person's details. */
     const [addingParty, setAddingParty] = useState(false);
+    /*
+     * Which person of a collection the parent has open — a new one (`"new"`), an existing row by
+     * instance_key, or none. Local to the card because it is where the parent's attention is, not
+     * a fact about the family.
+     */
+    const [editingEntry, setEditingEntry] = useState<string | null>(null);
     const [attachedEvidence, setAttachedEvidence] = useState<
         Record<string, { document_id: string; filename: string } | undefined>
     >({});
@@ -1124,6 +1130,11 @@ export function EnrollmentConversationCard({
             editFact?: { ref: string; value: unknown };
             /** Add a person by the role the platform is offering: decline, reuse, or collect. */
             party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
+            /** Add, correct or take one person off a collection. Draft state only — never canonical. */
+            partyCollection?:
+                | { action: "add"; group_field_id: string; values: Record<string, unknown> }
+                | { action: "edit"; group_field_id: string; instance_key: string; values: Record<string, unknown> }
+                | { action: "remove"; group_field_id: string; instance_key: string };
         }) => {
             if (inFlight.current) return;
             inFlight.current = true;
@@ -1196,6 +1207,7 @@ export function EnrollmentConversationCard({
                     ...(payload.confirmGroup ? { confirm_group: true } : {}),
                     ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
                     ...(payload.party ? { party: payload.party } : {}),
+                    ...(payload.partyCollection ? { party_collection: payload.partyCollection } : {}),
                 });
                 const json = (await res.json()) as TurnResponse;
                 if (!json.ok || !json.data) {
@@ -1363,6 +1375,142 @@ export function EnrollmentConversationCard({
                             </>
                         )}
                     </div>
+                </div>
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "party_collection" && objective.next_turn.party_collection) {
+        /*
+         * A LIST OF PEOPLE, DRAWN AS PEOPLE.
+         *
+         * The alternative — and what the conversation did before this — was to ask "Full name?",
+         * "Phone?", "Relationship?" as unrelated turns, so a parent answered five questions without
+         * ever being told they were describing one person. Three answers about Jane belong to Jane.
+         *
+         * Everyone Alloy already knows is shown first and cannot be removed here: saying someone
+         * does not belong on this paperwork is not an instruction to delete them from the record.
+         * Nothing on this card writes canonical truth — adding a person records a draft entry, and
+         * the relationship is written once, later, behind operator review.
+         */
+        const collection = objective.next_turn.party_collection;
+        const complete = collection.entries.filter((e) => e.complete);
+        const stillNeeded = Math.max(0, collection.min - complete.length);
+        const atMax = collection.max != null && collection.entries.length >= collection.max;
+        const editingRow = editingEntry && editingEntry !== "new"
+            ? collection.entries.find((e) => e.instance_key === editingEntry) ?? null
+            : null;
+
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                        {stillNeeded > 0 ? (
+                            <ThreadSupporting>
+                                {`Please add at least ${stillNeeded} more.`}
+                            </ThreadSupporting>
+                        ) : null}
+                    </ThreadTurn>
+
+                    {editingEntry ? (
+                        <PartyCollectionEntryEditor
+                            fields={collection.entry_fields}
+                            initial={editingRow?.values ?? {}}
+                            busy={busy}
+                            saveLabel={editingRow ? "Save" : "Add"}
+                            onCancel={() => setEditingEntry(null)}
+                            onSave={(values) => {
+                                setEditingEntry(null);
+                                void submit({
+                                    partyCollection: editingRow
+                                        ? { action: "edit", group_field_id: collection.group_field_id, instance_key: editingRow.instance_key, values }
+                                        : { action: "add", group_field_id: collection.group_field_id, values },
+                                    settledAs: String(values[collection.entry_fields[0]?.field_id ?? ""] ?? "").trim() || undefined,
+                                });
+                            }}
+                        />
+                    ) : (
+                        <ul className="flex list-none flex-col gap-2 p-0" data-participant-collection={collection.group_field_id}>
+                            {collection.entries.map((entry) => (
+                                <li
+                                    key={entry.instance_key}
+                                    data-participant-collection-entry={entry.instance_key}
+                                    data-entry-origin={entry.origin}
+                                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-alloy-midnight/12 px-4 py-3"
+                                >
+                                    <span className="text-[15px] font-medium text-alloy-midnight">{entry.display_name}</span>
+                                    {/*
+                                      * Never colour alone: the state is a word a screen reader reads
+                                      * and a parent understands.
+                                      */}
+                                    <span className="text-[12px] text-alloy-midnight/65">
+                                        {entry.origin === "existing"
+                                            ? "Already on file"
+                                            : entry.complete
+                                              ? "Added here"
+                                              : "Not finished"}
+                                    </span>
+                                    {entry.summary ? (
+                                        <span className="basis-full text-[13px] text-alloy-midnight/65">{entry.summary}</span>
+                                    ) : null}
+                                    <span className="ml-auto flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            disabled={busy}
+                                            data-participant-collection-edit={entry.instance_key}
+                                            onClick={() => setEditingEntry(entry.instance_key)}
+                                            className="flex min-h-[44px] items-center text-[13px] text-alloy-midnight/70 underline underline-offset-2 disabled:opacity-50"
+                                        >
+                                            {entry.origin === "existing" ? "Review" : entry.complete ? "Edit" : "Finish"}
+                                        </button>
+                                        {/* No Remove on someone Alloy already knows — see the note above. */}
+                                        {entry.origin === "respondent_added" ? (
+                                            <button
+                                                type="button"
+                                                disabled={busy}
+                                                data-participant-collection-remove={entry.instance_key}
+                                                onClick={() =>
+                                                    void submit({
+                                                        partyCollection: { action: "remove", group_field_id: collection.group_field_id, instance_key: entry.instance_key },
+                                                    })
+                                                }
+                                                className="flex min-h-[44px] items-center text-[13px] text-alloy-midnight/60 underline underline-offset-2 disabled:opacity-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        ) : null}
+                                    </span>
+                                </li>
+                            ))}
+                            {collection.allow_add && !atMax ? (
+                                <li>
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        data-participant-collection-add={collection.group_field_id}
+                                        onClick={() => setEditingEntry("new")}
+                                        className="flex min-h-[44px] w-full items-center rounded-xl border border-dashed border-alloy-midnight/20 px-4 py-3 text-left text-[15px] text-alloy-midnight/70 hover:border-alloy-bend-pine disabled:opacity-50"
+                                    >
+                                        {collection.add_another_label}
+                                    </button>
+                                </li>
+                            ) : null}
+                        </ul>
+                    )}
+
+                    {/* Settling the collection is a separate act from adding to it. */}
+                    {!editingEntry && stillNeeded === 0 ? (
+                        <button
+                            type="button"
+                            disabled={busy}
+                            data-participant-collection-done={collection.group_field_id}
+                            onClick={() => void submit({ text: "yes", settledAs: "That's everyone" })}
+                            className="flex min-h-[44px] items-center self-start rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
+                        >
+                            That&rsquo;s everyone
+                        </button>
+                    ) : null}
                 </div>
             </IntakeCard>
         );
@@ -1999,6 +2147,119 @@ function TypedAnswer({
             >
                 Done
             </button>
+        </div>
+    );
+}
+
+/**
+ * One person's details, collected together.
+ *
+ * The whole point of the collection card is that a parent should know whose details they are
+ * typing, so every question for this person is on screen at once and the heading says who. A
+ * conversation that asks "one question at a time" so literally that a person's fields come apart
+ * has stopped being a conversation and become a queue.
+ *
+ * Local state, deliberately: nothing is saved until the parent says so, so an abandoned entry
+ * leaves no half-written person anywhere — not in the session, and certainly not in the record.
+ */
+function PartyCollectionEntryEditor({
+    fields,
+    initial,
+    busy,
+    saveLabel,
+    onCancel,
+    onSave,
+}: {
+    readonly fields: readonly { field_id: string; label: string; type: string; required: boolean; options: readonly { value: string; label: string }[] }[];
+    readonly initial: Record<string, unknown>;
+    readonly busy: boolean;
+    readonly saveLabel: string;
+    readonly onCancel: () => void;
+    readonly onSave: (values: Record<string, unknown>) => void;
+}) {
+    const [values, setValues] = useState<Record<string, unknown>>(() => ({ ...initial }));
+    const firstRef = useRef<HTMLInputElement | null>(null);
+    useEffect(() => {
+        // Focus lands on the first question when the entry opens, so a keyboard user is not left
+        // hunting for where the form went.
+        firstRef.current?.focus();
+    }, []);
+
+    const missingRequired = fields.some(
+        (f) => f.required && String(values[f.field_id] ?? "").trim() === "",
+    );
+
+    return (
+        <div className="flex flex-col gap-3" data-participant-collection-editor="true">
+            {fields.map((f, i) => {
+                const id = `entry-${f.field_id}`;
+                const value = String(values[f.field_id] ?? "");
+                return (
+                    <div key={f.field_id} className="flex flex-col gap-1">
+                        <label htmlFor={id} className="text-[13px] text-alloy-midnight/70">
+                            {f.label}
+                            {f.required ? <span aria-hidden="true"> *</span> : null}
+                            {f.required ? <span className="sr-only"> (required)</span> : null}
+                        </label>
+                        {f.options.length ? (
+                            <select
+                                id={id}
+                                value={value}
+                                disabled={busy}
+                                onChange={(e) => setValues((p) => ({ ...p, [f.field_id]: e.target.value }))}
+                                className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-3 text-[15px] text-alloy-midnight"
+                            >
+                                <option value="">Choose…</option>
+                                {f.options.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                id={id}
+                                ref={i === 0 ? firstRef : undefined}
+                                type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
+                                value={value}
+                                disabled={busy}
+                                onChange={(e) => setValues((p) => ({ ...p, [f.field_id]: e.target.value }))}
+                                /*
+                                 * Enter saves the PERSON. Without this it submitted the surrounding
+                                 * conversation composer, which answers a different question
+                                 * entirely — and, on a row with a Remove beside it, a stray keyboard
+                                 * submit is exactly the accident that must not happen.
+                                 */
+                                onKeyDown={(e) => {
+                                    if (e.key !== "Enter") return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (!missingRequired && !busy) onSave(values);
+                                }}
+                                className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-3 text-[15px] text-alloy-midnight"
+                            />
+                        )}
+                    </div>
+                );
+            })}
+            <div className="mt-1 flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || missingRequired}
+                    data-participant-collection-save="true"
+                    onClick={() => onSave(values)}
+                    className="flex min-h-[44px] items-center rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
+                >
+                    {saveLabel}
+                </button>
+                <button
+                    type="button"
+                    disabled={busy}
+                    data-participant-collection-cancel="true"
+                    onClick={onCancel}
+                    className="flex min-h-[44px] items-center text-[13px] text-alloy-midnight/65 underline underline-offset-2 disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+            </div>
         </div>
     );
 }

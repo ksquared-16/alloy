@@ -77,6 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         confirm_group?: unknown;
         edit_fact?: unknown;
         party?: unknown;
+        party_collection?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;

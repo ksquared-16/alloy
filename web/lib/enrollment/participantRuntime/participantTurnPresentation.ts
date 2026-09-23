@@ -42,6 +42,15 @@ export type ParticipantTurnControl =
     | { readonly kind: "evidence" }
     /** A person to add by role — reuse someone known, or collect a new one. */
     | { readonly kind: "party" }
+    /**
+     * A LIST OF PEOPLE, as one obligation.
+     *
+     * Distinct from `party` above, which offers ONE role at a time and settles by adding a person
+     * or declining. A collection is the Form's own declaration: these people, this many, shown
+     * with the ones Alloy already knows. The card draws the whole list at once because the person
+     * grouping IS the interaction — three answers about Jane belong to Jane, not to three turns.
+     */
+    | { readonly kind: "party_collection" }
     | { readonly kind: "done" };
 
 /** The controls that actually collect a value. Shared by collection and by correction. */
@@ -71,6 +80,9 @@ export type ParticipantValueControl =
 export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantTurnControl {
     if (turn.kind === "complete") return { kind: "done" };
     if (turn.kind === "collect_party") return { kind: "party" };
+    // A collection need is recognised from the need itself, so any turn that carries one draws the
+    // collection rather than a control for a question the collection does not have.
+    if (turn.party_collection) return { kind: "party_collection" };
     if (turn.kind === "collect_evidence") return { kind: "evidence" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
