@@ -75,11 +75,13 @@ describe("the physical side shows what it supports", () => {
 });
 
 describe("ratio is authored on the object, canonically", () => {
-    it("posts the derived action, never a metadata ratio", () => {
-        const src = read(RATIO);
+    it("posts the derived action from the space's own save, never a metadata ratio", () => {
+        // The editor moved INTO the one Space edit form, so the write now lives
+        // in the panel and is saved by the same button as name and capacity.
+        const src = read(PANEL);
         expect(src).toContain('action: "set_object_ratio"');
         expect(src).toContain("/api/admin/operational-config/ratio-rules");
-        for (const forbidden of ["metadata.ratio", "student_teacher_ratio =", "metadata:"]) {
+        for (const forbidden of ["metadata.ratio", "student_teacher_ratio ="]) {
             expect(src).not.toContain(forbidden);
         }
     });
@@ -98,10 +100,27 @@ describe("ratio is authored on the object, canonically", () => {
         expect(src).toContain("staff for up to");
     });
 
-    it("a conflict opens the editor seeded with NEITHER record", () => {
+    it("a conflict hydrates the edit form with NEITHER record", () => {
+        // Seeding one of two disagreeing staffing records would decide a
+        // staffing-law question silently, on nothing but form convenience.
+        const src = read(PANEL);
+        expect(src).toContain('standing.state === "conflict" ? [] :');
+    });
+
+    it("the tier grid labels Staff and Children once, not around every input", () => {
         const src = read(RATIO);
-        // Seeding one would make a staffing-law decision by default.
-        expect(src).toContain('standing.state === "legacy_only" ? standing.legacy : null');
+        expect(src).toContain(">Staff</span>");
+        expect(src).toContain(">Children</span>");
+        expect(src).toContain("+ Add tier");
+        // The old shape repeated prose between every field.
+        expect(src).not.toContain("staff for up to</span>");
+    });
+
+    it("ordinary Space detail no longer advertises the rule engine", () => {
+        const src = read(PANEL);
+        expect(src).not.toContain("RoomCapacitySection");
+        expect(src).not.toContain("Advanced rules");
+        expect(src).not.toContain("Capacity limits");
     });
 
     it("the page supplies the canonical ratio data to the panel", () => {
