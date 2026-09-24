@@ -1,0 +1,119 @@
+{
+  "first": {
+    "selected": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "selectedLabel": "Certhouse Family $2,218.82 58 char",
+    "backdropDisplay": "none",
+    "ledgerRows": 116,
+    "kpiLine": "$2,023.87",
+    "rows": [
+      {
+        "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "selected": "true",
+        "label": "Certhouse Family $2,218.82 58 char"
+      },
+      {
+        "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "selected": "false",
+        "label": "Kurzman Family $75.00 3 charges · "
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0001",
+        "selected": "false",
+        "label": "Alvarez Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "selected": "false",
+        "label": "Automation Family $0.00 Open · not"
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0002",
+        "selected": "false",
+        "label": "Brennan Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "selected": "false",
+        "label": "Certfree Family $0.00 Open · nothi"
+      }
+    ]
+  },
+  "second": {
+    "selected": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedLabel": "Kurzman Family $75.00 3 charges · ",
+    "backdropDisplay": "none",
+    "ledgerRows": 2,
+    "kpiLine": "$0.00",
+    "rows": [
+      {
+        "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "selected": "false",
+        "label": "Certhouse Family $2,218.82 58 char"
+      },
+      {
+        "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "selected": "true",
+        "label": "Kurzman Family $75.00 3 charges · "
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0001",
+        "selected": "false",
+        "label": "Alvarez Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "selected": "false",
+        "label": "Automation Family $0.00 Open · not"
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0002",
+        "selected": "false",
+        "label": "Brennan Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "selected": "false",
+        "label": "Certfree Family $0.00 Open · nothi"
+      }
+    ]
+  },
+  "back": {
+    "selected": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "selectedLabel": "Certhouse Family $2,218.82 58 char",
+    "backdropDisplay": "none",
+    "ledgerRows": 116,
+    "kpiLine": "$2,023.87",
+    "rows": [
+      {
+        "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+        "selected": "true",
+        "label": "Certhouse Family $2,218.82 58 char"
+      },
+      {
+        "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "selected": "false",
+        "label": "Kurzman Family $75.00 3 charges · "
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0001",
+        "selected": "false",
+        "label": "Alvarez Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "selected": "false",
+        "label": "Automation Family $0.00 Open · not"
+      },
+      {
+        "id": "fd000000-0000-4000-8000-0000000c0002",
+        "selected": "false",
+        "label": "Brennan Household (demo) $0.00 Ope"
+      },
+      {
+        "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "selected": "false",
+        "label": "Certfree Family $0.00 Open · nothi"
+      }
+    ]
+  }
+}

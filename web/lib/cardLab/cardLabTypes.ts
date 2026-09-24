@@ -213,6 +213,18 @@ export type LedgerEntry = {
      */
     subject: string;
     /**
+     * THE SAME FACT AS `subject`, IN THE VOCABULARY THE ACCOUNT IS SCOPED BY.
+     *
+     * `subject` is a display label. Filtering by it made the ledger's idea of "which child" a
+     * SECOND vocabulary beside the account's own member ids, and a second vocabulary for one fact
+     * is how the KPI band and the rows beneath it came to disagree on deployed staging: the band
+     * answered for one child while the control said Everyone and the ledger showed the household.
+     *
+     * Null is a real answer and means the household — a charge with no child subject, which is not
+     * the same as a child whose name is missing.
+     */
+    subjectMemberId: string | null;
+    /**
      * Canonical charge category key. The card NEVER renders this — it renders
      * `chargeCategoryLabel(type)` from `lib/financials/chargeCategories.ts`, which the
      * configuration catalog already owns. No ad-hoc display map lives in the card.

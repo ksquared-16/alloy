@@ -1,0 +1,28 @@
+{
+  "focus": {
+    "subjectFilterAttr": null,
+    "accountAttr": null,
+    "scopeControlShows": "Everyone▾",
+    "lensText": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ A",
+    "domLedgerRows": 116,
+    "balance": "$1,412.87",
+    "pastDue": "$1,450.00",
+    "responsibility": "$1,487.87",
+    "due": "$1,912.00",
+    "paid": "$75.00",
+    "prepaid": "$125.00"
+  },
+  "accounts": {
+    "subjectFilterAttr": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "accountAttr": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "scopeControlShows": "Everyone▾",
+    "lensText": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ A",
+    "domLedgerRows": 116,
+    "balance": "$2,023.87",
+    "pastDue": "$1,525.00",
+    "responsibility": "$2,098.87",
+    "due": "$1,912.00",
+    "paid": "$75.00",
+    "prepaid": "$125.00"
+  }
+}

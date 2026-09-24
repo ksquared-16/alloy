@@ -46,6 +46,9 @@ import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/c
 /** An obligation nobody has been made answerable for. A state, not a person — so it sorts last. */
 const UNASSIGNED_LABEL = "Unassigned";
 
+/** The account itself, as a scope value — a charge with no child subject belongs to the household. */
+const HOUSEHOLD_SUBJECT = "__household__";
+
 export default function FinancialsDetailCard({
     evidence,
     periods,
@@ -70,11 +73,20 @@ export default function FinancialsDetailCard({
     responsibilityAdmin,
     lens: lensProp,
     onLensChange,
+    subject: subjectProp,
+    onSubjectChange,
     expandedPeriods,
     onPeriodToggle,
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
+    /**
+     * Controlled subject scope, as a member id — or `null` for the whole account. Omit to let this
+     * card own it. A host that derives the KPI band from a scope MUST pass that same scope here,
+     * or the totals and the rows answer for different subjects.
+     */
+    subject?: string | null;
+    onSubjectChange?: (next: string | null) => void;
     /** Controlled lens. Omit to let this card own it, which is what the workspace host does. */
     lens?: AccountLens;
     onLensChange?: (lens: AccountLens) => void;
@@ -272,7 +284,26 @@ export default function FinancialsDetailCard({
         setLensOwn(next);
         onLensChange?.(next);
     };
-    const [subject, setSubject] = useState<string | null>(null);
+    /*
+     * ── ONE SCOPE, OWNED BY WHOEVER OWNS THE TOTALS ────────────────────────────────────────────
+     *
+     * This card used to hold its own `subject` state and filter the ledger by the display LABEL,
+     * while the host held `subjectFilter` in member ids and derived the KPI band from it. Two
+     * states, two vocabularies, one question — "which subject is this surface scoped to" — and on
+     * deployed staging they disagreed: the control read "Everyone", the ledger showed all 79 rows
+     * of the household, and the band above them reported one child's $1,412.87 instead of the
+     * account's $2,023.87.
+     *
+     * So the scope is CONTROLLED, exactly as `lens` already is. A host that owns the totals owns
+     * the scope those totals are taken at, and the rows and the control follow the same state.
+     * Omit it and this card keeps its own, which is what the card lab does.
+     */
+    const [subjectOwn, setSubjectOwn] = useState<string | null>(null);
+    const subject = subjectProp !== undefined ? subjectProp : subjectOwn;
+    const setSubject = (next: string | null) => {
+        setSubjectOwn(next);
+        onSubjectChange?.(next);
+    };
     const [periodLabel, setPeriodLabel] = useState<string | null>(null);
     const [payer, setPayer] = useState<string | null>(null);
     /* WHO OWES IT — distinct from whose child the row is, and from who paid. */
@@ -296,7 +327,7 @@ export default function FinancialsDetailCard({
     const counts = useMemo(() => {
         const scoped = allEntries.filter(
             (e) =>
-                (!subject || e.subject === subject)
+                (!subject || (e.subjectMemberId ?? HOUSEHOLD_SUBJECT) === subject)
                 && inResponsibleScope(e)
                 && (!periodLabel || periods.some((p) => p.label === periodLabel && p.entries.includes(e))),
         );
@@ -316,7 +347,14 @@ export default function FinancialsDetailCard({
      * control with a single choice, which reads as a capability this surface does not have.
      */
     const subjectChoices = useMemo(
-        () => [...new Set(allEntries.map((e) => e.subject))].sort((a, b) => a.localeCompare(b)),
+        () => {
+            /* One option per distinct subject, keyed by the id the account scopes by. */
+            const byId = new Map<string, string>();
+            for (const e of allEntries) byId.set(e.subjectMemberId ?? HOUSEHOLD_SUBJECT, e.subject);
+            return [...byId.entries()]
+                .map(([value, label]) => ({ value, label }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+        },
         [allEntries],
     );
     const periodChoices = useMemo(() => periods.map((p) => p.label), [periods]);
@@ -371,7 +409,7 @@ export default function FinancialsDetailCard({
                 entries: p.entries.filter(
                     (e) =>
                         (lens === "all" || e.lens === lens)
-                        && (!subject || e.subject === subject)
+                        && (!subject || (e.subjectMemberId ?? HOUSEHOLD_SUBJECT) === subject)
                         && inResponsibleScope(e),
                 ),
             }))
@@ -1274,7 +1312,12 @@ function LensFilter({
     value: string;
     onChange: (value: string) => void;
     placeholder: string;
-    options: string[];
+    /*
+     * A plain string where the label IS the value (period, payer), or an explicit pair where they
+     * differ — the subject filter carries member ids and shows names, because the id is what the
+     * account's totals are scoped by and the name is only what the operator reads.
+     */
+    options: ReadonlyArray<string | { value: string; label: string }>;
 }) {
     /*
      * The house dropdown, not a bare `<select>` — same reason as the workspace's copy: on macOS the
@@ -1285,7 +1328,7 @@ function LensFilter({
         <AlloySelect
             value={value}
             onChange={onChange}
-            options={options.map((o) => ({ value: o, label: o }))}
+            options={options.map((o) => (typeof o === "string" ? { value: o, label: o } : o))}
             placeholder={placeholder}
             density="compact"
             aria-label={placeholder}
