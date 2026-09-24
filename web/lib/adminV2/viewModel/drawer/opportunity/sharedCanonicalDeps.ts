@@ -1,3 +1,4 @@
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 /**
  * CP-1 / S4.2 — Shared Canonical Dependencies (Module C).
  *
@@ -14,6 +15,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
+import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
+import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
 import {
@@ -137,6 +140,64 @@ export async function resolveSharedCanonicalDeps(
 
     phases_ms.base_subject_ms = phases_ms.opportunity_select_ms + phases_ms.record_layout_ms;
     const tVisible0 = Date.now();
+    /*
+     * THE CANONICAL ACTION AUTHORITY, RESOLVED AT ITS OWN DEPENDENCY BOUNDARY.
+     *
+     * `resolveActionsForContext` needs the org, the opportunity id, the department and work unit,
+     * the opportunity's status key and metadata, and the lifecycle stage from work-unit metadata.
+     * All of those exist once the opportunity select and the layout/work-unit join have landed - it
+     * reads nothing from the visible payload, the children shell, household persons, photos or any
+     * capability card, so it can start beside them instead of behind them.
+     *
+     * It is threaded to the first-paint consumer rather than recomputed there: ONE resolver, one
+     * input contract, one answer. Moving the computation earlier is not itself a saving - measured,
+     * the resolver costs ~140ms inside a first-paint block whose ~586ms wall is set by
+     * `attention_bundle` at ~260ms - so this exists to make the authority DELIVERABLE early, which
+     * is where the value is.
+     *
+     * Resolves to null when it could not be attempted. Null means "not resolved", never an
+     * authoritative empty action set.
+     */
+    const earlyWu = (wuRes.data ?? null) as { department_id?: string | null; metadata?: unknown } | null;
+    /*
+     * ONLY WHEN THE INPUTS ARE PROVABLY THE SAME ONES.
+     *
+     * The first-paint resolver is handed the fully-derived `departmentId`, whose last fallback is
+     * `record._work_unit_department_id` — a field that does not exist until the visible payload has
+     * been built. Resolving early with a null department where the later path would have found one
+     * would produce a DIFFERENT action set, which is a correctness change wearing a performance
+     * costume. So the early resolution is attempted only when the department is already known from
+     * the request context or the work-unit row; otherwise this stays null and the first-paint
+     * resolver runs exactly as it always has.
+     *
+     * `status_key` and `metadata` are safe to read from the selected row: the visible payload adds
+     * underscore-prefixed fields and child collections and never rewrites either.
+     *
+     * Deliberately NOT wrapped in `.catch`. A rejection must keep propagating the way it always did
+     * — swallowing it here would turn a failed resolution into an authoritative empty action set.
+     */
+    const earlyDepartmentId = ctxDept || trimOrNull(earlyWu?.department_id) || null;
+    const earlyHeaderActions: Promise<ResolvedActionsBySlot> | null =
+        earlyDepartmentId ?
+            resolveActionsForContext(supabase, {
+                orgId,
+                surface: "record_header",
+                entityType: "opportunity",
+                entityId: opportunityId,
+                departmentId: earlyDepartmentId,
+                workUnitId: workUnitId || null,
+                hintOpportunityStatusKey: trimOrNull((oppRow as { status_key?: unknown }).status_key),
+                hintOpportunityMetadata:
+                    (oppRow as { metadata?: unknown }).metadata
+                    && typeof (oppRow as { metadata?: unknown }).metadata === "object" ?
+                        ((oppRow as { metadata?: unknown }).metadata as Record<string, unknown>)
+                    :   null,
+                lifecycleViewStageKey: stageKeyFromLifecycleWorkUnitMetadata(
+                    (earlyWu?.metadata as Record<string, unknown> | null) ?? null,
+                ),
+            })
+        :   null;
+
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
         orgId,
@@ -275,6 +336,7 @@ export async function resolveSharedCanonicalDeps(
         lifecycle_rail,
         currentStageKey,
         currentStageLabel,
+        earlyHeaderActions,
         phases_ms,
     };
 }
