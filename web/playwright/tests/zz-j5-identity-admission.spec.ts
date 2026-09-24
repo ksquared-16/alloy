@@ -99,7 +99,29 @@ test("j5 identity truth admission", async ({ page }) => {
                 }
                 if (reserved.length === 0 && bodySubject() !== was) break;
             }
-            return { switched: bodySubject() !== was, clearedAt: cleared };
+            /*
+             * THE VERDICT, READ WHERE THE DECISION IS MADE.
+             *
+             * The provisioning answer is server-rendered into the RSC payload, so there is no
+             * response to intercept - measured 0 of 12 row switches. The identity bag reaches the
+             * client only as this component's props, and the settlement diagnostic now reports its
+             * presence classifications. Reading them here is what separates truth-absent from
+             * truth-present-and-unadmitted.
+             */
+            const d = (window.__ALLOY_FOCUS_SETTLEMENT_DIAG__ || {});
+            return {
+                switched: bodySubject() !== was,
+                clearedAt: cleared,
+                identity: {
+                    present: d.identityTruthPresent ?? null,
+                    keyCount: d.identityKeyCount ?? null,
+                    childrenPresent: d.inquiryChildrenIdentityPresent ?? null,
+                    childrenCount: d.inquiryChildrenCount ?? null,
+                    contactPresent: d.primaryContactIdentityPresent ?? null,
+                    customerPresent: d.customerIdentityPresent ?? null,
+                    families: d.identityFamilies ?? null,
+                },
+            };
         })(${run})`);
         const answer = answers.length ? answers[answers.length - 1] : null;
         console.log(`[adm] ${JSON.stringify({ run, card, answer })}`);

@@ -1,0 +1,250 @@
+[
+  {
+    "pass": "cold-1",
+    "acknowledgement": 39,
+    "firstGeometry": 40,
+    "interactiveList": 1574,
+    "selectedAccount": 2836,
+    "usableShell": 2836,
+    "firstLedger": 2840,
+    "settled": 2842,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1188,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1576,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2835,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-2",
+    "acknowledgement": 36,
+    "firstGeometry": 37,
+    "interactiveList": 1414,
+    "selectedAccount": 2340,
+    "usableShell": 2340,
+    "firstLedger": 2343,
+    "settled": 2346,
+    "rows": 116,
+    "shellToLedger": 3,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1325,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1403,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2339,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "cold-3",
+    "acknowledgement": 52,
+    "firstGeometry": 54,
+    "interactiveList": 1689,
+    "selectedAccount": 3129,
+    "usableShell": 3129,
+    "firstLedger": 3132,
+    "settled": 3134,
+    "rows": 116,
+    "shellToLedger": 3,
+    "requests": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1494,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1688,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3128,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3223,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-1",
+    "acknowledgement": 45,
+    "firstGeometry": 47,
+    "interactiveList": 2067,
+    "selectedAccount": 3065,
+    "usableShell": 3065,
+    "firstLedger": 3069,
+    "settled": 3070,
+    "rows": 116,
+    "shellToLedger": 4,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1188,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 2066,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3064,
+        "bytes": 218680,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-2",
+    "acknowledgement": 35,
+    "firstGeometry": 36,
+    "interactiveList": 1473,
+    "selectedAccount": 2873,
+    "usableShell": 2873,
+    "firstLedger": 2878,
+    "settled": 2879,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1131,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1472,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2872,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2993,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-3",
+    "acknowledgement": 34,
+    "firstGeometry": 35,
+    "interactiveList": 1605,
+    "selectedAccount": 2568,
+    "usableShell": 2568,
+    "firstLedger": 2573,
+    "settled": 2574,
+    "rows": 116,
+    "shellToLedger": 5,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1334,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1592,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2567,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3204,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  },
+  {
+    "pass": "warm-4",
+    "acknowledgement": 35,
+    "firstGeometry": 36,
+    "interactiveList": 1599,
+    "selectedAccount": 2735,
+    "usableShell": 2735,
+    "firstLedger": 2741,
+    "settled": 2742,
+    "rows": 116,
+    "shellToLedger": 6,
+    "requests": [
+      {
+        "url": "/api/admin/financials/position",
+        "endedAt": 1192,
+        "bytes": 52925,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "endedAt": 1584,
+        "bytes": 4221,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 2733,
+        "bytes": 218680,
+        "status": 200
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "endedAt": 3099,
+        "bytes": 690,
+        "status": 200
+      }
+    ]
+  }
+]
