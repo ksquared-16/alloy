@@ -1,0 +1,33 @@
+{
+  "at": "2026-09-24T21:26:34.463Z",
+  "checks": [
+    {
+      "name": "1_infant_a_confirmed",
+      "read": "STAFFING RATIO | 1:5 · 2:11 · 3:18",
+      "review": null
+    },
+    {
+      "name": "2_toddler_1_confirmed",
+      "read": "STAFFING RATIO | 1:5 · 2:11",
+      "review": null
+    },
+    {
+      "name": "3_legacy_only_still_unresolved",
+      "read": null,
+      "review": "Ratio needs review | Recorded earlier as 1:5, before ratios were configured here. Edit the space to confirm it."
+    },
+    {
+      "name": "4_unrelated_edit_does_not_confirm",
+      "read": null,
+      "review": "Ratio needs review | Recorded earlier as 1:5, before ratios were configured here. Edit the space to confirm it."
+    },
+    {
+      "name": "5_runtime_errors",
+      "errs": [],
+      "perrs": []
+    }
+  ],
+  "legacyStillStored": {
+    "status": 200
+  }
+}
