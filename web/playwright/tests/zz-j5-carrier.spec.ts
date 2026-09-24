@@ -42,18 +42,27 @@ test("j5 carrier certify and measure", async ({ page }) => {
 
     for (let i = 0; i < RUNS; i += 1) {
         // Hover first — the operator sequence, and the prewarm this programme must preserve.
-        const hovered = await page.evaluate(`(() => {
+        /*
+         * WALK BY INDEX, NOT BY "WHICHEVER ROW LOOKS SELECTED".
+         *
+         * The census probe cycled rows by finding the selected one and taking the next; it returned
+         * 55 observations for a SINGLE subject, because neither `aria-selected` nor a `--selected`
+         * class is how this queue marks selection, so the search answered -1 every time and the same
+         * row was clicked repeatedly. A measurement of the row-to-row switch that never switches
+         * rows would have reported beautiful numbers for a journey nobody took.
+         */
+        const hovered = await page.evaluate(`((i) => {
             const rows=[...document.querySelectorAll('.alloy-os-queue-row-card')];
             if (rows.length < 2) return false;
-            const cur = rows.findIndex(r=>r.getAttribute('aria-selected')==='true'||r.className.includes('--selected'));
-            const target = rows[cur>=0?(cur+1)%rows.length:1];
+            const target = rows[(i + 1) % rows.length];
             window.__ox.target = target;
+            window.__ox.targetIndex = (i + 1) % rows.length;
             window.__ox.hoverAt = Math.round(performance.now());
             for (const t of ["pointerover","mouseover","pointerenter","mouseenter"]) {
                 target.dispatchEvent(new MouseEvent(t, { bubbles: true }));
             }
             return true;
-        })()`);
+        })(${i})`);
         if (!hovered) break;
         await page.waitForTimeout(800);
 
@@ -125,6 +134,10 @@ test("j5 carrier certify and measure", async ({ page }) => {
                 milestones: m,
                 mixedFrames,
                 subjectBefore, subjectAfter: nowBody,
+                // A sample where the committed subject did not move is NOT a row switch and must
+                // not be pooled with the ones that were.
+                validSwitch: !!(nowBody && subjectBefore && nowBody !== subjectBefore),
+                targetIndex: w.targetIndex,
                 carrierArrivalsThisEvent: arrivals,
                 carrierRelForClickedSubject: earliest,
                 carrierReadyBeforeClick: earliest != null && earliest < 0,

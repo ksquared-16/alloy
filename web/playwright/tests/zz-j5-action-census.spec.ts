@@ -51,8 +51,10 @@ test("j5 action census", async ({ page }) => {
         const moved = await page.evaluate(`(() => {
             const rows=[...document.querySelectorAll('.alloy-os-queue-row-card')];
             if (rows.length < 2) return false;
-            const cur = rows.findIndex(r=>r.getAttribute('aria-selected')==='true'||r.className.includes('--selected'));
-            const next = rows[cur>=0?(cur+1)%rows.length:1];
+            // Walk by index: neither aria-selected nor a --selected class marks selection on this
+            // queue, so searching for the selected row answers -1 and re-clicks the same one. This
+            // census returned 55 observations for a single subject before that was noticed.
+            const next = rows[(window.__censusIdx = ((window.__censusIdx ?? 0) + 1) % rows.length)];
             next.click();
             return true;
         })()`);
