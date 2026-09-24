@@ -49,8 +49,36 @@ function notify(): void {
     }
 }
 
+/**
+ * WHEN PHASE 1 ARRIVED, for measurement.
+ *
+ * Deliberately NOT gated on NODE_ENV, by the same reasoning as the reveal-gate diagnostic: the
+ * question "did the carrier arrive before the click, or after it" can only be answered on the build
+ * the measurements actually run against. It records timing and counts — never an action's payload.
+ */
+function recordCarrierArrival(carrier: ActionableDrawerCarrier): void {
+    if (typeof window === "undefined") return;
+    try {
+        const w = window as Window & {
+            __ALLOY_CARRIER_DIAG__?: Array<Record<string, unknown>>;
+        };
+        w.__ALLOY_CARRIER_DIAG__ = w.__ALLOY_CARRIER_DIAG__ ?? [];
+        w.__ALLOY_CARRIER_DIAG__.push({
+            t: Math.round(performance.now()),
+            subject: carrier.subject.opportunity_id,
+            lens: carrier.subject.attention_subject_id,
+            actions: carrier.header_menu.length,
+            executable: carrier.header_menu.filter((a) => a.readiness === "CARRIER_SAFE").length,
+            flushed_at_ms: carrier.flushed_at_ms,
+        });
+    } catch {
+        /* a diagnostic may never break a delivery */
+    }
+}
+
 /** Phase 1 landed. Validated by the fetch seam before it ever reaches here. */
 export function publishActionableDrawerCarrier(carrier: ActionableDrawerCarrier): void {
+    recordCarrierArrival(carrier);
     const key = keyOf(carrier.subject.opportunity_id, carrier.subject.attention_subject_id);
     entries.set(key, { carrier, storedAt: Date.now() });
     while (entries.size > MAX_ENTRIES) {
