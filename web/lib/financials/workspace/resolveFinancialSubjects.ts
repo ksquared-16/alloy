@@ -209,15 +209,25 @@ export async function resolveFinancialSubjectCohort(
     const truncated = !reachedEnd && households.length >= scanCap;
 
     const customerIds = households.map((h) => h.id).filter(Boolean);
-    const sitesByCustomer = await readAgreementSites(supabase, args.orgId, customerIds);
     /*
-     * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
-     * read that fails leaves that facet empty rather than failing the cohort, because a household
-     * an operator cannot filter by room is still a household they must be able to reach, and a
-     * rail that refuses to render because a classroom label could not be read has turned a
-     * convenience into an outage.
+     * ── THE FACETS NEVER NEEDED THE AGREEMENT SITES ────────────────────────────────────────────
+     *
+     * `readAgreementSites` walks three dependent reads of its own — agreements by customer, then
+     * the orphan agreements a paged scan finds, then the members those orphans name. The three
+     * facet reads below take `customerIds` and NOTHING else: children, contacts and placements are
+     * all keyed by the households wave one already produced.
+     *
+     * They ran after it purely because the site map is used first when the rows are assembled.
+     * Measured with a holding client, that made this cohort SEVEN sequential waves, and measured on
+     * deployed staging the whole endpoint took 1,370 ms to return 4.2 KB — the gate on the Accounts
+     * shell, since the account list cannot render and the card cannot be asked for until it lands.
+     *
+     * Started together, the site map and the facets overlap instead of queueing. Same reads, same
+     * predicates, same rows, same per-facet failure tolerance — each still degrades to an empty
+     * facet rather than failing the cohort.
      */
-    const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await Promise.all([
+    const sitesP = readAgreementSites(supabase, args.orgId, customerIds);
+    const facetsP = Promise.all([
         readChildNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
         readContactNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
         readCurrentPlacements(supabase, args.orgId, customerIds).catch((e) => {
@@ -231,6 +241,15 @@ export async function resolveFinancialSubjectCohort(
             return new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
         }),
     ]);
+    const sitesByCustomer = await sitesP;
+    /*
+     * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
+     * read that fails leaves that facet empty rather than failing the cohort, because a household
+     * an operator cannot filter by room is still a household they must be able to reach, and a
+     * rail that refuses to render because a classroom label could not be read has turned a
+     * convenience into an outage.
+     */
+    const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await facetsP;
 
     const subjects: FinancialSubjectRow[] = [];
     for (const household of households) {
