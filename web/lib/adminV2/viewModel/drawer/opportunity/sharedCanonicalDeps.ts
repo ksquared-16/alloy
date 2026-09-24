@@ -28,7 +28,10 @@ import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/reso
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import {
+    applyEffectiveEnrollmentStagesToOpportunityRows,
+    startEffectiveEnrollmentStagesForOpportunityRows,
+} from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -133,6 +136,41 @@ export async function resolveSharedCanonicalDeps(
         .eq("org_id", orgId)
         .single();
     phases_ms.opportunity_select_ms = Date.now() - tOpp0;
+
+    /*
+     * MISSION STAGES START HERE, NOT AT THE END OF THE CHAIN.
+     *
+     * `mission_stages_ms` (P50 219ms) was the last of four SERIAL top-level stages:
+     * base_subject 260 -> visible_entity 875 -> status_and_dept 218 -> mission_stages 219, which
+     * reconcile against `shared_deps_wall` (P50 1,634ms) with a per-sample remainder of 2ms. It was
+     * last only by source order.
+     *
+     * Its ROUND TRIP reads exactly three fields off the context row: `id`, `stage_key` and
+     * `lifecycle_stage_key`. All three are columns of OPPORTUNITY_CANONICAL_ADMIN_SELECT, so they
+     * are canonical the moment `oppRow` lands -- it never needed the composed record. What DOES
+     * need the record is the apply step, which decorates the returned row; that stays where it was.
+     *
+     * Modelled per sample on deployed 38248a2d (n=23): moving the load here recovers a P50 of 222ms
+     * and a P95 of 432ms of critical path, because visible_entity + status_and_dept (P50 ~1,093ms)
+     * dominates this load completely.
+     *
+     * The other candidate, running the status/dept block early, was REFUTED on the same data: its
+     * household leg seeds its person map from `_opportunity_persons`, which
+     * `attachOpportunityPersonsShell` writes inside visible_entity, and ids present in that map are
+     * then excluded from the `persons` fetch. Starting it earlier would change which names resolve.
+     * That is an output change, not a schedule change, so it is not taken here.
+     */
+    const tMission0 = Date.now();
+    const missionLoadP = startEffectiveEnrollmentStagesForOpportunityRows({
+        supabase,
+        orgId,
+        // The not-found guard is below; an absent row yields an empty start, not a thrown read.
+        rows: oppRow ? [oppRow as Record<string, unknown>] : [],
+        logLabel: "drawer-mission",
+    }).then((loaded) => {
+        phases_ms.mission_stages_ms = Date.now() - tMission0;
+        return loaded;
+    });
 
     if (oppErr || !oppRow) {
         return { ok: false, reason: "opportunity_not_found" };
@@ -363,14 +401,13 @@ export async function resolveSharedCanonicalDeps(
      * computation over values already in hand. Timing it is what makes the remainder a number rather
      * than a suspicion.
      */
-    const tMission0 = Date.now();
-    const [recordWithEpp] = await attachEffectiveEnrollmentStagesToOpportunityRows({
-        supabase,
-        orgId,
-        rows: [record as Record<string, unknown>],
-        logLabel: "drawer-mission",
-    });
-    phases_ms.mission_stages_ms = Date.now() - tMission0;
+    // The round trip started right after the opportunity select; this is only the pure apply, which
+    // needs the composed record because that is the row returned to every downstream consumer.
+    const [recordWithEpp] = applyEffectiveEnrollmentStagesToOpportunityRows(
+        [record as Record<string, unknown>],
+        await missionLoadP,
+        "drawer-mission",
+    );
     const mission = resolveContextMissionStages({
         contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
         effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
