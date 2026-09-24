@@ -23,6 +23,13 @@ import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWor
  * prep forced a cold ~4s entry fetch even though the answer was in hand. 60s keeps the prepared entry
  * consumable across normal browsing; the committed surface still settles fresh values after commit.
  */
+import {
+    PHASED_CONTENT_TYPE,
+    PHASED_QUERY_KEY,
+    SETTLEMENT_LINE_KEY,
+} from "@/lib/runtime/provisioning/provisioningTwoPhaseWire";
+import type { ProvisioningSettlementPatch } from "@/lib/runtime/provisioning/provisioningSettlement";
+
 export const PREFETCH_TTL_MS = 60_000;
 
 type Entry = { promise: Promise<ProvisioningAnswer>; startedAt: number };
@@ -61,6 +68,15 @@ export function provisioningAnswerUrl(
     if (cohort === "none" && aspect) q.set("aspect", aspect);
     if (departmentConfigHeldIds && departmentConfigHeldIds.length) q.set("dept_config", [...departmentConfigHeldIds].sort().join(","));
     if (summaryConfigHeldIds && summaryConfigHeldIds.length) q.set("summary_cfg", [...summaryConfigHeldIds].sort().join(","));
+    /*
+     * THE TWO-PHASE REQUEST IS PART OF THE IDENTITY, like `dept_config` above it.
+     *
+     * The browser can always consume a second delivery, so this is constant here rather than a
+     * caller's choice — but it still rides the URL, because the URL is the coalescing key, the
+     * intent-warm key and the consume-once key, and a phased answer and a settled one are different
+     * RESPONSES. Leaving it out of the key would let a settled warm answer serve a phased entry.
+     */
+    q.set(PHASED_QUERY_KEY, "1");
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }
@@ -244,11 +260,109 @@ export function seedProvisioningForRoute(
 }
 
 export type ProvisioningFetchResult =
-    | { ok: true; answer: ProvisioningAnswer }
+    | {
+          ok: true;
+          answer: ProvisioningAnswer;
+          /**
+           * PHASE 2, when the server delivered a phased response.
+           *
+           * Absent on a settled (single-document) answer, because there is nothing further coming —
+           * which is not the same as a settlement that resolved to nothing. `null` from the promise
+           * means "nothing to apply"; an absent promise means "this answer was already complete".
+           */
+          settlement?: Promise<ProvisioningSettlementPatch | null>;
+      }
     | { ok: false; status: number };
 
 /** In-flight coalescing map for the K2 cold-path entry fetch (separate from the intent-warm cache). */
 const inflightEntry = new Map<string, Promise<ProvisioningFetchResult>>();
+
+/**
+ * PHASE 2, FOUND FROM THE FRAME IT BELONGS TO — an association, deliberately NOT a cache.
+ *
+ * Both client paths funnel through one fetch seam, but they do not return the same SHAPE: the warm
+ * path's cache holds `Promise<ProvisioningAnswer>` so callers can chain off the answer, and threading
+ * a second value through it would change that signature everywhere for a value almost no caller
+ * wants. So the settlement is associated with the frame object itself.
+ *
+ * A `WeakMap` and not a cache: it has no key policy, no TTL, no eviction and no capacity, it can
+ * never be consulted by identity-of-request, and an entry disappears when the answer it belongs to
+ * is collected. It cannot serve a stale answer because it cannot be looked up without already
+ * holding the exact frame the settlement was read alongside.
+ */
+const settlementByAnswer = new WeakMap<object, Promise<ProvisioningSettlementPatch | null>>();
+
+/** Phase 2 for this exact frame, or null when the answer arrived already settled. */
+export function settlementForAnswer(
+    answer: ProvisioningAnswer,
+): Promise<ProvisioningSettlementPatch | null> | null {
+    return settlementByAnswer.get(answer as unknown as object) ?? null;
+}
+
+/**
+ * READ A PHASED ANSWER: resolve on the FRAME LINE, hand phase 2 back as a promise.
+ *
+ * The whole point is to stop reading at the first newline. Awaiting the full body would restore the
+ * completion coupling this removes — the frame would once again arrive only when the settlement did,
+ * and the ~600-680ms measured settlement wait would be back on the operator's critical path with a
+ * streaming transport underneath it, which is worse than before because it would look repaired.
+ *
+ * The settlement promise NEVER rejects. A truncated, malformed or failed second line resolves to
+ * null: the frame already answered, and its unresolved regions stay honestly UNKNOWN rather than
+ * becoming a fabricated empty.
+ */
+async function readPhasedAnswer(body: ReadableStream<Uint8Array>): Promise<ProvisioningFetchResult> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = "";
+
+    const readLine = async (): Promise<string | null> => {
+        for (;;) {
+            const nl = buffered.indexOf("\n");
+            if (nl >= 0) {
+                const line = buffered.slice(0, nl);
+                buffered = buffered.slice(nl + 1);
+                if (line.trim()) return line;
+                continue;
+            }
+            const { done, value } = await reader.read();
+            if (done) {
+                const rest = buffered.trim();
+                buffered = "";
+                return rest ? rest : null;
+            }
+            buffered += decoder.decode(value, { stream: true });
+        }
+    };
+
+    const frameLine = await readLine();
+    if (frameLine == null) {
+        // The server declared a phased response and sent no frame. That is a transport fault, not an
+        // answer, so it is reported as one rather than invented into an empty answer.
+        void reader.cancel().catch(() => {});
+        return { ok: false, status: 502 } as const;
+    }
+    const answer = JSON.parse(frameLine) as ProvisioningAnswer;
+
+    const settlement = (async (): Promise<ProvisioningSettlementPatch | null> => {
+        try {
+            const line = await readLine();
+            if (line == null) return null;
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            return (parsed[SETTLEMENT_LINE_KEY] as ProvisioningSettlementPatch | null) ?? null;
+        } catch {
+            return null;
+        } finally {
+            void reader.cancel().catch(() => {});
+        }
+    })();
+    // The caller may never look at it (a superseded navigation drops the whole result), and an
+    // unobserved rejection must not surface as an unhandled one. It cannot reject, but the guard
+    // costs nothing and survives a future edit that makes it able to.
+    void settlement.catch(() => {});
+    settlementByAnswer.set(answer as unknown as object, settlement);
+    return { ok: true, answer, settlement } as const;
+}
 
 /**
  * K2 cold-path provisioning fetch with IN-FLIGHT de-duplication. When two identical entry fetches
@@ -270,14 +384,19 @@ export function fetchProvisioningEntryDeduped(url: string): Promise<Provisioning
     }
     logCurrentWorkInit("provisioning.cold.fetch", { cacheKey: url, cache: "miss", preloadSource: "live", note: "cold entry network fetch" });
     const promise: Promise<ProvisioningFetchResult> = fetch(url, {
-        headers: { accept: "application/json" },
+        headers: { accept: `${PHASED_CONTENT_TYPE}, application/json` },
         credentials: "include",
     })
-        .then(async (res) =>
-            res.ok
-                ? ({ ok: true, answer: (await res.json()) as ProvisioningAnswer } as const)
-                : ({ ok: false, status: res.status } as const),
-        )
+        .then(async (res) => {
+            if (!res.ok) return { ok: false, status: res.status } as const;
+            const phased = (res.headers.get("content-type") ?? "").includes(PHASED_CONTENT_TYPE);
+            if (!phased || !res.body) {
+                // A settled answer. No `settlement` field at all — absent means "already complete",
+                // which is a different fact from a settlement that resolved to nothing.
+                return { ok: true, answer: (await res.json()) as ProvisioningAnswer } as const;
+            }
+            return readPhasedAnswer(res.body);
+        })
         .finally(() => {
             inflightEntry.delete(url);
         });
