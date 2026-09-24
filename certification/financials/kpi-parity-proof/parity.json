@@ -1,0 +1,57 @@
+{
+  "focus": {
+    "present": true,
+    "kpis": {
+      "CURRENT BALANCE": "$2,023.87",
+      "DUE": "$1,912.00",
+      "PAST DUE": "$1,525.00",
+      "RESPONSIBILITY": "$2,098.87",
+      "PAID": "$75.00",
+      "AVAILABLE PREPAID": "$125.00"
+    },
+    "scopeControl": "Everyone▾",
+    "relationshipRow": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+    "rowGroups": 3,
+    "discountSummary": "Sibling discount (QA specimen) · 10%",
+    "discountGear": 1,
+    "methodState": "No payment method on file",
+    "managePayments": 1,
+    "responsibilityGear": 1,
+    "responsibleFilter": 1,
+    "lenses": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ Anyone responsible ▾",
+    "ledgerRows": 116,
+    "periodHeaders": 0,
+    "actions": 0
+  },
+  "accounts": {
+    "present": true,
+    "kpis": {
+      "CURRENT BALANCE": "$2,023.87",
+      "DUE": "$1,912.00",
+      "PAST DUE": "$1,525.00",
+      "RESPONSIBILITY": "$2,098.87",
+      "PAID": "$75.00",
+      "AVAILABLE PREPAID": "$125.00"
+    },
+    "scopeControl": "Everyone▾",
+    "relationshipRow": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+    "rowGroups": 3,
+    "discountSummary": "Sibling discount (QA specimen) · 10%",
+    "discountGear": 1,
+    "methodState": "No payment method on file",
+    "managePayments": 1,
+    "responsibilityGear": 1,
+    "responsibleFilter": 1,
+    "lenses": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ Anyone responsible ▾",
+    "ledgerRows": 116,
+    "periodHeaders": 0,
+    "actions": 0
+  },
+  "kpiDiffs": [],
+  "innerDiffs": [],
+  "timing": {
+    "shellAt": 70,
+    "ledgerAt": 8129,
+    "settledAt": 27029
+  }
+}

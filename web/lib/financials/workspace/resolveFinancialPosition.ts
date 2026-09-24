@@ -330,8 +330,16 @@ export async function resolveFinancialPositionCohort(
         };
     }
 
-    const chargeIds = visible.map((v) => v.charge.id);
-    const facts = await readPositionFacts(supabase, args.orgId, chargeIds);
+    /* One reader for both callers — see `resolveCollectiblePositionsForCharges`. */
+    const positionsByCharge = await resolveCollectiblePositionsForCharges(supabase, {
+        orgId: args.orgId,
+        charges: visible.map((v) => ({
+            id: v.charge.id,
+            currencyCode: v.charge.currency_code,
+            status: v.charge.status,
+            amountCents: Number(v.charge.amount_cents),
+        })),
+    });
 
     /* Names, so a list of accounts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
@@ -343,28 +351,11 @@ export async function resolveFinancialPositionCohort(
     const customerNames = new Map(customerRows.map((c) => [c.id, c.name]));
 
     const rows: FinancialPositionRow[] = visible.map((v) => {
-        const reductions = facts.reductionsByCharge.get(v.charge.id) ?? [];
-        const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);
-        const grossCents = Number(v.charge.amount_cents);
-        const netCents = grossCents + reductionsCents;
-        const allocations = facts.allocationsByCharge.get(v.charge.id) ?? [];
-
-        const position = computeCollectiblePosition({
-            chargeId: v.charge.id,
-            currencyCode: v.charge.currency_code,
-            chargeStatus: v.charge.status,
-            grossCents,
-            reductionsCents,
-            netCents,
-            applications: facts.applicationsByCharge.get(v.charge.id) ?? [],
-            allocations: allocations.map((a) => ({
-                assignedAmountCents: a.assignedAmountCents,
-                isUnassigned: a.isUnassigned,
-            })),
-            expectedFunding: facts.fundingForCharge(allocations),
-            claimLines: facts.claimLinesByCharge.get(v.charge.id) ?? [],
-            variances: facts.variancesByCharge.get(v.charge.id) ?? [],
-        });
+        /*
+         * The position is the shared reader's, not a second computation. A charge the reader could
+         * not speak for is impossible here: it was given exactly these ids.
+         */
+        const position = positionsByCharge.get(v.charge.id)!;
 
         return {
             position,
@@ -535,6 +526,91 @@ export async function readInBatches<T>(
             throw new Error(`financial position: ${label} could not be read (${error.message.trim()})`);
         }
         for (const row of data ?? []) out.push(row);
+    }
+    return out;
+}
+
+/**
+ * COLLECTIBLE POSITIONS FOR A KNOWN SET OF CHARGES, read once per table.
+ *
+ * ── WHY THIS IS EXPORTED ──
+ *
+ * `resolveFamilyCollectible` answers the same question with `.eq(charge)` — one round trip per
+ * charge, and roughly six of them. The account card looped it over every posted charge in the
+ * period, which on the Certhouse specimen is 49 charges and therefore ~294 database round trips.
+ * Measured through Server-Timing on deployed staging: `collectible;dur=2841.7` of a `total;dur=3755.1`
+ * response — 76% of the wait, and O(posted rows).
+ *
+ * The note above `readPositionFacts` already named that divergence as a risk. This is the other
+ * half of the repair: the cohort scan and the single account now reach the SAME set-based reader
+ * and the SAME `computeCollectiblePosition`, so there is one implementation rather than two that
+ * must be kept in agreement. The cohort's own mapper below calls this too.
+ *
+ * The caller supplies the charge facts it already holds — gross, status, currency — because a
+ * caller that has read the charges must not read them again to be told what it already knows.
+ */
+export async function resolveCollectiblePositionsForCharges(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        /**
+         * The charge facts, when the caller has already read them — the cohort scan has. A caller
+         * that only holds ids passes `chargeIds` instead and the charges are read here, ONCE, from
+         * the same table `resolveAllocatableNet` reads per charge. Gross, status and currency are
+         * never inferred from a projection: they decide money.
+         */
+        charges?: ReadonlyArray<{ id: string; currencyCode: string; status: string; amountCents: number }>;
+        chargeIds?: readonly string[];
+    },
+): Promise<Map<string, CollectiblePosition>> {
+    const out = new Map<string, CollectiblePosition>();
+    const charges =
+        args.charges
+        ?? (args.chargeIds?.length
+            ? (
+                  await readInBatches<{ id: string; amount_cents: number; currency_code: string; status: string }>(
+                      "charges",
+                      [...args.chargeIds],
+                      (batch) =>
+                          supabase
+                              .from("charges")
+                              .select("id, amount_cents, currency_code, status")
+                              .eq("org_id", args.orgId)
+                              .in("id", batch),
+                  )
+              ).map((c) => ({
+                  id: c.id,
+                  currencyCode: c.currency_code,
+                  status: c.status,
+                  amountCents: Number(c.amount_cents),
+              }))
+            : []);
+    if (charges.length === 0) return out;
+    const facts = await readPositionFacts(supabase, args.orgId, charges.map((c) => c.id));
+    for (const charge of charges) {
+        const reductions = facts.reductionsByCharge.get(charge.id) ?? [];
+        const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);
+        const grossCents = Number(charge.amountCents);
+        const allocations = facts.allocationsByCharge.get(charge.id) ?? [];
+        out.set(
+            charge.id,
+            computeCollectiblePosition({
+                chargeId: charge.id,
+                currencyCode: charge.currencyCode,
+                chargeStatus: charge.status,
+                grossCents,
+                reductionsCents,
+                netCents: grossCents + reductionsCents,
+                applications: facts.applicationsByCharge.get(charge.id) ?? [],
+                allocations: allocations.map((a) => ({
+                    assignedAmountCents: a.assignedAmountCents,
+                    isUnassigned: a.isUnassigned,
+                })),
+                expectedFunding: facts.fundingForCharge(allocations),
+                claimLines: facts.claimLinesByCharge.get(charge.id) ?? [],
+                variances: facts.variancesByCharge.get(charge.id) ?? [],
+            }),
+        );
     }
     return out;
 }

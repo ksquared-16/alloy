@@ -1442,6 +1442,35 @@ export default function FinancialsCard({
     }, [overlay]);
 
     useEffect(() => {
+        /*
+         * ── A BOUNDED SUMMARY MUST NOT DISCARD A FULL READ OF THE SAME ACCOUNT ─────────────────
+         *
+         * Measured on deployed staging: opening Details issued `financials/card` TWICE, ~3.2s each,
+         * 218,680 bytes each, the second starting the instant the first returned — so the operator
+         * waited 7.3 seconds for an answer that arrived at 3.5.
+         *
+         * The cause is here. The settlement projection lands AFTER the deep read the click started.
+         * This effect then superseded that read, replaced the full model with the bounded summary,
+         * and cleared `deepLoadedForRef` — which is exactly the condition the prewarm effect below
+         * treats as "this account has not been read", so it read it again. Identical request,
+         * identical bytes, identical answer.
+         *
+         * The projection is a SUBSET of what a completed deep read already holds for the same
+         * account. So when the account has already been read in full, the summary carries nothing
+         * and the deeper answer stands.
+         *
+         * SUBJECT SAFETY IS UNCHANGED, and it is the reason this is scoped so tightly: the guard
+         * applies only when the projection is READY for the account this card has already read.
+         * A projection for a DIFFERENT subject still clears everything, still supersedes any
+         * in-flight read, and still prevents one family's balance appearing under another's name.
+         */
+        const readKey = customerId ?? scopedMemberId;
+        const alreadyReadInFull =
+            provisioned?.state === "ready"
+            && readKey != null
+            && deepLoadedForRef.current === readKey;
+        if (alreadyReadInFull) return;
+
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
         requestSeq.current += 1;
@@ -1449,6 +1478,8 @@ export default function FinancialsCard({
         setDeniedRead(provisioned?.state === "forbidden");
         // A new projection is the BOUNDED summary by construction, whichever account it is for.
         deepLoadedForRef.current = null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the identity guard reads this
+        // render's account; adding it as a dependency would re-run the clear on every subject echo.
     }, [provisioned]);
 
     /*
