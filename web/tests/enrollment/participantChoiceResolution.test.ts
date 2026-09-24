@@ -343,3 +343,30 @@ describe("the readers are total", () => {
         expect(choiceValueFor(junk, "A")).toBe("a");
     });
 });
+
+describe("an answer to an organization-vocabulary question is accepted", () => {
+    /*
+     * Measured in the mounted conversation: a parent pressed "Female", the request carried
+     * `{"value":"female"}` — the canonical value, correctly — and the runtime answered "That
+     * doesn't look quite right". `validateScalarValue` is the owner of the closed option set and it
+     * learns the allowed values from `optionValuesByFieldId`; the conversation passed `undefined`,
+     * so a field with `option_set_key` and no `static_options` had an EMPTY allowed set and refused
+     * every possible answer.
+     */
+    const VALIDATOR = join(process.cwd(), "lib/enrollment/participantRuntime/validateParticipantCandidate.ts");
+
+    it("the validator is given the resolved vocabulary, not undefined", () => {
+        const src = readFileSync(VALIDATOR, "utf8");
+        expect(src).toContain("const resolvedOptionValues = choiceValues(occurrenceChoices);");
+        expect(src).toMatch(/resolvedOptionValues\.length \? \{ \[field\.id\]: resolvedOptionValues \} : undefined/);
+        // The defect, stated: the old call handed the owner nothing.
+        expect(src).not.toMatch(/validateScalarValue\(field, value, "submit", undefined/);
+    });
+
+    it("an inline-choice field still validates from its own authored list", () => {
+        // `static_options` reach the validator on the field itself, so nothing here may depend on
+        // the occurrence for those.
+        const src = readFileSync(VALIDATOR, "utf8");
+        expect(src).toContain("field.static_options.map((o) => o.value)");
+    });
+});

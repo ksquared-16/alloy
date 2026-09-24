@@ -200,7 +200,28 @@ export function validateCandidateValue(
      * older caller cannot fall through to "anything goes".
      */
     if (field) {
-        const errors = validateScalarValue(field, value, "submit", undefined, ["value"]);
+        /*
+         * THE VALIDATOR NEEDS THE VOCABULARY, OR IT REFUSES EVERY ANSWER TO A CLOSED QUESTION.
+         *
+         * `optionValuesByFieldId` is how `validateScalarValue` learns the allowed values of a field
+         * that defers to an organisation option set — a public Form supplies it from
+         * `hydrateSelectOptionsForSchema`. This call passed `undefined`, so for a field with
+         * `option_set_key` and no `static_options` the allowed set was EMPTY and every value failed
+         * as "not one of the available choices".
+         *
+         * Measured in the mounted conversation: a parent pressed "Female", the request carried
+         * `{"value":"female"}` — the canonical value, correctly — and the runtime answered "That
+         * doesn't look quite right". The occurrence already carries the resolved choices, so the
+         * vocabulary is handed over from there rather than resolved a second time.
+         */
+        const resolvedOptionValues = choiceValues(occurrenceChoices);
+        const errors = validateScalarValue(
+            field,
+            value,
+            "submit",
+            resolvedOptionValues.length ? { [field.id]: resolvedOptionValues } : undefined,
+            ["value"],
+        );
         if (errors.length > 0) {
             return { ok: false, reason: participantWordingFor(errors[0]!.message, controlType) };
         }
