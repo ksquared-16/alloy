@@ -129,7 +129,8 @@ function assemble() {
     });
     const supplied = resolveSuppliedValuesFromTemplates(SPECIMEN, TEMPLATES).values;
     const groups = partyCollectionGroupRows(SPECIMEN, HELD, FD, KNOWN_ENTRIES) as Record<string, FormPayloadGroupRow[]>;
-    return { values: { ...ANSWERED, ...derived, ...supplied }, groups, derived, supplied };
+    const values: Record<string, unknown> = { ...ANSWERED, ...derived, ...supplied };
+    return { values, groups, derived, supplied };
 }
 
 const composed = async () => {
