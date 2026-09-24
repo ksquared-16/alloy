@@ -53,6 +53,7 @@ import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicy
  */
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
+import { resolveCollectiblePositionsForCharges } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { financialsClock, recordFinancialsSpans } from "@/lib/perf/routeTimingDiagnostic";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY, chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { readAccountReductions, type AccountReduction } from "@/lib/financials/reductions/readAccountReductions";
@@ -1686,18 +1687,32 @@ async function buildFinancialsCardVMInner(
      * cannot open an unbounded number of connections. The diagnostics above are staging's and are
      * kept: the call count is exactly what distinguishes one slow read from N reads.
      */
-    const COLLECTIBLE_CONCURRENCY = 8;
-    for (let i = 0; i < collectibleRows.length; i += COLLECTIBLE_CONCURRENCY) {
-        const positions = await clock.time("collectible_ms", () =>
-            Promise.all(
-                collectibleRows.slice(i, i + COLLECTIBLE_CONCURRENCY).map((row) =>
-                    resolveFamilyCollectible(supabase, { orgId: args.orgId, chargeId: row.chargeId }).catch(
-                        () => null,
-                    ),
-                ),
-            ),
-        );
-        for (const position of positions) {
+    /*
+     * ── ONCE PER TABLE, NOT ONCE PER CHARGE ────────────────────────────────────────────────────
+     *
+     * This asked `resolveFamilyCollectible` for one charge at a time. That resolver issues about
+     * six round trips per charge, so the Certhouse specimen — 49 posted charges in the period —
+     * cost roughly 294 of them. Bounded concurrency hid some of the latency and none of the work:
+     * measured on deployed staging through Server-Timing, `collectible;dur=2841.7` of a
+     * `total;dur=3755.1` response. 76% of the Details wait, growing with every charge a family
+     * accumulates.
+     *
+     * `resolveFinancialPosition` already read these same facts set-wise for the Accounts cohort —
+     * its own note says `resolveFamilyCollectible` "issues these same queries with `.eq(charge)`"
+     * and calls that a divergence waiting to happen. So this now reaches THAT reader rather than a
+     * second copy of it: one set-based read per table, chunked and fail-closed, and the identical
+     * `computeCollectiblePosition` doing the arithmetic. Same authority, same numbers, one
+     * implementation.
+     */
+    const positionsByCharge = await clock.time("collectible_ms", () =>
+        resolveCollectiblePositionsForCharges(supabase, {
+            orgId: args.orgId,
+            chargeIds: collectibleRows.map((row) => row.chargeId),
+        }).catch(() => new Map<string, Awaited<ReturnType<typeof resolveFamilyCollectible>>>()),
+    );
+    {
+        for (const row of collectibleRows) {
+            const position = positionsByCharge.get(row.chargeId);
             if (!position) {
                 // A charge the resolver cannot speak for (a void, a charge with no allocatable net)
                 // contributes nothing rather than failing the account — the same rule every other
