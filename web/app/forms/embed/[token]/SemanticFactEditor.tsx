@@ -21,6 +21,7 @@ import type {
     CompiledArtifactControl,
 } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import { displayValue, naturalFieldLabel } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import { isAbsenceValue } from "@/lib/forms/fieldSemantics";
 
 /**
  * What this control is called, when Alloy is entitled to call it anything.
@@ -77,15 +78,22 @@ export function SemanticFactEditor({
                                 <div className="text-[13px] text-alloy-midnight/50">
                                     {captionFor(control)}
                                 </div>
+                                {/* The words, not the key — see `display_value`. */}
                                 <div className="text-[16px] text-alloy-midnight">
-                                    {displayValue(control.value) || "—"}
+                                    {control.display_value || displayValue(control.value) || "—"}
                                 </div>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => {
                                     setEditing(control.field_id);
-                                    setDraft(control.value == null ? "" : String(control.value));
+                                    // Never seed the absence sentinel into the box; saving it would
+                                    // store `__absence__` as a typed answer.
+                                    setDraft(
+                                        control.value == null || isAbsenceValue(control.value)
+                                            ? ""
+                                            : String(control.value),
+                                    );
                                 }}
                                 className="shrink-0 text-[14px] text-alloy-midnight/55 underline underline-offset-2"
                                 data-artifact-edit={control.field_id}

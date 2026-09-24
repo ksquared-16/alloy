@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import type { CompiledArtifact, CompiledArtifactControl } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import { displayValue, naturalFieldLabel } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import { isAbsenceValue } from "@/lib/forms/fieldSemantics";
 
 function Fact({
     control,
@@ -104,9 +105,31 @@ export function CompiledArtifactReview({
                                     <Fact
                                         key={control.field_id}
                                         control={control}
-                                        onEdit={() => {
+                                        /*
+                                         * NO BOX FOR A FACT THE FAMILY DOES NOT SUPPLY.
+                                         *
+                                         * A derived value and one the organisation supplies both
+                                         * print here — they are on the paperwork — but an Edit
+                                         * button on either offers an input whose contents the next
+                                         * render discards.
+                                         */
+                                        onEdit={!control.participant_editable ? null : () => {
                                             setEditing(control.field_id);
-                                            setDraft(control.value == null ? "" : String(control.value));
+                                            /*
+                                             * NEVER SEED THE ABSENCE SENTINEL INTO THE BOX.
+                                             *
+                                             * `__absence__` is a state, not text. Seeding it meant a
+                                             * parent pressing Edit on "No known food sensitivities"
+                                             * met the literal string `__absence__`, and saving it
+                                             * would have written the sentinel as a typed answer —
+                                             * collapsing "they told us there are none" into prose
+                                             * that happens to spell it.
+                                             */
+                                            setDraft(
+                                                control.value == null || isAbsenceValue(control.value)
+                                                    ? ""
+                                                    : String(control.value),
+                                            );
                                         }}
                                     />
                                 );

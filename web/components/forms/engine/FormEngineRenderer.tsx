@@ -23,6 +23,7 @@ import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemField
 import { emptyPayload, ensureGroupRows, newRespondentAddedCollectionRow, setSignature, setTopLevelValue } from "./formEnginePayload";
 import { addAnotherLabel, allowsAdd, entryHeading, rowIsKnown, rowIsRemovable } from "@/lib/forms/partyCollection";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
+import { DEFAULT_ABSENCE_LABEL, absenceLabel, isAbsenceValue } from "@/lib/forms/fieldSemantics";
 
 export type FormEngineOptionChoice = { value: string; label: string };
 
@@ -137,9 +138,24 @@ export function FormEngineRenderer({
                 <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{desc}</p>
             ) : null;
 
-            if (readonly) {
+            /*
+             * "THE FAMILY SAID THERE ARE NONE" IS AN ANSWER, AND `__absence__` IS NOT ITS WORDS.
+             *
+             * The sentinel is deliberately not the button's text, so unanswered, explicitly-none
+             * and a real detail stay three distinct states all the way to the artifact. Every
+             * consumer that PRINTS a value therefore has to translate it, and this renderer did
+             * not: on the review surface a parent met a text box containing the literal string
+             * `__absence__` where they had answered "No known food sensitivities" — and saving it
+             * would have stored the sentinel as typed prose, collapsing the three states into two.
+             */
+            const absent = isAbsenceValue(raw);
+            const absentWords = absenceLabel(field) ?? DEFAULT_ABSENCE_LABEL;
+
+            if (readonly || absent) {
                 const display =
-                    field.type === "multiselect" && Array.isArray(raw)
+                    absent
+                        ? absentWords
+                        : field.type === "multiselect" && Array.isArray(raw)
                         ? raw.join(", ")
                         : raw === undefined || raw === null || raw === ""
                           ? "—"
@@ -157,6 +173,24 @@ export function FormEngineRenderer({
                         >
                             {display}
                         </div>
+                        {/*
+                          * Withdrawing the answer is one click, and it is the ONLY way back.
+                          *
+                          * Without it, standing in for the editable control here would make an
+                          * explicit "there are none" permanent on the one surface a parent corrects
+                          * their paperwork from. Clearing the sentinel is all it takes: the next
+                          * render is the ordinary authored control, empty.
+                          */}
+                        {absent && !readonly ? (
+                            <button
+                                type="button"
+                                onClick={() => onCellChange(field.id, "")}
+                                className="text-xs text-neutral-600 underline underline-offset-2"
+                                data-absence-withdraw={field.id}
+                            >
+                                Change this
+                            </button>
+                        ) : null}
                     </div>
                 );
             }

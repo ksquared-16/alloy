@@ -41,7 +41,8 @@ import {
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
-import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
+import { formFieldAsksParticipant, formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
+import { DEFAULT_ABSENCE_LABEL, absenceLabel, isAbsenceValue } from "@/lib/forms/fieldSemantics";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { authoredChoices, choiceLabels, type ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 
@@ -80,6 +81,19 @@ export type CompiledArtifactControl = {
      * question showed a family `option_1` on the document they were about to sign.
      */
     readonly display_value: string;
+    /**
+     * Whether the FAMILY may change this, as opposed to merely reading it.
+     *
+     * `resolved_shared_value` means "a fact that is filled in", and the review surface offered an
+     * Edit button on every one of them. For a derived value or one the organisation supplies that
+     * is an input whose contents the next render discards — the same defect the `read_only` rule
+     * was written for, reached by two semantics that came later. `formFieldAsksParticipant` is the
+     * one owner of the question, so the flag is read from it rather than re-derived here.
+     *
+     * Deliberately NOT a reclassification: these facts are on the family's paperwork and must keep
+     * printing on the review. What they must not have is a box.
+     */
+    readonly participant_editable: boolean;
     /** Authored prose, for `display_content`. */
     readonly content: string | null;
     /**
@@ -129,7 +143,17 @@ function hasValue(value: unknown): boolean {
  * else prints itself. An answer with no matching choice still prints, because it is the answer that
  * was given and hiding it would be worse than showing a key.
  */
-function displayForControl(options: readonly ParticipantChoice[], value: unknown): string {
+function displayForControl(field: FormField, options: readonly ParticipantChoice[], value: unknown): string {
+    /*
+     * "THE FAMILY SAID THERE ARE NONE" IS AN ANSWER, AND `__absence__` IS NOT ITS WORDS.
+     *
+     * The sentinel is deliberately not the button's text, so that unanswered, explicitly-none and
+     * a real detail stay three states all the way to the artifact. The DOCUMENT already printed
+     * the authored words for it; this surface printed the sentinel — a parent reviewing their own
+     * paperwork read `__absence__` where they had answered "No known food sensitivities", and
+     * pressing Edit seeded that string into the box.
+     */
+    if (isAbsenceValue(value)) return absenceLabel(field) ?? DEFAULT_ABSENCE_LABEL;
     if (!options.length) return value == null ? "" : Array.isArray(value) ? value.map(String).join(", ") : String(value);
     return choiceLabels(options, value).join(", ");
 }
@@ -196,7 +220,17 @@ function classify(
      * baseline over whatever the parent typed. An input whose value is discarded on write is worse
      * than no input at all.
      */
-    if (field.read_only === true) {
+    /*
+     * The same rule, for the two semantics that did not exist when it was written.
+     *
+     * `formFieldAsksParticipant` is the one owner of "is this the family's question", and it
+     * already knew that a DERIVED value and a CONFIGURATION-SUPPLIED value are not — the
+     * conversation has never asked for either. This classifier only tested `read_only`, so the
+     * change surface offered "Age at enrollment" and "Registration fee" as editable boxes whose
+     * contents the next render discards. That is the defect the comment above describes, reached
+     * by two more routes.
+     */
+    if (!formFieldAsksParticipant(field)) {
         return sharedKey != null && hasValue(value) ? "resolved_shared_value" : "display_content";
     }
 
@@ -261,7 +295,8 @@ export function compileParticipantArtifact(
                 options: readOptions(field),
                 required: field.required === true,
                 value: value ?? null,
-                display_value: displayForControl(readOptions(field), value ?? null),
+                display_value: displayForControl(field, readOptions(field), value ?? null),
+                participant_editable: formFieldAsksParticipant(field),
                 content: (field as { content?: string }).content ?? null,
                 shared_key: sharedKey,
             });
