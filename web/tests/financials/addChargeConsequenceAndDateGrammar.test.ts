@@ -73,18 +73,32 @@ const mounted = (over: Record<string, unknown> = {}) =>
         currency: "USD",
         previewSummary: "monthly_tuition $400.00",
         previewChanges: [],
-        discountCents: 4_000,
+        /*
+         * NEGATIVE, because that is what the resolver returns. `AppliedReduction.amountCents` is
+         * documented as "NEGATIVE cents. The sign is the direction money moves, and it is stored,
+         * not inferred." The first version of this fixture used a magnitude, which encoded the
+         * defect the mounted pass then found on deployed: "--$40.00" and a net of $440.00 for a
+         * $400.00 charge. A fixture that disagrees with the producer certifies nothing.
+         */
+        discountCents: -4_000,
         ...over,
     });
 
 describe("the preview states what the discount is worth, not only what it is called", () => {
-    it("carries the resolver's own reduction into the card as money", () => {
+    it("carries the resolver's own reduction into the card as money, sign and all", () => {
         const s = mounted();
-        expect(s.previewDiscountAmount, "the discount's money, not its rate").toBe("$40.00");
+        expect(s.previewDiscountAmount, "the discount's money, already signed by the domain").toBe("-$40.00");
+        expect(
+            (s.previewDiscountAmount ?? "").startsWith("--"),
+            "a second minus prefixed to an already-signed figure is the deployed defect",
+        ).toBe(false);
     });
 
     it("states the net, which is the number the operator came for", () => {
-        expect(mounted().previewNet, "$400.00 gross less a $40.00 discount").toBe("$360.00");
+        expect(
+            mounted().previewNet,
+            "$400.00 gross plus a -$40.00 reduction — subtracting a negative would read $440.00",
+        ).toBe("$360.00");
     });
 
     it("says nothing about a discount when none applies — null, never $0.00", () => {
@@ -124,6 +138,21 @@ describe("the preview states what the discount is worth, not only what it is cal
         expect(cmd, "the line prints the specimen's money").toMatch(/specimen\.previewDiscountAmount/);
         expect(cmd).toMatch(/data-addcharge-preview-net="true"/);
         expect(cmd).toMatch(/specimen\.previewNet/);
+        /*
+         * THE SIGN IS RENDERED, NEVER ADDED TO.
+         *
+         * The adapter's own tests cannot see this: they assert the figure it PRODUCES, and the
+         * doubling happened in the template that printed it. On deployed staging the line read
+         * "--$40.00". So the guard is on the markup — the value is the specimen's figure as-is,
+         * and no sign is interpolated in front of it.
+         */
+        expect(
+            /`-\$\{\s*specimen\.previewDiscountAmount\s*\}`/.test(cmd),
+            "prefixing a minus onto an already-signed figure is the deployed defect",
+        ).toBe(false);
+        expect(cmd, "the signed figure is printed as it came").toMatch(
+            /\?\s*specimen\.previewDiscountAmount\s*\n?\s*:/,
+        );
     });
 });
 

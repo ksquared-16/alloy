@@ -775,7 +775,7 @@ export default function AddChargeCommand({
                             {!controls.chargeDiscount.selectedPolicyId
                                 ? "None"
                                 : specimen.previewDiscountAmount
-                                  ? `-${specimen.previewDiscountAmount}`
+                                  ? specimen.previewDiscountAmount
                                   : (selectedDiscount?.label ?? "Selected")}
                         </span>
                     </p>
