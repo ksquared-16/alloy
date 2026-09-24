@@ -238,10 +238,11 @@ export async function resolveFinancialSubjectCohort(
      * facet rather than failing the cohort.
      */
     const sitesP = readAgreementSites(supabase, args.orgId, customerIds);
+    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds).catch(() => [] as HouseholdMemberRow[]);
     const facetsP = Promise.all([
-        readChildNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
+        membersP.then(childNamesFrom).catch(() => new Map<string, string[]>()),
         readContactNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
-        readCurrentPlacements(supabase, args.orgId, customerIds).catch((e) => {
+        membersP.then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members)).catch((e) => {
             /*
              * Non-fatal, and NOT silent. A household an operator cannot filter by room is still a
              * household they must be able to reach, so the rail renders — but a swallowed facet
@@ -392,26 +393,45 @@ function uniqueNames(values: Iterable<string>): string[] {
  * the child list and `customer_persons` below is the adult one. Inactive members are excluded: a
  * child who has left is not who an operator is looking for when they type a name today.
  */
-async function readChildNames(
+type HouseholdMemberRow = {
+    id: string | null;
+    customer_id: string | null;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    is_active: boolean | null;
+};
+
+/**
+ * THE HOUSEHOLD'S CHILDREN, READ ONCE.
+ *
+ * `readChildNames` and `readCurrentPlacements` both asked `customer_members` for the same
+ * households — the first for names, the second only to learn which member belongs to which
+ * household. Same table, same key, same batches, twice. Measured on deployed staging, the facet
+ * phase was 326.7 ms on top of the agreement-site reads it already overlaps, and the placement
+ * chain it sits in is members -> placements -> process instances.
+ *
+ * One read now feeds both, which removes a batched scan AND the first hop of that chain. The `id`
+ * is added to the select because the placement map needs it; nothing else about either answer
+ * changes.
+ */
+async function readHouseholdMembers(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
-): Promise<Map<string, string[]>> {
-    const out = new Map<string, Set<string>>();
-    if (customerIds.length === 0) return new Map();
-    const rows = await readInBatches<{
-        customer_id: string | null;
-        display_name: string | null;
-        first_name: string | null;
-        last_name: string | null;
-        is_active: boolean | null;
-    }>("household children", customerIds, (batch) =>
+): Promise<HouseholdMemberRow[]> {
+    if (customerIds.length === 0) return [];
+    return readInBatches<HouseholdMemberRow>("household children", customerIds, (batch) =>
         supabase
             .from("customer_members")
-            .select("customer_id, display_name, first_name, last_name, is_active")
+            .select("id, customer_id, display_name, first_name, last_name, is_active")
             .eq("org_id", orgId)
             .in("customer_id", batch),
     );
+}
+
+function childNamesFrom(rows: readonly HouseholdMemberRow[]): Map<string, string[]> {
+    const out = new Map<string, Set<string>>();
     for (const row of rows) {
         if (row.is_active === false) continue;
         const customerId = named(row.customer_id);
@@ -491,12 +511,14 @@ async function readCurrentPlacements(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
+    /* The households' children, already read for their names. Same rows, one scan. */
+    suppliedMembers?: ReadonlyArray<{ id: string | null; customer_id: string | null }>,
 ): Promise<Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>> {
     const empty = new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
     if (customerIds.length === 0) return empty;
 
     /* Household → its member ids, so a placement naming a child can be attributed to the account. */
-    const memberRows = await readInBatches<{ id: string; customer_id: string | null }>(
+    const memberRows = suppliedMembers ?? await readInBatches<{ id: string; customer_id: string | null }>(
         "placement members",
         customerIds,
         (batch) =>
