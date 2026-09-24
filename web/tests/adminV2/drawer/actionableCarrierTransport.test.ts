@@ -157,6 +157,37 @@ describe("two-phase drawer transport", () => {
         expect((r as { skipped: { reason: string } }).skipped.reason).toBe("classic_layout_deferred");
     });
 
+    it("A REFUSED ORG ASSERTION YIELDS NO CARRIER AND A 404", async () => {
+        /*
+         * The org assertion now runs ALONGSIDE compose instead of ahead of it, so that a median
+         * 118ms (and up to 3,807ms measured) leaves the critical path. The route holds the carrier
+         * until the assertion answers and writes only this line when it refuses. If that line were
+         * ever accompanied by a carrier, a caller whose right to the record was denied would have
+         * received its action set.
+         */
+        fetchMock.mockResolvedValue(streamed([`${JSON.stringify({ __not_found: true })}\n`]));
+        const seen: ActionableDrawerCarrier[] = [];
+        const r = await fetchOpportunityDrawerViewModelClient("opp-B", null, undefined, (c) => seen.push(c));
+        expect(seen).toHaveLength(0);
+        expect(r.ok).toBe(false);
+        expect((r as { status: number }).status).toBe(404);
+        expect((r as { error: string }).error).toBe("Not found");
+    });
+
+    it("the refusal wins even if a carrier line somehow precedes it", async () => {
+        // Defence in depth: the route cannot emit this order, and if it ever did the request must
+        // still resolve as a refusal rather than as a drawer.
+        fetchMock.mockResolvedValue(
+            streamed([
+                `${JSON.stringify({ [CARRIER_LINE_KEY]: carrierFor("opp-B") })}\n`,
+                `${JSON.stringify({ __not_found: true })}\n`,
+            ]),
+        );
+        const r = await fetchOpportunityDrawerViewModelClient("opp-B", null, undefined, () => {});
+        expect(r.ok).toBe(false);
+        expect((r as { status: number }).status).toBe(404);
+    });
+
     it("a compose failure survives becoming a line", async () => {
         fetchMock.mockResolvedValue(streamed([`${JSON.stringify({ __error: "boom" })}\n`]));
         const r = await fetchOpportunityDrawerViewModelClient("opp-B", null, undefined, () => {});
