@@ -1640,6 +1640,49 @@ export async function buildOpportunityDrawerVisiblePayload(
     phaseMs.location_lookup_ms = Date.now() - t0;
     return row;
   })();
+  /*
+   * THE SHELL JOIN DOES NOT WAIT FOR THE PRIMARY JOIN.
+   *
+   * `drawer_primary_parallel_ms` (P50 130 ms) and `shell_parallel_ms` (P50 632 ms) were serial
+   * stages of `visible_entity_ms` (P50 962 ms): 130 + 632 + 201 = 963, measured over n=24 on
+   * deployed staging. The shells were awaited after the primary join for one reason only — `vis`
+   * was constructed from its results.
+   *
+   * They do not read those results. Across all four shells the only host keys read are `id`,
+   * `primary_person_id`, `status`, `status_key`, `work_unit_id`, `customer_id`, `metadata`,
+   * `program_type` and `schedule_type`. Every one is a column of `data`. The primary join writes
+   * `_work_unit_department_id`, `_customer_name`, `_pipeline_stage_name`, `_status_display`,
+   * `_quote_total_display`, the lifecycle fields, `_primary_person_*`, `_primary_contact_*`,
+   * `_field_definitions` and `_record_surface` — and no shell reads any of them. The dependency was
+   * on the OBJECT, never on its contents.
+   *
+   * So `vis` is built from `data` alone and the shells start here. The primary join's assignments
+   * below land on the same object while the shells are in flight: the key sets are disjoint, and a
+   * single-threaded runtime cannot interleave within either write.
+   *
+   * NOT a query-count repair — the same reads happen, and each leg is timed exactly as before.
+   * Only the schedule changes.
+   */
+  const vis: Record<string, unknown> = { ...data };
+  const documentActor = options?.documentActor ?? null;
+  const tShell0 = Date.now();
+  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      return await work;
+    } finally {
+      phaseMs[key] = Date.now() - t0;
+    }
+  };
+  const shellP = Promise.all([
+    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
+    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
+  ]);
+  // The `await` below is what reports a rejection, exactly as `await Promise.all(...)` did. This
+  // only keeps the interval until then from being read as an unhandled rejection.
+  shellP.catch(() => {});
   const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible, locRowV] = await Promise.all([
     wuDeptP,
     customerP,
@@ -1649,7 +1692,6 @@ export async function buildOpportunityDrawerVisiblePayload(
     locP,
   ]);
   phaseMs.drawer_primary_parallel_ms = Date.now() - tParallel0;
-  const vis: Record<string, unknown> = { ...data };
   vis._work_unit_department_id = hintDepartmentId
     ? hintDepartmentId
     : wuidForDept
@@ -1718,28 +1760,7 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
-  const documentActor = options?.documentActor ?? null;
-  /**
-   * Bounded per-leg timing for the shell batch. `visible_entity_ms` measured 1,091 ms of an 1,880 ms
-   * compose while only ~584 ms of it was attributable, and a dominant leg must never be inferred
-   * from the aggregate. `phaseMs` is the same object `vis._drawer_primary_phase_ms` already points
-   * at, so these writes surface in the response's `phases_ms` like the earlier legs.
-   */
-  const tShell0 = Date.now();
-  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
-    const t0 = Date.now();
-    try {
-      return await work;
-    } finally {
-      phaseMs[key] = Date.now() - t0;
-    }
-  };
-  await Promise.all([
-    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
-    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
-    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
-    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
-  ]);
+  await shellP;
   phaseMs.shell_parallel_ms = Date.now() - tShell0;
   vis._relationship_displays = {};
   const householdIdV =
