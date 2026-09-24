@@ -176,7 +176,17 @@ export function isFinancialSubjectVisible(args: {
 export async function resolveFinancialSubjectCohort(
     supabase: SupabaseClient,
     args: FinancialSubjectArgs,
+    /*
+     * ── SAY WHERE THE COHORT'S TIME GOES ───────────────────────────────────────────────────────
+     *
+     * The route's `cohort;dur=` is 645-717 ms and gates the Accounts account list. A slice already
+     * guessed at what was inside that label — collapsed the facet chaining from seven waves to
+     * four — and the deployed number did not move. A duration with no interior is how that happens
+     * twice, so the caller may pass a mark and get the phases.
+     */
+    mark?: (name: string) => void,
 ): Promise<FinancialSubjectCohort> {
+    const phase = (name: string) => mark?.(name);
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
     const scanCap = Math.min(Math.max(args.scanCap ?? FINANCIAL_SUBJECT_SCAN_CAP, 1), FINANCIAL_SUBJECT_SCAN_CAP);
     const scope = { siteLocationId: activeSiteLocationId, siteScope: args.siteScope };
@@ -208,6 +218,7 @@ export async function resolveFinancialSubjectCohort(
     }
     const truncated = !reachedEnd && households.length >= scanCap;
 
+    phase("households");
     const customerIds = households.map((h) => h.id).filter(Boolean);
     /*
      * ── THE FACETS NEVER NEEDED THE AGREEMENT SITES ────────────────────────────────────────────
@@ -242,6 +253,7 @@ export async function resolveFinancialSubjectCohort(
         }),
     ]);
     const sitesByCustomer = await sitesP;
+    phase("agreement_sites");
     /*
      * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
      * read that fails leaves that facet empty rather than failing the cohort, because a household
@@ -250,6 +262,7 @@ export async function resolveFinancialSubjectCohort(
      * convenience into an outage.
      */
     const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await facetsP;
+    phase("facets");
 
     const subjects: FinancialSubjectRow[] = [];
     for (const household of households) {
@@ -273,6 +286,7 @@ export async function resolveFinancialSubjectCohort(
         });
     }
 
+    phase("assemble");
     return { subjects, scope, truncated, scanCap };
 }
 
