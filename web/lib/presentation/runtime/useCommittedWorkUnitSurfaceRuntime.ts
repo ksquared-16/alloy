@@ -217,6 +217,21 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
      * TARGET restores a begin/end cycle that actually closes, and leaves the child-scoped Mission
      * reserve (which is a reveal CONTRACT, not this gate) untouched.
      */
+    /*
+     * A->G BOUNDARY F. The committed snapshot's subject, marked when it changes, so the wait can be
+     * attributed to either "attention move -> snapshot commits" or "snapshot commits -> record
+     * runtime notices". Diagnostic only.
+     */
+    const committedSubjectId =
+        focus.current?.snapshot?.terminal === "operational"
+            ? String(focus.current.snapshot.recordOfAttention?.id ?? "")
+            : "";
+    const lastCommittedRef = useRef<string | null>(null);
+    if (committedSubjectId && lastCommittedRef.current !== committedSubjectId) {
+        lastCommittedRef.current = committedSubjectId;
+        recordRevealGateEvent("committed_subject", committedSubjectId);
+    }
+
     const committedRevealKey = focus.current ? (focus.current.ref.target ?? "") || null : null;
     useEffect(() => {
         if (committedRevealKey) beginWorkUnitPrimaryReveal();
@@ -373,6 +388,14 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
              * consumable because the selected record never loads through the prewarm scheduler.
              */
             beginWorkUnitPrimaryReveal();
+            /*
+             * A->G BOUNDARY C. Measured on deployed 98859b66: the interval from this click to the
+             * record runtime seeing the new subject is P50 ~1,061ms, with the main thread IDLE for
+             * 98% of it and no request spanning it. So it is neither compute nor network - something
+             * is waiting. These two marks split that interval at the only seam between them, using
+             * the reveal-gate ring buffer that is already production-visible.
+             */
+            recordRevealGateEvent("attn_move_requested", String(row.entityId ?? ""));
             // A SUBJECT-scope movement — cannot express a lens/target change (compile-enforced).
             // This is the WHOLE gesture: committed Focus becomes the sole subject owner, and the
             // inline Record Work Runtime resolves that subject into the VM. No drawer state is written

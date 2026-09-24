@@ -30,7 +30,18 @@ test("ox3 gate trace", async ({ page }) => {
                 }
             }).observe({ entryTypes: ["resource"] });
         } catch { /* ignore */ }
-        w.__ox3 = { reqs, clickAt: -1 };
+        /*
+         * MAIN-THREAD OCCUPANCY. A->G has no request spanning it in 7/8 samples, so the ~992ms is
+         * client work. Long tasks say whether the thread is BUSY (compute we own) or IDLE (waiting
+         * on a scheduler/effect ordering) - two different owners with two different repairs.
+         */
+        const longtasks: Array<{ at: number; dur: number }> = [];
+        try {
+            new PerformanceObserver((l) => {
+                for (const e of l.getEntries()) longtasks.push({ at: Math.round(e.startTime), dur: Math.round(e.duration) });
+            }).observe({ entryTypes: ["longtask"] });
+        } catch { /* not all browsers */ }
+        w.__ox3 = { reqs, longtasks, clickAt: -1 };
     });
 
     await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 120_000 });
@@ -77,23 +88,54 @@ test("ox3 gate trace", async ({ page }) => {
          * read from data-card-subject, which each card now carries from context.subject.id.
          */
         const bodySubject = () => document.querySelector('[data-focus-panel-body-subject]')?.getAttribute('data-focus-panel-body-subject') || null;
+        // The subject whose payload the CARDS are rendering — the honest "is B on screen" signal.
+        const cardSubject = () => {
+            const els = [...document.querySelectorAll('[data-card-subject]')];
+            if (!els.length) return null;
+            const vals = [...new Set(els.map((e) => e.getAttribute('data-card-subject')))];
+            return vals.length === 1 ? vals[0] : 'MIXED';
+        };
         w.subjectBefore = bodySubject();
-        const cardsFor = (id) => id ? document.querySelectorAll('[data-card-subject="' + id + '"]').length : 0;
+        w.cardSubjectBefore = cardSubject();
         w.__mo = new MutationObserver(() => {
-            const nowSubject = bodySubject();
-            const isB = nowSubject && nowSubject !== w.subjectBefore;
-            if (idText() && idText() !== w.identityBefore && isB) mark('T4_authoritative');
-            if (w.milestones.T4_authoritative == null) return;
-            // T5: the operator can act on B — an enabled header action WHILE the body is bound to B
-            // and at least one card has actually composed against B.
+            const nowBody = bodySubject();
+            const nowCards = cardSubject();
+            w.cardsWithSubject = document.querySelectorAll('[data-card-subject]').length;
+            w.cardSubjectNow = nowCards;
+            // T4_snapshot: the committed operational snapshot moved. This is the FAST commit and is
+            // NOT proof that B is on screen — the panel holds the prior grid past this point.
+            if (nowBody && nowBody !== w.subjectBefore) mark('T4_snapshot');
+            // T4_visible: the cards themselves now render B's payload. This is the atomic swap.
+            const cardsAreB = nowCards && nowCards !== 'MIXED' && nowCards !== w.cardSubjectBefore;
+            if (cardsAreB) mark('T4_visible');
+            /*
+             * T5_ACTION_ENABLED — CAN THE OPERATOR ACT ON B, independent of whether B's CAPABILITY
+             * CARDS have rendered.
+             *
+             * The milestone below gates on cardsAreB because Slice 4 measured A's RETAINED grid
+             * satisfying "six cells and an enabled action" while B was selected. Slice 7 removed that
+             * retention: the panel no longer shows A's cards under B, and 0/23 mixed-subject frames
+             * were measured. So the hazard that definition guarded against is gone, and requiring
+             * cards would now under-report actionability for a frame that legitimately carries
+             * canonical action eligibility before its capability cards resolve.
+             *
+             * This is NOT optimistic: it requires the COMMITTED SUBJECT to be B and the action to be
+             * genuinely enabled, which only canonical eligibility produces. Recorded alongside the
+             * strict milestone, never instead of it, so the two can disagree visibly.
+             */
+            if (nowBody && nowBody !== w.subjectBefore) {
+                const early = document.querySelector(HEADER + ' [data-alloy-os-fp-header-actions="true"] button:not([disabled])');
+                if (early) mark('T5_action_enabled');
+            }
+            if (!cardsAreB) return;
+            // T5 and T6 are only evaluated once the cards are B's — A's retained content can no
+            // longer satisfy them, which is what invalidated every earlier definition.
             const act = document.querySelector(HEADER + ' [data-alloy-os-fp-header-actions="true"] button:not([disabled])');
-            if (act && cardsFor(nowSubject) >= 1) mark('T5_actionable');
-            // T6: every configured cell carries B's content — no cell still showing A, none reserved.
+            if (act) mark('T5_actionable');
             const cells = document.querySelectorAll('.alloy-os-ucard').length;
             const reserved = document.querySelectorAll('[data-focus-panel-cell-reserved="true"]').length;
-            if (cells >= 6 && reserved === 0 && cardsFor(nowSubject) >= cells) mark('T6_first_order');
-            w.cardsB = cardsFor(nowSubject);
-            w.cellsTotal = cells;
+            const bCards = document.querySelectorAll('[data-card-subject="' + nowCards + '"]').length;
+            if (cells >= 6 && reserved === 0 && bCards >= cells) mark('T6_first_order');
         });
         w.__mo.observe(document, { childList: true, subtree: true, attributes: true, characterData: true });
         w.gateAtClick = (window.__ALLOY_REVEAL_GATE_DIAG__||[]).length;
@@ -126,11 +168,23 @@ test("ox3 gate trace", async ({ page }) => {
             gateEventsAfterClick: gate.filter((g) => g.rel >= -200).slice(0, 40),
             postClickRequests: app.filter((r) => r.rel >= -50).sort((a, b) => a.rel - b.rel).slice(0, 25)
                 .map((r) => ({ ...r, subject: subjectOf(r.path) })),
+            /*
+             * Requests that STARTED BEFORE the click and were still in flight when it happened.
+             * The post-click list cannot see these, and excluding them is how a hover-warmed
+             * provisioning fetch still running at click time looks like "no network on the path".
+             */
+            inFlightAtClick: app.filter((r) => r.rel < -50 && r.rel + r.dur > 0)
+                .map((r) => ({ ...r, subject: subjectOf(r.path), endsAfterClick: r.rel + r.dur }))
+                .sort((a, b) => a.rel - b.rel).slice(0, 15),
             selectedHeader: selected,
+            longtasksAfterClick: (w.__ox3 as unknown as { longtasks?: Array<{ at: number; dur: number }> }).longtasks
+                ?.filter((t) => t.at >= clickAt - 50).map((t) => ({ rel: t.at - clickAt, dur: t.dur })).slice(0, 40) ?? [],
             milestones: (w.__ox3 as unknown as { milestones?: Record<string, number> }).milestones ?? null,
             identityBefore: (w.__ox3 as unknown as { identityBefore?: string }).identityBefore ?? null,
             subjectBefore: (w.__ox3 as unknown as { subjectBefore?: string }).subjectBefore ?? null,
-            cardsBoundToB: (w.__ox3 as unknown as { cardsB?: number }).cardsB ?? null,
+            cardsBoundToB: (w.__ox3 as unknown as { cardsWithSubject?: number }).cardsWithSubject ?? 0,
+            cardSubjectNow: (w.__ox3 as unknown as { cardSubjectNow?: string }).cardSubjectNow ?? null,
+            cardSubjectBefore: (w.__ox3 as unknown as { cardSubjectBefore?: string }).cardSubjectBefore ?? null,
             cellsTotal: (w.__ox3 as unknown as { cellsTotal?: number }).cellsTotal ?? null,
         };
     });

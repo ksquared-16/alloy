@@ -289,9 +289,16 @@ describeLive("Thread 7 Core Resources, over the wire", () => {
         });
 
         it("a filter narrows within authority and cannot widen past it", async () => {
-            const all = await get("riverside", "/api/v1/enrollments?limit=200");
             const narrowed = await get("riverside", `/api/v1/enrollments?site_id=${RIVERSIDE}&limit=200`);
-            expect(narrowed.data.length).toBeLessThanOrEqual(all.data.length);
+            // Assert the PROPERTY, not a count. Comparing the size of two separately fetched pages
+            // is a proxy that another suite writing to this tenant can break between the requests —
+            // measured twice, as `expected 13 to be less than or equal to 12`, with nothing wrong.
+            // Every row a filter returns being inside the authority is the actual claim, and it is
+            // both stricter and immune to concurrent inserts.
+            expect(narrowed.data.length, "the filter must return something to narrow").toBeGreaterThan(0);
+            for (const row of narrowed.data) {
+                expect(String(row.site_location_id), "a filter may only narrow within authority").toBe(RIVERSIDE);
+            }
             // Naming the site this installation may NOT reach yields nothing, not everything.
             const widened = await get("riverside", `/api/v1/enrollments?site_id=${LAKESIDE}&limit=200`);
             expect(widened.data).toHaveLength(0);

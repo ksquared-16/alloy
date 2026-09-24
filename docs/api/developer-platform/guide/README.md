@@ -112,7 +112,7 @@ V1 scopes:
 | Scope | Grants |
 |---|---|
 | `locations.read` | Read authorized sites, rooms, and operational units |
-| `children.read` | Read children currently in service within authorized locations |
+| `children.read` | Read children with an enrollment at authorized locations (not one cancelled before it began) |
 | `households.read` | Read the household shell for visible children |
 | `relationships.read` | Read visible child-adult relationships and effective pickup authority |
 | `relationships.contact.read` | Read email and phone for adults already visible through relationships |

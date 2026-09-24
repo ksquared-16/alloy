@@ -50,7 +50,14 @@ describe("gate A — the identity reaches the browser's commit model", () => {
     it("every hop of the transport chain is wired", () => {
         // Each of these is a separate file; a break anywhere silently reserves the cards again,
         // which is exactly the defect this closes and is invisible from any single file.
-        expect(SURFACE).toContain("resolvedParticipant={op ? op.resolvedParticipant ?? null : null}");
+        /*
+         * The hop is unchanged; its GUARD is. `resolvedParticipant` is a fact about a record, so it
+         * now flows through `factsOp`, which is the answer only while that answer describes the
+         * SELECTED subject. Identity commits as soon as the operator picks a row, so an ungated
+         * `op` here would deliver the previous subject's participant under the new subject's
+         * identity — the mixed-subject frame, reached through this very chain.
+         */
+        expect(SURFACE).toContain("resolvedParticipant={factsOp ? factsOp.resolvedParticipant ?? null : null}");
         expect(CTX).toContain("resolvedParticipant: resolvedParticipant ?? null");
         expect(PANEL).toContain("resolvedParticipant: operational.resolvedParticipant ?? null");
         expect(BODY).toContain("resolvedParticipant: commitCritical.resolvedParticipant ?? null");

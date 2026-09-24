@@ -106,30 +106,47 @@ export async function readAssignmentDiscountPosition(
     const periodKey = (periods?.current.start ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
     const periodStartForExceptions = periods?.current.start ?? `${periodKey}-01`;
 
-    const forecast = await forecastAssignmentReductions(supabase, {
-        orgId: args.orgId,
-        opportunityCustomerMemberId: ocmId,
-        customerId: row.customer_id,
-        customerMemberId: accepted.customerMemberId,
-        enrollmentAgreementId: row.id,
-        grossCents: accepted.amountCents,
-        currencyCode: accepted.currencyCode,
-        periodKey,
-        categoryKey: "tuition",
-    });
-
     /*
-     * WHAT THIS RELATIONSHIP IS EXCEPTED FROM — beside the forecast, never folded into it. The
-     * forecast answers "what would happen"; this answers "what did somebody decide, and why", and
-     * an operator looking at a discount that is not applying needs the second to make sense of the
-     * first.
+     * ── THREE INDEPENDENT QUESTIONS, ASKED TOGETHER ──────────────────────────────────────────
+     *
+     * The two reads above are genuinely dependent — the agreement is found by an id the tuition
+     * view returns — and these three are not: the forecast needs the household, the exception
+     * history needs only the relationship, and the policy labels need only the organisation.
+     * Running them in series made the position four sequential round trips deep, and this read is
+     * itself fanned out per relationship, so the serialisation was multiplied by the size of the
+     * family before anything reached the operator.
+     *
+     * MEASURED AND NOT FIXED HERE: `readPolicies` is org-scoped, so every relationship asks the
+     * same question and gets the same answer — a family of three reads one policy list three
+     * times. Hoisting it to the caller would change this reader's contract for every other
+     * consumer, which is more than a summary row should ask for; it is recorded rather than
+     * quietly reshaped.
+     *
+     * WHAT THIS RELATIONSHIP IS EXCEPTED FROM stays beside the forecast and is never folded into
+     * it. The forecast answers "what would happen"; the history answers "what did somebody decide,
+     * and why", and an operator looking at a discount that is not applying needs the second to
+     * make sense of the first.
      */
-    const history = await readExceptionHistory(supabase, {
-        orgId: args.orgId,
-        opportunityCustomerMemberId: ocmId,
-    }).catch(() => []);
+    const [forecast, history, policies] = await Promise.all([
+        forecastAssignmentReductions(supabase, {
+            orgId: args.orgId,
+            opportunityCustomerMemberId: ocmId,
+            customerId: row.customer_id,
+            customerMemberId: accepted.customerMemberId,
+            enrollmentAgreementId: row.id,
+            grossCents: accepted.amountCents,
+            currencyCode: accepted.currencyCode,
+            periodKey,
+            categoryKey: "tuition",
+        }),
+        readExceptionHistory(supabase, {
+            orgId: args.orgId,
+            opportunityCustomerMemberId: ocmId,
+        }).catch(() => []),
+        readPolicies({ supabase, orgId: args.orgId } as never).catch(() => []),
+    ]);
     const policyLabels = new Map(
-        (await readPolicies({ supabase, orgId: args.orgId } as never).catch(() => [])).map(
+        policies.map(
             /* Same precedence as the forecast: configured name, then authored value, then kind. */
             (p) => [p.id, p.label ?? (p.params?.label as string | undefined) ?? p.kind] as const,
         ),

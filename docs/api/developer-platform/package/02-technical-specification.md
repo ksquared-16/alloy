@@ -248,7 +248,7 @@ The thirteen grantable scopes:
 | Scope | What it permits | What it does not |
 | --- | --- | --- |
 | `locations.read` | Read authorized sites, rooms and operational units | Any write; any other resource |
-| `children.read` | Identity and lifecycle of children in service inside the boundary | Contact details, guardians, health, anything about an adult |
+| `children.read` | Identity and lifecycle of enrolled children inside the boundary | Contact details, guardians, health, anything about an adult |
 | `households.read` | The household a visible child belongs to | Any member list; billing; siblings outside the boundary |
 | `relationships.read` | Adult↔child relationships and effective pickup authority | Contact points; any safeguarding detail or reason |
 | `relationships.contact.read` | Email and phone for those adults | Anything `relationships.read` does not already permit |
@@ -401,6 +401,31 @@ what counts as participation in service.
 The practical consequence for your planning: **expect fewer children than the
 organization has records for.** If a child you expect is absent, check their
 enrollment before reporting a defect.
+
+**An enrollment that was cancelled before it began never makes a child visible.**
+A family who signed and then withdrew before their child's first day was never a
+participant in service, so no record of them reaches this API. Every other state
+does make a child visible, including one that has `ended`: service happened, and
+your attendance and billing history must still be able to resolve who the child
+was. Concretely:
+
+| Enrollment status | Child visible | Why |
+| --- | --- | --- |
+| `pending_start` | Yes | Committed. You need the roster before the first day. |
+| `active` | Yes | In service. |
+| `ending` | Yes | Still in service, with a known last day. |
+| `ended` | Yes | Served and concluded — history stays resolvable. |
+| `canceled` | **No** | Withdrawn before service began; never a participant. |
+
+**Visibility can end, and you will see it end.** The one path is a `pending_start`
+enrollment that is cancelled: the child then leaves `GET /api/v1/children`, their
+household leaves `GET /api/v1/households`, and their relationships leave
+`GET /api/v1/relationships`. This is never silent — the enrollment itself remains
+readable and turns `canceled`, and cancelling bumps its `updated_at`, so a normal
+`GET /api/v1/enrollments?updated_since=...` pass delivers the change. **Treat a
+child's disappearance from `/children` as a signal to read `/enrollments`, not as
+data loss.** A child with commitments at two sites stays visible while any one of
+them is uncancelled.
 
 ### 8.2 `GET /api/v1/children`
 
@@ -664,23 +689,66 @@ Not an oversight, and not a roadmap gap in most cases:
 
 ### How things end — and why `DELETE` is missing
 
-**No resource on this API supports physical deletion.** This is a complete
-lifecycle, not a missing feature. Do not wait for `DELETE` endpoints.
+**Canonical history is never destructively deleted.** Every resource you can
+create through this API offers a governed way to end, cancel, supersede, correct
+or reverse it — chosen to match what actually happened. Do not wait for `DELETE`
+endpoints: the operation you need already exists under a name that says which of
+those it is.
 
-| Resource | How it ends |
-| --- | --- |
-| Children | archived — `status` becomes `inactive` |
-| Relationships | ended by status |
-| Enrollment | effective end — `end_date` is set, or it is cancelled before it starts |
-| Placements | **superseded** — a new placement names the one it replaces |
-| Schedule assignments | **superseded** |
-| Staff | effective end |
-| Attendance | **reversed** — a reversal fact supersedes the original |
-| Locations, Households | not deletable through this API |
+That distinction is the point, and it is not pedantry. **A change and a mistake
+are different truths.** Superseding a placement says the child really was in that
+room until the move. Cancelling one says they never were. If the only tool were
+supersession, correcting a record created in error would publish a period of care
+that never happened — and you, having already synchronized the original, would
+have no way to tell the two apart afterwards.
 
-Supersession is why your mirror stays correct: the record you already stored is
-never rewritten or removed, so you learn about the change through ordinary
-incremental synchronization instead of diverging silently.
+| Resource | Ended normally | Never should have been effective |
+| --- | --- | --- |
+| Children | archived — `status` becomes `inactive` | — (identity is not created through this API) |
+| Relationships | ended by status | — |
+| Enrollment | effective end — `end_date` is set | **cancelled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
+| Placements | **superseded** — a new placement names the one it replaces | **cancelled** — `POST /placements/cancel` |
+| Schedule assignments | **superseded** | **cancelled** — `POST /schedule-assignments/cancel` |
+| Attendance | **reversed** — a reversal fact supersedes the original | **reversed** — the fact is a tombstone, never a deletion |
+| Staff | effective end | — |
+| Locations, Households | not deletable through this API | — |
+
+### The six words, and which one you want
+
+Each names a different thing that happened. Reading `status` tells you which, so you
+never have to guess why a record changed.
+
+| Word | What it asserts | When Alloy uses it |
+| --- | --- | --- |
+| **end** | It was true, and then it concluded | A child finishes their time with the service |
+| **cancel** | A planned commitment was withdrawn before it became true | A family signs and then withdraws before the first day |
+| **supersede** | It was true, and a new state replaced it | A child moves rooms, or a schedule changes |
+| **void** | The record was created in error and was never true | An enrollment recorded against the wrong child |
+| **reverse** | A recorded fact did not happen | A check-in that was never real |
+| **correct** | The fact happened, but a recorded detail was wrong | A check-in with the wrong time or room |
+
+The pairs that are easy to confuse are worth stating plainly. **Cancel and void are
+not synonyms**: cancelling says a commitment existed and was withdrawn in time,
+voiding says the record never represented anything. **Supersede and void are not
+synonyms either**: superseding keeps asserting that the old state was real for the
+period it covered, which is exactly what you do not want to publish about a record
+that was a mistake.
+
+Voiding an enrollment is deliberately hard to misuse. If Alloy holds attendance for
+it, a child actually arrived, and the request is refused with `409` — real history
+cannot be rewritten by calling it a mistake.
+
+Nothing disappears in any of these. The record you already stored is never
+rewritten or removed; its `status` changes and you learn about it through ordinary
+incremental synchronization. Read `status` to decide what a record means:
+`superseded` and `ended` describe something that was true for a period, while
+`canceled` says it never took effect and nothing should be derived from it.
+
+One limit worth stating plainly rather than discovering: a record that has already
+closed cannot be cancelled. Once a placement or assignment has been superseded or
+ended, it asserts real history that occupancy and billing already depend on, and
+denying it retroactively would be a different and much larger operation than this
+one. Cancellation applies while a record is still effective.
 
 ### Answering the five questions for any resource
 

@@ -50,6 +50,16 @@ export type ReductionPolicyKind = "waiver" | "sibling_discount" | "discount";
  */
 export const STACK_ORDER: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
 
+/**
+ * THE POLICY TYPES THAT REDUCE MONEY, named once.
+ *
+ * The same three, and the same list, but a different question from STACK_ORDER: that one says in
+ * what order they stack, this one says which policy types are reductions at all. Two callers had
+ * each declared their own private copy and a third was about to — and a surface filtering on a
+ * stale copy would offer an operator a proration rule in a discount selector.
+ */
+export const REDUCTION_KINDS: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
+
 /** One authored policy, already narrowed to the winner for its type and scope. */
 export type ReductionPolicy = {
     id: string;
@@ -82,6 +92,24 @@ export type EligibilityFacts = {
     siblingCount: number;
     /** A person on this household holds an employment covering the service period. */
     employeeHousehold: boolean;
+    /*
+     * ── POLICIES THIS RELATIONSHIP HAS BEEN EXPLICITLY GIVEN ──────────────────────────────────
+     *
+     * Until this existed, a child received a discount only by satisfying a RULE — sibling rank and
+     * count, or an employee household — and an operator who wanted to give one family a configured
+     * discount the rules did not already reach had no way to say so.
+     *
+     * An assignment satisfies the policy's RELATIONSHIP-level eligibility and NOTHING ELSE. It
+     * does not decide whether the policy covers this charge, whether the category may be
+     * discounted at all, or whether an exception or exclusion removes it. Those gates are below
+     * and the assignment passes through every one of them, because "which policies does this child
+     * receive" and "does this policy apply to this charge" are two different questions and only
+     * the first is an operator's to answer.
+     *
+     * Server-resolved like every other fact here: a browser that could declare itself assigned
+     * could grant itself a discount.
+     */
+    assignedPolicyIds?: readonly string[];
 };
 
 export type AppliedReduction = {
@@ -121,7 +149,16 @@ export type NotEligibleReason =
      * Collapsing it into `category_not_covered` would tell an operator their configuration is
      * wrong when somebody on their team decided this on purpose and said why.
      */
-    | "excluded_by_exception";
+    | "excluded_by_exception"
+    /**
+     * A policy that applies to this relationship, deliberately withheld from THIS charge.
+     *
+     * Deliberately its own reason rather than folded into `excluded_by_exception`: the two are
+     * different decisions with different blast radius, and an operator reading "excluded for this
+     * assignment" when only one charge was waived would believe the family had lost the discount
+     * entirely.
+     */
+    | "excluded_by_charge_exception";
 
 export type RefusalReason =
     | "unreadable_basis"
@@ -229,7 +266,25 @@ function evaluateOne(
         };
     }
 
-    if (policy.kind === "sibling_discount") {
+    /*
+     * ── AN EXPLICIT ASSIGNMENT ANSWERS THE RELATIONSHIP QUESTION, AND ONLY THAT ───────────────
+     *
+     * The two gates below ask whether this RELATIONSHIP qualifies: enough siblings, the right
+     * rank, an employee household. An operator who assigned this policy to this relationship has
+     * answered that question themselves, deliberately and attributably, so the rules do not get
+     * to answer it again.
+     *
+     * NOTE WHAT IS ABOVE THIS LINE AND CANNOT BE REACHED FROM HERE: `coversCategory` and
+     * `chargeCategorySemantics(...).discountable` already ran. A sibling discount assigned to a
+     * child STILL cannot reduce a Registration Fee when the policy's own `applies_to` excludes
+     * fees, and still cannot reduce a charge whose category is not discountable at all. That is
+     * the intersection this model turns on: assignment says which policies a child receives,
+     * policy eligibility says whether one applies to a charge, and an operator may decide the
+     * first without being able to overrule the second.
+     */
+    const assigned = (facts.assignedPolicyIds ?? []).includes(policy.id);
+
+    if (!assigned && policy.kind === "sibling_discount") {
         const minSiblings = num(policy.params.min_siblings) ?? 2;
         if (facts.siblingCount < minSiblings) return { skip: "not_enough_siblings" };
         const rankRule = typeof policy.params.applies_to_rank === "string" ? policy.params.applies_to_rank : "subsequent";
@@ -238,7 +293,7 @@ function evaluateOne(
         if (rankRule !== "all" && facts.siblingRank < minSiblings) return { skip: "rank_not_covered" };
     }
 
-    if (policy.kind === "discount") {
+    if (!assigned && policy.kind === "discount") {
         // Employee eligibility is a CONFIGURED requirement, not a hard-coded discount type. The
         // shared policy substrate stays free of childcare vocabulary; the tenant expresses "staff
         // families" and the server proves it from `employments`.
@@ -311,9 +366,21 @@ export function resolveFinancialReductions(args: {
      * forecast cannot promise a discount the application path will withhold.
      */
     excludedPolicyIds?: readonly string[];
+    /**
+     * Policies withheld from THIS charge alone, resolved by `chargePolicyExclusionService`.
+     *
+     * Same reasoning as the relationship exclusion above, one grain down: dropping these before
+     * the call would make the resolver answer `no_policy_configured` for a family that has a
+     * policy and an operator who deliberately waived it once. The waiver is an eligibility fact,
+     * so it is evaluated where eligibility is decided and carries its own reason.
+     */
+    chargeExcludedPolicyIds?: readonly string[];
 }): ReductionDecision {
     const { gross, policies, facts } = args;
     const excluded = new Set(args.excludedPolicyIds ?? []);
+    const chargeExcluded = new Set(args.chargeExcludedPolicyIds ?? []);
+    /* Either grain sets a policy aside; only the reason differs. */
+    const setAside = (id: string): boolean => excluded.has(id) || chargeExcluded.has(id);
     if (gross.amountCents <= 0) {
         return { kind: "refused", reason: "negative_gross", detail: `gross ${gross.amountCents}`, policyId: null };
     }
@@ -336,11 +403,17 @@ export function resolveFinancialReductions(args: {
          * "there is a policy and you are excluded from it" and "there is no policy" are different
          * answers and only one of them is about a decision somebody made.
          */
-        if (forKind.every((p) => excluded.has(p.id))) {
-            firstSkip = firstSkip ?? "excluded_by_exception";
+        if (forKind.every((p) => setAside(p.id))) {
+            /*
+             * WHICH DECISION SET IT ASIDE. A charge-level waiver is named as one, because the
+             * family still has the policy for every other charge and the answer must not read as
+             * though they had lost it.
+             */
+            const everyOneCharge = forKind.every((p) => chargeExcluded.has(p.id) && !excluded.has(p.id));
+            firstSkip = firstSkip ?? (everyOneCharge ? "excluded_by_charge_exception" : "excluded_by_exception");
             continue;
         }
-        const contenders = forKind.filter((p) => !excluded.has(p.id));
+        const contenders = forKind.filter((p) => !setAside(p.id));
         if (contenders.length > 1) {
             return {
                 kind: "refused",

@@ -62,11 +62,11 @@ export type ResolveOutcome =
  */
 export async function readArrangementInForce(
     supabase: SupabaseClient,
-    args: { orgId: string; customerId: string; customerMemberId: string | null; onDate: string },
+    args: { orgId: string; customerId: string; customerMemberId: string | null; chargeId?: string | null; onDate: string },
 ): Promise<ArrangementInForce | null> {
     const { data, error } = await supabase
         .from("financial_responsibility_arrangements")
-        .select("id, customer_id, customer_member_id, effective_start, effective_end, state")
+        .select("id, customer_id, customer_member_id, charge_id, effective_start, effective_end, state")
         .eq("org_id", args.orgId)
         .eq("customer_id", args.customerId)
         .eq("state", "active");
@@ -81,17 +81,20 @@ export async function readArrangementInForce(
         id: string;
         customer_id: string;
         customer_member_id: string | null;
+        charge_id: string | null;
         effective_start: string;
         effective_end: string | null;
     }>).map((a) => ({
         id: a.id,
         customerId: a.customer_id,
         customerMemberId: a.customer_member_id,
+        chargeId: a.charge_id ?? null,
         effectiveStart: a.effective_start,
         effectiveEnd: a.effective_end,
     }));
     const picked = pickGoverningArrangement(rows, {
         customerMemberId: args.customerMemberId,
+        chargeId: args.chargeId ?? null,
         onDate: args.onDate,
     });
     if (!picked) return null;
@@ -152,10 +155,15 @@ export async function resolveChargeResponsibility(
     }
 
     const onDate = net.serviceDate ?? new Date().toISOString().slice(0, 10);
+    /*
+     * The charge is named, so a charge-scoped arrangement can win. Where none exists this is
+     * exactly the question it always asked, and the child or household answer stands.
+     */
     const arrangement = await readArrangementInForce(supabase, {
         orgId: args.orgId,
         customerId: net.customerId,
         customerMemberId: net.customerMemberId,
+        chargeId: args.chargeId,
         onDate,
     });
 

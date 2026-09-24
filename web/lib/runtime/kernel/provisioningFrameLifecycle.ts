@@ -127,30 +127,84 @@ export type SettlementOutcome =
  * MONOTONIC. `applyProvisioningSettlement` never lets a known field become unknown, so a duplicate
  * settlement changes nothing and an out-of-order one cannot undo a later result.
  */
+/**
+ * SETTLEMENT OUTCOME, VISIBLE IN PRODUCTION — diagnostic only, deliberately NOT NODE_ENV-gated.
+ *
+ * The mounted proof on deployed ed24d807 could not say whether a settlement was APPLIED, because
+ * `ProvisioningSettlementSeed` discards this function's outcome and nothing recorded it. The only
+ * observable was Financials sitting at `data-financials-empty="loading"` — and that one state has
+ * FOUR independent causes (`loading`, `subjectStillResolving`, `provisioningAccount`,
+ * `awaitingFirstAnswer`), so it cannot establish application either way. An effect that several
+ * mechanisms can produce is not a proof of any one of them.
+ *
+ * So this records the OUTCOME and nothing else: the navigation key addressed, the key that was
+ * found (or not), and the classification. NO payload, NO business values, NO subject content beyond
+ * the navigation identity that is already in the URL. Bounded ring buffer, same shape as
+ * `__ALLOY_REVEAL_GATE_DIAG__`, which exists for the same reason: the build that needs proving is
+ * the production one.
+ */
+type SettlementDiagEvent = {
+    t: number;
+    /** The navigation key the settlement was addressed to. */
+    addressed: string;
+    /** applied | no_frame | expired | mismatch | no_change */
+    outcome: string;
+    /** How many frames were registered when it arrived — 0 explains a no_frame immediately. */
+    frames: number;
+};
+function settlementDiag(): SettlementDiagEvent[] {
+    if (typeof window === "undefined") return [];
+    const w = window as Window & { __ALLOY_SETTLEMENT_DIAG__?: SettlementDiagEvent[] };
+    if (!w.__ALLOY_SETTLEMENT_DIAG__) w.__ALLOY_SETTLEMENT_DIAG__ = [];
+    return w.__ALLOY_SETTLEMENT_DIAG__;
+}
+function recordSettlementOutcome(addressed: string, outcome: string, frameCount: number): void {
+    try {
+        const buf = settlementDiag();
+        if (buf.length > 200) buf.splice(0, buf.length - 100);
+        buf.push({
+            t: Math.round(typeof performance !== "undefined" ? performance.now() : Date.now()),
+            addressed,
+            outcome,
+            frames: frameCount,
+        });
+    } catch {
+        /* diagnostics are never load-bearing */
+    }
+}
+
 export function applyFrameSettlement(
     patch: ProvisioningSettlementPatch,
     now: number = Date.now(),
 ): SettlementOutcome {
-    const rec = frames.get(navigationKey(patch.navigation));
-    if (!rec) return { applied: false, reason: "no_frame", state: "ABSENT" };
+    const addressed = navigationKey(patch.navigation);
+    const rec = frames.get(addressed);
+    if (!rec) {
+        recordSettlementOutcome(addressed, "no_frame", frames.size);
+        return { applied: false, reason: "no_frame", state: "ABSENT" };
+    }
     expireIfDue(rec, now);
     if (rec.state === "EXPIRED") {
         rec.refusedCount += 1;
+        recordSettlementOutcome(addressed, "expired", frames.size);
         return { applied: false, reason: "expired", state: rec.state };
     }
     if (!settlementMatchesFrame(rec.answer, patch, rec.navigation)) {
         rec.refusedCount += 1;
+        recordSettlementOutcome(addressed, "mismatch", frames.size);
         return { applied: false, reason: "mismatch", state: rec.state };
     }
     const next = applyProvisioningSettlement(rec.answer, patch, rec.navigation);
     if (next === rec.answer) {
         // A duplicate, or a patch carrying nothing this frame did not already know.
+        recordSettlementOutcome(addressed, "no_change", frames.size);
         return { applied: false, reason: "no_change", state: rec.state };
     }
     rec.answer = next;
     rec.state = "SETTLING";
     rec.lastSettledAt = now;
     rec.appliedCount += 1;
+    recordSettlementOutcome(addressed, "applied", frames.size);
     return { applied: true, state: rec.state, answer: next };
 }
 

@@ -142,19 +142,25 @@ describe("public OpenAPI drift guard", () => {
         // updates this expectation, not something that happens quietly. B.3 added
         // /api/v1/locations, slice 7.1 added /api/v1/attendance-events, and the Core Resource
         // Expansion added the eight below; each changed this line on purpose, and none relaxed it.
+        // The mistaken-creation audit added the two `/cancel` operations: supersession can only say
+        // "this was true and then changed", never "this was never true", and the difference is
+        // externally material.
         expect(Object.keys(spec.paths).sort()).toEqual([
             "/api/v1/attendance-events",
             "/api/v1/children",
             "/api/v1/context",
             "/api/v1/enrollments",
             "/api/v1/enrollments/end",
+            "/api/v1/enrollments/void",
             "/api/v1/households",
             "/api/v1/locations",
             "/api/v1/oauth/token",
             "/api/v1/placements",
+            "/api/v1/placements/cancel",
             "/api/v1/placements/move",
             "/api/v1/relationships",
             "/api/v1/schedule-assignments",
+            "/api/v1/schedule-assignments/cancel",
             "/api/v1/schedule-assignments/change",
             "/api/v1/schedule-days",
             "/api/v1/staff",

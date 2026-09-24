@@ -20,7 +20,9 @@ function stubEnv(fetchImpl: typeof fetch) {
 }
 
 const okAnswer = (terminal = "operational") =>
-    ({ ok: true, json: async () => ({ terminal }) }) as unknown as Response;
+    // A real Response always carries headers, and the fetch seam reads content-type to tell a
+    // settled answer from a phased one. A stub without them is not a Response-like at all.
+    ({ ok: true, headers: new Headers({ "content-type": "application/json" }), json: async () => ({ terminal }) }) as unknown as Response;
 
 describe("workUnitProvisioningPrefetch", () => {
     beforeEach(() => clearProvisioningPrefetchForTests());
@@ -31,9 +33,9 @@ describe("workUnitProvisioningPrefetch", () => {
     });
 
     it("builds the exact K2 URL (no query when unscoped; work_view_id/subject_id when scoped)", () => {
-        expect(provisioningAnswerUrl("new-leads")).toBe("/api/admin/work-units/new-leads/provisioning-answer");
-        expect(provisioningAnswerUrl("new-leads", "v1")).toBe("/api/admin/work-units/new-leads/provisioning-answer?work_view_id=v1");
-        expect(provisioningAnswerUrl("new-leads", "v1", "s1")).toBe("/api/admin/work-units/new-leads/provisioning-answer?work_view_id=v1&subject_id=s1");
+        expect(provisioningAnswerUrl("new-leads")).toBe("/api/admin/work-units/new-leads/provisioning-answer?phased=1");
+        expect(provisioningAnswerUrl("new-leads", "v1")).toBe("/api/admin/work-units/new-leads/provisioning-answer?work_view_id=v1&phased=1");
+        expect(provisioningAnswerUrl("new-leads", "v1", "s1")).toBe("/api/admin/work-units/new-leads/provisioning-answer?work_view_id=v1&subject_id=s1&phased=1");
     });
 
     it("prefetch warms an answer that a fresh consume returns (blank-time removal path)", async () => {
@@ -87,14 +89,14 @@ describe("workUnitProvisioningPrefetch", () => {
         stubEnv(fetchMock as unknown as typeof fetch);
         prefetchWorkUnitProvisioningFromHref("/workspace/work-unit/new-leads?work_view_id=all_leads");
         expect(fetchMock).toHaveBeenCalledWith(
-            "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=all_leads",
+            "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=all_leads&phased=1",
             expect.anything(),
         );
         // default tile (no lens) → unscoped URL
         clearProvisioningPrefetchForTests();
         prefetchWorkUnitProvisioningFromHref("/workspace/work-unit/new-leads");
         expect(fetchMock).toHaveBeenLastCalledWith(
-            "/api/admin/work-units/new-leads/provisioning-answer",
+            "/api/admin/work-units/new-leads/provisioning-answer?phased=1",
             expect.anything(),
         );
     });
@@ -155,7 +157,7 @@ describe("seed contract — seedProvisioningForRoute (the sole public seed seam)
     });
 
     it("IDEMPOTENT (no clobber): a seed does not overwrite a still-fresh intent-prefetch entry", async () => {
-        const fetchMock = vi.fn(async () => ({ ok: true, json: async () => answer("operational", "prefetched") }) as unknown as Response);
+        const fetchMock = vi.fn(async () => ({ ok: true, headers: new Headers({ "content-type": "application/json" }), json: async () => answer("operational", "prefetched") }) as unknown as Response);
         (globalThis as any).window = { location: { origin: "https://alloy.local" } };
         (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
         prefetchWorkUnitProvisioning("new-leads", { now: 1000 }); // warm via hover

@@ -1,0 +1,42 @@
+{
+  "tabs": [
+    {
+      "i": 0,
+      "t": "Charge",
+      "mode": "charge"
+    },
+    {
+      "i": 1,
+      "t": "Adjustment",
+      "mode": "adjustment"
+    },
+    {
+      "i": 2,
+      "t": "Field trip▾",
+      "mode": null
+    },
+    {
+      "i": 3,
+      "t": "Household▾",
+      "mode": null
+    },
+    {
+      "i": 4,
+      "t": "Change →",
+      "mode": null
+    },
+    {
+      "i": 5,
+      "t": "Add charge",
+      "mode": null
+    },
+    {
+      "i": 6,
+      "t": "Cancel",
+      "mode": null
+    }
+  ],
+  "mode": "adjustment",
+  "text": "ADD Charge Adjustment Add adjustment Against enrolment Certa Certhouse ▾ Against charge Choose the charge this is about… ▾ Type Credit — lowers what the family owes ▾ Amount Reason Effective date Preview Confirm Cancel",
+  "natives": 1
+}

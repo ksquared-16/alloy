@@ -356,8 +356,15 @@ describe("the instrument names every boundary it crosses", () => {
         const declared = [...DIAG.slice(at, DIAG.indexOf("};", at)).matchAll(/^\s+(\w+_ms):/gm)]
             .map((m) => m[1]).sort();
         const recorded = [...new Set([...CODE.matchAll(/clock\s*\.\s*time\("(\w+_ms)"/g)].map((m) => m[1]))].sort();
-        expect(declared.length, "the build crosses thirteen awaited boundaries; the payload must name them all")
-            .toBe(13);
+        /*
+         * Fourteen since the policies read became a measured boundary. It was always an awaited
+         * database read; it was simply issued nine reads deep, where nobody had put a timer on it.
+         * Hoisting it to the org-grain wave is what made it worth naming — and this gate is what
+         * required the name, because a recorded span the payload does not declare is a boundary
+         * the instrument cannot report.
+         */
+        expect(declared.length, "the build crosses sixteen awaited boundaries; the payload must name them all")
+            .toBe(16);
         expect(recorded).toEqual(declared);
     });
 
@@ -367,14 +374,35 @@ describe("the instrument names every boundary it crosses", () => {
          * measured where it was CREATED. An unmeasured read is how a boundary gets called cheap
          * because nobody ever saw its number — which is the whole reason this slice exists.
          */
-        const body = CODE.slice(CODE.indexOf("async function buildFinancialsCardVMInner"));
-        const awaited = [...body.matchAll(/await ([A-Za-z_.]+)/g)].map((m) => m[1]);
+        /*
+         * COMMENTS ARE NOT CODE. This scanned the raw source, so the prose "never await these" and
+         * "never await it" in two explanatory blocks read as unmeasured awaits — and a gate that
+         * cannot pass guards nothing. It had been failing on them long enough to hide two reads
+         * that genuinely had no timer: the `commercial_policies` window read and the payment holds
+         * read. Stripping comments first is what let it say so.
+         */
+        const source = CODE.slice(CODE.indexOf("async function buildFinancialsCardVMInner"));
+        const body = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        /*
+         * `await (` is captured too. The first version matched only an identifier, so wrapping the
+         * expression in parentheses — `await (supabase.from(...))` — captured nothing and the gate
+         * had nothing to object to. A planted removal of the policy-window timer walked straight
+         * past it in exactly that shape.
+         */
+        const awaited = [...body.matchAll(/await\s+(\(|[A-Za-z_.]+)/g)].map((m) => m[1]);
         const measuredPromises = [
             "configRead", "merchantRead", "responsibilityP", "paymentsP", "setupP", "payersP",
             // Slice 12F: the payment views, in flight from entry and measured where they are created.
             // Admitted BY NAME, not by loosening the pattern — this gate caught the new await on its
             // first run, which is the gate doing its job.
             "paymentViewsP",
+            /*
+             * Both measured where they are CREATED, in the org-grain and post-charges waves, and
+             * awaited later where their answers are assembled. Admitted by name for the same reason
+             * `paymentViewsP` was: the pattern stays tight, and a genuinely unmeasured await still
+             * fails this gate.
+             */
+            "financialPoliciesP", "collectiblePositionsP",
             "openCollectionsP", "Promise.all", "clock.time",
         ];
         for (const a of awaited) {

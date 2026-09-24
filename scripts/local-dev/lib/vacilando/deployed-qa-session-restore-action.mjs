@@ -285,6 +285,24 @@ export function executeRestoreDeployedQaSessionSync({
         base_url: validated.base_url,
         registered_identity: validated.expected_identity,
         project_ref: backing.projectRef,
+        /*
+         * WHERE THE SESSION IS, RETURNED RATHER THAN CONVENTIONAL.
+         *
+         * Everything else about this result was already truthful — the mint ran, the artifact was
+         * written, the stamp moved, verification passed. What the result never said is WHERE, and a
+         * consuming lane cannot use a session it cannot find.
+         *
+         * The conventional path is not a safe substitute, because the runtime boundary moves it:
+         * `defaultAuthRoot()` joins `auth` onto ALLOY_RUNTIME_ROOT when that is set, so the same
+         * action writes `<root>/gateway/auth/deployed/<target>/storage-state.json` for a
+         * gateway-rooted executor and `~/.local/state/alloy-dev/auth/...` for one without it.
+         *
+         * MEASURED: a certification lane computed the unrooted path, found a stale unrelated file,
+         * loaded it into Playwright, landed on /login, and reported the ENVIRONMENT blocked — while
+         * a valid session minted four minutes earlier sat at the rooted path. The action was
+         * telling the truth and the consumer had no way to hear it.
+         */
+        storage_state_path: storagePath,
         storage_written: storageWritten,
         verified: ok,
         verified_at: ok ? new Date(nowMs).toISOString() : null,

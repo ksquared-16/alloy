@@ -80,6 +80,7 @@ import {
     resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { FocusPanelRenderedSubjectProvider } from "@/components/admin/focusPanel/focusPanelRenderedSubjectContext";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import {
     beginDrawerTabPrefetchEpoch,
@@ -453,8 +454,27 @@ export function InlineOpportunityFocusPanel() {
     // skeleton. During a hold `displayVm`/`record` still carry the prior subject's payload
     // (the payload hook returns the held VM), so the previously-resolved composed grid stays
     // on screen while the new subject fetches — no flash back to a placeholder.
+    /*
+     * HOLDING THE PRIOR SUBJECT IS ONLY TRUTHFUL WHILE IT IS STILL THE COMMITTED SUBJECT.
+     *
+     * The committed subject now commits as soon as the operator selects a row, rather than when the
+     * provisioning answer for it lands. That is what removes ~1,094ms from the operator's wait - but
+     * it means this hold can no longer be unconditional: continuing to paint the previous record's
+     * VM underneath the new subject's identity is exactly the mixed-subject frame the atomic-subject
+     * contract forbids, and would be a correctness regression traded for latency.
+     *
+     * So the hold applies only while the held payload IS the committed subject. Once selection has
+     * moved on, this yields null and the panel falls to its identity-safe frame: the new subject's
+     * identity, the published configured geometry, and reserved UNKNOWN cells - no previous value
+     * survives under the new record.
+     */
+    const heldPriorMatchesCommittedSubject =
+        displayVm != null
+        && operationalSubjectId != null
+        && String(displayVm.entity.id) === String(operationalSubjectId);
     const heldPrior =
-        !resolved && holdPriorPayload && displayVm != null && record != null ?
+        !resolved && holdPriorPayload && displayVm != null && record != null
+        && heldPriorMatchesCommittedSubject ?
             { displayVm, record }
             : null;
 
@@ -869,6 +889,17 @@ export function InlineOpportunityFocusPanel() {
                     }
                 >
                     {/* STABLE body surface. Subject changes inside it; it is not rebuilt per subject. */}
+                    <FocusPanelRenderedSubjectProvider
+                        /*
+                         * The payload the cards are ACTUALLY rendering, which is not
+                         * `bodyRenderKey`. That id is the committed operational snapshot and moves
+                         * to the destination fast, while `visible` (resolved ?? heldPrior) is what
+                         * is on screen — so during a hold this correctly names the PRIOR subject
+                         * and only becomes the destination at the atomic swap. Feeding a diagnostic
+                         * from the fast id would label the prior subject's cards as the new one.
+                         */
+                        value={visible ? String(visible.displayVm.entity.id) : null}
+                    >
                     <div
                         key="focus-panel-body"
                         data-focus-panel-body-subject={bodyRenderKey}
@@ -926,6 +957,7 @@ export function InlineOpportunityFocusPanel() {
                             <AlloyThinkingLabel size="sm" />
                         </div>}
                     </div>
+                    </FocusPanelRenderedSubjectProvider>
                 </div>
                 {resolved ?
                     <div className="shrink-0 overflow-visible">

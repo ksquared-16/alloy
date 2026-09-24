@@ -997,8 +997,11 @@ inherits, what it must not rebuild, and where provider-specific objects belong.
 The three accepted Core deferrals are stated in full in the Director QA catalog
 (`CORE_DEFERRALS` in `lib/qa/financialsDirectorQa/scenarioCatalog.ts`) and are **not** Core defects:
 
-- `SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED` — fixed shares are operator-authorable; percentage
-  and remainder exist in the arrangement authority with no Core authoring surface.
+- ~~`SHARE_METHODS_PERCENTAGE_REMAINDER_DEFERRED`~~ — **RETIRED.** The arrangement authority always
+  accepted percentage, fixed and remainder; what was deferred was the authoring surface, and the
+  Responsibility depth card now offers all three with the reconciliation stated before Confirm.
+  The authority's own refusals — total over 100%, a second remainder, a duplicate party, a party
+  outside the org — are unchanged and remain the last word.
 - `LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED` — canonical provenance exists and the ledger states a
   concise preview of it; there is no deep row-inspection surface in Core.
 - `DEPOSIT_OPERATOR_PRODUCTIZATION_GAP` — the deposit policy and model foundation exist; the held

@@ -44,6 +44,37 @@ export type ProvisioningSettlementPatch = {
 };
 
 /** Does this settlement belong to this frame? Navigation AND identity must both agree. */
+/**
+ * THE SETTLEMENT'S NAVIGATION IDENTITY — built from what the caller REQUESTED, never from what the
+ * composer RESOLVED.
+ *
+ * One function because there were two construction sites and they must not be able to drift. Both
+ * previously read a local named `requestedWorkViewId` that the composer reassigns to the slug's
+ * implied default before either site runs, so on the ordinary path — no explicit lens in the URL —
+ * the settlement was addressed with a lens the frame had never been registered under.
+ * `navigationKey` includes the lens, so `frames.get` missed and `applyFrameSettlement` returned
+ * `no_frame`, discarding the patch that carries Financials, Attendance and Health.
+ *
+ * `requestedWorkViewId` here is the URL-carried lens and nothing else. A caller that passes the
+ * resolved lens reintroduces the defect, which is what the lifecycle test proves by doing exactly
+ * that and watching the settlement fail to find its frame.
+ */
+export function settlementNavigationForRequest(request: {
+    rawSlug: string;
+    requestedWorkViewId: string | null;
+    requestedSubjectId: string | null;
+    cohort?: "none" | null;
+    aspect?: string | null;
+}): ProvisioningSettlementPatch["navigation"] {
+    return {
+        target: request.rawSlug,
+        lens: request.requestedWorkViewId ?? null,
+        subject: request.requestedSubjectId ?? null,
+        cohort: request.cohort ?? null,
+        aspect: request.aspect ?? null,
+    };
+}
+
 export function settlementMatchesFrame(
     answer: ProvisioningAnswer,
     patch: ProvisioningSettlementPatch,

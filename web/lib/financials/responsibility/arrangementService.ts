@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { ResponsibilityError } from "@/lib/financials/responsibility/responsibilityService";
 
 export type ShareInput = {
@@ -29,6 +30,11 @@ export type ConfigureArrangementInput = {
     customerId: string;
     /** One child, or null for the whole account. */
     customerMemberId?: string | null;
+    /**
+     * The charge this arrangement governs, when it governs exactly one. Absent, the arrangement is
+     * the standing household or child answer it has always been.
+     */
+    chargeId?: string | null;
     opportunityCustomerMemberId?: string | null;
     effectiveStart: string;
     effectiveEnd?: string | null;
@@ -124,10 +130,50 @@ export async function configureResponsibilityArrangement(
     if (customerError) throw new ResponsibilityError("db_error", customerError.message);
     if (!customerRow) throw new ResponsibilityError("unknown_account", "No such account in this organisation.");
 
+    /*
+     * ── A CHARGE-SCOPED ARRANGEMENT MUST BE SCOPED TO THIS ACCOUNT'S CHARGE ───────────────────
+     *
+     * The org-parity trigger refuses a charge from another organisation. It cannot refuse a charge
+     * that belongs to a DIFFERENT HOUSEHOLD IN THE SAME ORGANISATION, and that is the mistake an
+     * operator surface can actually make: the charge id is carried from a ledger row, and a wrong
+     * one would make these parties responsible for money billed to someone else — an arrangement
+     * that reads as deliberate and correct on every screen that renders it.
+     *
+     * The charge's own account is not stored on the charge; it is resolved from the enrolment the
+     * charge names. `resolveAllocatableNet` is the one place that answers that question, and it is
+     * the same answer the resolver uses when it later divides this charge, so the two cannot
+     * disagree about which account a charge belongs to.
+     */
+    if (input.chargeId) {
+        let chargeAccount: string | null;
+        try {
+            const net = await resolveAllocatableNet(supabase, { orgId: input.orgId, chargeId: input.chargeId });
+            chargeAccount = net.customerId;
+        } catch (err) {
+            throw new ResponsibilityError(
+                "unknown_charge",
+                err instanceof Error ? err.message : "That charge could not be read.",
+            );
+        }
+        if (!chargeAccount) {
+            /* A charge whose enrolment names no household cannot be scoped to one either. */
+            throw new ResponsibilityError(
+                "charge_has_no_account",
+                "That charge's enrolment names no household, so it cannot carry an account's arrangement.",
+            );
+        }
+        if (chargeAccount !== input.customerId) {
+            throw new ResponsibilityError(
+                "charge_belongs_to_another_account",
+                "That charge belongs to a different account.",
+            );
+        }
+    }
+
     // ── CLOSE THE PREDECESSOR, THEN OPEN THE SUCCESSOR ──────────────────────────────────────
     const { data: priorRows, error: priorError } = await supabase
         .from("financial_responsibility_arrangements")
-        .select("id, effective_start, effective_end, customer_member_id")
+        .select("id, effective_start, effective_end, customer_member_id, charge_id")
         .eq("org_id", input.orgId)
         .eq("customer_id", input.customerId)
         .eq("state", "active");
@@ -143,8 +189,15 @@ export async function configureResponsibilityArrangement(
         effective_start: string;
         effective_end: string | null;
         customer_member_id: string | null;
+        charge_id: string | null;
     }>)
+        /*
+         * SUPERSESSION IS PER SCOPE. A charge-scoped arrangement must not close the standing child
+         * or household one — leaving those alone is the entire reason the charge grain exists —
+         * and a standing arrangement must not close a charge-scoped one either.
+         */
         .filter((p) => (p.customer_member_id ?? null) === (input.customerMemberId ?? null))
+        .filter((p) => (p.charge_id ?? null) === (input.chargeId ?? null))
         .filter((p) => !p.effective_end || p.effective_end >= input.effectiveStart)[0] ?? null;
 
     let supersededId: string | null = null;
@@ -172,6 +225,7 @@ export async function configureResponsibilityArrangement(
             org_id: input.orgId,
             customer_id: input.customerId,
             customer_member_id: input.customerMemberId ?? null,
+            charge_id: input.chargeId ?? null,
             opportunity_customer_member_id: input.opportunityCustomerMemberId ?? null,
             effective_start: input.effectiveStart,
             effective_end: input.effectiveEnd ?? null,

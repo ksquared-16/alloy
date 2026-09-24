@@ -1,0 +1,189 @@
+{
+  "trusted_host_action_id": "tha_f7b5e7a42f87f0",
+  "query_hash": "d43b0cb658f5717d07208b31ff383289b0f9efc69fa347cca9750a0b9b89223c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T03:04:44.418Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f7b5e7a42f87f0",
+    "query_hash": "d43b0cb658f5717d07208b31ff383289b0f9efc69fa347cca9750a0b9b89223c",
+    "authorization_id": "grnt_e6c42c2e8f7e4f52",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T03:04:46.129Z",
+    "question_ids": [
+      "attempts",
+      "specimen_charges",
+      "charge_counts",
+      "certhouse_guard",
+      "clock"
+    ],
+    "questions": {
+      "attempts": {
+        "question_id": "attempts",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "occurrence_id": "1cf0ca86-c9ca-4366-a14d-687b9fbe158d",
+                "attempt_number": 1,
+                "worker_id": "worker-a8d926b0",
+                "outcome": "completed",
+                "started_at": "2026-09-22 03:00:02.339765+00",
+                "diagnostic": {
+                  "lease": "applied",
+                  "counts": {
+                    "no_work_due": 4,
+                    "configuration_refused": 0,
+                    "normal_period_processed": 1,
+                    "short_catch_up_processed": 1,
+                    "catch_up_requires_operator": 1
+                  },
+                  "domain": "periodic_billing",
+                  "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                  "reason": "periodic billing: 1 assignment(s) exceed the 2-period automatic catch-up limit and were not billed",
+                  "evaluated_for": "2026-09-22",
+                  "periods_billed": [
+                    "2026-09-22~2026-09-28",
+                    "2026-09-15~2026-09-21",
+                    "2026-09-22~2026-09-28"
+                  ],
+                  "requires_operator": [
+                    {
+                      "operator_action": "Converge these periods with Generate Tuition; automatic billing resumes once the outstanding set is within the limit.",
+                      "outstanding_periods": 3,
+                      "automatic_catch_up_limit": 2,
+                      "newest_outstanding_period": "2026-09-22~2026-09-28",
+                      "oldest_outstanding_period": "2026-09-08~2026-09-14",
+                      "financial_mutation_performed": false,
+                      "opportunity_customer_member_id": "e978987c-56d1-4972-af34-54ccc32f37e2"
+                    }
+                  ],
+                  "assignments_considered": 7,
+                  "automatic_catch_up_limit": 2
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "specimen_charges": {
+        "question_id": "specimen_charges",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-02",
+                "created_at": "2026-09-22 02:20:04.972373+00"
+              },
+              {
+                "agreement": "771c085f-d145-4650-adee-4653db661975",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-09",
+                "created_at": "2026-09-22 02:20:07.514179+00"
+              },
+              {
+                "agreement": "a09eceb9-6e8f-41b6-8d7b-8d3f5bce261b",
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-09-25",
+                "created_at": "2026-09-22 03:00:08.186581+00"
+              },
+              {
+                "agreement": "a09eceb9-6e8f-41b6-8d7b-8d3f5bce261b",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-02",
+                "created_at": "2026-09-22 03:00:10.773416+00"
+              },
+              {
+                "agreement": "a09f8a86-edad-4562-a868-9bcaeede0ae0",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-02",
+                "created_at": "2026-09-22 03:00:05.273001+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "service_date": "2026-09-15",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-09-25",
+                "created_at": "2026-09-22 02:20:10.630654+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "service_date": "2026-09-22",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-02",
+                "created_at": "2026-09-22 02:20:12.840154+00"
+              },
+              {
+                "agreement": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+                "service_date": "2026-09-29",
+                "status": "draft",
+                "cents": 19500,
+                "due_date": "2026-10-09",
+                "created_at": "2026-09-22 02:20:16.243823+00"
+              }
+            ]
+          }
+        ]
+      },
+      "charge_counts": {
+        "question_id": "charge_counts",
+        "row_count": null,
+        "rows": [
+          {
+            "A_771c085f": 2,
+            "B_e5a7471e": 3,
+            "C_570ef2e5": 0,
+            "D_a09f8a86": 1,
+            "E_a09eceb9": 2
+          }
+        ]
+      },
+      "certhouse_guard": {
+        "question_id": "certhouse_guard",
+        "row_count": null,
+        "rows": [
+          {
+            "certa_count": 5,
+            "certb_count": 2,
+            "max_created": "2026-09-20 20:55:08.905848+00"
+          }
+        ]
+      },
+      "clock": {
+        "question_id": "clock",
+        "row_count": null,
+        "rows": [
+          {
+            "next_due_at": "2026-09-23 02:57:17.855+00",
+            "wake_count": 92,
+            "last_wake_at": "2026-09-22 03:00:11.458289+00",
+            "now": "2026-09-22 03:04:46.005567+00"
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

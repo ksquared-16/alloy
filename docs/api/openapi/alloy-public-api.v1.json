@@ -511,8 +511,8 @@
         "tags": [
           "People"
         ],
-        "summary": "List children in service",
-        "description": "Children participating in service at locations within your boundary. Requires the `children.read` scope.\n\n**Enrollment is what makes a child visible.** A child appears here only when an enrollment agreement places them at a site you can reach. Belonging to the organization is not enough, and this holds even for organization-wide installations \u2014 being organization-wide widens which SITES you reach, not what counts as participation in service. If you expect a child and do not see one, check their enrollment first.\n\n**What this resource is not.** It carries identity and lifecycle only. Health, allergy, medical and safeguarding information is never returned by any endpoint in this API. Guardians and contact details are a separate resource with a separate scope: see `GET /api/v1/relationships`.\n\n**Lifecycle.** Poll `status`. A child leaving service becomes `inactive`; records are not removed from history without an observable change first.\n\n**Your own identifiers.** If you have mapped a child to your own system, `external_id` returns YOUR mapping and only yours. You may also filter by it. Another installation's identifier for the same child is never visible to you.",
+        "summary": "List enrolled children",
+        "description": "Children participating in service at locations within your boundary. Requires the `children.read` scope.\n\n**Enrollment is what makes a child visible.** A child appears here only when an enrollment agreement places them at a site you can reach. An enrollment CANCELLED BEFORE IT BEGAN never makes a child visible \u2014 that family was never a participant in service. Every other status does, including `ended`, so your attendance and billing history stays resolvable. Belonging to the organization is not enough, and this holds even for organization-wide installations \u2014 being organization-wide widens which SITES you reach, not what counts as participation in service. If you expect a child and do not see one, check their enrollment first.\n\n**What this resource is not.** It carries identity and lifecycle only. Health, allergy, medical and safeguarding information is never returned by any endpoint in this API. Guardians and contact details are a separate resource with a separate scope: see `GET /api/v1/relationships`.\n\n**Lifecycle.** Poll `status`. A child leaving service becomes `inactive`. Visibility itself can end in one case \u2014 a `pending_start` enrollment that is cancelled \u2014 and it is never silent: the enrollment remains readable, turns `canceled`, and its `updated_at` advances, so `GET /api/v1/enrollments?updated_since=...` delivers the change on a normal sync pass. Read `/enrollments` when a child stops appearing here; do not treat it as data loss. A child with commitments at two sites stays visible while any one is uncancelled.\n\n**Your own identifiers.** If you have mapped a child to your own system, `external_id` returns YOUR mapping and only yours. You may also filter by it. Another installation's identifier for the same child is never visible to you.",
         "security": [
           {
             "bearerAuth": []
@@ -2004,6 +2004,124 @@
         }
       }
     },
+    "/api/v1/enrollments/void": {
+      "post": {
+        "operationId": "voidEnrollment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Void an enrollment that never represented service",
+        "description": "Records that an enrollment was created or activated in error and never represented service. Requires the `enrollment.write` scope.\n\n**Three endings, and they are not interchangeable.** `ended` says service happened and concluded. `canceled` says a commitment was withdrawn before it began. `voided` says the record was never real at all. `POST /enrollments/end` reaches the first two; only this reaches the third. Ending a mistaken enrollment would assert that care was delivered, and would keep the child on your roster as genuine history.\n\n**It is refused where it would be a lie.** If attendance was recorded under the enrollment then a child actually arrived, and no operator decision changes that. Alloy checks its own attendance ledger \u2014 reversed and superseded facts do not count \u2014 and returns `409` if any effective fact remains. Use `POST /enrollments/end` for history you regret; this is for records that were never true. A `canceled` enrollment is also refused: it already tells a narrower true story.\n\n**What it does to the rest.** The child stops being visible through this enrollment: they leave `GET /api/v1/children`, their household leaves `GET /api/v1/households` and their edges leave `GET /api/v1/relationships`, exactly as a cancellation does. Any placement or schedule assignment still attached is cancelled in the same act, so nothing operational is left pointing at an enrollment that says it was never valid.\n\n**Nothing disappears.** The enrollment stays readable on `GET /api/v1/enrollments` with `status: \"voided\"`, and its update clock advances, so the transition reaches you on a normal `updated_since` or `since_token` pass. Treat a child leaving `/children` as a signal to read `/enrollments`.\n\n**Safe to retry.** Voiding an already-voided enrollment returns it unchanged with `200`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The enrollment that should never have represented service.",
+                "properties": {
+                  "enrollment_id": {
+                    "type": "string",
+                    "description": "The enrollment recorded in error."
+                  }
+                },
+                "required": [
+                  "enrollment_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/placements/move": {
       "post": {
         "operationId": "movePlacement",
@@ -2196,6 +2314,242 @@
               }
             }
           },
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/placements/cancel": {
+      "post": {
+        "operationId": "cancelPlacement",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Cancel a placement that was never effective",
+        "description": "Cancels a placement that should never have existed. Requires the `enrollment.write` scope.\n\n**This is not ``/placements/move``, and the difference is the point.** Moving says the earlier record was true and then stopped being true: Alloy closes it on the day before the replacement begins, so it keeps asserting the period it covered. Cancelling says it was NEVER effective \u2014 recorded against the wrong child, or with terms nobody ever agreed. Using `/placements/move` for a mistake would publish a period of service that never happened, and you would have no way to tell the two apart afterwards.\n\n**Nothing is deleted.** The record is retained and its `status` becomes `canceled`, so an identifier you already synchronised still resolves and explains itself. Poll `status` to converge: `canceled` means it never took effect and nothing should be derived from it.\n\n**Safe to retry.** Cancelling an already-cancelled record returns it unchanged with `200` rather than a conflict, so an attempt you could not confirm reaches the same place.\n\nOnly a record that is still operational can be cancelled. One that has already ended or been superseded asserts that service really happened, and denying it retroactively would break every figure derived from it; that returns `409`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "enrollment.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The record that should never have been effective.",
+                "properties": {
+                  "placement_id": {
+                    "type": "string",
+                    "description": "The placement that should never have been effective."
+                  }
+                },
+                "required": [
+                  "placement_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already in this state \u2014 the existing record is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementOperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The access token is missing, expired or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The installation does not hold the required scope, or has no authorized location.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource is available to this installation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Alloy's domain rules refuse the operation in the record's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The operation failed validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule-assignments/cancel": {
+      "post": {
+        "operationId": "cancelScheduleAssignment",
+        "tags": [
+          "Service state"
+        ],
+        "summary": "Cancel a schedule assignment that never applied",
+        "description": "Cancels a schedule assignment that should never have applied. Requires the `schedule.write` scope.\n\n**This is not ``/schedule-assignments/change``, and the difference is the point.** Changing says the earlier record was true and then stopped being true: Alloy closes it on the day before the replacement begins, so it keeps asserting the period it covered. Cancelling says it was NEVER effective \u2014 recorded against the wrong child, or with terms nobody ever agreed. Using `/schedule-assignments/change` for a mistake would publish a period of service that never happened, and you would have no way to tell the two apart afterwards.\n\n**Nothing is deleted.** The record is retained and its `status` becomes `canceled`, so an identifier you already synchronised still resolves and explains itself. Poll `status` to converge: `canceled` means it never took effect and nothing should be derived from it.\n\n**Safe to retry.** Cancelling an already-cancelled record returns it unchanged with `200` rather than a conflict, so an attempt you could not confirm reaches the same place.\n\nOnly a record that is still operational can be cancelled. One that has already ended or been superseded asserts that service really happened, and denying it retroactively would break every figure derived from it; that returns `409`.\n\n**It also stops the derived days.** `GET /api/v1/schedule-days` expands assignments into concrete expected days; a cancelled assignment stops projecting, so you will not keep receiving attendance expectations nobody ever owed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-required-scope": "schedule.write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The record that should never have been effective.",
+                "properties": {
+                  "schedule_assignment_id": {
+                    "type": "string",
+                    "description": "The schedule assignment that should never have applied."
+                  }
+                },
+                "required": [
+                  "schedule_assignment_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
           "200": {
             "description": "Already in this state \u2014 the existing record is returned unchanged.",
             "content": {
@@ -2931,7 +3285,7 @@
       },
       "Child": {
         "type": "object",
-        "description": "A child participating in service. Identity and lifecycle only \u2014 health, allergy and safeguarding information is never part of this resource.",
+        "description": "A child with an enrollment that was not cancelled before it began. Identity and lifecycle only \u2014 health, allergy and safeguarding information is never part of this resource.",
         "properties": {
           "id": {
             "type": "string",

@@ -27,6 +27,14 @@ import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actio
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
+import {
+    createChargePolicyExclusion,
+    endChargePolicyExclusion,
+} from "@/lib/financials/reductions/chargePolicyExclusionService";
+import {
+    assignPolicyToRelationship,
+    endPolicyAssignment,
+} from "@/lib/financials/reductions/commercialPolicyAssignmentService";
 import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
 import {
     MANUAL_REDUCTION_CATEGORIES,
@@ -40,6 +48,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const BILLING_APPLY_DISCOUNTS_ACTION_KEY = "billing.apply_discounts";
 export const BILLING_ADJUST_ACCOUNT_ACTION_KEY = "billing.adjust_account";
 export const BILLING_REVERSE_ADJUSTMENT_ACTION_KEY = "billing.reverse_adjustment";
+/** Taking an otherwise-applicable policy off ONE charge, and putting it back. */
+export const BILLING_WAIVE_CHARGE_DISCOUNT_ACTION_KEY = "billing.waive_charge_discount";
+export const BILLING_RESTORE_CHARGE_DISCOUNT_ACTION_KEY = "billing.restore_charge_discount";
+/** Giving one commercial relationship a configured policy, and taking it back. */
+export const BILLING_ASSIGN_POLICY_ACTION_KEY = "billing.assign_commercial_policy";
+export const BILLING_END_POLICY_ASSIGNMENT_ACTION_KEY = "billing.end_commercial_policy_assignment";
 
 /** Running authored policy is billing. */
 export const BILLING_APPLY_DISCOUNTS_PERMISSION = "fin.write" as const;
@@ -438,4 +452,445 @@ const reverseAdjustment: RegisteredAction = {
     },
 };
 
-export const financialReductionActions: RegisteredAction[] = [applyDiscounts, adjustAccount, reverseAdjustment];
+// ── ONE CHARGE, ONE POLICY, EXCLUDED ─────────────────────────────────────────────────────────
+/*
+ * ── WHY THIS IS NOT AN ADJUSTMENT ────────────────────────────────────────────────────────────
+ *
+ * An operator who wants "the sibling discount should not reduce THIS charge" has, until now, had
+ * one instrument: adjust the account by the discount's worth, which lands as a manual reduction of
+ * a number a human computed. That is wrong twice — the discount still shows as applied on every
+ * surface that resolves policy, and the offsetting adjustment reads as a decision about this
+ * family rather than about this charge.
+ *
+ * An exclusion says the true thing instead: the policy did not apply here, and here is why. The
+ * resolver reports `excluded_by_charge_exception`, the reason is NOT NULL in the table, and the
+ * money is recomputed rather than countered.
+ *
+ * ── AND WHY IT TAKES `fin.adjust` ────────────────────────────────────────────────────────────
+ *
+ * Applying authored policy is billing (`fin.write`): the machine runs and decides nothing.
+ * Refusing authored policy for one charge is a decision that INCREASES what a real family owes.
+ * That is the same class of act as adjusting an account by hand, and it takes the same grant.
+ */
+const waiveChargeDiscount: RegisteredAction = {
+    actionKey: BILLING_WAIVE_CHARGE_DISCOUNT_ACTION_KEY,
+    defaultLabel: "Waive discount for this charge",
+    description: "Record that an otherwise-applicable commercial policy does not reduce one charge, and why.",
+    /*
+     * THE ENTITY IS THE SUBJECT, THE CHARGE IS THE PAYLOAD. There is no `charge` entity type in
+     * the action runtime, and inventing one here would be a second entity vocabulary. The charge
+     * this exclusion is about travels as `charge_id`, exactly as it does for every other
+     * charge-scoped financial action.
+     */
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const blockers: Array<{ code: string; message: string; field?: string }> = [];
+        if (!t(payload?.charge_id)) {
+            blockers.push({ code: "charge_required", message: "Name the charge this applies to.", field: "charge_id" });
+        }
+        if (!t(payload?.policy_id)) {
+            blockers.push({ code: "policy_required", message: "Name the policy being excluded.", field: "policy_id" });
+        }
+        /*
+         * THE REASON IS REFUSED HERE AS WELL AS IN THE SERVICE. Not redundancy: the service refuses
+         * a write, this refuses a COMMAND, so the operator is told before they confirm rather than
+         * after. The rule is the same one stated twice to two different audiences.
+         */
+        if (t(payload?.reason).length < 3) {
+            blockers.push({
+                code: "reason_required",
+                message: "Say why this discount is being waived. It changes what a real family owes.",
+                field: "reason",
+            });
+        }
+        /* The exclusion is a fact about applicability. It may not carry a number. */
+        const money = POLICY_FORBIDDEN_FIELDS.filter((f) => payload && f in payload);
+        if (money.length > 0) {
+            blockers.push({
+                code: "policy_owns_amount",
+                message: `An exclusion states that a policy did not apply, never what it was worth (${money.join(", ")}).`,
+                field: money[0],
+            });
+        }
+        return blockers.length > 0 ? { ok: false, blockers } : { ok: true, value: payload ?? {} };
+    },
+
+    async resolveEligibility({ supabase, ctx }) {
+        const ok = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_ADJUST_PERMISSION);
+        return {
+            eligible: ok,
+            blockers: ok ? [] : [{ code: "adjust_permission_required", message: `Waiving a discount requires ${BILLING_ADJUST_PERMISSION}.` }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: "This policy will not reduce this charge.",
+            /* The reason is the change worth showing: it is the part that outlives the operator. */
+            changes: [`Reason: ${t(payload?.reason)}`],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_ADJUST_PERMISSION))) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: `Waiving a discount requires ${BILLING_ADJUST_PERMISSION}.`,
+                blockers: [{ code: "adjust_permission_required", message: "Permission required." }],
+            };
+        }
+        const result = await createChargePolicyExclusion(supabase as SupabaseClient, {
+            orgId: ctx.orgId,
+            policyId: t(payload?.policy_id),
+            chargeId: t(payload?.charge_id),
+            reason: t(payload?.reason),
+            actorUserId: ctx.userId ?? null,
+        });
+        if (!result.ok) {
+            return {
+                ok: false,
+                correlationId,
+                status: 400,
+                error: result.message,
+                blockers: [{ code: result.code, message: result.message }],
+            };
+        }
+        return {
+            ok: true,
+            correlationId,
+            result: {
+                actionKey: BILLING_WAIVE_CHARGE_DISCOUNT_ACTION_KEY,
+                entityType: invocation.entityType,
+                entityId: t(invocation.entityId) || result.exclusion.chargeId,
+                affectedId: result.exclusion.id,
+                detail: {
+                    exclusion_id: result.exclusion.id,
+                    charge_id: result.exclusion.chargeId,
+                    policy_id: result.exclusion.policyId,
+                    reason: result.exclusion.reason,
+                },
+            },
+        };
+    },
+};
+
+/*
+ * THE WAY BACK. A waiver an operator cannot undo is a waiver they will work around — with an
+ * adjustment, which is the instrument this action exists to stop them reaching for. Ending an
+ * exclusion is the same class of decision as making one and takes the same grant.
+ */
+const restoreChargeDiscount: RegisteredAction = {
+    actionKey: BILLING_RESTORE_CHARGE_DISCOUNT_ACTION_KEY,
+    defaultLabel: "Restore discount for this charge",
+    description: "End a charge-level policy exclusion, so the policy reduces the charge again.",
+    /*
+     * THE ENTITY IS THE SUBJECT, THE CHARGE IS THE PAYLOAD. There is no `charge` entity type in
+     * the action runtime, and inventing one here would be a second entity vocabulary. The charge
+     * this exclusion is about travels as `charge_id`, exactly as it does for every other
+     * charge-scoped financial action.
+     */
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        if (!t(payload?.exclusion_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "exclusion_required", message: "Name the waiver being ended.", field: "exclusion_id" }],
+            };
+        }
+        return { ok: true, value: payload ?? {} };
+    },
+
+    async resolveEligibility({ supabase, ctx }) {
+        const ok = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_ADJUST_PERMISSION);
+        return {
+            eligible: ok,
+            blockers: ok ? [] : [{ code: "adjust_permission_required", message: `Restoring a discount requires ${BILLING_ADJUST_PERMISSION}.` }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview() {
+        return { summary: "This policy will reduce this charge again.", changes: [] };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_ADJUST_PERMISSION))) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: `Restoring a discount requires ${BILLING_ADJUST_PERMISSION}.`,
+                blockers: [{ code: "adjust_permission_required", message: "Permission required." }],
+            };
+        }
+        const result = await endChargePolicyExclusion(supabase as SupabaseClient, {
+            orgId: ctx.orgId,
+            exclusionId: t(payload?.exclusion_id),
+            actorUserId: ctx.userId ?? null,
+        });
+        if (!result.ok) {
+            return {
+                ok: false,
+                correlationId,
+                status: 400,
+                error: result.message,
+                blockers: [{ code: result.code, message: result.message }],
+            };
+        }
+        return {
+            ok: true,
+            correlationId,
+            result: {
+                actionKey: BILLING_RESTORE_CHARGE_DISCOUNT_ACTION_KEY,
+                entityType: invocation.entityType,
+                entityId: t(invocation.entityId) || result.exclusion.chargeId,
+                affectedId: result.exclusion.id,
+                detail: { exclusion_id: result.exclusion.id, charge_id: result.exclusion.chargeId },
+            },
+        };
+    },
+};
+
+// ── GIVING A RELATIONSHIP A CONFIGURED POLICY ────────────────────────────────────────────────
+/*
+ * ── THE AFFIRMATIVE HALF ─────────────────────────────────────────────────────────────────────
+ *
+ * Every existing discount action is negative: except a relationship, exclude a charge, waive,
+ * restore. The product could refuse a discount and could not grant one, because a child received
+ * a policy only by satisfying a rule.
+ *
+ * ── WHY IT TAKES `fin.write` AND NOT `fin.adjust` ────────────────────────────────────────────
+ *
+ * Waiving takes money's worth away from a family and is the same class of act as adjusting an
+ * account by hand, so it takes `fin.adjust`. Giving a family a discount the organisation has
+ * already authored — at a rate the organisation set, under eligibility the organisation wrote —
+ * decides nothing about what that discount is worth. It says which configured policy this family
+ * receives, which is ordinary billing administration.
+ */
+const assignPolicy: RegisteredAction = {
+    actionKey: BILLING_ASSIGN_POLICY_ACTION_KEY,
+    defaultLabel: "Add discount",
+    description: "Record that one commercial relationship receives a configured commercial policy.",
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const blockers: Array<{ code: string; message: string; field?: string }> = [];
+        if (!t(payload?.policy_id)) {
+            blockers.push({ code: "policy_required", message: "Name the discount to add.", field: "policy_id" });
+        }
+        if (!t(payload?.opportunity_customer_member_id)) {
+            blockers.push({
+                code: "relationship_required",
+                message: "Name the child this is for.",
+                field: "opportunity_customer_member_id",
+            });
+        }
+        if (!t(payload?.customer_member_id)) {
+            blockers.push({ code: "member_required", message: "Name the child this is for.", field: "customer_member_id" });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(t(payload?.effective_start))) {
+            blockers.push({
+                code: "invalid_effective_start",
+                message: "Name the date this discount starts.",
+                field: "effective_start",
+            });
+        }
+        /*
+         * THE POLICY OWNS ITS ECONOMICS. A caller naming a rate here has misunderstood what an
+         * assignment is — and would be authoring a second place the discount is worth something.
+         */
+        const money = POLICY_FORBIDDEN_FIELDS.filter((f) => payload && f in payload);
+        if (money.length > 0) {
+            blockers.push({
+                code: "policy_owns_amount",
+                message: `An assignment names which policy a child receives, never what it is worth (${money.join(", ")}).`,
+                field: money[0],
+            });
+        }
+        return blockers.length > 0 ? { ok: false, blockers } : { ok: true, value: payload ?? {} };
+    },
+
+    async resolveEligibility({ supabase, ctx }) {
+        const ok = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_APPLY_DISCOUNTS_PERMISSION);
+        return {
+            eligible: ok,
+            blockers: ok ? [] : [{ code: "billing_permission_required", message: `Adding a discount requires ${BILLING_APPLY_DISCOUNTS_PERMISSION}.` }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: "This child will receive this configured discount.",
+            /* What it is WORTH is the policy's answer and the resolver's; this states neither. */
+            changes: [`From ${t(payload?.effective_start)}`],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_APPLY_DISCOUNTS_PERMISSION))) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: `Adding a discount requires ${BILLING_APPLY_DISCOUNTS_PERMISSION}.`,
+                blockers: [{ code: "billing_permission_required", message: "Permission required." }],
+            };
+        }
+        const result = await assignPolicyToRelationship(supabase as SupabaseClient, {
+            orgId: ctx.orgId,
+            policyId: t(payload?.policy_id),
+            opportunityCustomerMemberId: t(payload?.opportunity_customer_member_id),
+            customerMemberId: t(payload?.customer_member_id),
+            effectiveStart: t(payload?.effective_start),
+            reason: t(payload?.reason) || null,
+            actorUserId: ctx.userId ?? null,
+        });
+        if (!result.ok) {
+            return {
+                ok: false,
+                correlationId,
+                status: 400,
+                error: result.message,
+                blockers: [{ code: result.code, message: result.message }],
+            };
+        }
+        return {
+            ok: true,
+            correlationId,
+            result: {
+                actionKey: BILLING_ASSIGN_POLICY_ACTION_KEY,
+                entityType: invocation.entityType,
+                entityId: t(invocation.entityId) || result.assignment.customerMemberId,
+                affectedId: result.assignment.id,
+                detail: {
+                    assignment_id: result.assignment.id,
+                    policy_id: result.assignment.policyId,
+                    customer_member_id: result.assignment.customerMemberId,
+                    effective_start: result.assignment.effectiveStart,
+                },
+            },
+        };
+    },
+};
+
+/*
+ * TAKING IT BACK. Ended, never deleted: the row is the record that somebody gave this family this
+ * discount and for how long, and removing it would make money that was already reduced
+ * unexplainable.
+ */
+const endAssignment: RegisteredAction = {
+    actionKey: BILLING_END_POLICY_ASSIGNMENT_ACTION_KEY,
+    defaultLabel: "Remove discount",
+    description: "End a relationship's assignment of a configured commercial policy, from a date.",
+    supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const blockers: Array<{ code: string; message: string; field?: string }> = [];
+        if (!t(payload?.assignment_id)) {
+            blockers.push({ code: "not_assigned", message: "Name the discount being removed.", field: "assignment_id" });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(t(payload?.effective_end))) {
+            blockers.push({ code: "invalid_effective_end", message: "Name the date this discount ends.", field: "effective_end" });
+        }
+        return blockers.length > 0 ? { ok: false, blockers } : { ok: true, value: payload ?? {} };
+    },
+
+    async resolveEligibility({ supabase, ctx }) {
+        const ok = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_APPLY_DISCOUNTS_PERMISSION);
+        return {
+            eligible: ok,
+            blockers: ok ? [] : [{ code: "billing_permission_required", message: `Removing a discount requires ${BILLING_APPLY_DISCOUNTS_PERMISSION}.` }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return { summary: "This child will stop receiving this discount.", changes: [`From ${t(payload?.effective_end)}`] };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, BILLING_APPLY_DISCOUNTS_PERMISSION))) {
+            return {
+                ok: false,
+                correlationId,
+                status: 403,
+                error: `Removing a discount requires ${BILLING_APPLY_DISCOUNTS_PERMISSION}.`,
+                blockers: [{ code: "billing_permission_required", message: "Permission required." }],
+            };
+        }
+        const result = await endPolicyAssignment(supabase as SupabaseClient, {
+            orgId: ctx.orgId,
+            assignmentId: t(payload?.assignment_id),
+            effectiveEnd: t(payload?.effective_end),
+            actorUserId: ctx.userId ?? null,
+        });
+        if (!result.ok) {
+            return {
+                ok: false,
+                correlationId,
+                status: 400,
+                error: result.message,
+                blockers: [{ code: result.code, message: result.message }],
+            };
+        }
+        return {
+            ok: true,
+            correlationId,
+            result: {
+                actionKey: BILLING_END_POLICY_ASSIGNMENT_ACTION_KEY,
+                entityType: invocation.entityType,
+                entityId: t(invocation.entityId) || result.assignment.customerMemberId,
+                affectedId: result.assignment.id,
+                detail: {
+                    assignment_id: result.assignment.id,
+                    policy_id: result.assignment.policyId,
+                    effective_end: result.assignment.effectiveEnd,
+                },
+            },
+        };
+    },
+};
+
+export const financialReductionActions: RegisteredAction[] = [
+    applyDiscounts,
+    adjustAccount,
+    reverseAdjustment,
+    waiveChargeDiscount,
+    restoreChargeDiscount,
+    assignPolicy,
+    endAssignment,
+];

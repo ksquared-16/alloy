@@ -364,3 +364,87 @@ export function assertNoOperationalPlacementPatch(): void {
 export function isOperationalPlacementRow(row: ChildPlacementRow): boolean {
     return isPlacementOperationalStatus(row.status);
 }
+
+/**
+ * Cancel a placement that should never have been effective.
+ *
+ * ── WHY SUPERSESSION CANNOT DO THIS ──
+ *
+ * `supersedeChildPlacement` requires the replacement to start strictly AFTER the prior row
+ * (`isInvalidSupersedeStartDate`), and closes the prior row on the day before that start. So the
+ * superseded row always asserts a NON-EMPTY interval during which it was the truth — the arithmetic
+ * makes a zero-length window impossible. That is exactly right for "the child was in Room A and
+ * then moved to Room B", and exactly wrong for "this placement was recorded against the wrong child
+ * and was never true at all". Using `move` for the second case publishes a period of care that
+ * never happened, and a partner that already synced the row has no way to tell the two apart.
+ *
+ * `canceled` is already the canonical word for a placement that never became operational: it is in
+ * the status CHECK, it is excluded from
+ * `ux_child_placements_one_operational_per_agreement` (so cancelling frees the slot for a corrected
+ * row), and it is terminal. Nothing new is invented here — the state existed and had no writer.
+ *
+ * ── WHAT THIS IS NOT ──
+ *
+ * Not a delete: the row is retained, so a consumer that already read it can still resolve the id
+ * and see what happened to it. Not a change: no business value is rewritten, which is why the
+ * `assertNoOperationalPlacementPatch` doctrine is untouched — that guard forbids patching a row's
+ * terms in place, and a terminal lifecycle transition is not a term.
+ *
+ * Retry converges rather than conflicting: a caller that could not confirm the first attempt is
+ * told the same thing the first attempt would have told it.
+ */
+export async function cancelChildPlacement(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        placementId: string;
+        actorUserId?: string | null;
+    }
+): Promise<ChildPlacementRow> {
+    const { data: existing, error: readError } = await supabase
+        .from("child_placements")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("id", input.placementId)
+        .maybeSingle();
+
+    if (readError) {
+        throw new OperationalEnrollmentServiceError("db_error", readError.message);
+    }
+    if (!existing) {
+        throw new OperationalEnrollmentServiceError("not_found", "Placement not found");
+    }
+
+    const prior = existing as ChildPlacementRow;
+    if (prior.status === "canceled") {
+        return prior;
+    }
+    // `ended` and `superseded` are assertions that the placement WAS true for a period. Cancelling
+    // them would retroactively deny care that the record says happened, and anything derived from
+    // it — occupancy, ratios, invoices — would no longer reconcile. A mistake discovered after a
+    // row has been closed is a different problem from this one, and it is not solved by pretending
+    // the row never existed.
+    if (!isPlacementOperationalStatus(prior.status)) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Only an operational placement can be cancelled; this one is already closed",
+            { status: prior.status }
+        );
+    }
+
+    const { data, error } = await supabase
+        .from("child_placements")
+        .update({
+            status: "canceled",
+            updated_by: trimOrNull(input.actorUserId),
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.placementId)
+        .select("*")
+        .single();
+
+    if (error || !data) {
+        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "update failed");
+    }
+    return data as ChildPlacementRow;
+}
