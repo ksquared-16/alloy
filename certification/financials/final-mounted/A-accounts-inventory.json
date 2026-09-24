@@ -1,0 +1,79 @@
+{
+  "detailRoot": 1,
+  "kpis": [],
+  "rowGroups": {
+    "identity": 1,
+    "discount": 1,
+    "payment": 1
+  },
+  "rowText": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+  "discountSummary": "Sibling discount (QA specimen) · 10%",
+  "discountGear": 1,
+  "methodState": "No payment method on file",
+  "managePayments": 1,
+  "responsibilityGear": 1,
+  "responsibleFilter": 1,
+  "lenses": "All 79 Charges 23 Credits & adjustments 56 Funding 0 Payments 2 Everyone ▾ All periods ▾ Anyone responsible ▾",
+  "ledger": 0,
+  "periods": [],
+  "paymentButton": 1,
+  "chargeMenu": 0,
+  "boxes": {
+    "identity": {
+      "top": 206,
+      "left": 431,
+      "right": 584,
+      "width": 153,
+      "height": 18
+    },
+    "discount": {
+      "top": 203,
+      "left": 602,
+      "right": 838,
+      "width": 236,
+      "height": 21
+    },
+    "payment": {
+      "top": 228,
+      "left": 729,
+      "right": 1009,
+      "width": 280,
+      "height": 17
+    },
+    "methodState": {
+      "top": 228,
+      "left": 729,
+      "right": 879,
+      "width": 150,
+      "height": 17
+    },
+    "managePayments": {
+      "top": 228,
+      "left": 885,
+      "right": 1009,
+      "width": 124,
+      "height": 17
+    },
+    "row": {
+      "top": 195,
+      "left": 431,
+      "right": 1009,
+      "width": 578,
+      "height": 50
+    },
+    "detail": {
+      "top": 83,
+      "left": 417,
+      "right": 1023,
+      "width": 606,
+      "height": 3437
+    }
+  },
+  "permanentResponsibilityBlock": 0,
+  "permanentDiscountBlock": 0,
+  "permanentPaymentMethodsBlock": 0,
+  "horizontalOverflow": false,
+  "rootScrollWidthOverflow": false,
+  "nativeFinancialControls": 0,
+  "prepaidNamed": true
+}

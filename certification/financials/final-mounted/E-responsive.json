@@ -1,0 +1,170 @@
+[
+  {
+    "viewport": 1280,
+    "detail": {
+      "top": 83,
+      "left": 337,
+      "right": 943,
+      "width": 606,
+      "height": 3437
+    },
+    "row": {
+      "top": 195,
+      "left": 351,
+      "right": 929,
+      "width": 578,
+      "height": 50
+    },
+    "identity": {
+      "top": 206,
+      "left": 351,
+      "right": 504,
+      "width": 153,
+      "height": 18
+    },
+    "discount": {
+      "top": 203,
+      "left": 522,
+      "right": 758,
+      "width": 236,
+      "height": 21
+    },
+    "payment": {
+      "top": 228,
+      "left": 649,
+      "right": 929,
+      "width": 280,
+      "height": 17
+    },
+    "methodState": {
+      "top": 228,
+      "left": 649,
+      "right": 799,
+      "width": 150,
+      "height": 17
+    },
+    "managePayments": {
+      "top": 228,
+      "left": 805,
+      "right": 929,
+      "width": 124,
+      "height": 17
+    },
+    "rowText": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+    "horizontalOverflow": false,
+    "clippedNodes": 116,
+    "detailInsideViewport": true
+  },
+  {
+    "viewport": 1440,
+    "detail": {
+      "top": 83,
+      "left": 417,
+      "right": 1023,
+      "width": 606,
+      "height": 3437
+    },
+    "row": {
+      "top": 195,
+      "left": 431,
+      "right": 1009,
+      "width": 578,
+      "height": 50
+    },
+    "identity": {
+      "top": 206,
+      "left": 431,
+      "right": 584,
+      "width": 153,
+      "height": 18
+    },
+    "discount": {
+      "top": 203,
+      "left": 602,
+      "right": 838,
+      "width": 236,
+      "height": 21
+    },
+    "payment": {
+      "top": 228,
+      "left": 729,
+      "right": 1009,
+      "width": 280,
+      "height": 17
+    },
+    "methodState": {
+      "top": 228,
+      "left": 729,
+      "right": 879,
+      "width": 150,
+      "height": 17
+    },
+    "managePayments": {
+      "top": 228,
+      "left": 885,
+      "right": 1009,
+      "width": 124,
+      "height": 17
+    },
+    "rowText": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+    "horizontalOverflow": false,
+    "clippedNodes": 116,
+    "detailInsideViewport": true
+  },
+  {
+    "viewport": 1680,
+    "detail": {
+      "top": 83,
+      "left": 537,
+      "right": 1143,
+      "width": 606,
+      "height": 3437
+    },
+    "row": {
+      "top": 195,
+      "left": 551,
+      "right": 1129,
+      "width": 578,
+      "height": 50
+    },
+    "identity": {
+      "top": 206,
+      "left": 551,
+      "right": 704,
+      "width": 153,
+      "height": 18
+    },
+    "discount": {
+      "top": 203,
+      "left": 722,
+      "right": 958,
+      "width": 236,
+      "height": 21
+    },
+    "payment": {
+      "top": 228,
+      "left": 849,
+      "right": 1129,
+      "width": 280,
+      "height": 17
+    },
+    "methodState": {
+      "top": 228,
+      "left": 849,
+      "right": 999,
+      "width": 150,
+      "height": 17
+    },
+    "managePayments": {
+      "top": 228,
+      "left": 1005,
+      "right": 1129,
+      "width": 124,
+      "height": 17
+    },
+    "rowText": "Certt Certhouse $36.00 Sibling discount (QA specimen) · 10% No payment method on file Manage payments →",
+    "horizontalOverflow": false,
+    "clippedNodes": 116,
+    "detailInsideViewport": true
+  }
+]

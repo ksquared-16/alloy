@@ -1,0 +1,20 @@
+{
+  "net": [
+    "200 /api/admin/financials/work-queue",
+    "200 /api/admin/financials/activity",
+    "200 /api/admin/financials/overview-metrics",
+    "200 /api/admin/financials/position",
+    "200 /api/admin/financials/subjects",
+    "200 /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "200 /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "200 /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "200 /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "200 /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+    "200 /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+  ],
+  "errs": [
+    "FAILED /.well-known/vercel/jwe net::ERR_ABORTED",
+    "FAILED / net::ERR_ABORTED"
+  ],
+  "clickError": "TimeoutError: locator.click: Timeout 25000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[data-financials-account-row=\"0658832a-48d6-4b80-beae-0b12d573fdf2\"]').first()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" aria-pressed=\"false\" data-financials-account-selected=\"false\" data-financials-account-state=\"outstanding\" data-financials-account-row=\"0658832a-48d6-4b80-beae-0b12d573fdf"
+}

@@ -529,6 +529,21 @@ export default function FinancialsDetailCard({
                   * silently attribute one payer's method state to the relationship as a whole.
                   * With several, each keeps its own, and only the door is shared.
                   */}
+                {/*
+                  * ── NO AVATAR ON THE PAYER, AND THAT IS A DECISION ────────────────────────
+                  *
+                  * Discounts draws a canonical avatar per child because it is handed the child's
+                  * identity — `vm.subjects` carries the request-scoped `resolved_photo_url` that
+                  * `projectResolvedProfilePhotosOntoRows` minted. The payer is not that: a
+                  * `FinancialsPayer` is `{ name, share, method }`, with no person id and no photo,
+                  * so this row cannot resolve an image without a second authority and a second
+                  * fetch on a surface whose whole point is one compact line.
+                  *
+                  * So the absence is intentional, not an oversight, and it is recorded here rather
+                  * than re-discovered: giving the adult an avatar means widening the payer model
+                  * first. What must never happen instead is the shortcut — a child's avatar
+                  * standing in for the adult who owes, on the row that says who owes.
+                  */}
                 {evidence.payers.length || administration ? (
                     <div className="alloy-os-fdetail__payers" data-financials-payer-row="true">
                         <span className="alloy-os-fdetail__rowgroup" data-financials-row-group="identity">

@@ -591,6 +591,21 @@ export type AddChargeSpecimen = {
     note: string;
     previewBefore: string;
     previewAfter: string;
+    /**
+     * ── THE CONSEQUENCE THE OPERATOR IS ABOUT TO AUTHORISE ──
+     *
+     * All four are the DOMAIN's figures, placed here by the adapter. `null` means "not resolved
+     * yet" and must render as an absent line, never as zero — a zero on this surface is a claim
+     * about a family's money.
+     */
+    /** The gross this charge is raised at. */
+    previewGross: string | null;
+    /** What the chosen discount takes off it, or null when no discount applies. */
+    previewDiscountAmount: string | null;
+    /** Gross less discount. */
+    previewNet: string | null;
+    /** The balance once this charge posts — the gross away, since the discount posts separately. */
+    previewPostedBalance: string | null;
 };
 
 /** A configured Business Process, as the combined Process card consumes it. */

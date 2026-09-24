@@ -1,0 +1,29 @@
+{
+  "accName": "Manage responsibility",
+  "tShell": 142,
+  "meaningful": 4145,
+  "present": true,
+  "box": {
+    "top": 234,
+    "left": 416,
+    "width": 608,
+    "height": 433
+  },
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "text": "RESPONSIBILITY Applies to Household — the whole account ▾ CURRENT Certt Certhouse · $18.00 · since Sep 18, 2026 Saving replaces this arrangement. Effective from Applies from this date onward. Money already paid is not moved. RESPONSIBLE PARTIES Certt CerthousePrimary contact Fixed amount ▾ Name at least one responsible party. Preview Confirm Cancel",
+  "fixedPercentRemainder": [
+    "Fixed"
+  ],
+  "buttons": [
+    "Household — the whole account▾",
+    "Fixed amount▾",
+    "Preview",
+    "Confirm",
+    "Cancel"
+  ],
+  "avatars": 0,
+  "insideViewport": true
+}

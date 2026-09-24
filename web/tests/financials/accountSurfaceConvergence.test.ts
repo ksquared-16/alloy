@@ -206,8 +206,25 @@ describe("F7 · one truth, two grains", () => {
          * element now, and it dismisses through the platform's return-to-base signal.
          */
         expect(css).toContain(".alloy-accounts-command-backdrop");
-        expect(css, "the account stays behind a scrim")
-            .toMatch(/\.alloy-accounts-command-host:has\(\[data-financials-overlay\]\)[^{]*\{[^}]*position: fixed/);
+        /*
+         * ── THIS ASSERTION USED TO ENCODE THE DEFECT ────────────────────────────────────────
+         *
+         * It demanded that the scrim and the fixed layer key on `:has([data-financials-overlay])`
+         * — ANY overlay. That was right while Details was something the operator pushed on top of
+         * the account, and it went on passing after convergence made Details the FLOOR of this
+         * host, at which point "any overlay" meant "always". Measured on deployed staging: the
+         * account list sat under a permanent full-viewport scrim, every row refused an ordinary
+         * click, and the ledger floated over a list whose selected row had scrolled out of sight.
+         * The lock was green throughout.
+         *
+         * So the rule is stated as what it always meant — a COMMAND is a focused layer — and the
+         * floor is excluded by name. `accountsReachability` holds the effect: it matches these
+         * same shipped selectors against a real floor node and a real command node.
+         */
+        expect(css, "a command stays behind a scrim")
+            .toMatch(/\.alloy-accounts-command-host:has\(\[data-financials-overlay\][^)]*\)[^{]*\{[^}]*position: fixed/);
+        expect(css, "and the host's resting surface is not treated as one")
+            .toMatch(/:has\(\[data-financials-overlay\]:not\(\[data-financials-surface-role="floor"\]\)\)/);
         const detail = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
         expect(detail, "and the backdrop is clickable").toContain('data-financials-command-backdrop="true"');
         /*
@@ -217,7 +234,7 @@ describe("F7 · one truth, two grains", () => {
          * scrolls the layer instead of pushing the actions off it.
          */
         expect(css, "and the command's own actions stay reachable")
-            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(\d+svh/);
+            .toMatch(/\[data-financials-overlay\][^{]*\{[^}]*max-height: min\(\d+svh/);
         /* One Add Charge implementation: the workspace composes the card, it does not rebuild it. */
         expect(src).not.toContain("AddChargeCommand");
     });
@@ -311,7 +328,7 @@ describe("F7 · one truth, two grains", () => {
         expect(uncapped, "the command body is uncapped here").toContain("max-height: none");
         expect(uncapped, "and both inner caps are released").toContain(".alloy-os-ucard__body");
         expect(css, "while the layer itself stays bounded for smaller viewports")
-            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
+            .toMatch(/\[data-financials-overlay\][^{]*\{[^}]*max-height: min\(/);
     });
 
     /*

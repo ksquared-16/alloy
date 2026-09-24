@@ -1,0 +1,73 @@
+{
+  "trusted_host_action_id": "tha_4cf2d638f50e34",
+  "query_hash": "f59044fb60dea899bb263e18bd0414652639bebe3358ad836533da1705e6da6c",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-23T20:00:59.251Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_4cf2d638f50e34",
+    "query_hash": "f59044fb60dea899bb263e18bd0414652639bebe3358ad836533da1705e6da6c",
+    "authorization_id": "grnt_df03e41f40a940e0",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-23T20:01:00.919Z",
+    "question_ids": [
+      "q1_three_in_ledger",
+      "q2_ledger_high_water",
+      "q3_arrangements_precondition",
+      "q4_charge_id_column",
+      "q5_new_tables",
+      "q6_dependencies"
+    ],
+    "questions": {
+      "q1_three_in_ledger": {
+        "question_id": "q1_three_in_ledger",
+        "row_count": null,
+        "rows": [
+          "20261018120000,20261019120000,20261020120000"
+        ]
+      },
+      "q2_ledger_high_water": {
+        "question_id": "q2_ledger_high_water",
+        "row_count": null,
+        "rows": [
+          20261020120000
+        ]
+      },
+      "q3_arrangements_precondition": {
+        "question_id": "q3_arrangements_precondition",
+        "row_count": null,
+        "rows": [
+          "arrangements_present:financial_responsibility_arrangements_no_overlap"
+        ]
+      },
+      "q4_charge_id_column": {
+        "question_id": "q4_charge_id_column",
+        "row_count": null,
+        "rows": [
+          "charge_id_present"
+        ]
+      },
+      "q5_new_tables": {
+        "question_id": "q5_new_tables",
+        "row_count": null,
+        "rows": [
+          "exclusions_present,assignments_present"
+        ]
+      },
+      "q6_dependencies": {
+        "question_id": "q6_dependencies",
+        "row_count": null,
+        "rows": [
+          "charges_ok,policies_ok,ocm_ok,orgs_ok"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}

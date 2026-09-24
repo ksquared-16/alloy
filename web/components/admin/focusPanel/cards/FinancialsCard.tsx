@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
+import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
@@ -1832,7 +1834,23 @@ export default function FinancialsCard({
      * WOULD have applied is a decision, declining one that was never coming is the truth.
      */
     const [proposedDiscounts, setProposedDiscounts] = useState<{
-        options: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+        /*
+         * `expectedCents` IS THE RESOLVER'S ANSWER, NOT A RATE TO MULTIPLY BY.
+         *
+         * The route already returns what each policy is worth against this proposed charge —
+         * `resolveFinancialReductions` priced it, through every gate a real charge passes. It was
+         * being dropped on the way in, which left the preview able to name a policy and its rate
+         * but not what it takes off, and left the card the only place a figure could come from.
+         * Carried, never recomputed: a second answer here would make this card a reduction
+         * authority, which is the one thing the selector exists not to be.
+         */
+        options: Array<{
+            policyId: string;
+            label: string;
+            basis: string | null;
+            basisValue: number | null;
+            expectedCents: number | null;
+        }>;
         wouldApplyPolicyId: string | null;
     }>({ options: [], wouldApplyPolicyId: null });
     const chargeDiscountSuppresses = proposedDiscounts.wouldApplyPolicyId;
@@ -1861,12 +1879,21 @@ export default function FinancialsCard({
         void fetch(`/api/admin/financials/proposed-charge-discounts?${query.toString()}`, { credentials: "include" })
             .then((r) => (r.ok ? r.json() : null))
             .then((body: {
-                options?: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+                options?: Array<{
+                    policyId: string;
+                    label: string;
+                    basis: string | null;
+                    basisValue: number | null;
+                    expectedCents?: number | null;
+                }>;
                 wouldApplyPolicyId?: string | null;
             } | null) => {
                 if (cancelled) return;
                 setProposedDiscounts({
-                    options: body?.options ?? [],
+                    options: (body?.options ?? []).map((o) => ({
+                        ...o,
+                        expectedCents: o.expectedCents ?? null,
+                    })),
                     wouldApplyPolicyId: body?.wouldApplyPolicyId ?? null,
                 });
             })
@@ -1881,6 +1908,25 @@ export default function FinancialsCard({
          * charge it cannot reduce.
          */
     }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates]);
+
+    /*
+     * ── WHICH DISCOUNT THIS CHARGE WILL GET, AND WHAT IT IS WORTH ────────────────────────────
+     *
+     * One selection rule, stated once. The card had it inline where the control is built, so the
+     * preview had no way to ask the same question without restating it — and two copies of
+     * "unanswered means the canonical default" is exactly how a preview comes to describe a
+     * different decision from the one the operator is about to make.
+     *
+     * The MONEY is looked up, never derived. `expectedCents` came from the resolver; this picks
+     * the row and hands it on.
+     */
+    const chargeDiscountSelectedPolicyId =
+        chargeDiscountChoice === undefined ? proposedDiscounts.wouldApplyPolicyId : chargeDiscountChoice;
+    const chargeDiscountCents =
+        chargeDiscountSelectedPolicyId
+            ? proposedDiscounts.options.find((o) => o.policyId === chargeDiscountSelectedPolicyId)?.expectedCents
+              ?? null
+            : null;
 
     const [waiverReason, setWaiverReason] = useState("");
     const resetChargeDecisions = useCallback(() => {
@@ -2829,14 +2875,21 @@ export default function FinancialsCard({
                         </label>
                         <label className="alloy-os-fdetail__movefield">
                             <span>Effective date</span>
-                            <input
-                                data-testid="adjustment-effective-date"
-                                type="date"
+                            {/*
+                              * The canonical date control, for the same reason Add Charge and
+                              * Responsibility now carry it: an adjustment decides money, and the
+                              * one field on the card that asked the browser for its widget was the
+                              * one field that did not look like Alloy. Same stored `YYYY-MM-DD`,
+                              * same effective-date meaning.
+                              */}
+                            <AlloyDateInput
                                 value={adjustEffectiveDate}
-                                onChange={(e) => {
-                                    setAdjustEffectiveDate(e.target.value);
+                                onChange={(next) => {
+                                    setAdjustEffectiveDate(next);
                                     setAdjustPreview(null);
                                 }}
+                                aria-label="Effective date"
+                                testId="adjustment-effective-date"
                             />
                         </label>
                         {adjustPreview ? (
@@ -3616,6 +3669,12 @@ export default function FinancialsCard({
                             currency,
                             previewSummary: pending?.summary ?? null,
                             previewChanges: pending?.changes ?? [],
+                            /*
+                             * The resolver's figure for the discount this charge would get, so the
+                             * preview can state the net instead of leaving the operator to do the
+                             * subtraction they came here to have done for them.
+                             */
+                            discountCents: chargeDiscountCents,
                         })}
                         controls={{
                             selectedTemplateId: selected.key,
@@ -3829,6 +3888,13 @@ export default function FinancialsCard({
                                               label: o.basis === "percentage" && o.basisValue != null
                                                   ? `${o.label} · ${o.basisValue}%`
                                                   : o.label,
+                                              /*
+                                               * What the resolver said this policy takes off THIS
+                                               * charge, formatted and handed on. The card does not
+                                               * know how it was arrived at and must not.
+                                               */
+                                              expectedAmount:
+                                                  o.expectedCents != null ? money(o.expectedCents, currency) : null,
                                           })),
                                           /*
                                            * UNANSWERED MEANS "WHAT RESOLUTION SAYS". The operator
@@ -3837,10 +3903,7 @@ export default function FinancialsCard({
                                            * canonical answer" means — and no exclusion is written
                                            * for a decision they never made.
                                            */
-                                          selectedPolicyId:
-                                              chargeDiscountChoice === undefined
-                                                  ? proposedDiscounts.wouldApplyPolicyId
-                                                  : chargeDiscountChoice,
+                                          selectedPolicyId: chargeDiscountSelectedPolicyId,
                                           onSelect: (policyId: string | null) => setChargeDiscountChoice(policyId),
                                           /*
                                            * A REASON ONLY WHERE ONE IS OWED. Declining a discount
@@ -4418,7 +4481,34 @@ export default function FinancialsCard({
      */
     if (overlay === "detail" && vm && reconciliation) {
         return (
-            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                /*
+                 * ── IS THIS LAYER A COMMAND, OR IS IT THE HOST'S RESTING SURFACE? ────────────
+                 *
+                 * The workspace presents a command as a focused layer: a fixed, centred shell over
+                 * a full-viewport scrim. It decided which layers those were by asking whether ANY
+                 * `data-financials-overlay` existed — true, while Details was something the
+                 * operator pushed on top of the account.
+                 *
+                 * Convergence made Details the FLOOR of this host (`detailsAreTheSurface`), and
+                 * that assumption silently inverted: the floor is always present, so the scrim was
+                 * always up. Measured on deployed staging — the account list sat under a
+                 * full-viewport backdrop, every row refused an ordinary click, the selected account
+                 * never changed, and the ledger floated over the list belonging to a family whose
+                 * row had scrolled out of sight.
+                 *
+                 * So the card states the distinction it is the only one that can know, and the
+                 * stylesheet reads it instead of inferring it. A layer pushed ABOVE the floor is a
+                 * command in either host; the floor is a command in neither.
+                 */
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                })}
+            >
                 {/*
                   * The Move / Apply panel. One panel serves both intents because they differ only in
                   * whether a reversal has to happen first — the destination question is identical, and

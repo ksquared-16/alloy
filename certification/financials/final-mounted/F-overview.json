@@ -1,0 +1,111 @@
+{
+  "periodicBilling": false,
+  "periodicBillingLine": null,
+  "nativeControls": 0,
+  "actionable": [
+    {
+      "t": "All locations▾",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Actions (2)▶",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "New4",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Active Pipeline0",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Registration3",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Waitlist16",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Tours0",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "All8",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Enrolled children2",
+      "bg": "rgb(0, 162, 131)"
+    },
+    {
+      "t": "Filters",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Manage▾",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Work",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Activity",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "2Children",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "0Emergency contacts",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "0Authorized pickups",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Summarize this leadGet a quick o",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Identify missing informationSee ",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Draft follow-upCreate a personal",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "All sites▾",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Work",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Studio",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "Review charges",
+      "bg": "rgb(0, 162, 131)"
+    },
+    {
+      "t": "Review payments",
+      "bg": "rgb(0, 162, 131)"
+    },
+    {
+      "t": "Review subsidy",
+      "bg": "rgb(255, 255, 255)"
+    },
+    {
+      "t": "All activity",
+      "bg": "rgb(255, 255, 255)"
+    }
+  ]
+}
