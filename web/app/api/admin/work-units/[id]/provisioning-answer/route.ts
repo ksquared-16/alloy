@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminRouteGateFailureResponse } from "@/lib/admin/adminRouteGate";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
+import { collectedRouteTiming } from "@/lib/perf/routeTimingDiagnostic";
 
 export async function GET(
     request: NextRequest,
@@ -60,7 +61,24 @@ export async function GET(
     // Terminal semantics survive the wire: an honest `error` is a 200 carrying a terminal outcome,
     // NOT an HTTP failure. K2 maps D1 terminals 1:1; an error surface is a workable place, so it must
     // arrive as an answer rather than as a transport fault the client has to interpret.
-    return NextResponse.json(result.answer, {
+    /*
+     * THE OUTER SPANS, CARRIED ON THE ANSWER THIS SEAM ACTUALLY RETURNS (OX Slice 8).
+     *
+     * `ProvisioningTimings` rides the answer already, but it measures only the INNER composer. The
+     * outer awaits — route identity, and the settlement wait that `card_producers_ms` covers — are
+     * recorded into the route-timing collector and then emitted on the ROUTE DOCUMENT, which this
+     * seam never produces. So the one request J5 actually waits on was the one request whose outer
+     * critical path had no observer, and the gap between `total_ms` and the observed round trip had
+     * to be attributed by argument instead of measurement.
+     *
+     * Diagnostic only, and inert unless `ALLOY_ROUTE_TIMING=1`: `collectedRouteTiming()` returns
+     * null when the flag is off, so the product payload is byte-identical. It is attached under a
+     * reserved key rather than merged into the answer's own shape, because the answer is a contract
+     * and a diagnostic must not be able to collide with a business field.
+     */
+    const timing = collectedRouteTiming();
+    const body = timing ? { ...result.answer, __route_timing: timing } : result.answer;
+    return NextResponse.json(body, {
         status: 200,
         headers: { "cache-control": "no-store" },
     });
