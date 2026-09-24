@@ -1534,8 +1534,20 @@ export default function FinancialsCard({
      * matches what they are looking at.
      */
     useEffect(() => {
+        /*
+         * ── THE PRESELECT BELONGS TO THE COMPACT CARD, NOT TO THE ACCOUNT SURFACE ───────────────
+         *
+         * A panel about one child should summarise that child, and the compact card does. Details
+         * is a different object: it is the ACCOUNT, it lists every child's rows, and its own
+         * control says "Everyone". Carrying the preselect into it is what made the band answer for
+         * one child above a household ledger — a total that reconciles to no rows on screen.
+         *
+         * So the preselect applies while the account surface is not open. Opening Details resets
+         * the scope to the account below, and the operator can still narrow it there.
+         */
+        if (detailsAreTheSurface) return;
         setSubjectFilter(scopedMemberId ?? "all");
-    }, [scopedMemberId]);
+    }, [scopedMemberId, detailsAreTheSurface]);
 
     const visibleRows = useMemo(() => {
         if (!vm) return [];
@@ -2378,6 +2390,8 @@ export default function FinancialsCard({
          * difference between this and the skeleton that was rejected three passes running.
          */
         setDetailPending(true);
+        /* Details is the account. It opens at the account's own scope, which is what its control says. */
+        setSubjectFilter("all");
         setStack([{ kind: "detail" }]);
     }, []);
 
@@ -4817,6 +4831,18 @@ export default function FinancialsCard({
                         currency,
                         openPeriodKey: vm.period.key,
                     })}
+                    /*
+                     * ── THE ROWS AND THE TOTALS ARE SCOPED BY THE SAME STATE ─────────────────
+                     *
+                     * The KPI band above this ledger is derived from `subjectFilter`
+                     * (`reconciliationBySubject` / `pastDueBySubject`). The ledger used to be
+                     * scoped by a SECOND state this card held privately, keyed by display label,
+                     * and the two disagreed on deployed staging — the band answered for one child
+                     * while the control read "Everyone" and the rows showed the whole household.
+                     * One scope, passed to whoever renders under it.
+                     */
+                    subject={subjectFilter === "all" ? null : subjectFilter}
+                    onSubjectChange={(next) => setSubjectFilter(next ?? "all")}
                     /*
                      * `Payment` enters the settle operation. Slice H is that lane, so the control is
                      * live: it selects the obligation the operator is most likely to settle — the
