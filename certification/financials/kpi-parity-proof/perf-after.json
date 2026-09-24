@@ -1,0 +1,22 @@
+{
+  "samples": [
+    {
+      "shellAt": 160,
+      "ledgerAt": 7577,
+      "rows": 116
+    },
+    {
+      "shellAt": 59,
+      "ledgerAt": 7498,
+      "rows": 116
+    },
+    {
+      "shellAt": 68,
+      "ledgerAt": 7592,
+      "rows": 116
+    }
+  ],
+  "medianShellMs": 68,
+  "medianLedgerMs": 7577,
+  "rows": 116
+}

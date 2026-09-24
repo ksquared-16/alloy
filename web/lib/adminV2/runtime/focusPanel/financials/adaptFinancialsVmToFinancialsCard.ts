@@ -451,6 +451,8 @@ export function adaptFinancialsVmToLedgerPeriods(input: {
             when: displayDate(row.date) ?? "—",
             // The account, not a child, when a household charge has no participant subject.
             subject: row.subjectName ?? "Household",
+            /* The same fact the account scopes by. The label is for reading; this is for filtering. */
+            subjectMemberId: row.subjectMemberId ?? null,
             type: row.categoryKey,
             glCode:
                 row.glCode ?

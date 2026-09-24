@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
+import { createInFlightCoalescer } from "@/lib/adminV2/runtime/focusPanel/financials/coalesceInFlight";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -328,6 +329,14 @@ export default function FinancialsCard({
      * `awaitingFirstAnswer` below.
      */
     const answeredKeyRef = useRef<string | null>(null);
+    /** The account a FULL read is in flight for, so a late projection cannot restart it. */
+    const deepReadInFlightForRef = useRef<string | null>(null);
+    /**
+     * The one read currently in the air, keyed by the composed query. A second caller for the same
+     * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
+     * not a cache, and never outlives the operation.
+     */
+    const coalescerRef = useRef(createInFlightCoalescer<void>());
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -731,40 +740,78 @@ export default function FinancialsCard({
         return null;
     }, [customerId, scopedMemberId]);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (): Promise<void> => {
         if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
         }
         const answeringKey = customerId ?? scopedMemberId ?? null;
+        /*
+         * ── ONE OPERATION, ONE REQUEST, HOWEVER MANY CALLERS ASK FOR IT ───────────────────────
+         *
+         * MEASURED at the fetch boundary on deployed staging, not inferred: opening Details issued
+         * two identical `financials/card` requests 48ms apart, for the same account, overlapping —
+         * the second reported `identicalInFlight: 1`. Their stacks name two different legitimate
+         * callers of this same `load()`:
+         *
+         *   #1  requestIdleCallback.timeout   the prewarm, which predicted the operator's ask
+         *   #2  the React commit path         the same effect's "asked for: now" branch, once the
+         *                                     overlay opened
+         *
+         * Neither is wrong to ask. The prewarm exists so the operator never waits for what was
+         * predictable, and the click must not depend on a prediction having already landed. What
+         * was wrong is that asking twice ISSUED twice: two ~2.4s server reads racing each other,
+         * each slower for the contention, and the ledger waiting on the later one.
+         *
+         * So the second caller CONSUMES THE FIRST'S RESULT. This is request-scoped coalescing, not
+         * a cache: one entry, keyed by the composed query, cleared the moment it settles. It holds
+         * no financial truth between operations, survives no navigation, and answers no question a
+         * second way — the single response still flows through the same `setVm` and the same
+         * `requestSeq` supersession that keeps one family's balance off another's screen.
+         */
+        /* The mechanism lives in `createInFlightCoalescer`, where it is tested with real concurrency. */
+        return coalescerRef.current.run(requestQuery, async () => {
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
+        /*
+         * WHICH ACCOUNT A FULL READ IS CURRENTLY IN FLIGHT FOR.
+         *
+         * `deepLoadedForRef` records a read that has LANDED, which is one instant too late to stop
+         * the duplicate: measured on deployed staging, the settlement projection almost always
+         * arrives while the read is still in the air, so the guard below found no completed read
+         * and cleared everything — and the second request went out. Recording the read at its
+         * START closes that window. Cleared in `finally`, so a superseded or failed read leaves
+         * nothing latched.
+         */
+        deepReadInFlightForRef.current = answeringKey;
         setLoading(true);
-        try {
-            const query = requestQuery;
+        const query = requestQuery;
+            try {
                 const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
-            const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
-            if (!current()) return;
-            const fresh = json?.ok && json.vm ? json.vm : null;
-            // The endpoint's answer is the FULL model; record which account now has it.
-            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
-            setVm(fresh);
-        } catch {
-            if (!current()) return;
-            setVm(null);
-        } finally {
-            // A superseded request must not clear the spinner belonging to the one that replaced it.
-            if (current()) {
-                /*
-                 * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before the
-                 * spinner clears, because the frame after `setLoading(false)` is exactly the one
-                 * that decides between "still reading" and "no account".
-                 */
-                answeredKeyRef.current = answeringKey;
-                setLoading(false);
+                const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+                if (!current()) return;
+                const fresh = json?.ok && json.vm ? json.vm : null;
+                // The endpoint's answer is the FULL model; record which account now has it.
+                if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+                setVm(fresh);
+            } catch {
+                if (!current()) return;
+                setVm(null);
+            } finally {
+                // A superseded request must not clear the spinner belonging to the one that replaced it.
+                if (current()) {
+                    /*
+                     * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before
+                     * the spinner clears, because the frame after `setLoading(false)` is exactly the
+                     * one that decides between "still reading" and "no account".
+                     */
+                    answeredKeyRef.current = answeringKey;
+                    deepReadInFlightForRef.current = null;
+                    setLoading(false);
+                }
             }
-        }
+        });
     }, [customerId, requestQuery, scopedMemberId]);
 
     /*
@@ -1442,6 +1489,36 @@ export default function FinancialsCard({
     }, [overlay]);
 
     useEffect(() => {
+        /*
+         * ── A BOUNDED SUMMARY MUST NOT DISCARD A FULL READ OF THE SAME ACCOUNT ─────────────────
+         *
+         * Measured on deployed staging: opening Details issued `financials/card` TWICE, ~3.2s each,
+         * 218,680 bytes each, the second starting the instant the first returned — so the operator
+         * waited 7.3 seconds for an answer that arrived at 3.5.
+         *
+         * The cause is here. The settlement projection lands AFTER the deep read the click started.
+         * This effect then superseded that read, replaced the full model with the bounded summary,
+         * and cleared `deepLoadedForRef` — which is exactly the condition the prewarm effect below
+         * treats as "this account has not been read", so it read it again. Identical request,
+         * identical bytes, identical answer.
+         *
+         * The projection is a SUBSET of what a full read holds for the same account. So when that
+         * account has been read in full — or is being read right now — the summary carries nothing
+         * and the deeper answer stands. Covering the IN-FLIGHT case is what actually closes the
+         * duplicate: the projection usually lands mid-read, not after it.
+         *
+         * SUBJECT SAFETY IS UNCHANGED, and it is the reason this is scoped so tightly: the guard
+         * applies only when the projection is READY for the account this card has already read.
+         * A projection for a DIFFERENT subject still clears everything, still supersedes any
+         * in-flight read, and still prevents one family's balance appearing under another's name.
+         */
+        const readKey = customerId ?? scopedMemberId;
+        const fullReadCoversThisAccount =
+            provisioned?.state === "ready"
+            && readKey != null
+            && (deepLoadedForRef.current === readKey || deepReadInFlightForRef.current === readKey);
+        if (fullReadCoversThisAccount) return;
+
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
         requestSeq.current += 1;
@@ -1449,6 +1526,8 @@ export default function FinancialsCard({
         setDeniedRead(provisioned?.state === "forbidden");
         // A new projection is the BOUNDED summary by construction, whichever account it is for.
         deepLoadedForRef.current = null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the identity guard reads this
+        // render's account; adding it as a dependency would re-run the clear on every subject echo.
     }, [provisioned]);
 
     /*
@@ -1534,8 +1613,20 @@ export default function FinancialsCard({
      * matches what they are looking at.
      */
     useEffect(() => {
+        /*
+         * ── THE PRESELECT BELONGS TO THE COMPACT CARD, NOT TO THE ACCOUNT SURFACE ───────────────
+         *
+         * A panel about one child should summarise that child, and the compact card does. Details
+         * is a different object: it is the ACCOUNT, it lists every child's rows, and its own
+         * control says "Everyone". Carrying the preselect into it is what made the band answer for
+         * one child above a household ledger — a total that reconciles to no rows on screen.
+         *
+         * So the preselect applies while the account surface is not open. Opening Details resets
+         * the scope to the account below, and the operator can still narrow it there.
+         */
+        if (detailsAreTheSurface) return;
         setSubjectFilter(scopedMemberId ?? "all");
-    }, [scopedMemberId]);
+    }, [scopedMemberId, detailsAreTheSurface]);
 
     const visibleRows = useMemo(() => {
         if (!vm) return [];
@@ -2378,6 +2469,8 @@ export default function FinancialsCard({
          * difference between this and the skeleton that was rejected three passes running.
          */
         setDetailPending(true);
+        /* Details is the account. It opens at the account's own scope, which is what its control says. */
+        setSubjectFilter("all");
         setStack([{ kind: "detail" }]);
     }, []);
 
@@ -4817,6 +4910,18 @@ export default function FinancialsCard({
                         currency,
                         openPeriodKey: vm.period.key,
                     })}
+                    /*
+                     * ── THE ROWS AND THE TOTALS ARE SCOPED BY THE SAME STATE ─────────────────
+                     *
+                     * The KPI band above this ledger is derived from `subjectFilter`
+                     * (`reconciliationBySubject` / `pastDueBySubject`). The ledger used to be
+                     * scoped by a SECOND state this card held privately, keyed by display label,
+                     * and the two disagreed on deployed staging — the band answered for one child
+                     * while the control read "Everyone" and the rows showed the whole household.
+                     * One scope, passed to whoever renders under it.
+                     */
+                    subject={subjectFilter === "all" ? null : subjectFilter}
+                    onSubjectChange={(next) => setSubjectFilter(next ?? "all")}
                     /*
                      * `Payment` enters the settle operation. Slice H is that lane, so the control is
                      * live: it selects the obligation the operator is most likely to settle — the

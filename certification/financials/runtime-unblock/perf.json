@@ -1,0 +1,53 @@
+{
+  "cold": {
+    "pass": "cold",
+    "domAt": 4822,
+    "shellAt": 4837,
+    "meaningAt": 4845,
+    "actionableAt": 4847,
+    "settledAt": 4848,
+    "detailShellAt": 98,
+    "detailLedgerAt": 6745
+  },
+  "warmMedian": {
+    "domAt": 3989,
+    "shellAt": 4004,
+    "meaningAt": 4011,
+    "actionableAt": 4013,
+    "settledAt": 4014,
+    "detailShellAt": 94,
+    "detailLedgerAt": 7138
+  },
+  "all": [
+    {
+      "pass": "cold",
+      "domAt": 4822,
+      "shellAt": 4837,
+      "meaningAt": 4845,
+      "actionableAt": 4847,
+      "settledAt": 4848,
+      "detailShellAt": 98,
+      "detailLedgerAt": 6745
+    },
+    {
+      "pass": "warm-1",
+      "domAt": 3830,
+      "shellAt": 3848,
+      "meaningAt": 3867,
+      "actionableAt": 3871,
+      "settledAt": 3872,
+      "detailShellAt": 71,
+      "detailLedgerAt": 7085
+    },
+    {
+      "pass": "warm-2",
+      "domAt": 3989,
+      "shellAt": 4004,
+      "meaningAt": 4011,
+      "actionableAt": 4013,
+      "settledAt": 4014,
+      "detailShellAt": 94,
+      "detailLedgerAt": 7138
+    }
+  ]
+}

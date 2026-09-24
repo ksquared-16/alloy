@@ -8,7 +8,7 @@ import {
 } from "@/lib/documents/projectPersonProfilePhotos";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { FINANCIALS_READ_PERMISSION_KEY, assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 
 /**
  * GET /api/admin/financials/card?customer_id=…&customer_member_id=…&date=…
@@ -29,35 +29,56 @@ export async function GET(request: NextRequest) {
      * not need. These marks are published as `Server-Timing`, which the browser records natively
      * and any probe can read, so the decomposition is a measurement rather than an argument.
      */
+    /*
+     * ── DELTAS STOPPED BEING THE TRUTH WHEN THE SPANS STARTED OVERLAPPING ───────────────────
+     *
+     * These marks were deltas between consecutive calls, which reads correctly only while every
+     * span is strictly sequential. Hoisting the org-grain reads and the permission verdict off the
+     * critical path broke that: a read that now finishes during an earlier await would be charged
+     * to whichever mark happened to land next, and `policies;dur=` would report ~0 for a read that
+     * genuinely happened. A delta that moves because work was PARALLELISED rather than removed is
+     * exactly the instrument that lets a latency repair certify itself.
+     *
+     * So each mark publishes both: `name;dur=` is the span as before, and `name_at;dur=` is its
+     * completion offset from the start of the request. Where the two stay consistent the work is
+     * still serial; where `name;dur=` collapses but `total` does not, the overlap is visible
+     * rather than inferred.
+     */
     const t0 = performance.now();
     const marks: Array<[string, number]> = [];
     let last = t0;
     const mark = (name: string) => {
         const now = performance.now();
         marks.push([name, now - last]);
+        marks.push([`${name}_at`, now - t0]);
         last = now;
     };
 
-    const forbidden = await requireAdminOrOps();
+    /*
+     * ── TWO RESOLVERS, ONE SESSION, ASKED AT THE SAME TIME ──────────────────────────────────
+     *
+     * `requireAdminOrOps` resolves PORTAL ADMISSION through `resolveAdminPortalOrgCore`;
+     * `getAdminContextCached` and `getAdminAuthCached` resolve the ACCESS BUNDLE through
+     * `resolveAdminAccessCore`. They are deliberately different resolvers answering different
+     * questions, and neither consumes the other's answer — yet they ran one after the other, and
+     * measured on deployed staging that pair was `auth;dur=` 354–522 ms before any Financials
+     * work began.
+     *
+     * Both are request-memoized with React `cache()`, so starting them together costs no extra
+     * work; the second caller of either joins the first. The CHECKS below are unchanged and stay
+     * in the same order — admission first, then context, then auth — so a caller refused by any
+     * one of them is refused exactly as before, with the same status and the same body.
+     */
+    const forbiddenP = requireAdminOrOps();
+    const ctxP = getAdminContextCached();
+    const authP = getAdminAuthCached();
+    const forbidden = await forbiddenP;
     if (forbidden) return forbidden;
-    const ctx = await getAdminContextCached();
+    const ctx = await ctxP;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuthCached();
+    const auth = await authP;
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     mark("auth");
-
-    const allowedRead = await assertFinancialsReadAllowed({
-        supabase: createAdminClient(),
-        orgId: ctx.orgId,
-        userId: ctx.userId,
-    });
-    if (!allowedRead.ok) {
-        return NextResponse.json(
-            { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
-            { status: 403 },
-        );
-    }
-    mark("perm");
 
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customer_id")?.trim() || null;
@@ -70,13 +91,67 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const vm = await buildFinancialsCardVM(createAdminClient(), {
+        /*
+         * Started, not awaited: the verdict below is what decides whether its answer is ever
+         * looked at. `.catch` is attached at creation because the denial path never awaits it and
+         * an unawaited rejection must not surface as an unhandled one — the real failure is not
+         * swallowed, it is re-thrown at the join where the catch below still owns it.
+         */
+        let readFailure: unknown = null;
+        const vmP = buildFinancialsCardVM(createAdminClient(), {
             orgId: ctx.orgId,
             customerId,
             customerMemberId,
             today: searchParams.get("date")?.trim() || null,
             mark,
+        }).catch((e: unknown) => {
+            readFailure = e;
+            return null;
         });
+
+        /*
+         * ── THE VERDICT IS ASKED WHILE THE READ IS IN THE AIR, AND ANSWERED BEFORE ANY OF IT ────
+         *
+         * `fin.read` resolves through two reads — memberships, then the grants those roles carry —
+         * and measured on deployed staging that cost `perm;dur=` 204–565 ms sitting alone on the
+         * critical path with the composed read not yet started. The read above is issued first, so
+         * this await overlaps it instead of preceding it.
+         *
+         * The gate itself is unchanged, and deliberately not any of the three shapes that would
+         * weaken it: the verdict is resolved per request, from the live grants tables, and is never
+         * persisted, cached across requests, or carried over from an earlier answer. Only WHEN it
+         * is asked moved. Nothing is returned until it answers, and a grants lookup that throws
+         * denies exactly as one that answers null does.
+         *
+         * It is bound and tested under ONE name on purpose. An earlier cut held the promise as
+         * `allowedReadP` and tested the awaited `allowedRead`, which reads identically at runtime
+         * and broke the declared route-capability table's second join — the checker could no longer
+         * see the verdict being tested, and said so. The binding is part of the guarantee, not
+         * paperwork around it.
+         *
+         * The trade this accepts is explicit: an operator who clears `requireAdminOrOps` but lacks
+         * `fin.read` now causes a service-role SELECT whose rows are discarded — reads only, no
+         * writes, nothing returned, and nothing reaching the client but the 403.
+         */
+        const allowedRead = await assertFinancialsReadAllowed({
+            supabase: createAdminClient(),
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+        }).catch(() => ({
+            ok: false as const,
+            message: "Financial access could not be verified.",
+            requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
+        }));
+        mark("perm");
+        if (!allowedRead.ok) {
+            return NextResponse.json(
+                { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
+                { status: 403 },
+            );
+        }
+
+        const vm = await vmP;
+        if (!vm) throw readFailure ?? new Error("Financial records unavailable.");
         mark("read");
 
         /*
