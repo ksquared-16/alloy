@@ -548,21 +548,51 @@ export async function readChargeBalance(
     };
 }
 
-/** What has been given back out of this receipt. Refunds are outbound rows pointing at it. */
+/** The rows these two answers are computed from, when the caller already holds them. */
+export type PaymentMoneyRows = {
+    /** Outbound rows pointing at a receipt. */
+    refunds: ReadonlyArray<{ refunds_payment_id?: unknown; amount_cents?: unknown; status?: unknown }>;
+    /** Applications of a receipt. */
+    allocations: ReadonlyArray<{ payment_id?: unknown; allocated_amount_cents?: unknown; status?: unknown }>;
+};
+
+/**
+ * What has been given back out of this receipt. Refunds are outbound rows pointing at it.
+ *
+ * ── WHY THIS TAKES ROWS ─────────────────────────────────────────────────────────────────────────
+ *
+ * This was called once PER RECEIPT from the household payment views, and so was
+ * `readPaymentUnappliedCents` below — two awaited reads inside a loop over every receipt on the
+ * account. On the certification tenant's largest household that is 3,198 receipts and roughly
+ * 6,400 sequential round trips, which is the bulk of the 1,131-4,211 ms the payment views cost on
+ * deployed staging.
+ *
+ * The SUM is the Payments authority and does not move: it is the same arithmetic over the same
+ * rows, under the same `status != voided` rule. Only where the rows come from changed.
+ */
 export async function readPaymentRefundedCents(
     supabase: SupabaseClient,
     orgId: string,
     paymentId: string,
+    supplied?: Pick<PaymentMoneyRows, "refunds">,
 ): Promise<number> {
-    const { data, error } = await supabase
-        .from("payments")
-        .select("amount_cents")
-        .eq("org_id", orgId)
-        .eq("refunds_payment_id", paymentId)
-        .neq("status", "voided");
-    if (error) translateDbError(error, "load refunds for payment");
+    let rows: Array<{ amount_cents: number }>;
+    if (supplied) {
+        rows = supplied.refunds
+            .filter((r) => String(r.refunds_payment_id ?? "") === paymentId && String(r.status ?? "") !== "voided")
+            .map((r) => ({ amount_cents: Number(r.amount_cents) || 0 }));
+    } else {
+        const { data, error } = await supabase
+            .from("payments")
+            .select("amount_cents")
+            .eq("org_id", orgId)
+            .eq("refunds_payment_id", paymentId)
+            .neq("status", "voided");
+        if (error) translateDbError(error, "load refunds for payment");
+        rows = (data ?? []) as Array<{ amount_cents: number }>;
+    }
     let refunded = 0;
-    for (const r of (data ?? []) as Array<{ amount_cents: number }>) {
+    for (const r of rows) {
         refunded += Number(r.amount_cents) || 0;
     }
     return refunded;
@@ -581,19 +611,28 @@ export async function readPaymentUnappliedCents(
     orgId: string,
     paymentId: string,
     paymentAmountCents: number,
+    supplied?: PaymentMoneyRows,
 ): Promise<number> {
-    const { data, error } = await supabase
-        .from("payment_allocations")
-        .select("allocated_amount_cents")
-        .eq("org_id", orgId)
-        .eq("payment_id", paymentId)
-        .eq("status", "active");
-    if (error) translateDbError(error, "load applications for payment");
+    let rows: Array<{ allocated_amount_cents: number }>;
+    if (supplied) {
+        rows = supplied.allocations
+            .filter((a) => String(a.payment_id ?? "") === paymentId && String(a.status ?? "") === "active")
+            .map((a) => ({ allocated_amount_cents: Number(a.allocated_amount_cents) || 0 }));
+    } else {
+        const { data, error } = await supabase
+            .from("payment_allocations")
+            .select("allocated_amount_cents")
+            .eq("org_id", orgId)
+            .eq("payment_id", paymentId)
+            .eq("status", "active");
+        if (error) translateDbError(error, "load applications for payment");
+        rows = (data ?? []) as Array<{ allocated_amount_cents: number }>;
+    }
     let applied = 0;
-    for (const r of (data ?? []) as Array<{ allocated_amount_cents: number }>) {
+    for (const r of rows) {
         applied += Number(r.allocated_amount_cents) || 0;
     }
-    const refunded = await readPaymentRefundedCents(supabase, orgId, paymentId);
+    const refunded = await readPaymentRefundedCents(supabase, orgId, paymentId, supplied);
     return paymentAmountCents - applied - refunded;
 }
 

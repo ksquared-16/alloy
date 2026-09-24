@@ -116,6 +116,10 @@ const BUNDLE = {
     subsidy_variances: [],
     collection_attempts: [],
     payments_by_source: ROWS.payments,
+    payments_for_views: ROWS.payments,
+    charges_for_allocations: ROWS.charges,
+    payer_customers: [],
+    payment_refunds: [],
     counts: { agreements: 1, charges: 1, allocations: 1, claim_lines: 1 },
 };
 

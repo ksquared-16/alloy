@@ -45,8 +45,12 @@ export type AccountFactBundle = {
     subsidyVariances: FactRow[];
     collectionAttempts: FactRow[];
     paymentsBySource: FactRow[];
+    paymentsForViews: FactRow[];
+    chargesForAllocations: FactRow[];
+    payerCustomers: FactRow[];
+    paymentRefunds: FactRow[];
     /** Asked-and-none, distinguishable from never-gathered. */
-    counts: { agreements: number; charges: number; allocations: number; claimLines: number };
+    counts: { agreements: number; charges: number; allocations: number; claimLines: number; householdPayments: number };
 };
 
 const list = (v: unknown): FactRow[] => (Array.isArray(v) ? (v as FactRow[]) : []);
@@ -93,11 +97,16 @@ export async function readAccountFactBundle(
         subsidyVariances: list(b.subsidy_variances),
         collectionAttempts: list(b.collection_attempts),
         paymentsBySource: list(b.payments_by_source),
+        paymentsForViews: list(b.payments_for_views),
+        chargesForAllocations: list(b.charges_for_allocations),
+        payerCustomers: list(b.payer_customers),
+        paymentRefunds: list(b.payment_refunds),
         counts: {
             agreements: Number(counts.agreements ?? 0),
             charges: Number(counts.charges ?? 0),
             allocations: Number(counts.allocations ?? 0),
             claimLines: Number(counts.claim_lines ?? 0),
+            householdPayments: Number(counts.household_payments ?? 0),
         },
     };
 }
