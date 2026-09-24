@@ -25,9 +25,40 @@ export const dynamic = "force-dynamic";
  * Reading financial subjects is `fin.read`. This route executes nothing.
  */
 export async function GET(request: NextRequest) {
+    /*
+     * ── WHERE THE SECONDS GO ──────────────────────────────────────────────────────────────────
+     *
+     * This route gates the Accounts account list: measured on deployed staging it returns 4.2 KB
+     * in 1,634-2,664 ms, and nothing on that host can render until it lands. A slice collapsed the
+     * cohort's facet chaining from seven sequential waves to four and the deployed number did NOT
+     * move — which means the pole is elsewhere inside it and was never identified by reading the
+     * code. The certification tenant holds no households under this org, so it cannot be profiled
+     * locally either.
+     *
+     * So the boundaries are published, the way the Financials card's are. Three slices of that
+     * card were tractable only because its `Server-Timing` said which span was the cost; this one
+     * is guesswork without the same thing. Deltas AND completion offsets, because overlapping
+     * spans make a delta alone misattribute.
+     */
+    const t0 = performance.now();
+    const marks: Array<[string, number]> = [];
+    let last = t0;
+    const mark = (name: string) => {
+        const now = performance.now();
+        marks.push([name, now - last]);
+        marks.push([`${name}_at`, now - t0]);
+        last = now;
+    };
+    const serverTiming = () =>
+        marks
+            .map(([name, ms]) => `${name};dur=${ms.toFixed(1)}`)
+            .concat(`total;dur=${(performance.now() - t0).toFixed(1)}`)
+            .join(", ");
+
     const gate = await loadAdminRouteGate();
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
     const ctx = gate.access;
+    mark("auth");
 
     const supabase = createAdminClient();
     const allowed = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
@@ -38,6 +69,8 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    mark("perm");
+
     const requestedSite = new URL(request.url).searchParams.get("site_location_id")?.trim() || null;
     try {
         const cohort = await resolveFinancialSubjectCohort(supabase, {
@@ -45,8 +78,17 @@ export async function GET(request: NextRequest) {
             siteScope: ctx.siteScope === "restricted" ? "restricted" : "all",
             allowedSiteLocationIds: ctx.siteScope === "restricted" ? (ctx.allowedSiteLocationIds ?? []) : [],
             activeSiteLocationId: requestedSite,
+        }, mark);
+        const body = JSON.stringify({ ok: true, ...cohort });
+        mark("serialize");
+        return new NextResponse(body, {
+            status: 200,
+            headers: {
+                "content-type": "application/json",
+                "cache-control": "no-store",
+                "server-timing": serverTiming(),
+            },
         });
-        return NextResponse.json({ ok: true, ...cohort });
     } catch (e) {
         return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }

@@ -176,7 +176,17 @@ export function isFinancialSubjectVisible(args: {
 export async function resolveFinancialSubjectCohort(
     supabase: SupabaseClient,
     args: FinancialSubjectArgs,
+    /*
+     * ── SAY WHERE THE COHORT'S TIME GOES ───────────────────────────────────────────────────────
+     *
+     * The route's `cohort;dur=` is 645-717 ms and gates the Accounts account list. A slice already
+     * guessed at what was inside that label — collapsed the facet chaining from seven waves to
+     * four — and the deployed number did not move. A duration with no interior is how that happens
+     * twice, so the caller may pass a mark and get the phases.
+     */
+    mark?: (name: string) => void,
 ): Promise<FinancialSubjectCohort> {
+    const phase = (name: string) => mark?.(name);
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
     const scanCap = Math.min(Math.max(args.scanCap ?? FINANCIAL_SUBJECT_SCAN_CAP, 1), FINANCIAL_SUBJECT_SCAN_CAP);
     const scope = { siteLocationId: activeSiteLocationId, siteScope: args.siteScope };
@@ -208,19 +218,31 @@ export async function resolveFinancialSubjectCohort(
     }
     const truncated = !reachedEnd && households.length >= scanCap;
 
+    phase("households");
     const customerIds = households.map((h) => h.id).filter(Boolean);
-    const sitesByCustomer = await readAgreementSites(supabase, args.orgId, customerIds);
     /*
-     * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
-     * read that fails leaves that facet empty rather than failing the cohort, because a household
-     * an operator cannot filter by room is still a household they must be able to reach, and a
-     * rail that refuses to render because a classroom label could not be read has turned a
-     * convenience into an outage.
+     * ── THE FACETS NEVER NEEDED THE AGREEMENT SITES ────────────────────────────────────────────
+     *
+     * `readAgreementSites` walks three dependent reads of its own — agreements by customer, then
+     * the orphan agreements a paged scan finds, then the members those orphans name. The three
+     * facet reads below take `customerIds` and NOTHING else: children, contacts and placements are
+     * all keyed by the households wave one already produced.
+     *
+     * They ran after it purely because the site map is used first when the rows are assembled.
+     * Measured with a holding client, that made this cohort SEVEN sequential waves, and measured on
+     * deployed staging the whole endpoint took 1,370 ms to return 4.2 KB — the gate on the Accounts
+     * shell, since the account list cannot render and the card cannot be asked for until it lands.
+     *
+     * Started together, the site map and the facets overlap instead of queueing. Same reads, same
+     * predicates, same rows, same per-facet failure tolerance — each still degrades to an empty
+     * facet rather than failing the cohort.
      */
-    const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await Promise.all([
-        readChildNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
+    const sitesP = readAgreementSites(supabase, args.orgId, customerIds);
+    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds).catch(() => [] as HouseholdMemberRow[]);
+    const facetsP = Promise.all([
+        membersP.then(childNamesFrom).catch(() => new Map<string, string[]>()),
         readContactNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
-        readCurrentPlacements(supabase, args.orgId, customerIds).catch((e) => {
+        membersP.then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members)).catch((e) => {
             /*
              * Non-fatal, and NOT silent. A household an operator cannot filter by room is still a
              * household they must be able to reach, so the rail renders — but a swallowed facet
@@ -231,6 +253,17 @@ export async function resolveFinancialSubjectCohort(
             return new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
         }),
     ]);
+    const sitesByCustomer = await sitesP;
+    phase("agreement_sites");
+    /*
+     * The queue facets, read once for the whole cohort. Each is independently tolerant: a facet
+     * read that fails leaves that facet empty rather than failing the cohort, because a household
+     * an operator cannot filter by room is still a household they must be able to reach, and a
+     * rail that refuses to render because a classroom label could not be read has turned a
+     * convenience into an outage.
+     */
+    const [childrenByCustomer, contactsByCustomer, placementsByCustomer] = await facetsP;
+    phase("facets");
 
     const subjects: FinancialSubjectRow[] = [];
     for (const household of households) {
@@ -254,6 +287,7 @@ export async function resolveFinancialSubjectCohort(
         });
     }
 
+    phase("assemble");
     return { subjects, scope, truncated, scanCap };
 }
 
@@ -359,26 +393,45 @@ function uniqueNames(values: Iterable<string>): string[] {
  * the child list and `customer_persons` below is the adult one. Inactive members are excluded: a
  * child who has left is not who an operator is looking for when they type a name today.
  */
-async function readChildNames(
+type HouseholdMemberRow = {
+    id: string | null;
+    customer_id: string | null;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    is_active: boolean | null;
+};
+
+/**
+ * THE HOUSEHOLD'S CHILDREN, READ ONCE.
+ *
+ * `readChildNames` and `readCurrentPlacements` both asked `customer_members` for the same
+ * households — the first for names, the second only to learn which member belongs to which
+ * household. Same table, same key, same batches, twice. Measured on deployed staging, the facet
+ * phase was 326.7 ms on top of the agreement-site reads it already overlaps, and the placement
+ * chain it sits in is members -> placements -> process instances.
+ *
+ * One read now feeds both, which removes a batched scan AND the first hop of that chain. The `id`
+ * is added to the select because the placement map needs it; nothing else about either answer
+ * changes.
+ */
+async function readHouseholdMembers(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
-): Promise<Map<string, string[]>> {
-    const out = new Map<string, Set<string>>();
-    if (customerIds.length === 0) return new Map();
-    const rows = await readInBatches<{
-        customer_id: string | null;
-        display_name: string | null;
-        first_name: string | null;
-        last_name: string | null;
-        is_active: boolean | null;
-    }>("household children", customerIds, (batch) =>
+): Promise<HouseholdMemberRow[]> {
+    if (customerIds.length === 0) return [];
+    return readInBatches<HouseholdMemberRow>("household children", customerIds, (batch) =>
         supabase
             .from("customer_members")
-            .select("customer_id, display_name, first_name, last_name, is_active")
+            .select("id, customer_id, display_name, first_name, last_name, is_active")
             .eq("org_id", orgId)
             .in("customer_id", batch),
     );
+}
+
+function childNamesFrom(rows: readonly HouseholdMemberRow[]): Map<string, string[]> {
+    const out = new Map<string, Set<string>>();
     for (const row of rows) {
         if (row.is_active === false) continue;
         const customerId = named(row.customer_id);
@@ -458,12 +511,14 @@ async function readCurrentPlacements(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
+    /* The households' children, already read for their names. Same rows, one scan. */
+    suppliedMembers?: ReadonlyArray<{ id: string | null; customer_id: string | null }>,
 ): Promise<Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>> {
     const empty = new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
     if (customerIds.length === 0) return empty;
 
     /* Household → its member ids, so a placement naming a child can be attributed to the account. */
-    const memberRows = await readInBatches<{ id: string; customer_id: string | null }>(
+    const memberRows = suppliedMembers ?? await readInBatches<{ id: string; customer_id: string | null }>(
         "placement members",
         customerIds,
         (batch) =>

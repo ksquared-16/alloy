@@ -292,16 +292,18 @@ in the same order.
 
 ## 9. Submitting facts and performing operations
 
-Seven writes exist, and they come in two shapes.
+Ten write operations exist, and they come in two shapes.
 
-**Six are service-state operations** — starting and ending an enrollment,
-assigning and moving a placement, setting and changing a schedule. They are
-covered in §9a.
+**Nine are service-state operations** — starting, ending and voiding an
+enrollment; assigning, moving and cancelling a placement; setting, changing and
+cancelling a schedule. §9a catalogs them with the lifecycle result and the exact
+conflict condition for each.
 
 **One is fact submission:** `POST /api/v1/attendance-events`. It is Attendance's
-only write, and the rest of this section is about it.
+only endpoint, and it carries three intents — `original`, `correction` and
+`reversal`. The rest of this section is about it.
 
-All seven are **governed**, not CRUD. You assert an intent; Alloy decides whether
+All ten are **governed**, not CRUD. You assert an intent; Alloy decides whether
 it may be performed. There is no `PUT`, no `PATCH` and no `DELETE` anywhere on
 this API.
 
