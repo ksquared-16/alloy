@@ -44,6 +44,13 @@ export type ResolveFirstPaintDependenciesParams = {
     wuMetadata: unknown;
     departmentMetadata: Record<string, unknown> | null;
     readiness: ReadinessResult | null;
+    /**
+     * The canonical resolution started upstream at its own dependency boundary.
+     *
+     * When present this leg AWAITS it instead of issuing a second `resolveActionsForContext`. That
+     * is the contract: one resolver, one input set, one answer - rescheduled, never duplicated.
+     */
+    earlyHeaderActions?: Promise<ResolvedActionsBySlot> | null;
 };
 
 function planIncludes(plan: OpportunityDrawerFirstPaintDependencyKey[], key: OpportunityDrawerFirstPaintDependencyKey): boolean {
@@ -126,7 +133,7 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
             }))
         :   Promise.resolve(null),
         needsHeaderActions ?
-            timedLeg("header_actions", resolveActionsForContext(params.supabase, {
+            timedLeg("header_actions", params.earlyHeaderActions ?? resolveActionsForContext(params.supabase, {
                 orgId: params.gate.orgId,
                 surface: "record_header",
                 entityType: "opportunity",

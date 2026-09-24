@@ -153,6 +153,8 @@ export async function composeOpportunityDrawerViewModel(
             lifecycleRail: lifecycle_rail,
             hintOperTrustHeadline: params.hintOperTrustHeadline,
             hintOperTrustUrgency: params.hintOperTrustUrgency,
+            // The SAME promise the shared deps started. Consumed here, never re-resolved.
+            earlyHeaderActions: shared.earlyHeaderActions,
         }),
         buildDeferredDetailResource({
             supabase,

@@ -1,3 +1,4 @@
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 /**
  * CP-1 / S4.4 — Initial Panel resource (Module A, Tier-2).
  *
@@ -91,6 +92,8 @@ export type BuildInitialPanelResourceParams = {
     lifecycleRail: OpportunityDrawerViewModel["workspace"]["lifecycle_rail"];
     hintOperTrustHeadline?: string | null;
     hintOperTrustUrgency?: string | null;
+    /** The ONE canonical header-action resolution, already started upstream. Consumed, not repeated. */
+    earlyHeaderActions?: Promise<ResolvedActionsBySlot> | null;
 };
 
 export type BuildInitialPanelResourceResult =
@@ -115,6 +118,7 @@ export async function buildInitialPanelResource(
         wuMetadata,
         statusDefs,
         lifecycleRail,
+        earlyHeaderActions,
     } = params;
     const phases_ms: Record<string, number> = {};
 
@@ -167,6 +171,7 @@ export async function buildInitialPanelResource(
             wuMetadata,
             departmentMetadata: deptMetadata,
             readiness: readiness ?? null,
+            earlyHeaderActions,
         }),
         // Same canonical activity set as Focus Panel Activity / What's Next Recent Activity.
         loadOpportunityActivityEvents({
