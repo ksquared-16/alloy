@@ -142,13 +142,16 @@ function buildWarnings(
     return warnings;
 }
 
-async function buildLabels(
+/**
+ * The three LOOKED-UP labels. Split from the schedule label deliberately: these are the only part
+ * of the label set that costs a round trip, and none of them reads the schedule pattern.
+ */
+async function resolveLookedUpLabels(
     supabase: SupabaseClient,
     orgId: string,
     agreement: ChildEnrollmentAgreementRow | null,
-    placement: ChildPlacementRow | null,
-    schedulePattern: SchedulePatternRow | null
-): Promise<OperationalEnrollmentDisplayLabels> {
+    placement: ChildPlacementRow | null
+): Promise<Pick<OperationalEnrollmentDisplayLabels, "site" | "program" | "room">> {
     /*
      * THREE INDEPENDENT LOOKUPS, RESOLVED TOGETHER.
      *
@@ -161,7 +164,14 @@ async function buildLabels(
         placement ? resolveProgramLabel(supabase, orgId, placement.program_category_id) : Promise.resolve(null),
         placement ? resolveLocationLabel(supabase, orgId, placement.room_location_id) : Promise.resolve(null),
     ]);
+    return { site: siteLabel, program: programLabel, room: roomLabel };
+}
 
+/** The schedule label is a pure format of the pattern row — no read, so it never gated the others. */
+function composeLabels(
+    lookedUp: Pick<OperationalEnrollmentDisplayLabels, "site" | "program" | "room">,
+    schedulePattern: SchedulePatternRow | null
+): OperationalEnrollmentDisplayLabels {
     let scheduleLabel: string | null = null;
     if (schedulePattern) {
         const weekdays = formatWeekdays(schedulePattern.weekdays ?? []);
@@ -171,9 +181,9 @@ async function buildLabels(
     }
 
     return {
-        site: siteLabel,
-        program: programLabel,
-        room: roomLabel,
+        site: lookedUp.site,
+        program: lookedUp.program,
+        room: lookedUp.room,
         schedule: scheduleLabel,
     };
 }
@@ -221,11 +231,29 @@ export async function buildOperationalEnrollmentReadModelForAgreement(
         };
     }
 
-    const schedulePattern = scheduleAssignment
-        ? await loadSchedulePattern(supabase, orgId, scheduleAssignment.schedule_pattern_id)
-        : null;
+    /*
+     * THE PATTERN READ AND THE LABEL READS ARE THE SAME STAGE, NOT TWO.
+     *
+     * `buildLabels` took `schedulePattern` and so was awaited after `loadSchedulePattern` — but its
+     * three round trips never read it. Only `scheduleLabel` does, and that is a pure format of a row
+     * already in hand. The pattern read was gating three lookups that do not depend on it.
+     *
+     * Measured n=24 on deployed staging: `children_overlay_durable_facts_ms` P50 360ms owned the
+     * overlay wall (P50 360ms) in 9/12 sampled switches, with `overlay_children_in` P50 = 1 — one
+     * child, so this is chain DEPTH, not per-child fan-out. Four dependent stages at the ~90ms
+     * round trip this deployment measures everywhere else (`customer_lookup` 113, `primary_person_hydrate`
+     * 106, `process_instances` 104, `ocm_members_batch` 120) is exactly the 360ms observed.
+     *
+     * Three stages become two. Same reads, same results, one less round trip in sequence.
+     */
+    const [schedulePattern, lookedUpLabels] = await Promise.all([
+        scheduleAssignment
+            ? loadSchedulePattern(supabase, orgId, scheduleAssignment.schedule_pattern_id)
+            : Promise.resolve(null),
+        resolveLookedUpLabels(supabase, orgId, agreement, placement),
+    ]);
 
-    const labels = await buildLabels(supabase, orgId, agreement, placement, schedulePattern);
+    const labels = composeLabels(lookedUpLabels, schedulePattern);
     const warnings = buildWarnings(agreement, placement, scheduleAssignment, schedulePattern);
 
     return {
