@@ -1,0 +1,488 @@
+[
+  {
+    "host": "focus",
+    "pass": "cold-1",
+    "shellAt": 71,
+    "firstLedgerAt": 2932,
+    "settledAt": 2935,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2782,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 6426,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2782,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=342.1, perm;dur=221.9, collectible;dur=1584.1, payments;dur=99.6, policies;dur=124.5, read;dur=0.1, identity;dur=0.3, serialize;dur=1.1, total;dur=2373.9"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "cold-2",
+    "shellAt": 67,
+    "firstLedgerAt": 2812,
+    "settledAt": 2817,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2761,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3870,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2761,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=548.1, perm;dur=211.9, collectible;dur=1425.9, payments;dur=99.9, policies;dur=102.6, read;dur=0.7, identity;dur=0.4, serialize;dur=1.6, total;dur=2391.2"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "cold-3",
+    "shellAt": 109,
+    "firstLedgerAt": 2832,
+    "settledAt": 2836,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2654,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 4078,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2654,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=362.8, perm;dur=220.4, collectible;dur=1282.5, payments;dur=409.5, policies;dur=116.0, read;dur=0.2, identity;dur=0.2, serialize;dur=0.8, total;dur=2392.5"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "cold-4",
+    "shellAt": 61,
+    "firstLedgerAt": 2827,
+    "settledAt": 2830,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2701,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 4280,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2701,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=366.1, perm;dur=198.5, collectible;dur=1618.9, payments;dur=110.4, policies;dur=105.7, read;dur=0.3, identity;dur=0.3, serialize;dur=1.0, total;dur=2401.3"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "cold-5",
+    "shellAt": 77,
+    "firstLedgerAt": 2360,
+    "settledAt": 2365,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2254,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 4583,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2254,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=358.2, perm;dur=211.8, collectible;dur=1268.1, payments;dur=101.9, policies;dur=104.9, read;dur=0.2, identity;dur=0.3, serialize;dur=0.9, total;dur=2046.3"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-1",
+    "shellAt": 100,
+    "firstLedgerAt": 2903,
+    "settledAt": 2907,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2758,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3493,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2758,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=359.5, perm;dur=452.0, collectible;dur=1498.0, payments;dur=97.8, policies;dur=110.5, read;dur=0.6, identity;dur=0.4, serialize;dur=1.2, total;dur=2520.1"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-2",
+    "shellAt": 160,
+    "firstLedgerAt": 2492,
+    "settledAt": 2495,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2309,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 4323,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2309,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=338.7, perm;dur=224.9, collectible;dur=1337.3, payments;dur=126.7, policies;dur=95.7, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2124.7"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-3",
+    "shellAt": 93,
+    "firstLedgerAt": 2460,
+    "settledAt": 2465,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2289,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3877,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2289,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=351.4, perm;dur=201.6, collectible;dur=1259.1, payments;dur=103.4, policies;dur=112.6, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2029.4"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-4",
+    "shellAt": 178,
+    "firstLedgerAt": 2700,
+    "settledAt": 2704,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2613,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3642,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2613,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=345.7, perm;dur=284.6, collectible;dur=1467.9, payments;dur=188.6, policies;dur=116.5, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2404.7"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-5",
+    "shellAt": 173,
+    "firstLedgerAt": 2889,
+    "settledAt": 2892,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2611,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3744,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2611,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=330.0, perm;dur=207.8, collectible;dur=1578.6, payments;dur=116.3, policies;dur=135.5, read;dur=0.3, identity;dur=0.3, serialize;dur=1.2, total;dur=2370.1"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-6",
+    "shellAt": 230,
+    "firstLedgerAt": 2988,
+    "settledAt": 2992,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2741,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3931,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2741,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=384.2, perm;dur=275.7, collectible;dur=1479.5, payments;dur=224.3, policies;dur=129.6, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2494.7"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-7",
+    "shellAt": 229,
+    "firstLedgerAt": 2873,
+    "settledAt": 2877,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2597,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3884,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2597,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=473.7, perm;dur=236.9, collectible;dur=1342.4, payments;dur=199.2, policies;dur=103.9, read;dur=0.1, identity;dur=0.3, serialize;dur=1.2, total;dur=2357.6"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-8",
+    "shellAt": 137,
+    "firstLedgerAt": 2619,
+    "settledAt": 2625,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2422,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 3524,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2422,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=307.4, perm;dur=207.7, collectible;dur=1450.9, payments;dur=118.3, policies;dur=132.1, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2217.8"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "cold-1",
+    "shellAt": 4012,
+    "firstLedgerAt": 4021,
+    "settledAt": 4021,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2414,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 29556,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2414,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=314.1, perm;dur=210.3, collectible;dur=1404.5, payments;dur=106.4, policies;dur=119.9, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2156.5"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "cold-2",
+    "shellAt": 5056,
+    "firstLedgerAt": 5063,
+    "settledAt": 5064,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2660,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 29524,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2660,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=365.9, perm;dur=221.8, collectible;dur=1403.0, payments;dur=258.4, policies;dur=102.3, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=2352.9"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "warm-1",
+    "shellAt": 5949,
+    "firstLedgerAt": 5960,
+    "settledAt": 5961,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2694,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 31302,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2694,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=371.9, perm;dur=222.0, collectible;dur=1451.8, payments;dur=170.3, policies;dur=216.8, read;dur=0.1, identity;dur=0.3, serialize;dur=0.8, total;dur=2434.2"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "warm-2",
+    "shellAt": 2978,
+    "firstLedgerAt": 2979,
+    "settledAt": 2979,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 2595,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 37946,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 2595,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=402.5, perm;dur=231.7, collectible;dur=1553.6, payments;dur=114.7, policies;dur=93.0, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=2396.8"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "warm-3",
+    "shellAt": 7008,
+    "firstLedgerAt": 7009,
+    "settledAt": 7010,
+    "rows": 116,
+    "requestsPerDetailsOpen": 1,
+    "firstRequestMs": 6694,
+    "secondRequestMs": null,
+    "joinedCallers": 0,
+    "issued": [
+      {
+        "at": 44406,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "identicalInFlight": 0,
+        "ms": 6694,
+        "status": 200
+      }
+    ],
+    "serverTiming": [
+      "auth;dur=348.8, perm;dur=218.2, collectible;dur=1322.0, payments;dur=4497.0, policies;dur=112.9, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=6500.4"
+    ],
+    "responseBytes": [
+      218680
+    ]
+  }
+]

@@ -684,6 +684,21 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         reductionsByCharge.set(r.source_charge_id, list);
     }
 
+    /*
+     * ── EVERYTHING ROUND ONE UNLOCKS GOES OUT TOGETHER ───────────────────────────────────────
+     *
+     * Payments, expected funding and the subsidy claim/variance pair each need ids that the four
+     * reads above produced, and NONE of them needs anything the other two return: payments are
+     * keyed by `payment_id` off the allocations, funding by `allocation_id`/`share_id` off the
+     * responsibility allocations, claims and variances by ids off the claim lines. They ran as
+     * three consecutive awaits purely because each sat where its rows were first consumed — the
+     * same source-order-as-dependency mistake the card's own builder had.
+     *
+     * Measured on deployed staging through Server-Timing, `collectible;dur=` was 1,414–1,997 ms of
+     * a 2,677–3,446 ms response, the single largest span left after the per-charge N+1 came out.
+     * Four serial rounds become two. The ids are derived first, from round one's rows only, so the
+     * keys are computed rather than the reads reordered: same queries, same predicates, same rows.
+     */
     const rawApplications = ((applicationRows ?? []) as Array<{
         charge_id: string;
         allocated_amount_cents: number;
@@ -691,16 +706,80 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         payment_id: string;
     }>);
     const paymentIds = [...new Set(rawApplications.map((a) => a.payment_id).filter(Boolean))];
-    const paymentRows = await readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
-        "payments backing applied money",
-        paymentIds,
-        (batch) =>
-            supabase
-                .from("payments")
-                .select("id, status, payer_entity_type")
-                .eq("org_id", orgId)
-                .in("id", batch),
-    );
+
+    const allocationsByCharge = new Map<string, AllocationFact[]>();
+    for (const a of ((allocationRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        assigned_amount_cents: number;
+        is_unassigned: boolean;
+        share_id: string | null;
+    }>)) {
+        const list = allocationsByCharge.get(a.charge_id) ?? [];
+        list.push({
+            id: a.id,
+            assignedAmountCents: Number(a.assigned_amount_cents),
+            isUnassigned: a.is_unassigned,
+            shareId: a.share_id,
+        });
+        allocationsByCharge.set(a.charge_id, list);
+    }
+    /* Expected funding hangs off BOTH anchors a claim reads: the allocation, or the share. */
+    const allocationIds = [...allocationsByCharge.values()].flat().map((a) => a.id);
+    const shareIds = [
+        ...new Set([...allocationsByCharge.values()].flat().map((a) => a.shareId).filter((v): v is string => !!v)),
+    ];
+
+    const rawClaimLines = ((claimLineRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        claim_id: string;
+        claimed_amount_cents: number;
+    }>);
+    const claimIds = [...new Set(rawClaimLines.map((l) => l.claim_id))];
+    const lineIds = rawClaimLines.map((l) => l.id);
+
+    const [
+        paymentRows,
+        { data: fundingByAllocationRows },
+        { data: fundingByShareRows },
+        { data: claimRows },
+        { data: varianceRows },
+    ] = await Promise.all([
+        readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
+            "payments backing applied money",
+            paymentIds,
+            (batch) =>
+                supabase
+                    .from("payments")
+                    .select("id, status, payer_entity_type")
+                    .eq("org_id", orgId)
+                    .in("id", batch),
+        ),
+        allocationIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                  .eq("org_id", orgId).eq("state", "active").in("allocation_id", allocationIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                  .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        claimIds.length
+            ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds)
+            : Promise.resolve({ data: [] as Array<{ id: string; state: string }> }),
+        lineIds.length
+            ? supabase
+                  .from("financial_subsidy_variances")
+                  .select("claim_line_id, variance_cents, state, resolution_kind")
+                  .eq("org_id", orgId)
+                  .in("claim_line_id", lineIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ]);
+
     const payments = new Map(paymentRows.map((p) => [p.id, p]));
     const applicationsByCharge = new Map<string, Array<{
         allocatedAmountCents: number;
@@ -720,43 +799,6 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         applicationsByCharge.set(a.charge_id, list);
     }
 
-    const allocationsByCharge = new Map<string, AllocationFact[]>();
-    for (const a of ((allocationRows ?? []) as Array<{
-        id: string;
-        charge_id: string;
-        assigned_amount_cents: number;
-        is_unassigned: boolean;
-        share_id: string | null;
-    }>)) {
-        const list = allocationsByCharge.get(a.charge_id) ?? [];
-        list.push({
-            id: a.id,
-            assignedAmountCents: Number(a.assigned_amount_cents),
-            isUnassigned: a.is_unassigned,
-            shareId: a.share_id,
-        });
-        allocationsByCharge.set(a.charge_id, list);
-    }
-
-    /* Expected funding hangs off BOTH anchors a claim reads: the allocation, or the share. */
-    const allocationIds = [...allocationsByCharge.values()].flat().map((a) => a.id);
-    const shareIds = [
-        ...new Set([...allocationsByCharge.values()].flat().map((a) => a.shareId).filter((v): v is string => !!v)),
-    ];
-    const [{ data: fundingByAllocationRows }, { data: fundingByShareRows }] = await Promise.all([
-        allocationIds.length
-            ? supabase
-                  .from("financial_expected_funding")
-                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-                  .eq("org_id", orgId).eq("state", "active").in("allocation_id", allocationIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-        shareIds.length
-            ? supabase
-                  .from("financial_expected_funding")
-                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-                  .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    ]);
     const fundingRow = (f: Record<string, unknown>) => ({
         basis: (f.basis as string | null) ?? null,
         expectedAmountCents: f.expected_amount_cents == null ? null : Number(f.expected_amount_cents),
@@ -776,27 +818,6 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         list.push(fundingRow(f));
         fundingByShareId.set(key, list);
     }
-
-    const rawClaimLines = ((claimLineRows ?? []) as Array<{
-        id: string;
-        charge_id: string;
-        claim_id: string;
-        claimed_amount_cents: number;
-    }>);
-    const claimIds = [...new Set(rawClaimLines.map((l) => l.claim_id))];
-    const lineIds = rawClaimLines.map((l) => l.id);
-    const [{ data: claimRows }, { data: varianceRows }] = await Promise.all([
-        claimIds.length
-            ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds)
-            : Promise.resolve({ data: [] as Array<{ id: string; state: string }> }),
-        lineIds.length
-            ? supabase
-                  .from("financial_subsidy_variances")
-                  .select("claim_line_id, variance_cents, state, resolution_kind")
-                  .eq("org_id", orgId)
-                  .in("claim_line_id", lineIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    ]);
     const claimStateById = new Map(
         ((claimRows ?? []) as Array<{ id: string; state: string }>).map((c) => [c.id, c.state]),
     );
