@@ -45,12 +45,30 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const supabase = createAdminClient();
+    /*
+     * THE ORG ASSERTION STARTS HERE AND IS AWAITED WHERE IT IS NEEDED.
+     *
+     * Measured across 40 phased requests on deployed 97623416: this one query costs a median 118ms
+     * and up to 3,807ms, entirely ahead of a compose whose own first act is the same predicate on
+     * the same table -- `select ... from opportunities where id = ? and org_id = ?` -- which
+     * short-circuits to `opportunity_not_found` when it matches nothing. So the boundary is asserted
+     * twice in series, and the second assertion is the one that actually guards every downstream
+     * read.
+     *
+     * It is NOT removed. It still decides the response, and the phased path writes NOTHING until it
+     * has resolved -- the carrier is held rather than emitted. What changes is only that compose may
+     * begin while it is in flight, which is safe because the single query compose starts first is
+     * scoped by the gate's own org and the untrusted id reaches nothing else until that select has
+     * returned a row belonging to this org.
+     *
+     * The unphased path below still awaits it exactly where it always did, so every consumer that
+     * does not opt into two-phase delivery is byte-identical, 404 included.
+     */
     const tAssert = Date.now();
-    const oppOrg = await assertRowOrg(supabase, "opportunities", opportunityId, gate.orgId);
-    routePhases.assert_row_org_ms = Date.now() - tAssert;
-    if (!oppOrg.ok) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    const oppOrgPromise = assertRowOrg(supabase, "opportunities", opportunityId, gate.orgId).then((r) => {
+        routePhases.assert_row_org_ms = Date.now() - tAssert;
+        return r;
+    });
 
     const sp = request.nextUrl.searchParams;
     logDrawerViewModelRuntimeFlagsServerSummary();
@@ -81,7 +99,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             sp,
             routeT0,
             routePhases,
+            oppOrgPromise,
         });
+    }
+
+    const oppOrg = await oppOrgPromise;
+    if (!oppOrg.ok) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     try {
@@ -287,8 +311,9 @@ function streamPhasedDrawerViewModel(args: {
     sp: URLSearchParams;
     routeT0: number;
     routePhases: Record<string, number>;
+    oppOrgPromise: Promise<{ ok: boolean }>;
 }): NextResponse {
-    const { supabase, gate, opportunityId, sp, routeT0, routePhases } = args;
+    const { supabase, gate, opportunityId, sp, routeT0, routePhases, oppOrgPromise } = args;
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream<Uint8Array>({
@@ -309,15 +334,31 @@ function streamPhasedDrawerViewModel(args: {
              * the guard is here too: a second phase-1 line would be a second action authority on the
              * wire, and the client would have no canonical rule for which one wins.
              */
+            /*
+             * HELD UNTIL THE ORG ASSERTION HAS PASSED.
+             *
+             * Compose may now run while that query is in flight, so the carrier can be ready before
+             * the boundary has answered. It is stored, never written: a subject's action set must not
+             * reach a caller whose right to this record is still unestablished. In practice the
+             * assertion resolves at a median 118ms and the carrier is ready at a median 374ms into
+             * compose, so this holds nothing in the ordinary case -- it exists for the case where the
+             * assertion is the slow one, which measured up to 3,807ms.
+             */
+            let authorized = false;
+            let heldCarrier: ActionableDrawerCarrier | null = null;
             const sendCarrier = (carrier: ActionableDrawerCarrier) => {
                 if (carrierSent) return;
+                if (!authorized) {
+                    heldCarrier = carrier;
+                    return;
+                }
                 carrierSent = true;
                 write({ [CARRIER_LINE_KEY]: carrier });
             };
 
             try {
                 const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
-                const result = await composeOpportunityDrawerViewModel({
+                const composePromise = composeOpportunityDrawerViewModel({
                     supabase,
                     gate,
                     opportunityId,
@@ -340,6 +381,28 @@ function streamPhasedDrawerViewModel(args: {
                     })(),
                     onActionableCarrier: sendCarrier,
                 });
+                /*
+                 * A rejection here is handled below by the await. Attaching a no-op catch now stops
+                 * it being an unhandled rejection during the window where the org assertion is the
+                 * thing being awaited instead.
+                 */
+                composePromise.catch(() => {});
+
+                const oppOrg = await oppOrgPromise;
+                if (!oppOrg.ok) {
+                    // The same refusal the unphased path returns as a 404. A streamed response has
+                    // already sent its status, so it travels as its own line and the client maps it
+                    // back -- exactly as the 422 and the compose failure below already do.
+                    write({ __not_found: true });
+                    return;
+                }
+                authorized = true;
+                if (heldCarrier && !carrierSent) {
+                    carrierSent = true;
+                    write({ [CARRIER_LINE_KEY]: heldCarrier });
+                }
+
+                const result = await composePromise;
 
                 routePhases.full_compose_end_ms = Date.now() - routeT0;
 

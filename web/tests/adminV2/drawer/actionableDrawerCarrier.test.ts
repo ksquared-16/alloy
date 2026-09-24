@@ -499,3 +499,52 @@ describe("one resolveActionsForContext per drawer lifecycle — still", () => {
         expect(SHARED).toContain("departmentId: string;");
     });
 });
+
+/**
+ * THE ORG BOUNDARY IS ASSERTED BEFORE ANY BYTE, EVEN THOUGH IT NO LONGER BLOCKS COMPOSE.
+ *
+ * Measured across 40 phased requests on deployed 97623416, `assertRowOrg` cost a median 118ms and
+ * up to 3,807ms entirely ahead of a compose whose own first query is the same predicate on the same
+ * table. Overlapping them removes that from the critical path; what must not change is that nothing
+ * reaches a caller whose right to the record is unestablished.
+ */
+describe("the phased route holds everything until the org assertion answers", () => {
+    const ROUTE = read("app/api/admin/view-models/drawer/opportunity/[id]/route.ts");
+
+    it("the assertion still runs, and still decides the response", () => {
+        expect(ROUTE).toContain('assertRowOrg(supabase, "opportunities", opportunityId, gate.orgId)');
+        expect(ROUTE).toContain("const oppOrg = await oppOrgPromise;");
+        expect(ROUTE).toContain("write({ __not_found: true });");
+    });
+
+    it("THE CARRIER IS HELD, NOT WRITTEN, WHILE AUTHORIZATION IS UNKNOWN", () => {
+        const sink = ROUTE.slice(ROUTE.indexOf("const sendCarrier ="), ROUTE.indexOf("try {", ROUTE.indexOf("const sendCarrier =")));
+        expect(sink).toContain("if (!authorized) {");
+        expect(sink).toContain("heldCarrier = carrier;");
+        // The write must be unreachable while unauthorized: the guard returns before it.
+        expect(sink.indexOf("heldCarrier = carrier;")).toBeLessThan(sink.indexOf("write({ [CARRIER_LINE_KEY]: carrier })"));
+    });
+
+    it("the held carrier is released only AFTER the assertion passes", () => {
+        const after = ROUTE.slice(ROUTE.indexOf("const oppOrg = await oppOrgPromise;"));
+        expect(after.indexOf("authorized = true;")).toBeGreaterThan(-1);
+        expect(after.indexOf("authorized = true;")).toBeLessThan(after.indexOf("await composePromise"));
+        expect(after).toContain("if (heldCarrier && !carrierSent) {");
+    });
+
+    it("the unphased path is untouched — it still awaits the assertion and still 404s", () => {
+        const unphased = ROUTE.slice(ROUTE.indexOf("const phased ="), ROUTE.indexOf("function streamPhasedDrawerViewModel"));
+        expect(unphased).toContain("const oppOrg = await oppOrgPromise;");
+        expect(unphased).toContain('NextResponse.json({ error: "Not found" }, { status: 404 })');
+    });
+
+    it("compose starting early cannot read across the org boundary", () => {
+        // The one query compose starts before its own org-scoped select takes the gate's org and a
+        // literal entity type; the untrusted id reaches nothing until that select has returned a row
+        // for this org, and the miss short-circuits.
+        const SHARED = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
+        expect(SHARED).toContain('fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity")');
+        expect(SHARED).toContain('.eq("id", opportunityId)\n        .eq("org_id", orgId)');
+        expect(SHARED).toContain('return { ok: false, reason: "opportunity_not_found" };');
+    });
+});

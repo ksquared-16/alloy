@@ -65,6 +65,7 @@ async function readPhasedDrawerViewModelBody(
     let viewModel: OpportunityDrawerViewModel | null = null;
     let skipped: OpportunityDrawerViewModelSkipped | null = null;
     let failure: string | null = null;
+    let notFound = false;
 
     const consume = (line: string) => {
         const trimmed = line.trim();
@@ -92,6 +93,13 @@ async function readPhasedDrawerViewModelBody(
         }
         if ("__error" in parsed) {
             failure = String(parsed.__error ?? "drawer_vm_phased_error");
+            return;
+        }
+        if ("__not_found" in parsed) {
+            // The org assertion refused. The unphased path answers this as a 404; a streamed
+            // response has already sent its status, so it arrives as a line and is mapped back here
+            // to the same shape every caller above already handles.
+            notFound = true;
         }
     };
 
@@ -112,6 +120,7 @@ async function readPhasedDrawerViewModelBody(
     consume(buffered);
 
     if (viewModel) return { ok: true, viewModel };
+    if (notFound) return { ok: false, error: "Not found", status: 404 };
     if (skipped) return { ok: false, skipped, status: 422 };
     return { ok: false, error: failure ?? "drawer_vm_phased_incomplete", status: 500 };
 }
