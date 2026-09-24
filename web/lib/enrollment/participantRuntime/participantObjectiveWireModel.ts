@@ -46,6 +46,7 @@ import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
 } from "@/lib/enrollment/participantRuntime/participantWorkProgress";
+import type { ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 /**
  * Which part of the experience the participant is in.
@@ -177,7 +178,7 @@ export type ParticipantObjectiveWire = {
                 readonly value: string;
                 /** The authored control, for correcting this one fact in place. */
                 readonly input_type: string | null;
-                readonly options: readonly string[];
+                readonly options: readonly ParticipantChoice[];
                 /**
                  * The STRUCTURED editor this fact deserves, chosen server-side.
                  *
@@ -226,8 +227,19 @@ export type ParticipantObjectiveWire = {
             readonly description: string | null;
             readonly artifact_title: string;
         }[];
-        /** Closed option set, when the authored control has one. Empty otherwise. */
-        readonly options: readonly string[];
+        /**
+         * Closed option set, when the authored control has one. Empty otherwise.
+         *
+         * A label beside a value: the parent reads the label, the Form stores the value.
+         */
+        readonly options: readonly ParticipantChoice[];
+        /**
+         * This question names an organisation vocabulary that could not be resolved.
+         *
+         * Carried so the card can say so and refuse, rather than fall through to the free-text
+         * control — which would accept prose for a field whose contract says otherwise.
+         */
+        readonly vocabulary_unresolved?: boolean;
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
         readonly optional: boolean;
         /**
@@ -821,6 +833,9 @@ export function participantObjectiveWireModel(
             entity_type: turn.need?.identity.entity_type ?? turn.need?.identity.subject_entity_type ?? null,
             canonical_key: turn.need?.identity.canonical_key ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
+            // A named vocabulary that would not resolve. The card refuses rather than degrading to
+            // free text; see `vocabulary_unresolved` on the need occurrence.
+            ...(firstOccurrence?.vocabulary_unresolved ? { vocabulary_unresolved: true } : {}),
             optional: turn.need?.optional === true,
             absence_label: firstOccurrence?.absence_label ?? null,
             /*
@@ -875,7 +890,7 @@ function inputTypeForNeed(
 function optionsForNeed(
     objective: ParticipantEnrollmentObjective,
     formFieldId: string,
-): readonly string[] {
+): readonly ParticipantChoice[] {
     const need = objective.next_turn.need;
     if (!need) return [];
     return need.occurrences.find((o) => o.form_field_id === formFieldId)?.options ?? [];

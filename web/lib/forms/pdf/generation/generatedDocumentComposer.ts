@@ -36,6 +36,7 @@ import {
     isAbsenceValue,
 } from "@/lib/forms/fieldSemantics";
 import { entryHeading } from "@/lib/forms/partyCollection";
+import { choiceLabels, resolveFieldChoices, type ResolvedOptionSets } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 /**
  * The layout's own version.
@@ -142,7 +143,7 @@ function isAcknowledgement(field: FormField): boolean {
  * number rather than as a phone. One stored value, formatted per destination — a composed document
  * is a destination too.
  */
-function displayAnswer(field: FormField, raw: unknown): string {
+function displayAnswer(field: FormField, raw: unknown, optionSets?: ResolvedOptionSets): string {
     /*
      * "THE FAMILY SAID THERE ARE NONE" IS NOT "NOBODY ANSWERED".
      *
@@ -152,6 +153,19 @@ function displayAnswer(field: FormField, raw: unknown): string {
     if (isAbsenceValue(raw)) return absenceLabel(field) ?? DEFAULT_ABSENCE_LABEL;
     if (raw === undefined || raw === null || raw === "") return "—";
     if (typeof raw === "boolean") return raw ? "Yes" : "No";
+    /*
+     * A CLOSED QUESTION PRINTS THE WORDS THE FAMILY CHOSE.
+     *
+     * `option_1` is the canonical value the Form stores, and it is what a parent read on the
+     * document they were asked to sign. The choices are the field's own, or the organisation
+     * vocabulary it defers to — resolved by the caller through the canonical authority, never
+     * copied into the Form.
+     */
+    const { choices } = resolveFieldChoices(field, optionSets);
+    if (choices.length) {
+        const words = choiceLabels(choices, raw).filter((w) => w.length > 0);
+        if (words.length) return words.join(", ");
+    }
     return String(formatValueForDocumentDestination(raw));
 }
 
@@ -283,6 +297,14 @@ export async function composeGeneratedDocument(input: {
      * was correct, and the school's completed paperwork named nobody.
      */
     groups?: Readonly<Record<string, readonly FormPayloadGroupRow[]>>;
+    /**
+     * Organisation vocabularies a field defers to, keyed by `option_set_key`.
+     *
+     * Resolved by the caller through `resolveOptionSetsForOrg` — the same authority the
+     * conversation and a public Form use. Without them a field bound to a vocabulary prints its
+     * stored key, which is what the family would have to read.
+     */
+    optionSets?: ResolvedOptionSets;
 }): Promise<ComposedGeneratedDocument> {
     const pdf = await PDFDocument.create();
     const body = await pdf.embedFont(StandardFonts.Helvetica);
@@ -533,7 +555,7 @@ export async function composeGeneratedDocument(input: {
             if (field.read_only === true && empty) continue;
 
             const question = presentableQuestion(field.label);
-            const answer = displayAnswer(field, input.values[field.id]);
+            const answer = displayAnswer(field, input.values[field.id], input.optionSets);
             if (answer !== "—") answeredCount += 1;
             // Question quiet, answer prominent — a completed record reads answer-first.
             reserve(9 * 1.38 + 11 * 1.38 + 8);

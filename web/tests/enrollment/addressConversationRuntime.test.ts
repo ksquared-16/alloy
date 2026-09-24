@@ -103,9 +103,14 @@ describe("one need, not four questions", () => {
 
     it("asks for it as one address, and confirms a known one instead of retyping it", () => {
         const empty = project().find((n) => n.address)!;
-        expect(deterministicPrompt(empty)).toBe("What is home address?");
+        /*
+         * WHOSE address — an authored label is a heading and carries no determiner, so
+         * "What is home address?" is what this asserted before the binding was read for the
+         * sentence. The binding here names a person with no role, which is the parent answering.
+         */
+        expect(deterministicPrompt(empty)).toBe("What is your home address?");
         const known = project(KNOWN).find((n) => n.address)!;
-        expect(deterministicPrompt(known)).toBe("We have home address as 12 Alder Lane, Bend, OR 97701. Is that right?");
+        expect(deterministicPrompt(known)).toBe("We have your home address as 12 Alder Lane, Bend, OR 97701. Is that right?");
     });
 });
 

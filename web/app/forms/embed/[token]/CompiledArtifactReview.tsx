@@ -28,7 +28,12 @@ function Fact({
         <div className="flex items-baseline justify-between gap-4 border-b border-alloy-midnight/[0.06] py-3">
             <div className="min-w-0">
                 <div className="text-[13px] text-alloy-midnight/50">{captionFor(control)}</div>
-                <div className="text-[15px] text-alloy-midnight">{displayValue(control.value) || "—"}</div>
+                {/*
+                  * The words, not the key. `display_value` is the chosen option's label where the
+                  * control has options, and the raw value everywhere else — printing `value` here
+                  * showed a family `option_1` for a question they had answered "Yes".
+                  */}
+                <div className="text-[15px] text-alloy-midnight">{control.display_value || displayValue(control.value) || "—"}</div>
             </div>
             {onEdit ? (
                 <button

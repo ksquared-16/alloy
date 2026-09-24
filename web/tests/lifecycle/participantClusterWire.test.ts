@@ -110,6 +110,10 @@ describe("an authored choice list must reach the participant", () => {
             subjectId: "c1", sharedValues: {}, confirmations: {},
         } as never);
         expect(needs).toHaveLength(1);
-        expect(needs[0]!.occurrences[0]!.options).toEqual(["Male", "Female"]);
+        // A label beside a value now, so the conversation can show the words and store the key.
+        expect(needs[0]!.occurrences[0]!.options).toEqual([
+            { value: "Male", label: "Male" },
+            { value: "Female", label: "Female" },
+        ]);
     });
 });

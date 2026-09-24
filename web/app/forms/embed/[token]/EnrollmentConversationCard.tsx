@@ -372,7 +372,12 @@ function StructuredFactEditor({
         const shown = (initial ?? "").trim();
         if (editor.kind === "options") {
             // The current choice, so a parent changing something else does not have to re-find it.
-            return editor.options.find((o) => o.toLowerCase() === shown.toLowerCase()) ?? editor.options[0] ?? "";
+            // Matched on the VALUE, which is what was stored, falling back to the words in case a
+            // legacy answer kept the label.
+            const hit =
+                editor.options.find((o) => o.value.toLowerCase() === shown.toLowerCase()) ??
+                editor.options.find((o) => o.label.toLowerCase() === shown.toLowerCase());
+            return hit?.value ?? editor.options[0]?.value ?? "";
         }
         if (editor.kind === "value" && editor.inputType === "date") return isoDraft(shown);
         return shown;
@@ -431,8 +436,9 @@ function StructuredFactEditor({
         value = () => draft;
         body = (
             <select className={field} value={draft} aria-label={label} onChange={(e) => setDraft(e.target.value)}>
+                {/* The label is read; the value is submitted. */}
                 {editor.options.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
             </select>
         );
@@ -1637,6 +1643,26 @@ export function EnrollmentConversationCard({
         );
     }
 
+    if (control.kind === "unavailable") {
+        /*
+         * A CLOSED QUESTION WHOSE ANSWERS ARE MISSING IS NOT A TEXT BOX.
+         *
+         * The Form says this answer must be one of a list the school maintains, and the list could
+         * not be loaded. Every branch that offers a select is written as "is a select AND has
+         * choices", so without this the question fell through to free text and a parent could type
+         * anything into a field whose contract says otherwise — which the submission would then
+         * have carried as valid. Truthful, unanswerable, and fixable by configuration.
+         */
+        return (
+            <IntakeCard>
+                <IntakeHeading
+                    title={control.label}
+                    subtitle={control.reason}
+                />
+            </IntakeCard>
+        );
+    }
+
     if (control.kind === "handoff" && !artifactRenderable) {
         // Truthful and recoverable, never an empty completion screen: the shared facts ARE settled,
         // and the paperwork this journey points at cannot be shown. That is a configuration problem
@@ -1771,8 +1797,19 @@ export function EnrollmentConversationCard({
          * REQUIRED, never about whether the answers are shown.
          */
         suggestionKind = "options";
+        /*
+         * THE BUTTON SAYS THE LABEL AND SUBMITS THE VALUE.
+         *
+         * Both used to be the same string, because the need projection collapsed every choice to
+         * its canonical value before it reached here — so a parent answering a question the school
+         * had authored as "Yes" pressed a button reading `option_1`, and the settled row said
+         * `option_1` back to them. `settledAs` is what they read; `value` is what the Form stores.
+         */
         for (const option of control.options) {
-            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
+            suggestions.push({
+                label: option.label,
+                onSelect: () => void submit({ value: option.value, settledAs: option.label }),
+            });
         }
         // Leaving it blank stays available, beside the choices rather than instead of them.
         if (optionalUnanswered && skipLabel) {
@@ -2155,7 +2192,9 @@ function TypedAnswer({
     /** `shown` is what the thread displays — the value as a parent reads it. */
     onSubmit: (value: unknown, shown: string) => void;
 }) {
-    if (control.kind === "boolean" || control.kind === "options") return null;
+    // Nothing to type: a closed question is answered with its buttons, and an unanswerable one
+    // must not be handed a composer either.
+    if (control.kind === "boolean" || control.kind === "options" || control.kind === "unavailable") return null;
 
     // A date must BE a date. The input type gives the picker and the browser's own validation; the
     // check refuses anything that reaches the handler anyway, so "31 February" cannot be sent.

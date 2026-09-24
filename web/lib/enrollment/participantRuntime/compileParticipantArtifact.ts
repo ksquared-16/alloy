@@ -43,6 +43,7 @@ import {
 import { fieldIsAcknowledgement } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { authoredChoices, choiceLabels, type ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 export type CompiledControlKind =
     /** A shared fact the conversation settled. Shown as a fact, editable on request. */
@@ -67,9 +68,18 @@ export type CompiledArtifactControl = {
     readonly kind: CompiledControlKind;
     /** The authored control type, so an edit uses the same semantics the Form would. */
     readonly input_type: string;
-    readonly options: readonly string[];
+    /** A label beside a value — `display_value` is what a person reads. */
+    readonly options: readonly ParticipantChoice[];
     readonly required: boolean;
     readonly value: unknown;
+    /**
+     * The value as a PERSON reads it — the chosen option's label, where the control has options.
+     *
+     * The canonical `value` is what the Form stores and what every consumer writes; this is what is
+     * printed. Separating them is the whole point: an artifact that printed `value` for a closed
+     * question showed a family `option_1` on the document they were about to sign.
+     */
+    readonly display_value: string;
     /** Authored prose, for `display_content`. */
     readonly content: string | null;
     /**
@@ -105,18 +115,27 @@ function hasValue(value: unknown): boolean {
     return true;
 }
 
-function readOptions(field: unknown): readonly string[] {
-    const raw = (field as { options?: unknown })?.options;
-    if (!Array.isArray(raw)) return [];
-    const out: string[] = [];
-    for (const item of raw) {
-        if (typeof item === "string" && item.trim()) out.push(item.trim());
-        else if (item && typeof item === "object") {
-            const v = (item as { value?: unknown; label?: unknown }).value ?? (item as { label?: unknown }).label;
-            if (typeof v === "string" && v.trim()) out.push(v.trim());
-        }
-    }
-    return out;
+/**
+ * The choices a control offers, label and value both.
+ *
+ * One reader, shared with the conversation. This used to collapse each choice to its value, so an
+ * artifact printed `option_1` where the parent had chosen "Yes" — the same loss the conversation
+ * had, in the document a family signs.
+ */
+/**
+ * What is printed for one control's value.
+ *
+ * A closed question prints the chosen option's words; a multi-select prints each of them. Anything
+ * else prints itself. An answer with no matching choice still prints, because it is the answer that
+ * was given and hiding it would be worse than showing a key.
+ */
+function displayForControl(options: readonly ParticipantChoice[], value: unknown): string {
+    if (!options.length) return value == null ? "" : Array.isArray(value) ? value.map(String).join(", ") : String(value);
+    return choiceLabels(options, value).join(", ");
+}
+
+function readOptions(field: unknown): readonly ParticipantChoice[] {
+    return authoredChoices(field);
 }
 
 /**
@@ -242,6 +261,7 @@ export function compileParticipantArtifact(
                 options: readOptions(field),
                 required: field.required === true,
                 value: value ?? null,
+                display_value: displayForControl(readOptions(field), value ?? null),
                 content: (field as { content?: string }).content ?? null,
                 shared_key: sharedKey,
             });

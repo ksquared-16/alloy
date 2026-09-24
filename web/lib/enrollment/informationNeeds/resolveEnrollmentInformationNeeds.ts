@@ -29,6 +29,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { optionSetKeysInSchema, type ResolvedOptionSets } from "@/lib/enrollment/informationNeeds/participantChoices";
+import { resolveOptionSetsForOrg } from "@/lib/fields/resolveOptionSetOptions";
 
 import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
 
@@ -98,6 +100,8 @@ export function assembleEnrollmentInformationNeeds(
         canonicalValues?: Readonly<Record<string, unknown>>;
         /** Known people for each party collection, read from the canonical relationship graph. */
         knownPartyEntries?: Readonly<Record<string, readonly import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyEntry[]>>;
+        /** Organisation vocabularies, resolved through the canonical authority by the caller. */
+        optionSets?: ResolvedOptionSets;
     },
 ): EnrollmentInformationNeeds {
     const { prog, session, subjectId, forms } = context;
@@ -125,6 +129,15 @@ export function assembleEnrollmentInformationNeeds(
         requiresConfirmation: input.requiresConfirmation,
         // What Alloy already knows, from the canonical relationship graph the caller read.
         ...(input.knownPartyEntries ? { knownPartyEntries: input.knownPartyEntries } : {}),
+        /*
+         * The organisation's own vocabularies, resolved once for every Form in this objective.
+         *
+         * Passed IN rather than read here for the same reason the known people are: this projection
+         * is pure, and the option sets belong to `resolveOptionSetsForOrg` — the authority a public
+         * Form already uses. Absent, a field that names a set is marked unresolved and blocked; it
+         * never degrades into free text.
+         */
+        ...(input.optionSets ? { optionSets: input.optionSets } : {}),
     });
     return {
         process_instance_id: prog.process_instance_id,
@@ -358,7 +371,20 @@ export async function resolveEnrollmentInformationNeeds(
         });
     }
 
+    /*
+     * ONE ROUND TRIP FOR EVERY VOCABULARY THIS OBJECTIVE REFERENCES.
+     *
+     * Done here because this is the boundary that can do I/O, and done for the whole objective at
+     * once because a family meeting four Forms that all defer to "Person gender" is asking about
+     * one list. `resolveOptionSetsForOrg` is the canonical authority; nothing is cached into the
+     * Form, so editing the vocabulary changes what the next participant is offered.
+     */
+    const optionSetKeys = [...new Set(forms.flatMap((f) => optionSetKeysInSchema(f.schema)))];
+    const optionSets: ResolvedOptionSets = optionSetKeys.length
+        ? await resolveOptionSetsForOrg(supabase, input.orgId, optionSetKeys)
+        : {};
+
     const context: EnrollmentNeedsContext = { prog, session, subjectId, forms };
     input.captureContext?.(context);
-    return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
+    return { ok: true, value: assembleEnrollmentInformationNeeds(context, { ...input, optionSets }) };
 }

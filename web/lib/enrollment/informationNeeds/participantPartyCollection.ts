@@ -30,6 +30,7 @@
  * the related-record proposal pipeline already consume. One adaptation, at one seam.
  */
 
+import { authoredChoices, type ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 import { partyCollectionOf, addAnotherLabel, entryHeading, effectiveCollectionBinding } from "@/lib/forms/partyCollection";
@@ -52,7 +53,7 @@ export type ParticipantPartyEntryField = {
     readonly label: string;
     readonly type: string;
     readonly required: boolean;
-    readonly options?: readonly { value: string; label: string }[];
+    readonly options?: readonly ParticipantChoice[];
     /**
      * What this question MEANS, where the platform has a primitive for it.
      *
@@ -353,16 +354,15 @@ export function partyCollectionGroupRows(
     return out;
 }
 
-/** The inline choices a child question offers, when it offers any. */
-function readEntryFieldOptions(field: FormField): { value: string; label: string }[] {
-    const opts = (field as unknown as { static_options?: unknown }).static_options;
-    if (!Array.isArray(opts)) return [];
-    return opts.flatMap((o) => {
-        if (!o || typeof o !== "object") return [];
-        const r = o as { value?: unknown; label?: unknown };
-        if (typeof r.value !== "string" || typeof r.label !== "string") return [];
-        return [{ value: r.value, label: r.label }];
-    });
+/**
+ * The inline choices a child question offers, when it offers any.
+ *
+ * One reader, shared with the scalar path. This shape — a label beside a value — was already right
+ * here while the scalar path collapsed both into the value; converging on the owner is what keeps
+ * the two from drifting apart again.
+ */
+function readEntryFieldOptions(field: FormField): readonly ParticipantChoice[] {
+    return authoredChoices(field);
 }
 
 /**

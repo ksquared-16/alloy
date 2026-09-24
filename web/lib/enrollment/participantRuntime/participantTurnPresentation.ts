@@ -16,6 +16,7 @@ import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRunti
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { formatPhoneNumber, isFormattablePhoneNumber } from "@/lib/format/phoneNumber";
+import type { ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 /**
  * The control a turn needs.
@@ -67,10 +68,24 @@ export type ParticipantValueControl =
     | { readonly kind: "boolean"; readonly affirm: string; readonly deny: string; readonly label: string }
     | {
           readonly kind: "options";
-          readonly options: readonly string[];
+          /** A label beside a value: the parent reads the label, the Form stores the value. */
+          readonly options: readonly ParticipantChoice[];
           readonly label: string;
           /** More than one choice may be selected. */
           readonly multiple?: boolean;
+      }
+    | {
+          /**
+           * A CLOSED QUESTION WHOSE VOCABULARY IS MISSING.
+           *
+           * Deliberately not a text box. The Form says this answer must be one of a set the
+           * organisation maintains, and the set could not be found; offering free text would
+           * accept prose for a constrained field and call it valid. The parent is told, and the
+           * question is left unanswerable until the configuration is fixed.
+           */
+          readonly kind: "unavailable";
+          readonly label: string;
+          readonly reason: string;
       };
 
 /**
@@ -130,6 +145,21 @@ export function valueControlForTurn(turn: ParticipantObjectiveWire["next_turn"])
     }
     if ((authored === "multiselect" || authored === "checkbox_group") && turn.options.length > 0) {
         return { kind: "options", options: turn.options, label, multiple: true };
+    }
+    /*
+     * FAIL CLOSED, BEFORE THE FREE-TEXT FALLBACK BELOW.
+     *
+     * A select whose organisation vocabulary could not be resolved has no choices, and every test
+     * above is written as "is a select AND has choices" — so without this it fell through to the
+     * text branch and a vocabulary-constrained question became a box a parent could type anything
+     * into. The data contract has not changed just because the configuration is missing.
+     */
+    if ((turn as { vocabulary_unresolved?: boolean }).vocabulary_unresolved) {
+        return {
+            kind: "unavailable",
+            label,
+            reason: "This question offers a set of answers your school maintains, and that list could not be loaded. Nobody can answer it until it is available.",
+        };
     }
     if (authored === "textarea" || authored === "long_text") {
         return { kind: "value", inputType: "text", label, multiline: true };

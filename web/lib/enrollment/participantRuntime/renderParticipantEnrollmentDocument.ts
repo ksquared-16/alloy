@@ -49,6 +49,8 @@ import { resolveConfigurationSuppliedValues } from "@/lib/forms/supplied/resolve
 import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 import { PDFDocument } from "pdf-lib";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
+import { optionSetKeysInSchema } from "@/lib/enrollment/informationNeeds/participantChoices";
+import { resolveOptionSetsForOrg } from "@/lib/fields/resolveOptionSetOptions";
 
 /** Page count of rendered bytes — the unified contract reports it for either engine. */
 async function pdfPageCount(bytes: Uint8Array): Promise<number> {
@@ -375,11 +377,22 @@ export async function renderParticipantEnrollmentDocument(
          * from the evidence's own document reference — never re-drawn, never substituted.
          */
         const signatures = await composedSignatureMarks(supabase, input.orgId, payload?.signatures);
+        /*
+         * The organisation's own vocabularies, so a closed question prints the words the family
+         * chose rather than the key the Form stores. Resolved here, through the canonical
+         * authority, for the same reason the conversation resolves them at its own async boundary.
+         */
+        const documentOptionSetKeys = optionSetKeysInSchema(schema);
+        const documentOptionSets = documentOptionSetKeys.length
+            ? await resolveOptionSetsForOrg(supabase, input.orgId, [...documentOptionSetKeys])
+            : {};
+
         const composed = await composeGeneratedDocument({
             schema,
             values,
             groups: groups as Parameters<typeof composeGeneratedDocument>[0]["groups"],
             signatures,
+            optionSets: documentOptionSets,
             provenance: {
                 form_definition_id: artifact.formDefinitionId,
                 form_definition_version_id: artifact.versionId ?? "",

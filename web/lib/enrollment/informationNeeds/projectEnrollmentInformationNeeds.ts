@@ -52,6 +52,7 @@ import type {
     EnrollmentNeedState,
     EnrollmentNeedValueSource,
 } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+import { resolveFieldChoices, type ResolvedOptionSets } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 /** One realized, D-94-pinned Form the participant must complete for this objective. */
 export type PinnedRequirementForm = {
@@ -86,6 +87,16 @@ export type ProjectNeedsInput = {
      * means "nothing known", which fails closed: the family is asked rather than shown a guess.
      */
     readonly knownPartyEntries?: Readonly<Record<string, readonly ParticipantPartyEntry[]>>;
+    /**
+     * Organisation vocabularies a Form defers to, keyed by `option_set_key`.
+     *
+     * Resolved by the CALLER through `resolveOptionSetsForOrg`, the canonical authority — exactly as
+     * a public Form resolves them. Never copied into the Form definition, so a vocabulary the
+     * organisation edits is the vocabulary the participant meets. Absent means "nothing resolved",
+     * which fails CLOSED: a field naming a set is marked `vocabulary_unresolved` and blocked rather
+     * than quietly offered as free text.
+     */
+    readonly optionSets?: ResolvedOptionSets;
     readonly confirmations: EnrollmentNeedConfirmationMap;
     /**
      * Needs the participant was asked about and chose to leave blank.
@@ -292,7 +303,22 @@ export function projectEnrollmentInformationNeeds(
                 required: field.required === true,
                 section_title: sectionByFieldId.get(field.id) ?? null,
                 field_type: conversationalControlType(field),
-                options: readFieldOptions(field),
+                ...(() => {
+                    /*
+                     * WHAT THIS QUESTION OFFERS — read once, from the one owner.
+                     *
+                     * This used to be a local reader that collapsed every choice to its VALUE, so
+                     * the label never crossed this boundary and a parent met a button reading
+                     * `option_1`. It also never looked at `option_set_key`, so a question deferring
+                     * to an organisation vocabulary arrived with no choices at all and the
+                     * conversation fell back to a text box for a closed set.
+                     */
+                    const resolved = resolveFieldChoices(field, input.optionSets);
+                    return {
+                        options: resolved.choices,
+                        ...(resolved.unresolved ? { vocabulary_unresolved: true } : {}),
+                    };
+                })(),
                 absence_label: absenceLabel(field),
                 form_only_evidence: isFormOnlyEvidence(field),
                 configuration_supplied: isConfigurationSupplied(field),
@@ -331,29 +357,7 @@ export function projectEnrollmentInformationNeeds(
  * the form library's history, and a participant control that silently rendered nothing for the older
  * shape would be worse than the text box it replaced.
  */
-function readFieldOptions(field: unknown): readonly string[] {
-    /*
-     * `static_options` is where a realized Form actually keeps its choices.
-     *
-     * `draftFormToFormSchemaV1` publishes an authored choice list as `static_options` — the schema's
-     * own inline-choice construct — and this reader only ever looked at `options`. So every select
-     * need reached the participant with no choices at all, and any answer they gave was refused as
-     * "That is not one of the available choices". A question with no visible answers that rejects
-     * every answer is a loop with no way out; it is how a parent gets stuck.
-     */
-    const f = field as { options?: unknown; static_options?: unknown };
-    const raw = Array.isArray(f?.options) && f.options.length ? f.options : f?.static_options;
-    if (!Array.isArray(raw)) return [];
-    const out: string[] = [];
-    for (const item of raw) {
-        if (typeof item === "string" && item.trim()) out.push(item.trim());
-        else if (item && typeof item === "object") {
-            const v = (item as { value?: unknown; label?: unknown }).value ?? (item as { label?: unknown }).label;
-            if (typeof v === "string" && v.trim()) out.push(v.trim());
-        }
-    }
-    return out;
-}
+
 
 /**
  * The authored control type as the CONVERSATION needs to hear it.

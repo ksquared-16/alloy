@@ -40,6 +40,7 @@ import type {
     ParticipantTurn,
     StructuredCandidate,
 } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+import { choiceValueFor, choiceValues } from "@/lib/enrollment/informationNeeds/participantChoices";
 
 /** ISO calendar date, and a real one — `2021-02-31` parses loosely elsewhere and must not here. */
 export function isValidIsoDate(raw: unknown): boolean {
@@ -102,10 +103,18 @@ export function validateCandidateValue(
     const occurrence = (need.occurrences ?? [])[0] ?? null;
     const controlType = field?.type ?? occurrence?.field_type ?? null;
     const fieldKey = need.identity.field_key ?? null;
+    /*
+     * THE VALUES A CLOSED QUESTION ACCEPTS — never the words beside them.
+     *
+     * The occurrence now carries a label with every value, so this reads the values explicitly.
+     * Mapping the choice objects with `String` (which the previous `.map(String)` would now do)
+     * would compare against "[object Object]" and refuse every answer.
+     */
+    const occurrenceChoices = occurrence?.options ?? [];
     const allowedOptions =
         field && (field.type === "select" || field.type === "multiselect") && field.static_options?.length
             ? field.static_options.map((o) => o.value)
-            : (occurrence?.options ?? []).map(String);
+            : choiceValues(occurrenceChoices);
 
     /**
      * STEP 1 — normalize into the AUTHORED type.
@@ -121,12 +130,37 @@ export function validateCandidateValue(
      * plausibility does not run at all rather than run against a fabricated epoch. An early version
      * defaulted to 1970 and duly refused every real date of birth as being in the future.
      */
+    /*
+     * A CONSTRAINED FIELD WHOSE VOCABULARY IS MISSING REFUSES EVERY ANSWER.
+     *
+     * The card no longer offers a control for one, but the route is the authority and a submission
+     * can reach it another way. `narrowTypeGate` treats an empty option list as "unconstrained",
+     * which is right for a select that genuinely has none and wrong for one whose organisation
+     * vocabulary would not load — that field's contract still says its answer is one of a set.
+     */
+    if (occurrence?.vocabulary_unresolved) {
+        return {
+            ok: false,
+            reason: "This question offers a set of answers your school maintains, and that list could not be loaded.",
+        };
+    }
+
+    /*
+     * A PARENT MAY SAY THE WORDS RATHER THAN THE KEY.
+     *
+     * The buttons submit the canonical value, so this is for a typed or interpreted answer:
+     * "Female" is how a person names the choice whose stored value is `female`. Coerced BEFORE
+     * validation so the stored value stays canonical; an unmatched answer is left alone and refused
+     * by the gate below rather than invented into a value.
+     */
+    const coerced = occurrenceChoices.length ? (choiceValueFor(occurrenceChoices, raw) ?? raw) : raw;
+
     const nowIso = context?.nowIso ?? null;
     const normalized = normalizeParticipantValue({
         controlType,
         fieldKey,
         allowedOptions,
-        raw,
+        raw: coerced,
         // Only a real clock can expand a two-digit year; without one the shape is left for the
         // validator to judge rather than guessed into a century.
         referenceYear: nowIso ? Number(nowIso.slice(0, 4)) || 0 : 0,

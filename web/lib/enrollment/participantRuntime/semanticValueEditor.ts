@@ -30,13 +30,15 @@
  */
 
 /** The editor a semantic fact deserves. */
+import type { ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
+
 export type SemanticEditor =
     /** Street / city / state / ZIP over ONE canonical address string. */
     | { readonly kind: "address"; readonly parts: AddressParts }
     /** A single typed control — the browser's own date, email or phone affordances. */
     | { readonly kind: "value"; readonly inputType: "date" | "email" | "tel" | "number" | "text" }
     /** A closed vocabulary the authored control already declares. */
-    | { readonly kind: "options"; readonly options: readonly string[] };
+    | { readonly kind: "options"; readonly options: readonly ParticipantChoice[] };
 
 export type AddressParts = {
     readonly street: string;
@@ -134,10 +136,16 @@ export function isAddressFact(canonicalKey: string | null | undefined): boolean 
  * type on a whole-address field is invariably `text` and a text box is the control that caused the
  * problem.
  */
+/** The two answers a yes/no question has — a value and the word for it, like every other choice. */
+const YES_NO: readonly ParticipantChoice[] = [
+    { value: "Yes", label: "Yes" },
+    { value: "No", label: "No" },
+];
+
 export function semanticEditorFor(input: {
     readonly canonicalKey: string | null;
     readonly inputType: string | null;
-    readonly options: readonly string[];
+    readonly options: readonly ParticipantChoice[];
     readonly value: unknown;
 }): SemanticEditor {
     if (input.options.length > 0) return { kind: "options", options: input.options };
@@ -161,7 +169,7 @@ export function semanticEditorFor(input: {
      * button was handed a free text box to correct it with, and anything they typed that was not a
      * yes/no word would be refused by the Form's own validator. Two answers, one closed vocabulary.
      */
-    if (authored === "boolean" || authored === "checkbox") return { kind: "options", options: ["Yes", "No"] };
+    if (authored === "boolean" || authored === "checkbox") return { kind: "options", options: YES_NO };
     if (authored === "date") return { kind: "value", inputType: "date" };
     if (authored === "number") return { kind: "value", inputType: "number" };
     if (authored === "email") return { kind: "value", inputType: "email" };

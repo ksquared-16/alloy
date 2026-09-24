@@ -18,6 +18,7 @@
 
 import type { FieldScope } from "@/lib/forms/fieldScope";
 import type { EnrollmentNeedIdentity } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
+import type { ParticipantChoice } from "@/lib/enrollment/informationNeeds/participantChoices";
 import type { EnrollmentValueOrigin } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 
 /**
@@ -85,8 +86,21 @@ export type EnrollmentNeedOccurrence = {
      * the label was the reason every need rendered as an undifferentiated text box.
      */
     readonly field_type: string;
-    /** Closed option set for `select`-shaped controls. Empty when the field is open-ended. */
-    readonly options: readonly string[];
+    /**
+     * Closed option set for `select`-shaped controls. Empty when the field is open-ended.
+     *
+     * A LABEL AND A VALUE, not a flat list. These used to be collapsed to the value alone, and the
+     * conversation duly offered a parent a button reading `option_1`.
+     */
+    readonly options: readonly ParticipantChoice[];
+    /**
+     * The field names an organisation vocabulary that could not be resolved.
+     *
+     * Not the same as having no choices: this question's answer MUST be one of a closed set, and
+     * the set is missing. The runtime blocks it rather than offering free text, because accepting
+     * prose here would put an unconstrained string into a constrained field and call it valid.
+     */
+    readonly vocabulary_unresolved?: boolean;
     /**
      * The words the family reads on an absence answer, when the Form offers one.
      *

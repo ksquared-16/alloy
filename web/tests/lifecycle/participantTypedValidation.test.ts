@@ -156,7 +156,14 @@ describe("other authored types", () => {
         expect(validateCandidateValue(numberNeed, numberField, "-1", ctx).ok).toBe(false);
     });
 
-    const enumNeed = need({}, { field_type: "select", form_field_id: "f_s", options: ["Morning", "Afternoon"] });
+    const enumNeed = need({}, {
+        field_type: "select",
+        form_field_id: "f_s",
+        options: [
+            { value: "Morning", label: "Morning" },
+            { value: "Afternoon", label: "Afternoon" },
+        ],
+    });
     const enumField = { id: "f_s", type: "select", label: "Session", static_options: [{ value: "Morning" }, { value: "Afternoon" }] } as unknown as FormField;
 
     it("persists ONLY an authored option, however the parent phrased it", () => {

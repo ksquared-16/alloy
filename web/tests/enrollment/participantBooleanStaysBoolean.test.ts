@@ -86,14 +86,30 @@ describe("every control offered for a boolean is a boolean control", () => {
 
     it("correcting a settled answer offers the same two, never a text box", () => {
         const editor = semanticEditorFor({ canonicalKey: null, inputType: "boolean", options: [], value: true });
-        expect(editor).toEqual({ kind: "options", options: ["Yes", "No"] });
+        // A choice is a value and the words for it, like every other choice — the flat list this
+        // asserted before is what let a select present a family its own canonical keys.
+        expect(editor).toEqual({
+            kind: "options",
+            options: [
+                { value: "Yes", label: "Yes" },
+                { value: "No", label: "No" },
+            ],
+        });
     });
 
     it("the unreadable-answer fallback opens that same editor", () => {
         // The fallback opens `next_turn.editor`; for a boolean that editor is the Yes/No control
         // above, so there is no path on which a yes/no question becomes free text.
         const editor = semanticEditorFor({ canonicalKey: null, inputType: "checkbox", options: [], value: false });
-        expect(editor).toEqual({ kind: "options", options: ["Yes", "No"] });
+        // A choice is a value and the words for it, like every other choice — the flat list this
+        // asserted before is what let a select present a family its own canonical keys.
+        expect(editor).toEqual({
+            kind: "options",
+            options: [
+                { value: "Yes", label: "Yes" },
+                { value: "No", label: "No" },
+            ],
+        });
     });
 });
 
