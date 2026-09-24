@@ -6,7 +6,7 @@ import {
     type ProcessingLibraryGroupOffer,
 } from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
-import { updateField } from "@/lib/forms/formBuilderSchema";
+import { setPartyEntryFields, updateField } from "@/lib/forms/formBuilderSchema";
 import { RELATIONSHIP_ACTION_SCOPES, RELATIONSHIP_ACTION_SCOPE_LABELS } from "@/lib/admin/relationship/relationshipActionContract";
 import { addAnotherLabel } from "@/lib/forms/partyCollection";
 import {
@@ -54,12 +54,35 @@ const ANSWER_TYPE_LABELS: Record<string, string> = {
  * wrong combination is silently possible. The keys are `RELATIONSHIP_ACTION_KEYS`; nothing here is
  * a Forms-local vocabulary.
  */
-const PARTY_KIND_PRESETS: Record<string, { action_key: string; subject: "person" | "child"; role?: string; scope?: string }> = {
-    add_emergency_contact: { action_key: "add_emergency_contact", subject: "person", role: "emergency_contact", scope: "this_child" },
-    add_authorized_pickup: { action_key: "add_authorized_pickup", subject: "person", role: "authorized_pickup", scope: "this_child" },
-    add_parent_guardian: { action_key: "add_parent_guardian", subject: "person", role: "guardian", scope: "household" },
-    add_billing_contact: { action_key: "add_billing_contact", subject: "person", role: "billing_contact", scope: "household" },
-    add_child: { action_key: "add_child", subject: "child", scope: "household" },
+type PartyEntryQuestion = { type: "short_text" | "date"; label: string; required?: boolean };
+
+/** What a family is asked about each PERSON in a related-party list. */
+const PERSON_ENTRY_QUESTIONS: ReadonlyArray<PartyEntryQuestion> = [
+    { type: "short_text", label: "Full name", required: true },
+    { type: "short_text", label: "Phone", required: true },
+    { type: "short_text", label: "Relationship to the child", required: false },
+];
+
+/**
+ * What a family is asked about each CHILD in their own household.
+ *
+ * Not the person questions: a parent is not asked their own child's "relationship to the child",
+ * and `add_child` needs an identity — a name and, where the family knows it, a date of birth.
+ */
+const CHILD_ENTRY_QUESTIONS: ReadonlyArray<PartyEntryQuestion> = [
+    { type: "short_text", label: "Full name", required: true },
+    { type: "date", label: "Date of birth", required: false },
+];
+
+const PARTY_KIND_PRESETS: Record<
+    string,
+    { action_key: string; subject: "person" | "child"; role?: string; scope?: string; fields: ReadonlyArray<PartyEntryQuestion> }
+> = {
+    add_emergency_contact: { action_key: "add_emergency_contact", subject: "person", role: "emergency_contact", scope: "this_child", fields: PERSON_ENTRY_QUESTIONS },
+    add_authorized_pickup: { action_key: "add_authorized_pickup", subject: "person", role: "authorized_pickup", scope: "this_child", fields: PERSON_ENTRY_QUESTIONS },
+    add_parent_guardian: { action_key: "add_parent_guardian", subject: "person", role: "guardian", scope: "household", fields: PERSON_ENTRY_QUESTIONS },
+    add_billing_contact: { action_key: "add_billing_contact", subject: "person", role: "billing_contact", scope: "household", fields: PERSON_ENTRY_QUESTIONS },
+    add_child: { action_key: "add_child", subject: "child", scope: "household", fields: CHILD_ENTRY_QUESTIONS },
 };
 
 const PARTY_KIND_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
@@ -69,6 +92,17 @@ const PARTY_KIND_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
     { value: "add_billing_contact", label: "Payers / billing contacts" },
     { value: "add_child", label: "Children in the household (siblings)" },
 ];
+
+/**
+ * Whose address, in the platform's own relationship vocabulary.
+ *
+ * Derived from the party kinds that name a PERSON role, so the two lists cannot drift: a role an
+ * administrator can collect people in is a role whose address they can ask for.
+ */
+const PARTY_ROLE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = PARTY_KIND_OPTIONS.flatMap((kind) => {
+    const role = PARTY_KIND_PRESETS[kind.value]?.role;
+    return role ? [{ value: role, label: kind.label.replace(/s$/, "") }] : [];
+});
 
 /** Scope labels are the platform's own — a second wording would be a second meaning. */
 const PARTY_SCOPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = RELATIONSHIP_ACTION_SCOPES.map((sc) => ({
@@ -83,6 +117,33 @@ function isPartyCollection(field: FormField): boolean {
 function numberOrZero(raw: string): number {
     const n = Number.parseInt(raw.trim(), 10);
     return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function isAddress(field: FormField): boolean {
+    return field.type === "group" && Boolean((field as { address_binding?: unknown }).address_binding);
+}
+
+/**
+ * Patch the address statement in place.
+ *
+ * The same shape as `updatePartyCollection` and for the same reason: the schema's own construct is
+ * edited, never a parallel copy, and a key passed empty is CLEARED — which is how "this address
+ * belongs to the subject, not to a role" is said.
+ */
+function updateAddressBinding(schema: FormSchemaV1, fieldId: string, patch: Record<string, unknown>): FormSchemaV1 {
+    return {
+        ...schema,
+        fields: schema.fields.map((f) => {
+            if (f.id !== fieldId || f.type !== "group") return f;
+            const current = ((f as { address_binding?: Record<string, unknown> }).address_binding ?? {}) as Record<string, unknown>;
+            const next: Record<string, unknown> = { ...current, ...patch };
+            for (const key of Object.keys(next)) {
+                const cleared = next[key] === undefined || (typeof next[key] === "string" && (next[key] as string).trim() === "");
+                if (cleared) delete next[key];
+            }
+            return { ...f, address_binding: next } as FormField;
+        }),
+    };
 }
 
 /** Patch the party statement in place — the schema's own construct, never a parallel copy. */
@@ -347,6 +408,7 @@ export default function ProcessingFormQuestionInspector({
     optionSets,
 }: Props) {
     const party = (field as { party_collection?: { action_key?: string; subject?: "person" | "child"; role?: string; scope?: string; show_known?: boolean; allow_add?: boolean; add_another_label?: string } }).party_collection ?? null;
+    const address = (field as { address_binding?: { subject?: "person" | "child"; role?: string } }).address_binding ?? null;
     const partyMin = field.type === "group" ? (field.repeat?.min ?? 0) : 0;
     const partyMax = field.type === "group" && field.repeat?.max != null ? String(field.repeat.max) : "";
     const storeSubject = storeSubjectFromField(field);
@@ -412,6 +474,55 @@ export default function ProcessingFormQuestionInspector({
                         disabled={!editable}
                     />
                 ) : null}
+                {/*
+                  * WHOSE ADDRESS IS THIS?
+                  *
+                  * The one thing an address declaration says that the parts cannot. Without it the
+                  * answer type is authorable but not configurable, and every address silently
+                  * belongs to "the person" with no role — which is the wrong answer the moment a
+                  * Form asks for a guardian's address and an emergency contact's.
+                  */}
+                {isAddress(field) ? (
+                    <div data-inspector-address>
+                        <AlloyFieldLabel>Whose address?</AlloyFieldLabel>
+                        <select
+                            value={address?.subject ?? "person"}
+                            disabled={!editable}
+                            data-inspector-address-subject
+                            onChange={(e) =>
+                                mutate((s) => updateAddressBinding(s, field.id, { subject: e.target.value }))
+                            }
+                            className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
+                        >
+                            <option value="person">A person on the record</option>
+                            <option value="child">The child</option>
+                        </select>
+                        {(address?.subject ?? "person") === "person" ? (
+                            <div className="mt-2">
+                                <AlloyFieldLabel>Which person?</AlloyFieldLabel>
+                                <select
+                                    value={address?.role ?? ""}
+                                    disabled={!editable}
+                                    data-inspector-address-role
+                                    onChange={(e) =>
+                                        mutate((s) => updateAddressBinding(s, field.id, { role: e.target.value }))
+                                    }
+                                    className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm"
+                                >
+                                    <option value="">The person this form is about</option>
+                                    {PARTY_ROLE_OPTIONS.map((o) => (
+                                        <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        ) : null}
+                        <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
+                            Street, city, state and postal code are asked together as one address, and stored on that
+                            person&rsquo;s own record &mdash; not copied into this form.
+                        </p>
+                    </div>
+                ) : null}
+
                 {/*
                   * WHAT HAPPENS IF THERE IS NONE?
                   *
@@ -535,6 +646,24 @@ export default function ProcessingFormQuestionInspector({
                                     disabled={!editable}
                                     testId="form-builder-supplied-source"
                                 />
+                                {field.supplied_by.source_key.trim() ? null : (
+                                    /*
+                                     * An INCOMPLETE declaration, said out loud.
+                                     *
+                                     * Ticking the box is one act and naming the template is the next, so there is a
+                                     * moment where the Form says "we supply this" without saying which one. The
+                                     * draft may hold that; a published Form may not — `formFieldSuppliedBySchema`
+                                     * requires the key. Saying so here is the difference between an administrator
+                                     * finishing the thought and meeting a validation error at publish.
+                                     */
+                                    <p
+                                        className="mt-1.5 rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-2.5 py-2 text-[11px] text-alloy-ember"
+                                        data-testid="form-builder-supplied-needs-key"
+                                    >
+                                        Name the charge template this reads from — this form cannot be published until
+                                        you do.
+                                    </p>
+                                )}
                                 <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
                                     The family is never asked for this. Each time paperwork is generated Alloy reads
                                     the amount your charge template holds today, so changing the fee changes new
@@ -766,13 +895,20 @@ export default function ProcessingFormQuestionInspector({
                                          * `role: "emergency_contact"` on a collection of children. The role and the
                                          * scope belong to the kind, so they are cleared and re-stated together.
                                          */
-                                        mutate((s2) =>
-                                            updatePartyCollection(s2, field.id, {
+                                        mutate((s2) => {
+                                            const preset = PARTY_KIND_PRESETS[action_key];
+                                            // `fields` is the group's own shape, not part of the
+                                            // declaration — it must not leak into party_collection.
+                                            const { fields: entryQuestions, ...declaration } = preset ?? { action_key, fields: undefined };
+                                            const withKind = updatePartyCollection(s2, field.id, {
                                                 role: undefined,
                                                 scope: undefined,
-                                                ...(PARTY_KIND_PRESETS[action_key] ?? { action_key }),
-                                            }),
-                                        )
+                                                ...declaration,
+                                            });
+                                            return entryQuestions
+                                                ? setPartyEntryFields(withKind, field.id, entryQuestions)
+                                                : withKind;
+                                        })
                                     }
                                     options={PARTY_KIND_OPTIONS}
                                     testId="form-builder-party-kind"

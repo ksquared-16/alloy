@@ -82,6 +82,15 @@ const QUESTION_TYPES: Array<{ type: BuilderFieldType; label: string; meta: strin
      * single long-text box. One menu entry, because that is how an administrator thinks about it.
      */
     { type: "party_collection", label: "Repeated people", meta: "A list of people the family can add to", category: "people" },
+    /*
+     * EXACTLY THE MULTI-SELECT MISS ABOVE, MADE AGAIN.
+     *
+     * `structured_address` was in the builder's type union, in `BUILDER_TYPE_META`, in the schema,
+     * in the conversation and on the artifact — and absent from THIS menu, which is the only place
+     * an administrator can reach it. Capability certified through the builder API is not capability
+     * an administrator has; the menu is the product.
+     */
+    { type: "structured_address", label: "Address", meta: "Street, city, state and postal code as one answer", category: "people" },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {

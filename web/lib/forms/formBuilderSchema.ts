@@ -395,10 +395,25 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
         }
         if (Object.prototype.hasOwnProperty.call(patch, "supplied_by")) {
             const sup = patch.supplied_by;
-            if (sup?.source_key?.trim()) {
+            /*
+             * THE DECLARATION IS THE TICK, NOT THE KEY.
+             *
+             * This used to store `supplied_by` only when `source_key` was already non-empty — and
+             * the inspector turns the capability on by sending exactly `{ source_kind, source_key:
+             * "" }`, because the administrator has not typed a key yet. The patch was therefore
+             * dropped, the checkbox never became checked, the "Which charge template?" box never
+             * appeared, and a configuration-supplied value could not be authored AT ALL through
+             * the product. It was reachable only by writing the schema directly.
+             *
+             * Same shape as `absence` and `retention` above: turning it on is one act, saying
+             * which one is the next. An empty key is an INCOMPLETE declaration, which the
+             * inspector says out loud and `formFieldSuppliedBySchema` refuses at publish — not a
+             * declaration that silently never happened.
+             */
+            if (sup?.source_kind) {
                 (next as { supplied_by?: unknown }).supplied_by = {
                     source_kind: sup.source_kind,
-                    source_key: sup.source_key.trim(),
+                    source_key: (sup.source_key ?? "").trim(),
                     resolve_at: "generation",
                 };
                 // The organisation supplies it, so it is not a question the family can answer
@@ -469,6 +484,39 @@ export function moveFieldWithinSection(schema: FormSchemaV1, fieldId: string, di
         return { ...s, field_ids: ids };
     });
     return { ...schema, sections };
+}
+
+/**
+ * REPLACE THE QUESTIONS ASKED ABOUT EACH ENTRY.
+ *
+ * The companion to the role and the scope: what a family is asked about each person belongs to the
+ * KIND of person, not to the collection. Switching "Emergency contacts" to "Children in the
+ * household" used to leave "Phone" and "Relationship to the child" in place — questions a parent
+ * reads about their own child and cannot answer sensibly, and which carry no child identity for
+ * `add_child` to use.
+ *
+ * Ids are re-derived from the group's own id, exactly as `fieldFromSpec` does when the collection
+ * is created, so there is one rule for how an entry question is named.
+ */
+export function setPartyEntryFields(
+    schema: FormSchemaV1,
+    fieldId: string,
+    fields: ReadonlyArray<{ type: BuilderFieldType; label: string; required?: boolean }>,
+): FormSchemaV1 {
+    return {
+        ...schema,
+        fields: schema.fields.map((f) => {
+            if (f.id !== fieldId || f.type !== "group") return f;
+            const entryFields = fields.map((e, i) =>
+                fieldFromSpec(`${f.id}_${slug(e.label) || `field_${i + 1}`}`, {
+                    type: e.type,
+                    label: e.label,
+                    required: e.required,
+                }),
+            );
+            return { ...f, fields: entryFields } as FormField;
+        }),
+    };
 }
 
 /** Add a new section (header). */
