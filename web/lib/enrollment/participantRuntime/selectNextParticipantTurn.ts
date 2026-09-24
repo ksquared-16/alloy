@@ -58,8 +58,19 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
      */
     const address = need.address;
     if (address) {
-        if (address.known_line) return `We have ${lowerFirst(address.label)} as ${address.known_line}. Is that right?`;
-        return `What is ${lowerFirst(address.label)}?`;
+        /*
+         * WHOSE ADDRESS — the one thing the binding says that the label does not.
+         *
+         * `lowerFirst(label)` alone asked a parent "What is home address?", because an authored
+         * label is a heading ("Home address") and a heading carries no determiner. The scalar stem
+         * a few lines below has always been careful about this; the address branch was not. The
+         * binding already names the subject and the role, so the sentence can say it rather than
+         * leave the parent to guess which of the several addresses on the record is meant.
+         */
+        const subject = addressPossessive(address);
+        const named = subject ? `${subject} ${lowerFirst(address.label)}` : lowerFirst(address.label);
+        if (address.known_line) return `We have ${named} as ${address.known_line}. Is that right?`;
+        return `What is ${named}?`;
     }
     const collection = need.party_collection;
     if (collection) {
@@ -83,6 +94,24 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
      */
     if (/\?\s*$/.test(label)) return label;
     return `What is ${label}?`;
+}
+
+/**
+ * "your", "your child's", "your emergency contact's" — whose address this is, in a parent's words.
+ *
+ * Read from the `address_binding` rather than guessed from the label: a role the Form named is a
+ * role the question can name back. Returns null when the authored label already possesses it
+ * ("Guardian's home address", "Your mailing address"), because "your guardian's home address" is
+ * worse than the heading the school wrote.
+ */
+function addressPossessive(address: { subject: "child" | "person"; role: string | null; label: string }): string | null {
+    const label = address.label.trim();
+    if (/'s\b/.test(label) || /^(your|my|our)\b/i.test(label)) return null;
+    if (address.subject === "child") return "your child's";
+    const role = address.role?.trim();
+    // The person answering IS the parent or guardian, so their own address is simply "your".
+    if (!role || /^(guardian|parent|parent_guardian|recipient)$/.test(role)) return "your";
+    return `your ${role.replace(/_/g, " ")}'s`;
 }
 
 /**

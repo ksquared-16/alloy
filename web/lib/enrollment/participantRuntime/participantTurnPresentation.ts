@@ -399,7 +399,22 @@ export type ConversationVoice = {
     subject: string;
     /** True when the person being spoken to owns the fact, so "Do you…" reads correctly. */
     secondPerson: boolean;
+    /**
+     * The auxiliary that AGREES with `subject` — "do you", "does your family", "does Marisol".
+     *
+     * `secondPerson` was carrying this meaning and could not: it is true both for "you", which
+     * takes *do*, and for "your family", which takes *does*. A sentence built from `subject` and a
+     * hard-coded "Does" therefore asked a parent "Does you have a phone number?". Agreement
+     * belongs with the pronoun that decides it, so every sentence reads it from here rather than
+     * re-deriving it and getting it wrong somewhere else.
+     */
+    aux: "do" | "does";
 };
+
+/** "Do" / "Does" at the head of a question. */
+export function capitalizedAux(voice: ConversationVoice): string {
+    return voice.aux === "do" ? "Do" : "Does";
+}
 
 export function conversationVoice(objective: ParticipantObjectiveWire): ConversationVoice {
     const turn = objective.next_turn as { scope?: string | null; entity_type?: string | null };
@@ -432,21 +447,21 @@ export function voiceForSubject(input: {
         case "person":
         case "guardian":
         case "contact":
-            return { possessive: "your", subject: "you", secondPerson: true };
+            return { possessive: "your", subject: "you", secondPerson: true, aux: "do" };
         case "customer":
-            return { possessive: "your family's", subject: "your family", secondPerson: true };
+            return { possessive: "your family's", subject: "your family", secondPerson: true, aux: "does" };
         case "child":
         case "customer_member":
         // An enrolment fact is about the child being enrolled — "Marisol's first day", not the
         // family's. The record it lives on is the enrolment; the person it describes is the child.
         case "enrollment":
-            return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+            return { possessive: childPossessive, subject: child || "your child", secondPerson: false, aux: "does" };
     }
 
     // No canonical entity — fall back to grain. `recipient` is the person signing: they are here.
-    if ((turn.scope ?? "") === "recipient") return { possessive: "your", subject: "you", secondPerson: true };
-    if ((turn.scope ?? "") === "household") return { possessive: "your family's", subject: "your family", secondPerson: true };
-    return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+    if ((turn.scope ?? "") === "recipient") return { possessive: "your", subject: "you", secondPerson: true, aux: "do" };
+    if ((turn.scope ?? "") === "household") return { possessive: "your family's", subject: "your family", secondPerson: true, aux: "does" };
+    return { possessive: childPossessive, subject: child || "your child", secondPerson: false, aux: "does" };
 }
 
 
@@ -542,9 +557,18 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
      * taken as given rather than rebuilt here.
      */
     if (turn.party_collection && turn.prompt?.trim()) return turn.prompt.trim();
-    // An address turn keeps the runtime's own sentence: it names the address and says whether Alloy
-    // already holds one, which no re-composition from a field label can do.
-    if (turn.address && turn.prompt?.trim()) return turn.prompt.trim();
+    /*
+     * An address turn keeps the runtime's own sentence: it names the address and says whether Alloy
+     * already holds one, which no re-composition from a field label can do.
+     *
+     * One substitution, the same one an authored question gets: the runtime has no child name, so
+     * a child's address is composed as "your child's home address", and here — where the name IS
+     * known — the parent hears the child's own name instead.
+     */
+    if (turn.address && turn.prompt?.trim()) {
+        const spoken = turn.prompt.trim();
+        return subject ? spoken.replace(/\byour child's\b/gi, `${subject}'s`) : spoken;
+    }
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
@@ -556,13 +580,28 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
             : `Is ${possessive} ${spoken} still right?`;
     }
     if (turn.kind === "collect_missing_value") {
+        /*
+         * THE SCHOOL'S OWN QUESTION OUTRANKS EVERY HEURISTIC, INCLUDING THIS ONE.
+         *
+         * The allergies rule below used to run first, and it tested the LABEL for "allerg" — the
+         * same substring test the field semantics work was written to retire. A Form that
+         * authored, in full, "Does your child have any allergies?" was therefore not asked its own
+         * question: the rule replaced it with a sentence about whoever the destination happened to
+         * name, so a question about the CHILD reached the parent as "Does your family have any
+         * allergies we should know about?". Different subject, different fact, and the school's
+         * words discarded to get there.
+         *
+         * So the authored question is tried first. The rule beneath it keeps doing exactly the job
+         * it was written for — turning a bare label, "Allergies", into something a specialist
+         * would say out loud — and no longer overrules an administrator who already said it.
+         */
+        const authored = authoredQuestionPrompt(turn.label ?? "", subject);
+        if (authored) return authored;
         // Allergies is the reference case: a specialist ASKS whether there are any. They do not
         // present a field called Allergies and wait for the parent to work out what to type.
         if (label.includes("allerg")) {
-            return `Does ${them} have any allergies we should know about?`;
+            return `${capitalizedAux(voice)} ${them} have any allergies we should know about?`;
         }
-        const authored = authoredQuestionPrompt(turn.label ?? "", subject);
-        if (authored) return authored;
 
         /*
          * NO CANONICAL OWNER, SO NO POSSESSIVE.
@@ -605,8 +644,10 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         }
         if (turn.optional) {
             // A yes/no shape for an optional attribute — the same shape allergies already uses, and
-            // what a specialist actually says: "Does Malik have a middle name?"
-            return `Does ${them} have ${indefiniteArticle(label)} ${label}?`;
+            // what a specialist actually says: "Does Malik have a middle name?", "Do you have a
+            // phone number?". The auxiliary agrees with the subject; hard-coding "Does" here is
+            // what produced "Does you have a phone number?".
+            return `${capitalizedAux(voice)} ${them} have ${indefiniteArticle(label)} ${label}?`;
         }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
