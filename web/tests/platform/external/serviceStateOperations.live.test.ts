@@ -439,6 +439,31 @@ describeLive("governed service-state operations, over the wire", () => {
             expect(String(cancelled.body.status)).toBe("canceled");
         }, 60_000);
 
+        it("a cancelled assignment frees the calendar, so the correction can cover the SAME dates", async () => {
+            /*
+             * The gap hosted certification found. Cancelling freed the uniqueness invariant but NOT
+             * `validate_schedule_assignments_primary_overlap`, which compared every primary row
+             * regardless of status — so a cancelled assignment still blocked its own replacement,
+             * and the raw trigger error reached partners as a 500. Recording the correction is the
+             * entire point of cancelling the mistake, so this asserts the replacement, not just the
+             * cancellation.
+             */
+            const made = await postOk("writer", "/api/v1/schedule-assignments", {
+                enrollment_id: enrollmentId, schedule_pattern_id: PATTERN_MWF, start_date: "2026-12-07",
+            });
+            await postOk("writer", "/api/v1/schedule-assignments/cancel", {
+                schedule_assignment_id: String(made.body.id),
+            });
+            const corrected = await postOk("writer", "/api/v1/schedule-assignments", {
+                enrollment_id: enrollmentId, schedule_pattern_id: PATTERN_TT, start_date: "2026-12-07",
+            });
+            expect(String(corrected.body.id), "a new row, not the cancelled one").not.toBe(String(made.body.id));
+            expect(String(corrected.body.start_date), "the correction covers the same day").toBe("2026-12-07");
+            await postOk("writer", "/api/v1/schedule-assignments/cancel", {
+                schedule_assignment_id: String(corrected.body.id),
+            });
+        }, 120_000);
+
         it("a cancelled assignment stops projecting derived days", async () => {
             // The whole reason this matters: assignments expand into concrete expected days. An
             // erroneous one left "valid until yesterday" bills expectations nobody ever owed.
