@@ -31,6 +31,16 @@ type Props = {
     onSelect?: (key: RecordManageMenuActionKey) => void;
     onRegistryActionSelect?: (action: ResolvedActionForClient) => void;
     registryActionLoadingKey?: string | null;
+    /**
+     * Registry actions that are SHOWN but not yet executable — the two-phase drawer's phase-1 set,
+     * where some actions carry every canonical execution input and some are still waiting on one.
+     *
+     * Per-action rather than per-menu on purpose: holding the whole menu for the slowest action
+     * would give the operator nothing early, and hiding the unready ones would make the command set
+     * change shape underneath them when the rest of the record lands.
+     */
+    registryActionDisabledKeys?: ReadonlySet<string>;
+    registryActionDisabledReason?: string | null;
     proofLayoutActions?: boolean;
     emptyStateReason?: string | null;
 };
@@ -46,6 +56,8 @@ export function RecordDrawerManageMenu({
     onSelect,
     onRegistryActionSelect,
     registryActionLoadingKey = null,
+    registryActionDisabledKeys,
+    registryActionDisabledReason = null,
     proofLayoutActions = false,
     emptyStateReason = "No actions available for this record.",
 }: Props) {
@@ -158,6 +170,9 @@ export function RecordDrawerManageMenu({
             if (registryMode) {
                 const action = a as ResolvedActionForClient;
                 if (registryActionLoadingKey === action.key) return;
+                // Keyboard activation is a SECOND way in. A per-action guard applied only to the
+                // click handler would let Enter run an action the pointer cannot.
+                if (registryActionDisabledKeys?.has(action.key)) return;
                 close();
                 onRegistryActionSelect?.(action);
                 return;
@@ -172,15 +187,21 @@ export function RecordDrawerManageMenu({
 
     const renderRegistryMenuBody = () =>
         (registryActions ?? []).map((action, index) => {
-            const itemDisabled = disabled || registryActionLoadingKey === action.key;
+            const notYetExecutable = registryActionDisabledKeys?.has(action.key) ?? false;
+            const itemDisabled =
+                disabled || notYetExecutable || registryActionLoadingKey === action.key;
             return (
                 <button
                     key={action.key}
                     type="button"
                     role="menuitem"
                     disabled={itemDisabled}
+                    data-registry-action-key={action.key}
+                    data-registry-action-executable={itemDisabled ? undefined : "true"}
                     title={
                         registryActionLoadingKey === action.key ? "Action in progress…"
+                        : notYetExecutable && registryActionDisabledReason ?
+                            registryActionDisabledReason
                         : menuDisabledReason ?
                             menuDisabledReason
                         :   action.label

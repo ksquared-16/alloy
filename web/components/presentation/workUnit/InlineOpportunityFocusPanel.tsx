@@ -95,6 +95,8 @@ import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFo
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
+import { useActionableDrawerCarrier } from "@/lib/adminV2/viewModel/drawer/opportunity/useActionableDrawerCarrier";
+import FocusPanelCarrierActionRail from "@/components/admin/focusPanel/FocusPanelCarrierActionRail";
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
 
 export function InlineOpportunityFocusPanel() {
@@ -425,10 +427,37 @@ export function InlineOpportunityFocusPanel() {
         reloadOpportunityDisplayVm: reloadDisplayVm,
     });
 
+    /*
+     * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE, for THIS subject.
+     *
+     * Asked for by the subject already committed here, never by "whatever arrived last". A carrier
+     * for a row the operator hovered and did not click, or for B after they have moved to C, is not
+     * the carrier this asks for and is therefore never read.
+     */
+    const carrier = useActionableDrawerCarrier({
+        opportunityId: settlementSubjectId,
+        attentionSubjectId: isChildSubject ? operationalSubjectId : null,
+    });
+
+    /*
+     * ONE ACTION AUTHORITY, WHICHEVER PHASE IS IN HAND.
+     *
+     * Phase 2 wins outright the moment it exists — this is not a merge, and a resolved view model is
+     * never topped up from a carrier. Phase 1 fills the gap and nothing else, and it can only fill it
+     * with values the view model will itself publish: `workspace.department_id` and
+     * `workspace.work_unit_id` are the compose inputs verbatim, and the carrier quotes the same two.
+     * So the arguments an action executes with do not depend on which phase the operator clicked in.
+     */
+    const actionExecutionScope =
+        displayVm ? displayVm.workspace
+        : carrier ?
+            { department_id: carrier.execution.department_id, work_unit_id: carrier.execution.work_unit_id }
+        :   null;
+
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
         opportunityId: drawer.id,
-        departmentId: displayVm?.workspace.department_id,
-        workUnitId: displayVm?.workspace.work_unit_id,
+        departmentId: actionExecutionScope?.department_id,
+        workUnitId: actionExecutionScope?.work_unit_id,
         registryHostExtensions,
         actionHost: headerActionHost,
     });
@@ -874,6 +903,27 @@ export function InlineOpportunityFocusPanel() {
                             onModeChange={setFocusPanelMode}
                             onClose={closeDrawer}
                             hideClose
+                            /*
+                             * THE REAL PHASE-1 CONSUMER.
+                             *
+                             * The identity-safe frame has always rendered this header with no
+                             * commands at all, so the operator's wait for FIRST ACTIONABLE was the
+                             * whole drawer compose even though canonical action authority existed
+                             * about 1.9s earlier. When a carrier for THIS subject is in hand it
+                             * mounts here, through the same menu and the same selection handler the
+                             * resolved header uses; actions still missing a canonical execution
+                             * input stay disabled until phase 2 supplies it.
+                             */
+                            secondaryActions={
+                                carrier ?
+                                    <FocusPanelCarrierActionRail
+                                        carrier={carrier}
+                                        onActionSelect={onActionSelect}
+                                        actionLoadingKey={actionLoadingKey}
+                                        canMutate={manageCanMutate}
+                                    />
+                                :   null
+                            }
                         />}
                 </div>
                 <div

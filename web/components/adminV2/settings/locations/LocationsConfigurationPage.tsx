@@ -572,7 +572,7 @@ export default function LocationsConfigurationPage({
                     }))}
                     rooms={selectedRooms.map((room) => ({
                         id: room.id,
-                        label: String(room.label ?? "").trim() || "Room",
+                        label: String(room.label ?? "").trim() || "Untitled space",
                         is_active: room.is_active !== false,
                         metadata: room.metadata,
                     }))}
