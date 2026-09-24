@@ -102,7 +102,27 @@ export function RuntimeKernelProvider({
             entryResource: workUnitEntryResourceClient(),
             instrumentation: {
                 onStarted: () => markPerceived("queue_hold", "intent"),
-                onTerminal: () => markPerceived("queue_hold", "reveal"),
+                /*
+                 * EVERY TERMINAL REACHES K3 HERE — INCLUDING THE SECOND ONE.
+                 *
+                 * Focus used to be fed only from `onAttentionMoved(...).then(...)` below, and that
+                 * promise resolves on the FIRST terminal. A settled snapshot emitted afterwards had
+                 * nowhere to go: `emit` recorded it, `onTerminal` reported it for timing, and the
+                 * committed surface never saw it. Measured on deployed ed24d807, the Focus Panel's
+                 * capability cards stayed unresolved on both the route-load and queue-switch paths
+                 * for exactly this reason — the settlement was computed, delivered and dropped.
+                 *
+                 * An emit without a consumer is not delivery. This is the consumer, and it is the
+                 * CANONICAL one: `onPreparationTerminal` is K3's only commit entry point, so phase 2
+                 * commits through the same path, the same atomic snapshot swap and the same staleness
+                 * rules as phase 1. It already refuses a terminal whose attention has been superseded,
+                 * which is what keeps a late B settlement from repainting C — that safety is reused,
+                 * not restated.
+                 */
+                onTerminal: (terminal) => {
+                    markPerceived("queue_hold", "reveal");
+                    focus.onPreparationTerminal(terminal);
+                },
             },
         });
 
@@ -125,10 +145,14 @@ export function RuntimeKernelProvider({
             // error for a surface that is perfectly fine. Attention still moves; only preparation
             // is skipped.
             if (e.ref.target === WORKSPACE_ATTENTION_TARGET) return;
-            void provisioning.onAttentionMoved(e).then((terminal) => {
-                // `null` = the preparation was disposed (superseded/cancelled). Disposal is not an
-                // outcome and never reaches Focus — Kernel §K2: "there is no fourth outcome".
-                if (terminal) focus.onPreparationTerminal(terminal);
+            void provisioning.onAttentionMoved(e).then(() => {
+                /*
+                 * The terminal itself is delivered to Focus by `onTerminal` above, which fires for
+                 * EVERY emit rather than only the first. This await remains because disposal still
+                 * has to be rendered: `null` means the preparation was superseded or cancelled, which
+                 * is not an outcome and never reaches Focus (Kernel §K2: "there is no fourth
+                 * outcome"), but the surface must still be notified that the wait ended.
+                 */
                 notify();
             });
         });
