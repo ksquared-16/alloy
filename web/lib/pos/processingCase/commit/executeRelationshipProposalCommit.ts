@@ -30,6 +30,7 @@ import {
 import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
 import { resolveRelationshipAnchor, type AnchorCandidate } from "@/lib/pos/processingCase/commit/resolveRelationshipAnchor";
 import {
+    loadHouseholdAnchorCandidates,
     loadResolvedProcessingCaseContext,
     resolveCommitHousehold,
 } from "@/lib/pos/processingCase/commit/loadResolvedProcessingCaseContext";
@@ -219,10 +220,28 @@ export async function executeRelationshipProposalCommit(args: {
             },
         };
     }
+    /*
+     * ONE HOUSEHOLD, ONE CANDIDATE LIST.
+     *
+     * These used to disagree. `resolveCommitHousehold` accepts the submission's own household when
+     * the case carries no operational resolution — which is every Processing case opened from an
+     * enrollment packet — while the candidates came from `context.customer_member_ids`, loaded only
+     * for the household named in case metadata. So the commit resolved the right family and then
+     * refused every child in it as `anchor_not_found`.
+     *
+     * Candidates are now loaded for the household this commit actually decided. Nothing is
+     * loosened: `resolveRelationshipAnchor` still checks org and household on every candidate, and
+     * the household is still server-resolved.
+     */
     const anchorCustomerId = household.customer_id;
     const anchorCandidates: readonly AnchorCandidate[] =
         args.householdChildren ??
-        household.context.customer_member_ids.map((id) => ({
+        (
+            await loadHouseholdAnchorCandidates(args.supabase, {
+                orgId: args.orgId,
+                customerId: anchorCustomerId,
+            })
+        ).map((id) => ({
             customer_member_id: id,
             customer_id: anchorCustomerId,
             org_id: args.orgId,

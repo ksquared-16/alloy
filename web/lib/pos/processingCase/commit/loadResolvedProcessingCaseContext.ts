@@ -50,6 +50,42 @@ function fingerprint(parts: Array<string | null>): string {
     return parts.map((p) => p ?? "-").join("|");
 }
 
+/**
+ * The children a relationship may be anchored to, for ONE household.
+ *
+ * ## Why this is its own function
+ *
+ * The commit runtime had two different readings of "which family is this". The EXECUTOR decided the
+ * household through `resolveCommitHousehold`, which accepts the submission's own `customer_id` when
+ * the case carries no operational resolution. The ANCHOR CANDIDATES were loaded only for the
+ * household named in `metadata.operational_result.records.household`.
+ *
+ * For a Processing case opened from an enrollment packet those are not the same thing: the case has
+ * no operational result yet, so the household came from the submission and the candidate list was
+ * empty. Every anchor the operator named was then rejected as `anchor_not_found` — a child who was
+ * plainly in the household, refused as if they belonged to someone else. MEASURED against a real
+ * case: the executor resolved role `emergency_contact`, command `add_emergency_contact`, scope
+ * `this_child` and destination `person_child_relationships`, and then refused its own anchor.
+ *
+ * One authority now: candidates are always the active children of whichever household the commit
+ * actually resolved. This LOOSENS nothing — `resolveRelationshipAnchor` still validates every
+ * candidate for org and household, so an anchor from another family is still refused, and the
+ * household itself is still server-resolved and never client-asserted.
+ */
+export async function loadHouseholdAnchorCandidates(
+    supabase: SupabaseClient,
+    args: { orgId: string; customerId: string },
+): Promise<string[]> {
+    const { data: kids } = await supabase
+        .from("customer_members")
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("customer_id", args.customerId)
+        .eq("relationship", "child")
+        .eq("is_active", true);
+    return (kids ?? []).map((k: { id: string }) => k.id);
+}
+
 export async function loadResolvedProcessingCaseContext(
     supabase: SupabaseClient,
     args: { orgId: string; caseId: string },
@@ -71,19 +107,12 @@ export async function loadResolvedProcessingCaseContext(
     const childId = str(records.child);
     const personId = str(records.person);
 
-    // Anchor candidates come from the RESOLVED household, loaded server-side. A caller may name one
-    // of these; it may never introduce a child from anywhere else.
-    let memberIds: string[] = [];
-    if (customerId) {
-        const { data: kids } = await supabase
-            .from("customer_members")
-            .select("id")
-            .eq("org_id", args.orgId)
-            .eq("customer_id", customerId)
-            .eq("relationship", "child")
-            .eq("is_active", true);
-        memberIds = (kids ?? []).map((k: { id: string }) => k.id);
-    }
+    // Anchor candidates for the household THIS projection resolved. The commit does not read them
+    // from here — see `loadHouseholdAnchorCandidates` — because the household it commits against is
+    // not always this one.
+    const memberIds = customerId
+        ? await loadHouseholdAnchorCandidates(supabase, { orgId: args.orgId, customerId })
+        : [];
 
     const status: ProcessingCaseResolutionStatus = customerId
         ? "resolved"

@@ -9,7 +9,7 @@ import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
  * canonical collection a group iterates, authored or derived; reading `collection_binding` directly
  * here is what made every Studio-authored collection of people invisible to Processing.
  */
-import { effectiveCollectionBinding } from "@/lib/forms/partyCollection";
+import { effectiveCollectionBinding, effectiveEntryFieldSource } from "@/lib/forms/partyCollection";
 import {
     findCanonicalCollectionProvider,
     classifyCollectionProvider,
@@ -99,6 +99,8 @@ function buildFieldProposals(
 
 function buildInstanceProposal(args: {
     ctx: AdaptFormSubmissionProposalsContext;
+    /** The authored group, which is what declares whether these questions describe a person. */
+    group: FormField | null;
     groupId: string;
     schemaBindingProvider: string;
     schemaIterationEntity: string;
@@ -184,13 +186,21 @@ function buildInstanceProposal(args: {
               supported_scopes: relationshipDef.scopes,
               identity_action: row.origin === "existing" ? "link_existing_person" : "create_proposed_person",
               ...(row.item_id ? { existing_person_id: row.item_id } : {}),
+              /*
+               * The identity a proposed Person would be created from.
+               *
+               * Read through `effectiveEntryFieldSource`, not `field_source` alone: a
+               * Studio-authored party collection carries no explicit binding on its entry
+               * questions, so this list came back EMPTY and every family-added person was refused
+               * `insufficient_person_identity` — visible on the card, printed on the completed
+               * paperwork, and impossible to create. An authored binding still wins; a question the
+               * rule cannot place contributes no fact rather than a guessed one.
+               */
               proposed_person_facts: nestedFields
-                  .filter((n) => n.field_source && Object.prototype.hasOwnProperty.call(row.values, n.id))
-                  .map((n) => ({
-                      entity_type: n.field_source!.entity_type,
-                      field_key: n.field_source!.field_key,
-                      value: row.values[n.id],
-                  })),
+                  .filter((n) => Object.prototype.hasOwnProperty.call(row.values, n.id))
+                  .map((n) => ({ source: args.group ? effectiveEntryFieldSource(args.group, n) : null, value: row.values[n.id] }))
+                  .filter((f): f is { source: { entity_type: string; field_key: string }; value: unknown } => f.source !== null)
+                  .map((f) => ({ entity_type: f.source.entity_type, field_key: f.source.field_key, value: f.value })),
           }
         : undefined;
 
@@ -286,6 +296,7 @@ export function adaptFormSubmissionToRelatedRecordProposals(
             instances.push(
                 buildInstanceProposal({
                     ctx,
+                    group: field,
                     groupId: field.id,
                     schemaBindingProvider: binding.collection_provider_ref,
                     schemaIterationEntity: binding.iteration_entity_type,
@@ -320,6 +331,7 @@ export function adaptFormSubmissionToRelatedRecordProposals(
                     instances: rows.map((row, i) =>
                         buildInstanceProposal({
                             ctx,
+                            group: schemaGroup ?? null,
                             groupId,
                             schemaBindingProvider: row.provider_ref,
                             schemaIterationEntity: row.iteration_entity_type,

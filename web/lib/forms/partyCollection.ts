@@ -164,3 +164,51 @@ export function effectiveCollectionBinding(field: FormField): FormGroupCollectio
 export function hasEffectiveCollectionBinding(field: FormField): boolean {
     return effectiveCollectionBinding(field) !== null;
 }
+
+/**
+ * WHICH CANONICAL FACT ONE ENTRY QUESTION CARRIES.
+ *
+ * ## The asymmetry this removes
+ *
+ * The platform already answered this — in one direction only. `knownPartyEntriesFromParties` has to
+ * decide which of an entry's questions holds a known person's name and which holds their phone, and
+ * it decides with the canonical binding first and the question's own words second. That is how
+ * "Already on file · (541) 555-7788" gets onto the card.
+ *
+ * Nothing answered it in the WRITE direction. `proposed_person_facts` is built from
+ * `field_source` alone, and a Studio-authored party collection carries none — MEASURED on the real
+ * enrollment form, where every entry field arrived as `provider_ref: "ec_name", entity_type: null`.
+ * So the family's new emergency contact reached the commit with zero identity facts and was refused
+ * `insufficient_person_identity`: Alloy could show the person on the card and print them on the
+ * completed paperwork, but could not say who they were well enough to create them.
+ *
+ * ## Why this is a declaration, not a guess
+ *
+ * The inference is bounded by what the Form already DECLARED. A `party_collection` with
+ * `subject: "person"` states that these questions describe a Person; inside that statement a
+ * question labelled "Full name" is that person's name. The same reading is not offered to ordinary
+ * fields, which is why this takes the GROUP as well as the field.
+ *
+ * An explicit `field_source` always wins — an authored binding is a statement, and a statement
+ * outranks an inference. Anything the rule does not recognise returns null and contributes no fact,
+ * so a question Alloy cannot place is simply left out of the draft rather than guessed into it.
+ */
+export function effectiveEntryFieldSource(
+    group: FormField,
+    field: FormField,
+): { entity_type: string; field_key: string } | null {
+    if (field.field_source?.entity_type && field.field_source?.field_key) {
+        return { entity_type: field.field_source.entity_type, field_key: field.field_source.field_key };
+    }
+    const party = partyCollectionOf(group);
+    if (!party) return null;
+
+    const entity = party.subject === "child" ? "customer_member" : "person";
+    const label = (field.label ?? "").toLowerCase();
+
+    // The same precedence, and the same three facts, the read direction already uses.
+    if (/\bname\b/.test(label)) return { entity_type: entity, field_key: "full_name" };
+    if (/\bphone\b|\bmobile\b|\bcell\b/.test(label)) return { entity_type: entity, field_key: "phone" };
+    if (/\bemail\b/.test(label)) return { entity_type: entity, field_key: "email" };
+    return null;
+}
