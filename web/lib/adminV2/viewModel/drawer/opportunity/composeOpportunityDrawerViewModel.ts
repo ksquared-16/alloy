@@ -86,6 +86,15 @@ export async function composeOpportunityDrawerViewModel(
     // S4.2 — the shared canonical DATA foundation (Module C): opportunity record (visible payload +
     // household attach), layout inputs, work-unit identity + queue definition, department metadata +
     // status definitions, and the lifecycle rail. Resolved once; both tiers read it by value.
+    /*
+     * COMPOSE'S OWN TOP-LEVEL DAG.
+     *
+     * Until now this function reported only the phases its callees stamped, so the two boundaries
+     * that actually decide when compose finishes -- the shared-deps wall and the initial/deferred
+     * join -- had no measured wall of their own and had to be inferred by subtraction. They are
+     * stamped here so the critical path can be read rather than reconstructed.
+     */
+    const tSharedDeps0 = Date.now();
     const shared = await resolveSharedCanonicalDeps({
         supabase,
         gate,
@@ -145,6 +154,9 @@ export async function composeOpportunityDrawerViewModel(
         currentStageLabel,
     } = shared;
     Object.assign(phases, shared.phases_ms);
+    // Compose's view of the same span. `shared_deps_total_ms` is shared deps' own clock; this one
+    // includes the call boundary, so a gap between them is scheduling rather than work.
+    phases.shared_deps_wall_ms = Date.now() - tSharedDeps0;
 
     /*
      * THE EARLY PARTICIPANT CONTRACT — published here, and here is why here.
@@ -178,6 +190,7 @@ export async function composeOpportunityDrawerViewModel(
      * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
      * compose still costs `max(A, B)` = A.
      */
+    const tTiers0 = Date.now();
     const [initial, deferred] = await Promise.all([
         buildInitialPanelResource({
             supabase,
@@ -197,6 +210,12 @@ export async function composeOpportunityDrawerViewModel(
             hintOperTrustUrgency: params.hintOperTrustUrgency,
             // The SAME promise the shared deps started. Consumed here, never re-resolved.
             earlyHeaderActions: shared.earlyHeaderActions,
+        // Leg-observed elapsed, not a wall of its own: the stamp fires when THIS leg settles while
+        // the other may still be running. That is exactly what is wanted here — which side of the
+        // join finishes last is the question, and max(A,B) is the join's cost.
+        }).then((r) => {
+            phases.tier_initial_leg_ms = Date.now() - tTiers0;
+            return r;
         }),
         buildDeferredDetailResource({
             supabase,
@@ -208,8 +227,13 @@ export async function composeOpportunityDrawerViewModel(
             currentStageKey,
             currentStageLabel,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
+        }).then((r) => {
+            phases.tier_deferred_leg_ms = Date.now() - tTiers0;
+            return r;
         }),
     ]);
+    // The join that decides when compose can finish: max(initial, deferred), not their sum.
+    phases.tiers_join_ms = Date.now() - tTiers0;
     if (!initial.ok) {
         return finishCompose({
             ok: false,

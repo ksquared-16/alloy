@@ -106,6 +106,16 @@ export async function resolveSharedCanonicalDeps(
     const { supabase, gate, opportunityId } = params;
     const orgId = gate.orgId;
     const phases_ms: Record<string, number> = {};
+    /*
+     * THE WALL THIS FUNCTION ACTUALLY OCCUPIES.
+     *
+     * Without it the only way to size shared deps was to add up its named legs, and that answer was
+     * wrong twice over: `status_and_dept_ms` and `household_persons_ms` measure the SAME join (the
+     * household leg is nested inside it), and the mission-stage attach at the end was not timed at
+     * all. A measured wall beside the named legs turns the leftover into an explicit remainder
+     * instead of something to be apportioned.
+     */
+    const sharedStart = Date.now();
 
     /**
      * The record layout is a function of the ORG and the entity type — it does not read the
@@ -296,7 +306,9 @@ export async function resolveSharedCanonicalDeps(
     const tHousehold0 = Date.now();
     const [, deptMetadata, statusDefsPack] = await Promise.all([
         attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
-            phases_ms.household_persons_ms = Date.now() - tHousehold0;
+            // NESTED INSIDE `status_and_dept_ms`, not serial with it: both clocks start on adjacent
+            // lines and this leg resolves inside that same Promise.all. Summing the two double-counts.
+            phases_ms.household_persons_nested_ms = Date.now() - tHousehold0;
             return r;
         }),
         departmentId ?
@@ -343,12 +355,22 @@ export async function resolveSharedCanonicalDeps(
     });
     // Mission stage for Current Work: Effective Process Position when participants diverge.
     // Lifecycle rail still reflects shared/context stage for chrome; stage-work uses Mission.
+    /*
+     * THE LAST SERIAL AWAIT IN SHARED DEPS, AND THE ONE NOBODY HAD TIMED.
+     *
+     * Shared deps measured ~1,974ms against ~1,667ms of named walls, leaving ~307ms unattributed.
+     * This is the only database round trip in that gap: everything else after the prep join is pure
+     * computation over values already in hand. Timing it is what makes the remainder a number rather
+     * than a suspicion.
+     */
+    const tMission0 = Date.now();
     const [recordWithEpp] = await attachEffectiveEnrollmentStagesToOpportunityRows({
         supabase,
         orgId,
         rows: [record as Record<string, unknown>],
         logLabel: "drawer-mission",
     });
+    phases_ms.mission_stages_ms = Date.now() - tMission0;
     const mission = resolveContextMissionStages({
         contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
         effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
@@ -366,6 +388,7 @@ export async function resolveSharedCanonicalDeps(
             ? lifecycle_rail?.stages.find((s) => s.key === railStageKey)?.label ?? null
             : null);
 
+    phases_ms.shared_deps_total_ms = Date.now() - sharedStart;
     return {
         ok: true,
         orgId,

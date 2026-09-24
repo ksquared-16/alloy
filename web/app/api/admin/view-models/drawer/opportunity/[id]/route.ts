@@ -353,7 +353,11 @@ function streamPhasedDrawerViewModel(args: {
                     return;
                 }
                 carrierSent = true;
-                write({ [CARRIER_LINE_KEY]: carrier });
+                // Route-relative, on the carrier's OWN line. `flushed_at_ms` is compose-relative, so
+                // by itself it cannot say how much of the operator's wait was spent before compose
+                // even started; and the route phases ride the phase-2 line, which on a slow sample
+                // arrives long after the thing being attributed.
+                write({ [CARRIER_LINE_KEY]: carrier, __carrier_route_ms: Date.now() - routeT0 });
             };
 
             try {
@@ -399,7 +403,7 @@ function streamPhasedDrawerViewModel(args: {
                 authorized = true;
                 if (heldCarrier && !carrierSent) {
                     carrierSent = true;
-                    write({ [CARRIER_LINE_KEY]: heldCarrier });
+                    write({ [CARRIER_LINE_KEY]: heldCarrier, __carrier_route_ms: Date.now() - routeT0 });
                 }
 
                 const result = await composePromise;

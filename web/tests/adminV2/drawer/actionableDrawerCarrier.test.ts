@@ -522,7 +522,7 @@ describe("the phased route holds everything until the org assertion answers", ()
         expect(sink).toContain("if (!authorized) {");
         expect(sink).toContain("heldCarrier = carrier;");
         // The write must be unreachable while unauthorized: the guard returns before it.
-        expect(sink.indexOf("heldCarrier = carrier;")).toBeLessThan(sink.indexOf("write({ [CARRIER_LINE_KEY]: carrier })"));
+        expect(sink.indexOf("heldCarrier = carrier;")).toBeLessThan(sink.indexOf("write({ [CARRIER_LINE_KEY]: carrier,"));
     });
 
     it("the held carrier is released only AFTER the assertion passes", () => {
