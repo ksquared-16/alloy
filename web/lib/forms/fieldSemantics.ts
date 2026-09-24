@@ -170,6 +170,51 @@ export function formatAddressLine(parts: Partial<Record<AddressPartKey, unknown>
  * is exactly the participant experience the declaration exists to prevent: "City" arriving on its
  * own, with nothing to say it is part of an address the family is in the middle of giving.
  */
+/**
+ * THE SHARED KEY ONE ADDRESS PART IS STORED UNDER.
+ *
+ * Lives here, with the rest of the address semantics, because it must have exactly ONE definition.
+ * It did not: the conversation derived a role-scoped key — `person.guardian.address_line1`, so a
+ * Form may ask for a guardian's address and an emergency contact's without the two colliding — and
+ * every other consumer derived the part's key from its `field_source` alone, which has no role on
+ * it. The family's address was therefore written where nothing else looked: the conversation read
+ * it back and stopped asking, and the generated document printed an em dash for the whole address.
+ *
+ * The role belongs in the key. What was missing was everyone else agreeing on it.
+ */
+export function addressPartSharedKey(group: FormField, field: FormField): string | null {
+    const explicit = field.field_source?.shared_value_key?.trim();
+    if (explicit) return explicit;
+    const source = field.field_source;
+    if (!source?.entity_type || !source?.field_key) return null;
+    const role = addressBindingOf(group)?.role?.trim();
+    return role ? `${source.entity_type}.${role}.${source.field_key}` : `${source.entity_type}.${source.field_key}`;
+}
+
+/**
+ * Every declared address part in a schema, with the group it belongs to and the key it is stored
+ * under — so a reader that maps shared values onto field ids can honour the role without having to
+ * know what an address binding is.
+ */
+export function addressPartSharedKeyByFieldId(schema: { fields: readonly FormField[] }): Map<string, string> {
+    const out = new Map<string, string>();
+    const walk = (fields: readonly FormField[]) => {
+        for (const f of fields) {
+            if (f.type !== "group") continue;
+            if (addressBindingOf(f)) {
+                for (const child of f.fields) {
+                    const key = addressPartSharedKey(f, child);
+                    if (key) out.set(child.id, key);
+                }
+                continue;
+            }
+            walk(f.fields);
+        }
+    };
+    walk(schema.fields);
+    return out;
+}
+
 export function addressPartFieldIds(schema: { fields: readonly FormField[] }): Set<string> {
     const ids = new Set<string>();
     const walk = (fields: readonly FormField[]) => {

@@ -31,6 +31,7 @@ import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import { parseProcessScopedAnswerKey } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import { valueFitsFieldType } from "@/lib/forms/valueFitsFieldType";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { addressPartSharedKeyByFieldId } from "@/lib/forms/fieldSemantics";
 
 /**
  * Which fields of this schema the settled shared values answer.
@@ -71,6 +72,21 @@ export function sharedValuesToFieldIds(
 ): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     if (!sharedValues || Object.keys(sharedValues).length === 0) return out;
+
+    /*
+     * AN ADDRESS PART IS STORED UNDER ITS GROUP'S ROLE, AND THIS COULD NOT SEE THE GROUP.
+     *
+     * `canonicalKeyFor` reads a field's own `field_source`, and a part carries no role — the role
+     * is on the parent group's `address_binding`. So a family's address, written by the
+     * conversation under `person.guardian.address_line1`, was looked for here under
+     * `person.address_line1`, found nowhere, and the generated document printed an em dash for the
+     * whole address while the conversation had already stopped asking for it.
+     *
+     * Resolved first, from the same owner the conversation uses, so the two cannot disagree again.
+     */
+    for (const [fieldId, key] of addressPartSharedKeyByFieldId(schema)) {
+        if (Object.prototype.hasOwnProperty.call(sharedValues, key)) out[fieldId] = sharedValues[key];
+    }
 
     walkScalarFormFields(schema as FormSchemaV1, (field) => {
         if (!formFieldCollectsValue(field)) return;

@@ -72,16 +72,15 @@ export function addressGroups(schema: Pick<FormSchemaV1, "fields">): Array<FormF
  * needs no store of its own: a guardian's `address_line1` collected here and the same fact
  * collected anywhere else are one value, and correcting it once corrects it everywhere.
  */
-export function addressPartSharedKey(group: FormField, field: FormField): string | null {
-    const explicit = field.field_source?.shared_value_key?.trim();
-    if (explicit) return explicit;
-    const source = field.field_source;
-    if (!source?.entity_type || !source?.field_key) return null;
-    const binding = addressBindingOf(group);
-    const role = binding?.role?.trim();
-    // A role-scoped address belongs to the person in that relationship, so the key says which.
-    return role ? `${source.entity_type}.${role}.${source.field_key}` : `${source.entity_type}.${source.field_key}`;
-}
+/**
+ * Re-exported from the Forms-side owner.
+ *
+ * This derivation used to live here, and living here was the defect: a key only the conversation
+ * could compute is a key only the conversation can find. See `addressPartSharedKey` in
+ * `lib/forms/fieldSemantics.ts`.
+ */
+export { addressPartSharedKey } from "@/lib/forms/fieldSemantics";
+import { addressPartSharedKey } from "@/lib/forms/fieldSemantics";
 
 /** Project one declared address group into the conversational obligation, with what is known. */
 export function projectParticipantAddress(
