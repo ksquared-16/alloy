@@ -6,6 +6,7 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { previewExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
+import { executeNewChildProposalCommit } from "@/lib/pos/processingCase/commit/executeNewChildProposalCommit";
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 
@@ -103,6 +104,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return relPreview.ok
                 ? jsonData(payload)
                 : NextResponse.json({ error: relPreview.record.reason, ...payload }, { status: relPreview.status });
+        }
+
+        /*
+         * THE SAME DIVERSION THE COMMIT MAKES, OR THIS IS NOT A PREVIEW OF IT.
+         *
+         * The comment above says a preview must exercise the identical gate. It did for a
+         * configured relationship and not for a respondent-added child: that proposal fell through
+         * to the existing-child plan, which correctly refuses anything that is not already held —
+         * "Only existing child proposals may commit in P5B", 403. So an operator reviewing a
+         * sibling the family added was told it could not be committed, while the commit route
+         * routes exactly that proposal to `add_child` and succeeds. A preview that disagrees with
+         * the commit is worse than no preview: it invites the operator to reject real work.
+         *
+         * `executeNewChildProposalCommit` already takes `previewOnly`, which exists for this.
+         */
+        if (proposalContext?.proposal.membership_intent?.identity_action === "create_household_child") {
+            const childPreview = await executeNewChildProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                actorRole: ctx.role,
+                accessScope: (ctx as { accessScope?: unknown }).accessScope,
+                caseId,
+                proposalId,
+                decision,
+                metadata,
+                previewOnly: true,
+                expectedResolutionRevision:
+                    typeof body.expected_resolution_revision === "string" ? body.expected_resolution_revision : null,
+            });
+            const payload = { caseId, proposalId, decision_version: childPreview.record.idempotency_key, ...childPreview.record };
+            return childPreview.ok
+                ? jsonData(payload)
+                : NextResponse.json({ error: childPreview.record.reason, ...payload }, { status: childPreview.status });
         }
 
         const outcome = await previewExistingChildProposalCommit({
