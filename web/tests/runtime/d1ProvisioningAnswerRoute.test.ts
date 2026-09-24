@@ -120,6 +120,15 @@ describe("GET provisioning-answer — canonical route slug resolution", () => {
             orgId: ORG,
             userId: "user-1",
             dim: { departmentScope: "all", allowedDepartmentIds: null, siteScope: "all", allowedSiteLocationIds: null },
+            /*
+             * The gate's resolved ACCESS. Absent here since the composer began reading
+             * `gate.access.permissionKeys`, which threw before any assertion ran and left all six
+             * route tests dead — passing lint, typecheck and CI while covering nothing. A fixture
+             * that cannot construct its subject is not a weaker test, it is an absent one.
+             */
+            access: { permissionKeys: [], roleKeys: [] },
+            roleKeys: [],
+            role: null,
         });
         honestCompose();
         honestFetch();

@@ -39,12 +39,14 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { collectedRouteTiming, recordRouteTiming, routeTimingEnabled } from "@/lib/perf/routeTimingDiagnostic";
 import {
     applyProvisioningSettlement,
+    settlementNavigationForRequest,
     type ProvisioningSettlementPatch,
 } from "@/lib/runtime/provisioning/provisioningSettlement";
 
 export {
     applyProvisioningSettlement,
     settlementMatchesFrame,
+    settlementNavigationForRequest,
     type ProvisioningSettlementPatch,
 } from "@/lib/runtime/provisioning/provisioningSettlement";
 
@@ -128,15 +130,36 @@ export async function composeProvisioningAnswerForRoute(input: {
     // not_found / ambiguous / unresolved → fall through with the raw slug; the composer emits the honest error.
     const contextual = input.cohort === "none";
     let workUnitSlug = input.rawSlug;
-    let requestedWorkViewId = input.requestedWorkViewId;
+    /*
+     * TWO WORK-VIEW IDENTITIES, AND THEY ARE NOT THE SAME FACT (P0-7.6 settlement lens identity).
+     *
+     * REQUESTED is what the caller addressed: the URL's `work_view_id`, null when none was given.
+     * It is NAVIGATION IDENTITY — the thing the frame was registered under, and the thing a
+     * settlement must be addressed to in order to find that frame again.
+     *
+     * RESOLVED is what CONTENT composes under, and it may be filled in below from the slug's implied
+     * view. That default is correct for content and wrong for identity.
+     *
+     * These used to be one reassigned local called `requestedWorkViewId`, so the settlement was
+     * addressed with the RESOLVED lens while `page.tsx` had registered the frame under the REQUESTED
+     * one. `navigationKey` includes the lens, so on the ordinary path — no explicit lens, slug
+     * implies a default — the keys differed, `frames.get` missed, and `applyFrameSettlement` returned
+     * `no_frame`. The patch carrying Financials, Attendance and Health was discarded every time, and
+     * Financials sat at `data-financials-empty="loading"` indefinitely.
+     *
+     * The capture is `const` on purpose: the defect was a reassignment, so the repair is a value that
+     * cannot be reassigned, not a second careful reader.
+     */
+    const requestedWorkViewId: string | null = input.requestedWorkViewId ?? null;
+    let resolvedWorkViewId: string | null = requestedWorkViewId;
     if (resolution && resolution.status === "resolved") {
         workUnitSlug = resolution.match.workUnitKey;
         // THE SLUG'S IMPLIED VIEW IS A SECOND PLACE A LENS GETS FILLED IN — and the one that would
         // have quietly defeated contextual focus. When the operator selected no cohort there is
         // nothing for the slug to imply on their behalf: they addressed a HOST, and the view the slug
         // happens to open by default is exactly the `New` this whole change exists to stop claiming.
-        if (!requestedWorkViewId && !contextual && resolution.match.initialWorkViewId) {
-            requestedWorkViewId = resolution.match.initialWorkViewId;
+        if (!resolvedWorkViewId && !contextual && resolution.match.initialWorkViewId) {
+            resolvedWorkViewId = resolution.match.initialWorkViewId;
         }
     }
 
@@ -393,7 +416,9 @@ export async function composeProvisioningAnswerForRoute(input: {
          */
         canMutate: hasPortalAdminMutateAccess(gate.roleKeys ?? []),
         workUnitSlug,
-        requestedWorkViewId,
+        // CONTENT resolution, so the slug's implied default still applies exactly as before. The
+        // field's name is the composer request's, and it is fed the RESOLVED lens deliberately.
+        requestedWorkViewId: resolvedWorkViewId,
         requestedSubjectId: input.requestedSubjectId,
         mode: contextual ? "contextual_focus" : "operational",
         requestedAspect: aspect ? { cardKey: aspect.card_key, itemId: aspect.item_id } : null,
@@ -553,13 +578,14 @@ export async function composeProvisioningAnswerForRoute(input: {
                           });
                       })();
             patch = {
-                navigation: {
-                    target: input.rawSlug,
-                    lens: requestedWorkViewId ?? null,
-                    subject: input.requestedSubjectId ?? null,
+                // IDENTITY, not content: one builder, so the two sites cannot drift apart again.
+                navigation: settlementNavigationForRequest({
+                    rawSlug: input.rawSlug,
+                    requestedWorkViewId,
+                    requestedSubjectId: input.requestedSubjectId ?? null,
                     cohort: input.cohort ?? null,
                     aspect: input.aspect ?? null,
-                },
+                }),
                 identity: {
                     subjectId: answer.recordOfAttention?.id ? String(answer.recordOfAttention.id) : null,
                     stageKey: answer.currentBusinessState?.stageKey ?? null,
@@ -620,13 +646,14 @@ export async function composeProvisioningAnswerForRoute(input: {
      * Every other caller — the HTTP seam most of all — still gets ONE fully settled answer, because
      * its consumer has no second delivery to wait for.
      */
-    const settlementNavigation: ProvisioningSettlementPatch["navigation"] = {
-        target: input.rawSlug,
-        lens: requestedWorkViewId ?? null,
-        subject: input.requestedSubjectId ?? null,
-        cohort: input.cohort ?? null,
-        aspect: input.aspect ?? null,
-    };
+    const settlementNavigation: ProvisioningSettlementPatch["navigation"] =
+        settlementNavigationForRequest({
+            rawSlug: input.rawSlug,
+            requestedWorkViewId,
+            requestedSubjectId: input.requestedSubjectId ?? null,
+            cohort: input.cohort ?? null,
+            aspect: input.aspect ?? null,
+        });
     let deferredSettlement: Promise<ProvisioningSettlementPatch | null> | null = null;
     if (input.deferSettlement) {
         // Started, never awaited. The rejection handler keeps an unawaited failure from surfacing

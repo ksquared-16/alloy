@@ -108,6 +108,25 @@ test("ox3 gate trace", async ({ page }) => {
             // T4_visible: the cards themselves now render B's payload. This is the atomic swap.
             const cardsAreB = nowCards && nowCards !== 'MIXED' && nowCards !== w.cardSubjectBefore;
             if (cardsAreB) mark('T4_visible');
+            /*
+             * T5_ACTION_ENABLED — CAN THE OPERATOR ACT ON B, independent of whether B's CAPABILITY
+             * CARDS have rendered.
+             *
+             * The milestone below gates on cardsAreB because Slice 4 measured A's RETAINED grid
+             * satisfying "six cells and an enabled action" while B was selected. Slice 7 removed that
+             * retention: the panel no longer shows A's cards under B, and 0/23 mixed-subject frames
+             * were measured. So the hazard that definition guarded against is gone, and requiring
+             * cards would now under-report actionability for a frame that legitimately carries
+             * canonical action eligibility before its capability cards resolve.
+             *
+             * This is NOT optimistic: it requires the COMMITTED SUBJECT to be B and the action to be
+             * genuinely enabled, which only canonical eligibility produces. Recorded alongside the
+             * strict milestone, never instead of it, so the two can disagree visibly.
+             */
+            if (nowBody && nowBody !== w.subjectBefore) {
+                const early = document.querySelector(HEADER + ' [data-alloy-os-fp-header-actions="true"] button:not([disabled])');
+                if (early) mark('T5_action_enabled');
+            }
             if (!cardsAreB) return;
             // T5 and T6 are only evaluated once the cards are B's — A's retained content can no
             // longer satisfy them, which is what invalidated every earlier definition.
