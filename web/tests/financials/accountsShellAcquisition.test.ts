@@ -136,8 +136,18 @@ describe("the account list's own boundaries are published", () => {
          * instead of guessing.
          */
         expect(ROUTE, "the response publishes Server-Timing").toContain('"server-timing"');
-        for (const span of ["auth", "perm", "cohort", "serialize"]) {
+        for (const span of ["auth", "perm", "serialize"]) {
             expect(ROUTE, `${span} is a named boundary`).toContain(`mark("${span}")`);
+        }
+        /*
+         * `cohort` is no longer one mark in the route. Measuring it as a single 645-717 ms label is
+         * exactly what let a slice guess wrong about what was inside it, so the route hands the
+         * mark to the resolver and the resolver names its phases.
+         */
+        expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark\)/);
+        const COHORT = readFileSync(join(process.cwd(), "lib/financials/workspace/resolveFinancialSubjects.ts"), "utf8");
+        for (const span of ["households", "agreement_sites", "facets", "assemble"]) {
+            expect(COHORT, `the cohort names its ${span} phase`).toContain(`phase("${span}")`);
         }
     });
 
