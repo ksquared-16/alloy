@@ -15,12 +15,19 @@ export type LocationOperatingSnapshot = {
 };
 
 /**
- * Overview — operator facts about this Location (not configuration health).
+ * Overview — operator facts about this Location, and the short list of things
+ * standing in the way of operating it.
+ *
+ * The attention items were computed by the workspace model all along and shown
+ * nowhere, so the collection row could say "1 needs attention" while no surface
+ * in the product would say what it was. They are listed here, each with the
+ * consequence of leaving it and a way to go and fix it.
  */
 export function LocationOverviewSurface({
     model,
     scheduleSummary,
     operatingSnapshot,
+    onResolveAttention,
     onOpenTab,
 }: {
     model: LocationWorkspaceModel;
@@ -30,6 +37,12 @@ export function LocationOverviewSurface({
     onSelectReadinessArea?: (tab: LocationWorkspaceTab | "general") => void;
     onOpenTab: (tab: LocationWorkspaceTab) => void;
 }) {
+    const outstanding = model.attention.filter((item) => item.grade !== "good");
+    const goTo = (tab: LocationWorkspaceTab | "general") => {
+        if (onResolveAttention) onResolveAttention(tab);
+        else if (tab !== "general") onOpenTab(tab);
+    };
+
     const hoursValue =
         scheduleSummary === "Not set up yet" ? "Not set"
         : operatingSnapshot.hoursLabel?.trim() || scheduleSummary;
@@ -59,6 +72,34 @@ export function LocationOverviewSurface({
 
     return (
         <div className="flex w-full flex-col gap-3" data-testid="locations-overview">
+            {outstanding.length > 0 ?
+                <section className="process-config-setup-card p-5" data-testid="locations-overview-attention">
+                    <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">Needs attention</h2>
+                    <ul className="mt-3 space-y-2">
+                        {outstanding.map((item) => (
+                            <li
+                                key={item.key}
+                                className="flex flex-wrap items-baseline justify-between gap-3 rounded-md border border-alloy-stone/15 bg-white/60 px-3 py-2"
+                                data-testid={`locations-overview-attention-${item.key}`}
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-alloy-midnight">{item.label}</p>
+                                    <p className="config-typo-sublabel mt-0.5">{item.consequence}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => goTo(item.tab)}
+                                    className="shrink-0 text-[12px] font-medium text-alloy-pine underline-offset-2 hover:underline"
+                                    data-testid={`locations-overview-attention-go-${item.key}`}
+                                >
+                                    {item.nextLabel} →
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            :   null}
+
             <section className="process-config-setup-card p-5" data-testid="locations-overview-identity">
                 <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">
                     About this Location

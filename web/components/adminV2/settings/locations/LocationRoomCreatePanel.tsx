@@ -98,7 +98,7 @@ export default function LocationRoomCreatePanel({
             />
 
             <div className="space-y-2.5">
-                <ConfigEditorSection title="Room" testId="locations-room-create-identity">
+                <ConfigEditorSection title="Space" testId="locations-room-create-identity">
                     <label className="block space-y-1">
                         <span className="config-typo-field-label">Name</span>
                         <input

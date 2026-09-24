@@ -213,3 +213,18 @@ describe("parsing what the operator typed", () => {
         expect(parseOrdinaryCapacityInput("-4").ok).toBe(false);
     });
 });
+
+describe("capacity carried the same version defect", () => {
+    it("replaces rather than versioning a rule that closes today", () => {
+        // Same shape as the ratio defect: in force today, closing today, so a
+        // supersede starting today is not "strictly after" the prior end.
+        const p = planOrdinaryCapacityWrite({
+            rules: [rule({ id: "closes-today", capacity: 10, effective_start: "2026-01-01", effective_end: TODAY })],
+            roomLocationId: ROOM,
+            role: "operational_group",
+            capacity: 12,
+            todayYmd: TODAY,
+        });
+        expect(p).toMatchObject({ action: "replace_same_day", retireId: "closes-today" });
+    });
+});

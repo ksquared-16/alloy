@@ -44,9 +44,9 @@ import {
     type RatioDraftRow,
 } from "@/components/adminV2/settings/locations/SpaceRatioSection";
 import {
-    planObjectRatioWrite,
     readObjectRatioTiers,
     resolveObjectRatioStanding,
+    sameTiers,
     validateRatioTiers,
 } from "@/lib/locations/objectRatio";
 import {
@@ -410,7 +410,7 @@ export default function LocationRoomDetailPanel({
                 />
 
                 <div className="space-y-2.5" data-testid="locations-room-editor">
-                    <ConfigEditorSection title="Room" testId="locations-room-editor-identity">
+                    <ConfigEditorSection title="Space" testId="locations-room-editor-identity">
                         <label className="block max-w-md space-y-1">
                             <span className="config-typo-field-label">Name</span>
                             <input
@@ -614,14 +614,26 @@ export default function LocationRoomDetailPanel({
                                                     })),
                                                 );
                                                 if (!check.ok) throw new Error(check.message);
-                                                const plan = planObjectRatioWrite({
-                                                    rules: ratioRules,
-                                                    tierRows: ratioTiers,
-                                                    roomLocationId: room.id,
-                                                    tiers: check.tiers,
-                                                    todayYmd,
-                                                });
-                                                if (plan.action !== "noop") {
+                                                /*
+                                                 * ONLY WHEN THE OPERATOR ACTUALLY CHANGED IT.
+                                                 *
+                                                 * A conflicted space opens its ratio editor
+                                                 * EMPTY on purpose — pre-filling one of two
+                                                 * disagreeing records would settle a
+                                                 * staffing-law question by accident. But an
+                                                 * empty draft then looked exactly like "the
+                                                 * operator cleared every tier", so opening
+                                                 * Infant A to change its name and pressing
+                                                 * Save RETIRED its canonical ratio. Measured
+                                                 * on staging: rule 31bc3220 came back with
+                                                 * effective_end set to that day and no
+                                                 * replacement.
+                                                 *
+                                                 * Comparing against the seed makes clearing
+                                                 * an explicit act again: a space that opened
+                                                 * empty and stayed empty writes nothing.
+                                                 */
+                                                if (!sameTiers(check.tiers, ratioSeedFor(room))) {
                                                     await saveObjectRatio(room.id, check.tiers);
                                                     capacityWritten = true;
                                                 }
@@ -663,7 +675,7 @@ export default function LocationRoomDetailPanel({
                                     })();
                                 }}
                             >
-                                {saving ? "Saving…" : "Save room"}
+                                {saving ? "Saving…" : "Save space"}
                             </ConfigurationPrimaryButton>
                             <ConfigurationSecondaryButton onClick={cancelEdit} disabled={saving}>
                                 Cancel

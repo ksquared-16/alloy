@@ -17,6 +17,8 @@ type LocationCollectionSummary = {
     criticalCount: number;
     locality: string | null;
     isActive: boolean;
+    /** The model's most important outstanding item, so one problem can name itself. */
+    topAttention?: { label: string } | null;
 };
 
 /**
@@ -159,7 +161,10 @@ export function LocationsObjectSelector({
                         null;
                     const inactive = site.is_active === false;
                     const selected = site.id === selectedId;
-                    const attention = locationSelectorAttentionSignal(summary?.criticalCount ?? 0);
+                    const attention = locationSelectorAttentionSignal({
+                        criticalCount: summary?.criticalCount ?? 0,
+                        topAttention: summary?.topAttention ?? null,
+                    });
                     const name = String(site.label ?? "").trim() || "Untitled location";
 
                     return (
