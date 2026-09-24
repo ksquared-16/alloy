@@ -28,9 +28,18 @@ async function openAccounts(page: Page, pass: string) {
         reqs.push({ url: u.slice(0, 110), startedAt: Math.round(r.request().timing().startTime), endedAt: Date.now() - t0, bytes, status: r.status() });
     });
 
-    await page.goto(ENTRY, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(13_000);
-    await page.locator("[data-adminv2-sidebar-modal-nav='financials']").first().click({ force: true, timeout: 20_000 });
+    /*
+     * One re-navigation is allowed and REPORTED. A cold load occasionally lands before the
+     * workspace shell mounts, and a run that silently retried would hide a session that expired.
+     */
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        await page.goto(ENTRY, { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(13_000);
+        const nav = page.locator("[data-adminv2-sidebar-modal-nav='financials']").first();
+        if (await nav.count()) { await nav.click({ force: true, timeout: 20_000 }); break; }
+        log(`  ${pass}: workspace nav not ready on attempt ${attempt} (url=${page.url()})`);
+        if (attempt === 2) throw new Error(`workspace nav never mounted for ${pass} at ${page.url()}`);
+    }
     await page.waitForTimeout(11_000);
 
     /* THE CLICK. Everything from here is the Accounts host's cost. */
@@ -88,11 +97,11 @@ async function openAccounts(page: Page, pass: string) {
     return row;
 }
 
-for (const n of [1, 2, 3]) {
+for (const n of [1, 2, 3, 4, 5]) {
     test(`accounts cold ${n}`, async ({ page }) => { await openAccounts(page, `cold-${n}`); });
 }
 test("accounts warm x4", async ({ page }) => {
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 8; i++) {
         await openAccounts(page, `warm-${i}`);
         await page.locator("[data-workspace-section-tab='overview']").first().click({ timeout: 20_000 }).catch(() => undefined);
         await page.waitForTimeout(2_000);
@@ -102,5 +111,5 @@ test("record", async () => {
     mkdirSync(OUT, { recursive: true });
     writeFileSync(`${OUT}/decomposition.json`, JSON.stringify(all, null, 2));
     log(`RECORDED ${all.length} openings`);
-    expect(all.length).toBeGreaterThanOrEqual(7);
+    expect(all.length).toBeGreaterThanOrEqual(13);
 });
