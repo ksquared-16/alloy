@@ -141,6 +141,19 @@ describe("the account list's own boundaries are published", () => {
         }
     });
 
+    it("the position route reports where its time goes too", () => {
+        /*
+         * The pair gates the list together: neither it nor the card that follows can start until
+         * both land. Instrumenting one and not the other leaves the decomposition with a hole in
+         * exactly the place a 52.9 KB response sits.
+         */
+        const POSITION = readFileSync(join(process.cwd(), "app/api/admin/financials/position/route.ts"), "utf8");
+        expect(POSITION, "the response publishes Server-Timing").toContain('"server-timing"');
+        for (const span of ["auth", "perm", "cohort", "serialize"]) {
+            expect(POSITION, `${span} is a named boundary`).toContain(`mark("${span}")`);
+        }
+    });
+
     it("it publishes completion offsets, not only deltas", () => {
         /* A delta alone misattributes the moment spans overlap; the offsets make that visible. */
         expect(ROUTE).toMatch(/marks\.push\(\[`\$\{name\}_at`/);
