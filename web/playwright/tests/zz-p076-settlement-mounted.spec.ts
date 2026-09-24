@@ -83,6 +83,13 @@ test("p076 mounted settlement proof", async ({ page }) => {
             cells_total: document.querySelectorAll(".alloy-os-ucard").length,
             cells_reserved: document.querySelectorAll('[data-focus-panel-cell-reserved="true"]').length,
             card_subject: document.querySelector("[data-card-subject]")?.getAttribute("data-card-subject") ?? null,
+            /*
+             * THE DIRECT SETTLEMENT OUTCOME. No inference: this is what applyFrameSettlement actually
+             * returned, with how many frames were registered when it arrived. no_frame with zero
+             * frames and no_frame with registered frames are different defects with different owners.
+             */
+            settlementDiag: (window as unknown as { __ALLOY_SETTLEMENT_DIAG__?: unknown[] })
+                .__ALLOY_SETTLEMENT_DIAG__ ?? null,
         };
     });
     console.log(`[mounted] ${JSON.stringify({ routeLoad: onRouteLoad, afterClick: out })}`);

@@ -954,15 +954,45 @@ export async function attachOpportunityInquiryChildrenShell(
         });
 
   const tOverlay0 = Date.now();
-  const placementLabeledP = enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase);
-  const processInstancesP = listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
-  const durableFactsP = resolveDurableFactsForChildren(
-    supabase as never,
-    orgId,
-    inquiryChildrenBase.map((c) => ({
-      customerMemberId: c.customer_member_id,
-      siteLocationId: c.location_id ?? null,
-    })),
+  /*
+   * THE THREE LEGS, TIMED INDIVIDUALLY — because the wall is the SLOWEST of them, not their sum.
+   *
+   * `overlay_parallel_fetch_ms` measured 554-627ms on deployed 14be94ea and is the largest true wall
+   * inside the children shell (857-875ms), which is itself the largest wall inside `visible_entity`
+   * (1,162-1,270ms) on the chain that ends at FIRST ACTIONABLE. It has never been possible to say
+   * WHICH leg owns it, so the repair could only have been chosen by guessing among three.
+   *
+   * Timing starts where each promise is CREATED, which is where its work begins — these are started
+   * eagerly and joined below, so a clock opened at the join would measure the remainder of the
+   * slowest leg and report the other two as instant.
+   *
+   * `finally` rather than `then`: a leg that rejects still consumed the time, and the caller's own
+   * error handling must see the rejection unchanged.
+   */
+  const leg = <T,>(name: string, p: Promise<T>): Promise<T> => {
+    const started = Date.now();
+    return p.finally(() => {
+      cph[name] = Date.now() - started;
+    });
+  };
+  const placementLabeledP = leg(
+    "overlay_placement_labels_ms",
+    enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase),
+  );
+  const processInstancesP = leg(
+    "overlay_process_instances_ms",
+    listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId }),
+  );
+  const durableFactsP = leg(
+    "overlay_durable_facts_ms",
+    resolveDurableFactsForChildren(
+      supabase as never,
+      orgId,
+      inquiryChildrenBase.map((c) => ({
+        customerMemberId: c.customer_member_id,
+        siteLocationId: c.location_id ?? null,
+      })),
+    ),
   );
   const [placementLabeled, processInstances, durableFacts] = await Promise.all([
     placementLabeledP,
@@ -970,6 +1000,10 @@ export async function attachOpportunityInquiryChildrenShell(
     durableFactsP,
   ]);
   cph.overlay_parallel_fetch_ms = Date.now() - tOverlay0;
+  // Row counts, so a slow leg can be told apart from a leg handed too much work. The children count
+  // is the input scale all three share.
+  cph.overlay_children_in = inquiryChildrenBase.length;
+  cph.overlay_process_instances_rows = Array.isArray(processInstances) ? processInstances.length : -1;
   // Apply in precedence order (pure, synchronous).
   let inquiryChildrenOut = applyProcessInstanceParticipation(placementLabeled, processInstances, ocmStatusLabelByKey);
   inquiryChildrenOut = applyDurableOperationalFacts(inquiryChildrenOut, durableFacts);
