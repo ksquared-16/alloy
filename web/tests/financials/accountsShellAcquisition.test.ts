@@ -120,3 +120,29 @@ describe("the relationship reads are issued once per account, not once per rende
             .toMatch(/\[discountPositionBody, responsibilityPositionBody, vm\?\.subjects\]/);
     });
 });
+
+describe("the account list's own boundaries are published", () => {
+    const ROUTE = readFileSync(join(process.cwd(), "app/api/admin/financials/subjects/route.ts"), "utf8");
+
+    it("the subjects route reports where its time goes", () => {
+        /*
+         * This route gates the Accounts list and returns 4.2 KB in 1,634-2,664 ms on deployed
+         * staging. Collapsing the cohort's facet chaining seven waves to four did not move that
+         * number, so the pole is somewhere the code reading did not find — and the certification
+         * tenant holds no households under this org, so it cannot be profiled locally.
+         *
+         * The Financials card was only tractable because its Server-Timing named the span that
+         * was the cost. This asserts the same instrument exists here, so the next attempt measures
+         * instead of guessing.
+         */
+        expect(ROUTE, "the response publishes Server-Timing").toContain('"server-timing"');
+        for (const span of ["auth", "perm", "cohort", "serialize"]) {
+            expect(ROUTE, `${span} is a named boundary`).toContain(`mark("${span}")`);
+        }
+    });
+
+    it("it publishes completion offsets, not only deltas", () => {
+        /* A delta alone misattributes the moment spans overlap; the offsets make that visible. */
+        expect(ROUTE).toMatch(/marks\.push\(\[`\$\{name\}_at`/);
+    });
+});
