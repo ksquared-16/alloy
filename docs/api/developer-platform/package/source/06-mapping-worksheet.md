@@ -112,7 +112,7 @@ disagree without noticing:
 ## 7. Which lifecycle operations do you need?
 
 Alloy can accept governed writes for the concepts below. **We do not know which
-of these Classroom Coach needs to perform**, and the answer changes both the
+of these your system needs to perform**, and the answer changes both the
 permissions an operator grants and the shape of the integration.
 
 For each, tell us: do you need to perform it, does Alloy perform it and you

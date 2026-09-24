@@ -152,7 +152,7 @@ export const PUBLIC_SCOPES = {
     "enrollment.write": {
         scope: "enrollment.write",
         access: "write",
-        summary: "Start and end enrollments, and assign or move room placements, for children at authorized locations.",
+        summary: "Start, end and void enrollments, and assign, move or cancel room placements, for children at authorized locations.",
         alloyAuthority: "enrollmentAgreementService and childPlacementService, through the external operation adapter",
         /*
          * ONE permission for one operator concept — "manage where this child is enrolled and which
@@ -166,7 +166,7 @@ export const PUBLIC_SCOPES = {
     "schedule.write": {
         scope: "schedule.write",
         access: "write",
-        summary: "Set and change committed schedules for children at authorized locations.",
+        summary: "Set, change and cancel committed schedules for children at authorized locations.",
         alloyAuthority: "scheduleAssignmentService, through the external operation adapter",
         // Never reaches the dated projection: a generated day is a view of the commitment, so
         // changing a day means changing the assignment it came from.
