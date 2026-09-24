@@ -1020,6 +1020,17 @@ export function EnrollmentConversationCard({
      * nothing. Only saving one fact is a turn — and it is a turn about THAT fact alone.
      */
     const [changingGroup, setChangingGroup] = useState(false);
+    /**
+     * The choices already picked on a MULTIPLE-choice question, before it is sent.
+     *
+     * A multi-select's answer is a LIST, and the card submitted the single option a parent tapped.
+     * `validateScalarValue` requires an array for `multiselect`, so "Which days will your child
+     * attend?" refused every possible answer — measured in the mounted conversation, request
+     * `{"value":"option_1"}`, response "That doesn't look quite right". Held here rather than sent
+     * per tap because one tap is not the answer: the answer is what the parent has selected when
+     * they say they are done.
+     */
+    const [multiPicked, setMultiPicked] = useState<readonly string[]>([]);
     const [editingRef, setEditingRef] = useState<string | null>(null);
     /**
      * Facts corrected in THIS sitting, so the record can say "Updated" beside them.
@@ -1805,11 +1816,48 @@ export function EnrollmentConversationCard({
          * had authored as "Yes" pressed a button reading `option_1`, and the settled row said
          * `option_1` back to them. `settledAs` is what they read; `value` is what the Form stores.
          */
-        for (const option of control.options) {
-            suggestions.push({
-                label: option.label,
-                onSelect: () => void submit({ value: option.value, settledAs: option.label }),
-            });
+        if (control.multiple) {
+            /*
+             * A LIST IS THE ANSWER, SO ONE TAP IS NOT.
+             *
+             * Tapping toggles; the answer is sent when the parent says they are done, as the array
+             * the Form's own validator requires. Sending per tap submitted a bare string and every
+             * answer was refused.
+             */
+            for (const option of control.options) {
+                const chosen = multiPicked.includes(option.value);
+                suggestions.push({
+                    label: chosen ? `✓ ${option.label}` : option.label,
+                    emphasis: chosen,
+                    onSelect: () =>
+                        setMultiPicked((prev) =>
+                            prev.includes(option.value)
+                                ? prev.filter((v) => v !== option.value)
+                                : [...prev, option.value],
+                        ),
+                });
+            }
+            if (multiPicked.length > 0) {
+                const words = multiPicked
+                    .map((v) => control.options.find((o) => o.value === v)?.label ?? v)
+                    .join(", ");
+                suggestions.push({
+                    label: "Done",
+                    emphasis: true,
+                    onSelect: () => {
+                        const picked = [...multiPicked];
+                        setMultiPicked([]);
+                        void submit({ value: picked, settledAs: words });
+                    },
+                });
+            }
+        } else {
+            for (const option of control.options) {
+                suggestions.push({
+                    label: option.label,
+                    onSelect: () => void submit({ value: option.value, settledAs: option.label }),
+                });
+            }
         }
         // Leaving it blank stays available, beside the choices rather than instead of them.
         if (optionalUnanswered && skipLabel) {

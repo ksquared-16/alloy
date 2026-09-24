@@ -370,3 +370,38 @@ describe("an answer to an organization-vocabulary question is accepted", () => {
         expect(src).toContain("field.static_options.map((o) => o.value)");
     });
 });
+
+describe("a multiple-choice question is answered with a list", () => {
+    /*
+     * Measured in the mounted conversation: "Which days will Zzcert attend?" — an authored
+     * multiselect — refused every possible answer. The card submitted the single option the parent
+     * tapped (`{"value":"option_1"}`) and `validateScalarValue` requires an ARRAY for `multiselect`,
+     * so the question was unanswerable by any route.
+     */
+    const CARD = join(process.cwd(), "app/forms/embed/[token]/EnrollmentConversationCard.tsx");
+
+    it("a multiple control accumulates and sends an array, not a scalar", () => {
+        const src = readFileSync(CARD, "utf8");
+        expect(src).toContain("if (control.multiple) {");
+        expect(src).toContain("void submit({ value: picked, settledAs: words })");
+        expect(src).toMatch(/const picked = \[\.\.\.multiPicked\];/);
+    });
+
+    it("tapping toggles rather than sending, so the answer is what was selected", () => {
+        const src = readFileSync(CARD, "utf8");
+        expect(src).toMatch(/prev\.includes\(option\.value\)\s*\n?\s*\?\s*prev\.filter\(\(v\) => v !== option\.value\)/);
+    });
+
+    it("a single-choice control still sends its one value immediately", () => {
+        const src = readFileSync(CARD, "utf8");
+        expect(src).toContain("submit({ value: option.value, settledAs: option.label })");
+    });
+
+    it("the control model still distinguishes the two", () => {
+        const single = valueControlForTurn(turn({ input_type: "select", options: authoredChoices(YES_NO_FIELD) }));
+        const multi = valueControlForTurn(turn({ input_type: "multiselect", options: authoredChoices(YES_NO_FIELD) }));
+        if (single.kind !== "options" || multi.kind !== "options") throw new Error("both are options controls");
+        expect(single.multiple).toBeUndefined();
+        expect(multi.multiple).toBe(true);
+    });
+});
