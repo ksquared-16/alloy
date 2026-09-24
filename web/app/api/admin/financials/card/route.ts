@@ -80,33 +80,6 @@ export async function GET(request: NextRequest) {
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     mark("auth");
 
-    /*
-     * ── THE VERDICT IS ASKED FOR NOW AND ANSWERED BEFORE ANYTHING IS RETURNED ────────────────
-     *
-     * `fin.read` resolves through two reads — memberships, then the grants those roles carry —
-     * and measured on deployed staging that cost `perm;dur=` 204–565 ms sitting alone on the
-     * critical path, with the composed read not yet started. It is issued here instead and joined
-     * below, before a single byte of the model is serialized.
-     *
-     * This is NOT a relaxation of the gate, and deliberately not any of the three shapes that
-     * would be: the verdict is resolved per request, from the live grants tables, and it is never
-     * persisted, cached across requests, or carried over from an earlier answer. What changes is
-     * only WHEN the question is asked relative to a read that returns nothing until it is
-     * answered. The trade it accepts is explicit: an operator who cleared `requireAdminOrOps`
-     * but lacks `fin.read` now causes a service-role SELECT whose rows are discarded — reads
-     * only, no writes, nothing returned, and nothing reaching the client but the 403.
-     */
-    const allowedReadP = assertFinancialsReadAllowed({
-        supabase: createAdminClient(),
-        orgId: ctx.orgId,
-        userId: ctx.userId,
-    }).catch(() => ({
-        /* A grants lookup that throws denies, exactly as one that answers null does. */
-        ok: false as const,
-        message: "Financial access could not be verified.",
-        requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
-    }));
-
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customer_id")?.trim() || null;
     const customerMemberId = searchParams.get("customer_member_id")?.trim() || null;
@@ -136,7 +109,39 @@ export async function GET(request: NextRequest) {
             return null;
         });
 
-        const allowedRead = await allowedReadP;
+        /*
+         * ── THE VERDICT IS ASKED WHILE THE READ IS IN THE AIR, AND ANSWERED BEFORE ANY OF IT ────
+         *
+         * `fin.read` resolves through two reads — memberships, then the grants those roles carry —
+         * and measured on deployed staging that cost `perm;dur=` 204–565 ms sitting alone on the
+         * critical path with the composed read not yet started. The read above is issued first, so
+         * this await overlaps it instead of preceding it.
+         *
+         * The gate itself is unchanged, and deliberately not any of the three shapes that would
+         * weaken it: the verdict is resolved per request, from the live grants tables, and is never
+         * persisted, cached across requests, or carried over from an earlier answer. Only WHEN it
+         * is asked moved. Nothing is returned until it answers, and a grants lookup that throws
+         * denies exactly as one that answers null does.
+         *
+         * It is bound and tested under ONE name on purpose. An earlier cut held the promise as
+         * `allowedReadP` and tested the awaited `allowedRead`, which reads identically at runtime
+         * and broke the declared route-capability table's second join — the checker could no longer
+         * see the verdict being tested, and said so. The binding is part of the guarantee, not
+         * paperwork around it.
+         *
+         * The trade this accepts is explicit: an operator who clears `requireAdminOrOps` but lacks
+         * `fin.read` now causes a service-role SELECT whose rows are discarded — reads only, no
+         * writes, nothing returned, and nothing reaching the client but the 403.
+         */
+        const allowedRead = await assertFinancialsReadAllowed({
+            supabase: createAdminClient(),
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+        }).catch(() => ({
+            ok: false as const,
+            message: "Financial access could not be verified.",
+            requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
+        }));
         mark("perm");
         if (!allowedRead.ok) {
             return NextResponse.json(
