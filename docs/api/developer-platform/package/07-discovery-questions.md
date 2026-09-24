@@ -71,30 +71,42 @@ Grouped by what the answer decides.
 
 ## F. Lifecycle operations
 
-28. **Which of Alloy's governed operations do you need to perform?** Worksheet §7
-    lists all nine. A roster-mirroring integration may need none of them.
-29. **Do you expect to start or end enrollments**, or does the operator do that
+24. **Which of Alloy's governed operations do you need to perform?** Worksheet §7
+    lists each one. A roster-mirroring integration may need none of them.
+25. **Do you expect to start or end enrollments**, or does the operator do that
     in Alloy while you observe the result?
-30. **Do you expect to move a child's room**, or only to read where they are?
-31. **Do you expect to set or change schedules**, or only to read them?
-32. **Do any of your workflows assume you can delete something in Alloy?** There
-    is no deletion on this API for any resource — endings are archive, effective
-    end, supersession or reversal. If your design assumes a delete, we need to
-    find that now.
-33. **Do any of your workflows assume a field-level update** — setting a status,
+26. **Do you expect to move a child's room**, or only to read where they are?
+27. **Do you expect to set or change schedules**, or only to read them?
+28. **Do any of your workflows assume you can delete something in Alloy?**
+    Canonical history is never destructively deleted. Every record you can create
+    has a governed correction that says what actually happened: **end** (it was
+    true and concluded), **cancel** (withdrawn before it became true),
+    **supersede** (replaced by a new state), **void** (created in error, never
+    true), **correct** (it happened, a detail was wrong) and **reverse** (it never
+    happened). If your design assumes a delete, we need to find that now.
+29. **How do you represent a record created by mistake?** Specifically: can you
+    distinguish "this changed" from "this was never true"? Alloy does, and a
+    mirror that collapses them will publish service that never happened.
+30. **Can you retain a canceled or voided record rather than removing it?** Alloy
+    keeps them readable and delivers the transition through ordinary incremental
+    sync — nothing disappears from your feed.
+31. **Can you consume a status transition instead of a deletion signal?** There
+    are no tombstones and no delete events; a record changing state is an ordinary
+    update.
+32. **Do any of your workflows assume a field-level update** — setting a status,
     patching a record? Alloy accepts named intents only, and we would rather map
     your intent to an operation than have you discover the absence of `PATCH`
     during implementation.
 
 ## G. Operational
 
-24. **How many sites and rooms would a typical deployment have?** This affects
+33. **How many sites and rooms would a typical deployment have?** This affects
     nothing about correctness and everything about your sync design.
-25. **What is your deployment model** — one instance per organization, or
+34. **What is your deployment model** — one instance per organization, or
     multi-tenant? Alloy issues credentials per installation.
-26. **Who operates the integration in production**, and how would they see that a
+35. **Who operates the integration in production**, and how would they see that a
     sync has fallen behind?
-27. **What is your expectation for sandbox access**, and on what timeline?
+36. **What is your expectation for sandbox access**, and on what timeline?
 
 ---
 
