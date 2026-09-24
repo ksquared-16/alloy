@@ -49,9 +49,20 @@ test("j5 carrier certify and measure", async ({ page }) => {
      *
      * It costs a page load per sample. A cheap sample of the wrong journey costs more.
      */
+    /*
+     * SEVERAL COLD SWITCHES PER PAGE LOAD, NOT ONE.
+     *
+     * Each SUBJECT is visited at most once per load, so every sample is still a genuine first visit
+     * and still misses the drawer VM session cache — which is the property that matters. What it
+     * stops paying for is a page load per sample, and P95 on 21 samples was unstable enough that
+     * the sample count is the binding constraint on knowing whether the tail is real.
+     */
+    const PER_LOAD = Number(process.env.OX_PER_LOAD ?? "3");
     for (let i = 0; i < RUNS; i += 1) {
-        await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
-        await page.waitForTimeout(16_000);
+        if (i % PER_LOAD === 0) {
+            await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
+            await page.waitForTimeout(16_000);
+        }
         // Hover first — the operator sequence, and the prewarm this programme must preserve.
         /*
          * WALK BY INDEX, NOT BY "WHICHEVER ROW LOOKS SELECTED".

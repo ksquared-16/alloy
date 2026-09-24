@@ -54,8 +54,29 @@ test("j5 attribute post-answer requests", async ({ page }) => {
                  * the distinction that turned a straddling gap into a mis-named "prelude" once before.
                  */
                 if (url.includes("view-models/drawer/opportunity")) {
-                    res.clone().json().then((b: Record<string, unknown>) => {
-                        const t = (b?.vm as { timing?: unknown })?.timing ?? (b as { timing?: unknown })?.timing;
+                    /*
+                     * THE WHOLE REQUEST, NOT JUST THE COMPOSE.
+                     *
+                     * `compose_ms` is the server's own clock and the request duration is the
+                     * browser's; subtracting them leaves ~626ms that belongs to nobody yet. Rather
+                     * than name it from a guess, the body is read to completion with the parse timed
+                     * separately, so client-side cost is measured rather than assumed.
+                     */
+                    /*
+                     * THE ROUTE ALREADY PUBLISHES ITS OWN PHASES as a response header, so the
+                     * handler's interior needs no new instrumentation: gate, org assertion,
+                     * participant resolve and full_compose_end are all stamped from the route's t0.
+                     */
+                    try { rec.routePhases = res.headers.get("X-Alloy-Drawer-VM-Route-Phases"); } catch { rec.routePhases = null; }
+                    const tBody = performance.now();
+                    res.clone().text().then((raw) => {
+                        rec.bodyMs = Math.round(performance.now() - tBody);
+                        rec.bytes = raw.length;
+                        const tParse = performance.now();
+                        let b: Record<string, unknown> | null = null;
+                        try { b = JSON.parse(raw) as Record<string, unknown>; } catch { b = null; }
+                        rec.parseMs = Math.round(performance.now() - tParse);
+                        const t = (b?.vm as { timing?: unknown })?.timing ?? (b as { timing?: unknown } | null)?.timing;
                         rec.timing = t ?? null;
                     }).catch(() => { rec.timing = "unreadable"; });
                 }
@@ -95,6 +116,28 @@ test("j5 attribute post-answer requests", async ({ page }) => {
     await page.evaluate(`(() => { window.__clickAt = performance.now(); window.__t.click(); return true; })()`);
     await page.waitForTimeout(16000);
 
+    const resourceTiming = await page.evaluate(`(() => {
+        const clickAt = window.__clickAt || 0;
+        return performance.getEntriesByType("resource")
+            .filter((e) => e.name.includes("view-models/drawer/opportunity"))
+            .map((r) => ({
+                // The FULL url, because identity is decided by scope and key - not by path.
+                url: r.name.slice(r.name.indexOf("/api/")),
+                // Relative to the click: negative means the hover prewarm genuinely started it.
+                rel_to_click: Math.round(r.startTime - clickAt),
+                start_ms: Math.round(r.startTime),
+                end_ms: Math.round(r.responseEnd),
+                // Every term the browser can see, so the server's compose can be placed inside it.
+                total_ms: Math.round(r.responseEnd - r.startTime),
+                ttfb_ms: Math.round(r.responseStart - r.startTime),
+                transfer_ms: Math.round(r.responseEnd - r.responseStart),
+                request_ms: Math.round(r.responseStart - (r.requestStart || r.startTime)),
+                transferSize: r.transferSize ?? null,
+                encodedBodySize: r.encodedBodySize ?? null,
+                decodedBodySize: r.decodedBodySize ?? null,
+            }));
+    })()`);
+
     const out = await page.evaluate<{ signedOut: boolean; calls: unknown[] }>(`(() => {
         const w = window;
         const clickAt = w.__clickAt || 0;
@@ -107,5 +150,5 @@ test("j5 attribute post-answer requests", async ({ page }) => {
                 .slice(0, 30),
         };
     })()`);
-    console.log(`[attr] ${JSON.stringify({ census, signedOut: out.signedOut, calls: out.calls })}`);
+    console.log(`[attr] ${JSON.stringify({ census, signedOut: out.signedOut, calls: out.calls, resourceTiming })}`);
 });
