@@ -461,6 +461,21 @@ describe("one resolveActionsForContext per drawer lifecycle — still", () => {
         expect(SHARED).toContain("workUnitId: workUnitId || null });");
     });
 
+    it("THE SIDE CHANNEL MAY NEVER COST THE DRAWER ANYTHING", () => {
+        const SHARED = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
+        /*
+         * `then(onOk, onErr)`'s second arm handles the ORIGINAL promise's rejection — not a throw
+         * from the first arm, which would reject the derived promise with nobody listening. Phase 1
+         * failing to be delivered must cost the operator earliness and nothing else, so the publish
+         * call is guarded in its own right.
+         */
+        const arm = SHARED.slice(SHARED.indexOf("void earlyHeaderActions.then("));
+        const fulfil = arm.slice(0, arm.indexOf("            () => {"));
+        expect(fulfil).toContain("try {");
+        expect(fulfil).toContain("publish({ resolved,");
+        expect(fulfil).toContain("} catch {");
+    });
+
     it("UNRESOLVED DEPARTMENT CANNOT PRODUCE A WRONG ACTION SET", () => {
         const SHARED = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
         // Publishing is gated on the department being known, and the published type says so.

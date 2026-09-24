@@ -226,7 +226,19 @@ export async function resolveSharedCanonicalDeps(
         const publishedDepartmentId: string = earlyDepartmentId;
         void earlyHeaderActions.then(
             (resolved) => {
-                publish({ resolved, departmentId: publishedDepartmentId, workUnitId: workUnitId || null });
+                /*
+                 * The publisher is a SIDE CHANNEL and may never cost the drawer anything.
+                 *
+                 * `then(onOk, onErr)`'s second arm handles the ORIGINAL promise's rejection, not a
+                 * throw from the first arm — that would reject the derived promise with nobody
+                 * listening. Phase 1 failing to be delivered must cost the operator earliness and
+                 * nothing else.
+                 */
+                try {
+                    publish({ resolved, departmentId: publishedDepartmentId, workUnitId: workUnitId || null });
+                } catch {
+                    /* no carrier for this lifecycle; the drawer is unaffected */
+                }
             },
             () => {
                 /* The real consumer owns this rejection. Phase 1 simply never arrives. */
