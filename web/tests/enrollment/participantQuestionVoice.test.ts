@@ -149,3 +149,40 @@ describe("an address question says whose address it is", () => {
         );
     });
 });
+
+describe("the allergies heuristic is for a field CALLED Allergies", () => {
+    it("still asks a bare topic heading out loud", () => {
+        expect(ask({ label: "Allergies", entity_type: "child" })).toBe(
+            "Does Toureeb have any allergies we should know about?",
+        );
+        expect(ask({ label: "Food allergies", entity_type: "child" })).toBe(
+            "Does Toureeb have any allergies we should know about?",
+        );
+        expect(ask({ label: "Allergy information", entity_type: "child" })).toBe(
+            "Does Toureeb have any allergies we should know about?",
+        );
+    });
+
+    it("leaves the school's own instruction alone", () => {
+        const q = ask({ label: "Please describe the allergy and the reaction", entity_type: null, scope: null });
+        expect(q).toBe("Please describe the allergy and the reaction?");
+        // It must NOT become the yes/no question the family answered one turn earlier.
+        expect(q).not.toMatch(/have any allergies we should know about/);
+    });
+
+    it("does not re-ask 'are there any' for a detail request about the reaction", () => {
+        for (const label of [
+            "Please describe the allergy and the reaction",
+            "List each allergy and what happens",
+            "If your child has an allergy, tell us what to watch for",
+        ]) {
+            expect(ask({ label, entity_type: null, scope: null })).not.toMatch(/have any allergies we should know about/);
+        }
+    });
+
+    it("a parenthetical example list does not make a heading into prose", () => {
+        expect(ask({ label: "Allergies (food, medication, etc.)", entity_type: "child" })).toBe(
+            "Does Toureeb have any allergies we should know about?",
+        );
+    });
+});

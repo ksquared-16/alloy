@@ -531,6 +531,22 @@ export function questionForNeed(
     } as unknown as ParticipantObjectiveWire);
 }
 
+/**
+ * Is this label a bare TOPIC HEADING for `topic`, rather than a sentence about it?
+ *
+ * "Allergies", "Food allergies", "Allergy information" are headings — the school named a subject
+ * and left the wording to us. "Please describe the allergy and the reaction" is a sentence the
+ * school already wrote, and replacing it loses both the request and its words.
+ *
+ * Length is the test because it is the difference: a heading is a noun phrase, and no noun phrase
+ * naming one topic needs more than a few words.
+ */
+function isBareTopicLabel(label: string, topic: string): boolean {
+    const core = label.trim().replace(/\s*\([^()]*\)\s*$/, "").replace(/[:?.]+$/, "").trim();
+    if (!core.toLowerCase().includes(topic)) return false;
+    return core.split(/\s+/).filter(Boolean).length <= 3;
+}
+
 /** "a middle name", "an emergency contact" — article by sound, not by spelling rules nobody reads. */
 function indefiniteArticle(label: string): string {
     return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
@@ -597,9 +613,19 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
          */
         const authored = authoredQuestionPrompt(turn.label ?? "", subject);
         if (authored) return authored;
-        // Allergies is the reference case: a specialist ASKS whether there are any. They do not
-        // present a field called Allergies and wait for the parent to work out what to type.
-        if (label.includes("allerg")) {
+        /*
+         * Allergies is the reference case: a specialist ASKS whether there are any. They do not
+         * present a field called Allergies and wait for the parent to work out what to type.
+         *
+         * NARROWED TO EXACTLY THAT — a field CALLED Allergies.
+         *
+         * `label.includes("allerg")` also caught "Please describe the allergy and the reaction",
+         * which is not a topic heading but the school's own instruction, and replaced it with a
+         * yes/no question about whether there are any allergies at all — discarding the request and
+         * asking something already answered one question earlier. A heading is a short noun phrase;
+         * a sentence is prose, and prose is asked as written further down.
+         */
+        if (isBareTopicLabel(label, "allerg")) {
             return `${capitalizedAux(voice)} ${them} have any allergies we should know about?`;
         }
 
