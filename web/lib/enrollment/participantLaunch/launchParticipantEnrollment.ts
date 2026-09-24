@@ -243,6 +243,23 @@ export async function launchParticipantEnrollment(
             .eq("org_id", orgId)
             .eq("id", linkId)
             .maybeSingle();
+        /*
+         * The same statement, for a link minted before it was made.
+         *
+         * Resume is the ordinary path for work already in flight, and a session whose link predates
+         * this would stay invisible to Processing for its whole life. The link is process-governed
+         * either way — it was minted by this function, from a governing revision — so saying so is
+         * a correction, not a new claim. Idempotent, and only ever for a link this launcher owns.
+         */
+        const resumedMeta = ((linkRow as { metadata?: Record<string, unknown> } | null)?.metadata ??
+            {}) as Record<string, unknown>;
+        if (linkId && resumedMeta.pos_connected !== true) {
+            await supabase
+                .from("form_public_links")
+                .update({ metadata: { ...resumedMeta, pos_connected: true } })
+                .eq("org_id", orgId)
+                .eq("id", linkId);
+        }
         return {
             ok: true,
             value: {
@@ -269,6 +286,25 @@ export async function launchParticipantEnrollment(
                 created_via: "enrollment_start",
                 derived_from_business_process_revision_id: revisionId,
                 stage_key: stageKey,
+                /*
+                 * THIS IS PROCESS-GOVERNED WORK, AND THE ON-RAMP GATES ON SAYING SO.
+                 *
+                 * `ensureRequirementDerivedPacketDefinition` stamps `pos_connected` on a packet it
+                 * CREATES, with the comment "completing this packet must open a Processing case".
+                 * A stage whose requirement NAMES an existing packet never reaches that code — the
+                 * referenced packet is used as authored, which is right — so nothing carried the
+                 * marker and `shouldOpenProcessingCaseForPacket` refused a session the process
+                 * itself had just launched. Measured on the certification stack: the real
+                 * Enrollment configuration uses exactly that model, and its packet definition
+                 * carries only `{"created_via":"adminV2_packet_definitions"}`.
+                 *
+                 * The marker belongs on THIS link rather than on the referenced packet: the packet
+                 * is an administrator's asset and may be sent by hand too, whereas a link minted
+                 * here exists only because a published governing revision required it. So the gate
+                 * is untouched, and a Form sent from its own Distribution panel still opens no
+                 * Processing work — that path never runs this function.
+                 */
+                pos_connected: true,
             },
         },
     });
