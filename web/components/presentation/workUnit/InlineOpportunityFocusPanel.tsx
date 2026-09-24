@@ -192,6 +192,24 @@ export function InlineOpportunityFocusPanel() {
          */
         isChildSubject ? operationalSubjectId : null,
     );
+    /*
+     * WHEN THIS BROWSER RECEIVED THE FULL DRAWER, on the browser's own clock.
+     *
+     * Paired with the server's `children_truth_ready_ms`, this is what turns "the cards clear at
+     * 2,680ms" into an attributable interval instead of a subtraction across two populations. It is
+     * a diagnostic stamp: it records the first render at which a VM for this subject is in hand and
+     * changes nothing about what renders.
+     */
+    const serverPhases =
+        (displayVm as { timing?: { phases_ms?: Record<string, number> } } | null | undefined)?.timing
+            ?.phases_ms ?? null;
+    const vmAppliedAtRef = useRef<number | null>(null);
+    const vmAppliedForRef = useRef<string | null>(null);
+    const vmIdForStamp = displayVm?.entity?.id != null ? String(displayVm.entity.id) : null;
+    if (vmIdForStamp && vmAppliedForRef.current !== vmIdForStamp) {
+        vmAppliedForRef.current = vmIdForStamp;
+        vmAppliedAtRef.current = typeof performance !== "undefined" ? Math.round(performance.now()) : null;
+    }
     if (typeof window !== "undefined") {
         (window as Window & { __ALLOY_FOCUS_SETTLEMENT_DIAG__?: Record<string, unknown> }).__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
             isChildSubject,
@@ -246,6 +264,26 @@ export function InlineOpportunityFocusPanel() {
                 : null,
             displayVmId: displayVm?.entity?.id ?? null,
             structureSettled: displayVm?.structureSettled ?? null,
+            /*
+             * THE CORRELATED BOUNDARIES FOR ONE J5 EVENT.
+             *
+             * Measured n=22 cold switches on deployed 4899d4d9: children and household are reserved
+             * from P50 122ms and clear at P50 2,680ms, and the gate keys are absent in 22 of 22 — so
+             * the cards wait for the FULL DRAWER, not for the fact. Sizing that wait needs the
+             * server instant the fact became canonical and the client instant this VM landed, for
+             * the SAME request. Subtracting two population P50s taken on different clocks would not
+             * be a phase.
+             *
+             * `children_truth_ready_ms` / `contact_truth_ready_ms` are offsets on the server's own
+             * request clock; `vmAppliedAt` is this browser's. Offsets and counts only — no identity,
+             * contact, child or business value crosses this boundary.
+             */
+            serverChildrenTruthReadyMs: serverPhases?.children_truth_ready_ms ?? null,
+            serverContactTruthReadyMs: serverPhases?.contact_truth_ready_ms ?? null,
+            serverSharedDepsWallMs: serverPhases?.shared_deps_wall_ms ?? null,
+            serverVisibleEntityMs: serverPhases?.visible_entity_ms ?? null,
+            serverTotalMs: serverPhases?.total_ms ?? null,
+            vmAppliedAt: vmAppliedAtRef.current,
             runtimeError: error,
             bookingCount: displayVm?.summaries?.active_tour_bookings?.length ?? null,
             activityCount: Array.isArray(

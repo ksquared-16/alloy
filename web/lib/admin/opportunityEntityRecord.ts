@@ -1672,6 +1672,17 @@ export async function buildOpportunityDrawerVisiblePayload(
       return await work;
     } finally {
       phaseMs[key] = Date.now() - t0;
+      /*
+       * WHEN the leg finished, not only how long it took.
+       *
+       * A duration cannot be correlated with a client milestone: to ask "how long did the browser
+       * wait after this fact was canonical" the caller needs the INSTANT it became canonical. These
+       * absolute stamps are converted to offsets by `sharedCanonicalDeps` against its own clock
+       * origin and then deleted, so no wall-clock value reaches the response.
+       *
+       * Counts and instants only. No identity, contact or child values are recorded here.
+       */
+      phaseMs[`${key}__end_abs`] = Date.now();
     }
   };
   const shellP = Promise.all([
