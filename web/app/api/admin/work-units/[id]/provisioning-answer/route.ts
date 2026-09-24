@@ -20,6 +20,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminRouteGateFailureResponse } from "@/lib/admin/adminRouteGate";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
 import { collectedRouteTiming } from "@/lib/perf/routeTimingDiagnostic";
+import {
+    PHASED_CONTENT_TYPE,
+    PHASED_QUERY_KEY,
+    SETTLEMENT_LINE_KEY,
+} from "@/lib/runtime/provisioning/provisioningTwoPhaseWire";
 
 export async function GET(
     request: NextRequest,
@@ -32,6 +37,15 @@ export async function GET(
 
     // Attention is an INPUT carried by the request. The resource never derives it from the pathname:
     // K1 owns intent, and the URL is a projection of committed Focus, never its cause.
+    /*
+     * TWO-PHASE DELIVERY, ASKED FOR BY THE CLIENT (OX Slice 8).
+     *
+     * The client states whether it can consume a second delivery. A consumer that cannot must keep
+     * receiving ONE fully settled answer, because a frame whose capability cards never arrive is a
+     * worse answer than a slow one -- so this is opt-in per request rather than a flag day.
+     */
+    const phased = url.get(PHASED_QUERY_KEY) === "1";
+
     const result = await composeProvisioningAnswerForRoute({
         rawSlug,
         requestedWorkViewId: url.get("work_view_id"),
@@ -55,6 +69,7 @@ export async function GET(
             .map((v) => v.trim())
             .filter((v) => /^[0-9a-f-]{36}$/i.test(v))
             .slice(0, 8),
+        deferSettlement: phased,
     });
     if (!result.ok) return adminRouteGateFailureResponse(result.gate);
 
@@ -76,10 +91,58 @@ export async function GET(
      * reserved key rather than merged into the answer's own shape, because the answer is a contract
      * and a diagnostic must not be able to collide with a business field.
      */
-    const timing = collectedRouteTiming();
+    // Returned by the composer, because the route handler has no React `cache()` request scope to
+    // share the collector through — measured: the collected form came back absent on every sample.
+    const timing = result.timingSpans
+        ? { route_compose_spans: result.timingSpans }
+        : collectedRouteTiming();
     const body = timing ? { ...result.answer, __route_timing: timing } : result.answer;
-    return NextResponse.json(body, {
+
+    /*
+     * PHASE 1 NOW, PHASE 2 WHEN IT SETTLES — on ONE request.
+     *
+     * Two lines of NDJSON rather than a second endpoint: a settlement endpoint would have to
+     * recompose the whole answer to produce the patch, which is the same work twice and a second
+     * authority for one business fact. Keeping it on this request also keeps the settlement bound to
+     * the frame it belongs to, which is what lets the client's existing refusal guard drop a patch
+     * whose navigation no longer matches.
+     *
+     * The frame line is byte-identical to what a non-phased caller receives, so phase 1 is not a
+     * preview or a reduced shape -- it is the same canonical answer, minus only the capability
+     * results that had not resolved yet, which the frame already reports as UNKNOWN.
+     */
+    if (!phased || !result.settlement) {
+        return NextResponse.json(body, {
+            status: 200,
+            headers: { "cache-control": "no-store" },
+        });
+    }
+    const settlement = result.settlement;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+            try {
+                controller.enqueue(encoder.encode(`${JSON.stringify(body)}\n`));
+                // A settlement that throws is NOT an error terminal: the frame already answered. It
+                // resolves to null, the client applies nothing, and the unresolved regions stay
+                // UNKNOWN — never a fabricated empty.
+                const patch = await settlement.catch(() => null);
+                controller.enqueue(
+                    encoder.encode(`${JSON.stringify({ [SETTLEMENT_LINE_KEY]: patch ?? null })}\n`),
+                );
+            } finally {
+                controller.close();
+            }
+        },
+    });
+    return new Response(stream, {
         status: 200,
-        headers: { "cache-control": "no-store" },
+        headers: {
+            "content-type": PHASED_CONTENT_TYPE,
+            "cache-control": "no-store",
+            // Chunks must reach the browser as they are written; a proxy that buffers would
+            // reintroduce exactly the completion coupling this removes.
+            "x-accel-buffering": "no",
+        },
     });
 }

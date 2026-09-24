@@ -39,6 +39,21 @@ describe("provisioning answer outer timing", () => {
         expect(ROUTE).toContain("__route_timing");
     });
 
+    it("MEASURED: the seam must not read the collector — a route handler has no cache() scope", () => {
+        /*
+         * The first deployed build carrying this emission returned `__route_timing` ABSENT on every
+         * sample. `recordRouteTiming` writes into a collector scoped by React `cache()`, which the
+         * RSC boundaries share and a route handler does not provide, so the seam read an empty
+         * collector and emitted nothing while every local gate passed. The spans are therefore
+         * RETURNED by the composer, and this pins that the route prefers the returned value.
+         */
+        expect(ROUTE).toContain("result.timingSpans");
+        const COMPOSE = read("lib/runtime/provisioning/composeProvisioningAnswerForRoute.ts");
+        expect(COMPOSE).toContain("timingSpans: outerSpans");
+        // The RSC route still consumes the collector, so the recording must not have been removed.
+        expect(COMPOSE).toContain("recordRouteTiming({ route_compose_spans: outerSpans as never });");
+    });
+
     it("the settlement wait is what card_producers_ms measures", () => {
         // The number this exists to expose. If the span were ever narrowed to the producers alone,
         // the outer gap would stop being attributable and this slice's evidence would silently rot.

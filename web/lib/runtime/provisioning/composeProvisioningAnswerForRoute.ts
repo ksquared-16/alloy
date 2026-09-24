@@ -54,6 +54,19 @@ export type RouteProvisioningResult =
           answer: ProvisioningAnswer;
           /** Present only when `deferSettlement` was asked for; null on every settled path. */
           settlement?: Promise<ProvisioningSettlementPatch | null> | null;
+          /**
+           * THE OUTER SPANS, RETURNED RATHER THAN COLLECTED (OX Slice 8).
+           *
+           * `recordRouteTiming` writes into a collector scoped by React `cache()`, which the RSC
+           * boundaries share and a ROUTE HANDLER does not provide — so the HTTP seam read an empty
+           * collector and emitted nothing. That was measured, not predicted: the first deployed
+           * samples carrying the emission came back with the field absent on every one.
+           *
+           * Returning them makes the seam independent of request-scoping it does not have. The
+           * collector call is kept beside this, unchanged, because the RSC route still consumes it.
+           * Null when the timing flag is off.
+           */
+          timingSpans?: Record<string, unknown> | null;
       }
     | { ok: false; gate: AdminRouteGateFailure };
 
@@ -676,6 +689,7 @@ export async function composeProvisioningAnswerForRoute(input: {
         overlapDiag.outcome = "not_operational";
     }
 
+    let outerSpans: Record<string, unknown> | null = null;
     if (timing) {
         // Never let a diagnostic break the product path. The collector is request-scoped through
         // React `cache()`, which the HTTP seam's route handler does not necessarily provide.
@@ -692,8 +706,7 @@ export async function composeProvisioningAnswerForRoute(input: {
              * EMITTED. A spread keeps the next one too, whatever it is called.
              */
             const already = collectedRouteTiming()?.route_compose_spans;
-            recordRouteTiming({
-                route_compose_spans: {
+            outerSpans = {
                     ...(already ?? {}),
                     route_identity_ms: Math.round(routeIdentityMs),
                     admin_client_ms: Math.round(adminClientMs),
@@ -725,12 +738,13 @@ export async function composeProvisioningAnswerForRoute(input: {
                         producer_invocations: overlapDiag.producer_invocations,
                         participant_reads: overlapDiag.participant_reads,
                     },
-                },
-            });
+            };
+            // The RSC route still reads the collector; the HTTP seam reads the returned value.
+            recordRouteTiming({ route_compose_spans: outerSpans as never });
         } catch {
             /* diagnostics are never load-bearing */
         }
     }
 
-    return { ok: true, answer, settlement: deferredSettlement };
+    return { ok: true, answer, settlement: deferredSettlement, timingSpans: outerSpans };
 }
