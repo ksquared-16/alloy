@@ -1,0 +1,320 @@
+{
+  "trusted_host_action_id": "tha_b81145d82126b3",
+  "query_hash": "9e382f8d0d11080b9d577c91643d68cae2345481bf01a10848447f95efb82160",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-24T21:06:08.087Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_b81145d82126b3",
+    "query_hash": "9e382f8d0d11080b9d577c91643d68cae2345481bf01a10848447f95efb82160",
+    "authorization_id": "grnt_72f2c679844848e1",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-24T21:06:15.179Z",
+    "question_ids": [
+      "ratio_lifecycle_census"
+    ],
+    "questions": {
+      "ratio_lifecycle_census": {
+        "question_id": "ratio_lifecycle_census",
+        "row_count": null,
+        "rows": [
+          {
+            "spaces": [
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "North Campus",
+                "space_id": "16b9ec76-d1e6-41b2-b76c-44853543dc18",
+                "space": "Infant A",
+                "role": "(null=>operational_group)",
+                "legacy": "1:5,2:11",
+                "rule_id": "b849584d-3347-43a3-b9db-182718742ed5",
+                "rule_start": "2026-09-24",
+                "rule_end": null,
+                "in_force": true,
+                "authored_via": "object_editor",
+                "rule_metadata": {
+                  "authored_via": "object_editor",
+                  "replaced_same_day_rule_id": "ebd5f46b-55fb-4a9d-b907-37bf29976891"
+                },
+                "canonical_tiers": [
+                  "1:5",
+                  "2:11",
+                  "3:18"
+                ]
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "North Campus",
+                "space_id": "edf9398f-c7e2-4267-bda0-8b5846c4f306",
+                "space": "Infant B",
+                "role": "(null=>operational_group)",
+                "legacy": "1:5",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "North Campus",
+                "space_id": "1e141eb9-f2a3-4f4a-a4e8-13fe27159277",
+                "space": "Preschool 1",
+                "role": "(null=>operational_group)",
+                "legacy": "1:7,2:15",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "North Campus",
+                "space_id": "aebc7673-5a79-4715-8b69-c82d9aefee0d",
+                "space": "Preschool 2",
+                "role": "physical_space",
+                "legacy": "1:7,2:15",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "Room 1",
+                "space_id": "091eb9b7-b191-46ef-975e-a6b3972fbd86",
+                "space": "Pre-K",
+                "role": "operational_group",
+                "legacy": "1:8",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "Room 1",
+                "space_id": "641cdc88-c920-4fd0-a5db-bea3c2d05b0a",
+                "space": "Toddler 1",
+                "role": "operational_group",
+                "legacy": "1:6",
+                "rule_id": "8ab1b172-a133-415b-932d-efafaaf565ca",
+                "rule_start": "2026-09-23",
+                "rule_end": null,
+                "in_force": true,
+                "authored_via": "object_editor",
+                "rule_metadata": {
+                  "authored_via": "object_editor"
+                },
+                "canonical_tiers": [
+                  "1:5",
+                  "2:11"
+                ]
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "Room 1",
+                "space_id": "0c58d0d2-d756-4b56-9008-32649389d323",
+                "space": "Toddler 2",
+                "role": "operational_group",
+                "legacy": "1:7",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "South Campus",
+                "space_id": "75f44c2c-21b4-4ef0-817f-5978624abc31",
+                "space": "Bears",
+                "role": "(null=>operational_group)",
+                "legacy": "1:6",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "South Campus",
+                "space_id": "96411dc0-7370-4072-81f6-921cce5b4d7b",
+                "space": "Giraffe",
+                "role": "(null=>operational_group)",
+                "legacy": "1:6,2:14",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "South Campus",
+                "space_id": "4de42d04-86fc-4519-b5bd-f45eb8671429",
+                "space": "Monkeys",
+                "role": "(null=>operational_group)",
+                "legacy": "1:5",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "South Campus",
+                "space_id": "00262a56-7ddb-4f87-aca2-081bf62cd51e",
+                "space": "Tigers",
+                "role": "(null=>operational_group)",
+                "legacy": "1:6",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "South Campus",
+                "space_id": "8d123a2c-4539-4e0a-bce9-c2767c887c81",
+                "space": "Zebras",
+                "role": "(null=>operational_group)",
+                "legacy": "1:5",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "West Campus",
+                "space_id": "497b2e7b-e54c-4798-b4ff-a483a5230ac7",
+                "space": "Infant A",
+                "role": "(null=>operational_group)",
+                "legacy": "1:4",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "West Campus",
+                "space_id": "f82c4f41-31ef-4294-b29d-6e890af04ab1",
+                "space": "Infant B",
+                "role": "(null=>operational_group)",
+                "legacy": "1:4",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "West Campus",
+                "space_id": "5c9577ad-8bdf-4af5-8a1d-2646c5db3136",
+                "space": "Preschool",
+                "role": "(null=>operational_group)",
+                "legacy": "1:8",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "West Campus",
+                "space_id": "17cf540d-6c64-4ba4-926b-f2b9644b3391",
+                "space": "Toddler 1",
+                "role": "(null=>operational_group)",
+                "legacy": "1:6",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              },
+              {
+                "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                "site": "West Campus",
+                "space_id": "93c66b6f-bc30-4899-900c-c37aad4c3200",
+                "space": "Toddler 2",
+                "role": "(null=>operational_group)",
+                "legacy": "1:6",
+                "rule_id": null,
+                "rule_start": null,
+                "rule_end": null,
+                "in_force": false,
+                "authored_via": null,
+                "rule_metadata": null,
+                "canonical_tiers": []
+              }
+            ],
+            "authored_via_values": [
+              {
+                "value": "object_editor",
+                "rules": 5
+              },
+              {
+                "value": "(absent)",
+                "rules": 1
+              }
+            ],
+            "ratio_rule_totals": {
+              "all": 6,
+              "in_force": 4,
+              "object_editor": 5
+            },
+            "today": "2026-09-24",
+            "observed_at": "2026-09-24 21:06:13.686425+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

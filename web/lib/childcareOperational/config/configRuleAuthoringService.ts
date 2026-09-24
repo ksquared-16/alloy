@@ -262,6 +262,15 @@ async function supersedeRow<T extends RowLike>(
         newStart: string;
         actor: string | null;
         valueColumns: (prior: T) => Record<string, unknown>;
+        /**
+         * Merged over the prior row's metadata on the new version.
+         *
+         * Without it a version only INHERITS provenance, so a rule authored
+         * through an object editor on top of a seeded predecessor produced a new
+         * row claiming no authorship at all — the confirmation would evaporate
+         * on the second day's edit.
+         */
+        metadata?: Record<string, unknown>;
         afterInsert?: (newId: string, prior: T) => Promise<void>;
     },
 ): Promise<{ row: T; priorId: string; priorCloseDate: string }> {
@@ -284,6 +293,7 @@ async function supersedeRow<T extends RowLike>(
             ...asMetadata(prior.metadata),
             lineage_origin_id: lineageOriginOf(asMetadata(prior.metadata), prior.id),
             supersedes_id: prior.id,
+            ...asMetadata(args.metadata),
         },
         created_by: args.actor,
         updated_by: args.actor,
@@ -649,6 +659,8 @@ export type RatioVersionInput = {
     priorId: string;
     effectiveStart: string;
     jurisdictionKey?: string | null;
+    /** Provenance to stamp on the new version, merged over the prior metadata. */
+    metadata?: Record<string, unknown>;
     /** New tier set; when omitted the prior version's tiers are carried forward. */
     tiers?: RatioTierInput[];
     actorUserId?: string | null;
@@ -666,6 +678,7 @@ export async function createRatioRuleVersion(
         priorId: input.priorId,
         newStart: requireEffectiveStart(input.effectiveStart),
         actor: trimOrNull(input.actorUserId),
+        metadata: input.metadata,
         valueColumns: (prior) => ({
             scope_type: prior.scope_type,
             site_location_id: prior.site_location_id,

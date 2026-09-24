@@ -94,6 +94,9 @@ export async function setObjectRatio(
                 priorId: plan.priorId,
                 effectiveStart: plan.effectiveStart,
                 tiers: toTierInput(plan.tiers),
+                // Stamped, not inherited: a version on top of a seeded rule would
+                // otherwise claim no authorship and lose the confirmation.
+                metadata,
                 actorUserId: input.actorUserId,
             });
             return { action: "version", ruleId: result.row.id, closedRuleId: result.priorId };

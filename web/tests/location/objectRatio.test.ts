@@ -298,3 +298,83 @@ describe("a rule that closes today cannot be versioned from today", () => {
         expect(p).toMatchObject({ action: "create" });
     });
 });
+
+describe("legacy evidence is migration provenance, not a permanent comparator", () => {
+    /*
+     * The Infant A failure: canonical 1:5 · 2:11 · 3:18, authored by hand from
+     * the 1:5 · 2:11 the legacy record held, still reported as needing review
+     * against the very value it was authored from. Review meant "legacy evidence
+     * exists" when it should mean "a human decision is still required".
+     */
+    const confirmed = (over: Partial<ChildcareRatioRuleRow> = {}) =>
+        rule({ id: "r", metadata: { authored_via: "object_editor" }, ...over });
+
+    const stand = (rules: ChildcareRatioRuleRow[], tierRows: ChildcareRatioRuleTierRow[], legacyRaw: unknown) =>
+        resolveObjectRatioStanding({ rules, tierRows, roomLocationId: ROOM, legacyRaw, todayYmd: TODAY });
+
+    it("INFANT A: explicit authorship settles it, even though a tier was added", () => {
+        const s = stand([confirmed()], [tier("r", 1, 5), tier("r", 2, 11), tier("r", 3, 18)], "1:5,2:11");
+        expect(s.state).toBe("confirmed");
+        expect(ratioNeedsReview(s)).toBe(false);
+        expect(formatRatioTiers(readObjectRatioTiers(s)!)).toBe("1:5 · 2:11 · 3:18");
+    });
+
+    it("TODDLER 1: explicit authorship settles it even though it DIFFERS from legacy", () => {
+        // The law is about who decided, not about whether the numbers match.
+        const s = stand([confirmed()], [tier("r", 1, 5), tier("r", 2, 11)], "1:6");
+        expect(s.state).toBe("confirmed");
+        expect(ratioNeedsReview(s)).toBe(false);
+    });
+
+    it("PREFIX ALONE DOES NOT CONFIRM — the same tiers without provenance stay unresolved", () => {
+        // Identical data to the Infant A case, minus the marker. An extra tier
+        // can be a real staffing change; only a human settles that.
+        const s = stand([rule({ id: "r" })], [tier("r", 1, 5), tier("r", 2, 11), tier("r", 3, 18)], "1:5,2:11");
+        expect(s.state).toBe("conflict");
+        expect(ratioNeedsReview(s)).toBe(true);
+    });
+
+    it("EXACT AGREEMENT ALONE DOES NOT CONFIRM — it is merely 'agree', not reviewed", () => {
+        const s = stand([rule({ id: "r" })], [tier("r", 1, 5), tier("r", 2, 11)], "1:5,2:11");
+        expect(s.state).toBe("agree");
+    });
+
+    it("a legacy-only space stays unresolved — nothing canonical has been authored", () => {
+        expect(stand([], [], "1:6").state).toBe("legacy_only");
+    });
+
+    it("confirmation does not depend on a legacy value existing at all", () => {
+        const s = stand([confirmed()], [tier("r", 1, 5)], null);
+        expect(s.state).toBe("confirmed");
+    });
+
+    it("keeps the legacy string readable, so evidence is preserved rather than erased", () => {
+        const s = stand([confirmed()], [tier("r", 1, 5)], "1:6");
+        if (s.state !== "confirmed") throw new Error("unreachable");
+        expect(s.legacyRaw).toBe("1:6");
+    });
+
+    it("survives same-day replacement and ordinary versioning, because both stamp the marker", () => {
+        const sameDay = stand(
+            [confirmed({ effective_start: TODAY, metadata: { authored_via: "object_editor", replaced_same_day_rule_id: "old" } })],
+            [tier("r", 1, 5)],
+            "1:6",
+        );
+        expect(sameDay.state).toBe("confirmed");
+        const versioned = stand(
+            [confirmed({ metadata: { authored_via: "object_editor", supersedes_id: "old", lineage_origin_id: "seed" } })],
+            [tier("r", 1, 5)],
+            "1:6",
+        );
+        expect(versioned.state).toBe("confirmed");
+    });
+
+    it("a marker the object services never write does not confirm", () => {
+        const s = stand(
+            [rule({ id: "r", metadata: { authored_via: "config" } })],
+            [tier("r", 1, 5)],
+            "1:6",
+        );
+        expect(s.state).toBe("conflict");
+    });
+});

@@ -126,15 +126,37 @@ export function sameTiers(a: readonly RatioTierValue[], b: readonly RatioTierVal
     return x.every((t, i) => t.requiredStaff === y[i].requiredStaff && t.maxChildren === y[i].maxChildren);
 }
 
+/** The provenance that proves a human established this ratio through the object editor. */
+export const RATIO_OBJECT_EDITOR_PROVENANCE = "object_editor";
+
+/** Did a person explicitly author this rule on the space itself? */
+export function isOperatorConfirmedRatioRule(rule: ChildcareRatioRuleRow | null | undefined): boolean {
+    const via = (rule?.metadata as Record<string, unknown> | undefined)?.authored_via;
+    return via === RATIO_OBJECT_EDITOR_PROVENANCE;
+}
+
 /**
  * How the two records of one space's ratio stand to each other.
  *
- * `conflict` is the case that must never be resolved by code: Infant A carries
- * a legacy `1:5,2:11` beside a canonical `1:4 / 2:8 / 3:12`, and which one is
- * true is a claim about staffing law. The product's job is to show both and ask.
+ * LEGACY EVIDENCE IS MIGRATION PROVENANCE, NOT A PERMANENT COMPARATOR. Once a
+ * person has explicitly authored the canonical ratio on the space, the question
+ * "which of these is right" has been answered, and continuing to ask it turns a
+ * migration artefact into a standing warning. Infant A showed the failure
+ * exactly: canonical `1:5 · 2:11 · 3:18`, authored by hand, still reported as
+ * needing review against the `1:5 · 2:11` it was authored from.
+ *
+ * `confirmed` is decided by PROVENANCE ALONE — never by the numbers. Tiers that
+ * happen to agree, or a legacy value that happens to be a prefix of the
+ * canonical one, prove nothing about whether a human looked: an extra tier can
+ * be a real staffing change. Only `authored_via` settles it.
+ *
+ * `conflict` remains for the case no one has answered: two records, no evidence
+ * a person chose between them.
  */
 export type ObjectRatioStanding =
     | { state: "none" }
+    /** A person authored this ratio on the space. Current truth; no review. */
+    | { state: "confirmed"; ruleId: string; tiers: RatioTierValue[]; legacyRaw: string | null }
     | { state: "canonical_only"; ruleId: string; tiers: RatioTierValue[] }
     | { state: "legacy_only"; legacy: RatioTierValue[]; legacyRaw: string }
     | { state: "agree"; ruleId: string; tiers: RatioTierValue[]; legacyRaw: string }
@@ -167,6 +189,10 @@ export function resolveObjectRatioStanding(input: {
                 { state: "legacy_only", legacy, legacyRaw: rawText }
             :   { state: "legacy_unreadable", legacyRaw: rawText };
     }
+    // Explicit authorship settles the migration, whatever the legacy value says.
+    if (isOperatorConfirmedRatioRule(rule)) {
+        return { state: "confirmed", ruleId: rule.id, tiers: canonical, legacyRaw: rawText };
+    }
     if (!rawText) return { state: "canonical_only", ruleId: rule.id, tiers: canonical };
     if (!legacy) return { state: "canonical_only", ruleId: rule.id, tiers: canonical };
     if (sameTiers(canonical, legacy)) {
@@ -183,6 +209,7 @@ export function ratioNeedsReview(standing: ObjectRatioStanding): boolean {
 /** The tiers to show in read state, or null when there is nothing canonical yet. */
 export function readObjectRatioTiers(standing: ObjectRatioStanding): RatioTierValue[] | null {
     switch (standing.state) {
+        case "confirmed":
         case "canonical_only":
         case "agree":
         case "conflict":
