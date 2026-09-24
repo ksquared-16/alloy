@@ -31,6 +31,7 @@
  */
 
 import { compareIsoDates } from "@/lib/childcareOperational/effectiveDating";
+import { chooseObjectEditTransition } from "@/lib/locations/objectEditLifecycle";
 import { isRuleEffectiveOn } from "@/lib/childcareOperational/config/resolveConfigRule";
 import type { CanonicalUnitRole } from "@/lib/location/canonicalLocationModel";
 import type { ChildcareCapacityRuleRow } from "@/lib/childcareOperational/config/configRuleTypes";
@@ -159,9 +160,16 @@ export function planOrdinaryCapacityWrite(input: {
     }
     if (current.capacity === input.capacity) return { action: "noop" };
 
-    // Authored today? Then no completed day ever carried the old value, and a
-    // version would be refused for starting on its predecessor's own start date.
-    if (compareIsoDates(current.effective_start, input.todayYmd) === 0) {
+    // Can the canonical store accept a supersede starting today? It cannot when
+    // the prior rule began today, and equally cannot when the prior rule CLOSES
+    // today — both are "not strictly after", and only the first was checked here
+    // before. The predicate is the store's own.
+    const transition = chooseObjectEditTransition({
+        priorStart: current.effective_start,
+        priorEnd: current.effective_end,
+        todayYmd: input.todayYmd,
+    });
+    if (transition === "replace_same_day") {
         return {
             action: "replace_same_day",
             retireId: current.id,
