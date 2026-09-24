@@ -23,6 +23,7 @@
  */
 
 import { compareIsoDates } from "@/lib/childcareOperational/effectiveDating";
+import { chooseObjectEditTransition } from "@/lib/locations/objectEditLifecycle";
 import { isRuleEffectiveOn } from "@/lib/childcareOperational/config/resolveConfigRule";
 import { sortRatioTiers } from "@/lib/childcareOperational/config/ratioRules";
 import type {
@@ -227,7 +228,17 @@ export function planObjectRatioWrite(input: {
     const currentTiers = tiersOfRule(input.tierRows, current.id);
     if (sameTiers(currentTiers, next)) return { action: "noop" };
 
-    if (compareIsoDates(current.effective_start, input.todayYmd) === 0) {
+    // Ask the canonical store whether a supersede from today is legal, rather
+    // than guessing from the start date alone. A rule that is still in force
+    // today but CLOSES today cannot be versioned from today — Infant A hit that
+    // and the operator was shown the store's version-constraint error while
+    // editing an ordinary ratio.
+    const transition = chooseObjectEditTransition({
+        priorStart: current.effective_start,
+        priorEnd: current.effective_end,
+        todayYmd: input.todayYmd,
+    });
+    if (transition === "replace_same_day") {
         return { action: "replace_same_day", retireId: current.id, tiers: next, effectiveStart: input.todayYmd };
     }
     return { action: "version", priorId: current.id, tiers: next, effectiveStart: input.todayYmd };

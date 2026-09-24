@@ -248,3 +248,53 @@ describe("validating what the operator typed", () => {
         expect(validateRatioTiers([])).toEqual({ ok: true, tiers: [] });
     });
 });
+
+describe("a rule that closes today cannot be versioned from today", () => {
+    /*
+     * THE INFANT A DEFECT, reproduced from the deployed record.
+     *
+     * Rule 31bc3220: effective_start 2026-01-01, effective_end 2026-09-24 — still
+     * in force on the 24th, but closing that day. The planner only asked whether
+     * the rule STARTED today, so it chose `version`, and the canonical store
+     * refused with "New version effective_start must be after the prior version
+     * start and any prior end date" — rule mechanics, shown to a director editing
+     * an ordinary ratio.
+     */
+    const CLOSES_TODAY = rule({ id: "closes-today", effective_start: "2026-01-01", effective_end: TODAY });
+
+    it("replaces instead of versioning", () => {
+        const p = planObjectRatioWrite({
+            rules: [CLOSES_TODAY],
+            tierRows: [tier("closes-today", 1, 4), tier("closes-today", 2, 8), tier("closes-today", 3, 12)],
+            roomLocationId: ROOM,
+            tiers: [
+                { requiredStaff: 1, maxChildren: 5 },
+                { requiredStaff: 2, maxChildren: 11 },
+            ],
+            todayYmd: TODAY,
+        });
+        expect(p).toMatchObject({ action: "replace_same_day", retireId: "closes-today" });
+    });
+
+    it("still versions an ordinary open-ended rule from an earlier day", () => {
+        const p = planObjectRatioWrite({
+            rules: [rule({ id: "open", effective_start: "2026-01-01" })],
+            tierRows: [tier("open", 1, 4)],
+            roomLocationId: ROOM,
+            tiers: [{ requiredStaff: 1, maxChildren: 5 }],
+            todayYmd: TODAY,
+        });
+        expect(p).toMatchObject({ action: "version", priorId: "open" });
+    });
+
+    it("a rule that closed BEFORE today is not current at all, so this is a create", () => {
+        const p = planObjectRatioWrite({
+            rules: [rule({ id: "closed", effective_start: "2026-01-01", effective_end: "2026-09-21" })],
+            tierRows: [tier("closed", 1, 4)],
+            roomLocationId: ROOM,
+            tiers: [{ requiredStaff: 1, maxChildren: 5 }],
+            todayYmd: TODAY,
+        });
+        expect(p).toMatchObject({ action: "create" });
+    });
+});
