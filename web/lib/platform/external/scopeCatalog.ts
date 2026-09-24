@@ -265,8 +265,20 @@ export const PUBLIC_OPERATIONS = {
         scope: "enrollment.write",
         route: "/api/v1/enrollments/end",
     },
+    // Voiding is the same capability as starting or ending an enrollment — deciding whether a child
+    // is in service. It is guarded by evidence, not by a separate scope.
+    voidEnrollment: {
+        operationId: "voidEnrollment",
+        scope: "enrollment.write",
+        route: "/api/v1/enrollments/void",
+    },
     assignPlacement: { operationId: "assignPlacement", scope: "enrollment.write", route: "/api/v1/placements" },
     movePlacement: { operationId: "movePlacement", scope: "enrollment.write", route: "/api/v1/placements/move" },
+    // Cancelling a placement is the same capability as creating or moving one — deciding where a
+    // child sits. A separate scope would count endpoints, not capabilities, and would let an
+    // installation hold "move" while being refused the honest correction for a move it should
+    // never have made.
+    cancelPlacement: { operationId: "cancelPlacement", scope: "enrollment.write", route: "/api/v1/placements/cancel" },
     setScheduleAssignment: {
         operationId: "setScheduleAssignment",
         scope: "schedule.write",
@@ -276,6 +288,11 @@ export const PUBLIC_OPERATIONS = {
         operationId: "changeScheduleAssignment",
         scope: "schedule.write",
         route: "/api/v1/schedule-assignments/change",
+    },
+    cancelScheduleAssignment: {
+        operationId: "cancelScheduleAssignment",
+        scope: "schedule.write",
+        route: "/api/v1/schedule-assignments/cancel",
     },
 } as const satisfies Record<
     string,

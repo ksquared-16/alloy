@@ -15,6 +15,7 @@ import {
     trimOrNull,
 } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { validateSiteLocationRef } from "@/lib/childcareOperational/validateChildcareLocationRefs";
+import { effectiveAttendanceEvents } from "@/lib/childcareOperational/attendance/attendanceFold";
 import {
     emitAgreementCanceledEvent,
     emitAgreementEndedEvent,
@@ -386,4 +387,113 @@ export async function transitionEndingAgreementsToEnded(
     }
 
     return updated;
+}
+
+/**
+ * Void an enrollment that was created or activated in error.
+ *
+ * ── WHY THIS IS NOT `end`, AND NOT `cancel` ──
+ *
+ * `markAgreementEnded` asserts that service occurred and concluded. For an agreement recorded
+ * against the wrong child that claim is false, and it is not inert: under the external visibility
+ * law an `ended` agreement keeps publishing the child, their household and every relationship edge
+ * to partners, permanently. `cancelAgreementBeforeStart` tells a narrower truth — a commitment
+ * withdrawn before it began — and refuses anything that is not `pending_start`, so it cannot reach
+ * an agreement that was mistakenly made active.
+ *
+ * `voided` is the third terminal, and it says the record never represented service at all.
+ *
+ * ── THE GUARD THAT MAKES IT SAFE ──
+ *
+ * A state meaning "this was never true" is the obvious tool for rewriting inconvenient history, so
+ * it is refused whenever canonical evidence says service really happened. The evidence is the
+ * attendance ledger, folded by its own canonical rule (`effectiveAttendanceEvents`): corrections
+ * restate, reversals are tombstones, and anything superseded does not count. If even one effective
+ * fact remains for this agreement, a child was checked in — that is service, and the honest
+ * correction is `end`, not a claim it never happened.
+ *
+ * This is deliberately evidence-based rather than time-based. "The start date has passed" proves
+ * nothing; an enrollment can be active for a week with no child ever arriving, and that is exactly
+ * the case void exists for.
+ *
+ * ── DEPENDENTS ──
+ *
+ * An enrollment that asserts it was never valid cannot leave an operational placement or schedule
+ * assignment hanging off it — that would be a contradiction a partner could read. They are
+ * cancelled in the same act, through the same canonical terminal state their own governed cancel
+ * uses, so there is one meaning of `canceled` for those rows rather than two.
+ */
+export async function voidChildEnrollmentAgreement(
+    supabase: SupabaseClient,
+    orgId: string,
+    agreementId: string,
+    actorUserId?: string | null
+): Promise<ChildEnrollmentAgreementRow> {
+    const agreement = await getAgreementById(supabase, orgId, agreementId);
+    if (!agreement) {
+        throw new OperationalEnrollmentServiceError("not_found", "Agreement not found");
+    }
+
+    // Retry converges: a caller that could not confirm the first attempt is told the same thing.
+    if (agreement.status === "voided") {
+        return agreement;
+    }
+    // `canceled` already tells a true and narrower story, and `ended` is protected by the evidence
+    // guard below. Neither should oscillate into a different terminal state on a whim.
+    if (agreement.status === "canceled") {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "A cancelled enrollment already records that service never began; it cannot be voided",
+            { status: agreement.status }
+        );
+    }
+
+    const { data: events, error: eventsError } = await supabase
+        .from("child_attendance_events")
+        .select("id, entry_type, corrects_event_id")
+        .eq("org_id", orgId)
+        .eq("enrollment_agreement_id", agreementId);
+    if (eventsError) {
+        throw new OperationalEnrollmentServiceError("db_error", eventsError.message);
+    }
+    const effective = effectiveAttendanceEvents(
+        (events ?? []) as unknown as Parameters<typeof effectiveAttendanceEvents>[0]
+    );
+    if (effective.length > 0) {
+        throw new OperationalEnrollmentServiceError(
+            "invalid_state",
+            "Attendance was recorded under this enrollment, so it represented real service; end it instead of voiding it",
+            { attendance_events: effective.length }
+        );
+    }
+
+    const nowIso = new Date().toISOString();
+    const actor = trimOrNull(actorUserId);
+
+    // Dependents first. If the agreement transition succeeded and this failed, the enrollment would
+    // claim it was never valid while an operational placement still pointed at it.
+    for (const table of ["child_placements", "schedule_assignments"] as const) {
+        const { error } = await supabase
+            .from(table)
+            .update({ status: "canceled", updated_by: actor, updated_at: nowIso })
+            .eq("org_id", orgId)
+            .eq("enrollment_agreement_id", agreementId)
+            .in("status", ["planned", "active", "ending"]);
+        if (error) {
+            throw new OperationalEnrollmentServiceError("db_error", error.message);
+        }
+    }
+
+    const { data, error } = await supabase
+        .from("child_enrollment_agreements")
+        .update({ status: "voided", updated_by: actor })
+        .eq("org_id", orgId)
+        .eq("id", agreementId)
+        .select("*")
+        .single();
+
+    if (error || !data) {
+        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "update failed");
+    }
+    return data as ChildEnrollmentAgreementRow;
 }

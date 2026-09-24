@@ -9,6 +9,7 @@ export const CHILD_ENROLLMENT_AGREEMENT_STATUSES = [
     "ending",
     "ended",
     "canceled",
+    "voided",
 ] as const;
 
 export type ChildEnrollmentAgreementStatus = (typeof CHILD_ENROLLMENT_AGREEMENT_STATUSES)[number];
@@ -20,9 +21,17 @@ export const CHILD_ENROLLMENT_AGREEMENT_OPERATIONAL_STATUSES = [
     "ending",
 ] as const satisfies readonly ChildEnrollmentAgreementStatus[];
 
+/**
+ * Terminal, and for three different reasons. `ended` says service happened and concluded;
+ * `canceled` says a commitment was withdrawn before it began; `voided` says the record was created
+ * or activated in error and never represented service at all. Collapsing them would lose exactly the
+ * distinction a later reviewer needs, and the external visibility law reads two of the three as
+ * "never a participant".
+ */
 export const CHILD_ENROLLMENT_AGREEMENT_TERMINAL_STATUSES = [
     "ended",
     "canceled",
+    "voided",
 ] as const satisfies readonly ChildEnrollmentAgreementStatus[];
 
 export const CHILD_PLACEMENT_STATUSES = [
