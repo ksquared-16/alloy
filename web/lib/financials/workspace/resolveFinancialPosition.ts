@@ -564,6 +564,18 @@ export async function resolveCollectiblePositionsForCharges(
     },
 ): Promise<Map<string, CollectiblePosition>> {
     const out = new Map<string, CollectiblePosition>();
+    /*
+     * THE FACTS DO NOT WAIT ON THE CHARGE ROWS.
+     *
+     * `readPositionFacts` is keyed by charge id, and a caller passing `chargeIds` has already told
+     * us every id. So the fact reads start immediately rather than after the charges come back —
+     * two independent questions asked at once, which is the only kind of parallelism this file
+     * allows. The dependent reads INSIDE `readPositionFacts` (payments behind applications,
+     * funding behind allocations) stay sequential, because they genuinely depend on their
+     * predecessor's rows.
+     */
+    const knownIds = args.charges?.map((c) => c.id) ?? [...(args.chargeIds ?? [])];
+    const factsP = knownIds.length ? readPositionFacts(supabase, args.orgId, knownIds) : null;
     const charges =
         args.charges
         ?? (args.chargeIds?.length
@@ -586,7 +598,7 @@ export async function resolveCollectiblePositionsForCharges(
               }))
             : []);
     if (charges.length === 0) return out;
-    const facts = await readPositionFacts(supabase, args.orgId, charges.map((c) => c.id));
+    const facts = factsP ? await factsP : await readPositionFacts(supabase, args.orgId, charges.map((c) => c.id));
     for (const charge of charges) {
         const reductions = facts.reductionsByCharge.get(charge.id) ?? [];
         const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);

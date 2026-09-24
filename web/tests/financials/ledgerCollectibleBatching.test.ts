@@ -119,12 +119,15 @@ describe("the card reaches the shared reader, and the duplicate deep read is gon
 
     it("a bounded summary no longer discards a completed deep read of the same account", () => {
         const card = code(CARD);
-        expect(card, "the guard exists").toMatch(/const alreadyReadInFull =/);
+        expect(card, "the guard exists").toMatch(/const fullReadCoversThisAccount =/);
         expect(card, "and it is scoped to THIS account, so subject safety is unchanged").toMatch(
             /deepLoadedForRef\.current === readKey/,
         );
+        expect(card, "the in-flight window is covered, which is where the duplicate actually fired").toMatch(
+            /deepReadInFlightForRef\.current === readKey/,
+        );
         expect(card, "a projection for another subject still clears everything").toMatch(
-            /if \(alreadyReadInFull\) return;[\s\S]{0,400}deepLoadedForRef\.current = null;/,
+            /if \(fullReadCoversThisAccount\) return;[\s\S]{0,400}deepLoadedForRef\.current = null;/,
         );
     });
 

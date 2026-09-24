@@ -328,6 +328,8 @@ export default function FinancialsCard({
      * `awaitingFirstAnswer` below.
      */
     const answeredKeyRef = useRef<string | null>(null);
+    /** The account a FULL read is in flight for, so a late projection cannot restart it. */
+    const deepReadInFlightForRef = useRef<string | null>(null);
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -740,6 +742,17 @@ export default function FinancialsCard({
         const answeringKey = customerId ?? scopedMemberId ?? null;
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
+        /*
+         * WHICH ACCOUNT A FULL READ IS CURRENTLY IN FLIGHT FOR.
+         *
+         * `deepLoadedForRef` records a read that has LANDED, which is one instant too late to stop
+         * the duplicate: measured on deployed staging, the settlement projection almost always
+         * arrives while the read is still in the air, so the guard below found no completed read
+         * and cleared everything — and the second request went out. Recording the read at its
+         * START closes that window. Cleared in `finally`, so a superseded or failed read leaves
+         * nothing latched.
+         */
+        deepReadInFlightForRef.current = answeringKey;
         setLoading(true);
         try {
             const query = requestQuery;
@@ -762,6 +775,7 @@ export default function FinancialsCard({
                  * that decides between "still reading" and "no account".
                  */
                 answeredKeyRef.current = answeringKey;
+                deepReadInFlightForRef.current = null;
                 setLoading(false);
             }
         }
@@ -1455,9 +1469,10 @@ export default function FinancialsCard({
          * treats as "this account has not been read", so it read it again. Identical request,
          * identical bytes, identical answer.
          *
-         * The projection is a SUBSET of what a completed deep read already holds for the same
-         * account. So when the account has already been read in full, the summary carries nothing
-         * and the deeper answer stands.
+         * The projection is a SUBSET of what a full read holds for the same account. So when that
+         * account has been read in full — or is being read right now — the summary carries nothing
+         * and the deeper answer stands. Covering the IN-FLIGHT case is what actually closes the
+         * duplicate: the projection usually lands mid-read, not after it.
          *
          * SUBJECT SAFETY IS UNCHANGED, and it is the reason this is scoped so tightly: the guard
          * applies only when the projection is READY for the account this card has already read.
@@ -1465,11 +1480,11 @@ export default function FinancialsCard({
          * in-flight read, and still prevents one family's balance appearing under another's name.
          */
         const readKey = customerId ?? scopedMemberId;
-        const alreadyReadInFull =
+        const fullReadCoversThisAccount =
             provisioned?.state === "ready"
             && readKey != null
-            && deepLoadedForRef.current === readKey;
-        if (alreadyReadInFull) return;
+            && (deepLoadedForRef.current === readKey || deepReadInFlightForRef.current === readKey);
+        if (fullReadCoversThisAccount) return;
 
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
