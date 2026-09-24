@@ -876,3 +876,77 @@ against the last pass.
 
 The operator half. Nothing in this part asks you to review or approve what the family submitted —
 turning these people into canonical records still has no proven path, and you should not expect one.
+
+---
+
+# PART G2 — WAVE B: address, operator launch, evidence
+
+Everything here uses the same **Get a fresh participant link** button at the top of this page.
+
+## G2.1 — An address is ONE question
+
+**DO** Walk the conversation until an address is asked (any Form whose author added an **Address**
+answer type).
+
+**EXPECT** — one card, headed by the address's name, with four boxes that visibly belong together:
+
+```
+    Street address   [                    ]
+    City             [                    ]
+    State            [                    ]
+    ZIP / postal code[                    ]
+```
+
+**STOP AND REPORT IF** you are asked "City?" on its own, with nothing to say you are in the middle
+of giving an address. That is the defect this closed.
+
+**EXPECT** — where Alloy already holds the address, the card shows it and asks you to confirm:
+*"We have home address as 12 Alder Lane, Bend, OR 97701. Is that right?"* You should not have to
+retype an address that is already correct.
+
+**DO** Change ONE line — say the street — and save.
+
+**EXPECT** — the city, state and ZIP you did not touch are unchanged. A correction to one line must
+never wipe the rest.
+
+**DO** Close the tab, reopen the same link.
+
+**EXPECT** — what you entered is still there.
+
+## G2.2 — The completed document
+
+**DO** Reach **Review paperwork** and read the document.
+
+**EXPECT** — the address on **one line**: `12 Alder Lane, Bend, OR 97701`. Not four labelled
+answers.
+
+**EXPECT**, where the Form uses them:
+
+| What you did | What the document says |
+| --- | --- |
+| Chose "No known allergies" | **No known allergies** — not a dash |
+| Left a question untouched | a dash — visibly different from the line above |
+| A fee your school configures | the current amount, which you never typed |
+| A question with no owner yet | your answer, in plain words, with no jargon |
+
+**STOP AND REPORT IF** anything you answered shows as a lone **–**, or if you see an id, a key, or
+a word like *origin*, *provider_ref* or *pending*.
+
+## G2.3 — Send enrollment paperwork (KNOWN BLOCKER — read before trying)
+
+The operator action **IS** offered on a child's Process Card at **Enrolling** — the earlier report
+that it was gated to *Enrolled* was not the cause.
+
+But clicking it currently refuses with:
+
+> This journey is not pinned to a published Business Process revision, so there are no governing
+> requirements to realize.
+
+That refusal is deliberate and correct — paperwork built from configuration that can change
+underneath it is exactly what the pin prevents. **Until the Enrollment Business Process is published
+and these journeys are pinned to a revision, keep using the button at the top of this page.**
+
+Some children (e.g. *Touree Disposable0913*) show no action buttons at all on the card, not even
+**Record outcome** — the same cause, one step earlier: with no governing revision their stage work
+was never instantiated.
+
