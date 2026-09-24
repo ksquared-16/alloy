@@ -347,14 +347,14 @@ describe("actionable drawer carrier store", () => {
 
     it("phase 2 retires the carrier — a superseded action set must stop being readable", () => {
         publishActionableDrawerCarrier(mk("opp-B"));
-        retireActionableDrawerCarrier("opp-B", null);
+        retireActionableDrawerCarrier("opp-B");
         expect(peekActionableDrawerCarrier({ opportunityId: "opp-B" })).toBeNull();
     });
 
     it("retiring one subject leaves another alone", () => {
         publishActionableDrawerCarrier(mk("opp-B"));
         publishActionableDrawerCarrier(mk("opp-C"));
-        retireActionableDrawerCarrier("opp-B", null);
+        retireActionableDrawerCarrier("opp-B");
         expect(peekActionableDrawerCarrier({ opportunityId: "opp-C" })).not.toBeNull();
     });
 
@@ -368,7 +368,7 @@ describe("actionable drawer carrier store", () => {
         const seen = vi.fn();
         const stop = subscribeToActionableDrawerCarriers(seen);
         publishActionableDrawerCarrier(mk("opp-B"));
-        retireActionableDrawerCarrier("opp-B", null);
+        retireActionableDrawerCarrier("opp-B");
         stop();
         expect(seen).toHaveBeenCalledTimes(2);
     });
