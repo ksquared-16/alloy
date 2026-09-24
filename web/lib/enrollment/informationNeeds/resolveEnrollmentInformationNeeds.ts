@@ -90,6 +90,22 @@ export type EnrollmentNeedsContext = {
     readonly forms: readonly PinnedRequirementForm[];
     /** The tenant's canonical person roles, for recognising party-slot destinations. */
     readonly partyRoles?: readonly string[];
+    /**
+     * Organisation vocabularies for this objective's Forms, resolved once through the canonical
+     * authority.
+     *
+     * ON THE CONTEXT, NOT ONLY ON THE INPUT — because the objective is assembled MORE THAN ONCE.
+     * `resolveParticipantEnrollmentObjective` re-assembles with the party-role vocabulary in hand,
+     * and the post-write recompute assembles again from the context alone. Passing the sets only
+     * as an input meant the first pass had them and the authoritative second pass did not, so
+     * every `option_set_key` question arrived unresolved and the runtime — correctly — failed it
+     * closed. Measured in the mounted conversation: "Child gender" became "this list could not be
+     * loaded" for a vocabulary that was present and had three items.
+     *
+     * This is the same hazard the `knownPartyEntries` comment in that resolver records, reached by
+     * a different fact. Carrying it on the context is what makes the two readings agree.
+     */
+    readonly optionSets?: ResolvedOptionSets;
 };
 
 /** Assemble the needs value from a loaded context — PURE, reusable against a post-write session. */
@@ -137,7 +153,9 @@ export function assembleEnrollmentInformationNeeds(
          * Form already uses. Absent, a field that names a set is marked unresolved and blocked; it
          * never degrades into free text.
          */
-        ...(input.optionSets ? { optionSets: input.optionSets } : {}),
+        // The CONTEXT is the durable home (see its own note); an input still wins where a caller
+        // passes one explicitly.
+        ...(input.optionSets ?? context.optionSets ? { optionSets: input.optionSets ?? context.optionSets } : {}),
     });
     return {
         process_instance_id: prog.process_instance_id,
@@ -384,7 +402,14 @@ export async function resolveEnrollmentInformationNeeds(
         ? await resolveOptionSetsForOrg(supabase, input.orgId, optionSetKeys)
         : {};
 
-    const context: EnrollmentNeedsContext = { prog, session, subjectId, forms };
+    /*
+     * The vocabularies ride the CONTEXT, so every later reading of this objective has them.
+     *
+     * `captureContext` is how the objective resolver and the post-write recompute assemble again
+     * without re-querying. Leaving the sets off it meant those passes — the authoritative ones —
+     * saw no vocabulary at all and failed every `option_set_key` question closed.
+     */
+    const context: EnrollmentNeedsContext = { prog, session, subjectId, forms, optionSets };
     input.captureContext?.(context);
     return { ok: true, value: assembleEnrollmentInformationNeeds(context, { ...input, optionSets }) };
 }
