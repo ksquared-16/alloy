@@ -170,6 +170,14 @@ export async function applyPackagedCandidates(
                 outcomes.push({ need_key: answer.need_key, result: "settled" });
                 break;
             /*
+             * The parent said there are none, and the Form offers that as an answer. A value WAS
+             * written — a structured one — so this settles like any other answer rather than like a
+             * decline, which writes nothing.
+             */
+            case "record_absence":
+                outcomes.push({ need_key: answer.need_key, result: "settled" });
+                break;
+            /*
              * One of a batch of answers turned out to be a question. It settles nothing and writes
              * nothing — the need stays open and the parent is answered on the conversational path.
              */

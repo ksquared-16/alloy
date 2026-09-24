@@ -231,6 +231,14 @@ export type ParticipantObjectiveWire = {
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
         readonly optional: boolean;
         /**
+         * The words on the absence answer, when the Form offers one.
+         *
+         * AUTHORED and carried on the wire so the card never guesses. The rule it replaced tested
+         * whether the question's own words contained "allerg". Independent of `optional`: a
+         * REQUIRED question can have a true absence answer.
+         */
+        readonly absence_label: string | null;
+        /**
          * The artifact fields this single answer fills.
          *
          * Already visible to the participant — they are the ids of controls on their own form — and
@@ -801,6 +809,7 @@ export function participantObjectiveWireModel(
             canonical_key: turn.need?.identity.canonical_key ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
+            absence_label: firstOccurrence?.absence_label ?? null,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         known: knownRecord(objective, subjectName),

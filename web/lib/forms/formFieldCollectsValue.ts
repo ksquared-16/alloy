@@ -38,12 +38,20 @@ export function formFieldCollectsValue(field: Pick<FormField, "type">): boolean 
  * exist, and the parent's progress bar was measuring boxes nobody would ever type into.
  */
 export function formFieldAsksParticipant(
-    field: Pick<FormField, "type"> & { read_only?: boolean; derived?: unknown },
+    field: Pick<FormField, "type"> & { read_only?: boolean; derived?: unknown; supplied_by?: unknown },
 ): boolean {
     if (!formFieldCollectsValue(field)) return false;
     // Placed so the document renders; the family is not asked.
     if (field.read_only === true) return false;
     // Alloy fills it from canonical truth at the moment the source means.
     if (field.derived) return false;
+    /*
+     * The ORGANISATION owns this value, so it is not the family's question.
+     *
+     * Distinct from `read_only`, which says a value cannot be edited here. A registration fee is
+     * the school's number: asking a parent to type it only invites them to get it wrong, and it
+     * would put a second copy of a figure Financials owns onto a document they sign.
+     */
+    if (field.supplied_by) return false;
     return true;
 }

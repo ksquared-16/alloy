@@ -87,6 +87,18 @@ export type EnrollmentNeedOccurrence = {
     readonly field_type: string;
     /** Closed option set for `select`-shaped controls. Empty when the field is open-ended. */
     readonly options: readonly string[];
+    /**
+     * The words the family reads on an absence answer, when the Form offers one.
+     *
+     * AUTHORED. This replaced a rule that tested the question's own words for "allerg", so "Please
+     * list any food sensitivities" offered "Nothing to add" while "Allergy information" offered
+     * "No known allergies" — same fact, different paperwork, decided by spelling.
+     */
+    readonly absence_label: string | null;
+    /** True when nothing canonical owns this answer yet and the Form is holding it on purpose. */
+    readonly form_only_evidence: boolean;
+    /** True when the organisation supplies this value and the family is never asked for it. */
+    readonly configuration_supplied: boolean;
 };
 
 export type EnrollmentInformationNeed = {
@@ -104,6 +116,13 @@ export type EnrollmentInformationNeed = {
      * resolution — "None" or "Skip" — rather than forcing an untrue answer.
      */
     readonly optional?: boolean;
+    /**
+     * The authored words for "there are none", when any occurrence offers that answer.
+     *
+     * Independent of `optional`: a REQUIRED question can have a true absence answer — "No known
+     * allergies" is an answer, not a refusal to give one.
+     */
+    readonly absence_label?: string | null;
     /** Distinct governing requirements that caused this need to exist. */
     readonly requirement_ids: readonly string[];
     readonly has_value: boolean;

@@ -321,6 +321,19 @@ export function disposeParticipantCandidate(input: {
             if (turn.kind !== "collect_missing_value") {
                 return { action: "refused", reason: "There is nothing here to leave blank." };
             }
+            /*
+             * TWO DIFFERENT THINGS A PARENT CAN DO, AND THEY ARE NOT THE SAME.
+             *
+             * An authored absence answer is a CLAIM — "there are none" — and it is available even
+             * where the Form insists on an answer, because it IS an answer. It is recorded as a
+             * structured value so the submission and the completed document can carry it.
+             *
+             * A plain decline on an optional question claims nothing; it settles the turn and
+             * writes no value, which is why it stays as it was.
+             */
+            if (turn.need.absence_label) {
+                return { action: "record_absence" };
+            }
             if (turn.need.optional !== true) {
                 return { action: "refused", reason: "This one is required, so it cannot be left blank." };
             }

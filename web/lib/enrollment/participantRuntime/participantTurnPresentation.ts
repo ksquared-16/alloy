@@ -152,10 +152,22 @@ export function valueControlForTurn(turn: ParticipantObjectiveWire["next_turn"])
  * to type "na" has put a false value into a document they will later sign.
  */
 export function optionalSkipLabel(objective: ParticipantObjectiveWire): string | null {
-    if (!objective.next_turn.optional) return null;
-    const label = naturalFieldLabel(objective.next_turn.label).toLowerCase();
-    if (label.includes("allerg")) return "No known allergies";
-    return "Nothing to add";
+    /*
+     * AUTHORED, never inferred.
+     *
+     * This used to read the question's own words and offer "No known allergies" if they contained
+     * "allerg" and "Nothing to add" otherwise — so "Please list any food sensitivities" and
+     * "Allergy information" produced different paperwork for the same fact, decided by spelling.
+     * A Form now says whether "there are none" is one of the answers and what it is called.
+     */
+    const authored = objective.next_turn.absence_label;
+    if (authored) return authored;
+    /*
+     * No absence statement, but the Form does not insist on an answer: the parent still needs a way
+     * past a question they have nothing to say to. That is a SKIP, and it says so — it is not a
+     * claim that there are none, and it is why the two are worded differently.
+     */
+    return objective.next_turn.optional ? "Nothing to add" : null;
 }
 
 /**
@@ -166,7 +178,13 @@ export function optionalSkipLabel(objective: ParticipantObjectiveWire): string |
  * something to tell us is not typing into a box they never asked for.
  */
 export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string | null {
-    if (!objective.next_turn.optional) return null;
+    /*
+     * Offered wherever there is an alternative to giving detail — an authored absence answer, or an
+     * optional question. ABSENCE IS NOT OPTIONALITY: a REQUIRED question can have a true absence
+     * answer ("No known allergies" is an answer, not a refusal to give one), and without this a
+     * required allergies question would show the family no way to say there are none.
+     */
+    if (!objective.next_turn.optional && !objective.next_turn.absence_label) return null;
     return "Yes — I'll tell you";
 }
 

@@ -45,6 +45,7 @@ import { resolveArtifactValues } from "@/lib/enrollment/participantRuntime/resol
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
+import { resolveConfigurationSuppliedValues } from "@/lib/forms/supplied/resolveConfigurationSuppliedValues";
 import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 import { PDFDocument } from "pdf-lib";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
@@ -319,7 +320,20 @@ export async function renderParticipantEnrollmentDocument(
         timeZone: input.timeZone,
         signatures: (payload?.signatures ?? null) as Record<string, unknown> | null,
     });
-    const values: Record<string, unknown> = { ...resolved.values };
+    /*
+     * VALUES THE ORGANISATION SUPPLIES, READ NOW RATHER THAN REMEMBERED.
+     *
+     * A registration fee belongs to Financials. The Form holds only a reference, so the figure is
+     * resolved from canonical configuration at the moment the document is produced — which is what
+     * makes "change the fee, print new paperwork" work with nobody editing a Form. A reference that
+     * resolves to nothing leaves its destination empty rather than printing a remembered number: a
+     * stale fee on a document a family signs is worse than a blank, because nobody can see it.
+     *
+     * Applied OVER the participant's own answers because the family is never asked for it, and last
+     * because it is the one value nothing else may overrule.
+     */
+    const supplied = await resolveConfigurationSuppliedValues(supabase, { orgId: input.orgId, schema });
+    const values: Record<string, unknown> = { ...resolved.values, ...supplied.values };
 
     /*
      * REPEATED PEOPLE REACH THE DOCUMENT THE SAME WAY THE SCALARS DO.

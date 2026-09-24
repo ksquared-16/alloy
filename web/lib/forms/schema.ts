@@ -187,6 +187,12 @@ type FormFieldBase = {
     layout_width?: FormFieldLayoutWidth;
     /** Provenance for operational mapping (CRM, shared_values, etc.); optional for legacy/demo schemas. */
     field_source?: FormFieldSource;
+    /** Whether "there are none" is one of this question's answers, and what it is called. */
+    absence?: FormFieldAbsence;
+    /** Where the answer is kept while no canonical owner exists. Never beside `field_source`. */
+    retention?: FormFieldRetention;
+    /** Canonical configuration supplies this value; the family is never asked for it. */
+    supplied_by?: FormFieldSuppliedBy;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
     read_only?: boolean;
     /** Alloy fills this destination from canonical truth; it is never asked. @see formFieldDerivedSchema */
@@ -236,7 +242,110 @@ export type FormField =
           collection_binding?: FormGroupCollectionBinding;
           /** When set, each repeat instance is a PERSON or CHILD in a canonical relationship. */
           party_collection?: FormPartyCollection;
+          /** When set, this group's fields are the parts of ONE address. */
+          address_binding?: FormAddressBinding;
       });
+
+/**
+ * "THERE ARE NONE" IS AN ANSWER, AND THE FORM HAS TO SAY SO.
+ *
+ * The runtime already let a participant decline an optional question. What it did not have was a
+ * statement of WHEN that is meaningful or what it should be called, so it guessed: the skip label
+ * was chosen by testing whether the question's own words contained "allerg". A school that writes
+ * "Please list any food sensitivities" got "Nothing to add"; one that writes "Allergy information"
+ * got "No known allergies". Same fact, different paperwork, decided by spelling.
+ *
+ * `offered` is the author saying an absence answer exists for this question. `label` is what the
+ * family reads. Absent, the question simply has no absence answer — which is the honest default for
+ * a question nobody has thought about.
+ *
+ * ABSENCE IS NOT OPTIONALITY. `required` says whether the form insists on an answer; this says
+ * whether "none" is one of the answers. A required question can have a true absence answer — "No
+ * known allergies" is an answer, not a refusal to give one — and an optional question may have none.
+ */
+export const formFieldAbsenceSchema = z
+    .object({
+        offered: z.literal(true),
+        /** What the family reads. Defaults to "None" where the author gives no words of their own. */
+        label: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormFieldAbsence = z.infer<typeof formFieldAbsenceSchema>;
+
+/**
+ * WHERE AN ANSWER IS KEPT WHEN NOTHING CANONICAL OWNS IT YET.
+ *
+ * Some facts a school must collect today have no canonical owner in Alloy yet — a Health domain
+ * that does not exist, a Consent writer not yet built. Until now a Form had two ways to describe
+ * such a question, and both lied: bind it to a canonical field that will not receive it, or leave
+ * it unbound and indistinguishable from a question nobody got round to normalising.
+ *
+ * This is the third, truthful state. The participant is asked normally, the answer is real
+ * structured evidence, the completed artifact carries it — and no canonical binding is claimed, so
+ * no writer is invented and nothing downstream mistakes it for owned truth. When the owner arrives
+ * it can adopt the fact deliberately, knowing exactly which questions were waiting for it.
+ *
+ * `owner_hint` is the domain the author expects to own it eventually. It is a HINT for a human
+ * reading the catalogue later, never a binding and never resolved against anything.
+ */
+export const formFieldRetentionSchema = z
+    .object({
+        kind: z.literal("form_only_pending_canonical_owner"),
+        owner_hint: z.string().min(1).optional(),
+        note: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormFieldRetention = z.infer<typeof formFieldRetentionSchema>;
+
+/**
+ * A VALUE THE ORGANISATION OWNS, WHICH THE FAMILY MUST NEVER BE ASKED FOR.
+ *
+ * A registration fee is the school's number. Asking a parent to type it invites them to get it
+ * wrong; copying it into the Form makes a second place it can be right, which is the same thing as
+ * a second place it can be stale. Financials already owns it, in a charge template.
+ *
+ * So the Form holds a REFERENCE and nothing else. The amount is resolved from canonical
+ * configuration at the moment the document is generated, which is what makes "change the fee, print
+ * new paperwork" work without anybody editing a Form.
+ */
+export const formFieldSuppliedBySchema = z
+    .object({
+        /** Which canonical configuration owns the value. */
+        source_kind: z.literal("charge_template"),
+        /** The owner's own stable key — never a duplicated amount, never a raw row id in the UI. */
+        source_key: z.string().min(1),
+        /** When the value is read. Generation keeps the document current; nothing is cached here. */
+        resolve_at: z.enum(["generation"]).default("generation"),
+    })
+    .strict();
+
+export type FormFieldSuppliedBy = z.infer<typeof formFieldSuppliedBySchema>;
+
+/**
+ * ONE ADDRESS, NOT FOUR QUESTIONS.
+ *
+ * The canonical store already exists on the Person — `address_line1`, `city`, `state`,
+ * `postal_code` — and a group of four bound fields already expresses it structurally. What no Form
+ * could say was that those four belong to ONE address, so a participant met four detached questions
+ * with nothing to indicate they were describing a single thing, and nothing downstream could render
+ * them as an address.
+ *
+ * Deliberately the same move `party_collection` made for repeated people: the group already
+ * existed; this is the statement of what it MEANS. It creates no address store, declares no
+ * columns, and adds no second address model — `subject` and `role` say whose address it is, and the
+ * child fields keep their own canonical bindings.
+ */
+export const formAddressBindingSchema = z
+    .object({
+        /** Whose address. A role names the person in that relationship; absent means the subject's. */
+        subject: z.enum(["child", "person"]),
+        role: z.string().min(1).optional(),
+    })
+    .strict();
+
+export type FormAddressBinding = z.infer<typeof formAddressBindingSchema>;
 
 const staticOptionRowSchema = z
     .object({
@@ -260,9 +369,47 @@ const fieldCoreSchema = z
         read_only: z.boolean().optional().default(false),
         derived: formFieldDerivedSchema.optional(),
         field_source: formFieldSourceSchema.optional(),
+        /** Whether "there are none" is one of this question's answers, and what it is called. */
+        absence: formFieldAbsenceSchema.optional(),
+        /** Where the answer is kept while no canonical owner exists. Never beside `field_source`. */
+        retention: formFieldRetentionSchema.optional(),
+        /** Canonical configuration supplies this value; the family is never asked for it. */
+        supplied_by: formFieldSuppliedBySchema.optional(),
         layout_width: z.enum(["full", "half", "third", "quarter"]).optional(),
     })
     .strict();
+
+/**
+ * Rules that span more than one property of a field.
+ *
+ * Applied to the assembled union rather than to `fieldCoreSchema`, because a refined schema is no
+ * longer an object schema and every field variant is built by extending the core.
+ */
+function assertFieldCombinationsAreCoherent(field: FormField, ctx: z.RefinementCtx): void {
+    /*
+     * A QUESTION CANNOT BE BOTH OWNED AND WAITING FOR AN OWNER.
+     *
+     * `retention` exists precisely to say "nothing canonical owns this yet". Carrying a
+     * `field_source` at the same time claims a canonical destination — the false binding this state
+     * was created to avoid — so the pair is refused rather than left for two readers to disagree
+     * about which one is true.
+     */
+    if (field.retention && field.field_source) {
+        ctx.addIssue({
+            code: "custom",
+            message: "A field kept as Form-only evidence cannot also claim a canonical field_source.",
+            path: ["retention"],
+        });
+    }
+    // A value the organisation supplies is not a question, so "none" is not one of its answers.
+    if (field.supplied_by && field.absence) {
+        ctx.addIssue({
+            code: "custom",
+            message: "A configuration-supplied value cannot offer an absence answer.",
+            path: ["supplied_by"],
+        });
+    }
+}
 
 export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
     z.union([
@@ -327,9 +474,11 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
                 repeat: formRepeatRulesSchema.optional(),
                 collection_binding: formGroupCollectionBindingSchema.optional(),
                 party_collection: formPartyCollectionSchema.optional(),
+                /** When set, this group's fields are the parts of ONE address. */
+                address_binding: formAddressBindingSchema.optional(),
             })
             .strict(),
-    ])
+    ]).superRefine(assertFieldCombinationsAreCoherent)
 );
 
 export const formSectionSchema = z

@@ -412,6 +412,139 @@ export default function ProcessingFormQuestionInspector({
                         disabled={!editable}
                     />
                 ) : null}
+                {/*
+                  * WHAT HAPPENS IF THERE IS NONE?
+                  *
+                  * One of the questions the inspector exists to answer. It used to be answered by
+                  * the runtime instead, and badly: the wording was chosen by testing whether the
+                  * question's own words contained "allerg", so "Please list any food sensitivities"
+                  * and "Allergy information" produced different paperwork for the same fact.
+                  */}
+                {field.type !== "text_block" && field.type !== "group" && field.type !== "signature" ? (
+                    <div data-inspector-absence>
+                        <AlloyCheckbox
+                            checked={Boolean(field.absence?.offered)}
+                            onChange={(offered) =>
+                                mutate((s) => updateField(s, field.id, { absence: offered ? { offered: true } : null }))
+                            }
+                            label={'Let the family answer "there are none"'}
+                            disabled={!editable || Boolean(field.supplied_by)}
+                        />
+                        {field.absence?.offered ? (
+                            <div className="mt-2">
+                                <AlloyFieldLabel>What the family reads</AlloyFieldLabel>
+                                <AlloyTextInput
+                                    value={field.absence.label ?? ""}
+                                    onChange={(label) =>
+                                        mutate((s) => updateField(s, field.id, { absence: { offered: true, label } }))
+                                    }
+                                    placeholder="None"
+                                    disabled={!editable}
+                                    testId="form-builder-absence-label"
+                                />
+                                <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
+                                    For example &ldquo;No known allergies&rdquo;. This is an answer, not a way to skip
+                                    the question &mdash; the completed paperwork says the family told you there are
+                                    none.
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {/*
+                  * WHERE IS IT RETAINED FOR NOW?
+                  *
+                  * The truthful third state between "bound to a canonical field" and "unbound and
+                  * forgotten". Setting it clears any canonical binding, because a question waiting
+                  * for an owner cannot also claim one.
+                  */}
+                {field.type !== "text_block" && field.type !== "group" ? (
+                    <div data-inspector-retention>
+                        <AlloyCheckbox
+                            checked={Boolean(field.retention)}
+                            onChange={(held) =>
+                                mutate((s) =>
+                                    updateField(s, field.id, {
+                                        retention: held ? { kind: "form_only_pending_canonical_owner" } : null,
+                                    }),
+                                )
+                            }
+                            label="Keep the answer on the form for now"
+                            disabled={!editable}
+                        />
+                        {field.retention ? (
+                            <div className="mt-2">
+                                <AlloyFieldLabel>Which part of Alloy will own it eventually?</AlloyFieldLabel>
+                                <AlloyTextInput
+                                    value={field.retention.owner_hint ?? ""}
+                                    onChange={(owner_hint) =>
+                                        mutate((s) =>
+                                            updateField(s, field.id, {
+                                                retention: { kind: "form_only_pending_canonical_owner", owner_hint },
+                                            }),
+                                        )
+                                    }
+                                    placeholder="Health, Consent, Financials…"
+                                    disabled={!editable}
+                                    testId="form-builder-retention-owner"
+                                />
+                                <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
+                                    The family answers this normally and the completed paperwork keeps it. Alloy does
+                                    not yet have a record that owns this fact, so nothing is written to one &mdash;
+                                    and when that owner exists it can adopt these answers deliberately.
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {/*
+                  * WHO PROVIDES IT? — the organisation, not the family.
+                  *
+                  * The Form holds the REFERENCE. Storing the amount here would make a second place
+                  * it can be right, which is the same as a second place it can go stale.
+                  */}
+                {field.type !== "text_block" && field.type !== "group" ? (
+                    <div data-inspector-supplied-by>
+                        <AlloyCheckbox
+                            checked={Boolean(field.supplied_by)}
+                            onChange={(supplied) =>
+                                mutate((s) =>
+                                    updateField(s, field.id, {
+                                        supplied_by: supplied ? { source_kind: "charge_template", source_key: "" } : null,
+                                    }),
+                                )
+                            }
+                            label="Your organization provides this value"
+                            disabled={!editable || Boolean(field.absence?.offered)}
+                        />
+                        {field.supplied_by ? (
+                            <div className="mt-2">
+                                <AlloyFieldLabel>Which charge template?</AlloyFieldLabel>
+                                <AlloyTextInput
+                                    value={field.supplied_by.source_key}
+                                    onChange={(source_key) =>
+                                        mutate((s) =>
+                                            updateField(s, field.id, {
+                                                supplied_by: { source_kind: "charge_template", source_key },
+                                            }),
+                                        )
+                                    }
+                                    placeholder="registration_fee"
+                                    disabled={!editable}
+                                    testId="form-builder-supplied-source"
+                                />
+                                <p className="mt-1.5 text-[10px] leading-snug text-alloy-midnight/45">
+                                    The family is never asked for this. Each time paperwork is generated Alloy reads
+                                    the amount your charge template holds today, so changing the fee changes new
+                                    paperwork without anyone editing this form.
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 {field.type === "text_block" ? (
                     <div data-inspector-text-block>
                         <AlloyFieldLabel>Inline text</AlloyFieldLabel>

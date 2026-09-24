@@ -53,6 +53,7 @@ import type {
     CandidateDisposition,
     StructuredCandidate,
 } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+import { ABSENCE_VALUE } from "@/lib/forms/fieldSemantics";
 
 export type ApplyTurnResult =
     | {
@@ -364,6 +365,34 @@ export async function applyParticipantTurnResponse(
                 shared_values: (row.shared_values ?? {}) as Record<string, unknown>,
                 metadata,
             };
+        }
+
+        if (disposition.action === "record_absence" && sharedKey) {
+            /*
+             * "THERE ARE NONE" IS WRITTEN DOWN.
+             *
+             * Unlike a decline, this is a claim the school needs to read, so it becomes a value —
+             * a structured sentinel, never the button's own words. Writing the label is what once
+             * printed "Middle name: Nothing to add" on a signed health form; writing nothing at all
+             * is indistinguishable from a question the family never reached. `displayWithAbsence`
+             * turns the sentinel back into the authored words wherever a person sees it.
+             */
+            const shared_values = shallowMergeSharedValues((row.shared_values ?? {}) as Record<string, unknown>, {
+                [sharedKey]: ABSENCE_VALUE,
+            });
+            const metadata = buildEnrollmentNeedConfirmationPatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                confirmedValue: ABSENCE_VALUE,
+                confirmedAtIso: input.nowIso,
+            });
+            const { error } = await supabase
+                .from("form_packet_sessions")
+                .update({ shared_values, metadata })
+                .eq("id", sessionId)
+                .eq("org_id", input.orgId);
+            if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+            postWrite = { shared_values, metadata: (metadata ?? {}) as Record<string, unknown> };
         }
 
         if (disposition.action === "write_shared_value" && sharedKey) {

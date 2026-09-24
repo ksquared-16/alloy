@@ -27,6 +27,14 @@ import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatValueForDocumentDestination } from "@/lib/forms/pdf/documentDestinationDate";
 import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
+import {
+    DEFAULT_ABSENCE_LABEL,
+    absenceLabel,
+    addressBindingOf,
+    addressParts,
+    formatAddressLine,
+    isAbsenceValue,
+} from "@/lib/forms/fieldSemantics";
 import { entryHeading } from "@/lib/forms/partyCollection";
 
 /**
@@ -135,6 +143,13 @@ function isAcknowledgement(field: FormField): boolean {
  * is a destination too.
  */
 function displayAnswer(field: FormField, raw: unknown): string {
+    /*
+     * "THE FAMILY SAID THERE ARE NONE" IS NOT "NOBODY ANSWERED".
+     *
+     * On a health form that difference is the whole point, and a document that prints an em dash
+     * for both has lost it. The authored absence words are printed as the answer they are.
+     */
+    if (isAbsenceValue(raw)) return absenceLabel(field) ?? DEFAULT_ABSENCE_LABEL;
     if (raw === undefined || raw === null || raw === "") return "—";
     if (typeof raw === "boolean") return raw ? "Yes" : "No";
     return String(formatValueForDocumentDestination(raw));
@@ -418,6 +433,28 @@ export async function composeGeneratedDocument(input: {
                 const label = (field.label ?? "Attachment").replace(/\s*[:?]\s*$/, "");
                 const provided = input.values[field.id];
                 draw(`${label}: ${provided ? "Provided" : "To be provided"}`, { font: body, size: 10, gap: 6 });
+                continue;
+            }
+
+            if (field.type === "group" && addressBindingOf(field)) {
+                /*
+                 * ONE ADDRESS, ON ONE LINE.
+                 *
+                 * The four parts are canonical fields in their own right, but nobody writes their
+                 * address as four labelled answers, and a completed record that prints
+                 * "City: Bend" under "Street address: 12 Alder Lane" reads like a database export
+                 * rather than paperwork. The group DECLARED itself an address, so it is printed as
+                 * one — and an address with missing parts closes up rather than printing the gaps.
+                 */
+                const parts = addressParts(field);
+                const line = formatAddressLine(
+                    Object.fromEntries(parts.map(({ field: f, part }) => [part, input.values[f.id]])),
+                );
+                const heading = presentableQuestion(field.label);
+                reserve(9 * 1.38 + 11 * 1.38 + 8);
+                if (heading) draw(heading, { font: body, size: 8.5, color: quiet, gap: 1 });
+                if (line) answeredCount += 1;
+                draw(line || "—", { font: bold, size: 10.5, gap: 9 });
                 continue;
             }
 

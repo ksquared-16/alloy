@@ -194,6 +194,9 @@ const BUILDER_TYPE_META: Record<BuilderFieldType, string> = {
     file_ref: "File upload",
     // A canonical field is never a party collection; the picker cannot offer one.
     party_collection: "Repeated people",
+    // Nor a whole address: the picker offers the individual canonical parts, and the ADDRESS is
+    // composed from them by the answer type rather than being a field in the catalogue.
+    structured_address: "Address",
 };
 
 const GROUP_META_LABEL: Record<ProcessingBuilderLibraryGroup, string> = {

@@ -148,6 +148,14 @@ export type CandidateDisposition =
      * name box of a signed Oregon health form.
      */
     | { readonly action: "decline_value" }
+    /**
+     * The family said there are none, and the Form offers that as an answer.
+     *
+     * Distinct from `decline_value`, which settles a turn without claiming anything. This IS a
+     * claim — "no known allergies" — so it is written as a structured value and reaches the
+     * submission and the completed document, where a school needs to read it.
+     */
+    | { readonly action: "record_absence" }
     | { readonly action: "no_change"; readonly reason: "unresolved" | "clarification_needed" }
     /**
      * READ, BUT NOT TRUSTED — the participant is asked, and NOTHING is persisted.

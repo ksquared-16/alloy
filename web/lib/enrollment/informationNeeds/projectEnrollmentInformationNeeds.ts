@@ -20,6 +20,7 @@ import {
     type SourceFieldMapping,
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
+import { absenceLabel, addressPartFieldIds, isConfigurationSupplied, isFormOnlyEvidence } from "@/lib/forms/fieldSemantics";
 import {
     partyCollectionChildFieldIds,
     partyCollectionGroups,
@@ -191,8 +192,17 @@ export function projectEnrollmentInformationNeeds(
          * as it did, because nothing has declared what its rows mean.
          */
         const partyChildIds = partyCollectionChildFieldIds(form.schema);
+        /*
+         * An address that has DECLARED itself one address is not four questions.
+         *
+         * Without this the group flattens back into "Street address", "City", "State" and "ZIP"
+         * arriving separately, with nothing to tell the family they are in the middle of giving one
+         * address — the exact experience the declaration exists to prevent.
+         */
+        const addressChildIds = addressPartFieldIds(form.schema);
         walkScalarFormFields(form.schema, (field) => {
             if (partyChildIds.has(field.id)) return;
+            if (addressChildIds.has(field.id)) return;
             // Not a participant need unless the participant is the one who supplies it. Display-only
             // prose was the first case — without it a handbook paragraph became an artifact-specific
             // item called "Page 3" and counted against the parent. Placed-not-asked destinations and
@@ -282,6 +292,9 @@ export function projectEnrollmentInformationNeeds(
                 section_title: sectionByFieldId.get(field.id) ?? null,
                 field_type: conversationalControlType(field),
                 options: readFieldOptions(field),
+                absence_label: absenceLabel(field),
+                form_only_evidence: isFormOnlyEvidence(field),
+                configuration_supplied: isConfigurationSupplied(field),
             };
 
             const existing = byKey.get(identity.key);
@@ -461,6 +474,12 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         occurrence_count: acc.occurrences.length,
         occurrences: acc.occurrences,
         requirement_ids: [...acc.requirementIds],
+        /*
+         * One need can be asked by several artifacts. If ANY of them offers an absence answer, the
+         * family gets one — a school that wrote "No known allergies" on one form has told us the
+         * answer exists, and a second form that never thought about it does not take it away.
+         */
+        absence_label: acc.occurrences.map((o) => o.absence_label).find((l) => Boolean(l)) ?? null,
     } as const;
 
     /*
@@ -626,6 +645,11 @@ function projectPartyCollectionNeeds(input: ProjectNeedsInput): EnrollmentInform
                         section_title: null,
                         field_type: "party_collection",
                         options: [],
+                        // A collection is a list of people; "there are none" is expressed by
+                        // settling it empty, never by an absence answer on a question.
+                        absence_label: null,
+                        form_only_evidence: false,
+                        configuration_supplied: false,
                     },
                 ],
                 optional: collection.min === 0,

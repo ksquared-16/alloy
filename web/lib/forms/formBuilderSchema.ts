@@ -10,6 +10,7 @@
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
+import { ADDRESS_PART_KEYS, ADDRESS_PART_LABELS } from "@/lib/forms/fieldSemantics";
 import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 
 /** Builder-facing field type menu (maps to FormField discriminants + a "section" pseudo-type). */
@@ -31,7 +32,15 @@ export type BuilderFieldType =
      * builder exposes it as one answer type because that is how an administrator thinks about it:
      * "collect a list of people", not "make a group, then make it repeat, then bind it".
      */
-    | "party_collection";
+    | "party_collection"
+    /**
+     * A STRUCTURED ADDRESS — street, city, state, postal code — as one answer type.
+     *
+     * Composed from the canonical Person address fields rather than modelled again: the builder
+     * exposes it as one thing because that is how an administrator thinks about it, and how a
+     * family writes it. `address_binding` says whose address it is.
+     */
+    | "structured_address";
 
 /** What one repeated-party collection collects, in the words the inspector uses. */
 export interface BuilderPartyCollectionSpec {
@@ -49,10 +58,18 @@ export interface BuilderPartyCollectionSpec {
     fields?: Array<{ type: BuilderFieldType; label: string; required?: boolean }>;
 }
 
+/** Whose address a structured address collects. */
+export interface BuilderAddressSpec {
+    subject: "child" | "person";
+    /** The relationship whose person holds it — a guardian, an emergency contact. */
+    role?: string;
+}
+
 export interface BuilderFieldSpec {
     type: BuilderFieldType;
     label: string;
     party_collection?: BuilderPartyCollectionSpec;
+    address?: BuilderAddressSpec;
     required?: boolean;
     description?: string;
     /** For select/multiselect — inline choices, when the vocabulary is this Form's own. */
@@ -86,6 +103,22 @@ export interface BuilderFieldSpec {
     derived?: { kind: "age_from_date_of_birth" | "execution_date"; source_key?: string; as_of_key?: string } | null;
     /** Optional canonical binding; unbound fields are allowed. */
     field_source?: { entity_type: string; field_key: string; shared_value_key?: string };
+    /**
+     * Whether "there are none" is one of this question's answers, and what the family reads.
+     *
+     * Authored because the runtime used to guess: the skip wording was chosen by testing whether
+     * the question's own words contained "allerg".
+     */
+    absence?: { offered: boolean; label?: string } | null;
+    /**
+     * Where the answer is kept while no canonical owner exists.
+     *
+     * The truthful third state between "bound to a canonical field" and "unbound and forgotten".
+     * The schema refuses it beside a `field_source`.
+     */
+    retention?: { kind: "form_only_pending_canonical_owner"; owner_hint?: string; note?: string } | null;
+    /** Canonical configuration supplies this value; the family is never asked for it. */
+    supplied_by?: { source_kind: "charge_template"; source_key: string } | null;
     /**
      * For `file_ref` — the canonical document classification this upload satisfies.
      *
@@ -186,6 +219,32 @@ function fieldFromSpec(id: string, spec: BuilderFieldSpec): FormField {
                           },
                       }
                     : {}),
+            } as FormField;
+        }
+        case "structured_address": {
+            /*
+             * One answer type in the menu, the schema's existing group underneath.
+             *
+             * The parts are the CANONICAL Person address fields — `address_line1`, `city`, `state`,
+             * `postal_code` — so nothing here declares a column or invents a second address model.
+             * `address_binding` is the statement that these four belong to one address, which is
+             * what lets the conversation ask for it as one thing and the document print it as one
+             * line.
+             */
+            const a = spec.address;
+            return {
+                ...base,
+                type: "group",
+                required: Boolean(spec.required),
+                fields: ADDRESS_PART_KEYS.map((key) =>
+                    fieldFromSpec(`${id}_${key}`, {
+                        type: "short_text",
+                        label: ADDRESS_PART_LABELS[key],
+                        required: spec.required && key !== "state" ? false : false,
+                        field_source: { entity_type: "person", field_key: key },
+                    }),
+                ),
+                address_binding: { subject: a?.subject ?? "person", ...(a?.role?.trim() ? { role: a.role.trim() } : {}) },
             } as FormField;
         }
         case "short_text":
@@ -314,6 +373,38 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
             const v = visibilityFromSpec(patch.visible_when);
             if (v) (next as { visibility?: unknown }).visibility = v;
             else delete (next as { visibility?: unknown }).visibility;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, "absence")) {
+            const a = patch.absence;
+            if (a?.offered) {
+                (next as { absence?: unknown }).absence = { offered: true, ...(a.label?.trim() ? { label: a.label.trim() } : {}) };
+            } else delete (next as { absence?: unknown }).absence;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, "retention")) {
+            const r = patch.retention;
+            if (r?.kind) {
+                (next as { retention?: unknown }).retention = {
+                    kind: r.kind,
+                    ...(r.owner_hint?.trim() ? { owner_hint: r.owner_hint.trim() } : {}),
+                    ...(r.note?.trim() ? { note: r.note.trim() } : {}),
+                };
+                // A question waiting for an owner cannot also claim one. The schema refuses the
+                // pair; clearing it here means the operator never has to discover that by error.
+                delete (next as { field_source?: unknown }).field_source;
+            } else delete (next as { retention?: unknown }).retention;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, "supplied_by")) {
+            const sup = patch.supplied_by;
+            if (sup?.source_key?.trim()) {
+                (next as { supplied_by?: unknown }).supplied_by = {
+                    source_kind: sup.source_kind,
+                    source_key: sup.source_key.trim(),
+                    resolve_at: "generation",
+                };
+                // The organisation supplies it, so it is not a question the family can answer
+                // "none" to.
+                delete (next as { absence?: unknown }).absence;
+            } else delete (next as { supplied_by?: unknown }).supplied_by;
         }
         if (Object.prototype.hasOwnProperty.call(patch, "derived")) {
             const d = patch.derived;
