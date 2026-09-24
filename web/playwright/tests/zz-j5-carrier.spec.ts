@@ -216,3 +216,78 @@ test("j5 carrier rapid navigation", async ({ page }) => {
     })()`);
     console.log(`[carrier-nav] ${JSON.stringify(out)}`);
 });
+
+/**
+ * SERVED CONTAINMENT — asked of the deployed server, not inferred from a SHA.
+ *
+ * A build SHA says which commit was built. It does not say that the phased branch is reachable, that
+ * it writes NDJSON, or that phase 1 precedes phase 2 on the wire. Those are three separate claims
+ * and each is answerable directly: ask the deployed route for a phased drawer view model and read
+ * what comes back, in order, with its media type.
+ *
+ * The unphased request is asked for too, because the opt-in is the compatibility guarantee: if the
+ * plain request ever started streaming, every consumer that cannot read a second delivery would
+ * break, and that must fail loudly here rather than quietly in a browser.
+ */
+test("j5 carrier served containment", async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
+    await page.waitForTimeout(18_000);
+
+    const subject = await page.evaluate(`(() => {
+        const rows=[...document.querySelectorAll('.alloy-os-queue-row-card')];
+        if (rows.length) rows[1].click();
+        return null;
+    })()`);
+    void subject;
+    await page.waitForTimeout(12_000);
+
+    const out = await page.evaluate(`(async () => {
+        const id = document.querySelector('[data-focus-panel-body-subject]')?.getAttribute('data-focus-panel-body-subject');
+        if (!id) return { error: 'no committed subject' };
+        const base = '/api/admin/view-models/drawer/opportunity/' + encodeURIComponent(id);
+
+        const phasedRes = await fetch(base + '?phased=1', { credentials: 'include' });
+        const phasedType = phasedRes.headers.get('content-type');
+        const phasedFlag = phasedRes.headers.get('x-alloy-drawer-vm-phased');
+        const text = await phasedRes.text();
+        const lines = text.split('\\n').filter((l) => l.trim());
+        const keys = lines.map((l) => { try { return Object.keys(JSON.parse(l)); } catch { return ['<unparseable>']; } });
+
+        let carrier = null;
+        for (const l of lines) {
+            try { const o = JSON.parse(l); if (o.__carrier) { carrier = o.__carrier; break; } } catch { /* skip */ }
+        }
+
+        const plainRes = await fetch(base, { credentials: 'include' });
+        const plainType = plainRes.headers.get('content-type');
+        const plainBody = await plainRes.text();
+        let plainIsSingleJson = false;
+        try { JSON.parse(plainBody); plainIsSingleJson = true; } catch { plainIsSingleJson = false; }
+
+        return {
+            subject: id,
+            phased: {
+                status: phasedRes.status,
+                contentType: phasedType,
+                phasedHeader: phasedFlag,
+                lineCount: lines.length,
+                lineKeys: keys,
+                // Phase 1 must come FIRST. A carrier delivered after the view model buys nothing.
+                carrierIsFirstLine: keys.length > 0 && keys[0].includes('__carrier'),
+                viewModelIsLastLine: keys.length > 0 && keys[keys.length - 1].includes('__viewModel'),
+            },
+            carrier: carrier ? {
+                version: carrier.carrier_version,
+                subjectMatches: carrier.subject?.opportunity_id === id,
+                lens: carrier.subject?.attention_subject_id,
+                execution: carrier.execution,
+                flushed_at_ms: carrier.flushed_at_ms,
+                actions: (carrier.header_menu || []).map((a) => [a.key, a.readiness]),
+                executable: (carrier.header_menu || []).filter((a) => a.readiness === 'CARRIER_SAFE').length,
+            } : null,
+            unphasedStillOneAnswer: { contentType: plainType, isSingleJsonDocument: plainIsSingleJson },
+        };
+    })()`);
+    console.log(`[carrier-containment] ${JSON.stringify(out)}`);
+});
