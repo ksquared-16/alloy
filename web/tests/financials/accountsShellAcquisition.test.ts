@@ -32,16 +32,22 @@ const ROWS: Record<string, Array<Record<string, unknown>>> = {
 
 /** Answers nothing until released; how many releases it takes is the depth of the cohort. */
 function holdingClient() {
-    const held: Array<{ table: string; release: () => void }> = [];
+    const held: Array<{ table: string; keys: string[]; release: () => void }> = [];
     const builder = (table: string) => {
+        const keys: string[] = [];
         const chain: Record<string, unknown> = {};
-        for (const k of ["select", "eq", "in", "is", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "range", "neq", "overlaps", "contains"]) {
+        for (const k of ["select", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "range", "overlaps", "contains"]) {
             chain[k] = () => chain;
         }
+        /* The COLUMN a read is keyed on: `customer_members` by customer_id and by id are two
+           different questions, and a gate that only counts the table cannot tell them apart. */
+        for (const k of ["eq", "in", "is", "neq"]) {
+            chain[k] = (col: string) => { keys.push(String(col)); return chain; };
+        }
         const answer = { data: ROWS[table] ?? [], error: null, count: (ROWS[table] ?? []).length };
-        chain.maybeSingle = () => new Promise((res) => held.push({ table, release: () => res({ data: (ROWS[table] ?? [])[0] ?? null, error: null }) }));
+        chain.maybeSingle = () => new Promise((res) => held.push({ table, keys, release: () => res({ data: (ROWS[table] ?? [])[0] ?? null, error: null }) }));
         chain.single = chain.maybeSingle;
-        chain.then = (resolve: (v: unknown) => unknown) => { held.push({ table, release: () => resolve(answer) }); };
+        chain.then = (resolve: (v: unknown) => unknown) => { held.push({ table, keys, release: () => resolve(answer) }); };
         return chain;
     };
     return { client: { from: (t: string) => builder(t) } as never, held };
@@ -54,16 +60,18 @@ async function waves() {
     const done = resolveFinancialSubjectCohort(client, { orgId: "org", siteLocationIds: [] } as never)
         .then((v) => { settled = true; return v; }, (e) => { settled = true; throw e; });
     const out: string[][] = [];
+    const reads: Array<{ table: string; keys: string[] }> = [];
     await flush();
     while (held.length > 0 && out.length < 40) {
         const w = held.splice(0, held.length);
         out.push([...new Set(w.map((x) => x.table))]);
+        reads.push(...w.map((x) => ({ table: x.table, keys: x.keys })));
         w.forEach((x) => x.release());
         await flush();
     }
     await done;
     expect(settled).toBe(true);
-    return out;
+    return Object.assign(out, { reads });
 }
 
 describe("the account list's cohort does not queue reads that share an input", () => {
@@ -84,6 +92,43 @@ describe("the account list's cohort does not queue reads that share an input", (
         expect(at("customer_persons"), "the contacts facet is not read at all").toBeGreaterThanOrEqual(0);
         expect(at("customer_persons"), "contacts must not wait for the site map")
             .toBeLessThanOrEqual(at("child_enrollment_agreements"));
+    });
+
+    it("the household's children are read ONCE, not once for names and once for rooms", async () => {
+        /*
+         * `readChildNames` and `readCurrentPlacements` both asked `customer_members` for the same
+         * households — the first for names, the second only to learn which member belongs to which
+         * household. Same table, same key, same batches, twice.
+         *
+         * Measured on deployed staging, the facet phase was 326.7 ms ON TOP of the agreement-site
+         * reads it already overlaps, and the placement chain it sits in was members -> placements
+         * -> process instances. One read feeds both now, which also removes the first hop.
+         */
+        const w = await waves();
+        /*
+         * Counted by KEY, not by table. `readAgreementSites` also reads `customer_members`, keyed
+         * by ID for orphan agreements — a different question. The duplicate this removes is the
+         * one keyed by `customer_id`: names asked for it, and the placement map asked again.
+         */
+        const byCustomer = w.reads.filter((r) => r.table === "customer_members" && r.keys.includes("customer_id"));
+        expect(byCustomer.length,
+            `the households' children were read ${byCustomer.length} times by customer_id: ${w.map((x) => x.join("+")).join(" -> ")}`)
+            .toBe(1);
+        const firstMembers = w.findIndex((x) => x.includes("customer_members"));
+        const placements = w.findIndex((x) => x.includes("child_placements"));
+        expect(placements, "the placements are read").toBeGreaterThanOrEqual(0);
+        /*
+         * The placements used to wait for their OWN members read. They now follow the one the
+         * names already needed, so they sit in the very next wave. A second members read of the
+         * same households would push them out again.
+         *
+         * `readAgreementSites` also reads `customer_members`, keyed by ID for orphan agreements —
+         * a different question with a different key, which is why this measures the DISTANCE to
+         * the placements rather than counting the table.
+         */
+        expect(placements - firstMembers,
+            `placements sit ${placements - firstMembers} waves after the children: ${w.map((x) => x.join("+")).join(" -> ")}`)
+            .toBeLessThanOrEqual(1);
     });
 
     it("nothing was dropped: every cohort source is still read", async () => {
