@@ -932,21 +932,42 @@ answers.
 **STOP AND REPORT IF** anything you answered shows as a lone **–**, or if you see an id, a key, or
 a word like *origin*, *provider_ref* or *pending*.
 
-## G2.3 — Send enrollment paperwork (KNOWN BLOCKER — read before trying)
+## G2.3 — Send enrollment paperwork — THE CANONICAL LAUNCH
 
-The operator action **IS** offered on a child's Process Card at **Enrolling** — the earlier report
-that it was gated to *Enrolled* was not the cause.
+**This is now how you start a participant run.** The button at the top of this page is developer
+tooling only; do not use it for certification.
 
-But clicking it currently refuses with:
+**DO**
 
-> This journey is not pinned to a published Business Process revision, so there are no governing
-> requirements to realize.
+1. **Workspace** → the **Enrollment** pipeline.
+2. Open the **Registration** work unit — "Children in the enrollment process".
+3. Pick a child showing **Enrolling**.
+4. On the Process Card, click **Send enrollment paperwork**.
 
-That refusal is deliberate and correct — paperwork built from configuration that can change
-underneath it is exactly what the pin prevents. **Until the Enrollment Business Process is published
-and these journeys are pinned to a revision, keep using the button at the top of this page.**
+**EXPECT** — a message composer, already addressed:
 
-Some children (e.g. *Touree Disposable0913*) show no action buttons at all on the card, not even
-**Record outcome** — the same cause, one step earlier: with no governing revision their stage work
-was never instantiated.
+```
+    FOR   Toureeb Tourb0913          ← the child whose card you opened
+    TO    Tourb Tourb0913            ← their guardian, resolved from the record
+    Subject  Enrollment paperwork for Toureeb
+    …body containing the participant link…
+```
+
+You should not have to reselect the child, and you should not have to choose a packet — the
+published Business Process decides which paperwork this child owes.
+
+**DO** Copy the link from the message body and open it in a private window.
+
+**EXPECT** — the conversation for the right child, with what Alloy already knows already filled in.
+
+**STOP AND REPORT IF** you see *"This journey is not pinned to a published Business Process
+revision"*. That was the blocker this run closed; its return matters.
+
+### Two messages that are NOT bugs
+
+* *"No parent or guardian is linked to <child>, so there is nobody to send enrollment paperwork
+  to."* — correct, and it tells you the fix. Add the family contact on the child's record.
+* A child at Enrolling with **no action buttons at all** — that journey has no stage work
+  instantiated. Pick another child at Enrolling; it is a property of that one record, not of the
+  product.
 
