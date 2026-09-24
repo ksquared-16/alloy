@@ -113,3 +113,79 @@ describe("the position facts are narrowed to the charges being asked about", () 
         expect(facts.claims).toEqual([]);
     });
 });
+
+/**
+ * ── THE CONTRACT LOCK ───────────────────────────────────────────────────────────────────────────
+ *
+ * The decision this slice encodes: the account fact bundle is the canonical acquisition boundary,
+ * and a bundle that fails makes the whole account financial answer UNAVAILABLE.
+ *
+ * The dangerous case is not a bundle that comes back empty. It is a bundle that comes back FULL of
+ * perfectly good ledger facts while the acquisition itself reports failure — because that is the
+ * shape from which a coherent-looking answer can be assembled out of an incomplete read. A money
+ * surface must refuse it, and refusing it must not depend on the payload happening to be empty.
+ */
+import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+
+const LEDGER_FACTS = {
+    ...FULL,
+    agreements: [{ id: "agr-1", customer_member_id: "mem-1", customer_id: "cust-1", status: "active" }],
+    members: [{ id: "mem-1", first_name: "A", last_name: "B", display_name: "A B", person_id: "per-1" }],
+    charges: [{
+        id: "charge-0", billable_source_type: "enrollment_agreement", billable_source_id: "agr-1",
+        source_charge_id: null, charge_category: "tuition", charge_type: "tuition", status: "posted",
+        amount_cents: 10_000, currency_code: "USD", charge_template_id: null, service_date: "2026-09-01",
+        occurs_on: "2026-09-01", billable_on: "2026-09-01", due_date: "2026-09-01",
+        posted_at: "2026-09-01T00:00:00Z", voided_at: null, description: "tuition", metadata: {},
+        created_at: "2026-09-01T00:00:00Z",
+    }],
+};
+
+/** Table reads all answer; only the acquisition boundary is varied. */
+const cardClient = (rpcAnswer: { data: unknown; error: unknown }) =>
+    ({
+        from: () => {
+            const chain: Record<string, unknown> = {};
+            for (const k of ["select", "eq", "in", "is", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "range", "neq"]) {
+                chain[k] = () => chain;
+            }
+            chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+            chain.single = chain.maybeSingle;
+            chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null, count: 0 });
+            return chain;
+        },
+        rpc: () => ({ then: (resolve: (v: unknown) => unknown) => resolve(rpcAnswer) }),
+    }) as never;
+
+describe("a failed acquisition is UNAVAILABLE, even when the payload looks complete", () => {
+    it("THE LOCK: valid ledger facts + a failed acquisition = no answer at all", async () => {
+        const vm = await buildFinancialsCardVM(
+            cardClient({ data: LEDGER_FACTS, error: { message: "connection reset" } }),
+            { orgId: "org", customerId: "cust-1", customerMemberId: null, today: "2026-09-24" },
+        );
+        expect(vm.unavailableReason, "the card says it cannot answer").toMatch(/unavailable/i);
+        expect(vm.rows, "no ledger is assembled from an acquisition that failed").toEqual([]);
+        expect(vm.collectible?.currentlyCollectibleCents ?? 0, "and no balance is claimed").toBe(0);
+    });
+
+    it("KNOWN ZERO is not UNAVAILABLE: an account with genuinely no receipts still answers", async () => {
+        const vm = await buildFinancialsCardVM(
+            cardClient({ data: { ...LEDGER_FACTS, payments_by_source: [], payments_backing: [], payment_allocations: [] }, error: null }),
+            { orgId: "org", customerId: "cust-1", customerMemberId: null, today: "2026-09-24" },
+        );
+        expect(vm.unavailableReason, "a family that has paid nothing is a known answer").toBeFalsy();
+        expect(vm.rows.length, "and its ledger renders").toBeGreaterThan(0);
+    });
+
+    it("the two are distinguishable at the seam, not merely at the card", async () => {
+        /* Same empty receipts, opposite acquisition outcomes — one answers, one refuses. */
+        await expect(readAccountFactBundle(clientReturning(LEDGER_FACTS, { message: "down" }), {
+            orgId: "org", customerId: "cust-1", customerMemberId: null,
+        })).rejects.toThrow(/unavailable/i);
+        const ok = await readAccountFactBundle(clientReturning({ ...LEDGER_FACTS, payments_by_source: [] }), {
+            orgId: "org", customerId: "cust-1", customerMemberId: null,
+        });
+        expect(ok.paymentsBySource, "asked, and there are none").toEqual([]);
+        expect(ok.counts.charges, "which the counts confirm was a real answer").toBe(1);
+    });
+});
