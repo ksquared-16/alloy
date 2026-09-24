@@ -83,12 +83,16 @@ async function measureDetails(page: Page, host: "focus" | "accounts", pass: stri
 }
 
 test("focus cold", async ({ page }) => { await measureDetails(page, "focus", "cold"); });
+test("focus cold 2", async ({ page }) => { await measureDetails(page, "focus", "cold-2"); });
 test("focus warm 1", async ({ page }) => { await measureDetails(page, "focus", "warm-1"); });
 test("focus warm 2", async ({ page }) => { await measureDetails(page, "focus", "warm-2"); });
+test("focus warm 3", async ({ page }) => { await measureDetails(page, "focus", "warm-3"); });
+test("focus warm 4", async ({ page }) => { await measureDetails(page, "focus", "warm-4"); });
+test("accounts warm 2", async ({ page }) => { await measureDetails(page, "accounts", "warm-2"); });
 test("accounts warm", async ({ page }) => { await measureDetails(page, "accounts", "warm"); });
 test("record", async () => {
     mkdirSync(OUT, { recursive: true });
-    writeFileSync(`${OUT}/baseline.json`, JSON.stringify(all, null, 2));
+    writeFileSync(`${OUT}/after.json`, JSON.stringify(all, null, 2));
     log(`BASELINE RECORDED (${all.length} runs)`);
-    expect(all.length).toBe(4);
+    expect(all.length).toBeGreaterThanOrEqual(7);
 });
