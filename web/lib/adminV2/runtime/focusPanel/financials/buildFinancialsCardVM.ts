@@ -1204,16 +1204,6 @@ async function buildFinancialsCardVMInner(
      * makes the whole payments answer unavailable.
      */
     const household = t(args.customerId) || null;
-    const paymentViewsP: Promise<
-        { ok: true; views: PaymentView[] | null } | { ok: false; error: unknown }
-    > = household
-        ? clock
-              .time("payment_views_ms", () =>
-                  resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }),
-              )
-              .then((views) => ({ ok: true as const, views }))
-              .catch((error: unknown) => ({ ok: false as const, error }))
-        : Promise.resolve({ ok: true as const, views: null });
 
     /*
      * ── THE TENANT'S POLICIES DEPEND ON THE ORG AND ON NOTHING ELSE ──────────────────────────
@@ -1312,6 +1302,39 @@ async function buildFinancialsCardVMInner(
     } catch (e) {
         return { ...vm, unavailableReason: e instanceof Error ? e.message : "Financial records unavailable." };
     }
+    /*
+     * ── THE VIEWS NO LONGER SCAN THE ORGANISATION TO FIND THIS FAMILY ───────────────────────────
+     *
+     * This resolver used to read every inbound receipt in the tenant and then resolve each
+     * billable source's household one at a time to decide which were ours — measured on the
+     * certification tenant, 3,517 receipts over four pages to keep 3,198, and 65 sequential
+     * lookups to decide, plus the batched applications and charges behind them. Roughly 150
+     * sequential round trips, and 1,131-4,211 ms of the deployed response once everything else on
+     * the card got fast.
+     *
+     * The bundle already resolved this household's billable sources, so its receipts are selected
+     * BY them. The resolver keeps every rule it owns — inbound-only, not-a-refund, what counts as
+     * applied, how a reversal reads, which payer names the receipt — and simply stops paying for
+     * the discovery. It is created AFTER the bundle now, which costs nothing: the bundle is the
+     * first wave, and this was never able to finish before it anyway.
+     */
+    const paymentViewsP: Promise<
+        { ok: true; views: PaymentView[] | null } | { ok: false; error: unknown }
+    > = household
+        ? clock
+              .time("payment_views_ms", () =>
+                  resolveHouseholdPaymentViews(supabase, { orgId: args.orgId, customerId: household }, {
+                      payments: bundle.paymentsForViews,
+                      allocations: bundle.paymentAllocations,
+                      charges: bundle.chargesForAllocations,
+                      payers: bundle.payerCustomers,
+                      refunds: bundle.paymentRefunds,
+                  }),
+              )
+              .then((views) => ({ ok: true as const, views }))
+              .catch((error: unknown) => ({ ok: false as const, error }))
+        : Promise.resolve({ ok: true as const, views: null });
+
     /*
      * ── A BALANCE IS STILL NOT ALLOWED TO BE PARTIAL ────────────────────────────────────────────
      *
