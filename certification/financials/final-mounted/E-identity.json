@@ -1,0 +1,22 @@
+{
+  "identity": {
+    "rowIdentity": "Certt Certhouse $36.00",
+    "rowAvatars": 0,
+    "ledgerChildNames": [],
+    "surfaceImages": [],
+    "bodyMentionsCertt": true
+  },
+  "discIdentity": {
+    "children": 2,
+    "avatarCount": 2,
+    "avatarText": [
+      "CC",
+      "CC"
+    ],
+    "avatarImages": [
+      false,
+      false
+    ],
+    "imagesInCard": 0
+  }
+}

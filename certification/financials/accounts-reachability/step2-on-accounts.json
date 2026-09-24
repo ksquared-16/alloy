@@ -1,0 +1,70 @@
+{
+  "url": "/workspace/work-unit/enrolled-children",
+  "accountRows": 12,
+  "rows": [
+    {
+      "id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+      "selected": "true",
+      "state": "outstanding",
+      "label": "Certhouse Family $2,218.82 58 charges · account-wide fees $2"
+    },
+    {
+      "id": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+      "selected": "false",
+      "state": "outstanding",
+      "label": "Kurzman Family $75.00 3 charges · account-wide fees $75 coll"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0001",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Alvarez Household (demo) $0.00 Open · nothing billed No fina"
+    },
+    {
+      "id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Automation Family $0.00 Open · nothing billed No financial a"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0002",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Brennan Household (demo) $0.00 Open · nothing billed No fina"
+    },
+    {
+      "id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Certfree Family $0.00 Open · nothing billed No financial act"
+    },
+    {
+      "id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Certopp Family $0.00 Open · nothing billed No financial acti"
+    },
+    {
+      "id": "fd000000-0000-4000-8000-0000000c0003",
+      "selected": "false",
+      "state": "no_activity",
+      "label": "Chen Household (demo) $0.00 Open · nothing billed No financi"
+    }
+  ],
+  "selectedRow": "29944d3e-8267-45b7-8dcb-7405060e2573",
+  "detailRoot": 1,
+  "detailAccount": null,
+  "overlays": [
+    "detail"
+  ],
+  "ledgerRows": 116,
+  "periods": 0,
+  "lenses": 1,
+  "payerRow": 1,
+  "responsibleFilter": 1,
+  "commandBackdrop": 1,
+  "skeleton": 3,
+  "emptyKind": "loading",
+  "workspaceTab": "accounts",
+  "detailText": "FINANCIALS $1,525.00 past due September 2026 CURRENT BALANCE $2,023.87 DUE $1,912.00 PAST DUE $1,525.00 RESPONSIBILITY $2,098.87 PAID $75.00 AVAILABLE PREPAID $125.00 Certt Certhouse $36.00 Sibling di"
+}

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloyMultiSelect, AlloySelect } from "@/components/workspace/AlloySelect";
 
 /**
@@ -206,7 +207,11 @@ export default function AddChargeCommand({
          * charge, so an ineligible policy is not offered rather than offered and refused.
          */
         chargeDiscount?: {
-            options: Array<{ policyId: string; label: string }>;
+            /**
+             * `expectedAmount` is what the resolver said this policy takes off THIS charge,
+             * already formatted. The card prints it; it never derives it from the rate in `label`.
+             */
+            options: Array<{ policyId: string; label: string; expectedAmount?: string | null }>;
             /** `null` means No discount — an explicit answer, never an empty one. */
             selectedPolicyId: string | null;
             onSelect: (policyId: string | null) => void;
@@ -229,6 +234,13 @@ export default function AddChargeCommand({
 }) {
     const t = specimen.template;
     const amountLocked = t.amountStrategy !== "manual";
+    /* The chosen policy, resolved once so the control and the preview line cannot name different ones. */
+    const selectedDiscount =
+        controls?.chargeDiscount?.selectedPolicyId
+            ? controls.chargeDiscount.options.find(
+                  (o) => o.policyId === controls.chargeDiscount!.selectedPolicyId,
+              ) ?? null
+            : null;
 
     return (
         <div className="alloy-os-addcharge-host">
@@ -441,13 +453,20 @@ export default function AddChargeCommand({
             <SectionHead ruled={false}>Dates</SectionHead>
             <Field label="Service date" required={t.occursOn === "event_date"}>
                 {controls && t.occursOn === "event_date" ? (
-                    <input
-                        className="alloy-os-addcharge__input"
-                        data-addcharge-event-date
-                        type="date"
-                        value={controls.eventDate}
-                        onChange={(e) => controls.onEventDate(e.target.value)}
-                    />
+                    /*
+                      * The canonical date control. This was a raw `<input type="date">` — the one
+                      * browser-styled widget on a card of Alloy dropdowns, on the surface that
+                      * commits money. The stored value is still `YYYY-MM-DD` and still the same
+                      * `event_date` the resolver is given, so nothing about dating semantics moved.
+                      */
+                    <span data-addcharge-event-date>
+                        <AlloyDateInput
+                            value={controls.eventDate}
+                            onChange={controls.onEventDate}
+                            aria-label="Service date"
+                            testId="addcharge-event-date"
+                        />
+                    </span>
                 ) : (
                     <Value>{specimen.serviceDate}</Value>
                 )}
@@ -734,25 +753,46 @@ export default function AddChargeCommand({
                 ) : null}
 
                 {/*
-                    ── THE DISCOUNT LINE STATES THE DECISION THAT WAS MADE ─────────────────────
+                    ── THE DISCOUNT LINE STATES THE DECISION, AND WHAT IT IS WORTH ─────────────
                     One line, matching the one control above it. "None" is an answer and reads as
                     one; naming a policy says which of the eligible ones will reduce this charge.
 
-                    NO ARITHMETIC. What the discount is worth against a charge that does not exist
-                    yet is the resolver's answer, and the selector's own label already carries the
-                    authored rate — computing a figure here to fill the column would make this
-                    card a second reduction authority.
+                    STILL NO ARITHMETIC. The figure is `resolveFinancialReductions`' own — the
+                    same resolver a real charge passes through — carried here by the route that
+                    priced it. What changed is that it is carried at all: the line used to name a
+                    policy and its rate in a money column with no money in it, and left the
+                    operator to work out what came off a charge they were a click from committing.
                 */}
                 {controls?.chargeDiscount ? (
                     <p className="alloy-os-billing__line" data-addcharge-preview-discount="true">
-                        <span className="alloy-os-billing__line-label">Discount</span>
-                        <span className="alloy-os-billing__line-value">
-                            {controls.chargeDiscount.selectedPolicyId
-                                ? (controls.chargeDiscount.options.find(
-                                      (o) => o.policyId === controls.chargeDiscount!.selectedPolicyId,
-                                  )?.label ?? "Selected")
-                                : "None"}
+                        <span className="alloy-os-billing__line-label">
+                            Discount
+                            {selectedDiscount ? (
+                                <span className="alloy-os-addcharge__share">{selectedDiscount.label}</span>
+                            ) : null}
                         </span>
+                        <span className="alloy-os-billing__line-value" data-addcharge-preview-discount-amount="true">
+                            {!controls.chargeDiscount.selectedPolicyId
+                                ? "None"
+                                : specimen.previewDiscountAmount
+                                  ? specimen.previewDiscountAmount
+                                  : (selectedDiscount?.label ?? "Selected")}
+                        </span>
+                    </p>
+                ) : null}
+
+                {/*
+                    ── NET, WHICH IS THE NUMBER THE OPERATOR CAME FOR ─────────────────────────
+                    Rendered only where a discount is actually coming off: with no reduction the
+                    net IS the gross, and a second line repeating it would be ceremony.
+                */}
+                {specimen.previewNet && specimen.previewDiscountAmount ? (
+                    <p
+                        className="alloy-os-billing__line alloy-os-billing__line--emphasis"
+                        data-addcharge-preview-net="true"
+                    >
+                        <span className="alloy-os-billing__line-label">Net charge</span>
+                        <span className="alloy-os-billing__line-value">{specimen.previewNet}</span>
                     </p>
                 ) : null}
 
@@ -771,38 +811,54 @@ export default function AddChargeCommand({
                     </>
                 ) : null}
                 {/*
-                    THE BALANCE LINE MUST MATCH THE ACT.
+                    ── WHAT CONFIRMING DOES, SAID AS THE WRITER ACTUALLY BEHAVES ──────────────
 
-                    Under a review boundary a draft is not yet owed, so the balance genuinely does
-                    not move and stating it unchanged is the fact. Without one the charge posts on
-                    confirm — and showing the balance UNCHANGED there would be the same lie in the
-                    other direction, telling an operator nothing will happen a moment before it does.
+                    `charge.add` writes a draft, and then — only where no review boundary applies —
+                    posts it in the same gesture through `postChildcareCharge`. Two different
+                    consequences, and the template's own `reviewRequired` is what decides which.
+
+                    Both branches used to end in a balance. The review branch was right: a draft is
+                    not owed, so the balance genuinely does not move. The posting branch printed
+                    "After posting" beside the UNCHANGED balance, so a +$400.00 charge promised, in
+                    bold, that pressing the button would leave $536.00 at $536.00. The label was
+                    accurate and the figure was not.
+
+                    The projection adds the GROSS. The discount comes off later and separately —
+                    `applyFinancialReductions` writes it as its own negative row when discounts run
+                    — so a balance quietly netted here would be a balance this action never
+                    produces. The net is stated above, where it belongs, as what the charge comes
+                    to rather than as what the account will read.
                 */}
+                <p className="alloy-os-billing__line">
+                    <span className="alloy-os-billing__line-label">Current balance</span>
+                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                </p>
+                <p className="alloy-os-billingdetail__group" data-addcharge-preview-consequence="true">
+                    On confirm
+                </p>
                 {t.reviewRequired ? (
-                    <>
-                        <p className="alloy-os-addcharge__draftnote">
-                            Creates a draft — the balance does not change until it posts.
-                        </p>
-                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                            <span className="alloy-os-billing__line-label">Current balance</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                        </p>
-                    </>
+                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="draft">
+                        Creates a draft charge for review. The balance does not change until it is posted.
+                    </p>
                 ) : (
                     <>
-                        {/*
-                          * The preview below already says what the family will owe, in money.
-                          * Saying it again in prose was the card explaining itself rather than
-                          * showing the effect.
-                          */}
-                        <p className="alloy-os-billing__line">
-                            <span className="alloy-os-billing__line-label">Current balance</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                        <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="posts">
+                            Creates this charge and posts it.
+                            {specimen.previewDiscountAmount
+                                ? " The discount is recorded separately when discounts run, and lowers the balance then."
+                                : ""}
                         </p>
-                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                            <span className="alloy-os-billing__line-label">After posting</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewAfter}</span>
-                        </p>
+                        {specimen.previewPostedBalance ? (
+                            <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                                <span className="alloy-os-billing__line-label">Balance after posting</span>
+                                <span
+                                    className="alloy-os-billing__line-value"
+                                    data-addcharge-posted-balance="true"
+                                >
+                                    {specimen.previewPostedBalance}
+                                </span>
+                            </p>
+                        ) : null}
                     </>
                 )}
             </div>

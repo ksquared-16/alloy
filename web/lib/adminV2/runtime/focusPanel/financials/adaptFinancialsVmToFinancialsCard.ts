@@ -569,6 +569,12 @@ export function adaptAddChargeSpecimen(input: {
      */
     previewSummary: string | null;
     previewChanges: readonly string[];
+    /**
+     * What the chosen discount is worth against this charge, as `resolveFinancialReductions`
+     * priced it. `null` is a real answer — no discount applies, or none was chosen — and is not
+     * the same as zero.
+     */
+    discountCents?: number | null;
 }): AddChargeSpecimen {
     /*
      * The domain states its resolved dating as "Occurs 2026-09-18" / "Billable 2026-10-01". The
@@ -591,6 +597,56 @@ export function adaptAddChargeSpecimen(input: {
      * exactly the drift the adapter exists to prevent.
      */
     const resolvedAmount = input.previewSummary?.match(/[$][\d,]+\.\d{2}/)?.[0] ?? null;
+
+    /*
+     * ── THE CONSEQUENCE, IN THREE CANONICAL FIGURES ─────────────────────────────────────────
+     *
+     * Gross is the resolver's, read back out of the summary it composed — the same string the
+     * card already prints, in cents so it can be added to. Discount is the resolver's too. Net is
+     * the one subtraction, and it is done HERE rather than in the card because this adapter is
+     * already the place the domain's answer becomes the card's display, and a component that
+     * subtracts money is a component that can disagree with the resolver.
+     *
+     * `null` propagates rather than collapsing to zero: a preview that has not resolved a gross
+     * yet must say nothing about the net, not claim it is $0.00.
+     */
+    const grossCents = centsFromMoney(resolvedAmount ?? input.amount);
+    /*
+     * ── THE SIGN IS THE DOMAIN'S, AND IT IS NEGATIVE ────────────────────────────────────────
+     *
+     * `AppliedReduction.amountCents` is documented as "NEGATIVE cents. The sign is the direction
+     * money moves, and it is stored, not inferred." This first shipped assuming a magnitude, and
+     * the mounted pass caught both halves of that mistake on deployed staging: the line read
+     * "--$40.00" because a minus was prefixed to an already-signed figure, and the net read
+     * "$440.00" because subtracting a negative ADDS it — a $400 charge with a 10% discount
+     * previewed as costing MORE than its gross.
+     *
+     * So the sign is honoured rather than corrected: the net is gross PLUS the reduction, which
+     * is the same arithmetic the ledger does when the reduction posts as its own negative row.
+     */
+    const discountCents = input.discountCents ?? null;
+    const netCents =
+        grossCents == null ? null : grossCents + (discountCents ?? 0);
+
+    /*
+     * ── WHAT CONFIRMING ACTUALLY DOES, WHICH IS NOT WHAT THIS ONCE SAID ─────────────────────
+     *
+     * `charge.add` writes a DRAFT (`writeTemplateDraftCharge` — "never posts"), and then, only
+     * where no review boundary applies, posts it in the same gesture through the canonical
+     * `postChildcareCharge`. So there are two consequences and they are different, and the card
+     * already branches on exactly that flag.
+     *
+     * What was wrong was the figure. The unposted branch is right that the balance does not move
+     * — and the posted branch was handed the SAME unchanged balance, so a +$400.00 charge
+     * previewed as "After posting $536.00" against a current balance of $536.00. The operator was
+     * shown, in bold, that pressing the button changes nothing.
+     *
+     * The projection adds the GROSS, not the net, because the reduction is a separate consequence
+     * written beside the charge later: `applyFinancialReductions` — "GROSS STAYS GROSS" — posts
+     * the discount as its own negative row when discounts run. A projection that quietly netted
+     * it here would promise a balance this action does not produce.
+     */
+    const postedBalanceCents = grossCents == null ? null : input.balanceCents + grossCents;
     return {
         template: input.template,
         subject: input.subjectLabel,
@@ -610,15 +666,39 @@ export function adaptAddChargeSpecimen(input: {
         note: input.note,
         previewBefore: money(input.balanceCents, input.currency),
         /*
-         * THE BALANCE DOES NOT MOVE, and this field says so.
-         *
-         * It once carried `balance + amount`, which claimed a posted increase that confirming the
-         * command does not cause: Add charge creates a DRAFT, and a draft is not owed until it
-         * posts. The charge amount is the implication the operator is authorising; the balance is a
-         * fact that is unchanged by authorising it.
+         * Retained as the UNPOSTED reading — the balance a draft leaves untouched. The card shows
+         * it only on the branch where confirming genuinely does not post.
          */
         previewAfter: money(input.balanceCents, input.currency),
+        /** The gross this charge is raised at, as the domain resolved it. */
+        previewGross: resolvedAmount ?? (grossCents != null ? money(grossCents, input.currency) : null),
+        /**
+         * What the chosen discount takes off it, already carrying the domain's minus sign, or null
+         * when none does. Callers render it as-is; prefixing another sign is the defect above.
+         */
+        previewDiscountAmount: discountCents != null ? money(discountCents, input.currency) : null,
+        /** Gross less that discount — what this charge is expected to come to. */
+        previewNet: netCents != null ? money(netCents, input.currency) : null,
+        /** The balance once this charge posts, which is the gross away. Null when unresolved. */
+        previewPostedBalance:
+            postedBalanceCents != null ? money(postedBalanceCents, input.currency) : null,
     };
+}
+
+/**
+ * Cents from a formatted money string — the inverse of `money()`, for the one place a canonical
+ * figure arrives already formatted and has to be added to another.
+ *
+ * Deliberately strict: anything that is not a plain currency amount returns null, so an
+ * unresolved preview stays unresolved rather than becoming a confident zero.
+ */
+function centsFromMoney(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const m = value.match(/-?[\d,]+\.\d{2}/);
+    if (!m) return null;
+    const n = Number(m[0].replace(/,/g, ""));
+    if (!Number.isFinite(n)) return null;
+    return Math.round(n * 100);
 }
 
 /**

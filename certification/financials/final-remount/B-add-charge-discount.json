@@ -1,0 +1,14 @@
+{
+  "present": true,
+  "text": "ADD Charge Adjustment CHARGE TYPEREQUIRED Monthly tuition ▾ 5 configured types CHARGE APPLIES TOREQUIRED Certa Certhouse ▾ Certa Certhouse AMOUNT $400.00 NOTE DATES SERVICE DATE Resolved at commit BILLING PERIOD September 2026 DUE Configured policy CHARGE TO Certt Certhouse $18.00 · household responsibilityChange → DISCOUNT Sibling discount (QA specimen) · 10% ▾ PREVIEW Monthly tuition +$400.00 DiscountSibling discount (QA specimen) · 10% --$40.00 NET CHARGE $440.00 Current balance $536.00 ON CONFIRM Creates this charge and posts it. The discount is recorded separately when discounts run, and lowers the balance then. BALANCE AFTER POSTING $936.00 Add charge Cancel",
+  "chargeToCount": 1,
+  "discountAmount": "--$40.00",
+  "netLine": "NET CHARGE $440.00",
+  "postedBalance": "$936.00",
+  "postingKind": "posts",
+  "postingCopy": "Creates this charge and posts it. The discount is recorded separately when discounts run, and lowers the balance then.",
+  "nativeDates": 0,
+  "alloyDates": 0,
+  "discountSelector": 1,
+  "nativeSelects": 0
+}
