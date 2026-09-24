@@ -266,7 +266,18 @@ describe("actionable drawer carrier — subject guard fails closed", () => {
         expect(actionableCarrierDescribesSubject(carrier, { opportunityId: "opp-C" })).toBe(false);
     });
 
-    it("the participation lens is part of identity — same case, different child refuses", () => {
+    it("THE LENS IS NOT IDENTITY — and making it identity is what broke the deployed reader", () => {
+        /*
+         * Deployed 8e749e03 keyed the carrier on (opportunity, lens). The hover prewarm calls
+         * `prewarmRecordWork(opportunity, id)` with the queue row's own id, so on a family row it
+         * asserts the opportunity id as the attention subject; the panel asserts none. Every
+         * hover-warmed carrier was therefore refused by the only consumer that needed it —
+         * `T_carrier_mounted` absent from every sample while the carrier arrived at click +164ms.
+         *
+         * It cannot be identity: `resolveActionsForContext` receives org, surface, entity,
+         * department and work unit and NO participation, so one opportunity has one header action
+         * set whatever lens asked for it. The lens is echoed for diagnosis and nothing keys on it.
+         */
         const childLens = buildActionableDrawerCarrier({
             opportunityId: "opp-B",
             attentionSubjectId: "child-1",
@@ -275,9 +286,15 @@ describe("actionable drawer carrier — subject guard fails closed", () => {
             resolved: { ...emptyResolvedActionsBySlot(), primary: [CENSUS[0]!.a] },
             flushedAtMs: 1,
         })!;
-        expect(actionableCarrierDescribesSubject(childLens, { opportunityId: "opp-B", attentionSubjectId: "child-2" })).toBe(false);
-        expect(actionableCarrierDescribesSubject(childLens, { opportunityId: "opp-B", attentionSubjectId: null })).toBe(false);
-        expect(actionableCarrierDescribesSubject(childLens, { opportunityId: "opp-B", attentionSubjectId: "child-1" })).toBe(true);
+        expect(childLens.subject.attention_subject_id).toBe("child-1");
+        for (const lens of ["child-1", "child-2", null, undefined]) {
+            expect(
+                actionableCarrierDescribesSubject(childLens, { opportunityId: "opp-B", attentionSubjectId: lens }),
+                `a carrier for opp-B must be readable however the consumer names its lens (${String(lens)})`,
+            ).toBe(true);
+        }
+        // The guard that matters is unchanged: a different opportunity is still refused.
+        expect(actionableCarrierDescribesSubject(childLens, { opportunityId: "opp-C" })).toBe(false);
     });
 
     it("malformed, truncated and unversioned carriers all refuse", () => {
@@ -386,8 +403,7 @@ describe("the carrier has a REAL mounted consumer", () => {
     });
 
     it("the carrier is asked for by the COMMITTED subject, never by last-arrival", () => {
-        expect(PANEL).toContain("useActionableDrawerCarrier({");
-        expect(PANEL).toContain("opportunityId: settlementSubjectId,");
+        expect(PANEL).toContain("useActionableDrawerCarrier({ opportunityId: settlementSubjectId })");
     });
 
     it("phase 2 wins outright — a resolved view model is never topped up from a carrier", () => {

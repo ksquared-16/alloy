@@ -82,7 +82,22 @@ export type ActionableDrawerCarrier = {
     subject: {
         entity_type: "opportunity";
         opportunity_id: string;
-        /** The participation lens the request was scoped to, or null for the family lens. */
+        /**
+         * The participation the REQUEST asserted, echoed for diagnosis. It is NOT part of this
+         * carrier's identity, and nothing may key on it.
+         *
+         * Measured on deployed 8e749e03: the hover prewarm calls `prewarmRecordWork(opportunity, id)`
+         * with the queue row's own id, so on a family row it asserts the opportunity id as the
+         * attention subject, while the click path asserts none. Keying identity on that difference
+         * refused every carrier the prewarm produced — the carrier arrived at click +164ms, was
+         * validated, was stored, and was then never found by the panel asking for the same subject
+         * with no lens. Phase 1 was a producer with no reader on the only path that matters.
+         *
+         * It is not part of identity because it cannot be: `resolveActionsForContext` is called with
+         * org, surface, entity, department and work unit and NO participation, so the header action
+         * set does not depend on the lens. Two carriers for one opportunity under different lenses
+         * carry the same actions by construction, and refusing one for the other protects nothing.
+         */
         attention_subject_id: string | null;
     };
     /**
@@ -347,11 +362,16 @@ export function actionableCarrierDescribesSubject(
     if (!want) return false;
     if (String(c.subject.opportunity_id ?? "").trim() !== want) return false;
 
-    // The participation lens is part of identity: the same opportunity under a different child is a
-    // different action context, so a carrier minted for one must not mount under the other.
-    const wantLens = selected.attentionSubjectId?.trim() || null;
-    const gotLens = c.subject.attention_subject_id?.trim() || null;
-    if (wantLens !== gotLens) return false;
-
+    /*
+     * THE LENS IS DELIBERATELY NOT COMPARED — see `subject.attention_subject_id` above.
+     *
+     * The opportunity is the whole identity here because the action set is resolved without any
+     * participation. Comparing lenses looked like a stricter guard and was in fact a false refusal:
+     * the prewarm asserts the row's own id as the attention subject and the click asserts none, so
+     * every hover-warmed carrier was discarded by the one consumer that needed it.
+     *
+     * What this guard must stop is B's carrier mounting under C, and the subject comparison above is
+     * exactly that check.
+     */
     return true;
 }
