@@ -6,6 +6,7 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { executeExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
+import { executeNewChildProposalCommit } from "@/lib/pos/processingCase/commit/executeNewChildProposalCommit";
 import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
 import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 
@@ -126,6 +127,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return relOutcome.ok
                 ? jsonData(payload)
                 : NextResponse.json({ error: relOutcome.record.reason, ...payload }, { status: relOutcome.status });
+        }
+
+        /*
+         * A SIBLING THE FAMILY ADDED IS A CREATE, NOT A RECONCILE.
+         *
+         * The native child plan below reconciles changes onto a child Alloy already holds, and it
+         * correctly refuses anything else — "Only existing child proposals may commit in P5B". A
+         * respondent-added child needs the registered `add_child` capability instead, so it is
+         * routed here rather than by loosening that refusal. Only a proposal whose server-derived
+         * membership intent says `create_household_child` diverts; an existing child still falls
+         * through to the plan that owns it.
+         */
+        if (proposalContext?.proposal.membership_intent?.identity_action === "create_household_child") {
+            const childOutcome = await executeNewChildProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                actorRole: ctx.role,
+                accessScope: (ctx as { accessScope?: unknown }).accessScope,
+                caseId,
+                proposalId,
+                decision,
+                metadata,
+                expectedResolutionRevision:
+                    typeof body.expected_resolution_revision === "string" ? body.expected_resolution_revision : null,
+            });
+            const payload = { caseId, proposalId, ...childOutcome.record };
+            return childOutcome.ok
+                ? jsonData(payload)
+                : NextResponse.json({ error: childOutcome.record.reason, ...payload }, { status: childOutcome.status });
         }
 
         const outcome = await executeExistingChildProposalCommit({

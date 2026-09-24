@@ -85,6 +85,32 @@ export type RelatedRecordRelationshipIntent = {
     proposed_person_facts: Array<{ entity_type: string; field_key: string; value: unknown }>;
 };
 
+/**
+ * A proposed NEW member of the household's own structure — a sibling the family added.
+ *
+ * The native structural counterpart to `RelatedRecordRelationshipIntent`, and deliberately its
+ * shape-mate. `children` carries no operational role, no apply scope choice and no relationship
+ * edge — it enumerates who the household is made of — so it has no relationship definition to
+ * resolve an intent from. What it DOES have is one registered canonical capability, `add_child`,
+ * and that is the whole of this declaration.
+ *
+ * Server-derived, like its sibling: the payload carries only a provider ref, and the command, the
+ * scope and the identity action are resolved from the registry here. Nothing a participant or a
+ * client submits can assert them.
+ */
+export type RelatedRecordMembershipIntent = {
+    /** Canonical write command — the registered `add_child` capability, never a Processing writer. */
+    apply_command_key: string;
+    /** Household membership is the grain; a new child is created on the household, not on a sibling. */
+    apply_scope: "household";
+    /** Whether the commit creates a household child or reuses one Alloy already holds. */
+    identity_action: "create_household_child" | "link_existing_child";
+    /** Canonical customer_member id when the instance references a child Alloy already knows. */
+    existing_child_member_id?: string;
+    /** Child facts proposed from the nested responses — the identity `add_child` is given. */
+    proposed_child_facts: Array<{ entity_type: string; field_key: string; value: unknown }>;
+};
+
 export type RelatedRecordInstanceProposal = {
     proposal_id: string;
     collection_provider_ref: string;
@@ -100,6 +126,8 @@ export type RelatedRecordInstanceProposal = {
     execution_kind?: CollectionExecutionKind;
     /** Present only for `configured_relationship` instances. */
     relationship_intent?: RelatedRecordRelationshipIntent;
+    /** Present only for `native_structural` instances that propose household membership. */
+    membership_intent?: RelatedRecordMembershipIntent;
 };
 
 export type RelatedRecordCollectionProposal = {

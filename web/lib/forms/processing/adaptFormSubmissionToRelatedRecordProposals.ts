@@ -30,6 +30,7 @@ import type {
     RelatedRecordProposalOrigin,
     RelatedRecordProposalStatus,
     RelatedRecordRelationshipIntent,
+    RelatedRecordMembershipIntent,
 } from "@/lib/intake/proposals/types";
 import {
     stableRelatedRecordProposalId,
@@ -204,6 +205,33 @@ function buildInstanceProposal(args: {
           }
         : undefined;
 
+    /*
+     * HOUSEHOLD MEMBERSHIP HAS ONE CANONICAL CAPABILITY, AND THIS NAMES IT.
+     *
+     * `children` is native structural — no operational role, no scope choice, no relationship edge —
+     * so it resolves no Relationship Definition and carried no execution intent at all. A sibling
+     * the family added was therefore a proposal an operator could read and nothing could act on.
+     *
+     * The intent is resolved HERE, from the provider, exactly as the relationship one is: the
+     * command is the registered `add_child` capability, the grain is the household, and the identity
+     * facts come only from questions the Form's own declaration places. Processing orchestrates it;
+     * it does not become a second child writer.
+     */
+    const membershipIntent: RelatedRecordMembershipIntent | undefined =
+        executionKind === "native_structural" && row.provider_ref === "children"
+            ? {
+                  apply_command_key: "add_child",
+                  apply_scope: "household",
+                  identity_action: row.origin === "existing" ? "link_existing_child" : "create_household_child",
+                  ...(row.item_id ? { existing_child_member_id: row.item_id } : {}),
+                  proposed_child_facts: nestedFields
+                      .filter((n) => Object.prototype.hasOwnProperty.call(row.values, n.id))
+                      .map((n) => ({ source: args.group ? effectiveEntryFieldSource(args.group, n) : null, value: row.values[n.id] }))
+                      .filter((f): f is { source: { entity_type: string; field_key: string }; value: unknown } => f.source !== null)
+                      .map((f) => ({ entity_type: f.source.entity_type, field_key: f.source.field_key, value: f.value })),
+              }
+            : undefined;
+
     return {
         proposal_id: proposalId,
         collection_provider_ref: row.provider_ref,
@@ -214,6 +242,7 @@ function buildInstanceProposal(args: {
         field_proposals: fieldProposals,
         execution_kind: executionKind,
         ...(relationshipIntent ? { relationship_intent: relationshipIntent } : {}),
+        ...(membershipIntent ? { membership_intent: membershipIntent } : {}),
         source_lineage: {
             source_kind: SOURCE_KIND,
             source_record_id: ctx.formSubmissionId,

@@ -9,6 +9,8 @@ import type { RelatedRecordInstanceProposal } from "@/lib/intake/proposals/types
 export type RelatedRecordProposalCaseContext = {
     proposal: RelatedRecordInstanceProposal;
     expectedCustomerId: string | null;
+    /** The enrollment opportunity the source submission belongs to, when it has one. */
+    expectedOpportunityId: string | null;
     source: { source_kind: string; source_id: string };
     /** Which packet step and form the proposal came from, when it came from a packet. */
     provenance: {
@@ -48,7 +50,10 @@ export async function loadRelatedRecordProposalForCase(args: {
     for (const entry of submissions) {
         const { data: sub, error: subError } = await args.supabase
             .from("form_submissions")
-            .select("id, payload, form_definition_version_id, customer_id, customer_member_id")
+            // `opportunity_id` is the operator-facing record a packet was launched from. It is the
+            // subject a Processing-side canonical command is invoked against, and it belongs to the
+            // proposal's provenance either way.
+            .select("id, payload, form_definition_version_id, customer_id, customer_member_id, opportunity_id")
             .eq("org_id", args.orgId)
             .eq("id", entry.submissionId)
             .maybeSingle();
@@ -59,6 +64,7 @@ export async function loadRelatedRecordProposalForCase(args: {
             form_definition_version_id: string | null;
             customer_id: string | null;
             customer_member_id: string | null;
+            opportunity_id: string | null;
         } | null;
         if (!subRow) continue;
 
@@ -106,6 +112,7 @@ export async function loadRelatedRecordProposalForCase(args: {
                 return {
                     proposal,
                     expectedCustomerId: subRow.customer_id,
+                    expectedOpportunityId: subRow.opportunity_id,
                     source: entry.caseSource,
                     provenance: {
                         formSubmissionId: subRow.id,
