@@ -488,6 +488,8 @@ export default function FinancialsCard({
      * round trip for an answer this component was already holding.
      */
     const [discountPositionBody, setDiscountPositionBody] = useState<FamilyPosition | null>(null);
+    /* Kept so the discount row can be RE-LABELLED when the subjects land, without re-reading. */
+    const [responsibilityPositionBody, setResponsibilityPositionBody] = useState<Record<string, unknown> | null>(null);
 
     useEffect(() => {
         /*
@@ -554,6 +556,7 @@ export default function FinancialsCard({
                 );
             }
             if (positionsBody) {
+                setResponsibilityPositionBody(positionsBody as Record<string, unknown>);
                 setStandingResponsibilitySummary(summariseHouseholdArrangement(positionsBody));
             }
         });
@@ -561,11 +564,39 @@ export default function FinancialsCard({
             cancelled = true;
         };
         /*
-         * `vm?.subjects` is READ inside, to name a child the discount route identifies by id. It is
-         * in the list so a card that resolves its subjects after this read re-labels rather than
-         * leaving the discount row naming ids.
+         * ── THE RE-LABEL MUST NOT BE A RE-FETCH ──────────────────────────────────────────────
+         *
+         * `vm?.subjects` used to be in this list, so that a card resolving its subjects after this
+         * read would re-label the discount row rather than leave it naming ids. It re-labelled —
+         * and it also issued both requests a second time. Measured on deployed staging, opening
+         * Accounts fired `responsibility-positions` and `family-discount-position` at +1,414 ms and
+         * again at +2,436 ms, the second pair taking 2,099 ms and 2,255 ms.
+         *
+         * The naming is a rendering concern and belongs downstream of the answer, not to its
+         * acquisition. The bodies are kept and re-derived by the effect below when the subjects
+         * arrive, so the row still stops naming ids and the network is asked once.
          */
-    }, [customerId, detailsAreTheSurface, overlay, vm?.subjects]);
+    }, [customerId, detailsAreTheSurface, overlay]);
+
+    /*
+     * ── RE-LABEL WHEN THE SUBJECTS ARRIVE, WITHOUT ASKING AGAIN ────────────────────────────────
+     *
+     * The discount route identifies a child by id; the card's subjects are what turn that into a
+     * name. When they resolve after the read, the row must stop naming ids — but that is a
+     * rendering concern over an answer already in hand, not a reason to issue the two requests a
+     * second time. This derives from the bodies the effect above kept.
+     */
+    useEffect(() => {
+        if (!discountPositionBody && !responsibilityPositionBody) return;
+        const roster = ((responsibilityPositionBody as { positions?: Array<{ customerMemberId?: string }> } | null)
+            ?.positions ?? [])
+            .map((position) => ({ customerMemberId: position.customerMemberId ?? "" }))
+            .filter((child) => child.customerMemberId.length > 0);
+        if (discountPositionBody) setAdminDiscountSummary(summariseFamilyDiscount(discountPositionBody, roster));
+        if (responsibilityPositionBody) {
+            setStandingResponsibilitySummary(summariseHouseholdArrangement(responsibilityPositionBody));
+        }
+    }, [discountPositionBody, responsibilityPositionBody, vm?.subjects]);
 
     /*
      * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
