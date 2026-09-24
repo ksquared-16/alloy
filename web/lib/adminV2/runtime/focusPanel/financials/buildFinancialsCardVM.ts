@@ -698,11 +698,48 @@ export async function readResponsibility(
     }
 
 
-    const { data: attributionRows } = await supabase
-        .from("payment_responsibility_attributions")
-        .select("responsibility_allocation_id, amount_cents")
-        .eq("org_id", orgId)
-        .in("responsibility_allocation_id", allocations.map((a) => a.id));
+    /*
+     * ── ATTRIBUTIONS, NAMES AND FUNDING ALL HANG OFF THE ALLOCATIONS, AND OFF NOTHING ELSE ──────
+     *
+     * Attributions are keyed by allocation id, the names by the responsible party ids ON those
+     * allocations, and expected funding by their share ids. None of the three reads a row another
+     * produced — yet they ran as three consecutive awaits, so this resolver alone was four round
+     * trips deep and the card waited through all of them.
+     *
+     * The keys are derived here, from the allocations only, and the three reads go out together.
+     * Each keeps its own degradation: a missing name still falls back to "Responsible party", and
+     * an absent funding row still means no expected funding rather than an error.
+     */
+    const partyIdsFromAllocations = [
+        ...new Set(
+            allocations
+                .filter((a) => !a.is_unassigned && a.responsible_party_id)
+                .map((a) => a.responsible_party_id as string),
+        ),
+    ];
+    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const [{ data: attributionRows }, { data: people }, { data: fundingRows }] = await Promise.all([
+        supabase
+            .from("payment_responsibility_attributions")
+            .select("responsibility_allocation_id, amount_cents")
+            .eq("org_id", orgId)
+            .in("responsibility_allocation_id", allocations.map((a) => a.id)),
+        partyIdsFromAllocations.length
+            ? supabase
+                  .from("persons")
+                  .select("id, first_name, last_name, full_name")
+                  .eq("org_id", orgId)
+                  .in("id", partyIdsFromAllocations)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        shareIds.length
+            ? supabase
+                  .from("financial_expected_funding")
+                  .select("funding_source_label, funding_source_type, expected_amount_cents, percent_basis_points, state")
+                  .eq("org_id", orgId)
+                  .eq("state", "active")
+                  .in("share_id", shareIds)
+            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+    ]);
     const attributed = new Map<string, number>();
     for (const row of (attributionRows ?? []) as Array<{ responsibility_allocation_id: string; amount_cents: number }>) {
         attributed.set(row.responsibility_allocation_id, (attributed.get(row.responsibility_allocation_id) ?? 0) + Number(row.amount_cents));
@@ -723,9 +760,6 @@ export async function readResponsibility(
     }
 
     const partyIds = [...byParty.keys()];
-    const { data: people } = partyIds.length
-        ? await supabase.from("persons").select("id, first_name, last_name, full_name").eq("org_id", orgId).in("id", partyIds)
-        : { data: [] };
     const nameById = new Map(
         ((people ?? []) as Array<Record<string, unknown>>).map((p) => [
             t(p.id),
@@ -743,16 +777,6 @@ export async function readResponsibility(
             remainingCents: totals.assigned - totals.attributed,
         };
     });
-
-    const shareIds = [...new Set(allocations.map((a) => a.share_id).filter((v): v is string => !!v))];
-    const { data: fundingRows } = shareIds.length
-        ? await supabase
-              .from("financial_expected_funding")
-              .select("funding_source_label, funding_source_type, expected_amount_cents, percent_basis_points, state")
-              .eq("org_id", orgId)
-              .eq("state", "active")
-              .in("share_id", shareIds)
-        : { data: [] };
 
     const allocatedCents = parties.reduce((acc, p) => acc + p.assignedCents, 0);
     const chargesWithAllocations = new Set(allocations.map((a) => a.charge_id));
@@ -1138,6 +1162,23 @@ async function buildFinancialsCardVMInner(
               .catch((error: unknown) => ({ ok: false as const, error }))
         : Promise.resolve({ ok: true as const, views: null });
 
+    /*
+     * ── THE TENANT'S POLICIES DEPEND ON THE ORG AND ON NOTHING ELSE ──────────────────────────
+     *
+     * One `financial_policies` read, keyed by `org_id`, and it sat behind the charges, the
+     * collectible position and the whole payments composition — nine-plus round trips deep —
+     * because that is where `reviewPolicyForService` first consults it. Measured on deployed
+     * staging, `policies;dur=` was 106–274 ms spent entirely in series at the end of the response.
+     *
+     * Same query, same predicate, same rows; it is issued here and joined where it is used. The
+     * existing `.catch(() => [])` is kept at the creation site so an early return never leaves an
+     * unawaited rejection, and a policy read that fails still degrades to "no policy resolved"
+     * rather than taking the card down.
+     */
+    const financialPoliciesP = clock
+        .time("policies_ms", () => listFinancialPolicies(supabase, args.orgId))
+        .catch(() => [] as Awaited<ReturnType<typeof listFinancialPolicies>>);
+
     const merchantRead = clock
         .time("merchant_ms", () =>
             supabase
@@ -1296,11 +1337,19 @@ async function buildFinancialsCardVMInner(
     const policyIds = [...new Set(reductions.map((r) => r.commercialPolicyId).filter((v): v is string => !!v))];
     const policyWindows = new Map<string, ReductionPolicyWindow>();
     if (policyIds.length) {
-        const { data: policyRows } = await supabase
-            .from("commercial_policies")
-            .select("id, effective_start, effective_end, is_active")
-            .eq("org_id", args.orgId)
-            .in("id", policyIds);
+        /*
+         * MEASURED, because it is a real awaited boundary and it was the only one in this body
+         * without a timer — which is how a round trip gets called cheap: nobody ever saw its
+         * number. It is also the one wave the depth gate could not see, because a fixture with no
+         * policy-produced reductions skips the read entirely. Naming it is what will say whether
+         * the Certhouse account pays for it.
+         */
+        const { data: policyRows } = await clock.time("reduction_policies_ms", () =>
+            supabase
+                .from("commercial_policies")
+                .select("id, effective_start, effective_end, is_active")
+                .eq("org_id", args.orgId)
+                .in("id", policyIds));
         for (const p of (policyRows ?? []) as unknown as Array<Record<string, unknown>>) {
             policyWindows.set(t(p.id), {
                 id: t(p.id),
@@ -1529,6 +1578,38 @@ async function buildFinancialsCardVMInner(
     rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.chargeId.localeCompare(b.chargeId));
 
     /*
+     * ── THE COLLECTIBLE READ NEEDS THE CHARGE IDS, AND IT HAS THEM HERE ─────────────────────────
+     *
+     * Which charges count toward the period's collectible position is decided by three properties
+     * the rows above already carry — posted, in this period, not an offset — and by nothing that
+     * the payments composition, the responsibility resolution or the payer candidates return. Yet
+     * the read ran after all of them, because that is where the sum is first assembled.
+     *
+     * Driving a HOLDING client through the whole builder counts the waves it makes the operator
+     * wait for, and this was waves six and seven of seven: two round trips whose inputs were ready
+     * at wave two. Started here, they overlap the three waves in between and the build gets two
+     * round trips shallower without issuing one extra query.
+     *
+     * `rows` is only SORTED between here and where the sum is assembled — the filter's three
+     * properties are set when the row is built and never reassigned — so this is the same set of
+     * charges, chosen by the same predicate, read at the same grain.
+     */
+    const collectibleRows = rows.filter(
+        (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
+    );
+    // How many charges the position covers. A duration alone cannot tell one slow read from N
+    // reads, and those two facts want opposite repairs.
+    clock.count("collectible_calls", collectibleRows.length);
+    const collectiblePositionsP = clock
+        .time("collectible_ms", () =>
+            resolveCollectiblePositionsForCharges(supabase, {
+                orgId: args.orgId,
+                chargeIds: collectibleRows.map((row) => row.chargeId),
+            }),
+        )
+        .catch(() => new Map<string, Awaited<ReturnType<typeof resolveFamilyCollectible>>>());
+
+    /*
      * ── SLICE 12E · EVERY REMAINING READ IS ISSUED HERE, WHERE ITS INPUTS EXIST ──────────────────
      *
      * From this point the build made five more trips through the database strictly one after
@@ -1578,17 +1659,28 @@ async function buildFinancialsCardVMInner(
             resolvePaymentSetup(supabase, { orgId: args.orgId, customerId: accountCustomerId }),
         )
         .catch(() => null);
-    /* Chained, not concurrent: the candidates read genuinely needs the responsible parties. */
-    const payersP = responsibilityP
-        .then((read) =>
-            clock.time("payer_candidates_ms", () =>
-                resolvePayerCandidates(supabase, {
-                    orgId: args.orgId,
-                    customerId: accountCustomerId ?? "",
-                    /* Reported as an overlap on each candidate. Never used to order or default the choice. */
-                    responsiblePersonIds: (read.responsibility?.parties ?? []).map((party) => String(party.personId)),
-                }),
-            ),
+    /*
+     * NOT chained. The candidates READ is keyed by org and household; the responsible parties only
+     * decorate its rows with `alsoResponsible`, which is why the resolver now takes them as a
+     * promise and joins them after its own query. Chaining made this the card's last round trip,
+     * waiting on a resolution whose answer the query does not consult.
+     */
+    const payersP = clock
+        .time("payer_candidates_ms", () =>
+            resolvePayerCandidates(supabase, {
+                orgId: args.orgId,
+                customerId: accountCustomerId ?? "",
+                /* Reported as an overlap on each candidate. Never used to order or default the choice. */
+                /*
+                 * `.catch` at creation: the resolver's own early return (no org, no household)
+                 * never awaits this, and an unawaited rejection must not surface as an unhandled
+                 * one. No overlap to report is the honest reading of a responsibility read that
+                 * could not answer — it is the same absence the chained version produced.
+                 */
+                responsiblePersonIds: responsibilityP
+                    .then((read) => (read.responsibility?.parties ?? []).map((party) => String(party.personId)))
+                    .catch(() => [] as string[]),
+            }),
         )
         .catch(() => ({ candidates: [] as PayerCandidate[] }));
     const openCollectionsP = chargeIdsForReads.filter(Boolean).length
@@ -1668,12 +1760,6 @@ async function buildFinancialsCardVMInner(
      * Concurrency is bounded so a long period cannot open an unbounded number of connections.
      */
     const collectible = { outstandingCents: 0, expectedSubsidyCents: 0, submittedClaimSuppressionCents: 0, actualSubsidyReceivedCents: 0, unresolvedVarianceCents: 0, currentlyCollectibleCents: 0 };
-    const collectibleRows = rows.filter(
-        (r) => r.lifecycleStatus === "posted" && r.periodKey === period.key && !isCollectibleOffsetRow(r),
-    );
-    // How many round trips this loop makes. A duration alone cannot tell one slow read from N reads,
-    // and those two facts want opposite repairs.
-    clock.count("collectible_calls", collectibleRows.length);
     /*
      * ── ASKED CONCURRENTLY, BECAUSE THE QUESTIONS ARE INDEPENDENT ──────────────────────────────
      *
@@ -1704,12 +1790,7 @@ async function buildFinancialsCardVMInner(
      * `computeCollectiblePosition` doing the arithmetic. Same authority, same numbers, one
      * implementation.
      */
-    const positionsByCharge = await clock.time("collectible_ms", () =>
-        resolveCollectiblePositionsForCharges(supabase, {
-            orgId: args.orgId,
-            chargeIds: collectibleRows.map((row) => row.chargeId),
-        }).catch(() => new Map<string, Awaited<ReturnType<typeof resolveFamilyCollectible>>>()),
-    );
+    const positionsByCharge = await collectiblePositionsP;
     {
         for (const row of collectibleRows) {
             const position = positionsByCharge.get(row.chargeId);
@@ -1792,10 +1873,12 @@ async function buildFinancialsCardVMInner(
              * alternative is refusing to show a family's prepaid position at all because a
              * restriction could not be counted. The holds themselves travel to Details separately.
              */
-            const holds = await readHoldsForPayments(supabase, {
-                orgId: args.orgId,
-                paymentIds: views.map((v) => v.paymentId),
-            });
+            /* Measured: a real awaited read, and the last one in this body without a timer. */
+            const holds = await clock.time("payment_holds_ms", () =>
+                readHoldsForPayments(supabase, {
+                    orgId: args.orgId,
+                    paymentIds: views.map((v) => v.paymentId),
+                }));
             const heldByPayment: Record<string, number> = {};
             for (const v of views) {
                 const held = heldCentsFor(v.paymentId, holds);
@@ -1890,7 +1973,7 @@ async function buildFinancialsCardVMInner(
      * consulting it here means the command can state what confirming will do instead of assuming.
      */
     mark("payments");
-    const financialPolicies = await listFinancialPolicies(supabase, args.orgId).catch(() => []);
+    const financialPolicies = await financialPoliciesP;
     mark("policies");
     const reviewPolicyForService = (serviceId: string | null) => {
         const r = resolveFinancialPolicy(financialPolicies, "posting_review", { serviceId: serviceId ?? undefined }, today);

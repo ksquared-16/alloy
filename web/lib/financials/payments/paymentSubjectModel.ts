@@ -162,7 +162,22 @@ const t = (v: unknown): string => (v != null ? String(v).trim() : "");
  */
 export async function resolvePayerCandidates(
     supabase: SupabaseClient,
-    args: { orgId: string; customerId: string; responsiblePersonIds?: readonly string[] },
+    /*
+     * `responsiblePersonIds` may arrive as a PROMISE, because it does not belong to the read.
+     *
+     * It keys nothing, filters nothing and orders nothing — it sets `alsoResponsible` on rows the
+     * `customer_persons` query has already chosen by org and household. Taking it as a resolved
+     * array forced the caller to await the responsibility resolution FIRST, which made this read
+     * the sixth and last round trip of the card build; driving a holding client through the
+     * builder is what showed that wave sitting alone at the end. Accepting the promise lets the
+     * read go out with the rest and the flag join it afterwards — same rule, same module, same
+     * answer, one fewer round trip in front of the operator.
+     */
+    args: {
+        orgId: string;
+        customerId: string;
+        responsiblePersonIds?: readonly string[] | PromiseLike<readonly string[]>;
+    },
 ): Promise<{ candidates: PayerCandidate[]; readFailed: boolean }> {
     const orgId = t(args.orgId);
     const customerId = t(args.customerId);
@@ -175,7 +190,8 @@ export async function resolvePayerCandidates(
         .eq("customer_id", customerId);
     if (error) return { candidates: [], readFailed: true };
 
-    const responsible = new Set((args.responsiblePersonIds ?? []).map((id) => t(id)).filter(Boolean));
+    const responsibleIds = await Promise.resolve(args.responsiblePersonIds ?? []);
+    const responsible = new Set(responsibleIds.map((id) => t(id)).filter(Boolean));
     const rows = (data ?? []) as Array<{
         person_id: string | null;
         role_type: string | null;

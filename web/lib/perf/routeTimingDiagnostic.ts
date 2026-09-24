@@ -237,6 +237,9 @@ export type RouteTimingMarks = {
             collectible_ms: number | null;
             collectible_calls: number | null;
             payments_ms: number | null;
+            policies_ms: number | null;
+            reduction_policies_ms: number | null;
+            payment_holds_ms: number | null;
             payment_views_ms: number | null;
             merchant_ms: number | null;
             payment_setup_ms: number | null;
@@ -431,6 +434,9 @@ export type FinancialsSpanName =
     | "responsibility_ms"
     | "collectible_ms"
     | "payments_ms"
+    | "policies_ms"
+    | "reduction_policies_ms"
+    | "payment_holds_ms"
     | "payment_views_ms"
     | "merchant_ms"
     | "payment_setup_ms"
@@ -498,6 +504,9 @@ export function recordFinancialsSpans(
             collectible_ms: spans.collectible_ms ?? null,
             collectible_calls: spans.collectible_calls ?? null,
             payments_ms: spans.payments_ms ?? null,
+            policies_ms: spans.policies_ms ?? null,
+            reduction_policies_ms: spans.reduction_policies_ms ?? null,
+            payment_holds_ms: spans.payment_holds_ms ?? null,
             payment_views_ms: spans.payment_views_ms ?? null,
             merchant_ms: spans.merchant_ms ?? null,
             payment_setup_ms: spans.payment_setup_ms ?? null,
