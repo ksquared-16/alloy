@@ -9,7 +9,8 @@
  * else; this only reads what a schema declared.
  */
 
-import type { FormField, FormPartyCollection } from "@/lib/forms/schema";
+import type { FormField, FormGroupCollectionBinding, FormPartyCollection } from "@/lib/forms/schema";
+import { canonicalCollectionProviderForRole } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 
 export type PartyGroupField = FormField & { type: "group"; party_collection?: FormPartyCollection };
@@ -98,4 +99,68 @@ function singularise(label: string): string {
     if (lower.endsWith("ses") || lower.endsWith("xes") || lower.endsWith("zes")) return t.slice(0, -2);
     if (lower.endsWith("s") && !lower.endsWith("ss")) return t.slice(0, -1);
     return t;
+}
+
+/**
+ * THE CANONICAL COLLECTION A PARTY COLLECTION ITERATES.
+ *
+ * ## The seam this closes
+ *
+ * `party_collection` says what a repeated entry MEANS — the relationship action, the subject, the
+ * role, the scope. `collection_binding` says which canonical collection the group iterates, and it
+ * is the only thing the whole Processing pipeline reads: `groupFieldHasCollectionBinding` gates the
+ * proposal adapter, `collection_provider_ref` resolves the provider, and the relationship
+ * definition behind that provider supplies the role, the apply command and the scope a reviewed
+ * commit executes through.
+ *
+ * Forms Studio authors the first and never wrote the second. So a family's emergency contacts
+ * reached the submission correctly, were carried into the completed artifact correctly — and then
+ * fell off a cliff: rows tagged `party:add_emergency_contact`, a provider no registry has ever
+ * heard of, a group the adapter skipped as unbound, and a Processing case that (had one opened at
+ * all) would have proposed nothing.
+ *
+ * ## Why derived rather than authored
+ *
+ * The mapping is not a choice an administrator makes — it is already determined by what they said.
+ * A collection of CHILDREN iterates the household's own membership; a collection of people in a
+ * ROLE iterates that role's canonical provider, which the relationship definition already owns.
+ * Writing it at authoring time would put a second, staler copy of that answer in every published
+ * schema, and would leave every schema published before today unable to reach Processing at all.
+ * Derived here, one owner answers for both.
+ *
+ * An AUTHORED binding still wins. An explicit statement outranks an inference, and a Form that
+ * binds a collection directly is saying something this function must not overrule.
+ *
+ * Returns null — fails closed — for a role no relationship definition claims. A row asserting a
+ * provider the registry cannot resolve is worse than a row asserting none: it reaches the adapter
+ * as `unknown_provider` and lands in front of an operator as a proposal nothing can execute.
+ */
+export function effectiveCollectionBinding(field: FormField): FormGroupCollectionBinding | null {
+    if (field.type !== "group") return null;
+    if (field.collection_binding?.collection_provider_ref?.trim()) return field.collection_binding;
+
+    const party = partyCollectionOf(field);
+    if (!party) return null;
+
+    /*
+     * Household membership is not a relationship edge — it carries no role, no apply command and no
+     * scope — so it is one of the two native structural providers rather than a definition.
+     */
+    if (party.subject === "child") {
+        return { collection_provider_ref: "children", iteration_entity_type: "customer_member" };
+    }
+
+    const role = party.role?.trim();
+    if (!role) return null;
+    const provider = canonicalCollectionProviderForRole(role);
+    if (!provider) return null;
+    return {
+        collection_provider_ref: provider.refKey,
+        iteration_entity_type: provider.itemEntityType,
+    };
+}
+
+/** True when this group iterates a canonical collection, authored or derived. */
+export function hasEffectiveCollectionBinding(field: FormField): boolean {
+    return effectiveCollectionBinding(field) !== null;
 }

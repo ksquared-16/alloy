@@ -3,7 +3,13 @@
  */
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
+/*
+ * A party collection is collection-bound too — it simply states its binding as a relationship
+ * rather than repeating it. `effectiveCollectionBinding` is the one place that answers which
+ * canonical collection a group iterates, authored or derived; reading `collection_binding` directly
+ * here is what made every Studio-authored collection of people invisible to Processing.
+ */
+import { effectiveCollectionBinding } from "@/lib/forms/partyCollection";
 import {
     findCanonicalCollectionProvider,
     classifyCollectionProvider,
@@ -256,8 +262,9 @@ export function adaptFormSubmissionToRelatedRecordProposals(
     const collections: RelatedRecordCollectionProposal[] = topLevel.collection ? [topLevel.collection] : [];
 
     for (const field of schema.fields) {
-        if (field.type !== "group" || !groupFieldHasCollectionBinding(field)) continue;
-        const binding = field.collection_binding!;
+        if (field.type !== "group") continue;
+        const binding = effectiveCollectionBinding(field);
+        if (!binding) continue;
         const rows = envelope.byGroup[field.id];
         if (!rows?.length) continue;
 
@@ -300,7 +307,7 @@ export function adaptFormSubmissionToRelatedRecordProposals(
 
     for (const [groupId, rows] of Object.entries(envelope.byGroup)) {
         const schemaGroup = schema.fields.find((f) => f.id === groupId && f.type === "group");
-        if (!schemaGroup || !groupFieldHasCollectionBinding(schemaGroup)) {
+        if (!schemaGroup || !effectiveCollectionBinding(schemaGroup)) {
             diagnostics.push({
                 code: "collection_mismatch",
                 message: `Envelope group "${groupId}" does not match a collection-bound schema group.`,

@@ -32,7 +32,7 @@
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
-import { partyCollectionOf, addAnotherLabel, entryHeading } from "@/lib/forms/partyCollection";
+import { partyCollectionOf, addAnotherLabel, entryHeading, effectiveCollectionBinding } from "@/lib/forms/partyCollection";
 import { fieldMeansPhone } from "@/lib/format/phoneNumber";
 
 /** One person in a collection, as the conversation holds them. */
@@ -311,6 +311,7 @@ export function partyCollectionGroupRows(
     const out: Record<string, FormPayloadGroupRow[]> = {};
     for (const group of partyCollectionGroups(schema)) {
         const party = partyCollectionOf(group)!;
+        const binding = effectiveCollectionBinding(group);
         const held = readPartyEntries(sharedValues, formDefinitionId, group.id);
         const entries = mergeKnownEntries(knownEntries[group.id] ?? [], held, {
             showKnown: party.show_known !== false,
@@ -321,13 +322,32 @@ export function partyCollectionGroupRows(
             values: { ...e.values },
             groups: {},
             signatures: {},
-            collection: {
-                provider_ref: group.collection_binding?.collection_provider_ref ?? `party:${party.action_key}`,
-                origin: e.origin,
-                iteration_entity_type:
-                    group.collection_binding?.iteration_entity_type ?? (party.subject === "child" ? "customer_member" : "person"),
-                ...(e.item_id ? { item_id: e.item_id } : {}),
-            },
+            /*
+             * THE ROW'S CANONICAL ADDRESS, AND IT HAS TO BE A REAL ONE.
+             *
+             * This used to fall back to `party:<action_key>` — a provider no registry has ever
+             * heard of — so a family's emergency contacts reached Processing as rows the proposal
+             * adapter classified `unknown_provider` and could execute nothing from. The binding is
+             * derived once, from the same declaration the card reads, so the conversation and
+             * Processing name the same collection.
+             *
+             * A collection whose binding cannot be resolved omits the envelope ENTIRELY rather than
+             * carrying a made-up or empty provider. `provider_ref` is `min(1)` in the payload
+             * contract, so an empty one would fail validation and refuse the family's submission —
+             * turning a downstream gap into a participant-facing outage. The row keeps its values,
+             * so the person still reaches the completed artifact; it simply makes no canonical
+             * claim, which is the truthful state for a collection nothing can execute.
+             */
+            ...(binding
+                ? {
+                      collection: {
+                          provider_ref: binding.collection_provider_ref,
+                          origin: e.origin,
+                          iteration_entity_type: binding.iteration_entity_type,
+                          ...(e.item_id ? { item_id: e.item_id } : {}),
+                      },
+                  }
+                : {}),
         }));
     }
     return out;

@@ -179,6 +179,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         const meta: Record<string, unknown> = {};
         if (internalNote) meta.internal_operator_note = internalNote;
         if (wantEmail) meta.enrollment_email_requested = true;
+        /*
+         * AN ENROLLMENT RETURN IS PROCESSING INTAKE.
+         *
+         * A packet launched from this route is an operator deliberately sending a named child's
+         * paperwork to a named family and expecting to review what comes back. That is the whole
+         * definition of a POS-connected surface, so the link says so and the completion on-ramp
+         * opens one Processing Case against it.
+         *
+         * Marked HERE rather than on the packet definition because the definition's metadata is
+         * written once at creation and has no update route — every enrollment packet already built
+         * would otherwise be permanently unable to reach Processing. Packets launched any other way
+         * are untouched: they carry no marker, and the on-ramp still declines them.
+         */
+        meta.pos_connected = true;
 
         const mintBody: Record<string, unknown> = {
             packet_definition_id: packetDefinitionId,
@@ -189,7 +203,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                 recipient_person_id: resolved.value.recipient_person_id,
                 delivery_intent: "copy_link",
             },
-            ...(Object.keys(meta).length ? { metadata: meta } : {}),
+            metadata: meta,
             ...(expires_at ? { expires_at } : {}),
         };
 

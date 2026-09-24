@@ -10,6 +10,7 @@ import type {
     RelatedRecordProposalStatus,
 } from "@/lib/intake/proposals/types";
 import { worstRelatedRecordProposalStatus } from "@/lib/intake/proposals/normalize";
+import { formatPhoneNumber } from "@/lib/format/phoneNumber";
 import {
     collectionGroupTitle,
     identityLabelFromValues,
@@ -98,8 +99,21 @@ function buildFieldBindings(inst: RelatedRecordInstanceProposal): ProcessingColl
             entity_type: entityType,
             field_key: fieldKey,
             label: fp.label ?? fp.provider_ref,
+            // The RAW submitted fact, untouched — this is evidence, and evidence is not reformatted.
             submitted_value: fp.submitted_value,
-            display_value: display,
+            /*
+             * `display_value` is the presentation half, and it was showing a stored phone verbatim.
+             *
+             * MEASURED in this case's own evidence: a known contact read `(541) 555-7788` and the
+             * contact the family had just typed read `3213525132`, one line apart, because the
+             * first happened to be stored punctuated. That is the same defect human QA reported on
+             * the participant card, surfacing again in front of the operator who has to decide
+             * whether these two people are the same kind of record.
+             *
+             * Through the platform primitive, which is total: anything that is not a NANP number —
+             * a name, a date, a note — comes back exactly as it went in.
+             */
+            display_value: display === null ? null : formatPhoneNumber(display),
         };
     });
 }

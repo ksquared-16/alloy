@@ -11,7 +11,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isPosConnectedSurface } from "@/lib/forms/binding/posConnectedMarker";
+import { isPosConnectedMetadata, isPosConnectedSurface } from "@/lib/forms/binding/posConnectedMarker";
 import { makeProcessingCaseDbDeps } from "./processingCaseDb";
 import { openProcessingCaseFromSource } from "./openProcessingCaseFromSource";
 
@@ -23,11 +23,27 @@ import { openProcessingCaseFromSource } from "./openProcessingCaseFromSource";
 export function shouldOpenProcessingCaseForPacket(args: {
     packetDefinitionMetadata?: unknown;
     packetSessionMetadata?: unknown;
+    /**
+     * The metadata of the public link this session was started from.
+     *
+     * `isPosConnectedSurface` has always accepted a LINK as a marker home; this decision simply
+     * never read one, so the only reachable marker was the packet DEFINITION's — written once at
+     * creation, with no update route. An organisation that had already built its enrollment packet
+     * could never turn Processing on for it.
+     *
+     * MEASURED on the certification stack: both enrollment packet definitions carry only
+     * `{"created_via":"adminV2_packet_definitions"}`. So every completed enrollment packet reached
+     * the end of this check and opened nothing — the family's whole return, reviewed and signed,
+     * with no case for an operator to act on and no proposals to commit.
+     */
+    publicLinkMetadata?: unknown;
 }): boolean {
-    return isPosConnectedSurface({
-        definitionMetadata: args.packetDefinitionMetadata,
-        linkMetadata: args.packetSessionMetadata,
-    });
+    return (
+        isPosConnectedSurface({
+            definitionMetadata: args.packetDefinitionMetadata,
+            linkMetadata: args.packetSessionMetadata,
+        }) || isPosConnectedMetadata(args.publicLinkMetadata)
+    );
 }
 
 export async function maybeOpenProcessingCaseFromPacketCompletionSafe(
@@ -39,12 +55,29 @@ export async function maybeOpenProcessingCaseFromPacketCompletionSafe(
 
         const { data: session } = await supabase
             .from("form_packet_sessions")
-            .select("id, packet_definition_id, metadata")
+            .select("id, packet_definition_id, metadata, started_via_public_link_id")
             .eq("org_id", args.orgId)
             .eq("id", args.packetSessionId)
             .maybeSingle();
         if (!session) return;
-        const sessionRow = session as { packet_definition_id?: string | null; metadata?: unknown };
+        const sessionRow = session as {
+            packet_definition_id?: string | null;
+            metadata?: unknown;
+            started_via_public_link_id?: string | null;
+        };
+
+        // The third marker home the doctrine already allows, and the only one an operator-launched
+        // enrollment packet can actually carry.
+        let publicLinkMetadata: unknown = undefined;
+        if (sessionRow.started_via_public_link_id) {
+            const { data: link } = await supabase
+                .from("form_public_links")
+                .select("metadata")
+                .eq("org_id", args.orgId)
+                .eq("id", sessionRow.started_via_public_link_id)
+                .maybeSingle();
+            publicLinkMetadata = (link as { metadata?: unknown } | null)?.metadata;
+        }
 
         let packetDefinitionMetadata: unknown = undefined;
         if (sessionRow.packet_definition_id) {
@@ -61,6 +94,7 @@ export async function maybeOpenProcessingCaseFromPacketCompletionSafe(
             !shouldOpenProcessingCaseForPacket({
                 packetDefinitionMetadata,
                 packetSessionMetadata: sessionRow.metadata,
+                publicLinkMetadata,
             })
         ) {
             return;
