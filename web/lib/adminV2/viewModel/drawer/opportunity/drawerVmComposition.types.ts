@@ -1,3 +1,4 @@
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 /**
  * CP-1 / S4 — the three owned composition contracts (D-013; see docs/runtime/cp1-s4-decomposition-plan.md).
  *
@@ -54,6 +55,25 @@ export type SharedCanonicalDeps = {
     currentStageKey: string | null;
     currentStageLabel: string | null;
     phases_ms: ComposePhaseTimings;
+    /**
+     * THE CANONICAL ACTION AUTHORITY, RESOLVED AT ITS OWN DEPENDENCY BOUNDARY.
+     *
+     * `resolveActionsForContext` needs the org, the opportunity id, the department and work unit,
+     * the opportunity's status key and metadata, and the lifecycle stage from work-unit metadata.
+     * All of those exist once the opportunity select and the layout/work-unit join have landed - it
+     * reads nothing from the visible payload, the children shell, household persons, photos or any
+     * capability card, so it can start beside them instead of behind them.
+     *
+     * It is threaded to the first-paint consumer rather than recomputed there: ONE resolver, one
+     * input contract, one answer. Moving the computation earlier is not itself a saving - measured,
+     * the resolver costs ~140ms inside a first-paint block whose ~586ms wall is set by
+     * `attention_bundle` at ~260ms - so this exists to make the authority DELIVERABLE early, which
+     * is where the value is.
+     *
+     * Resolves to null when it could not be attempted. Null means "not resolved", never an
+     * authoritative empty action set.
+     */
+    earlyHeaderActions: Promise<ResolvedActionsBySlot> | null;
 };
 
 /**
