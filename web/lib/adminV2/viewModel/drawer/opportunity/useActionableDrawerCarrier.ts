@@ -21,14 +21,12 @@ import {
  */
 export function useActionableDrawerCarrier(selected: {
     opportunityId: string | null | undefined;
-    attentionSubjectId?: string | null;
 }): ActionableDrawerCarrier | null {
     const opportunityId = selected.opportunityId?.trim() || null;
-    const attentionSubjectId = selected.attentionSubjectId?.trim() || null;
 
     const getSnapshot = useCallback(
-        () => peekActionableDrawerCarrier({ opportunityId, attentionSubjectId }),
-        [opportunityId, attentionSubjectId],
+        () => peekActionableDrawerCarrier({ opportunityId }),
+        [opportunityId],
     );
 
     return useSyncExternalStore(subscribeToActionableDrawerCarriers, getSnapshot, () => null);

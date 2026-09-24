@@ -164,7 +164,7 @@ describe("two-phase drawer transport", () => {
         expect((r as { error: string }).error).toBe("boom");
     });
 
-    it("the participation lens travels on the request AND is matched on the carrier", async () => {
+    it("THE LENS TRAVELS ON THE REQUEST BUT DOES NOT GATE THE CARRIER", async () => {
         const childCarrier = buildActionableDrawerCarrier({
             opportunityId: "opp-B",
             attentionSubjectId: "child-1",
@@ -179,12 +179,19 @@ describe("two-phase drawer transport", () => {
                 `${JSON.stringify({ [DRAWER_VIEW_MODEL_LINE_KEY]: VIEW_MODEL })}\n`,
             ]),
         );
-        // Asked for the family lens; the carrier describes a child lens. Different action context.
+        /*
+         * Asked with no lens; the carrier echoes one. It is STILL handed on, because the header
+         * action set is resolved without any participation — the two describe the same subject and
+         * therefore the same actions. Refusing here is what left deployed 8e749e03 with a carrier
+         * that arrived at click +164ms and mounted nothing: the hover prewarm asserts the queue
+         * row's own id and the panel asserts none.
+         */
         const seenFamily: ActionableDrawerCarrier[] = [];
         await fetchOpportunityDrawerViewModelClient("opp-B", { department_id: "dept-9" } as never, undefined, (c) =>
             seenFamily.push(c),
         );
-        expect(seenFamily).toHaveLength(0);
+        expect(seenFamily).toHaveLength(1);
+        expect(seenFamily[0]!.subject.attention_subject_id).toBe("child-1");
 
         fetchMock.mockResolvedValue(
             streamed([

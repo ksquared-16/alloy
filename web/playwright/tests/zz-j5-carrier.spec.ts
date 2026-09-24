@@ -35,12 +35,23 @@ test("j5 carrier certify and measure", async ({ page }) => {
         w.__ox = { reqs };
     });
 
-    await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
-    await page.waitForTimeout(20_000);
-
     const samples: unknown[] = [];
 
+    /*
+     * ONE COLD ROW SWITCH PER PAGE LOAD.
+     *
+     * The first run of this probe took 22 samples from a single page load and pooled them. The queue
+     * has four rows, so after one cycle every switch was served from the drawer VM session cache:
+     * 18 of 22 samples measured a cache hit at P50 42ms beside 4 real switches at P50 2,317ms, and
+     * the pooled P50 was meaningless. The session cache lives in memory, so reloading between
+     * samples is what makes each one a genuine first visit — which is the J5 event this programme
+     * has measured throughout and the one the 2,336ms baseline describes.
+     *
+     * It costs a page load per sample. A cheap sample of the wrong journey costs more.
+     */
     for (let i = 0; i < RUNS; i += 1) {
+        await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
+        await page.waitForTimeout(16_000);
         // Hover first — the operator sequence, and the prewarm this programme must preserve.
         /*
          * WALK BY INDEX, NOT BY "WHICHEVER ROW LOOKS SELECTED".
@@ -54,7 +65,10 @@ test("j5 carrier certify and measure", async ({ page }) => {
         const hovered = await page.evaluate(`((i) => {
             const rows=[...document.querySelectorAll('.alloy-os-queue-row-card')];
             if (rows.length < 2) return false;
-            const target = rows[(i + 1) % rows.length];
+            // Rotate the destination across samples so one row's configuration cannot stand for
+            // the whole surface; after a reload the selected row is the route default, so any other
+            // row is a real switch.
+            const target = rows[1 + (i % Math.max(1, rows.length - 1))];
             window.__ox.target = target;
             window.__ox.targetIndex = (i + 1) % rows.length;
             window.__ox.hoverAt = Math.round(performance.now());
@@ -121,10 +135,19 @@ test("j5 carrier certify and measure", async ({ page }) => {
             mo.disconnect();
 
             const diag = window.__ALLOY_CARRIER_DIAG__ || [];
+            /*
+             * ONLY ARRIVALS BELONGING TO THIS CLICK.
+             *
+             * An earlier version asked "is there any carrier for this subject" across the whole page
+             * session and reported a ready-before-click rate of 19/22. On a probe that revisits four
+             * rows repeatedly that question answers yes from a previous cycle, minutes earlier: the
+             * P50 it produced was -174 seconds. Scoping to arrivals recorded since this click is the
+             * only honest reading, and with one switch per page load there is nothing older to
+             * confuse it with.
+             */
             const arrivals = diag.slice(carrierBefore).map((d) => ({ ...d, rel: d.t - w.clickAt }));
-            // Did the carrier for the subject the operator clicked exist before they clicked it?
             const nowBody = bodySubject();
-            const forSubject = diag.filter((d) => d.subject === nowBody).map((d) => ({ ...d, rel: d.t - w.clickAt }));
+            const forSubject = arrivals.filter((d) => d.subject === nowBody);
             const earliest = forSubject.length ? Math.min(...forSubject.map((d) => d.rel)) : null;
 
             const drawerReq = w.reqs.filter((r) => r.path.includes('/view-models/drawer/opportunity/'))
@@ -150,7 +173,6 @@ test("j5 carrier certify and measure", async ({ page }) => {
         })()`);
         samples.push(sample);
         console.log(`[carrier-sample] ${JSON.stringify(sample)}`);
-        await page.waitForTimeout(2500);
     }
     console.log(`[carrier-done] n=${samples.length}`);
 });
