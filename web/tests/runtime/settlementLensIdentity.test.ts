@@ -1,3 +1,10 @@
+/**
+ * @vitest-environment jsdom
+ *
+ * jsdom because the settlement diagnostic is a BROWSER ring buffer on `window`, exactly like
+ * `__ALLOY_REVEAL_GATE_DIAG__`. Running it under node would silently record nothing and the
+ * assertions would be testing the absence of a window, not the diagnostic.
+ */
 import { beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -150,5 +157,67 @@ describe("focus panel settlement lens identity", () => {
         expect(settlementNavigationForRequest({
             rawSlug: SLUG, requestedWorkViewId: null, requestedSubjectId: SUBJECT,
         })).toEqual({ target: SLUG, lens: null, subject: SUBJECT, cohort: null, aspect: null });
+    });
+});
+
+/**
+ * THE SETTLEMENT OUTCOME MUST BE VISIBLE IN PRODUCTION.
+ *
+ * The mounted proof on deployed ed24d807 could not say whether a settlement applied: the outcome is
+ * discarded by `ProvisioningSettlementSeed`, and the only observable — Financials at
+ * `data-financials-empty="loading"` — has four independent causes. An effect several mechanisms can
+ * produce proves none of them, so the outcome itself is recorded.
+ */
+describe("settlement outcome diagnostic", () => {
+    beforeEach(() => {
+        resetFrameLifecycleForTests();
+        delete (globalThis as unknown as Record<string, unknown>).__ALLOY_SETTLEMENT_DIAG__;
+    });
+
+    const buf = () =>
+        ((globalThis as unknown as { __ALLOY_SETTLEMENT_DIAG__?: Array<Record<string, unknown>> })
+            .__ALLOY_SETTLEMENT_DIAG__ ?? []);
+
+    it("records no_frame with the address and how many frames existed", () => {
+        const nav = settlementNavigationForRequest({
+            rawSlug: SLUG, requestedWorkViewId: null, requestedSubjectId: SUBJECT,
+        });
+        applyFrameSettlement(patchFor(nav, IMPLIED_VIEW));
+        const last = buf().at(-1);
+        expect(last?.outcome).toBe("no_frame");
+        // 0 registered frames explains a no_frame immediately, which is the fact the mounted proof
+        // could not obtain: "addressed wrongly" and "nothing was ever registered" look identical.
+        expect(last?.frames).toBe(0);
+        expect(typeof last?.addressed).toBe("string");
+    });
+
+    it("records applied when the settlement reaches its frame", () => {
+        registerFrameReady(frameNavigation(null), answerFor(IMPLIED_VIEW));
+        const nav = settlementNavigationForRequest({
+            rawSlug: SLUG, requestedWorkViewId: null, requestedSubjectId: SUBJECT,
+        });
+        applyFrameSettlement(patchFor(nav, IMPLIED_VIEW));
+        expect(buf().at(-1)?.outcome).toBe("applied");
+    });
+
+    it("carries NO payload and NO business values", () => {
+        registerFrameReady(frameNavigation(null), answerFor(IMPLIED_VIEW));
+        const nav = settlementNavigationForRequest({
+            rawSlug: SLUG, requestedWorkViewId: null, requestedSubjectId: SUBJECT,
+        });
+        applyFrameSettlement(patchFor(nav, IMPLIED_VIEW));
+        const serialised = JSON.stringify(buf());
+        // The patch carried a participant and a Financials card; neither may reach the ring buffer.
+        expect(serialised).not.toContain("participant-1");
+        expect(serialised).not.toContain("financials");
+        expect(Object.keys(buf().at(-1) ?? {}).sort()).toEqual(["addressed", "frames", "outcome", "t"]);
+    });
+
+    it("is bounded — a long session cannot grow it without limit", () => {
+        const nav = settlementNavigationForRequest({
+            rawSlug: SLUG, requestedWorkViewId: null, requestedSubjectId: SUBJECT,
+        });
+        for (let i = 0; i < 400; i += 1) applyFrameSettlement(patchFor(nav, IMPLIED_VIEW));
+        expect(buf().length).toBeLessThanOrEqual(201);
     });
 });
