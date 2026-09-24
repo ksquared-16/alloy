@@ -22,6 +22,10 @@ import type {
     OpportunityDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import { resolveSharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
+import {
+    buildActionableDrawerCarrier,
+    type ActionableDrawerCarrier,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrier";
 import { buildInitialPanelResource } from "@/lib/adminV2/viewModel/drawer/opportunity/initialPanelResource";
 import { buildDeferredDetailResource } from "@/lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource";
 
@@ -51,6 +55,19 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * build below. Absent means nothing was resolvable, and the candidate fallback stands.
      */
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    /**
+     * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE.
+     *
+     * Called at most once, the moment canonical action authority for this subject exists — roughly
+     * 390ms into a compose that measures ~2,288ms. The caller decides what to do with it; this
+     * composer neither waits for the caller nor changes its own answer because one was supplied, so
+     * a route that passes nothing gets byte-identical behaviour.
+     *
+     * NOT called when the early resolve did not run (department authority unknown) or when it
+     * rejected. Both cases mean this lifecycle keeps today's full-drawer action timing, which is
+     * slower and correct rather than faster and invented.
+     */
+    onActionableCarrier?: (carrier: ActionableDrawerCarrier) => void;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -75,6 +92,31 @@ export async function composeOpportunityDrawerViewModel(
         opportunityId,
         departmentId: params.departmentId,
         workUnitId: params.workUnitId,
+        /*
+         * THE CARRIER IS BUILT FROM THE SAME VALUES PHASE 2 WILL PUBLISH, NOT FROM NEW ONES.
+         *
+         * `viewModel.workspace.department_id` below is `shared.departmentId`, whose first two
+         * fallbacks — the request context, then the work-unit row — are exactly the two the early
+         * resolve uses. Its third, `record._work_unit_department_id`, is unavailable that early, and
+         * when it is the one that supplies the department the early resolve does not run at all and
+         * no carrier is published. So whenever a carrier EXISTS its department is identical to the
+         * view model's, and an action cannot execute with different arguments depending on which
+         * phase the operator clicked in. The same holds for the work unit, which both read from the
+         * one `workUnitId` this compose resolved.
+         */
+        onEarlyHeaderActions: params.onActionableCarrier ?
+            ({ resolved, departmentId: earlyDept, workUnitId: earlyWu }) => {
+                const carrier = buildActionableDrawerCarrier({
+                    opportunityId,
+                    attentionSubjectId: params.attentionSubjectId ?? null,
+                    departmentId: earlyDept,
+                    workUnitId: earlyWu,
+                    resolved,
+                    flushedAtMs: Date.now() - composeStart,
+                });
+                if (carrier) params.onActionableCarrier?.(carrier);
+            }
+        :   undefined,
     });
     if (!shared.ok) {
         return finishCompose({
