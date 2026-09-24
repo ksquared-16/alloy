@@ -238,6 +238,19 @@ export type ParticipantObjectiveWire = {
          * REQUIRED question can have a true absence answer.
          */
         readonly absence_label: string | null;
+        /** The address this turn collects, when the turn is an address rather than a question. */
+        readonly address?: {
+            readonly group_field_id: string;
+            readonly label: string;
+            readonly known_line: string;
+            readonly complete: boolean;
+            readonly parts: readonly {
+                readonly part: string;
+                readonly label: string;
+                readonly required: boolean;
+                readonly value: string;
+            }[];
+        } | null;
         /**
          * The artifact fields this single answer fills.
          *
@@ -810,6 +823,24 @@ export function participantObjectiveWireModel(
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
             absence_label: firstOccurrence?.absence_label ?? null,
+            /*
+             * The whole address travels, because the grouping IS the interaction: the card has to
+             * draw four boxes that visibly belong together and show what Alloy already holds.
+             */
+            address: turn.need?.address
+                ? {
+                      group_field_id: turn.need.address.group_field_id,
+                      label: turn.need.address.label,
+                      known_line: turn.need.address.known_line,
+                      complete: turn.need.address.complete,
+                      parts: turn.need.address.parts.map((part) => ({
+                          part: part.part,
+                          label: part.label,
+                          required: part.required,
+                          value: part.value,
+                      })),
+                  }
+                : null,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         known: knownRecord(objective, subjectName),

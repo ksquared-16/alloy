@@ -30,6 +30,7 @@ import {
     parsePartyCollectionResponse,
 } from "@/lib/enrollment/participantRuntime/applyPartyCollectionResponse";
 import { knownPartyEntriesFromParties, partyCollectionGroups } from "@/lib/enrollment/informationNeeds/participantPartyCollection";
+import { applyAddressResponse } from "@/lib/enrollment/participantRuntime/applyAddressResponse";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import type { StructuredCandidate } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
@@ -233,6 +234,51 @@ export async function handleParticipantTurn(
         });
         collectionResponse.headers.set("Server-Timing", timing.header());
         return collectionResponse;
+    }
+
+    /*
+     * ONE ADDRESS, SAVED AS ONE.
+     *
+     * The browser sends the parts it holds, keyed by the canonical PART name — never by a schema
+     * field id, so nothing the client sends can name a destination. The address the server already
+     * projected decides which shared keys those parts write, and a part the family did not touch is
+     * not in the body and is therefore not written.
+     */
+    const addressBody = (body as { address?: unknown }).address;
+    if (addressBody != null && typeof addressBody === "object" && !Array.isArray(addressBody)) {
+        const submitted = addressBody as Record<string, unknown>;
+        const groupId = typeof submitted.group_field_id === "string" ? submitted.group_field_id.trim() : "";
+        const projected = current.value.needs.needs.find(
+            (n) => n.address?.group_field_id === groupId,
+        )?.address;
+        if (!projected) return publicErr("There is no address to save here.", 409, { code: "address_not_open" });
+
+        const applied = await applyAddressResponse(supabase, {
+            orgId: access.orgId,
+            sessionId: access.sessionId,
+            address: projected,
+            submitted: (submitted.parts && typeof submitted.parts === "object" && !Array.isArray(submitted.parts)
+                ? submitted.parts
+                : {}) as Record<string, unknown>,
+        });
+        if (!applied.ok) return publicErr(applied.error, 409, { code: "address_refused" });
+
+        // Re-resolve against the session AS IT NOW IS — the row this request read is one write old.
+        const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.orgId,
+            processInstanceId: access.processInstanceId,
+            canonicalValues: canonical.values,
+            preloadedSession: { ...access.session, shared_values: applied.sharedValues } as typeof access.session,
+        });
+        if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
+        const addressResponse = publicOk({
+            outcome: { action: "address_saved", written: applied.written },
+            objective: participantObjectiveWireModel(after.value, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        addressResponse.headers.set("Server-Timing", timing.header());
+        return addressResponse;
     }
 
     const partyBody = body.party;

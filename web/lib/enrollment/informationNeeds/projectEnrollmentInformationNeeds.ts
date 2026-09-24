@@ -21,6 +21,7 @@ import {
 } from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import { absenceLabel, addressPartFieldIds, isConfigurationSupplied, isFormOnlyEvidence } from "@/lib/forms/fieldSemantics";
+import { addressGroups, addressSatisfied, projectParticipantAddress } from "@/lib/enrollment/informationNeeds/participantAddress";
 import {
     partyCollectionChildFieldIds,
     partyCollectionGroups,
@@ -320,7 +321,7 @@ export function projectEnrollmentInformationNeeds(
     pruneInvisibleOccurrences(byKey, input);
 
     const scalar = [...byKey.values()].map((acc) => finalize(acc, input));
-    return [...scalar, ...projectPartyCollectionNeeds(input)];
+    return [...scalar, ...projectPartyCollectionNeeds(input), ...projectAddressNeeds(input)];
 }
 
 /**
@@ -660,6 +661,72 @@ function projectPartyCollectionNeeds(input: ProjectNeedsInput): EnrollmentInform
                 value_origin: null,
                 requires_participant_action: !satisfied,
                 party_collection: { ...collection, valid, settled: settledMarker },
+            } as EnrollmentInformationNeed);
+        }
+    }
+    return out;
+}
+
+
+/**
+ * One need per declared address — the address, not its four parts.
+ *
+ * The parts are already suppressed from the scalar walk, so without this a declared address is
+ * collected by nobody. This is the other half: one obligation, satisfied when the parts the Form
+ * marks REQUIRED are answered, and carrying what Alloy already holds so the card can show it for
+ * confirmation rather than asking a family to retype their own address.
+ */
+function projectAddressNeeds(input: ProjectNeedsInput): EnrollmentInformationNeed[] {
+    const out: EnrollmentInformationNeed[] = [];
+    for (const form of input.forms) {
+        for (const group of addressGroups(form.schema)) {
+            const address = projectParticipantAddress(group, input.sharedValues);
+            if (!address) continue;
+            const satisfied = addressSatisfied(address);
+            out.push({
+                identity: {
+                    key: `address:${form.form_definition_id}:${group.id}`,
+                    scope: "shared",
+                    subject_party: null,
+                    journey_subject_id: input.subjectId,
+                    entity_type: address.subject === "child" ? "customer_member" : "person",
+                    subject_entity_type: address.subject === "child" ? "customer_member" : "person",
+                    field_key: group.id,
+                    shared_value_key: null,
+                    session_value_key: null,
+                    collection_mode: "participant",
+                    label: group.label,
+                } as unknown as EnrollmentNeedIdentity,
+                scope: "shared" as EnrollmentInformationNeed["scope"],
+                subject_id: input.subjectId,
+                state: satisfied ? "confirmed" : "missing",
+                occurrence_count: 1,
+                occurrences: [
+                    {
+                        requirement_id: form.requirement_id,
+                        form_definition_id: form.form_definition_id,
+                        form_definition_version_id: form.form_definition_version_id,
+                        session_item_id: form.session_item_id,
+                        form_field_id: group.id,
+                        label: group.label,
+                        required: address.parts.some((part) => part.required),
+                        section_title: null,
+                        field_type: "address",
+                        options: [],
+                        // An address is given or it is not; "there are none" is not one of its answers.
+                        absence_label: null,
+                        form_only_evidence: false,
+                        configuration_supplied: false,
+                    },
+                ],
+                optional: !address.parts.some((part) => part.required),
+                requirement_ids: [form.requirement_id],
+                has_value: address.known_line.length > 0,
+                current_value: address.known_line || null,
+                value_source: address.known_line ? "session_shared_value" : "none",
+                value_origin: null,
+                requires_participant_action: !satisfied,
+                address,
             } as EnrollmentInformationNeed);
         }
     }

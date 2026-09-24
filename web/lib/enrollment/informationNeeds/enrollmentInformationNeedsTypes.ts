@@ -155,6 +155,14 @@ export type EnrollmentInformationNeed = {
      * of the collection's child questions asked as unrelated scalars.
      */
     readonly party_collection?: import("@/lib/enrollment/informationNeeds/participantPartyCollection").ParticipantPartyCollection;
+    /**
+     * The Form's own address declaration and the parts currently known.
+     *
+     * Present only for a group that declared itself an address. Its parts are canonical Person
+     * fields written through the ordinary shared-value path — this carries the STATEMENT that they
+     * are one address, so the conversation asks for them once.
+     */
+    readonly address?: import("@/lib/enrollment/informationNeeds/participantAddress").ParticipantAddress;
 };
 
 export type EnrollmentInformationNeeds = {

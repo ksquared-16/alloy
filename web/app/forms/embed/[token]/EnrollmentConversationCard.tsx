@@ -1131,6 +1131,13 @@ export function EnrollmentConversationCard({
             editFact?: { ref: string; value: unknown };
             /** Add a person by the role the platform is offering: decline, reuse, or collect. */
             party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
+            /**
+             * One address, saved as one.
+             *
+             * Keyed by the canonical PART name, never by a schema field id — the browser names no
+             * destination, and the server's own projection decides which shared keys are written.
+             */
+            address?: { group_field_id: string; parts: Record<string, string> };
             /** Add, correct or take one person off a collection. Draft state only — never canonical. */
             partyCollection?:
                 | { action: "settle"; group_field_id: string }
@@ -1210,6 +1217,7 @@ export function EnrollmentConversationCard({
                     ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
                     ...(payload.party ? { party: payload.party } : {}),
                     ...(payload.partyCollection ? { party_collection: payload.partyCollection } : {}),
+                    ...(payload.address ? { address: payload.address } : {}),
                 });
                 const json = (await res.json()) as TurnResponse;
                 if (!json.ok || !json.data) {
@@ -1377,6 +1385,43 @@ export function EnrollmentConversationCard({
                             </>
                         )}
                     </div>
+                </div>
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "address" && objective.next_turn.address) {
+        /*
+         * ONE ADDRESS, DRAWN AS ONE.
+         *
+         * Four boxes that visibly belong together, under one heading, with one save. The
+         * alternative — and what the runtime did before the parts were suppressed — was to ask
+         * "Street address?", then "City?", then "State?", then "ZIP?" as unrelated turns, so a
+         * parent answered four questions without ever being told they were giving one address.
+         *
+         * When Alloy already holds the address the family CONFIRMS it rather than retyping it:
+         * asking someone to key in an address that is already correct is the surest way to
+         * introduce a typo into a record that was right.
+         */
+        const address = objective.next_turn.address;
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                    </ThreadTurn>
+                    <AddressEditor
+                        address={address}
+                        busy={busy}
+                        onSave={(parts) =>
+                            void submit({
+                                address: { group_field_id: address.group_field_id, parts },
+                                settledAs: [parts.address_line1, parts.city, [parts.state, parts.postal_code].filter(Boolean).join(" ")]
+                                    .filter(Boolean)
+                                    .join(", "),
+                            })
+                        }
+                    />
                 </div>
             </IntakeCard>
         );
@@ -2315,6 +2360,91 @@ function PartyCollectionEntryEditor({
                     className="flex min-h-[44px] items-center text-[13px] text-alloy-midnight/65 underline underline-offset-2 disabled:opacity-50"
                 >
                     Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
+/**
+ * The four parts of one address, on screen together.
+ *
+ * Local state until the family saves, so a half-typed address leaves nothing anywhere — and a part
+ * they never touched is not sent, which is what stops one correction from wiping a city Alloy
+ * already held.
+ */
+function AddressEditor({
+    address,
+    busy,
+    onSave,
+}: {
+    readonly address: NonNullable<ParticipantObjectiveWire["next_turn"]["address"]>;
+    readonly busy: boolean;
+    readonly onSave: (parts: Record<string, string>) => void;
+}) {
+    const [values, setValues] = useState<Record<string, string>>(() =>
+        Object.fromEntries(address.parts.map((p) => [p.part, p.value])),
+    );
+    const firstRef = useRef<HTMLInputElement | null>(null);
+    useEffect(() => {
+        firstRef.current?.focus();
+    }, []);
+
+    const missingRequired = address.parts.some((p) => p.required && !(values[p.part] ?? "").trim());
+
+    return (
+        <div className="flex flex-col gap-3" data-participant-address={address.group_field_id}>
+            {address.known_line ? (
+                <p className="text-[13px] text-alloy-midnight/65" data-participant-address-known={address.known_line}>
+                    {address.known_line}
+                </p>
+            ) : null}
+            {address.parts.map((part, i) => {
+                const id = `address-${address.group_field_id}-${part.part}`;
+                return (
+                    <div key={part.part} className="flex flex-col gap-1">
+                        <label htmlFor={id} className="text-[13px] text-alloy-midnight/70">
+                            {part.label}
+                            {part.required ? <span aria-hidden="true"> *</span> : null}
+                            {part.required ? <span className="sr-only"> (required)</span> : null}
+                        </label>
+                        <input
+                            id={id}
+                            ref={i === 0 ? firstRef : undefined}
+                            type="text"
+                            autoComplete={
+                                part.part === "address_line1" ? "address-line1"
+                                : part.part === "city" ? "address-level2"
+                                : part.part === "state" ? "address-level1"
+                                : part.part === "postal_code" ? "postal-code"
+                                : undefined
+                            }
+                            value={values[part.part] ?? ""}
+                            disabled={busy}
+                            data-participant-address-part={part.part}
+                            onChange={(e) => setValues((prev) => ({ ...prev, [part.part]: e.target.value }))}
+                            onKeyDown={(e) => {
+                                // Enter saves the ADDRESS, not the surrounding composer.
+                                if (e.key !== "Enter") return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (!missingRequired && !busy) onSave(values);
+                            }}
+                            className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-3 text-[15px] text-alloy-midnight"
+                        />
+                    </div>
+                );
+            })}
+            <div className="mt-1 flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || missingRequired}
+                    data-participant-address-save="true"
+                    onClick={() => onSave(values)}
+                    className="flex min-h-[44px] items-center rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
+                >
+                    {address.known_line ? "Yes, that's right" : "Save address"}
                 </button>
             </div>
         </div>

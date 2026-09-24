@@ -48,6 +48,19 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
      * asks who these people ARE, and the card beside the sentence already lists the ones Alloy
      * knows, so the words only have to name the list and say whether anything is still needed.
      */
+    /*
+     * AN ADDRESS IS ONE THING, AND IT IS ASKED AS ONE.
+     *
+     * The scalar stem would produce "What is your Home address?" for a group; worse, before the
+     * parts were suppressed the family met four of them. When Alloy already holds the address the
+     * question is a confirmation, because asking someone to retype their own address is the surest
+     * way to introduce a typo into a record that was already right.
+     */
+    const address = need.address;
+    if (address) {
+        if (address.known_line) return `We have ${lowerFirst(address.label)} as ${address.known_line}. Is that right?`;
+        return `What is ${lowerFirst(address.label)}?`;
+    }
     const collection = need.party_collection;
     if (collection) {
         if (collection.entries.length === 0) {

@@ -51,6 +51,8 @@ export type ParticipantTurnControl =
      * grouping IS the interaction — three answers about Jane belong to Jane, not to three turns.
      */
     | { readonly kind: "party_collection" }
+    /** One address, drawn as one interaction rather than four questions. */
+    | { readonly kind: "address" }
     | { readonly kind: "done" };
 
 /** The controls that actually collect a value. Shared by collection and by correction. */
@@ -83,6 +85,7 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
     // A collection need is recognised from the need itself, so any turn that carries one draws the
     // collection rather than a control for a question the collection does not have.
     if (turn.party_collection) return { kind: "party_collection" };
+    if (turn.address) return { kind: "address" };
     if (turn.kind === "collect_evidence") return { kind: "evidence" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
@@ -539,6 +542,9 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
      * taken as given rather than rebuilt here.
      */
     if (turn.party_collection && turn.prompt?.trim()) return turn.prompt.trim();
+    // An address turn keeps the runtime's own sentence: it names the address and says whether Alloy
+    // already holds one, which no re-composition from a field label can do.
+    if (turn.address && turn.prompt?.trim()) return turn.prompt.trim();
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
