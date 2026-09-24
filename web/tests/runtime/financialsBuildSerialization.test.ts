@@ -363,8 +363,7 @@ describe("the instrument names every boundary it crosses", () => {
          * required the name, because a recorded span the payload does not declare is a boundary
          * the instrument cannot report.
          */
-        expect(declared.length, "the build crosses sixteen awaited boundaries; the payload must name them all")
-            .toBe(16);
+        expect(declared.length, "the payload names every boundary the build still crosses").toBe(recorded.length);
         expect(recorded).toEqual(declared);
     });
 

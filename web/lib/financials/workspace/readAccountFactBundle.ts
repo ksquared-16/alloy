@@ -44,6 +44,7 @@ export type AccountFactBundle = {
     subsidyClaims: FactRow[];
     subsidyVariances: FactRow[];
     collectionAttempts: FactRow[];
+    paymentsBySource: FactRow[];
     /** Asked-and-none, distinguishable from never-gathered. */
     counts: { agreements: number; charges: number; allocations: number; claimLines: number };
 };
@@ -91,11 +92,46 @@ export async function readAccountFactBundle(
         subsidyClaims: list(b.subsidy_claims),
         subsidyVariances: list(b.subsidy_variances),
         collectionAttempts: list(b.collection_attempts),
+        paymentsBySource: list(b.payments_by_source),
         counts: {
             agreements: Number(counts.agreements ?? 0),
             charges: Number(counts.charges ?? 0),
             allocations: Number(counts.allocations ?? 0),
             claimLines: Number(counts.claim_lines ?? 0),
         },
+    };
+}
+
+/**
+ * The bundle's rows, narrowed to the charges a position is being computed for.
+ *
+ * The bundle carries every charge-keyed fact for the account; a position is asked about the posted
+ * charges in one period. Narrowing here rather than in SQL keeps the period rule where it already
+ * lives — the builder decides which charges are collectible, and this only stops facts for other
+ * charges from reaching an arithmetic that would ignore them anyway.
+ */
+export function positionFactsFromBundle(
+    bundle: AccountFactBundle,
+    chargeIds: ReadonlySet<string>,
+): import("@/lib/financials/workspace/resolveFinancialPosition").PositionFactRows {
+    const forCharge = (rows: FactRow[], k: string) => rows.filter((r) => chargeIds.has(String(r[k])));
+    const allocations = forCharge(bundle.responsibilityAllocations, "charge_id");
+    const allocIds = new Set(allocations.map((a) => String(a.id)));
+    const shareIds = new Set(allocations.map((a) => a.share_id).filter(Boolean).map(String));
+    const claimLines = forCharge(bundle.subsidyClaimLines, "charge_id");
+    const claimIds = new Set(claimLines.map((l) => String(l.claim_id)));
+    const lineIds = new Set(claimLines.map((l) => String(l.id)));
+    const applications = forCharge(bundle.paymentAllocations, "charge_id");
+    const paymentIds = new Set(applications.map((a) => String(a.payment_id)));
+    return {
+        reductions: forCharge(bundle.reductionsByCharge, "source_charge_id") as never,
+        applications: applications as never,
+        responsibilityAllocations: allocations as never,
+        claimLines: claimLines as never,
+        paymentsBacking: bundle.paymentsBacking.filter((p) => paymentIds.has(String(p.id))) as never,
+        fundingByAllocation: bundle.fundingByAllocation.filter((f) => allocIds.has(String(f.allocation_id))),
+        fundingByShare: bundle.fundingByShare.filter((f) => shareIds.has(String(f.share_id))),
+        claims: bundle.subsidyClaims.filter((c) => claimIds.has(String(c.id))) as never,
+        variances: bundle.subsidyVariances.filter((v) => lineIds.has(String(v.claim_line_id))),
     };
 }

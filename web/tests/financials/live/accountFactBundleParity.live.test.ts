@@ -195,6 +195,19 @@ d("the bundle returns exactly what the five waves returned", () => {
             ["id", "rail", "processor_state", "provider_action_type", "charge_id",
              "requested_amount_cents", "currency", "canonical_payment_id"]);
 
+        /* The account's own receipts — the paged scan the bundle replaces. */
+        const accountPayments = await pageAll((from, to) =>
+            supabase.from("payments")
+                .select("id, direction, refunds_payment_id, reversal_origin, amount_cents, currency, status, payment_method, processor, received_at, posted_at, reference_number, notes")
+                .eq("org_id", ORG)
+                .in("billable_source_type", ["enrollment_agreement", "customer"])
+                .in("billable_source_id", sourceIds)
+                .order("received_at", { ascending: false }).order("id", { ascending: true })
+                .range(from, to) as never);
+        compare("payments_by_source", accountPayments, bundle.paymentsBySource,
+            ["id", "direction", "refunds_payment_id", "reversal_origin", "amount_cents", "currency",
+             "status", "payment_method", "processor", "reference_number", "notes"]);
+
         /* KNOWN ZERO is reported as a count, not inferred from an empty array. */
         expect(bundle.counts.charges, "the bundle reports what it gathered").toBe(charges.length);
         expect(bundle.counts.agreements).toBe(agreements.length);

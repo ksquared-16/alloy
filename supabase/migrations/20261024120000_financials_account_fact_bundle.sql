@@ -288,6 +288,25 @@ BEGIN
             FROM public.financial_subsidy_variances v
             WHERE v.org_id = p_org_id AND v.claim_line_id = ANY(v_line_ids)), '[]'::jsonb),
 
+        /*
+         * The account's receipts, matched on the billable source TYPE as well as the id: a source
+         * id is only unique within its kind, and matching on the id alone would claim a job
+         * payment that happened to share a uuid. Same predicate, same ordering, same rows as the
+         * paged read it replaces — and no page cap, so a long account cannot be silently truncated
+         * into "money the family never paid".
+         */
+        'payments_by_source', coalesce((
+            SELECT jsonb_agg(to_jsonb(p) ORDER BY p.received_at DESC NULLS LAST, p.id)
+            FROM (
+                SELECT p.id, p.direction, p.refunds_payment_id, p.reversal_origin, p.amount_cents,
+                       p.currency, p.status, p.payment_method, p.processor, p.received_at,
+                       p.posted_at, p.reference_number, p.notes
+                FROM public.payments p
+                WHERE p.org_id = p_org_id
+                  AND p.billable_source_type = ANY(ARRAY['enrollment_agreement','customer'])
+                  AND p.billable_source_id = ANY(v_source_ids)
+            ) p), '[]'::jsonb),
+
         'collection_attempts', coalesce((
             SELECT jsonb_agg(jsonb_build_object(
                 'id', ca.id, 'rail', ca.rail, 'processor_state', ca.processor_state,
