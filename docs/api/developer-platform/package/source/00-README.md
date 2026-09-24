@@ -85,9 +85,11 @@ are what they will keep open while building it.
    information is not available under any permission.
 7. **Attendance is append-only history.** Mistakes are corrected by recording a
    correction or reversal, never by editing or deleting.
-8. **Every write is a governed operation, not CRUD.** Seven exist: six
-   service-state operations (start/end an enrollment, assign/move a placement,
-   set/change a schedule) and Attendance fact submission. You assert an intent;
+8. **Every write is a governed operation, not CRUD.** Ten exist: nine
+   service-state operations (start, end or void an enrollment; assign, move or
+   cancel a placement; set, change or cancel a schedule) and Attendance fact
+   submission, which carries three intents — a fact, a correction, or a reversal
+   — through one endpoint. You assert an intent;
    Alloy decides whether it may be performed. There is no `PUT`, `PATCH` or
    `DELETE` anywhere.
 9. **Enrollment, Placement, Schedule Assignment and Schedule Day are four

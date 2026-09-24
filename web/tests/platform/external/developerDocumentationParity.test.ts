@@ -105,6 +105,73 @@ describe("the front door is accurate", () => {
     });
 });
 
+describe("no document still describes an older write surface", () => {
+    /*
+     * These are absence assertions on purpose. The counts were corrected once already and came back
+     * in a second place: the surface table said twenty-two while an orientation paragraph three
+     * sections later still said "Seven writes exist". Both read fluently; only the pair is wrong.
+     *
+     * They assert stale FORMS rather than approving a phrasing, so an author may word the current
+     * truth however they like — they simply cannot leave an older count behind.
+     */
+    const CURRENT = [SPEC, GUIDE, FRONT_DOOR,
+        "docs/api/developer-platform/package/01-integrating-with-alloy.md",
+        "docs/api/developer-platform/package/02-technical-specification.md",
+        "docs/api/developer-platform/package/06-mapping-worksheet.md",
+        "docs/api/developer-platform/package/07-discovery-questions.md",
+        "docs/api/developer-platform/package/source/06-mapping-worksheet.md",
+        "docs/api/developer-platform/package/source/07-discovery-questions.md",
+        "docs/api/developer-platform/package/source/00-README.md",
+        "docs/api/developer-platform/package/README.md",
+    ];
+    const STALE = [
+        "Seven writes", "seven writes", "Seven governed writes", "seven governed writes",
+        // The README said "Seven exist", which no count-word search for "writes" would find.
+        "Seven exist", "seven exist", "Six exist", "six exist",
+        "Six are service-state", "six service-state", "all seven", "all nine",
+        "nineteen operations", "fifteen paths",
+        "no public endpoint currently returns 409", "reserved on the public API",
+    ];
+
+    for (const file of CURRENT) {
+        it(`${file.split("/").pop()} describes no older surface`, () => {
+            const text = read(file);
+            for (const stale of STALE) {
+                expect(text, `${file} still contains "${stale}"`).not.toContain(stale);
+            }
+        });
+    }
+
+    it("every governed write operation is reachable from the canonical prose", () => {
+        const spec = read(SPEC);
+        const guide = read(GUIDE);
+        for (const id of writes) {
+            const route = PUBLIC_OPERATIONS[id].route;
+            expect(spec, `the specification never names ${route}`).toContain(route);
+            expect(guide, `the guide never names ${route}`).toContain(route);
+        }
+    });
+
+    it("the canonical partner toolkit stays partner-neutral", () => {
+        // The worksheet and discovery questions are reused for every integration. A partner name in
+        // the canonical source ships that partner's name to the next one.
+        for (const file of [
+            "docs/api/developer-platform/package/source/06-mapping-worksheet.md",
+            "docs/api/developer-platform/package/source/07-discovery-questions.md",
+        ]) {
+            expect(read(file), `${file} names a specific partner`).not.toMatch(/Classroom\s*Coach/i);
+        }
+    });
+
+    it("scope descriptions name the operations the scope actually grants", () => {
+        const spec = read(SPEC);
+        // Derived from the catalog: every write route's scope must be described in terms that
+        // mention cancelling, which is what the newest operations added.
+        expect(spec).toMatch(/`enrollment\.write`[^|]*\|[^|]*cancel/i);
+        expect(spec).toMatch(/`schedule\.write`[^|]*\|[^|]*cancel/i);
+    });
+});
+
 describe("the OpenAPI is the reference, and the package copies it exactly", () => {
     const canonical = JSON.parse(read(OPENAPI)) as { paths: Record<string, Record<string, unknown>> };
 

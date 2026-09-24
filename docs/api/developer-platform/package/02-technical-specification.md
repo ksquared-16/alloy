@@ -265,8 +265,8 @@ The thirteen grantable scopes:
 | `staff.contact.read` | Email and phone for visible staff | Anything `staff.read` does not already permit |
 | `attendance.read` | Read attendance facts for children inside the boundary | Authoring a fact |
 | `attendance.write` | Submit attendance facts for children inside the boundary | Reading anyone's attendance history |
-| `enrollment.write` | Start and end enrollment, and assign or move placement, for authorized children | Reading anything; creating children or households; schedules |
-| `schedule.write` | Set and change committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
+| `enrollment.write` | Start, end and void enrollments, and assign, move or cancel placements, for authorized children | Reading anything; creating children or households; schedules |
+| `schedule.write` | Set, change and cancel committed schedule assignments for authorized children | Reading anything; enrollment or placement; the derived schedule-day projection |
 
 The last pair is worth stating plainly, because it is the clearest demonstration
 of what exact matching means: an Installation granted only `attendance.write` can
@@ -658,8 +658,8 @@ does not.
 - **`.write`** — permission to invoke specific **named operations** on that
   resource. It is not permission to read, and it is not a generic mutation right.
 - **No read implies a write, and no write implies a read.** An integration
-  granted `enrollment.write` can start and end enrollments and cannot read a
-  single one.
+  granted `enrollment.write` can start, end and void enrollments and assign, move
+  and cancel placements — and cannot read a single one.
 
 ### There is no CRUD contract
 
@@ -667,15 +667,23 @@ The public API has **no `PUT`, no `PATCH` and no `DELETE`** on any resource, and
 none is planned. Creation, change and ending happen through named operations that
 express intent:
 
-| You want to | You call |
-| --- | --- |
-| Enroll a child | `POST /api/v1/enrollments` |
-| End an enrollment | `POST /api/v1/enrollments/end` |
-| Assign a room | `POST /api/v1/placements` |
-| Move a room | `POST /api/v1/placements/move` |
-| Set a schedule | `POST /api/v1/schedule-assignments` |
-| Change a schedule | `POST /api/v1/schedule-assignments/change` |
-| Record attendance | `POST /api/v1/attendance-events` |
+| You want to | You call | Scope |
+| --- | --- | --- |
+| Enroll a child | `POST /api/v1/enrollments` | `enrollment.write` |
+| End an enrollment | `POST /api/v1/enrollments/end` | `enrollment.write` |
+| Say an enrollment was never real | `POST /api/v1/enrollments/void` | `enrollment.write` |
+| Assign a room | `POST /api/v1/placements` | `enrollment.write` |
+| Move a room | `POST /api/v1/placements/move` | `enrollment.write` |
+| Say a placement was never real | `POST /api/v1/placements/cancel` | `enrollment.write` |
+| Set a schedule | `POST /api/v1/schedule-assignments` | `schedule.write` |
+| Change a schedule | `POST /api/v1/schedule-assignments/change` | `schedule.write` |
+| Say a schedule never applied | `POST /api/v1/schedule-assignments/cancel` | `schedule.write` |
+| Record, correct or reverse attendance | `POST /api/v1/attendance-events` | `attendance.write` |
+
+Ten HTTP operations carrying twelve domain intents, because Attendance submission
+accepts `original`, `correction` and `reversal` through one endpoint. §9 covers
+that endpoint's shape; the conflict conditions for each service-state operation
+are in the integration guide's catalog.
 
 You never send `status_key` or an end date as a field edit. `POST .../end` is one
 intent with three possible canonical outcomes — cancel, mark ending, close — and
@@ -859,10 +867,11 @@ therefore always safe.
 
 ## 14. Governed submission, idempotency, correlation
 
-Seven governed writes exist (§2). This section covers the one whose shape is
-different from the rest — **Attendance submission** — and the idempotency and
-correlation rules that apply to all of them. The service-state operations are
-described in §9 and §11a.
+Ten governed write operations exist (§2), carrying twelve domain intents:
+Attendance submission is one endpoint that accepts `original`, `correction` and
+`reversal`. This section covers that endpoint, whose shape differs from the rest,
+and the idempotency and correlation rules that apply to all of them. The nine
+service-state operations are described in §9 and §11a.
 
 ### Attendance is fact submission, not CRUD
 
