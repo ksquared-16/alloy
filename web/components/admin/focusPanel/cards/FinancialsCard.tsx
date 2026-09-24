@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
+import { createInFlightCoalescer } from "@/lib/adminV2/runtime/focusPanel/financials/coalesceInFlight";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -330,6 +331,12 @@ export default function FinancialsCard({
     const answeredKeyRef = useRef<string | null>(null);
     /** The account a FULL read is in flight for, so a late projection cannot restart it. */
     const deepReadInFlightForRef = useRef<string | null>(null);
+    /**
+     * The one read currently in the air, keyed by the composed query. A second caller for the same
+     * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
+     * not a cache, and never outlives the operation.
+     */
+    const coalescerRef = useRef(createInFlightCoalescer<void>());
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -733,13 +740,38 @@ export default function FinancialsCard({
         return null;
     }, [customerId, scopedMemberId]);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (): Promise<void> => {
         if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
         }
         const answeringKey = customerId ?? scopedMemberId ?? null;
+        /*
+         * ── ONE OPERATION, ONE REQUEST, HOWEVER MANY CALLERS ASK FOR IT ───────────────────────
+         *
+         * MEASURED at the fetch boundary on deployed staging, not inferred: opening Details issued
+         * two identical `financials/card` requests 48ms apart, for the same account, overlapping —
+         * the second reported `identicalInFlight: 1`. Their stacks name two different legitimate
+         * callers of this same `load()`:
+         *
+         *   #1  requestIdleCallback.timeout   the prewarm, which predicted the operator's ask
+         *   #2  the React commit path         the same effect's "asked for: now" branch, once the
+         *                                     overlay opened
+         *
+         * Neither is wrong to ask. The prewarm exists so the operator never waits for what was
+         * predictable, and the click must not depend on a prediction having already landed. What
+         * was wrong is that asking twice ISSUED twice: two ~2.4s server reads racing each other,
+         * each slower for the contention, and the ledger waiting on the later one.
+         *
+         * So the second caller CONSUMES THE FIRST'S RESULT. This is request-scoped coalescing, not
+         * a cache: one entry, keyed by the composed query, cleared the moment it settles. It holds
+         * no financial truth between operations, survives no navigation, and answers no question a
+         * second way — the single response still flows through the same `setVm` and the same
+         * `requestSeq` supersession that keeps one family's balance off another's screen.
+         */
+        /* The mechanism lives in `createInFlightCoalescer`, where it is tested with real concurrency. */
+        return coalescerRef.current.run(requestQuery, async () => {
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
         /*
@@ -754,31 +786,32 @@ export default function FinancialsCard({
          */
         deepReadInFlightForRef.current = answeringKey;
         setLoading(true);
-        try {
-            const query = requestQuery;
+        const query = requestQuery;
+            try {
                 const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
-            const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
-            if (!current()) return;
-            const fresh = json?.ok && json.vm ? json.vm : null;
-            // The endpoint's answer is the FULL model; record which account now has it.
-            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
-            setVm(fresh);
-        } catch {
-            if (!current()) return;
-            setVm(null);
-        } finally {
-            // A superseded request must not clear the spinner belonging to the one that replaced it.
-            if (current()) {
-                /*
-                 * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before the
-                 * spinner clears, because the frame after `setLoading(false)` is exactly the one
-                 * that decides between "still reading" and "no account".
-                 */
-                answeredKeyRef.current = answeringKey;
-                deepReadInFlightForRef.current = null;
-                setLoading(false);
+                const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+                if (!current()) return;
+                const fresh = json?.ok && json.vm ? json.vm : null;
+                // The endpoint's answer is the FULL model; record which account now has it.
+                if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+                setVm(fresh);
+            } catch {
+                if (!current()) return;
+                setVm(null);
+            } finally {
+                // A superseded request must not clear the spinner belonging to the one that replaced it.
+                if (current()) {
+                    /*
+                     * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before
+                     * the spinner clears, because the frame after `setLoading(false)` is exactly the
+                     * one that decides between "still reading" and "no account".
+                     */
+                    answeredKeyRef.current = answeringKey;
+                    deepReadInFlightForRef.current = null;
+                    setLoading(false);
+                }
             }
-        }
+        });
     }, [customerId, requestQuery, scopedMemberId]);
 
     /*

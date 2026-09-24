@@ -95,6 +95,47 @@ describe("the collectible read is per table, not per charge", () => {
         expect(big.reads.length).toBeLessThanOrEqual(small.reads.length * 3 + 2);
     });
 
+    it("the fact reads do not wait on the charge rows", async () => {
+        /*
+         * A COUNTING stub cannot see this: serializing two reads changes their ORDER, not their
+         * number, and the first version of this suite passed a plant that reserialized them. So
+         * the charge read is held open here, and the gate asserts the fact tables were reached
+         * anyway — which is only possible if they were not queued behind it.
+         */
+        const reads: string[] = [];
+        let releaseCharges: () => void = () => {};
+        const held = new Promise<void>((r) => { releaseCharges = r; });
+        const client = {
+            from: (table: string) => {
+                reads.push(table);
+                const chain: Record<string, unknown> = {};
+                for (const k of ["select", "eq", "in", "is", "not", "gte", "lte", "order", "limit", "range"]) {
+                    chain[k] = () => chain;
+                }
+                chain.maybeSingle = async () => ({ data: null, error: null });
+                chain.then = (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+                    table === "charges"
+                        ? held.then(() => resolve({ data: [], error: null }))
+                        : resolve({ data: [], error: null });
+                return chain;
+            },
+        } as never;
+
+        const pending = resolveCollectiblePositionsForCharges(client, {
+            orgId: "org",
+            chargeIds: ["charge-1", "charge-2"],
+        });
+        /* Let the microtask queue drain while the charge read is still held. */
+        await new Promise((r) => setTimeout(r, 0));
+        expect(reads, "the charge read was issued").toContain("charges");
+        expect(
+            reads.some((t) => t !== "charges"),
+            "the fact reads were queued behind the charge read instead of starting alongside it",
+        ).toBe(true);
+        releaseCharges();
+        await pending;
+    });
+
     it("no charges means no reads at all", async () => {
         const none = countingClient();
         const out = await resolveCollectiblePositionsForCharges(none.client, { orgId: "org", charges: [] });
