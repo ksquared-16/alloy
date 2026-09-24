@@ -101,90 +101,206 @@ const PAYMENT_VIEW_COLUMNS =
  */
 const HOUSEHOLD_VIEW_SCAN_CAP = 25_000;
 
+export type PaymentViewFactRows = {
+    /** The household's receipts, already selected by its billable sources. */
+    payments: ReadonlyArray<Record<string, unknown>>;
+    /** Applications of those receipts, and of this account's charges. */
+    allocations: ReadonlyArray<Record<string, unknown>>;
+    /** The charges those applications name, which may sit outside this account. */
+    charges: ReadonlyArray<Record<string, unknown>>;
+    /** The households the receipts were taken against. */
+    payers: ReadonlyArray<Record<string, unknown>>;
+    /** Outbound rows pointing at these receipts — what has been given back. */
+    refunds: ReadonlyArray<Record<string, unknown>>;
+};
+
 export async function resolveHouseholdPaymentViews(
     supabase: SupabaseClient,
     input: { orgId: string; customerId: string },
+    /*
+     * ── THE ACQUISITION MOVED; THE RULES DID NOT ────────────────────────────────────────────────
+     *
+     * This read EVERY inbound receipt in the organisation, then discovered which household each
+     * one belonged to by resolving its billable source ONE AT A TIME, then discarded the ones that
+     * were not this family's. Measured on the certification tenant: 3,517 receipts scanned over
+     * four pages to keep 3,198, and 65 sequential lookups to decide which. With the batched
+     * applications and charges behind them that is roughly 150 sequential round trips — the
+     * 1,131-4,211 ms that became the Financials pole once the rest of the card got fast.
+     *
+     * The account fact bundle already resolves the household's billable sources server-side, so
+     * the receipts can be selected BY them instead of found by scanning past everyone else's. When
+     * the caller supplies those rows this spends no network at all.
+     *
+     * Every rule below is untouched and still lives here: inbound-only, not-a-refund, what counts
+     * as applied, how a reversal reads, which payer names the receipt. None of it moved into SQL.
+     */
+    supplied?: PaymentViewFactRows,
 ): Promise<PaymentView[]> {
     const orgId = input.orgId?.trim();
     const customerId = input.customerId?.trim();
     if (!orgId || !customerId) return [];
 
-    /*
-     * PAGED, AND ORDERED — the defect this read carried was not subtle, only quiet.
-     *
-     * It asked for every inbound childcare receipt in the ORGANISATION and filtered to the
-     * household afterwards, in one unpaged, unordered query. PostgREST answers at most 1,000 rows,
-     * so on a tenant with more receipts than that the server returned an arbitrary page and this
-     * household's payment was present or absent depending on which rows came back. It surfaced as a
-     * receipt the composition could not see — money a family had paid, missing from the surface
-     * that explains where their money went.
-     *
-     * Ordering by `id` is what makes paging a sequence rather than a sample.
-     *
-     * The org-wide shape is left as it was: narrowing this to the household's own billable sources
-     * first is a real improvement and a different change, and it is recorded rather than smuggled
-     * in beside a correctness repair.
-     */
     let paymentRows: unknown[];
-    try {
-        const { rows, truncated } = await readAllPages<Record<string, unknown>>(
-            "household payment views",
-            HOUSEHOLD_VIEW_SCAN_CAP,
-            (fromIndex, toIndex) =>
-                supabase
-                    .from("payments")
-                    .select(PAYMENT_VIEW_COLUMNS)
-                    .eq("org_id", orgId)
-                    .eq("direction", "inbound")
-                    .is("refunds_payment_id", null)
-                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-                    .order("id", { ascending: true })
-                    .range(fromIndex, toIndex) as never,
-        );
+    if (supplied) {
         /*
-         * An account's receipts may not be answered from part of the cohort: a missing one reads as
-         * money never paid. The caller renders an empty list as "no receipts", so the honest answer
-         * when the bound is reached is the same as when the read fails — nothing, rather than a
-         * plausible subset.
+         * `direction` and `refunds_payment_id` are applied HERE, not in the function: an inbound
+         * receipt that is not a refund is this resolver's definition of a receipt, and moving it
+         * into SQL would fork the rule.
          */
-        if (truncated) return [];
-        paymentRows = rows;
-    } catch {
-        return [];
+        paymentRows = supplied.payments.filter(
+            (r) => String(r.direction ?? "").trim() === "inbound" && r.refunds_payment_id == null,
+        );
+    } else {
+        try {
+            const { rows, truncated } = await readAllPages<Record<string, unknown>>(
+                "household payment views",
+                HOUSEHOLD_VIEW_SCAN_CAP,
+                (fromIndex, toIndex) =>
+                    supabase
+                        .from("payments")
+                        .select(PAYMENT_VIEW_COLUMNS)
+                        .eq("org_id", orgId)
+                        .eq("direction", "inbound")
+                        .is("refunds_payment_id", null)
+                        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                        .order("id", { ascending: true })
+                        .range(fromIndex, toIndex) as never,
+            );
+            /*
+             * An account's receipts may not be answered from part of the cohort: a missing one reads as
+             * money never paid. The caller renders an empty list as "no receipts", so the honest answer
+             * when the bound is reached is the same as when the read fails — nothing, rather than a
+             * plausible subset.
+             */
+            if (truncated) return [];
+            paymentRows = rows;
+        } catch {
+            return [];
+        }
+
+        /* Household is resolved from the billable source, memoised — a family's receipts share sources. */
+        const householdBySource = new Map<string, string | null>();
+        const mine: PaymentRowLite[] = [];
+        for (const row of (paymentRows ?? []) as unknown as PaymentRowLite[]) {
+            const key = `${row.billable_source_type ?? ""}:${row.billable_source_id ?? ""}`;
+            if (!householdBySource.has(key)) {
+                householdBySource.set(
+                    key,
+                    await resolveBillableSourceHouseholdId(
+                        supabase,
+                        orgId,
+                        row.billable_source_type,
+                        row.billable_source_id,
+                    ),
+                );
+            }
+            if (householdBySource.get(key) === customerId) mine.push(row);
+        }
+        if (!mine.length) return [];
+
+        const paymentIds = mine.map((p) => p.id);
+        /* Batched: this id list grows with the account and would otherwise overflow the request URI. */
+        const allocRows = await readInBatches<Record<string, unknown>>(
+            "applications of these receipts",
+            paymentIds,
+            (batch) => supabase
+                .from("payment_allocations")
+                .select("id, payment_id, charge_id, allocated_amount_cents, status, allocated_at, reversed_at, reversal_reason")
+                .eq("org_id", orgId)
+                .in("payment_id", batch) as never,
+        );
+        const allocations = (allocRows ?? []) as unknown as Array<{
+            id: string;
+            payment_id: string;
+            charge_id: string | null;
+            allocated_amount_cents: number;
+            status: string;
+            allocated_at: string | null;
+            reversed_at: string | null;
+            reversal_reason: string | null;
+        }>;
+
+        const chargeIds = [...new Set(allocations.map((a) => a.charge_id).filter(Boolean))] as string[];
+        const chargeById = new Map<string, { description: string | null; charge_category: string | null; service_date: string | null }>();
+        if (chargeIds.length) {
+            const chargeRows = await readInBatches<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>(
+                "charges these applications name",
+                chargeIds,
+                (batch) => supabase
+                    .from("charges")
+                    .select("id, description, charge_category, service_date")
+                    .eq("org_id", orgId)
+                    .in("id", batch) as never,
+            );
+            for (const c of chargeRows) {
+                chargeById.set(c.id, c);
+            }
+        }
+
+        /* The payer is the household the receipt was taken against — named, never inferred from a child. */
+        const payerIds = [...new Set(mine.map((p) => p.customer_id).filter(Boolean))] as string[];
+        const payerById = new Map<string, string>();
+        if (payerIds.length) {
+            const customerRows = await readInBatches<{ id: string; name: string | null }>(
+                "households these receipts were taken against",
+                payerIds,
+                (batch) => supabase
+                    .from("customers")
+                    .select("id, name")
+                    .eq("org_id", orgId)
+                    .in("id", batch) as never,
+            );
+            for (const c of customerRows) {
+                if (c.name) payerById.set(c.id, c.name);
+            }
+        }
+
     }
 
-    /* Household is resolved from the billable source, memoised — a family's receipts share sources. */
-    const householdBySource = new Map<string, string | null>();
-    const mine: PaymentRowLite[] = [];
-    for (const row of (paymentRows ?? []) as unknown as PaymentRowLite[]) {
-        const key = `${row.billable_source_type ?? ""}:${row.billable_source_id ?? ""}`;
-        if (!householdBySource.has(key)) {
-            householdBySource.set(
-                key,
-                await resolveBillableSourceHouseholdId(
-                    supabase,
-                    orgId,
-                    row.billable_source_type,
-                    row.billable_source_id,
-                ),
-            );
+    /*
+     * WHOSE RECEIPT IS THIS.
+     *
+     * The supplied rows were already selected BY this household's billable sources, so they are
+     * this family's by construction. The unsupplied path scanned the organisation and must still
+     * decide, source by source, exactly as it always did — that resolution is the rule, and it is
+     * the reason the org-wide read was so expensive.
+     */
+    let mine: PaymentRowLite[];
+    if (supplied) {
+        mine = paymentRows as PaymentRowLite[];
+    } else {
+        const householdBySource = new Map<string, string | null>();
+        mine = [];
+        for (const row of (paymentRows ?? []) as unknown as PaymentRowLite[]) {
+            const key = `${row.billable_source_type ?? ""}:${row.billable_source_id ?? ""}`;
+            if (!householdBySource.has(key)) {
+                householdBySource.set(
+                    key,
+                    await resolveBillableSourceHouseholdId(
+                        supabase,
+                        orgId,
+                        row.billable_source_type,
+                        row.billable_source_id,
+                    ),
+                );
+            }
+            if (householdBySource.get(key) === customerId) mine.push(row);
         }
-        if (householdBySource.get(key) === customerId) mine.push(row);
     }
     if (!mine.length) return [];
 
     const paymentIds = mine.map((p) => p.id);
-    /* Batched: this id list grows with the account and would otherwise overflow the request URI. */
-    const allocRows = await readInBatches<Record<string, unknown>>(
-        "applications of these receipts",
-        paymentIds,
-        (batch) => supabase
-            .from("payment_allocations")
-            .select("id, payment_id, charge_id, allocated_amount_cents, status, allocated_at, reversed_at, reversal_reason")
-            .eq("org_id", orgId)
-            .in("payment_id", batch) as never,
-    );
-    const allocations = (allocRows ?? []) as unknown as Array<{
+    const allocations = (supplied
+        ? supplied.allocations.filter((a) => paymentIds.includes(String(a.payment_id)))
+        : await readInBatches<Record<string, unknown>>(
+            "applications of these receipts",
+            paymentIds,
+            (batch) => supabase
+                .from("payment_allocations")
+                .select("id, payment_id, charge_id, allocated_amount_cents, status, allocated_at, reversed_at, reversal_reason")
+                .eq("org_id", orgId)
+                .in("payment_id", batch) as never,
+        )) as unknown as Array<{
         id: string;
         payment_id: string;
         charge_id: string | null;
@@ -197,44 +313,54 @@ export async function resolveHouseholdPaymentViews(
 
     const chargeIds = [...new Set(allocations.map((a) => a.charge_id).filter(Boolean))] as string[];
     const chargeById = new Map<string, { description: string | null; charge_category: string | null; service_date: string | null }>();
-    if (chargeIds.length) {
-        const chargeRows = await readInBatches<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>(
-            "charges these applications name",
-            chargeIds,
-            (batch) => supabase
-                .from("charges")
-                .select("id, description, charge_category, service_date")
-                .eq("org_id", orgId)
-                .in("id", batch) as never,
-        );
-        for (const c of chargeRows) {
-            chargeById.set(c.id, c);
-        }
+    const chargeRows = supplied
+        ? supplied.charges.filter((c) => chargeIds.includes(String(c.id)))
+        : (chargeIds.length
+            ? await readInBatches<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>(
+                "charges these applications name",
+                chargeIds,
+                (batch) => supabase
+                    .from("charges")
+                    .select("id, description, charge_category, service_date")
+                    .eq("org_id", orgId)
+                    .in("id", batch) as never,
+            )
+            : []);
+    for (const c of chargeRows as Array<{ id: string; description: string | null; charge_category: string | null; service_date: string | null }>) {
+        chargeById.set(String(c.id), c);
     }
 
-    /* The payer is the household the receipt was taken against — named, never inferred from a child. */
     const payerIds = [...new Set(mine.map((p) => p.customer_id).filter(Boolean))] as string[];
     const payerById = new Map<string, string>();
-    if (payerIds.length) {
-        const customerRows = await readInBatches<{ id: string; name: string | null }>(
-            "households these receipts were taken against",
-            payerIds,
-            (batch) => supabase
-                .from("customers")
-                .select("id, name")
-                .eq("org_id", orgId)
-                .in("id", batch) as never,
-        );
-        for (const c of customerRows) {
-            if (c.name) payerById.set(c.id, c.name);
-        }
+    const customerRows = supplied
+        ? supplied.payers.filter((c) => payerIds.includes(String(c.id)))
+        : (payerIds.length
+            ? await readInBatches<{ id: string; name: string | null }>(
+                "households these receipts were taken against",
+                payerIds,
+                (batch) => supabase
+                    .from("customers")
+                    .select("id, name")
+                    .eq("org_id", orgId)
+                    .in("id", batch) as never,
+            )
+            : []);
+    for (const c of customerRows as Array<{ id: string; name: string | null }>) {
+        if (c.name) payerById.set(String(c.id), c.name);
     }
 
     const views: PaymentView[] = [];
     for (const p of mine) {
         const amountCents = Number(p.amount_cents) || 0;
-        const refundedCents = await readPaymentRefundedCents(supabase, orgId, p.id);
-        const unappliedCents = await readPaymentUnappliedCents(supabase, orgId, p.id, amountCents);
+        /*
+         * These two were an awaited read EACH, PER RECEIPT — 3,198 receipts on the certification
+         * tenant's largest household, so roughly 6,400 sequential round trips inside this loop and
+         * the bulk of what the payment views cost. The sums are the Payments authority and are
+         * unchanged; they now run over rows the bundle already carried.
+         */
+        const money = supplied ? { refunds: supplied.refunds, allocations: supplied.allocations } : undefined;
+        const refundedCents = await readPaymentRefundedCents(supabase, orgId, p.id, money);
+        const unappliedCents = await readPaymentUnappliedCents(supabase, orgId, p.id, amountCents, money);
         views.push({
             paymentId: p.id,
             status: p.status,

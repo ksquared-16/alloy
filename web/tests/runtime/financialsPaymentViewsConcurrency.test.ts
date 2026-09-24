@@ -116,6 +116,10 @@ function bundleFor(fixture: Record<string, unknown[]>) {
         subsidy_variances: all("financial_subsidy_variances"),
         collection_attempts: all("payment_collection_attempts"),
         payments_by_source: all("payments"),
+        payments_for_views: all("payments"),
+        charges_for_allocations: charges,
+        payer_customers: all("customers"),
+        payment_refunds: [],
         counts: {
             agreements: agreements.length,
             charges: charges.length,
@@ -197,15 +201,24 @@ const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const VIEWS_SRC = readFileSync(join(process.cwd(), "lib/financials/paymentApplicationView.ts"), "utf8");
 
 describe("the dependency is not real — proven from current source", () => {
-    it("THE GATE: resolveHouseholdPaymentViews takes only orgId and customerId", () => {
-        const sig = VIEWS_SRC.slice(
+    it("THE GATE: the views take no input derived from the account payments READ", () => {
+        /*
+         * The point was never the argument count. It was that this resolver must not depend on
+         * what `readAccountPayments` returns, because then the two could not overlap. It now takes
+         * supplied FACT ROWS — the household's receipts and what they name, straight from the
+         * account bundle — which is a different thing: the bundle is the first wave, and nothing
+         * about it is derived from the payments composition.
+         */
+        const raw = VIEWS_SRC.slice(
             VIEWS_SRC.indexOf("export async function resolveHouseholdPaymentViews"),
             VIEWS_SRC.indexOf("): Promise<PaymentView[]>"),
         );
-        expect(sig).toContain("input: { orgId: string; customerId: string }");
-        // If it ever grows an input derived from the account payments read, the concurrency below
-        // stops being safe and this gate is where that must be noticed.
-        expect(sig).not.toMatch(/payments\s*:|applied|allocations\s*:/);
+        /* Comments are prose, not signature — the note above this argument uses the word "applied". */
+        const sig = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        expect(sig, "the org and the household still name the question").toContain("input: { orgId: string; customerId: string }");
+        expect(sig, "the supplied rows are facts, not the payments answer").toContain("supplied?: PaymentViewFactRows");
+        expect(sig, "and never the applied/allocated result of the payments read")
+            .not.toMatch(/applied|received\s*:|appliedByChargeId/);
     });
 
     it("the views composition issues its OWN payments read — it does not receive one", () => {
@@ -215,7 +228,20 @@ describe("the dependency is not real — proven from current source", () => {
 });
 
 describe("the payment views no longer wait for the payments read", () => {
-    it("THE GATE: the views read is in the FIRST wave of trips — nothing precedes it", async () => {
+    it("THE GATE: the views cost NO remote boundary of their own", async () => {
+        /*
+         * This used to assert the views read went out first. It no longer goes out at all: the
+         * household's receipts, their applications, the charges those name and the payer come from
+         * the account fact bundle. The strongest true statement is no longer "it starts early" but
+         * "there is nothing to start", and a re-introduced org-wide scan fails here.
+         */
+        const { trips } = await measure();
+        expect(firstViewsTrip(trips), "the org-wide payments scan is gone, not merely early").toBeUndefined();
+        expect(trips.map((t) => t.table), "the bundle is what acquires them")
+            .toContain("financials_account_fact_bundle");
+    }, 30_000);
+
+    it.skip("SUPERSEDED: the views read is in the FIRST wave of trips — nothing precedes it", async () => {
         /*
          * RELATIVE TO THE RUN'S OWN FIRST TRIP, not to a constant.
          *
@@ -239,16 +265,23 @@ describe("the payment views no longer wait for the payments read", () => {
         ).toBeLessThan(LATENCY);
     }, 30_000);
 
-    it("THE GATE: the views read starts BEFORE the account payments read, not after it", async () => {
+    it("THE GATE: neither the views nor the account receipts are read separately any more", async () => {
+        /*
+         * Their ordering was the thing to protect while both were reads. Both now arrive in the
+         * bundle, so the ordering question is answered by there being nothing to order — and a
+         * regression that restores either read is caught by its trip reappearing.
+         */
         const { trips } = await measure();
-        const views = firstViewsTrip(trips);
-        const payments = firstAccountPaymentsTrip(trips);
-        expect(views).toBeDefined();
-        expect(payments, "the account payments read was never issued").toBeDefined();
+        expect(firstViewsTrip(trips), "no org-wide views scan").toBeUndefined();
+        /*
+         * Keyed on `reversal_origin`, which only the account-receipts select carries. Other
+         * `payments` readers remain — the refund collection reader asks for `amount_cents` — and
+         * matching the table alone would call those a regression when they are nothing of the kind.
+         */
         expect(
-            views!.startRel,
-            "payments -> payment views serialization has been restored",
-        ).toBeLessThan(payments!.startRel);
+            trips.find((t) => t.table === "payments" && (t.select ?? "").includes("reversal_origin")),
+            "no separate account receipts scan",
+        ).toBeUndefined();
     }, 30_000);
 
     it("THE GATE: the build's serial depth is 9 round trips, where the chained shape was 12", async () => {
@@ -296,11 +329,11 @@ describe("the query multiset is unchanged on the success path", () => {
         });
     }, 30_000);
 
-    it("THE GATE: the views composition runs exactly ONCE", async () => {
-        // Starting a read earlier must never mean starting it twice.
+    it("THE GATE: the acquisition runs exactly ONCE", async () => {
+        /* Moving a read earlier must never mean running it twice; nor must bundling it. */
         const { trips } = await measure();
-        expect(trips.filter((t) => t.table === "payments" && t.select.includes(VIEWS_PAYMENT_MARKER)).length).toBe(1);
-        expect(trips.filter((t) => t.table === "customers").length).toBe(1);
+        expect(trips.filter((t) => t.table === "financials_account_fact_bundle").length).toBe(1);
+        expect(trips.filter((t) => t.table === "customers").length, "the payer name came with the bundle").toBe(0);
     }, 30_000);
 });
 
@@ -312,13 +345,21 @@ describe("the failure contract survives the concurrency — this is the money-fa
         expect(vm.payments[0].payerLabel).toBe("The Household");
     }, 30_000);
 
-    it("B · the PAYMENTS read fails: the card still says it cannot answer about payments", async () => {
-        const { vm } = await measure({ fail: (table, select) => table === "payments" && !select.includes(VIEWS_PAYMENT_MARKER) });
-        expect(vm.unavailable.map((u) => u.fact)).toContain("payments");
-        for (const r of vm.rows) {
-            expect(r.appliedCents).toBe(0);
-            expect(r.outstandingCents).toBe(r.amountCents);
-        }
+    it("B · the ACQUISITION fails: the whole financial answer is unavailable, not a partial one", async () => {
+        /*
+         * This planted a failure on the account receipts read and required the ledger to render
+         * anyway with nothing applied — a partial answer, honestly labelled. That read no longer
+         * exists: the receipts, their applications, the charges those name, the payer and the
+         * refunds all arrive from the canonical account fact bundle.
+         *
+         * So the standing contract applies whole-card: an acquisition that cannot answer makes the
+         * account's financial answer UNAVAILABLE, and no ledger is assembled from it. That is the
+         * direction this gate always protected — a family that has paid must never be shown the
+         * full amount owed because a read failed — now enforced for every fact at once.
+         */
+        const { vm } = await measure({ fail: (table) => table === "financials_account_fact_bundle" });
+        expect(vm.unavailableReason, "one unavailable answer").toMatch(/unavailable/i);
+        expect(vm.rows, "and no partial ledger").toEqual([]);
     }, 30_000);
 
     it("THE GATE: C · the VIEWS read fails — still UNAVAILABLE, never 'no payment views'", async () => {
@@ -412,9 +453,11 @@ describe("truth, authorization and meaning are untouched", () => {
         expect(CODE).not.toMatch(/permissionKeys|hasPermission|user_roles/);
     });
 
-    it("the views read is still scoped to this household, and skipped when there is none", () => {
-        expect(CODE).toMatch(/resolveHouseholdPaymentViews\(supabase, \{ orgId: args\.orgId, customerId: household \}\)/);
-        expect(CODE).toMatch(/: Promise\.resolve\(\{ ok: true as const, views: null \}\)/);
+    it("the views are still scoped to this household, and skipped when there is none", () => {
+        expect(CODE, "the household still names the question")
+            .toMatch(/resolveHouseholdPaymentViews\(supabase, \{ orgId: args\.orgId, customerId: household \}/);
+        expect(CODE, "and an account with no household still resolves to no views")
+            .toMatch(/: Promise\.resolve\(\{ ok: true as const, views: null \}\)/);
     });
 });
 

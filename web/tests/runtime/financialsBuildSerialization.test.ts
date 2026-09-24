@@ -122,6 +122,10 @@ function bundleFor(fixture: Record<string, unknown[]>) {
         subsidy_variances: all("financial_subsidy_variances"),
         collection_attempts: all("payment_collection_attempts"),
         payments_by_source: all("payments"),
+        payments_for_views: all("payments"),
+        charges_for_allocations: charges,
+        payer_customers: all("customers"),
+        payment_refunds: [],
         counts: {
             agreements: agreements.length,
             charges: charges.length,
