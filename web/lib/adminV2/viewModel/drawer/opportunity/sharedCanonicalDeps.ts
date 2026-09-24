@@ -309,6 +309,31 @@ export async function resolveSharedCanonicalDeps(
     // response `phases_ms` (drawer_primary_* = the parallel FK batch, children_* = child orientation).
     const visiblePrimaryPhase = (record as { _drawer_primary_phase_ms?: Record<string, number> })._drawer_primary_phase_ms;
     if (visiblePrimaryPhase) for (const [k, v] of Object.entries(visiblePrimaryPhase)) phases_ms[`visible_${k}`] = v;
+    /*
+     * S2 / S3 — WHEN THE CARD-GATE FACTS BECAME CANONICAL, as an offset on this request's clock.
+     *
+     * The Focus Panel holds `children` and `household` reserved behind ONE gate,
+     * `hasSubjectIdentityTruth`, which is satisfied by `person.primary_contact_name` or
+     * `_inquiry_children`. Both are produced inside the visible-entity shell join: the children
+     * roster by the children leg, the contact by the persons leg. Measured on deployed 4899d4d9,
+     * n=22 cold switches, those two cells are reserved from P50 122ms and do not clear until P50
+     * 2,680ms — and the gate keys are absent in 22 of 22, so the cards are waiting for the FULL
+     * DRAWER rather than for the fact.
+     *
+     * A duration cannot answer "how long after the fact was canonical". These are the instants,
+     * rebased onto `sharedStart` so a client milestone can be subtracted from them for the SAME
+     * event. The absolute stamps are deleted here so no wall-clock value is serialized.
+     */
+    for (const [leg, mark] of [
+        ["shell_children_ms", "children_truth_ready_ms"],
+        ["shell_persons_ms", "contact_truth_ready_ms"],
+    ] as const) {
+        const abs = phases_ms[`visible_${leg}__end_abs`];
+        if (typeof abs === "number") phases_ms[mark] = abs - sharedStart;
+    }
+    for (const k of Object.keys(phases_ms)) {
+        if (k.endsWith("__end_abs")) delete phases_ms[k];
+    }
     const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
     if (childrenShellPhase) {
         for (const [k, v] of Object.entries(childrenShellPhase)) phases_ms[`children_${k}`] = v;
