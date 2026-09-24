@@ -43,6 +43,19 @@ export type ResolveSharedCanonicalDepsParams = {
     opportunityId: string;
     departmentId: string | null;
     workUnitId: string | null;
+    /**
+     * Publish the canonical header action set the INSTANT it resolves — phase 1 of the two-phase
+     * selected-drawer delivery.
+     *
+     * It is handed `departmentId` as a non-null string on purpose. The early resolve only runs when
+     * department authority is already known, and this signature makes that a type-level fact: there
+     * is no way to publish an action set that was resolved against an unknown department.
+     */
+    onEarlyHeaderActions?: (published: {
+        resolved: ResolvedActionsBySlot;
+        departmentId: string;
+        workUnitId: string | null;
+    }) => void;
 };
 
 /** A "skipped" foundation — the compose short-circuits with the same reason it did inline. */
@@ -93,6 +106,16 @@ export async function resolveSharedCanonicalDeps(
     const { supabase, gate, opportunityId } = params;
     const orgId = gate.orgId;
     const phases_ms: Record<string, number> = {};
+    /*
+     * THE WALL THIS FUNCTION ACTUALLY OCCUPIES.
+     *
+     * Without it the only way to size shared deps was to add up its named legs, and that answer was
+     * wrong twice over: `status_and_dept_ms` and `household_persons_ms` measure the SAME join (the
+     * household leg is nested inside it), and the mission-stage attach at the end was not timed at
+     * all. A measured wall beside the named legs turns the leftover into an explicit remainder
+     * instead of something to be apportioned.
+     */
+    const sharedStart = Date.now();
 
     /**
      * The record layout is a function of the ORG and the entity type — it does not read the
@@ -198,6 +221,41 @@ export async function resolveSharedCanonicalDeps(
             })
         :   null;
 
+    /*
+     * PUBLISH IT THE MOMENT IT EXISTS — WITHOUT TOUCHING THE PROMISE THE DRAWER AWAITS.
+     *
+     * `then(onOk, onErr)` derives a SECOND promise and handles only that one's rejection.
+     * `earlyHeaderActions` itself is handed on untouched and still rejects into
+     * `resolveOpportunityDrawerFirstPaintDependencies` exactly as it always has, so a failed
+     * resolution remains a failure. The rejection arm here deliberately publishes NOTHING: it exists
+     * so the derived promise is not an unhandled rejection, and converting a refusal into an
+     * authoritative empty action set is the one thing phase 1 must never do.
+     */
+    if (earlyHeaderActions && earlyDepartmentId && params.onEarlyHeaderActions) {
+        const publish = params.onEarlyHeaderActions;
+        const publishedDepartmentId: string = earlyDepartmentId;
+        void earlyHeaderActions.then(
+            (resolved) => {
+                /*
+                 * The publisher is a SIDE CHANNEL and may never cost the drawer anything.
+                 *
+                 * `then(onOk, onErr)`'s second arm handles the ORIGINAL promise's rejection, not a
+                 * throw from the first arm — that would reject the derived promise with nobody
+                 * listening. Phase 1 failing to be delivered must cost the operator earliness and
+                 * nothing else.
+                 */
+                try {
+                    publish({ resolved, departmentId: publishedDepartmentId, workUnitId: workUnitId || null });
+                } catch {
+                    /* no carrier for this lifecycle; the drawer is unaffected */
+                }
+            },
+            () => {
+                /* The real consumer owns this rejection. Phase 1 simply never arrives. */
+            },
+        );
+    }
+
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
         orgId,
@@ -248,7 +306,9 @@ export async function resolveSharedCanonicalDeps(
     const tHousehold0 = Date.now();
     const [, deptMetadata, statusDefsPack] = await Promise.all([
         attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
-            phases_ms.household_persons_ms = Date.now() - tHousehold0;
+            // NESTED INSIDE `status_and_dept_ms`, not serial with it: both clocks start on adjacent
+            // lines and this leg resolves inside that same Promise.all. Summing the two double-counts.
+            phases_ms.household_persons_nested_ms = Date.now() - tHousehold0;
             return r;
         }),
         departmentId ?
@@ -295,12 +355,22 @@ export async function resolveSharedCanonicalDeps(
     });
     // Mission stage for Current Work: Effective Process Position when participants diverge.
     // Lifecycle rail still reflects shared/context stage for chrome; stage-work uses Mission.
+    /*
+     * THE LAST SERIAL AWAIT IN SHARED DEPS, AND THE ONE NOBODY HAD TIMED.
+     *
+     * Shared deps measured ~1,974ms against ~1,667ms of named walls, leaving ~307ms unattributed.
+     * This is the only database round trip in that gap: everything else after the prep join is pure
+     * computation over values already in hand. Timing it is what makes the remainder a number rather
+     * than a suspicion.
+     */
+    const tMission0 = Date.now();
     const [recordWithEpp] = await attachEffectiveEnrollmentStagesToOpportunityRows({
         supabase,
         orgId,
         rows: [record as Record<string, unknown>],
         logLabel: "drawer-mission",
     });
+    phases_ms.mission_stages_ms = Date.now() - tMission0;
     const mission = resolveContextMissionStages({
         contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
         effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
@@ -318,6 +388,7 @@ export async function resolveSharedCanonicalDeps(
             ? lifecycle_rail?.stages.find((s) => s.key === railStageKey)?.label ?? null
             : null);
 
+    phases_ms.shared_deps_total_ms = Date.now() - sharedStart;
     return {
         ok: true,
         orgId,

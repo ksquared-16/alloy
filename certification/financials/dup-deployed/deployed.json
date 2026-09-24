@@ -2,25 +2,17 @@
   {
     "host": "focus",
     "pass": "cold-1",
-    "shellAt": 71,
-    "firstLedgerAt": 2932,
-    "settledAt": 2935,
+    "shellAt": 70,
+    "firstLedgerAt": 3730,
+    "settledAt": 3743,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2782,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 6426,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2782,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=342.1, perm;dur=221.9, collectible;dur=1584.1, payments;dur=99.6, policies;dur=124.5, read;dur=0.1, identity;dur=0.3, serialize;dur=1.1, total;dur=2373.9"
+      "auth;dur=606.1, auth_at;dur=606.1, collectible;dur=312.2, collectible_at;dur=918.3, perm;dur=282.3, perm_at;dur=1200.6, payments;dur=2145.2, payments_at;dur=3345.9, policies;dur=0.0, policies_at;dur=3345.9, read;dur=0.5, read_at;dur=3346.4, identity;dur=0.4, identity_at;dur=3346.8, serialize;dur=0.6, serialize_at;dur=3347.4, total;dur=3347.5"
     ],
     "responseBytes": [
       218680
@@ -30,24 +22,16 @@
     "host": "focus",
     "pass": "cold-2",
     "shellAt": 67,
-    "firstLedgerAt": 2812,
-    "settledAt": 2817,
+    "firstLedgerAt": 2854,
+    "settledAt": 2867,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2761,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 3870,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2761,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=548.1, perm;dur=211.9, collectible;dur=1425.9, payments;dur=99.9, policies;dur=102.6, read;dur=0.7, identity;dur=0.4, serialize;dur=1.6, total;dur=2391.2"
+      "auth;dur=399.8, auth_at;dur=399.8, perm;dur=244.0, perm_at;dur=643.8, collectible;dur=32.4, collectible_at;dur=676.2, payments;dur=1834.6, payments_at;dur=2510.8, policies;dur=0.0, policies_at;dur=2510.8, read;dur=0.4, read_at;dur=2511.2, identity;dur=0.3, identity_at;dur=2511.5, serialize;dur=1.1, serialize_at;dur=2512.7, total;dur=2512.8"
     ],
     "responseBytes": [
       218680
@@ -56,25 +40,17 @@
   {
     "host": "focus",
     "pass": "cold-3",
-    "shellAt": 109,
-    "firstLedgerAt": 2832,
-    "settledAt": 2836,
+    "shellAt": 71,
+    "firstLedgerAt": 2357,
+    "settledAt": 2370,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2654,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 4078,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2654,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=362.8, perm;dur=220.4, collectible;dur=1282.5, payments;dur=409.5, policies;dur=116.0, read;dur=0.2, identity;dur=0.2, serialize;dur=0.8, total;dur=2392.5"
+      "auth;dur=253.7, auth_at;dur=253.7, perm;dur=242.9, perm_at;dur=496.6, collectible;dur=427.9, collectible_at;dur=924.5, payments;dur=1063.9, payments_at;dur=1988.4, policies;dur=0.0, policies_at;dur=1988.4, read;dur=0.2, read_at;dur=1988.6, identity;dur=0.2, identity_at;dur=1988.8, serialize;dur=0.9, serialize_at;dur=1989.7, total;dur=1989.7"
     ],
     "responseBytes": [
       218680
@@ -83,25 +59,17 @@
   {
     "host": "focus",
     "pass": "cold-4",
-    "shellAt": 61,
-    "firstLedgerAt": 2827,
-    "settledAt": 2830,
+    "shellAt": 57,
+    "firstLedgerAt": 2592,
+    "settledAt": 2604,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2701,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 4280,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2701,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=366.1, perm;dur=198.5, collectible;dur=1618.9, payments;dur=110.4, policies;dur=105.7, read;dur=0.3, identity;dur=0.3, serialize;dur=1.0, total;dur=2401.3"
+      "auth;dur=588.1, auth_at;dur=588.1, perm;dur=274.3, perm_at;dur=862.4, collectible;dur=33.5, collectible_at;dur=895.9, payments;dur=1306.1, payments_at;dur=2202.0, policies;dur=0.0, policies_at;dur=2202.1, read;dur=0.5, read_at;dur=2202.6, identity;dur=0.4, identity_at;dur=2203.0, serialize;dur=0.9, serialize_at;dur=2204.0, total;dur=2204.1"
     ],
     "responseBytes": [
       218680
@@ -110,25 +78,17 @@
   {
     "host": "focus",
     "pass": "cold-5",
-    "shellAt": 77,
-    "firstLedgerAt": 2360,
-    "settledAt": 2365,
+    "shellAt": 65,
+    "firstLedgerAt": 2170,
+    "settledAt": 2183,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2254,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 4583,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2254,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=358.2, perm;dur=211.8, collectible;dur=1268.1, payments;dur=101.9, policies;dur=104.9, read;dur=0.2, identity;dur=0.3, serialize;dur=0.9, total;dur=2046.3"
+      "auth;dur=241.9, auth_at;dur=241.9, perm;dur=234.4, perm_at;dur=476.3, collectible;dur=62.1, collectible_at;dur=538.4, payments;dur=1237.8, payments_at;dur=1776.2, policies;dur=0.0, policies_at;dur=1776.2, read;dur=0.6, read_at;dur=1776.7, identity;dur=0.6, identity_at;dur=1777.3, serialize;dur=1.3, serialize_at;dur=1778.6, total;dur=1778.7"
     ],
     "responseBytes": [
       218680
@@ -137,25 +97,17 @@
   {
     "host": "focus",
     "pass": "warm-1",
-    "shellAt": 100,
-    "firstLedgerAt": 2903,
-    "settledAt": 2907,
+    "shellAt": 47,
+    "firstLedgerAt": 2325,
+    "settledAt": 2338,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2758,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 3493,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2758,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=359.5, perm;dur=452.0, collectible;dur=1498.0, payments;dur=97.8, policies;dur=110.5, read;dur=0.6, identity;dur=0.4, serialize;dur=1.2, total;dur=2520.1"
+      "auth;dur=274.2, auth_at;dur=274.2, collectible;dur=226.8, collectible_at;dur=501.1, perm;dur=11.9, perm_at;dur=512.9, payments;dur=1489.0, payments_at;dur=2002.0, policies;dur=0.0, policies_at;dur=2002.0, read;dur=0.2, read_at;dur=2002.2, identity;dur=0.3, identity_at;dur=2002.5, serialize;dur=0.9, serialize_at;dur=2003.3, total;dur=2003.4"
     ],
     "responseBytes": [
       218680
@@ -164,25 +116,25 @@
   {
     "host": "focus",
     "pass": "warm-2",
-    "shellAt": 160,
-    "firstLedgerAt": 2492,
-    "settledAt": 2495,
+    "shellAt": 48,
+    "firstLedgerAt": 2232,
+    "settledAt": 2245,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2309,
+    "firstRequestMs": 2129,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 4323,
+        "at": 4189,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2309,
+        "ms": 2129,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=338.7, perm;dur=224.9, collectible;dur=1337.3, payments;dur=126.7, policies;dur=95.7, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2124.7"
+      "auth;dur=264.1, auth_at;dur=264.1, collectible;dur=460.2, collectible_at;dur=724.3, perm;dur=31.2, perm_at;dur=755.5, payments;dur=1172.1, payments_at;dur=1927.7, policies;dur=0.0, policies_at;dur=1927.7, read;dur=0.1, read_at;dur=1927.8, identity;dur=0.3, identity_at;dur=1928.1, serialize;dur=0.9, serialize_at;dur=1929.0, total;dur=1929.1"
     ],
     "responseBytes": [
       218680
@@ -191,25 +143,25 @@
   {
     "host": "focus",
     "pass": "warm-3",
-    "shellAt": 93,
-    "firstLedgerAt": 2460,
-    "settledAt": 2465,
+    "shellAt": 66,
+    "firstLedgerAt": 2430,
+    "settledAt": 2442,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2289,
+    "firstRequestMs": 2337,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 3877,
+        "at": 4242,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2289,
+        "ms": 2337,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=351.4, perm;dur=201.6, collectible;dur=1259.1, payments;dur=103.4, policies;dur=112.6, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2029.4"
+      "auth;dur=251.8, auth_at;dur=251.8, perm;dur=232.5, perm_at;dur=484.3, collectible;dur=150.1, collectible_at;dur=634.4, payments;dur=1456.6, payments_at;dur=2091.0, policies;dur=0.0, policies_at;dur=2091.0, read;dur=0.5, read_at;dur=2091.5, identity;dur=0.4, identity_at;dur=2091.9, serialize;dur=0.8, serialize_at;dur=2092.8, total;dur=2092.8"
     ],
     "responseBytes": [
       218680
@@ -218,25 +170,25 @@
   {
     "host": "focus",
     "pass": "warm-4",
-    "shellAt": 178,
-    "firstLedgerAt": 2700,
-    "settledAt": 2704,
+    "shellAt": 49,
+    "firstLedgerAt": 2178,
+    "settledAt": 2189,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2613,
+    "firstRequestMs": 2083,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 3642,
+        "at": 3847,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2613,
+        "ms": 2083,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=345.7, perm;dur=284.6, collectible;dur=1467.9, payments;dur=188.6, policies;dur=116.5, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2404.7"
+      "auth;dur=226.3, auth_at;dur=226.3, perm;dur=251.2, perm_at;dur=477.5, collectible;dur=154.3, collectible_at;dur=631.8, payments;dur=1179.6, payments_at;dur=1811.4, policies;dur=0.0, policies_at;dur=1811.4, read;dur=0.2, read_at;dur=1811.6, identity;dur=0.3, identity_at;dur=1811.9, serialize;dur=1.0, serialize_at;dur=1812.9, total;dur=1813.0"
     ],
     "responseBytes": [
       218680
@@ -245,25 +197,25 @@
   {
     "host": "focus",
     "pass": "warm-5",
-    "shellAt": 173,
-    "firstLedgerAt": 2889,
-    "settledAt": 2892,
+    "shellAt": 44,
+    "firstLedgerAt": 1956,
+    "settledAt": 1969,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2611,
+    "firstRequestMs": 1863,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 3744,
+        "at": 3269,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2611,
+        "ms": 1863,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=330.0, perm;dur=207.8, collectible;dur=1578.6, payments;dur=116.3, policies;dur=135.5, read;dur=0.3, identity;dur=0.3, serialize;dur=1.2, total;dur=2370.1"
+      "auth;dur=226.6, auth_at;dur=226.6, perm;dur=248.6, perm_at;dur=475.2, collectible;dur=90.9, collectible_at;dur=566.1, payments;dur=1103.7, payments_at;dur=1669.8, policies;dur=0.0, policies_at;dur=1669.8, read;dur=0.1, read_at;dur=1669.9, identity;dur=0.2, identity_at;dur=1670.1, serialize;dur=0.8, serialize_at;dur=1671.0, total;dur=1671.0"
     ],
     "responseBytes": [
       218680
@@ -272,25 +224,17 @@
   {
     "host": "focus",
     "pass": "warm-6",
-    "shellAt": 230,
-    "firstLedgerAt": 2988,
-    "settledAt": 2992,
+    "shellAt": 44,
+    "firstLedgerAt": 2285,
+    "settledAt": 2297,
     "rows": 116,
-    "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2741,
+    "requestsPerDetailsOpen": 0,
+    "firstRequestMs": null,
     "secondRequestMs": null,
     "joinedCallers": 0,
-    "issued": [
-      {
-        "at": 3931,
-        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
-        "identicalInFlight": 0,
-        "ms": 2741,
-        "status": 200
-      }
-    ],
+    "issued": [],
     "serverTiming": [
-      "auth;dur=384.2, perm;dur=275.7, collectible;dur=1479.5, payments;dur=224.3, policies;dur=129.6, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2494.7"
+      "auth;dur=220.8, auth_at;dur=220.8, perm;dur=238.0, perm_at;dur=458.8, collectible;dur=59.9, collectible_at;dur=518.7, payments;dur=1481.5, payments_at;dur=2000.2, policies;dur=0.0, policies_at;dur=2000.2, read;dur=0.3, read_at;dur=2000.5, identity;dur=0.4, identity_at;dur=2000.9, serialize;dur=0.9, serialize_at;dur=2001.8, total;dur=2001.8"
     ],
     "responseBytes": [
       218680
@@ -299,25 +243,25 @@
   {
     "host": "focus",
     "pass": "warm-7",
-    "shellAt": 229,
-    "firstLedgerAt": 2873,
-    "settledAt": 2877,
+    "shellAt": 61,
+    "firstLedgerAt": 2627,
+    "settledAt": 2640,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2597,
+    "firstRequestMs": 2527,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 3884,
+        "at": 3248,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2597,
+        "ms": 2527,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=473.7, perm;dur=236.9, collectible;dur=1342.4, payments;dur=199.2, policies;dur=103.9, read;dur=0.1, identity;dur=0.3, serialize;dur=1.2, total;dur=2357.6"
+      "auth;dur=343.4, auth_at;dur=343.4, collectible;dur=234.4, collectible_at;dur=577.8, perm;dur=321.7, perm_at;dur=899.4, payments;dur=1306.6, payments_at;dur=2206.1, policies;dur=0.0, policies_at;dur=2206.1, read;dur=0.4, read_at;dur=2206.4, identity;dur=0.4, identity_at;dur=2206.8, serialize;dur=0.7, serialize_at;dur=2207.5, total;dur=2207.6"
     ],
     "responseBytes": [
       218680
@@ -326,25 +270,25 @@
   {
     "host": "focus",
     "pass": "warm-8",
-    "shellAt": 137,
-    "firstLedgerAt": 2619,
-    "settledAt": 2625,
+    "shellAt": 61,
+    "firstLedgerAt": 2640,
+    "settledAt": 2652,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2422,
+    "firstRequestMs": 2612,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 3524,
+        "at": 5239,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2422,
+        "ms": 2612,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=307.4, perm;dur=207.7, collectible;dur=1450.9, payments;dur=118.3, policies;dur=132.1, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2217.8"
+      "auth;dur=231.0, auth_at;dur=231.0, perm;dur=250.0, perm_at;dur=481.0, collectible;dur=250.0, collectible_at;dur=731.0, payments;dur=1497.2, payments_at;dur=2228.1, policies;dur=0.0, policies_at;dur=2228.1, read;dur=0.2, read_at;dur=2228.3, identity;dur=0.2, identity_at;dur=2228.6, serialize;dur=0.7, serialize_at;dur=2229.3, total;dur=2229.3"
     ],
     "responseBytes": [
       218680
@@ -353,25 +297,25 @@
   {
     "host": "accounts",
     "pass": "cold-1",
-    "shellAt": 4012,
-    "firstLedgerAt": 4021,
-    "settledAt": 4021,
+    "shellAt": 5917,
+    "firstLedgerAt": 5924,
+    "settledAt": 5925,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2414,
+    "firstRequestMs": 3035,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 29556,
+        "at": 29757,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2414,
+        "ms": 3035,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=314.1, perm;dur=210.3, collectible;dur=1404.5, payments;dur=106.4, policies;dur=119.9, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=2156.5"
+      "auth;dur=1002.5, auth_at;dur=1002.5, perm;dur=231.5, perm_at;dur=1234.0, collectible;dur=22.5, collectible_at;dur=1256.5, payments;dur=1492.0, payments_at;dur=2748.5, policies;dur=0.0, policies_at;dur=2748.5, read;dur=0.2, read_at;dur=2748.7, identity;dur=0.3, identity_at;dur=2749.0, serialize;dur=0.9, serialize_at;dur=2749.9, total;dur=2750.0"
     ],
     "responseBytes": [
       218680
@@ -380,25 +324,25 @@
   {
     "host": "accounts",
     "pass": "cold-2",
-    "shellAt": 5056,
-    "firstLedgerAt": 5063,
-    "settledAt": 5064,
+    "shellAt": 5933,
+    "firstLedgerAt": 5946,
+    "settledAt": 5947,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2660,
+    "firstRequestMs": 2274,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 29524,
+        "at": 30883,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2660,
+        "ms": 2274,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=365.9, perm;dur=221.8, collectible;dur=1403.0, payments;dur=258.4, policies;dur=102.3, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=2352.9"
+      "auth;dur=562.4, auth_at;dur=562.4, perm;dur=263.6, perm_at;dur=826.0, collectible;dur=21.6, collectible_at;dur=847.5, payments;dur=1155.8, payments_at;dur=2003.4, policies;dur=0.0, policies_at;dur=2003.4, read;dur=0.1, read_at;dur=2003.5, identity;dur=0.3, identity_at;dur=2003.8, serialize;dur=0.6, serialize_at;dur=2004.4, total;dur=2004.4"
     ],
     "responseBytes": [
       218680
@@ -407,25 +351,25 @@
   {
     "host": "accounts",
     "pass": "warm-1",
-    "shellAt": 5949,
-    "firstLedgerAt": 5960,
-    "settledAt": 5961,
+    "shellAt": 5915,
+    "firstLedgerAt": 5924,
+    "settledAt": 5925,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2694,
+    "firstRequestMs": 3227,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 31302,
+        "at": 29772,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2694,
+        "ms": 3227,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=371.9, perm;dur=222.0, collectible;dur=1451.8, payments;dur=170.3, policies;dur=216.8, read;dur=0.1, identity;dur=0.3, serialize;dur=0.8, total;dur=2434.2"
+      "auth;dur=624.3, auth_at;dur=624.3, perm;dur=294.6, perm_at;dur=919.0, collectible;dur=395.6, collectible_at;dur=1314.6, payments;dur=1631.2, payments_at;dur=2945.8, policies;dur=0.0, policies_at;dur=2945.8, read;dur=0.1, read_at;dur=2945.9, identity;dur=0.3, identity_at;dur=2946.2, serialize;dur=0.6, serialize_at;dur=2946.8, total;dur=2946.8"
     ],
     "responseBytes": [
       218680
@@ -434,25 +378,25 @@
   {
     "host": "accounts",
     "pass": "warm-2",
-    "shellAt": 2978,
-    "firstLedgerAt": 2979,
-    "settledAt": 2979,
+    "shellAt": 5914,
+    "firstLedgerAt": 5916,
+    "settledAt": 5916,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 2595,
+    "firstRequestMs": 5528,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 37946,
+        "at": 37454,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 2595,
+        "ms": 5528,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=402.5, perm;dur=231.7, collectible;dur=1553.6, payments;dur=114.7, policies;dur=93.0, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=2396.8"
+      "auth;dur=218.2, auth_at;dur=218.2, perm;dur=251.5, perm_at;dur=469.7, collectible;dur=620.1, collectible_at;dur=1089.7, payments;dur=4211.1, payments_at;dur=5300.8, policies;dur=0.0, policies_at;dur=5300.8, read;dur=0.3, read_at;dur=5301.1, identity;dur=0.3, identity_at;dur=5301.4, serialize;dur=0.8, serialize_at;dur=5302.3, total;dur=5302.3"
     ],
     "responseBytes": [
       218680
@@ -461,25 +405,25 @@
   {
     "host": "accounts",
     "pass": "warm-3",
-    "shellAt": 7008,
-    "firstLedgerAt": 7009,
-    "settledAt": 7010,
+    "shellAt": 2909,
+    "firstLedgerAt": 2911,
+    "settledAt": 2911,
     "rows": 116,
     "requestsPerDetailsOpen": 1,
-    "firstRequestMs": 6694,
+    "firstRequestMs": 1920,
     "secondRequestMs": null,
     "joinedCallers": 0,
     "issued": [
       {
-        "at": 44406,
+        "at": 46823,
         "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
         "identicalInFlight": 0,
-        "ms": 6694,
+        "ms": 1920,
         "status": 200
       }
     ],
     "serverTiming": [
-      "auth;dur=348.8, perm;dur=218.2, collectible;dur=1322.0, payments;dur=4497.0, policies;dur=112.9, read;dur=0.1, identity;dur=0.3, serialize;dur=1.0, total;dur=6500.4"
+      "auth;dur=246.0, auth_at;dur=246.0, perm;dur=277.9, perm_at;dur=523.9, collectible;dur=13.9, collectible_at;dur=537.7, payments;dur=1131.1, payments_at;dur=1668.8, policies;dur=0.0, policies_at;dur=1668.8, read;dur=0.1, read_at;dur=1668.9, identity;dur=0.3, identity_at;dur=1669.2, serialize;dur=0.9, serialize_at;dur=1670.1, total;dur=1670.2"
     ],
     "responseBytes": [
       218680

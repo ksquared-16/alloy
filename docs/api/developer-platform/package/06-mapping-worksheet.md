@@ -122,10 +122,13 @@ observe the result, or is it out of scope entirely?
 | --- | --- | --- | --- |
 | Start an enrollment | Enrolls a child at a site from a date | `enrollment.write` | `Provider confirmation required` |
 | End an enrollment | Cancels, schedules an ending, or closes | `enrollment.write` | `Provider confirmation required` |
+| Void an enrollment | States it was recorded in error and never represented service | `enrollment.write` | `Provider confirmation required` |
 | Assign a placement | First room for an enrollment | `enrollment.write` | `Provider confirmation required` |
 | Move a placement | New room from a date, superseding | `enrollment.write` | `Provider confirmation required` |
+| Cancel a placement | States it was recorded in error and never took effect | `enrollment.write` | `Provider confirmation required` |
 | Set a schedule | Committed recurring schedule | `schedule.write` | `Provider confirmation required` |
 | Change a schedule | New schedule from a date, superseding | `schedule.write` | `Provider confirmation required` |
+| Cancel a schedule | States it never applied; projects zero expected days | `schedule.write` | `Provider confirmation required` |
 | Submit attendance | Check-in, check-out, absence, room transfer | `attendance.write` | `Provider confirmation required` |
 | Submit a correction | Supersedes an earlier attendance fact | `attendance.write` | `Provider confirmation required` |
 | Submit a reversal | States an earlier fact did not happen | `attendance.write` | `Provider confirmation required` |

@@ -151,7 +151,24 @@ export async function readAccountReductions(
         }
     }
 
-    return rows
+    return shapeAccountReductions(rows as unknown as Array<Record<string, unknown>>, categoryByCharge, statusByCharge);
+}
+
+/**
+ * THE SHAPING, over rows however they were acquired.
+ *
+ * `readAccountReductions` reads the applications and then a second time for the CATEGORY and
+ * STATUS of the charge each one wrote — a dependent wave, because the category is what tells a
+ * credit from an adjustment and those are different decisions. The account fact bundle already
+ * carries both sets, so the card hands them straight here and spends no round trip. The mapping
+ * is identical and lives once: this is the authority on what a reduction row means.
+ */
+export function shapeAccountReductions(
+    rows: Array<Record<string, unknown>>,
+    categoryByCharge: Map<string, string>,
+    statusByCharge: Map<string, string>,
+): AccountReduction[] {
+    return (rows as unknown as Row[])
         .map((r): AccountReduction => ({
             applicationId: t(r.id),
             kind: t(r.reduction_kind),

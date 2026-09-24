@@ -22,6 +22,10 @@ import type {
     OpportunityDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import { resolveSharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps";
+import {
+    buildActionableDrawerCarrier,
+    type ActionableDrawerCarrier,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrier";
 import { buildInitialPanelResource } from "@/lib/adminV2/viewModel/drawer/opportunity/initialPanelResource";
 import { buildDeferredDetailResource } from "@/lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource";
 
@@ -51,6 +55,19 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * build below. Absent means nothing was resolvable, and the candidate fallback stands.
      */
     resolvedParticipant?: { participationId: string; customerMemberId: string } | null;
+    /**
+     * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE.
+     *
+     * Called at most once, the moment canonical action authority for this subject exists — roughly
+     * 390ms into a compose that measures ~2,288ms. The caller decides what to do with it; this
+     * composer neither waits for the caller nor changes its own answer because one was supplied, so
+     * a route that passes nothing gets byte-identical behaviour.
+     *
+     * NOT called when the early resolve did not run (department authority unknown) or when it
+     * rejected. Both cases mean this lifecycle keeps today's full-drawer action timing, which is
+     * slower and correct rather than faster and invented.
+     */
+    onActionableCarrier?: (carrier: ActionableDrawerCarrier) => void;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -69,12 +86,46 @@ export async function composeOpportunityDrawerViewModel(
     // S4.2 — the shared canonical DATA foundation (Module C): opportunity record (visible payload +
     // household attach), layout inputs, work-unit identity + queue definition, department metadata +
     // status definitions, and the lifecycle rail. Resolved once; both tiers read it by value.
+    /*
+     * COMPOSE'S OWN TOP-LEVEL DAG.
+     *
+     * Until now this function reported only the phases its callees stamped, so the two boundaries
+     * that actually decide when compose finishes -- the shared-deps wall and the initial/deferred
+     * join -- had no measured wall of their own and had to be inferred by subtraction. They are
+     * stamped here so the critical path can be read rather than reconstructed.
+     */
+    const tSharedDeps0 = Date.now();
     const shared = await resolveSharedCanonicalDeps({
         supabase,
         gate,
         opportunityId,
         departmentId: params.departmentId,
         workUnitId: params.workUnitId,
+        /*
+         * THE CARRIER IS BUILT FROM THE SAME VALUES PHASE 2 WILL PUBLISH, NOT FROM NEW ONES.
+         *
+         * `viewModel.workspace.department_id` below is `shared.departmentId`, whose first two
+         * fallbacks — the request context, then the work-unit row — are exactly the two the early
+         * resolve uses. Its third, `record._work_unit_department_id`, is unavailable that early, and
+         * when it is the one that supplies the department the early resolve does not run at all and
+         * no carrier is published. So whenever a carrier EXISTS its department is identical to the
+         * view model's, and an action cannot execute with different arguments depending on which
+         * phase the operator clicked in. The same holds for the work unit, which both read from the
+         * one `workUnitId` this compose resolved.
+         */
+        onEarlyHeaderActions: params.onActionableCarrier ?
+            ({ resolved, departmentId: earlyDept, workUnitId: earlyWu }) => {
+                const carrier = buildActionableDrawerCarrier({
+                    opportunityId,
+                    attentionSubjectId: params.attentionSubjectId ?? null,
+                    departmentId: earlyDept,
+                    workUnitId: earlyWu,
+                    resolved,
+                    flushedAtMs: Date.now() - composeStart,
+                });
+                if (carrier) params.onActionableCarrier?.(carrier);
+            }
+        :   undefined,
     });
     if (!shared.ok) {
         return finishCompose({
@@ -103,6 +154,9 @@ export async function composeOpportunityDrawerViewModel(
         currentStageLabel,
     } = shared;
     Object.assign(phases, shared.phases_ms);
+    // Compose's view of the same span. `shared_deps_total_ms` is shared deps' own clock; this one
+    // includes the call boundary, so a gap between them is scheduling rather than work.
+    phases.shared_deps_wall_ms = Date.now() - tSharedDeps0;
 
     /*
      * THE EARLY PARTICIPANT CONTRACT — published here, and here is why here.
@@ -136,6 +190,7 @@ export async function composeOpportunityDrawerViewModel(
      * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
      * compose still costs `max(A, B)` = A.
      */
+    const tTiers0 = Date.now();
     const [initial, deferred] = await Promise.all([
         buildInitialPanelResource({
             supabase,
@@ -155,6 +210,12 @@ export async function composeOpportunityDrawerViewModel(
             hintOperTrustUrgency: params.hintOperTrustUrgency,
             // The SAME promise the shared deps started. Consumed here, never re-resolved.
             earlyHeaderActions: shared.earlyHeaderActions,
+        // Leg-observed elapsed, not a wall of its own: the stamp fires when THIS leg settles while
+        // the other may still be running. That is exactly what is wanted here — which side of the
+        // join finishes last is the question, and max(A,B) is the join's cost.
+        }).then((r) => {
+            phases.tier_initial_leg_ms = Date.now() - tTiers0;
+            return r;
         }),
         buildDeferredDetailResource({
             supabase,
@@ -166,8 +227,13 @@ export async function composeOpportunityDrawerViewModel(
             currentStageKey,
             currentStageLabel,
             deferCommunicationsPreview: params.deferCommunicationsPreview === true,
+        }).then((r) => {
+            phases.tier_deferred_leg_ms = Date.now() - tTiers0;
+            return r;
         }),
     ]);
+    // The join that decides when compose can finish: max(initial, deferred), not their sum.
+    phases.tiers_join_ms = Date.now() - tTiers0;
     if (!initial.ok) {
         return finishCompose({
             ok: false,

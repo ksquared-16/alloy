@@ -1,0 +1,42 @@
+{
+  "trusted_host_action_id": "tha_099e0c5254bbb2",
+  "query_hash": "d71a5fe0209a1715857c20b7ecda9648d59353477b431f8796ef61add38bd3b7",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-24T18:26:31.113Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_099e0c5254bbb2",
+    "query_hash": "d71a5fe0209a1715857c20b7ecda9648d59353477b431f8796ef61add38bd3b7",
+    "authorization_id": "grnt_16e6e5536a674ef6",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-24T18:26:33.250Z",
+    "question_ids": [
+      "payment_views_precheck"
+    ],
+    "questions": {
+      "payment_views_precheck": {
+        "question_id": "payment_views_precheck",
+        "row_count": null,
+        "rows": [
+          {
+            "newest_applied": "20261024120000",
+            "total_applied": 494,
+            "has_20261025120000": 0,
+            "bundle_grants": "[{\"grantee\" : \"service_role\", \"privilege\" : \"EXECUTE\"}, {\"grantee\" : \"authenticated\", \"privilege\" : \"EXECUTE\"}, {\"grantee\" : \"postgres\", \"privilege\" : \"EXECUTE\"}, {\"grantee\" : \"PUBLIC\", \"privilege\" : \"EXECUTE\"}]",
+            "bundle_acl": "=X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
+            "payments_rls": true,
+            "charges_rls": true,
+            "customers_rls": true
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
