@@ -352,20 +352,58 @@ The public API has **no `PUT`, no `PATCH` and no `DELETE`** on any resource, and
 none is planned. Creation, change and ending happen through named operations that
 express intent:
 
+This is the complete catalog. Ten operations, each one an intent.
+
+**Enrollment** — scope `enrollment.write`
+
+| You want to | You call | Result | Refuses with 409 when |
+| --- | --- | --- | --- |
+| Enroll a child | `POST /api/v1/enrollments` | `pending_start` or `active` by start date | — (a repeat converges on the existing enrollment) |
+| End an enrollment | `POST /api/v1/enrollments/end` | `canceled` if it never started, otherwise `ending` then `ended` | — (ending an ended enrollment converges) |
+| Say it was never real | `POST /api/v1/enrollments/void` | `voided` | Attendance exists under it, or it is already `canceled` |
+
+**Placement** — scope `enrollment.write`
+
+| You want to | You call | Result | Refuses with 409 when |
+| --- | --- | --- | --- |
+| Assign a room | `POST /api/v1/placements` | a live placement | — (a repeat converges) |
+| Move a room | `POST /api/v1/placements/move` | prior row `superseded`, new row live | The new date does not move forward (422) |
+| Say it was never real | `POST /api/v1/placements/cancel` | `canceled` | It has already ended or been superseded |
+
+**Schedule** — scope `schedule.write`
+
+| You want to | You call | Result | Refuses with 409 when |
+| --- | --- | --- | --- |
+| Set a schedule | `POST /api/v1/schedule-assignments` | a live assignment | — (a repeat converges on the live one) |
+| Change a schedule | `POST /api/v1/schedule-assignments/change` | prior row `superseded`, new row live | The new date does not move forward (422) |
+| Say it never applied | `POST /api/v1/schedule-assignments/cancel` | `canceled`, projecting zero days | It has already ended or been superseded |
+
+**Attendance** — scope `attendance.write`
+
 | You want to | You call |
 | --- | --- |
-| Enroll a child | `POST /api/v1/enrollments` |
-| End an enrollment | `POST /api/v1/enrollments/end` |
-| Assign a room | `POST /api/v1/placements` |
-| Move a room | `POST /api/v1/placements/move` |
-| Set a schedule | `POST /api/v1/schedule-assignments` |
-| Change a schedule | `POST /api/v1/schedule-assignments/change` |
-| Record attendance | `POST /api/v1/attendance-events` |
+| Record what happened, correct a detail, or reverse a fact | `POST /api/v1/attendance-events` |
+
+Attendance is one endpoint and three intents. A submission carries `entry_type`
+— `original`, `correction` or `reversal` — and a correction or reversal names the
+event it supersedes. It is an append-only ledger: nothing is ever edited or
+removed, and the effective truth is what remains after corrections and reversals
+are applied.
+
+So the surface is **ten HTTP write operations** covering **twelve domain intents**,
+because Attendance carries three through one endpoint. Counting either way is
+fine; mixing the two is what causes confusion.
 
 You never send `status_key` or an end date as a field edit. `POST .../end` is one
 intent with three possible canonical outcomes — cancel, mark ending, close — and
 Alloy chooses between them from the record's current state. That is deliberate:
 deciding wrongly which one applies would leave a child enrolled.
+
+**Cancel and void are not the same word for the same thing.** Cancel withdraws a
+commitment that had not become true. Void says a record should never have existed
+at all, and Alloy refuses it where its own history contradicts you — an
+enrollment with attendance against it really did deliver service, whatever the
+record now looks like.
 
 ### Why some resources have no write at all
 
@@ -399,9 +437,9 @@ have no way to tell the two apart afterwards.
 | --- | --- | --- |
 | Children | archived — `status` becomes `inactive` | — (identity is not created through this API) |
 | Relationships | ended by status | — |
-| Enrollment | effective end — `end_date` is set | **cancelled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
-| Placements | **superseded** — a new placement names the one it replaces | **cancelled** — `POST /placements/cancel` |
-| Schedule assignments | **superseded** | **cancelled** — `POST /schedule-assignments/cancel` |
+| Enrollment | effective end — `end_date` is set | **canceled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
+| Placements | **superseded** — a new placement names the one it replaces | **canceled** — `POST /placements/cancel` |
+| Schedule assignments | **superseded** | **canceled** — `POST /schedule-assignments/cancel` |
 | Attendance | **reversed** — a reversal fact supersedes the original | **reversed** — the fact is a tombstone, never a deletion |
 | Staff | effective end | — |
 | Locations, Households | not deletable through this API | — |
@@ -438,7 +476,7 @@ incremental synchronization. Read `status` to decide what a record means:
 `canceled` says it never took effect and nothing should be derived from it.
 
 One limit worth stating plainly rather than discovering: a record that has already
-closed cannot be cancelled. Once a placement or assignment has been superseded or
+closed cannot be canceled. Once a placement or assignment has been superseded or
 ended, it asserts real history that occupancy and billing already depend on, and
 denying it retroactively would be a different and much larger operation than this
 one. Cancellation applies while a record is still effective.
