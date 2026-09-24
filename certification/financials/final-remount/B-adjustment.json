@@ -1,0 +1,27 @@
+{
+  "present": true,
+  "box": {
+    "top": 159,
+    "left": 416,
+    "width": 608,
+    "height": 581,
+    "bottom": 741
+  },
+  "insideViewport": true,
+  "text": "ADD Charge Adjustment Add adjustment Against enrolment Certa Certhouse ▾ Against charge Choose the charge this is about… ▾ Type Credit — lowers what the family owes ▾ Amount Reason Effective date 📅 Preview Confirm Cancel",
+  "nativeDates": 0,
+  "alloyDates": 1,
+  "buttons": [
+    "Charge",
+    "Adjustment",
+    "Certa Certhouse▾",
+    "Choose the charge this is about…▾",
+    "Credit — lowers what the family owes▾",
+    "📅",
+    "Preview",
+    "Confirm",
+    "Cancel"
+  ],
+  "avatars": 0,
+  "horizontalOverflow": false
+}

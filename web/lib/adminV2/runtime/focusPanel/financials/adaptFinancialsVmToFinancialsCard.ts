@@ -611,9 +611,22 @@ export function adaptAddChargeSpecimen(input: {
      * yet must say nothing about the net, not claim it is $0.00.
      */
     const grossCents = centsFromMoney(resolvedAmount ?? input.amount);
+    /*
+     * ── THE SIGN IS THE DOMAIN'S, AND IT IS NEGATIVE ────────────────────────────────────────
+     *
+     * `AppliedReduction.amountCents` is documented as "NEGATIVE cents. The sign is the direction
+     * money moves, and it is stored, not inferred." This first shipped assuming a magnitude, and
+     * the mounted pass caught both halves of that mistake on deployed staging: the line read
+     * "--$40.00" because a minus was prefixed to an already-signed figure, and the net read
+     * "$440.00" because subtracting a negative ADDS it — a $400 charge with a 10% discount
+     * previewed as costing MORE than its gross.
+     *
+     * So the sign is honoured rather than corrected: the net is gross PLUS the reduction, which
+     * is the same arithmetic the ledger does when the reduction posts as its own negative row.
+     */
     const discountCents = input.discountCents ?? null;
     const netCents =
-        grossCents == null ? null : grossCents - (discountCents ?? 0);
+        grossCents == null ? null : grossCents + (discountCents ?? 0);
 
     /*
      * ── WHAT CONFIRMING ACTUALLY DOES, WHICH IS NOT WHAT THIS ONCE SAID ─────────────────────
@@ -659,7 +672,10 @@ export function adaptAddChargeSpecimen(input: {
         previewAfter: money(input.balanceCents, input.currency),
         /** The gross this charge is raised at, as the domain resolved it. */
         previewGross: resolvedAmount ?? (grossCents != null ? money(grossCents, input.currency) : null),
-        /** What the chosen discount takes off it, or null when none does. */
+        /**
+         * What the chosen discount takes off it, already carrying the domain's minus sign, or null
+         * when none does. Callers render it as-is; prefixing another sign is the defect above.
+         */
         previewDiscountAmount: discountCents != null ? money(discountCents, input.currency) : null,
         /** Gross less that discount — what this charge is expected to come to. */
         previewNet: netCents != null ? money(netCents, input.currency) : null,
