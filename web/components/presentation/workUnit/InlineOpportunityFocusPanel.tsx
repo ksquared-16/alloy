@@ -203,6 +203,47 @@ export function InlineOpportunityFocusPanel() {
             settlementSubjectId,
             identitySeed: operational.identitySeed,
             truthFamily: operational.subjectIdentityTruth?.["child.family_opportunity_id"] ?? null,
+            /*
+             * WHY CHILDREN AND HOUSEHOLD WAIT — PRESENCE ONLY, NEVER CONTENT.
+             *
+             * Both are declared COMMIT_CRITICAL and both gate on identity carried in
+             * `subjectIdentityTruth`, yet both stay reserved a median 3,495ms while
+             * business_process and financials clear around 1,000ms. Two different defects produce
+             * that and they need different repairs: the truth is absent at this boundary, or it is
+             * present and the cards are not admitted from it. Nothing deployed could tell them
+             * apart — the answer is server-rendered into the RSC payload, so there is no response to
+             * read, and the identity bag lives only in this component's props.
+             *
+             * These are classifications and counts. A key's PRESENCE and how many children there
+             * are, never a name, a phone, an email, a child, or any business value. `identity_families`
+             * maps each key to its family so a new binding cannot leak a value through its own name.
+             */
+            identityTruthPresent: operational.subjectIdentityTruth != null,
+            identityKeyCount: operational.subjectIdentityTruth
+                ? Object.keys(operational.subjectIdentityTruth).length
+                : null,
+            inquiryChildrenIdentityPresent:
+                operational.subjectIdentityTruth?._inquiry_children != null,
+            inquiryChildrenCount: Array.isArray(operational.subjectIdentityTruth?._inquiry_children)
+                ? (operational.subjectIdentityTruth._inquiry_children as unknown[]).length
+                : null,
+            primaryContactIdentityPresent:
+                operational.subjectIdentityTruth?.["person.primary_contact_name"] != null,
+            customerIdentityPresent: operational.subjectIdentityTruth?.["customer.id"] != null,
+            identityFamilies: operational.subjectIdentityTruth
+                ? [
+                      ...new Set(
+                          Object.keys(operational.subjectIdentityTruth).map((k) =>
+                              k.startsWith("person.") ? "person"
+                              : k.startsWith("customer.") ? "customer"
+                              : k.startsWith("child.") ? "child"
+                              : k.startsWith("_mission") ? "mission"
+                              : k === "_inquiry_children" ? "children"
+                              : "other",
+                          ),
+                      ),
+                  ].sort()
+                : null,
             displayVmId: displayVm?.entity?.id ?? null,
             structureSettled: displayVm?.structureSettled ?? null,
             runtimeError: error,
