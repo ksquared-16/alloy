@@ -35,8 +35,17 @@ const MAX_ENTRIES = 8;
 const entries = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 
-function keyOf(opportunityId: string, attentionSubjectId: string | null): string {
-    return `${opportunityId}|${attentionSubjectId ?? ""}`;
+/*
+ * KEYED BY THE OPPORTUNITY ALONE.
+ *
+ * The participation lens is not part of the key because it is not part of the carrier's identity:
+ * the header action set is resolved without any participation, so one opportunity has one action
+ * set whatever lens asked for it. Including the lens made the hover-warmed carrier (which asserts
+ * the row's own id) unreachable to the panel (which asserts none) — a store with a writer and no
+ * reader, on deployed 8e749e03.
+ */
+function keyOf(opportunityId: string): string {
+    return opportunityId;
 }
 
 function notify(): void {
@@ -79,7 +88,7 @@ function recordCarrierArrival(carrier: ActionableDrawerCarrier): void {
 /** Phase 1 landed. Validated by the fetch seam before it ever reaches here. */
 export function publishActionableDrawerCarrier(carrier: ActionableDrawerCarrier): void {
     recordCarrierArrival(carrier);
-    const key = keyOf(carrier.subject.opportunity_id, carrier.subject.attention_subject_id);
+    const key = keyOf(carrier.subject.opportunity_id);
     entries.set(key, { carrier, storedAt: Date.now() });
     while (entries.size > MAX_ENTRIES) {
         const oldest = entries.keys().next();
@@ -94,13 +103,10 @@ export function publishActionableDrawerCarrier(carrier: ActionableDrawerCarrier)
  * not be readable any more — keeping it would let a stale action set reappear underneath a resolved
  * drawer on a later render.
  */
-export function retireActionableDrawerCarrier(
-    opportunityId: string | null | undefined,
-    attentionSubjectId: string | null
-): void {
+export function retireActionableDrawerCarrier(opportunityId: string | null | undefined): void {
     const id = opportunityId?.trim();
     if (!id) return;
-    if (entries.delete(keyOf(id, attentionSubjectId?.trim() || null))) notify();
+    if (entries.delete(keyOf(id))) notify();
 }
 
 /** The carrier for exactly this subject, or null. Never an approximate match. */
@@ -110,7 +116,7 @@ export function peekActionableDrawerCarrier(selected: {
 }): ActionableDrawerCarrier | null {
     const id = selected.opportunityId?.trim();
     if (!id) return null;
-    const entry = entries.get(keyOf(id, selected.attentionSubjectId?.trim() || null));
+    const entry = entries.get(keyOf(id));
     if (!entry) return null;
     // Re-validated on the way out as well as on the way in: the guard that makes a late B carrier
     // unmountable under C is cheap, and running it at BOTH ends means neither a store bug nor a

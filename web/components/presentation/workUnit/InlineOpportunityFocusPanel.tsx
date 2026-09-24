@@ -434,10 +434,7 @@ export function InlineOpportunityFocusPanel() {
      * for a row the operator hovered and did not click, or for B after they have moved to C, is not
      * the carrier this asks for and is therefore never read.
      */
-    const carrier = useActionableDrawerCarrier({
-        opportunityId: settlementSubjectId,
-        attentionSubjectId: isChildSubject ? operationalSubjectId : null,
-    });
+    const carrier = useActionableDrawerCarrier({ opportunityId: settlementSubjectId });
 
     /*
      * ONE ACTION AUTHORITY, WHICHEVER PHASE IS IN HAND.
