@@ -15,22 +15,50 @@ test.describe.configure({ mode: "serial" });
 test.setTimeout(1_500_000);
 const log = (s: string) => console.log(s); // eslint-disable-line no-console
 
-/** The values the ledger showed before any of this slice's performance work. */
+/*
+ * The values the ledger showed before any of this slice's performance work, each against the label
+ * it actually renders under.
+ *
+ * The first cut of this table mapped the six figures to labels in the order I ASSUMED the band used
+ * and got three of them wrong — it read RESPONSIBILITY, PAID and PAST DUE as $1,525.00, $2,098.87
+ * and $75.00. The deployed band reads them as $2,098.87, $75.00 and $1,525.00, and says so in its
+ * own header: "$1,525.00 past due". So the oracle reported a drift that was its own, against a card
+ * whose six figures were unchanged and identical on both hosts.
+ *
+ * An oracle that encodes what I expected rather than what the product renders certifies my
+ * assumption, not the money. The order is read from the DOM below rather than assumed again.
+ */
 const PINNED = {
     "CURRENT BALANCE": "$2,023.87",
     DUE: "$1,912.00",
-    RESPONSIBILITY: "$1,525.00",
-    PAID: "$2,098.87",
-    "PAST DUE": "$75.00",
+    "PAST DUE": "$1,525.00",
+    RESPONSIBILITY: "$2,098.87",
+    PAID: "$75.00",
     "AVAILABLE PREPAID": "$125.00",
 };
+/* The band's rendered order, asserted so a reordering is a finding rather than a re-association. */
+const PINNED_ORDER = ["CURRENT BALANCE", "DUE", "PAST DUE", "RESPONSIBILITY", "PAID", "AVAILABLE PREPAID"];
 const PINNED_ROWS = 116;
 
 const READ = () => {
     const root = document.querySelector("[data-financials-detail='true']") as HTMLElement | null;
     if (!root) return { present: false, kpis: {}, rows: [] as string[] };
     const txt = root.innerText.replace(/\s+/g, " ");
-    const kpi = (l: string) => { const m = txt.match(new RegExp(l + "\\s*(-?\\$[\\d,]+\\.\\d{2}|None)")); return m ? m[1] : "ABSENT"; };
+    /*
+     * `DUE` is a SUBSTRING of `PAST DUE`, so an unanchored match reads whichever appears first and
+     * can hand one label the other's figure. The lookbehind makes DUE mean DUE.
+     */
+    const kpi = (l: string) => {
+        const anchored = l === "DUE" ? "(?<!PAST )DUE" : l;
+        const m = txt.match(new RegExp(anchored + "\\s*(-?\\$[\\d,]+\\.\\d{2}|None)"));
+        return m ? m[1] : "ABSENT";
+    };
+    /* Literal, because this function is serialised into the page and closes over nothing. */
+    const order = ["CURRENT BALANCE", "DUE", "PAST DUE", "RESPONSIBILITY", "PAID", "AVAILABLE PREPAID"]
+        .map((l) => ({ l, at: txt.indexOf(l) }))
+        .filter((h) => h.at >= 0)
+        .sort((a, b) => a.at - b.at)
+        .map((h) => h.l);
     const rows = Array.from(root.querySelectorAll("[data-financials-ledger-row]")).map(
         (e) => (e as HTMLElement).innerText.replace(/\s+/g, " ").trim(),
     );
@@ -41,6 +69,7 @@ const READ = () => {
             RESPONSIBILITY: kpi("RESPONSIBILITY"), PAID: kpi("PAID"), "AVAILABLE PREPAID": kpi("AVAILABLE PREPAID"),
         },
         rows,
+        order,
     };
 };
 
@@ -93,6 +122,8 @@ test("same cents, same rows, both hosts, after the repair", async ({ page }) => 
     writeFileSync(`${OUT}/oracle.json`, JSON.stringify({ focus, accounts, rowDiffs, kpiDiffs, drift }, null, 2));
     await page.screenshot({ path: `${OUT}/accounts-after.png` });
 
+    expect(focus.order, "the band's label order, so a reordering is a finding not a re-association")
+        .toEqual(PINNED_ORDER);
     expect(drift, "the six KPIs must be unchanged by the performance work").toEqual([]);
     expect(focus.rows.length, "focus ledger row count").toBe(PINNED_ROWS);
     expect(accounts.rows.length, "accounts ledger row count").toBe(PINNED_ROWS);

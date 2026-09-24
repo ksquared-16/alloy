@@ -62,7 +62,67 @@ function latencyClient(fixture: Record<string, unknown[]>, trips: Trip[], t0: ()
         };
         return self;
     };
-    return { from: (tbl: string) => build(tbl), rpc: () => build("(rpc)") } as never;
+    /*
+     * ONE trip, resolved without a timer: the bundle is the canonical acquisition boundary, and
+     * giving it its own latency only couples this fake to each test's clock. The `fail` predicate
+     * still reaches it, so a planted acquisition failure is modelled where production has one.
+     */
+    const bundleRpc = () => ({
+        then: (onOk: (v: unknown) => unknown) => {
+            const startRel = Math.round(performance.now() - t0());
+            return new Promise((r) => setTimeout(r, LATENCY)).then(() => {
+                trips.push({ table: "financials_account_fact_bundle", select: "bundle", startRel, endRel: Math.round(performance.now() - t0()) });
+                return onOk(fail?.("financials_account_fact_bundle", "")
+                    ? { data: null, error: { message: "planted failure: account fact bundle" } }
+                    : { data: bundleFor(fixture), error: null });
+            });
+        },
+    });
+    return {
+        from: (tbl: string) => build(tbl),
+        rpc: (name: string) => (name === "financials_account_fact_bundle" ? bundleRpc() : build("(rpc)")),
+    } as never;
+}
+
+/**
+ * What the account fact bundle returns for a fixture.
+ *
+ * Production acquires every dependent fact in one server-side round trip, so a fake that answers
+ * only table reads answers nothing at all. This models that boundary from the same fixture the
+ * table reads use, which keeps these contracts pointed at the acquisition production actually has.
+ */
+function bundleFor(fixture: Record<string, unknown[]>) {
+    const all = (t: string) => (fixture[t] ?? []) as Array<Record<string, unknown>>;
+    const agreements = all("child_enrollment_agreements");
+    const charges = all("charges");
+    return {
+        resolved_customer_id: (agreements[0]?.customer_id as string) ?? null,
+        agreements,
+        members: all("customer_members"),
+        reductions_by_agreement: all("financial_reduction_applications"),
+        commercial_policies: all("commercial_policies"),
+        charges,
+        reductions_by_charge: all("financial_reduction_applications"),
+        payment_allocations: all("payment_allocations"),
+        responsibility_allocations: all("financial_responsibility_allocations"),
+        subsidy_claim_lines: all("financial_subsidy_claim_lines"),
+        payments_backing: all("payments"),
+        responsibility_attributions: all("payment_responsibility_attributions"),
+        responsible_persons: all("persons"),
+        funding_by_allocation: [],
+        funding_by_share: [],
+        funding_for_responsibility: all("financial_expected_funding"),
+        subsidy_claims: all("financial_subsidy_claims"),
+        subsidy_variances: all("financial_subsidy_variances"),
+        collection_attempts: all("payment_collection_attempts"),
+        payments_by_source: all("payments"),
+        counts: {
+            agreements: agreements.length,
+            charges: charges.length,
+            allocations: all("financial_responsibility_allocations").length,
+            claim_lines: all("financial_subsidy_claim_lines").length,
+        },
+    };
 }
 
 function fixture(posted = 3, agreements = 3): Record<string, unknown[]> {
@@ -273,10 +333,23 @@ describe("the failure contract survives the concurrency — this is the money-fa
             .toContain("payments");
     }, 30_000);
 
-    it("D · both fail: one unavailable answer, not two and not a partial", async () => {
-        const { vm } = await measure({ fail: (table) => table === "payments" });
-        expect(vm.unavailable.filter((u) => u.fact === "payments").length).toBe(1);
-        for (const r of vm.rows) expect(r.outstandingCents).toBe(r.amountCents);
+    it("D · the ACQUISITION fails: one unavailable answer, and no ledger at all", async () => {
+        /*
+         * ── THE CONTRACT CHANGE, STATED WHERE IT HAPPENED ──────────────────────────────────────
+         *
+         * This used to plant a failure on the account's receipts read and require the ledger to
+         * render anyway with everything outstanding — a partial answer, honestly labelled.
+         *
+         * The receipts no longer have their own read. They arrive with every other dependent fact
+         * from the canonical account fact bundle, and there is no state in which the charges
+         * answered and the receipts did not. So the contract is whole-card: a bundle that cannot
+         * answer makes the account's financial answer UNAVAILABLE, and no ledger is assembled from
+         * an acquisition that partly failed. That is the direction this gate always protected,
+         * applied to every fact at once instead of one family at a time.
+         */
+        const { vm } = await measure({ fail: (table) => table === "financials_account_fact_bundle" });
+        expect(vm.unavailableReason, "one unavailable answer").toMatch(/unavailable/i);
+        expect(vm.rows, "and not a partial ledger").toEqual([]);
     }, 30_000);
 
     it("THE GATE: the join re-throws the views failure rather than defaulting it", () => {

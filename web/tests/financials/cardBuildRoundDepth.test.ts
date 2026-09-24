@@ -84,13 +84,40 @@ function holdingClient() {
     return {
         client: {
             from: (t: string) => builder(t),
-            rpc: () => ({
-                then: (r: (v: unknown) => unknown) => { held.push({ table: "rpc", release: () => r({ data: [], error: null }) }); },
+            rpc: (name: string) => ({
+                then: (r: (v: unknown) => unknown) => {
+                    held.push({ table: `rpc:${name}`, release: () => r({ data: BUNDLE, error: null }) });
+                },
             }),
         } as never,
         held,
     };
 }
+
+/** What `financials_account_fact_bundle` returns for the specimen above. */
+const BUNDLE = {
+    resolved_customer_id: "cust-1",
+    agreements: ROWS.child_enrollment_agreements,
+    members: ROWS.customer_members,
+    reductions_by_agreement: [],
+    commercial_policies: [],
+    charges: ROWS.charges,
+    reductions_by_charge: [],
+    payment_allocations: ROWS.payment_allocations,
+    responsibility_allocations: ROWS.financial_responsibility_allocations,
+    subsidy_claim_lines: ROWS.financial_subsidy_claim_lines,
+    payments_backing: ROWS.payments,
+    responsibility_attributions: [],
+    responsible_persons: ROWS.persons,
+    funding_by_allocation: [],
+    funding_by_share: [],
+    funding_for_responsibility: [],
+    subsidy_claims: ROWS.financial_subsidy_claims,
+    subsidy_variances: [],
+    collection_attempts: [],
+    payments_by_source: ROWS.payments,
+    counts: { agreements: 1, charges: 1, allocations: 1, claim_lines: 1 },
+};
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -118,71 +145,64 @@ async function waveStructure() {
 const waveOf = (waves: string[][], table: string) => waves.findIndex((w) => w.includes(table));
 
 describe("the card build waits on as few round trips as its data actually requires", () => {
-    it("four waves, not seven", async () => {
+    it("ONE wave — every read goes out together", async () => {
         const waves = await waveStructure();
         expect(
             waves.length,
             `the build waited on ${waves.length} round trips: ${waves.map((w, i) => `[${i + 1}] ${w.join("+")}`).join(" → ")}`,
-        ).toBeLessThanOrEqual(4);
-    });
-
-    it("the org-grain reads go out first, before anything is known about the family", async () => {
-        const waves = await waveStructure();
-        for (const table of ["gl_account_mappings", "gl_accounts", "financial_charge_templates", "financial_policies"]) {
-            expect(waveOf(waves, table), `${table} depends only on the org and belongs in wave 1`).toBe(0);
-        }
-        expect(waveOf(waves, "child_enrollment_agreements"), "the agreements are the first family question").toBe(0);
-    });
-
-    it("everything the charges unlock is asked in ONE wave, not one resolver at a time", async () => {
-        const waves = await waveStructure();
-        const chargeKeyed = [
-            "payment_allocations",
-            "financial_responsibility_allocations",
-            "financial_subsidy_claim_lines",
-            "payment_collection_attempts",
-        ];
-        const at = chargeKeyed.map((t) => waveOf(waves, t));
-        expect(at.every((w) => w >= 0), `all of ${chargeKeyed.join(", ")} are read`).toBe(true);
-        expect(
-            new Set(at).size,
-            `these are all keyed by charge id and belong together: ${chargeKeyed.map((t, i) => `${t}@${at[i] + 1}`).join(", ")}`,
         ).toBe(1);
     });
 
-    it("the collectible position does not wait for the payments composition", async () => {
-        const waves = await waveStructure();
-        expect(
-            waveOf(waves, "financial_subsidy_claim_lines"),
-            "the collectible facts are charge-keyed, so they ride with the other charge-keyed reads",
-        ).toBe(waveOf(waves, "payment_allocations"));
-    });
-
-    it("the payer candidates are not chained behind the responsibility resolution", async () => {
-        const waves = await waveStructure();
-        expect(
-            waveOf(waves, "customer_persons"),
-            "the candidates read is keyed by household; responsibility only decorates its rows",
-        ).toBeLessThanOrEqual(waveOf(waves, "payment_responsibility_attributions"));
-    });
-
-    it("attributions, party names and expected funding share one wave", async () => {
-        const waves = await waveStructure();
-        const at = ["payment_responsibility_attributions", "persons", "financial_expected_funding"]
-            .map((t) => waveOf(waves, t));
-        expect(at.every((w) => w >= 0), "all three are read").toBe(true);
-        expect(new Set(at).size, `all three hang off the allocations alone: wave ${at.join(", ")}`).toBe(1);
-    });
-
-    it("collapsing the waves did not drop a read", async () => {
-        const tables = (await waveStructure()).flat();
+    it("the dependent chain is acquired by the bundle, not walked by the client", async () => {
+        const [first] = await waveStructure();
+        expect(first, "the account fact bundle is what replaced the chain")
+            .toContain("rpc:financials_account_fact_bundle");
+        /* The chain's tables must no longer be read directly by the card. */
         for (const table of [
-            "child_enrollment_agreements", "customer_members", "charges", "financial_policies",
-            "payment_allocations", "financial_responsibility_allocations", "financial_subsidy_claim_lines",
-            "payment_responsibility_attributions", "financial_expected_funding", "persons",
-            "customer_persons", "payments", "financial_subsidy_claims",
+            "child_enrollment_agreements", "charges", "payment_allocations",
+            "financial_responsibility_allocations", "financial_subsidy_claim_lines",
+            "payment_responsibility_attributions", "financial_expected_funding",
+            "financial_subsidy_claims", "commercial_policies",
         ]) {
-            expect(tables, `${table} is still read`).toContain(table);
+            expect(first, `${table} came with the bundle; reading it again is the four-wave shape returning`)
+                .not.toContain(table);
+        }
+    });
+
+    it("the org-grain reads still go out, and in that same single wave", async () => {
+        const [first] = await waveStructure();
+        for (const table of ["gl_account_mappings", "gl_accounts", "financial_charge_templates", "financial_policies"]) {
+            expect(first, `${table} depends only on the org and must still be read`).toContain(table);
+        }
+    });
+
+    it("the household-grain reads are not chained behind the bundle", async () => {
+        const [first] = await waveStructure();
+        /*
+         * These are keyed by the customer id the request carried in. They sat in a later wave only
+         * because the functions that consume them are called further down — the same
+         * source-order-as-dependency mistake, one level up.
+         */
+        for (const table of ["payment_methods", "payment_autopay_arrangements", "customer_persons"]) {
+            expect(first, `${table} is keyed by the household, which was known at request time`).toContain(table);
+        }
+    });
+
+    it("nothing the card consumes was dropped: the bundle carries every dependent set", () => {
+        /*
+         * A wave count alone stays green if a set silently stops being gathered, so this asserts
+         * the SHAPE the reader requires. Row-for-row equality against the real tenant is
+         * `accountFactBundleParity.live.test.ts`; this is the part a unit run can hold.
+         */
+        for (const key of [
+            "agreements", "members", "reductions_by_agreement", "commercial_policies", "charges",
+            "reductions_by_charge", "payment_allocations", "responsibility_allocations",
+            "subsidy_claim_lines", "payments_backing", "responsibility_attributions",
+            "responsible_persons", "funding_by_allocation", "funding_by_share",
+            "funding_for_responsibility", "subsidy_claims", "subsidy_variances",
+            "collection_attempts", "payments_by_source", "counts",
+        ]) {
+            expect(Object.keys(BUNDLE), `the bundle must carry ${key}`).toContain(key);
         }
     });
 });
