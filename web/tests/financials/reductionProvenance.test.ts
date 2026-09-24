@@ -167,9 +167,23 @@ describe("THE GATE — the provenance is actually read, and both surfaces state 
     });
 
     it("reads the policy window, which is what makes ongoing a fact", () => {
+        /*
+         * The window is still read; it is acquired with the rest of the account's dependent facts
+         * instead of in a wave of its own. So this follows the read to where it now lives — the
+         * bundle function must SELECT it, and the card must still map the three columns that make
+         * "ongoing" a fact rather than a guess. Asserting only the card would pass while nothing
+         * gathered the rows; asserting only the function would pass while the card ignored them.
+         */
+        const fn = readFileSync(
+            join(process.cwd(), "../supabase/migrations/20261024120000_financials_account_fact_bundle.sql"),
+            "utf8",
+        );
+        expect(fn, "the bundle gathers the policy windows").toContain("public.commercial_policies");
+        expect(fn).toMatch(/effective_start[\s\S]{0,120}effective_end[\s\S]{0,120}is_active/);
+
         const vm = src("lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM.ts");
-        expect(vm).toContain("commercial_policies");
-        expect(vm).toMatch(/effective_start.*effective_end.*is_active/);
+        expect(vm, "and the card still reads the window off the bundle").toContain("bundle.commercialPolicies");
+        expect(vm).toMatch(/effective_start[\s\S]{0,200}effective_end[\s\S]{0,200}is_active/);
     });
 
     /* One meaning on both surfaces: a semantic fork is the thing the convergence forbids. */
