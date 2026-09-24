@@ -1667,7 +1667,7 @@ export function FormEmbedClient({
                                 <button
                                     type="button"
                                     onClick={() => { setReadingMode("fit-page"); setReadingOpen(true); }}
-                                    className="rounded-xl border border-alloy-midnight/15 px-3.5 py-2 text-[14px] font-medium text-alloy-midnight"
+                                    className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-3.5 py-2 text-[14px] font-medium text-alloy-midnight"
                                     data-participant-document-zoom="enlarge"
                                 >
                                     View larger

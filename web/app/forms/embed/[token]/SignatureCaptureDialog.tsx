@@ -151,12 +151,20 @@ export function SignatureCaptureDialog({
                     />
                 )}
 
-                <label className="mt-4 flex items-start gap-2 text-[13px] text-alloy-midnight/70">
+                {/*
+                  * THE TWO CONTROLS THAT FINISH AN ENROLLMENT, AT A THUMB'S SIZE.
+                  *
+                  * Measured on the real participant surface at 390px: this acknowledgement's box
+                  * was 13px high and "Clear" 21px, against the platform's own 44px minimum — the
+                  * one the fact editor beside it already states twice. A parent cannot complete
+                  * enrollment on a phone without hitting both.
+                  */}
+                <label className="mt-4 flex min-h-[44px] items-center gap-3 text-[13px] text-alloy-midnight/70">
                     <input
                         type="checkbox"
                         checked={acknowledged}
                         onChange={(e) => setAcknowledged(e.target.checked)}
-                        className="mt-0.5"
+                        className="h-5 w-5 shrink-0"
                         data-signature-consent="true"
                     />
                     <span>I acknowledge this electronic signature applies to this form.</span>
@@ -176,7 +184,7 @@ export function SignatureCaptureDialog({
                         <button
                             type="button"
                             onClick={clear}
-                            className="text-[14px] text-alloy-midnight/60 underline underline-offset-2"
+                            className="flex min-h-[44px] items-center text-[14px] text-alloy-midnight/60 underline underline-offset-2"
                         >
                             Clear
                         </button>
@@ -186,7 +194,7 @@ export function SignatureCaptureDialog({
                         <button
                             type="button"
                             onClick={() => setMode(mode === "draw" ? "type" : "draw")}
-                            className="text-[14px] text-alloy-midnight/60 underline underline-offset-2"
+                            className="flex min-h-[44px] items-center text-[14px] text-alloy-midnight/60 underline underline-offset-2"
                         >
                             {mode === "draw" ? "Type instead" : "Draw instead"}
                         </button>
@@ -194,7 +202,7 @@ export function SignatureCaptureDialog({
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="text-[14px] text-alloy-midnight/60 underline underline-offset-2"
+                        className="flex min-h-[44px] items-center text-[14px] text-alloy-midnight/60 underline underline-offset-2"
                     >
                         Cancel
                     </button>

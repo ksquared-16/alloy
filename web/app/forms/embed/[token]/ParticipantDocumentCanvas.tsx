@@ -77,8 +77,16 @@ function paintSignatureTarget(
         target.textContent = preview.typedName;
         target.setAttribute("data-artifact-signature-state", "signed");
     } else {
+        /*
+         * A 44px FLOOR ON THE ONE CONTROL THAT STARTS A SIGNATURE.
+         *
+         * The overlay is drawn at the signature field's own size on the page, and on this Form that
+         * is 30px — below the platform's touch minimum, on a phone, for the control a parent must
+         * hit to finish. The floor only ever grows the target; the box it marks is unchanged.
+         */
         target.className =
             "animate-pulse rounded-md border-2 border-dashed border-alloy-bend-pine/70 bg-alloy-bend-pine/10 text-[13px] font-medium text-alloy-bend-pine";
+        target.style.minHeight = "44px";
         target.textContent = "Tap to sign";
         target.setAttribute("data-artifact-signature-state", "unsigned");
     }

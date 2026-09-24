@@ -113,7 +113,7 @@ function UploadRow({
                                     href={`/api/public/forms/${encodeURIComponent(token)}/enrollment-upload?document_id=${encodeURIComponent(attached.document_id)}`}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="underline underline-offset-2"
+                                    className="inline-flex min-h-[44px] items-center underline underline-offset-2"
                                     data-upload-view={request.field_id}
                                 >
                                     View
@@ -137,7 +137,9 @@ function UploadRow({
                 disabled={busy}
                 onClick={() => input.current?.click()}
                 className={clsx(
-                    "rounded-xl px-4 py-2.5 text-[14px] font-medium",
+                    // 44px: the platform's touch minimum, which this control missed at 41px. The
+                    // measurement is from the real participant surface at 390px.
+                    "min-h-[44px] rounded-xl px-4 py-2.5 text-[14px] font-medium",
                     attached
                         ? "border border-alloy-midnight/15 text-alloy-midnight"
                         : "bg-alloy-bend-pine text-white",

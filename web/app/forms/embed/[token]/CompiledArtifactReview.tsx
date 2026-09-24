@@ -40,7 +40,7 @@ function Fact({
                 <button
                     type="button"
                     onClick={onEdit}
-                    className="shrink-0 text-[13px] text-alloy-midnight/55 underline underline-offset-2"
+                    className="flex min-h-[44px] shrink-0 items-center text-[13px] text-alloy-midnight/55 underline underline-offset-2"
                     data-artifact-edit={control.field_id}
                 >
                     Edit
