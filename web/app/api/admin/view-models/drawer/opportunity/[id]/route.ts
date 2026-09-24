@@ -8,6 +8,13 @@ import { logDrawerVmRuntimeServer } from "@/lib/adminV2/viewModel/drawer/vmRunti
 import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadowServer";
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    CARRIER_LINE_KEY,
+    DRAWER_VIEW_MODEL_LINE_KEY,
+    PHASED_CONTENT_TYPE,
+    PHASED_QUERY_KEY,
+    type ActionableDrawerCarrier,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrier";
 
 /**
  * GET — Server-composed opportunity drawer View Model.
@@ -52,6 +59,31 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         department_id: (sp.get("department_id") ?? "").trim() || null,
         work_unit_id: (sp.get("work_unit_id") ?? "").trim() || null,
     });
+    /*
+     * TWO PHASES, ONE REQUEST — and only when the client says it can read them.
+     *
+     * Phase 1 is the actionable carrier: subject identity, canonical execution arguments and the
+     * resolved header actions, flushed the moment action authority exists (~390ms into a ~2,288ms
+     * compose). Phase 2 is this route's unchanged answer. NDJSON, one JSON document per line, by the
+     * same contract the provisioning seam already ships — not a second streaming protocol.
+     *
+     * OPT-IN, for the reason the provisioning wire states: a consumer that cannot read a second
+     * delivery must keep receiving ONE complete answer. Without `?phased=1` every byte below is
+     * bypassed and the handler behaves exactly as it did.
+     */
+    const phased = sp.get(PHASED_QUERY_KEY) === "1";
+    if (phased) {
+        return streamPhasedDrawerViewModel({
+            request,
+            supabase,
+            gate,
+            opportunityId: opportunityId.trim(),
+            sp,
+            routeT0,
+            routePhases,
+        });
+    }
+
     try {
         const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
 
@@ -233,4 +265,128 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         const status = /not found/i.test(msg) ? 404 : 500;
         return NextResponse.json({ error: msg }, { status });
     }
+}
+
+/**
+ * THE PHASED DELIVERY.
+ *
+ * Deliberately a separate function rather than a branch woven through the handler above: the
+ * unphased path is the one every existing consumer takes, and it must stay byte-identical. Nothing
+ * here changes what is composed — only WHEN the operator is told what they may do.
+ *
+ * STATUS CODES BECOME LINES. A streamed response commits its status before the composer has
+ * answered, so the 422 "structure not settled" and the 5xx failure both arrive as their own JSON
+ * line instead. The client maps them back to the same two outcomes, so `loadOpportunityDrawerViaViewModel`
+ * still distinguishes `not_structure_settled` from `fetch_failed`.
+ */
+function streamPhasedDrawerViewModel(args: {
+    request: NextRequest;
+    supabase: ReturnType<typeof createAdminClient>;
+    gate: Extract<Awaited<ReturnType<typeof loadAdminRouteGate>>, { ok: true }>;
+    opportunityId: string;
+    sp: URLSearchParams;
+    routeT0: number;
+    routePhases: Record<string, number>;
+}): NextResponse {
+    const { supabase, gate, opportunityId, sp, routeT0, routePhases } = args;
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+            let closed = false;
+            let carrierSent = false;
+            const write = (value: unknown) => {
+                if (closed) return;
+                try {
+                    controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`));
+                } catch {
+                    // The operator navigated away mid-stream. Nothing to repair; stop writing.
+                    closed = true;
+                }
+            };
+            /*
+             * AT MOST ONE CARRIER PER REQUEST. The composer already promises to call this once, but
+             * the guard is here too: a second phase-1 line would be a second action authority on the
+             * wire, and the client would have no canonical rule for which one wins.
+             */
+            const sendCarrier = (carrier: ActionableDrawerCarrier) => {
+                if (carrierSent) return;
+                carrierSent = true;
+                write({ [CARRIER_LINE_KEY]: carrier });
+            };
+
+            try {
+                const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
+                const result = await composeOpportunityDrawerViewModel({
+                    supabase,
+                    gate,
+                    opportunityId,
+                    departmentId: (sp.get("department_id") ?? "").trim() || null,
+                    workUnitId: (sp.get("work_unit_id") ?? "").trim() || null,
+                    hintOperTrustHeadline: (sp.get("hint_oper_trust_headline") ?? "").trim() || null,
+                    hintOperTrustUrgency: (sp.get("hint_oper_trust_urgency") ?? "").trim() || null,
+                    deferCommunicationsPreview: sp.get("comms_preview") !== "1",
+                    attentionSubjectId,
+                    resolvedParticipant: await (async () => {
+                        const t = Date.now();
+                        const r = await resolveParticipationSubjectForOpportunity({
+                            supabase,
+                            orgId: gate.orgId,
+                            opportunityId,
+                            participationId: attentionSubjectId,
+                        });
+                        routePhases.participant_resolve_ms = Date.now() - t;
+                        return r;
+                    })(),
+                    onActionableCarrier: sendCarrier,
+                });
+
+                routePhases.full_compose_end_ms = Date.now() - routeT0;
+
+                if (!result.ok) {
+                    logDrawerVmRuntimeServer("compose_skip", {
+                        opportunity_id: opportunityId,
+                        reason: result.skipped.reason,
+                    });
+                    write({ __skipped: result.skipped });
+                    return;
+                }
+
+                logDrawerVmRuntimeServer("compose_ok", {
+                    opportunity_id: opportunityId,
+                    generation: result.viewModel.generation,
+                    compose_ms: result.viewModel.timing.compose_ms,
+                });
+                write({
+                    [DRAWER_VIEW_MODEL_LINE_KEY]: result.viewModel,
+                    // The unphased path ships these as headers; a streamed response has already sent
+                    // its headers by now, so the same measurements ride the phase-2 line instead.
+                    __route_phases: routePhases,
+                    __server_duration_ms: Date.now() - routeT0,
+                });
+            } catch (e) {
+                logDrawerVmRuntimeServer("compose_error", {
+                    opportunity_id: opportunityId,
+                    message: e instanceof Error ? e.message : "unknown",
+                });
+                logOpportunityDrawerViewModelComposeFailureShadowSummary(opportunityId, Date.now() - routeT0);
+                write({ __error: e instanceof Error ? e.message : "Drawer view model compose failed" });
+            } finally {
+                closed = true;
+                try {
+                    controller.close();
+                } catch {
+                    /* already closed by the client disconnecting */
+                }
+            }
+        },
+    });
+
+    return new NextResponse(stream, {
+        headers: {
+            "Content-Type": PHASED_CONTENT_TYPE,
+            "Cache-Control": "no-store",
+            "X-Alloy-Drawer-VM-Phased": "1",
+        },
+    });
 }

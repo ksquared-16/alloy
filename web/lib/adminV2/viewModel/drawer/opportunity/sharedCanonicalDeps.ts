@@ -43,6 +43,19 @@ export type ResolveSharedCanonicalDepsParams = {
     opportunityId: string;
     departmentId: string | null;
     workUnitId: string | null;
+    /**
+     * Publish the canonical header action set the INSTANT it resolves — phase 1 of the two-phase
+     * selected-drawer delivery.
+     *
+     * It is handed `departmentId` as a non-null string on purpose. The early resolve only runs when
+     * department authority is already known, and this signature makes that a type-level fact: there
+     * is no way to publish an action set that was resolved against an unknown department.
+     */
+    onEarlyHeaderActions?: (published: {
+        resolved: ResolvedActionsBySlot;
+        departmentId: string;
+        workUnitId: string | null;
+    }) => void;
 };
 
 /** A "skipped" foundation — the compose short-circuits with the same reason it did inline. */
@@ -197,6 +210,29 @@ export async function resolveSharedCanonicalDeps(
                 ),
             })
         :   null;
+
+    /*
+     * PUBLISH IT THE MOMENT IT EXISTS — WITHOUT TOUCHING THE PROMISE THE DRAWER AWAITS.
+     *
+     * `then(onOk, onErr)` derives a SECOND promise and handles only that one's rejection.
+     * `earlyHeaderActions` itself is handed on untouched and still rejects into
+     * `resolveOpportunityDrawerFirstPaintDependencies` exactly as it always has, so a failed
+     * resolution remains a failure. The rejection arm here deliberately publishes NOTHING: it exists
+     * so the derived promise is not an unhandled rejection, and converting a refusal into an
+     * authoritative empty action set is the one thing phase 1 must never do.
+     */
+    if (earlyHeaderActions && earlyDepartmentId && params.onEarlyHeaderActions) {
+        const publish = params.onEarlyHeaderActions;
+        const publishedDepartmentId: string = earlyDepartmentId;
+        void earlyHeaderActions.then(
+            (resolved) => {
+                publish({ resolved, departmentId: publishedDepartmentId, workUnitId: workUnitId || null });
+            },
+            () => {
+                /* The real consumer owns this rejection. Phase 1 simply never arrives. */
+            },
+        );
+    }
 
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
