@@ -89,7 +89,7 @@ truth. There is currently **no public API for managing correlations**.
 
 ## 2. The public surface, complete
 
-Nineteen operations across fifteen paths. This is the entire public API.
+Twenty-two operations across eighteen paths. This is the entire public API.
 
 | Method | Path | Operation | Scope required |
 | --- | --- | --- | --- |
@@ -102,22 +102,29 @@ Nineteen operations across fifteen paths. This is the entire public API.
 | GET | `/api/v1/enrollments` | `listEnrollments` | `enrollment.read` |
 | POST | `/api/v1/enrollments` | `startEnrollment` | `enrollment.write` |
 | POST | `/api/v1/enrollments/end` | `endEnrollment` | `enrollment.write` |
+| POST | `/api/v1/enrollments/void` | `voidEnrollment` | `enrollment.write` |
 | GET | `/api/v1/placements` | `listPlacements` | `enrollment.read` |
 | POST | `/api/v1/placements` | `assignPlacement` | `enrollment.write` |
 | POST | `/api/v1/placements/move` | `movePlacement` | `enrollment.write` |
+| POST | `/api/v1/placements/cancel` | `cancelPlacement` | `enrollment.write` |
 | GET | `/api/v1/schedule-assignments` | `listScheduleAssignments` | `schedule.read` |
 | POST | `/api/v1/schedule-assignments` | `setScheduleAssignment` | `schedule.write` |
 | POST | `/api/v1/schedule-assignments/change` | `changeScheduleAssignment` | `schedule.write` |
+| POST | `/api/v1/schedule-assignments/cancel` | `cancelScheduleAssignment` | `schedule.write` |
 | GET | `/api/v1/schedule-days` | `listScheduleDays` | `schedule.read` |
 | GET | `/api/v1/staff` | `listStaff` | `staff.read` |
 | GET | `/api/v1/attendance-events` | `listAttendanceEvents` | `attendance.read` |
 | POST | `/api/v1/attendance-events` | `submitAttendanceEvents` | `attendance.write` |
 
-**One** is the unauthenticated token exchange, **eleven** are authenticated
-reads, and **seven** are governed domain writes. The writes are **named
-operations**, not a CRUD surface: there is no `PUT`, no `PATCH` and no `DELETE`
-anywhere in this contract. A change is a supersession and an ending is an ending
-— see §11a.
+**One** is the unauthenticated token exchange. `GET /api/v1/context` needs a
+valid token but no scope. The remaining twenty are **ten authenticated reads**
+and **ten governed domain writes**.
+
+The writes are **named operations**, not a CRUD surface: there is no `PUT`, no
+`PATCH` and no `DELETE` anywhere in this contract. Each one says which of six
+things happened — end, cancel, supersede, void, correct or reverse — because a
+change and a mistake are different truths and a partner mirroring your data needs
+to tell them apart. See §11a.
 
 There is no public webhook resource, no self-service correlation API, and no
 public Communications or Financials contract. Alloy's internal administrative
@@ -412,12 +419,12 @@ The practical consequence for your planning: **expect fewer children than the
 organization has records for.** If a child you expect is absent, check their
 enrollment before reporting a defect.
 
-**An enrollment that was cancelled before it began never makes a child visible.**
-A family who signed and then withdrew before their child's first day was never a
-participant in service, so no record of them reaches this API. Every other state
-does make a child visible, including one that has `ended`: service happened, and
-your attendance and billing history must still be able to resolve who the child
-was. Concretely:
+**An enrollment that never represented service never makes a child visible.**
+Two states mean that, for two different reasons, and both are excluded: a family
+who withdrew before their child's first day, and a record that was created in
+error and should never have existed. Every other state does make a child visible,
+including one that has `ended` — service happened, and your attendance and billing
+history must still be able to resolve who the child was. Concretely:
 
 | Enrollment status | Child visible | Why |
 | --- | --- | --- |
@@ -426,16 +433,17 @@ was. Concretely:
 | `ending` | Yes | Still in service, with a known last day. |
 | `ended` | Yes | Served and concluded — history stays resolvable. |
 | `canceled` | **No** | Withdrawn before service began; never a participant. |
+| `voided` | **No** | Recorded in error; never represented service at all. |
 
-**Visibility can end, and you will see it end.** The one path is a `pending_start`
-enrollment that is cancelled: the child then leaves `GET /api/v1/children`, their
-household leaves `GET /api/v1/households`, and their relationships leave
-`GET /api/v1/relationships`. This is never silent — the enrollment itself remains
-readable and turns `canceled`, and cancelling bumps its `updated_at`, so a normal
-`GET /api/v1/enrollments?updated_since=...` pass delivers the change. **Treat a
-child's disappearance from `/children` as a signal to read `/enrollments`, not as
-data loss.** A child with commitments at two sites stays visible while any one of
-them is uncancelled.
+**Visibility can end, and you will see it end.** Either path — a `pending_start`
+enrollment that is canceled, or an enrollment voided as never-valid — removes the
+child from `GET /api/v1/children`, their household from `GET /api/v1/households`
+and their relationships from `GET /api/v1/relationships`. This is never silent:
+the enrollment itself stays readable, turns `canceled` or `voided`, and its
+`updated_at` advances, so a normal `GET /api/v1/enrollments?updated_since=...`
+pass delivers the change. **Treat a child's disappearance from `/children` as a
+signal to read `/enrollments`, not as data loss.** A child with commitments at two
+sites stays visible while any one of them still stands.
 
 ### 8.2 `GET /api/v1/children`
 
@@ -716,9 +724,9 @@ have no way to tell the two apart afterwards.
 | --- | --- | --- |
 | Children | archived — `status` becomes `inactive` | — (identity is not created through this API) |
 | Relationships | ended by status | — |
-| Enrollment | effective end — `end_date` is set | **cancelled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
-| Placements | **superseded** — a new placement names the one it replaces | **cancelled** — `POST /placements/cancel` |
-| Schedule assignments | **superseded** | **cancelled** — `POST /schedule-assignments/cancel` |
+| Enrollment | effective end — `end_date` is set | **canceled** before it starts (`POST /enrollments/end`), or **voided** if it was recorded in error after starting (`POST /enrollments/void`) |
+| Placements | **superseded** — a new placement names the one it replaces | **canceled** — `POST /placements/cancel` |
+| Schedule assignments | **superseded** | **canceled** — `POST /schedule-assignments/cancel` |
 | Attendance | **reversed** — a reversal fact supersedes the original | **reversed** — the fact is a tombstone, never a deletion |
 | Staff | effective end | — |
 | Locations, Households | not deletable through this API | — |
@@ -755,7 +763,7 @@ incremental synchronization. Read `status` to decide what a record means:
 `canceled` says it never took effect and nothing should be derived from it.
 
 One limit worth stating plainly rather than discovering: a record that has already
-closed cannot be cancelled. Once a placement or assignment has been superseded or
+closed cannot be canceled. Once a placement or assignment has been superseded or
 ended, it asserts real history that occupancy and billing already depend on, and
 denying it retroactively would be a different and much larger operation than this
 one. Cancellation applies while a record is still effective.
@@ -792,21 +800,30 @@ Every refusal uses one envelope:
 quote in a support conversation. An optional `details` object appears only where
 a refusal has structured detail.
 
-| `type` | Status | Typical `code` |
-| --- | --- | --- |
-| `invalid_request` | 400 | `invalid_limit`, `invalid_cursor`, `invalid_filter`, `invalid_updated_since`, `unsupported_grant_type` |
-| `unauthenticated` | 401 | `invalid_credential`, `installation_suspended`, `installation_revoked` |
-| `forbidden_scope` | 403 | scope missing for the operation |
-| `forbidden_resource` | 403 | reserved |
-| `not_found` | 404 | reserved |
-| `conflict` | 409 | reserved on the public API |
-| `rate_limited` | 429 | `rate_limited` |
-| `internal_error` | 500 | `internal_error` |
+| Status | `type` | What it means | What to do |
+| --- | --- | --- | --- |
+| 400 | `invalid_request` | The request is malformed — a bad cursor, limit, filter or grant type | Fix the request. Retrying it unchanged will fail again |
+| 401 | `unauthenticated` | No valid token: expired, revoked, or the installation is suspended | Exchange credentials for a new token. If it repeats, the installation needs attention |
+| 403 | `forbidden_scope` | The token is valid but the installation was not granted the scope this operation requires | Ask for the scope during provisioning. Do not retry |
+| 404 | `not_found` | The identifier does not exist **or** is outside your boundary — deliberately indistinguishable | Check the id came from a read you are authorized for. Never infer existence from a 404 |
+| 409 | `conflict` | A well-formed, authorized operation that cannot truthfully be performed in the record's current lifecycle state | Re-read the record. The state has moved, or the intent is wrong for it |
+| 422 | `validation_failed` | Understood and authorized, but the values break a domain rule — for example an effective date that does not move forward | Correct the values. Retrying unchanged will fail again |
+| 429 | `rate_limited` | A budget is exhausted | Wait for `RateLimit-Reset`, then retry |
+| 500 | `internal_error` | Alloy failed. Never your input | Retry with backoff. Quote `request_id` if it persists |
 
-**On 409:** Alloy repaired one *administrative* operation — revoking or rotating
-an already-inactive credential — from HTTP 500 to HTTP 409, because a business
-rule refusing is not a server fault. That repair is on the **operator** API, not
-on `/api/v1`. No public endpoint currently returns 409; the status is reserved.
+**409 is the one worth understanding.** It is not a server fault and not a bad
+request — it is a domain rule speaking. The lifecycle operations return it
+whenever the act being asked for is untrue of the record as it stands:
+
+| You asked to | It returns 409 when |
+| --- | --- |
+| Void an enrollment | Attendance was recorded under it, so service really happened |
+| Void an enrollment | It is already `canceled`, which already states a narrower truth |
+| Cancel a placement or schedule assignment | It has already ended or been superseded, so it asserts real history |
+| Set a schedule | An operational one already exists — read it and use `change` |
+
+Treat a 409 as information, not an error to retry through: re-read the record and
+decide which intent is actually true of it.
 
 ---
 

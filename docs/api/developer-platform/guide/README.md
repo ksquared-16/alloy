@@ -7,29 +7,59 @@ supersedes: []
 
 # Alloy API — Getting Started
 
-> ## What is callable today — read this before you build
->
-> **Implemented and callable:** the application, installation and credential
-> model; token exchange at `POST /api/v1/oauth/token`; bearer authentication;
-> `GET /api/v1/context`; **`GET /api/v1/locations`** — the first canonical
-> resource; the error envelope; rate limiting; request correlation.
-> These are described by the governed contract at
-> [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json), whose
-> coverage is enforced by a drift guard in both directions.
->
-> **Also callable:** Children, Households and Relationships; Enrollments,
-> Placements, Schedule assignments and the dated Schedule-days projection; Staff;
-> Attendance read and Attendance submission. Thirteen operations in total — see
-> the API Reference for each one's parameters, fields and errors.
->
-> **Not callable:** webhooks and event delivery (polling is the V1 posture and is
-> sufficient for every resource above), Communications, Financials, and any
-> self-service correlation management. Nothing in these guides describes an
-> endpoint that does not exist.
->
-> **Credential posture.** Sandbox credentials are issued today. Ask your Alloy
-> contact before planning a production cutover; the contract below is not
-> expected to change when that happens.
+The Alloy Public API is a read-and-write HTTP contract over a childcare
+operator's live operational data: sites and rooms, children and their households,
+enrollments, placements, schedules and attendance. It is JSON over HTTPS, versioned
+at `/api/v1`, and described by a governed OpenAPI 3.1 document.
+
+## Start here
+
+| | |
+| --- | --- |
+| **Base URL** | `https://<alloy-host>/api/v1` — Alloy issues your host with your credentials. One host per environment; sandbox first, production on request. The contract is identical in both. |
+| **Authentication** | Exchange `client_id` + `client_secret` for a 15-minute opaque bearer token. No refresh tokens, no OAuth redirect flow. |
+| **First call** | `GET /api/v1/context` — tells you which organization you are acting for, what you may do, and where. |
+| **Reference** | [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json) — OpenAPI 3.1, complete, and kept in step with the runtime by a drift guard in both directions. |
+| **Surface** | 22 operations across 18 paths: 1 token exchange, 10 reads, 10 governed writes, and `GET /context`. |
+| **Pagination & sync** | `next_cursor` within one pass, `sync_token` between passes, `updated_since` for reconciliation. |
+| **Rate limits** | 30 token exchanges/min, 600 reads/min, 120 writes/min — reads and writes have independent budgets. |
+| **Errors** | A single JSON envelope with `type`, `code`, `message` and `request_id` on every refusal. |
+
+## Sixty-second quickstart
+
+You need a `client_id` and `client_secret` from your Alloy contact.
+
+```bash
+# 1. Exchange credentials for a token (15 minutes).
+TOKEN=$(curl -s -X POST https://<alloy-host>/api/v1/oauth/token \
+  -H 'content-type: application/json' \
+  -d '{"grant_type":"client_credentials","client_id":"alloy_app_example","client_secret":"example-secret"}' \
+  | jq -r .access_token)
+
+# 2. Ask who you are. This never needs a scope.
+curl -s https://<alloy-host>/api/v1/context -H "authorization: Bearer $TOKEN"
+
+# 3. Read the sites you can reach.
+curl -s "https://<alloy-host>/api/v1/locations?limit=50" -H "authorization: Bearer $TOKEN"
+
+# 4. Page with the cursor; checkpoint with the sync token.
+curl -s "https://<alloy-host>/api/v1/locations?limit=50&cursor=<next_cursor>" -H "authorization: Bearer $TOKEN"
+
+# 5. Next time, resume from where you stopped.
+curl -s "https://<alloy-host>/api/v1/locations?since_token=<sync_token>" -H "authorization: Bearer $TOKEN"
+```
+
+**If a collection comes back empty, that is usually authority, not absence.**
+Read `GET /api/v1/context` and check the scope and the boundary: you see only
+locations inside your boundary, and only children with an enrollment at one of
+them.
+
+## What is not here
+
+No webhooks — polling with `sync_token` is the V1 posture and is sufficient for
+every resource. No Communications or Financials contract. No self-service
+correlation management. No endpoint in these guides is unimplemented: if it is
+documented, it is callable.
 
 ## The model, in four words
 
@@ -107,12 +137,12 @@ scopes:   attendance.write, children.read
 boundary: locations = [Downtown Campus, Riverside]
 ```
 
-V1 scopes:
+The thirteen grantable scopes:
 
 | Scope | Grants |
 |---|---|
 | `locations.read` | Read authorized sites, rooms, and operational units |
-| `children.read` | Read children with an enrollment at authorized locations (not one cancelled before it began) |
+| `children.read` | Read children with an enrollment at authorized locations (not one canceled before it began) |
 | `households.read` | Read the household shell for visible children |
 | `relationships.read` | Read visible child-adult relationships and effective pickup authority |
 | `relationships.contact.read` | Read email and phone for adults already visible through relationships |
@@ -121,7 +151,9 @@ V1 scopes:
 | `staff.read` | Read staff assigned to authorized locations |
 | `staff.contact.read` | Read email and phone for staff already visible through staff access |
 | `attendance.read` | Read attendance history for visible children |
-| `attendance.write` | Submit attendance facts for visible children |
+| `enrollment.write` | Start, end and void enrollments; assign, move and cancel placements |
+| `schedule.write` | Set, change and cancel schedule assignments |
+| `attendance.write` | Submit attendance facts, including corrections and reversals |
 
 `GET /api/v1/context` needs no scope. Every installation can read its own
 context, because a caller that cannot discover what it holds cannot work out why
