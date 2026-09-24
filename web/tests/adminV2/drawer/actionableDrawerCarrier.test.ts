@@ -439,6 +439,28 @@ describe("one resolveActionsForContext per drawer lifecycle — still", () => {
         expect(SHARED).not.toContain("earlyHeaderActions.catch(");
     });
 
+    it("THE CARRIER'S DEPARTMENT IS THE VIEW MODEL'S DEPARTMENT — same row, not a second read", () => {
+        const SHARED = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
+        /*
+         * This is the load-bearing convergence claim, and it rests on one fact: the early department
+         * and the composed one read the SAME work-unit row.
+         *
+         *   earlyDepartmentId = ctxDept || earlyWu.department_id
+         *   departmentId      = ctxDept || wuData.department_id || record._work_unit_department_id
+         *
+         * with `earlyWu` and `wuData` both being `wuRes.data`. They can therefore differ in exactly
+         * one case — the third fallback supplying what the first two did not — and in that case
+         * `earlyDepartmentId` is null, no early resolve runs and no carrier is published at all.
+         * If either ever read a different row this would stop being true silently.
+         */
+        expect(SHARED).toContain("const earlyWu = (wuRes.data ?? null)");
+        expect(SHARED).toContain("const wuData = wuRes.data as {");
+        expect(SHARED).toContain("const earlyDepartmentId = ctxDept || trimOrNull(earlyWu?.department_id) || null;");
+        expect(SHARED).toContain("ctxDept ||\n        trimOrNull(wuData?.department_id) ||");
+        // And the work unit is the single value this compose resolved, quoted by both.
+        expect(SHARED).toContain("workUnitId: workUnitId || null });");
+    });
+
     it("UNRESOLVED DEPARTMENT CANNOT PRODUCE A WRONG ACTION SET", () => {
         const SHARED = read("lib/adminV2/viewModel/drawer/opportunity/sharedCanonicalDeps.ts");
         // Publishing is gated on the department being known, and the published type says so.
