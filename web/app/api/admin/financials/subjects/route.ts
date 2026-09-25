@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
-import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
+import { resolveFinancialSubjectCohort, FINANCIAL_SUBJECT_SCAN_CAP } from "@/lib/financials/workspace/resolveFinancialSubjects";
+import { readAccountSubjectFacts } from "@/lib/financials/workspace/readAccountSubjectFacts";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -89,12 +91,26 @@ export async function GET(request: NextRequest) {
 
     const requestedSite = new URL(request.url).searchParams.get("site_location_id")?.trim() || null;
     try {
+        /*
+         * ── ONE ROUND TRIP FOR THE WHOLE COHORT ────────────────────────────────────────────────
+         *
+         * Measured on deployed staging, this branch was six sequential remote waves over TWELVE
+         * households at a mean 113 ms each, while assembling the rows from them took 0.2 ms. The
+         * facts are acquired once here; every rule that decides what they mean still runs in the
+         * cohort resolver below.
+         */
+        const facts = await readAccountSubjectFacts(supabase, {
+            orgId: ctx.orgId,
+            scanCap: FINANCIAL_SUBJECT_SCAN_CAP,
+            enrollmentProcessKey: ENROLLMENT_PROCESS_KEY,
+        });
+        mark("acquire");
         const cohort = await resolveFinancialSubjectCohort(supabase, {
             orgId: ctx.orgId,
             siteScope: ctx.siteScope === "restricted" ? "restricted" : "all",
             allowedSiteLocationIds: ctx.siteScope === "restricted" ? (ctx.allowedSiteLocationIds ?? []) : [],
             activeSiteLocationId: requestedSite,
-        }, mark);
+        }, mark, facts);
         const body = JSON.stringify({ ok: true, ...cohort });
         mark("serialize");
         return new NextResponse(body, {

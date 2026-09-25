@@ -123,6 +123,111 @@ function resolvingClient(rows: Record<string, Array<Record<string, unknown>>>) {
     return { from: (t: string) => builder(t) } as never;
 }
 
+describe("the account cohort is acquired ONCE", () => {
+    /*
+     * ── THE MEASURED REPAIR, GATED BEHAVIOURALLY ───────────────────────────────────────────────
+     *
+     * Deployed instrumentation decomposed this branch into six sequential remote waves over TWELVE
+     * households — a mean 113ms per wave, while assembling the rows took 0.2ms. The cost followed
+     * the NUMBER OF ROUND TRIPS, not the rows.
+     *
+     * These assertions do not read the source for a helper name. They drive the real cohort with
+     * the holding client and count the waves it actually waits on, because that count IS the
+     * repair. A future edit that reintroduces a dependent read reddens here even if it looks
+     * perfectly reasonable in isolation.
+     */
+    const FACTS = {
+        households: [{ id: "cust-1", name: "H" }],
+        members: [{ id: "mem-1", customer_id: "cust-1", display_name: "A B", first_name: "A", last_name: "B", is_active: true }],
+        agreement_sites_direct: [{ customer_id: "cust-1", site_location_id: "site-1" }],
+        agreement_sites_orphan: [],
+        orphan_members: [],
+        contacts: [{ customer_id: "cust-1", role_type: "parent", status: "active", end_date: null, first_name: "R", last_name: "P" }],
+        placements: [{ customer_member_id: "mem-1", program_category_id: "prog-1", room_location_id: "room-1", status: "active" }],
+        enrolment_intents: [],
+        program_labels: [{ id: "prog-1", label: "Toddler", key: "toddler" }],
+        room_labels: [{ id: "room-1", label: "Room A" }],
+    };
+
+    it("waits on ZERO remote waves when the facts are supplied", async () => {
+        const { client, held } = holdingClient();
+        let settled = false;
+        const done = resolveFinancialSubjectCohort(
+            client,
+            { orgId: "org", siteLocationIds: [] } as never,
+            undefined,
+            FACTS as never,
+        ).then((v) => { settled = true; return v; }, (e) => { settled = true; throw e; });
+        await flush();
+        /* Everything the cohort needs already arrived; nothing may be asked for again. */
+        expect(held.map((h) => h.table), `the cohort issued reads it was already given: ${held.map((h) => h.table).join(", ")}`).toEqual([]);
+        await done;
+        expect(settled).toBe(true);
+    });
+
+    it("still produces the same cohort from those facts", async () => {
+        const { client } = holdingClient();
+        const cohort = await resolveFinancialSubjectCohort(
+            client,
+            { orgId: "org", siteLocationIds: [] } as never,
+            undefined,
+            FACTS as never,
+        );
+        expect(cohort.subjects.length, "one household in, one household out").toBe(1);
+        const row = cohort.subjects[0];
+        expect(row.customerId).toBe("cust-1");
+        expect(row.householdName).toBe("H");
+        expect(row.siteLocationIds).toEqual(["site-1"]);
+        expect(row.childNames, "the member rule still runs here").toEqual(["A B"]);
+        expect(row.contactNames, "the contact rule still runs here").toEqual(["R P"]);
+        expect(row.programs.map((p) => p.label), "the label fallback still runs here").toEqual(["Toddler"]);
+        expect(row.rooms.map((r) => r.label)).toEqual(["Room A"]);
+    });
+
+    it("keeps the rules in the application, not in the acquisition", async () => {
+        /*
+         * The acquisition carries the COLUMNS the rules read, deliberately, so the rules can still
+         * run. Supplying rows that every rule must reject proves the rules are still the ones
+         * deciding: an inactive child, an ended contact, a child-role contact, and a placement that
+         * is not live.
+         */
+        const { client } = holdingClient();
+        const cohort = await resolveFinancialSubjectCohort(
+            client,
+            { orgId: "org", siteLocationIds: [] } as never,
+            undefined,
+            {
+                ...FACTS,
+                members: [{ ...FACTS.members[0], is_active: false }],
+                contacts: [
+                    { ...FACTS.contacts[0], end_date: "2026-01-01" },
+                    { customer_id: "cust-1", role_type: "child", status: "active", end_date: null, first_name: "K", last_name: "P" },
+                ],
+                placements: [{ ...FACTS.placements[0], status: "withdrawn" }],
+            } as never,
+        );
+        const row = cohort.subjects[0];
+        expect(row.childNames, "is_active === false is the application's rule").toEqual([]);
+        expect(row.contactNames, "ended and child-role contacts are the application's rules").toEqual([]);
+        expect(row.programs, "placement liveness is the application's rule").toEqual([]);
+        expect(row.rooms).toEqual([]);
+    });
+
+    it("reads the extra household row as truncation, and does not show it", async () => {
+        /* The acquisition returns cap + 1. The verdict stays with the caller. */
+        const { client } = holdingClient();
+        const many = Array.from({ length: 4 }, (_, i) => ({ id: `c${i}`, name: `H${i}` }));
+        const cohort = await resolveFinancialSubjectCohort(
+            client,
+            { orgId: "org", siteLocationIds: [], scanCap: 3 } as never,
+            undefined,
+            { ...FACTS, households: many, agreement_sites_direct: many.map((m) => ({ customer_id: m.id, site_location_id: "site-1" })) } as never,
+        );
+        expect(cohort.truncated, "cap + 1 rows means there were more").toBe(true);
+        expect(cohort.subjects.length, "the extra row is not a household to show").toBe(3);
+    });
+});
+
 describe("the instrument actually fires", () => {
     /*
      * ── WHY THIS EXISTS ALONGSIDE THE SOURCE GATES ─────────────────────────────────────────────
@@ -302,7 +407,7 @@ describe("the account list's own boundaries are published", () => {
          * exactly what let a slice guess wrong about what was inside it, so the route hands the
          * mark to the resolver and the resolver names its phases.
          */
-        expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark\)/);
+        expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark(, facts)?\)/);
         const COHORT = readFileSync(join(process.cwd(), "lib/financials/workspace/resolveFinancialSubjects.ts"), "utf8");
         /*
          * A span may carry its own shape in the label — `households_2p_n847` says the walk took two
