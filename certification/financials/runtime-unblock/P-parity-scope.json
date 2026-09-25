@@ -1,0 +1,49 @@
+{
+  "focusScoped": {
+    "subjectFilter": null,
+    "account": null,
+    "kpis": {
+      "CURRENT BALANCE": "$1,412.87",
+      "DUE": "$1,912.00",
+      "PAST DUE": "$1,450.00",
+      "RESPONSIBILITY": "$1,487.87",
+      "PAID": "$75.00",
+      "AVAILABLE PREPAID": "$125.00"
+    },
+    "discountSummary": "Sibling discount (QA specimen) · 10%",
+    "ledgerRows": 116
+  },
+  "focusAll": {
+    "subjectFilter": null,
+    "account": null,
+    "kpis": {
+      "CURRENT BALANCE": "$1,412.87",
+      "DUE": "$1,912.00",
+      "PAST DUE": "$1,450.00",
+      "RESPONSIBILITY": "$1,487.87",
+      "PAID": "$75.00",
+      "AVAILABLE PREPAID": "$125.00"
+    },
+    "discountSummary": "Sibling discount (QA specimen) · 10%",
+    "ledgerRows": 116
+  },
+  "accounts": {
+    "subjectFilter": "46105cd4-6030-417d-a7cb-faf409071c0d",
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "kpis": {
+      "CURRENT BALANCE": "$2,023.87",
+      "DUE": "$1,912.00",
+      "PAST DUE": "$1,525.00",
+      "RESPONSIBILITY": "$2,098.87",
+      "PAID": "$75.00",
+      "AVAILABLE PREPAID": "$125.00"
+    },
+    "discountSummary": "Sibling discount (QA specimen) · 10%",
+    "ledgerRows": 116
+  },
+  "diffs": [
+    "KPI CURRENT BALANCE: focus(all)=$1,412.87 accounts=$2,023.87",
+    "KPI PAST DUE: focus(all)=$1,450.00 accounts=$1,525.00",
+    "KPI RESPONSIBILITY: focus(all)=$1,487.87 accounts=$2,098.87"
+  ]
+}

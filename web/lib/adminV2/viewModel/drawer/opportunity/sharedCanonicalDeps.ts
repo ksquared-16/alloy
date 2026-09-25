@@ -1,3 +1,4 @@
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 /**
  * CP-1 / S4.2 — Shared Canonical Dependencies (Module C).
  *
@@ -14,6 +15,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
+import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
+import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
 import {
@@ -25,7 +28,10 @@ import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/reso
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
-import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import {
+    applyEffectiveEnrollmentStagesToOpportunityRows,
+    startEffectiveEnrollmentStagesForOpportunityRows,
+} from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -40,6 +46,21 @@ export type ResolveSharedCanonicalDepsParams = {
     opportunityId: string;
     departmentId: string | null;
     workUnitId: string | null;
+    /**
+     * Publish the canonical header action set the INSTANT it resolves — phase 1 of the two-phase
+     * selected-drawer delivery.
+     *
+     * It is handed `departmentId` as a non-null string on purpose. The early resolve only runs when
+     * department authority is already known, and this signature makes that a type-level fact: there
+     * is no way to publish an action set that was resolved against an unknown department.
+     */
+    /** Forwarded to the visible-payload builder: canonical record facts, the moment each is known. */
+    onCanonicalTruth?: (fields: Record<string, unknown>) => void;
+    onEarlyHeaderActions?: (published: {
+        resolved: ResolvedActionsBySlot;
+        departmentId: string;
+        workUnitId: string | null;
+    }) => void;
 };
 
 /** A "skipped" foundation — the compose short-circuits with the same reason it did inline. */
@@ -90,6 +111,16 @@ export async function resolveSharedCanonicalDeps(
     const { supabase, gate, opportunityId } = params;
     const orgId = gate.orgId;
     const phases_ms: Record<string, number> = {};
+    /*
+     * THE WALL THIS FUNCTION ACTUALLY OCCUPIES.
+     *
+     * Without it the only way to size shared deps was to add up its named legs, and that answer was
+     * wrong twice over: `status_and_dept_ms` and `household_persons_ms` measure the SAME join (the
+     * household leg is nested inside it), and the mission-stage attach at the end was not timed at
+     * all. A measured wall beside the named legs turns the leftover into an explicit remainder
+     * instead of something to be apportioned.
+     */
+    const sharedStart = Date.now();
 
     /**
      * The record layout is a function of the ORG and the entity type — it does not read the
@@ -107,6 +138,41 @@ export async function resolveSharedCanonicalDeps(
         .eq("org_id", orgId)
         .single();
     phases_ms.opportunity_select_ms = Date.now() - tOpp0;
+
+    /*
+     * MISSION STAGES START HERE, NOT AT THE END OF THE CHAIN.
+     *
+     * `mission_stages_ms` (P50 219ms) was the last of four SERIAL top-level stages:
+     * base_subject 260 -> visible_entity 875 -> status_and_dept 218 -> mission_stages 219, which
+     * reconcile against `shared_deps_wall` (P50 1,634ms) with a per-sample remainder of 2ms. It was
+     * last only by source order.
+     *
+     * Its ROUND TRIP reads exactly three fields off the context row: `id`, `stage_key` and
+     * `lifecycle_stage_key`. All three are columns of OPPORTUNITY_CANONICAL_ADMIN_SELECT, so they
+     * are canonical the moment `oppRow` lands -- it never needed the composed record. What DOES
+     * need the record is the apply step, which decorates the returned row; that stays where it was.
+     *
+     * Modelled per sample on deployed 38248a2d (n=23): moving the load here recovers a P50 of 222ms
+     * and a P95 of 432ms of critical path, because visible_entity + status_and_dept (P50 ~1,093ms)
+     * dominates this load completely.
+     *
+     * The other candidate, running the status/dept block early, was REFUTED on the same data: its
+     * household leg seeds its person map from `_opportunity_persons`, which
+     * `attachOpportunityPersonsShell` writes inside visible_entity, and ids present in that map are
+     * then excluded from the `persons` fetch. Starting it earlier would change which names resolve.
+     * That is an output change, not a schedule change, so it is not taken here.
+     */
+    const tMission0 = Date.now();
+    const missionLoadP = startEffectiveEnrollmentStagesForOpportunityRows({
+        supabase,
+        orgId,
+        // The not-found guard is below; an absent row yields an empty start, not a thrown read.
+        rows: oppRow ? [oppRow as Record<string, unknown>] : [],
+        logLabel: "drawer-mission",
+    }).then((loaded) => {
+        phases_ms.mission_stages_ms = Date.now() - tMission0;
+        return loaded;
+    });
 
     if (oppErr || !oppRow) {
         return { ok: false, reason: "opportunity_not_found" };
@@ -137,6 +203,99 @@ export async function resolveSharedCanonicalDeps(
 
     phases_ms.base_subject_ms = phases_ms.opportunity_select_ms + phases_ms.record_layout_ms;
     const tVisible0 = Date.now();
+    /*
+     * THE CANONICAL ACTION AUTHORITY, RESOLVED AT ITS OWN DEPENDENCY BOUNDARY.
+     *
+     * `resolveActionsForContext` needs the org, the opportunity id, the department and work unit,
+     * the opportunity's status key and metadata, and the lifecycle stage from work-unit metadata.
+     * All of those exist once the opportunity select and the layout/work-unit join have landed - it
+     * reads nothing from the visible payload, the children shell, household persons, photos or any
+     * capability card, so it can start beside them instead of behind them.
+     *
+     * It is threaded to the first-paint consumer rather than recomputed there: ONE resolver, one
+     * input contract, one answer. Moving the computation earlier is not itself a saving - measured,
+     * the resolver costs ~140ms inside a first-paint block whose ~586ms wall is set by
+     * `attention_bundle` at ~260ms - so this exists to make the authority DELIVERABLE early, which
+     * is where the value is.
+     *
+     * Resolves to null when it could not be attempted. Null means "not resolved", never an
+     * authoritative empty action set.
+     */
+    const earlyWu = (wuRes.data ?? null) as { department_id?: string | null; metadata?: unknown } | null;
+    /*
+     * ONLY WHEN THE INPUTS ARE PROVABLY THE SAME ONES.
+     *
+     * The first-paint resolver is handed the fully-derived `departmentId`, whose last fallback is
+     * `record._work_unit_department_id` — a field that does not exist until the visible payload has
+     * been built. Resolving early with a null department where the later path would have found one
+     * would produce a DIFFERENT action set, which is a correctness change wearing a performance
+     * costume. So the early resolution is attempted only when the department is already known from
+     * the request context or the work-unit row; otherwise this stays null and the first-paint
+     * resolver runs exactly as it always has.
+     *
+     * `status_key` and `metadata` are safe to read from the selected row: the visible payload adds
+     * underscore-prefixed fields and child collections and never rewrites either.
+     *
+     * Deliberately NOT wrapped in `.catch`. A rejection must keep propagating the way it always did
+     * — swallowing it here would turn a failed resolution into an authoritative empty action set.
+     */
+    const earlyDepartmentId = ctxDept || trimOrNull(earlyWu?.department_id) || null;
+    const earlyHeaderActions: Promise<ResolvedActionsBySlot> | null =
+        earlyDepartmentId ?
+            resolveActionsForContext(supabase, {
+                orgId,
+                surface: "record_header",
+                entityType: "opportunity",
+                entityId: opportunityId,
+                departmentId: earlyDepartmentId,
+                workUnitId: workUnitId || null,
+                hintOpportunityStatusKey: trimOrNull((oppRow as { status_key?: unknown }).status_key),
+                hintOpportunityMetadata:
+                    (oppRow as { metadata?: unknown }).metadata
+                    && typeof (oppRow as { metadata?: unknown }).metadata === "object" ?
+                        ((oppRow as { metadata?: unknown }).metadata as Record<string, unknown>)
+                    :   null,
+                lifecycleViewStageKey: stageKeyFromLifecycleWorkUnitMetadata(
+                    (earlyWu?.metadata as Record<string, unknown> | null) ?? null,
+                ),
+            })
+        :   null;
+
+    /*
+     * PUBLISH IT THE MOMENT IT EXISTS — WITHOUT TOUCHING THE PROMISE THE DRAWER AWAITS.
+     *
+     * `then(onOk, onErr)` derives a SECOND promise and handles only that one's rejection.
+     * `earlyHeaderActions` itself is handed on untouched and still rejects into
+     * `resolveOpportunityDrawerFirstPaintDependencies` exactly as it always has, so a failed
+     * resolution remains a failure. The rejection arm here deliberately publishes NOTHING: it exists
+     * so the derived promise is not an unhandled rejection, and converting a refusal into an
+     * authoritative empty action set is the one thing phase 1 must never do.
+     */
+    if (earlyHeaderActions && earlyDepartmentId && params.onEarlyHeaderActions) {
+        const publish = params.onEarlyHeaderActions;
+        const publishedDepartmentId: string = earlyDepartmentId;
+        void earlyHeaderActions.then(
+            (resolved) => {
+                /*
+                 * The publisher is a SIDE CHANNEL and may never cost the drawer anything.
+                 *
+                 * `then(onOk, onErr)`'s second arm handles the ORIGINAL promise's rejection, not a
+                 * throw from the first arm — that would reject the derived promise with nobody
+                 * listening. Phase 1 failing to be delivered must cost the operator earliness and
+                 * nothing else.
+                 */
+                try {
+                    publish({ resolved, departmentId: publishedDepartmentId, workUnitId: workUnitId || null });
+                } catch {
+                    /* no carrier for this lifecycle; the drawer is unaffected */
+                }
+            },
+            () => {
+                /* The real consumer owns this rejection. Phase 1 simply never arrives. */
+            },
+        );
+    }
+
     const record = await buildOpportunityDrawerVisiblePayload(
         supabase,
         orgId,
@@ -145,13 +304,42 @@ export async function resolveSharedCanonicalDeps(
         // Without the actor this payload reaches the Focus Panel with `_inquiry_children` carrying no
         // `resolved_photo_url`, so every child avatar placement falls back to initials while the same
         // children resolve correctly through the entity-record path (R-019).
-        { hintDepartmentId: ctxDept, documentActor: documentActorFromAdminGate(gate) }
+        {
+            hintDepartmentId: ctxDept,
+            documentActor: documentActorFromAdminGate(gate),
+            onCanonicalTruth: params.onCanonicalTruth,
+        }
     );
     phases_ms.visible_entity_ms = Date.now() - tVisible0;
     // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
     // response `phases_ms` (drawer_primary_* = the parallel FK batch, children_* = child orientation).
     const visiblePrimaryPhase = (record as { _drawer_primary_phase_ms?: Record<string, number> })._drawer_primary_phase_ms;
     if (visiblePrimaryPhase) for (const [k, v] of Object.entries(visiblePrimaryPhase)) phases_ms[`visible_${k}`] = v;
+    /*
+     * S2 / S3 — WHEN THE CARD-GATE FACTS BECAME CANONICAL, as an offset on this request's clock.
+     *
+     * The Focus Panel holds `children` and `household` reserved behind ONE gate,
+     * `hasSubjectIdentityTruth`, which is satisfied by `person.primary_contact_name` or
+     * `_inquiry_children`. Both are produced inside the visible-entity shell join: the children
+     * roster by the children leg, the contact by the persons leg. Measured on deployed 4899d4d9,
+     * n=22 cold switches, those two cells are reserved from P50 122ms and do not clear until P50
+     * 2,680ms — and the gate keys are absent in 22 of 22, so the cards are waiting for the FULL
+     * DRAWER rather than for the fact.
+     *
+     * A duration cannot answer "how long after the fact was canonical". These are the instants,
+     * rebased onto `sharedStart` so a client milestone can be subtracted from them for the SAME
+     * event. The absolute stamps are deleted here so no wall-clock value is serialized.
+     */
+    for (const [leg, mark] of [
+        ["shell_children_ms", "children_truth_ready_ms"],
+        ["shell_persons_ms", "contact_truth_ready_ms"],
+    ] as const) {
+        const abs = phases_ms[`visible_${leg}__end_abs`];
+        if (typeof abs === "number") phases_ms[mark] = abs - sharedStart;
+    }
+    for (const k of Object.keys(phases_ms)) {
+        if (k.endsWith("__end_abs")) delete phases_ms[k];
+    }
     const childrenShellPhase = (record as { _children_shell_phase_ms?: Record<string, number> })._children_shell_phase_ms;
     if (childrenShellPhase) {
         for (const [k, v] of Object.entries(childrenShellPhase)) phases_ms[`children_${k}`] = v;
@@ -187,7 +375,9 @@ export async function resolveSharedCanonicalDeps(
     const tHousehold0 = Date.now();
     const [, deptMetadata, statusDefsPack] = await Promise.all([
         attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record).then((r) => {
-            phases_ms.household_persons_ms = Date.now() - tHousehold0;
+            // NESTED INSIDE `status_and_dept_ms`, not serial with it: both clocks start on adjacent
+            // lines and this leg resolves inside that same Promise.all. Summing the two double-counts.
+            phases_ms.household_persons_nested_ms = Date.now() - tHousehold0;
             return r;
         }),
         departmentId ?
@@ -234,12 +424,21 @@ export async function resolveSharedCanonicalDeps(
     });
     // Mission stage for Current Work: Effective Process Position when participants diverge.
     // Lifecycle rail still reflects shared/context stage for chrome; stage-work uses Mission.
-    const [recordWithEpp] = await attachEffectiveEnrollmentStagesToOpportunityRows({
-        supabase,
-        orgId,
-        rows: [record as Record<string, unknown>],
-        logLabel: "drawer-mission",
-    });
+    /*
+     * THE LAST SERIAL AWAIT IN SHARED DEPS, AND THE ONE NOBODY HAD TIMED.
+     *
+     * Shared deps measured ~1,974ms against ~1,667ms of named walls, leaving ~307ms unattributed.
+     * This is the only database round trip in that gap: everything else after the prep join is pure
+     * computation over values already in hand. Timing it is what makes the remainder a number rather
+     * than a suspicion.
+     */
+    // The round trip started right after the opportunity select; this is only the pure apply, which
+    // needs the composed record because that is the row returned to every downstream consumer.
+    const [recordWithEpp] = applyEffectiveEnrollmentStagesToOpportunityRows(
+        [record as Record<string, unknown>],
+        await missionLoadP,
+        "drawer-mission",
+    );
     const mission = resolveContextMissionStages({
         contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
         effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
@@ -257,6 +456,7 @@ export async function resolveSharedCanonicalDeps(
             ? lifecycle_rail?.stages.find((s) => s.key === railStageKey)?.label ?? null
             : null);
 
+    phases_ms.shared_deps_total_ms = Date.now() - sharedStart;
     return {
         ok: true,
         orgId,
@@ -275,6 +475,7 @@ export async function resolveSharedCanonicalDeps(
         lifecycle_rail,
         currentStageKey,
         currentStageLabel,
+        earlyHeaderActions,
         phases_ms,
     };
 }

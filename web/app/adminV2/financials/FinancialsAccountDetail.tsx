@@ -163,6 +163,12 @@ export default function FinancialsAccountDetail({
                 context={context}
                 showDetailsAction={showDetailsAction}
                 summaryVariant={summaryVariant}
+                /*
+                 * THE WORKSPACE'S SUBJECT IS THE ACCOUNT. It opens on the shared Details surface
+                 * rather than on a compact card with a disabled way in — which is what left this
+                 * host without the relationship row, the discount gear or Manage payments.
+                 */
+                detailsAreTheSurface={summaryVariant === "account"}
                 coordination={coordination}
             />
         </div>

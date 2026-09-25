@@ -34,6 +34,17 @@ import {
 } from "@/lib/financials/reductions/resolveFinancialReductions";
 
 const src = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
+/**
+ * Source with comments stripped, for the gates below.
+ *
+ * They are about what a file COMPUTES, and a file that names the reduction authority in a comment
+ * — to say the figure beside it came from there, and was not worked out here — is doing the
+ * opposite of the thing being forbidden. Scanning raw text refused exactly that: an honest
+ * provenance note reddened the same lock as a real second authority would, so the cheapest way to
+ * stay green was to stop writing down where a number came from.
+ */
+const executable = (rel: string) =>
+    src(rel).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 /** The tenant's canonical specimen: a 10% sibling discount, as authored. */
 const SIBLING_DISCOUNT: ReductionPolicy = {
@@ -131,16 +142,23 @@ describe("THE GATE — the reduction authority is the only one doing this arithm
      * not say which was right.
      */
     it("keeps reduction math out of the Add command authority", () => {
-        const add = src("lib/adminV2/actions/definitions/financialChargeActions.ts");
+        const add = executable("lib/adminV2/actions/definitions/financialChargeActions.ts");
         for (const forbidden of ["resolveFinancialReductions", "sibling_discount", "min_siblings"]) {
             expect(add, `Add does not compute ${forbidden}`).not.toContain(forbidden);
         }
     });
 
     it("keeps reduction math out of the Add operator surface", () => {
-        const cmd = src("components/operationalCards/AddChargeCommand.tsx");
+        const cmd = executable("components/operationalCards/AddChargeCommand.tsx");
         expect(cmd).not.toContain("resolveFinancialReductions");
         expect(cmd, "the surface states economics, it does not compute discounts").not.toContain("siblingRank");
+        /*
+         * The figure it now shows must be one it was HANDED. `previewDiscountAmount` is the
+         * resolver's, formatted by the adapter; arithmetic on a rate here would be the second
+         * authority this gate exists to prevent.
+         */
+        expect(cmd, "the discount money is carried, not derived").toContain("specimen.previewDiscountAmount");
+        expect(cmd, "no rate arithmetic on the operator surface").not.toMatch(/basisValue\s*[*/]/);
     });
 
     /* Eligibility is read from canonical facts server-side, never taken from a payload. */

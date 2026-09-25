@@ -1,0 +1,185 @@
+{
+  "trusted_host_action_id": "tha_3fcff1e5f78307",
+  "query_hash": "fbbdebc2239d7074b4b7693b45e2647f7de9c82fb22c5572ebeb9617f73bb196",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-22T22:29:36.148Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3fcff1e5f78307",
+    "query_hash": "fbbdebc2239d7074b4b7693b45e2647f7de9c82fb22c5572ebeb9617f73bb196",
+    "authorization_id": "grnt_122b4b73ec454bcd",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-22T22:29:38.336Z",
+    "question_ids": [
+      "spaces_rules_inventory"
+    ],
+    "questions": {
+      "spaces_rules_inventory": {
+        "question_id": "spaces_rules_inventory",
+        "row_count": null,
+        "rows": [
+          {
+            "ratio_rules": [
+              {
+                "id": "31bc3220-0499-42f8-89b6-6901abf7c409",
+                "scope": "room",
+                "site": null,
+                "room": "Infant A",
+                "room_role": "(null)",
+                "program": null,
+                "age_group": null,
+                "effective_start": "2026-01-01",
+                "effective_end": null,
+                "tiers": [
+                  {
+                    "required_staff": 1,
+                    "max_children": 4,
+                    "sort": 100
+                  },
+                  {
+                    "required_staff": 2,
+                    "max_children": 8,
+                    "sort": 200
+                  },
+                  {
+                    "required_staff": 3,
+                    "max_children": 12,
+                    "sort": 300
+                  }
+                ]
+              }
+            ],
+            "counts": {
+              "capacity_rules": 8,
+              "ratio_rules": 1,
+              "ratio_tiers": 3,
+              "operating_windows": 0,
+              "schedule_rules": 0
+            },
+            "scope_distribution": [
+              {
+                "family": "capacity",
+                "scope": "room",
+                "rows": 8
+              },
+              {
+                "family": "ratio",
+                "scope": "room",
+                "rows": 1
+              }
+            ],
+            "closed_versions": {
+              "capacity_closed": 3,
+              "ratio_closed": 0
+            },
+            "program_categories": [
+              {
+                "id": "80723acb-4884-4da9-a862-b4748e19a8b4",
+                "label": "Infant",
+                "key": "infant"
+              },
+              {
+                "id": "237c9769-3b78-4265-8836-3e4d09e86b34",
+                "label": "Infant",
+                "key": "infant"
+              },
+              {
+                "id": "4a77ea9e-8641-4d05-97dd-a4f91651b07a",
+                "label": "Infant",
+                "key": "infant"
+              },
+              {
+                "id": "8c794d51-1081-4a26-b77e-f13ed128e2ea",
+                "label": "Kindergarten",
+                "key": "kindergarten"
+              },
+              {
+                "id": "963a3bd0-3a98-499e-ac11-6384b8795030",
+                "label": "Pre-K",
+                "key": "pre_k"
+              },
+              {
+                "id": "aed7556e-14bd-48bb-a9a2-4a94eb47c0ac",
+                "label": "Pre-K",
+                "key": "pre_k"
+              },
+              {
+                "id": "5e6856e4-8b3d-4a6c-abea-ac7ad8b49c2c",
+                "label": "Pre-K",
+                "key": "pre_k"
+              },
+              {
+                "id": "cf8f7031-1657-46dd-8b59-df1abf9f4627",
+                "label": "Preschool",
+                "key": "preschool"
+              },
+              {
+                "id": "923d7789-b86c-4f0d-bb04-8a9e58dceb83",
+                "label": "Preschool",
+                "key": "preschool"
+              },
+              {
+                "id": "2147d374-8112-4e88-8342-b49c9b95fc7b",
+                "label": "Preschool",
+                "key": "preschool"
+              },
+              {
+                "id": "50a71b79-8be5-488f-b3bc-2d9102c77568",
+                "label": "School Age",
+                "key": "school_age"
+              },
+              {
+                "id": "31287001-09db-4d42-9d58-483767bd83c9",
+                "label": "School Age",
+                "key": "school_age"
+              },
+              {
+                "id": "5e9e715a-eb8f-4534-bcfe-a8a74ed883d9",
+                "label": "School Age",
+                "key": "school_age"
+              },
+              {
+                "id": "38472624-1193-4583-84dd-69ee79be4940",
+                "label": "Stage4 OK3 w9k7sx",
+                "key": "stage4_ok3_w9k7sx"
+              },
+              {
+                "id": "29b6d0c7-ca8f-4ff7-bf52-77552b5e7f61",
+                "label": "Stage4 OK3 w9k7sx",
+                "key": "stage4_ok3_w9k7sx"
+              },
+              {
+                "id": "3f087047-76da-43fa-b256-b704dd2debc0",
+                "label": "Stage4 OK3 w9k7sx",
+                "key": "stage4_ok3_w9k7sx"
+              },
+              {
+                "id": "08e30247-4aeb-4bb8-890d-cdbb54979b6f",
+                "label": "Toddler",
+                "key": "toddler"
+              },
+              {
+                "id": "b9fa2703-3a3c-4ac6-a6b3-3e4e262527a2",
+                "label": "Toddler",
+                "key": "toddler"
+              },
+              {
+                "id": "d65c987d-7d6b-4ac7-8647-f2c94d22fd8f",
+                "label": "Toddler",
+                "key": "toddler"
+              }
+            ],
+            "observed_at": "2026-09-22 22:29:38.288259+00"
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

@@ -954,15 +954,45 @@ export async function attachOpportunityInquiryChildrenShell(
         });
 
   const tOverlay0 = Date.now();
-  const placementLabeledP = enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase);
-  const processInstancesP = listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId });
-  const durableFactsP = resolveDurableFactsForChildren(
-    supabase as never,
-    orgId,
-    inquiryChildrenBase.map((c) => ({
-      customerMemberId: c.customer_member_id,
-      siteLocationId: c.location_id ?? null,
-    })),
+  /*
+   * THE THREE LEGS, TIMED INDIVIDUALLY — because the wall is the SLOWEST of them, not their sum.
+   *
+   * `overlay_parallel_fetch_ms` measured 554-627ms on deployed 14be94ea and is the largest true wall
+   * inside the children shell (857-875ms), which is itself the largest wall inside `visible_entity`
+   * (1,162-1,270ms) on the chain that ends at FIRST ACTIONABLE. It has never been possible to say
+   * WHICH leg owns it, so the repair could only have been chosen by guessing among three.
+   *
+   * Timing starts where each promise is CREATED, which is where its work begins — these are started
+   * eagerly and joined below, so a clock opened at the join would measure the remainder of the
+   * slowest leg and report the other two as instant.
+   *
+   * `finally` rather than `then`: a leg that rejects still consumed the time, and the caller's own
+   * error handling must see the rejection unchanged.
+   */
+  const leg = <T,>(name: string, p: Promise<T>): Promise<T> => {
+    const started = Date.now();
+    return p.finally(() => {
+      cph[name] = Date.now() - started;
+    });
+  };
+  const placementLabeledP = leg(
+    "overlay_placement_labels_ms",
+    enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryChildrenBase),
+  );
+  const processInstancesP = leg(
+    "overlay_process_instances_ms",
+    listEnrollmentInstancesForLead(supabase as never, { orgId, opportunityId }),
+  );
+  const durableFactsP = leg(
+    "overlay_durable_facts_ms",
+    resolveDurableFactsForChildren(
+      supabase as never,
+      orgId,
+      inquiryChildrenBase.map((c) => ({
+        customerMemberId: c.customer_member_id,
+        siteLocationId: c.location_id ?? null,
+      })),
+    ),
   );
   const [placementLabeled, processInstances, durableFacts] = await Promise.all([
     placementLabeledP,
@@ -970,6 +1000,10 @@ export async function attachOpportunityInquiryChildrenShell(
     durableFactsP,
   ]);
   cph.overlay_parallel_fetch_ms = Date.now() - tOverlay0;
+  // Row counts, so a slow leg can be told apart from a leg handed too much work. The children count
+  // is the input scale all three share.
+  cph.overlay_children_in = inquiryChildrenBase.length;
+  cph.overlay_process_instances_rows = Array.isArray(processInstances) ? processInstances.length : -1;
   // Apply in precedence order (pure, synchronous).
   let inquiryChildrenOut = applyProcessInstanceParticipation(placementLabeled, processInstances, ocmStatusLabelByKey);
   inquiryChildrenOut = applyDurableOperationalFacts(inquiryChildrenOut, durableFacts);
@@ -1485,6 +1519,15 @@ export type BuildOpportunityDrawerVisiblePayloadOptions = {
   hintPrimaryPersonPhone?: string | null;
   /** Admin document actor for request-scoped profile-photo URL minting. */
   documentActor?: DocumentActor | null;
+  /**
+   * Called the moment a canonical record fact becomes KNOWN, before the payload is finished.
+   *
+   * Delivery only — this never produces a fact, it reports one the composition just produced. The
+   * roster is still resolved exactly once, by the shell leg below, and still travels in the finished
+   * payload. Measured on deployed 96f37f1a: `_inquiry_children` is canonical at P50 1,148ms and the
+   * cards that gate on it do not clear until P50 3,194ms.
+   */
+  onCanonicalTruth?: (fields: Record<string, unknown>) => void;
 };
 
 export async function buildOpportunityDrawerVisiblePayload(
@@ -1606,6 +1649,79 @@ export async function buildOpportunityDrawerVisiblePayload(
     phaseMs.location_lookup_ms = Date.now() - t0;
     return row;
   })();
+  /*
+   * THE SHELL JOIN DOES NOT WAIT FOR THE PRIMARY JOIN.
+   *
+   * `drawer_primary_parallel_ms` (P50 130 ms) and `shell_parallel_ms` (P50 632 ms) were serial
+   * stages of `visible_entity_ms` (P50 962 ms): 130 + 632 + 201 = 963, measured over n=24 on
+   * deployed staging. The shells were awaited after the primary join for one reason only — `vis`
+   * was constructed from its results.
+   *
+   * They do not read those results. Across all four shells the only host keys read are `id`,
+   * `primary_person_id`, `status`, `status_key`, `work_unit_id`, `customer_id`, `metadata`,
+   * `program_type` and `schedule_type`. Every one is a column of `data`. The primary join writes
+   * `_work_unit_department_id`, `_customer_name`, `_pipeline_stage_name`, `_status_display`,
+   * `_quote_total_display`, the lifecycle fields, `_primary_person_*`, `_primary_contact_*`,
+   * `_field_definitions` and `_record_surface` — and no shell reads any of them. The dependency was
+   * on the OBJECT, never on its contents.
+   *
+   * So `vis` is built from `data` alone and the shells start here. The primary join's assignments
+   * below land on the same object while the shells are in flight: the key sets are disjoint, and a
+   * single-threaded runtime cannot interleave within either write.
+   *
+   * NOT a query-count repair — the same reads happen, and each leg is timed exactly as before.
+   * Only the schedule changes.
+   */
+  const vis: Record<string, unknown> = { ...data };
+  const documentActor = options?.documentActor ?? null;
+  const tShell0 = Date.now();
+  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      return await work;
+    } finally {
+      phaseMs[key] = Date.now() - t0;
+      /*
+       * WHEN the leg finished, not only how long it took.
+       *
+       * A duration cannot be correlated with a client milestone: to ask "how long did the browser
+       * wait after this fact was canonical" the caller needs the INSTANT it became canonical. These
+       * absolute stamps are converted to offsets by `sharedCanonicalDeps` against its own clock
+       * origin and then deleted, so no wall-clock value reaches the response.
+       *
+       * Counts and instants only. No identity, contact or child values are recorded here.
+       */
+      phaseMs[`${key}__end_abs`] = Date.now();
+    }
+  };
+  const shellP = Promise.all([
+    timedLeg(
+      "shell_children_ms",
+      attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor).then((r) => {
+        /*
+         * The roster is canonical HERE, not when the payload finishes. Emitted only when the shell
+         * actually produced an array: absent stays UNKNOWN, and an explicit `[]` is the canonical
+         * answer "this family has no children" and is emitted as such. A throwing sink must never
+         * take down the composition it is reporting on.
+         */
+        const roster = (vis as Record<string, unknown>)._inquiry_children;
+        if (Array.isArray(roster)) {
+          try {
+            options?.onCanonicalTruth?.({ _inquiry_children: roster });
+          } catch {
+            /* delivery is best-effort; the finished payload still carries the same fact */
+          }
+        }
+        return r;
+      }),
+    ),
+    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
+    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
+  ]);
+  // The `await` below is what reports a rejection, exactly as `await Promise.all(...)` did. This
+  // only keeps the interval until then from being read as an unhandled rejection.
+  shellP.catch(() => {});
   const [wuDeptRowV, customerRowV, stRowV, primaryHydrV, opportunityDefsVisible, locRowV] = await Promise.all([
     wuDeptP,
     customerP,
@@ -1615,7 +1731,6 @@ export async function buildOpportunityDrawerVisiblePayload(
     locP,
   ]);
   phaseMs.drawer_primary_parallel_ms = Date.now() - tParallel0;
-  const vis: Record<string, unknown> = { ...data };
   vis._work_unit_department_id = hintDepartmentId
     ? hintDepartmentId
     : wuidForDept
@@ -1684,28 +1799,7 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
-  const documentActor = options?.documentActor ?? null;
-  /**
-   * Bounded per-leg timing for the shell batch. `visible_entity_ms` measured 1,091 ms of an 1,880 ms
-   * compose while only ~584 ms of it was attributable, and a dominant leg must never be inferred
-   * from the aggregate. `phaseMs` is the same object `vis._drawer_primary_phase_ms` already points
-   * at, so these writes surface in the response's `phases_ms` like the earlier legs.
-   */
-  const tShell0 = Date.now();
-  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
-    const t0 = Date.now();
-    try {
-      return await work;
-    } finally {
-      phaseMs[key] = Date.now() - t0;
-    }
-  };
-  await Promise.all([
-    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
-    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
-    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
-    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
-  ]);
+  await shellP;
   phaseMs.shell_parallel_ms = Date.now() - tShell0;
   vis._relationship_displays = {};
   const householdIdV =

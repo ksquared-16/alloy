@@ -7,25 +7,59 @@ supersedes: []
 
 # Alloy API — Getting Started
 
-> ## ⚠ Partially implemented — read this before you build
->
-> **Implemented and callable:** the application, installation and credential
-> model; token exchange at `POST /api/v1/oauth/token`; bearer authentication;
-> `GET /api/v1/context`; **`GET /api/v1/locations`** — the first canonical
-> resource; the error envelope; rate limiting; request correlation.
-> These are described by the governed contract at
-> [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json), whose
-> coverage is enforced by a drift guard in both directions.
->
-> **Contract only, NOT callable:** the remaining domain resources (children,
-> people, enrollment, schedules), every governed operation, attendance
-> ingestion, webhooks, and anything Classroom Coach. The sections below that
-> describe them state the intended contract so you can design against it — they
-> do not describe a live endpoint, and no credential can reach one.
->
-> **Not yet safe to issue production credentials.** Three security prerequisites
-> remain open; see
-> [`../product/08-slice-b2-external-boundary.md`](../product/08-slice-b2-external-boundary.md).
+The Alloy Public API is a read-and-write HTTP contract over a childcare
+operator's live operational data: sites and rooms, children and their households,
+enrollments, placements, schedules and attendance. It is JSON over HTTPS, versioned
+at `/api/v1`, and described by a governed OpenAPI 3.1 document.
+
+## Start here
+
+| | |
+| --- | --- |
+| **Base URL** | `https://<alloy-host>/api/v1` — Alloy issues your host with your credentials. One host per environment; sandbox first, production on request. The contract is identical in both. |
+| **Authentication** | Exchange `client_id` + `client_secret` for a 15-minute opaque bearer token. No refresh tokens, no OAuth redirect flow. |
+| **First call** | `GET /api/v1/context` — tells you which organization you are acting for, what you may do, and where. |
+| **Reference** | [`alloy-public-api.v1.json`](../../openapi/alloy-public-api.v1.json) — OpenAPI 3.1, complete, and kept in step with the runtime by a drift guard in both directions. |
+| **Surface** | 22 operations across 18 paths: 1 token exchange, 10 reads, 10 governed writes, and `GET /context`. |
+| **Pagination & sync** | `next_cursor` within one pass, `sync_token` between passes, `updated_since` for reconciliation. |
+| **Rate limits** | 30 token exchanges/min, 600 reads/min, 120 writes/min — reads and writes have independent budgets. |
+| **Errors** | A single JSON envelope with `type`, `code`, `message` and `request_id` on every refusal. |
+
+## Sixty-second quickstart
+
+You need a `client_id` and `client_secret` from your Alloy contact.
+
+```bash
+# 1. Exchange credentials for a token (15 minutes).
+TOKEN=$(curl -s -X POST https://<alloy-host>/api/v1/oauth/token \
+  -H 'content-type: application/json' \
+  -d '{"grant_type":"client_credentials","client_id":"alloy_app_example","client_secret":"example-secret"}' \
+  | jq -r .access_token)
+
+# 2. Ask who you are. This never needs a scope.
+curl -s https://<alloy-host>/api/v1/context -H "authorization: Bearer $TOKEN"
+
+# 3. Read the sites you can reach.
+curl -s "https://<alloy-host>/api/v1/locations?limit=50" -H "authorization: Bearer $TOKEN"
+
+# 4. Page with the cursor; checkpoint with the sync token.
+curl -s "https://<alloy-host>/api/v1/locations?limit=50&cursor=<next_cursor>" -H "authorization: Bearer $TOKEN"
+
+# 5. Next time, resume from where you stopped.
+curl -s "https://<alloy-host>/api/v1/locations?since_token=<sync_token>" -H "authorization: Bearer $TOKEN"
+```
+
+**If a collection comes back empty, that is usually authority, not absence.**
+Read `GET /api/v1/context` and check the scope and the boundary: you see only
+locations inside your boundary, and only children with an enrollment at one of
+them.
+
+## What is not here
+
+No webhooks — polling with `sync_token` is the V1 posture and is sufficient for
+every resource. No Communications or Financials contract. No self-service
+correlation management. No endpoint in these guides is unimplemented: if it is
+documented, it is callable.
 
 ## The model, in four words
 
@@ -103,15 +137,32 @@ scopes:   attendance.write, children.read
 boundary: locations = [Downtown Campus, Riverside]
 ```
 
-V1 scopes:
+The thirteen grantable scopes:
 
 | Scope | Grants |
 |---|---|
-| `context.read` | Read your own installation context |
-| `locations.read` | Read locations |
-| `children.read` | Read child records within your boundary |
-| `attendance.read` | Read attendance facts |
-| `attendance.write` | Record attendance facts |
+| `locations.read` | Read authorized sites, rooms, and operational units |
+| `children.read` | Read children with an enrollment at authorized locations (not one canceled before it began) |
+| `households.read` | Read the household shell for visible children |
+| `relationships.read` | Read visible child-adult relationships and effective pickup authority |
+| `relationships.contact.read` | Read email and phone for adults already visible through relationships |
+| `enrollment.read` | Read enrollment agreements and placements for visible children |
+| `schedule.read` | Read committed schedules and dated schedule projections for visible children |
+| `staff.read` | Read staff assigned to authorized locations |
+| `staff.contact.read` | Read email and phone for staff already visible through staff access |
+| `attendance.read` | Read attendance history for visible children |
+| `enrollment.write` | Start, end and void enrollments; assign, move and cancel placements |
+| `schedule.write` | Set, change and cancel schedule assignments |
+| `attendance.write` | Submit attendance facts, including corrections and reversals |
+
+`GET /api/v1/context` needs no scope. Every installation can read its own
+context, because a caller that cannot discover what it holds cannot work out why
+anything else was refused. There is no `context.read` to request.
+
+Scopes match **exactly**. `children.read` does not imply
+`children.contact.read`-style access to anything else, and no read implies a
+write. An installation granted only `attendance.write` can record that a child
+arrived and cannot read back a single attendance record.
 
 Rules that will surprise you if you skip them:
 
@@ -125,7 +176,10 @@ Rules that will surprise you if you skip them:
 
 ## Where to go next
 
+- [Integrating with Alloy](integrating.md) — the whole integration in one read:
+  identity, authority, the resource graph, synchronization, submission and limits
 - [Conventions](conventions.md) — resources vs operations, collections,
   idempotency, concurrency, errors, external IDs
-- [Locations](locations.md) — the first canonical resource, **live**
-- [Attendance example](attendance-example.md) — a full integration, contract only
+- [Locations](locations.md) — sites and rooms, and the vocabulary every other
+  resource uses to name a place
+- **API Reference** — every operation's parameters, fields, examples and errors

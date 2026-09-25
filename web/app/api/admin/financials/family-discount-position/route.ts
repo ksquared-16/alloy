@@ -84,6 +84,14 @@ export async function GET(request: NextRequest) {
                 expectedCents: number;
                 currencyCode: string;
                 /*
+                 * THE AUTHORED RATE, per subject, carried from the resolver that computed it.
+                 * A reader must be able to see "10%" without dividing the expected amount by a
+                 * basis it was never given — and two children on one policy at one rate cannot be
+                 * recognised as the SAME answer unless the rate itself travels.
+                 */
+                basis: "percentage" | "amount" | null;
+                basisValue: number | null;
+                /*
                  * THE BASIS IS PER RELATIONSHIP, NOT PER POLICY. One sibling policy produced
                  * "10% of $185.00" for one child and "10% of $1,450.00" for the other; carrying
                  * the first at the policy header stated one child's basis as if it were the
@@ -111,6 +119,8 @@ export async function GET(request: NextRequest) {
                         /* Carried through exactly as the forecast stated it. Nothing is summed here. */
                         expectedCents: outcome.amountCents,
                         currencyCode: p.forecast?.currencyCode ?? p.currencyCode ?? "USD",
+                        basis: outcome.basis ?? null,
+                        basisValue: outcome.basisValue ?? null,
                         explanation: outcome.explanation ?? null,
                     });
                     byPolicy.set(outcome.policyId, entry);

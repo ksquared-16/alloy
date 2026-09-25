@@ -772,6 +772,28 @@
         "helper": "assertAttendanceReadAllowed"
       }
     },
+    "app/api/admin/children/[childId]/safeguarding-restrictions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "crm.customers.read",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Reading the safeguarding restrictions recorded for one child. `crm.customers.read` is enforced by `requireCrmPeopleCapability`, narrowed by `canViewSafeguarding` to owner/admin/ops \u2014 the table's RLS select policy, which deliberately omits `manager` because a child's protective order must not read like ordinary profile content. Admin routes hold a service-role client and bypass RLS, so these checks are the enforcement, not the policy."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "crm.customers.write",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Authoring or lifting a child safeguarding restriction. `crm.customers.write` is the catalogued capability for changing family and person records and is enforced here by `requireCrmPeopleCapability`, but it is deliberately NOT the whole gate: that key is held by admin AND ops in every organization, and revoking a protective order is the moment a barred adult becomes collectable again. `canManageSafeguarding` is the floor beneath it \u2014 owner/admin only, mirroring the table's own RLS write policy (`has_org_role(org_id, ARRAY['owner','admin'])`). The conjunction is strictly narrower than either gate alone. The domain's own key, `crm.customers.safeguarding.manage`, is declared in lib/safeguarding/safeguardingRestriction.ts and cannot be named here: it is not seeded into permission_definitions (that catalog is frozen at a measured width and seeding it is a Director-owned Access & Identity step), so gating on it would resolve to false for every caller forever."
+      }
+    },
+    "app/api/admin/children/[childId]/safeguarding-restrictions/[restrictionId]/end/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "crm.customers.write",
+        "helper": "requireCrmPeopleCapability",
+        "reason": "Authoring or lifting a child safeguarding restriction. `crm.customers.write` is the catalogued capability for changing family and person records and is enforced here by `requireCrmPeopleCapability`, but it is deliberately NOT the whole gate: that key is held by admin AND ops in every organization, and revoking a protective order is the moment a barred adult becomes collectable again. `canManageSafeguarding` is the floor beneath it \u2014 owner/admin only, mirroring the table's own RLS write policy (`has_org_role(org_id, ARRAY['owner','admin'])`). The conjunction is strictly narrower than either gate alone. The domain's own key, `crm.customers.safeguarding.manage`, is declared in lib/safeguarding/safeguardingRestriction.ts and cannot be named here: it is not seeded into permission_definitions (that catalog is frozen at a measured width and seeding it is a Director-owned Access & Identity step), so gating on it would resolve to false for every caller forever."
+      }
+    },
     "app/api/admin/commands/[commandKey]/route.ts": {
       "GET": {
         "status": "pending"
@@ -2208,11 +2230,19 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
-    "app/api/admin/financials/card/route.ts": {
+    "app/api/admin/financials/autopay/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments W5. Reading what a family has authorized is an ordinary Financials read; enrolling, pausing, resuming and revoking are registered actions behind fin.write. The route returns the arrangement and the LIVE amount due, resolved the same way the scheduled handler resolves it, so the surface cannot show a stale figure. fin.read cannot mutate anything here."
+      }
+    },
+    "app/api/admin/financials/card/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "requireFinancialsCapability",
         "supersedes": "Superseded 2026-09-10 by the Access & Identity V2 Financials slice. The prior entry reasoned that \"fin.read is a Financials-workspace capability, not this projection's\" \u2014 but the key's own refusal says \"You don't have access to view financial information for this organization\", and the role editor now offers View Financials as a control an organization sets. Under that meaning a composed household financial card, and the amount and canonical payment id of a collection attempt, ARE financial information; leaving them on admission alone would make \"a role with no Financials access cannot read financial data\" false through a second door. Overturning a reasoned `none` is a decision, and this is the record of it."
       }
     },
@@ -2236,6 +2266,14 @@
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/family-discount-position/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "The family grain of the same discount forecast the assignment-grain route serves. It reads what is expected to apply to a household's relationships and writes nothing, so it is an ordinary Financials read behind the same helper."
       }
     },
     "app/api/admin/financials/funding-sources/route.ts": {
@@ -2314,12 +2352,12 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
-    "app/api/admin/financials/autopay/route.ts": {
+    "app/api/admin/financials/assignable-discounts/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
-        "reason": "Payments W5. Reading what a family has authorized is an ordinary Financials read; enrolling, pausing, resuming and revoking are registered actions behind fin.write. The route returns the arrangement and the LIVE amount due, resolved the same way the scheduled handler resolves it, so the surface cannot show a stale figure. fin.read cannot mutate anything here."
+        "reason": "Which configured discount policies a household's children could be given. Reads commercial_policies through the canonical config reader and the live assignments beside them; writes nothing, decides no eligibility, and states no amount it did not read."
       }
     },
     "app/api/admin/financials/payment-methods/route.ts": {
@@ -2330,11 +2368,43 @@
         "reason": "Payments W2. Reading what a family has on file is an ordinary Financials read; adding, defaulting and removing a method are registered actions behind fin.write. The route returns brand, last four, expiry, rail and state and holds no credential to expose."
       }
     },
+    "app/api/admin/financials/periodic-billing-activation/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed",
+        "reason": "Turns automatic Periodic Billing on for this organization by provisioning its one scheduled-work row. Provisioning is activation, so it is gated on fin.write \u2014 the same permission generating tuition requires, because switching on something that generates tuition is not a lesser act."
+      }
+    },
+    "app/api/admin/financials/periodic-billing-evaluate-now/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed",
+        "reason": "Makes this organization's existing Periodic Billing schedule due now so the ordinary clock picks it up sooner. It runs nothing and creates nothing \u2014 no handler call, no occurrence, no charge \u2014 and refuses when no schedule exists, because evaluation is not activation."
+      }
+    },
+    "app/api/admin/financials/periodic-billing-status/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Whether recurring tuition is billed automatically for this organization, read from this tenant's own scheduled-work row rather than from whether the handler shipped. A Financials read: it exposes no lease, occurrence or worker, and writes nothing."
+      }
+    },
     "app/api/admin/financials/position/route.ts": {
       "GET": {
         "status": "declared",
         "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
+        "helper": "requireFinancialsCapability"
+      }
+    },
+    "app/api/admin/financials/proposed-charge-discounts/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Which discounts would reduce a charge the operator is still typing. Calls the one canonical resolver with a hypothetical gross obligation - it re-implements no eligibility, writes nothing, and states no amount the resolver did not return."
       }
     },
     "app/api/admin/financials/provider/route.ts": {
@@ -2343,14 +2413,6 @@
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed",
         "reason": "Payments W1. Reading whether this organization can accept payments is an ordinary Financials read; connecting, refreshing and disconnecting are registered actions behind fin.provider because they decide where money settles."
-      }
-    },
-    "app/api/admin/financials/family-discount-position/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "The family grain of the same discount forecast the assignment-grain route serves. It reads what is expected to apply to a household's relationships and writes nothing, so it is an ordinary Financials read behind the same helper."
       }
     },
     "app/api/admin/financials/reduction-forecast/route.ts": {
@@ -2372,6 +2434,14 @@
         "status": "declared",
         "capability": "fin.read",
         "helper": "assertFinancialsReadAllowed"
+      }
+    },
+    "app/api/admin/financials/responsibility-positions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Who owes, per child, for one household. It composes the two readers that already own those answers - readHouseholdScopes and readAccountArrangement - resolves no specificity of its own and writes nothing, so it is an ordinary Financials read behind the same helper as the single-scope route beside it."
       }
     },
     "app/api/admin/financials/responsibility-scopes/route.ts": {
@@ -2406,7 +2476,7 @@
       "GET": {
         "status": "declared",
         "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed"
+        "helper": "requireFinancialsCapability"
       }
     },
     "app/api/admin/financials/tuition-plans/route.ts": {
@@ -4494,6 +4564,20 @@
         "reason": "Reads one employment's availability pattern, its exceptions and the resolved answer for a day. The org comes from the session, the employment is checked to belong to it before anything is read, and the handler writes nothing. Reads of a staff record's own operational facts are not gated anywhere in this estate; gating this one would invent a read boundary the product does not have."
       }
     },
+    "app/api/admin/staff-compensation/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "staff.compensation.read",
+        "helper": "requireCompensationCapability",
+        "reason": "Compensation is the first Staff fact that is not readable by anyone who can open a staff record. The table revokes every grant from authenticated, so this handler reads through the service role and the capability check is the only operator boundary. requireAdminOrOps resolves portal admission and no capability, so the capability check is what actually withholds pay from a principal who was never granted it."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "staff.compensation.write",
+        "helper": "requireCompensationCapability",
+        "reason": "Records an effective-dated compensation term and closes the prior open period. Gated separately from the read because a principal who may see a rate is not thereby a principal who may change one. Creates no payroll run and no financial transaction."
+      }
+    },
     "app/api/admin/staff-qualification-config/route.ts": {
       "GET": {
         "status": "none",
@@ -5264,10 +5348,30 @@
         "reason": "Runtime metadata. Reads no database and no caller, as build-info."
       }
     },
+    "app/api/scheduled-work/wake/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The generic scheduled-work wake, called by the hosting platform's external clock and authenticated by x-cron-token against INTERNAL_CRON_TOKEN - the same machine-caller convention communication-scheduled-sends/process-due already uses. There is no operator session path: this runs as the system across organizations, so a capability scoped to one operator's org could only ever do part of the job. A missing or mismatched token is 401, never open."
+      },
+      "GET": {
+        "status": "none",
+        "reason": "The external clock's entry point. Vercel Cron issues GET with Authorization: Bearer CRON_SECRET, so the clock arrives on GET rather than POST; both verbs run the same wake through the same runtime. Unauthenticated GET is 401 and drives nothing - it is not a liveness endpoint that returns ok to anyone who finds the URL."
+      }
+    },
     "app/api/stripe/webhook/route.ts": {
       "POST": {
         "status": "none",
         "reason": "Stripe's own callback. There is no org principal to hold a capability \u2014 the caller is the provider, which cannot present an Alloy session \u2014 so admission is the signed request itself: an HMAC over the raw body verified before the body is read as meaningful. Tenancy comes from the connected account through the merchant binding and fails closed when that account is bound to no organization, so the event never names its own tenant."
+      }
+    },
+    "app/api/v1/attendance-events/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope attendance.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and the location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed fact submission admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope attendance.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. The route authors nothing itself: it converts the principal through attendanceAuthorityForPrincipal (one-way, granting nothing the installation does not hold) and calls ingestExternalAttendanceEvent, which owns identity resolution, the site-authority check against the child's own enrollment site, the attendance.record capability check, replay identity and the canonical command. An installation whose boundary reaches no site is refused before any event is considered."
       }
     },
     "app/api/v1/context/route.ts": {
@@ -5318,52 +5422,106 @@
         "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
       }
     },
-    "app/api/admin/staff-compensation/route.ts": {
-      "GET": {
-        "status": "declared",
-        "capability": "staff.compensation.read",
-        "helper": "requireCompensationCapability",
-        "reason": "Compensation is the first Staff fact that is not readable by anyone who can open a staff record. The table revokes every grant from authenticated, so this handler reads through the service role and the capability check is the only operator boundary. requireAdminOrOps resolves portal admission and no capability, so the capability check is what actually withholds pay from a principal who was never granted it."
-      },
-      "POST": {
-        "status": "declared",
-        "capability": "staff.compensation.write",
-        "helper": "requireCompensationCapability",
-        "reason": "Records an effective-dated compensation term and closes the prior open period. Gated separately from the read because a principal who may see a rate is not thereby a principal who may change one. Creates no payroll run and no financial transaction."
-      }
-    },
-    "app/api/scheduled-work/wake/route.ts": {
-      "POST": {
-        "status": "none",
-        "reason": "The generic scheduled-work wake, called by the hosting platform's external clock and authenticated by x-cron-token against INTERNAL_CRON_TOKEN - the same machine-caller convention communication-scheduled-sends/process-due already uses. There is no operator session path: this runs as the system across organizations, so a capability scoped to one operator's org could only ever do part of the job. A missing or mismatched token is 401, never open."
-      },
+    "app/api/v1/children/route.ts": {
       "GET": {
         "status": "none",
-        "reason": "The external clock's entry point. Vercel Cron issues GET with Authorization: Bearer CRON_SECRET, so the clock arrives on GET rather than POST; both verbs run the same wake through the same runtime. Unauthenticated GET is 401 and drives nothing - it is not a liveness endpoint that returns ok to anyone who finds the URL."
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope children.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. Eligibility is narrower still: a child is returned only when an enrollment agreement places them at a site inside that boundary, in org_wide mode too, so organization membership alone never exposes a child. Caller filters narrow within authority and the external_id filter resolves only this installation's own mapping."
       }
     },
-    "app/api/admin/financials/periodic-billing-status/route.ts": {
+    "app/api/v1/households/route.ts": {
       "GET": {
-        "status": "declared",
-        "capability": "fin.read",
-        "helper": "assertFinancialsReadAllowed",
-        "reason": "Whether recurring tuition is billed automatically for this organization, read from this tenant's own scheduled-work row rather than from whether the handler shipped. A Financials read: it exposes no lease, occurrence or worker, and writes nothing."
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope households.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. A household is returned only when at least one of its children is independently visible, and the response carries no member list, count or sibling id, so it can never widen what the caller may see. Payment instrument columns on the same domain row are never selected."
       }
     },
-    "app/api/admin/financials/periodic-billing-activation/route.ts": {
-      "POST": {
-        "status": "declared",
-        "capability": "fin.write",
-        "helper": "assertFinancialsWriteAllowed",
-        "reason": "Turns automatic Periodic Billing on for this organization by provisioning its one scheduled-work row. Provisioning is activation, so it is gated on fin.write \u2014 the same permission generating tuition requires, because switching on something that generates tuition is not a lesser act."
+    "app/api/v1/relationships/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope relationships.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An edge is returned only when its child is independently visible. Contact columns are gated at the SQL source on the separate relationships.contact.read scope. Pickup authority is computed server-side from canonical grant minus active safeguarding restriction and fails closed; the raw role and every restriction detail are never published."
       }
     },
-    "app/api/admin/financials/periodic-billing-evaluate-now/route.ts": {
+    "app/api/v1/enrollments/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query."
+      },
       "POST": {
-        "status": "declared",
-        "capability": "fin.write",
-        "helper": "assertFinancialsWriteAllowed",
-        "reason": "Makes this organization's existing Periodic Billing schedule due now so the ordinary clock picks it up sooner. It runs nothing and creates nothing \u2014 no handler call, no occurrence, no charge \u2014 and refuses when no schedule exists, because evaluation is not activation."
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The named child must be independently visible under this installation's read authority and the named site must be inside the boundary; neither identifier is usable as a key. Converges on an existing operational agreement rather than creating a second. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService.createChildEnrollmentAgreement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/placements/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. An empty boundary returns an empty page rather than an unfiltered query. Room and site are published as Location ids from the same topology the Locations resource exposes."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Converges on an existing operational placement rather than duplicating it. The operation performs no domain logic of its own: it delegates to childPlacementService.createInitialChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-assignments/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. The authority filters subject_type to child inside the select, so staff schedules held in the same internal table are unreachable through this route."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Converges on an existing operational assignment rather than creating a second. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.createInitialScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-days/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. This is a derived, windowed projection over committed schedule authority: it returns no cursor and no sync token, requires a bounded date window, and filters subject_type to child inside the select."
+      }
+    },
+    "app/api/v1/staff/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "External canonical read admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope staff.read via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies - external scopes are a separate compatibility contract by design. Tenancy is pinned to the principal's organization and never supplied by the caller. The location boundary is resolved by resolveBoundarySites, which calls public.list_external_locations, so this route cannot reach a site GET /api/v1/locations would not return for the same installation. Visibility requires the employment's primary location to fall inside the boundary; an employment with no primary location is never returned. Contact columns are gated at the SQL source on staff.contact.read. Compensation, payroll, tax, HR and safeguarding authorities are never joined."
+      }
+    },
+    "app/api/v1/enrollments/end/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/enrollments/void/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. The agreement is resolved and its site proven inside the boundary before anything is read back; an agreement in another organization or at another site refuses identically to one that does not exist. Already-ended converges rather than conflicting. The operation performs no domain logic of its own: it delegates to enrollmentAgreementService cancel/markEnding/markEnded, chosen by canonical state rather than by the caller, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/placements/move/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits; the domain refuses in-place mutation of an effective-dated placement for every caller. The operation performs no domain logic of its own: it delegates to childPlacementService.supersedeChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/placements/cancel/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope enrollment.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits; the domain refuses in-place mutation of an effective-dated placement for every caller. The operation performs no domain logic of its own: it delegates to childPlacementService.supersedeChildPlacement, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-assignments/change/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/v1/schedule-assignments/cancel/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "External governed operation admitted by a bearer access token resolved through resolveAccessTokenPrincipal, then gated on the PUBLIC scope schedule.write via the scope catalog. The principal is a non-human Application Principal, not an org member, so no operator catalog capability applies. Tenancy is pinned to the principal's organization and never supplied by the caller; the location boundary is resolved by resolveBoundarySites over public.list_external_locations, and an installation with no authorized site is refused rather than allowed through. Keyed by an enrollment whose site is proven inside the boundary. Supersedes rather than edits, and never reaches the derived schedule-day projection. The operation performs no domain logic of its own: it delegates to scheduleAssignmentService.supersedeScheduleAssignment, so Alloy's validation, effective dating and refusals are the same ones the internal surface obeys. Internal error detail is never forwarded."
+      }
+    },
+    "app/api/admin/locations/[id]/archive/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Admin-only Space archive. Authorization is the adminV2 context plus an explicit role === 'admin' check in the handler, and the archive is refused server-side by decideSpaceArchive before any write. It grants no capability of its own."
       }
     }
   },

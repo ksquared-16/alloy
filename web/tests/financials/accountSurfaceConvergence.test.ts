@@ -142,13 +142,24 @@ describe("F7 · one truth, two grains", () => {
      * figures the card said, under different labels. Order is the thing being locked now, because
      * order is what was wrong.
      */
-    it("leads with the summary card and puts the detail directly beneath it", () => {
+    it("composes the account rather than re-implementing it", () => {
+        /*
+         * SUMMARY ABOVE, DETAIL BELOW — still true, and no longer two components. The shared card
+         * renders both halves in that order; what this host must never do again is re-implement
+         * either of them, which is precisely what the second component was.
+         */
         const src = read(ACCOUNTS);
         const summaryAt = src.indexOf("<FinancialsAccountDetail");
-        const detailAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
         expect(summaryAt, "the command-bearing card is composed, not re-implemented").toBeGreaterThan(-1);
-        expect(detailAt, "the expanded detail is rendered").toBeGreaterThan(-1);
-        expect(summaryAt, "summary above, detail below").toBeLessThan(detailAt);
+        expect(src, "and nothing beside it re-renders the ledger")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
+
+        /* The order now lives where the surface is built, and is asserted there. */
+        const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
+        const stats = detail.indexOf('<Stat label="Current balance"');
+        const lenses = detail.indexOf('data-financials-lenses="true"');
+        expect(stats, "the summary leads").toBeGreaterThan(-1);
+        expect(lenses, "and the ledger follows it").toBeGreaterThan(stats);
     });
 
     it("carries exactly one summary, not two", () => {
@@ -195,8 +206,25 @@ describe("F7 · one truth, two grains", () => {
          * element now, and it dismisses through the platform's return-to-base signal.
          */
         expect(css).toContain(".alloy-accounts-command-backdrop");
-        expect(css, "the account stays behind a scrim")
-            .toMatch(/\.alloy-accounts-command-host:has\(\[data-financials-overlay\]\)[^{]*\{[^}]*position: fixed/);
+        /*
+         * ── THIS ASSERTION USED TO ENCODE THE DEFECT ────────────────────────────────────────
+         *
+         * It demanded that the scrim and the fixed layer key on `:has([data-financials-overlay])`
+         * — ANY overlay. That was right while Details was something the operator pushed on top of
+         * the account, and it went on passing after convergence made Details the FLOOR of this
+         * host, at which point "any overlay" meant "always". Measured on deployed staging: the
+         * account list sat under a permanent full-viewport scrim, every row refused an ordinary
+         * click, and the ledger floated over a list whose selected row had scrolled out of sight.
+         * The lock was green throughout.
+         *
+         * So the rule is stated as what it always meant — a COMMAND is a focused layer — and the
+         * floor is excluded by name. `accountsReachability` holds the effect: it matches these
+         * same shipped selectors against a real floor node and a real command node.
+         */
+        expect(css, "a command stays behind a scrim")
+            .toMatch(/\.alloy-accounts-command-host:has\(\[data-financials-overlay\][^)]*\)[^{]*\{[^}]*position: fixed/);
+        expect(css, "and the host's resting surface is not treated as one")
+            .toMatch(/:has\(\[data-financials-overlay\]:not\(\[data-financials-surface-role="floor"\]\)\)/);
         const detail = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
         expect(detail, "and the backdrop is clickable").toContain('data-financials-command-backdrop="true"');
         /*
@@ -206,7 +234,7 @@ describe("F7 · one truth, two grains", () => {
          * scrolls the layer instead of pushing the actions off it.
          */
         expect(css, "and the command's own actions stay reachable")
-            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(\d+svh/);
+            .toMatch(/\[data-financials-overlay\][^{]*\{[^}]*max-height: min\(\d+svh/);
         /* One Add Charge implementation: the workspace composes the card, it does not rebuild it. */
         expect(src).not.toContain("AddChargeCommand");
     });
@@ -221,13 +249,21 @@ describe("F7 · one truth, two grains", () => {
      * The shared border is drawn by the placement and suppressed on the card within it.
      */
     it("renders the summary and the account body as one surface", () => {
+        /*
+         * THE BODY IS NO LONGER A SIBLING — it is the same surface, opened.
+         *
+         * This asserted two components inside one bordered placement, summary first. That shape
+         * existed because the workspace could not reach the shared Details surface, so it grew a
+         * second ledger beside the card. One component renders both halves now, and the placement
+         * still draws exactly one account surface around it.
+         */
         const src = read(ACCOUNTS);
         const surfaceAt = src.indexOf("alloy-accounts-account-card");
         expect(surfaceAt, "the placement draws one account surface").toBeGreaterThan(-1);
         const summaryAt = src.indexOf("<FinancialsAccountDetail");
-        const bodyAt = src.indexOf("<FinancialsAccountWorkspaceDetail");
-        expect(summaryAt).toBeGreaterThan(surfaceAt);
-        expect(bodyAt, "both live inside that surface, summary first").toBeGreaterThan(summaryAt);
+        expect(summaryAt, "and the account lives inside it").toBeGreaterThan(surfaceAt);
+        expect(src, "with no second body component beside it")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
 
         const css = read("app/adminV2/components/alloyOsRuntime.css");
         expect(css).toContain(".alloy-accounts-account-card");
@@ -237,7 +273,8 @@ describe("F7 · one truth, two grains", () => {
 
     /* The lenses and the account body are not a second workspace panel with its own chrome. */
     it("gives the account body no card chrome of its own", () => {
-        const detail = read(WORKSPACE_DETAIL);
+        /* Now read from the shared surface, which is what renders the body in both hosts. */
+        const detail = read("components/operationalCards/FinancialsDetailCard.tsx");
         expect(detail, "the lens region is a divider, not a panel").toContain('data-financials-lenses="true"');
         expect(detail).not.toMatch(/data-financials-lenses="true"[^>]*rounded-xl/);
         expect(detail).not.toMatch(/<section className="rounded-xl border/);
@@ -248,12 +285,27 @@ describe("F7 · one truth, two grains", () => {
      * is what the placement passes, never a second component or a second truth.
      */
     it("keeps the Focus Panel compact and Accounts expanded", () => {
+        /*
+         * THE RULE SURVIVES AND IS BETTER SATISFIED. "One presentation system, two depths — the
+         * difference is what the placement passes, never a second component or a second truth."
+         *
+         * The old shape honoured the second half and broke the first: Accounts was expanded by
+         * rendering a DIFFERENT component beside the card. The difference is now only a prop.
+         */
         const card = read("components/admin/focusPanel/cards/FinancialsCard.tsx");
         expect(card, "the drill-down is on by default, so the Focus Panel keeps it")
             .toContain("showDetailsAction = true");
+        expect(card, "and the workspace opens on the shared surface instead")
+            .toContain("detailsAreTheSurface");
+        const summary = read("app/adminV2/financials/FinancialsAccountDetail.tsx");
+        expect(summary, "the account placement asks for it").toMatch(
+            /detailsAreTheSurface=\{summaryVariant === "account"\}/,
+        );
         const accounts = read(ACCOUNTS);
-        expect(accounts, "and Accounts turns it off").toContain("showDetailsAction={false}");
-        expect(accounts, "Accounts shows the body without asking").toContain("<FinancialsAccountWorkspaceDetail");
+        expect(accounts, "and Accounts still declines the drill-down action")
+            .toContain("showDetailsAction={false}");
+        expect(accounts, "without a second component to show the body")
+            .not.toMatch(/<FinancialsAccountWorkspaceDetail/);
         /* Nothing in the Focus Panel path opts into the expanded body. */
         expect(card).not.toContain("alloy-accounts-account-card");
     });
@@ -276,7 +328,7 @@ describe("F7 · one truth, two grains", () => {
         expect(uncapped, "the command body is uncapped here").toContain("max-height: none");
         expect(uncapped, "and both inner caps are released").toContain(".alloy-os-ucard__body");
         expect(css, "while the layer itself stays bounded for smaller viewports")
-            .toMatch(/\[data-financials-overlay\]\s*\{[^}]*max-height: min\(/);
+            .toMatch(/\[data-financials-overlay\][^{]*\{[^}]*max-height: min\(/);
     });
 
     /*
@@ -1694,16 +1746,31 @@ describe("F38 · the entry command previews the act it will perform", () => {
         expect(cmd, "the posting line is a decision, not a constant").toMatch(
             /t\.reviewRequired[\s\S]{0,200}Creates a draft/,
         );
-        expect(cmd, "and the other branch states the act").toMatch(/Posts on confirm/);
         /*
-         * The draft sentence still exists — it is the truth under a configured boundary. What must
-         * not exist is a path to it that does not go through the boundary, so it is located INSIDE
-         * the conditional rather than merely present in the file.
+         * THE RULE IS "NO UNCONDITIONAL DRAFT CLAIM", NOT A PARTICULAR SENTENCE.
+         *
+         * This used to require the words "Posts on confirm" on the other branch. That copy was
+         * removed deliberately: naming the ordinary case in implementation language told the
+         * operator nothing they had to decide, while the review boundary is the case that changes
+         * what pressing Confirm does. Requiring the removed sentence back would be asking the
+         * command to say more, not to say it more truthfully — the spelling, not the rule.
+         *
+         * What must hold: every draft claim sits inside the boundary fork, and the balance line
+         * forks too, so an unchanged balance is never shown for a charge that posts on confirm.
          */
-        const branch = cmd.indexOf("t.reviewRequired ? (");
-        const draftNote = cmd.indexOf("Creates a draft — the balance does not change until it posts.");
-        expect(branch, "the preview forks on the boundary").toBeGreaterThan(-1);
-        expect(draftNote, "and the draft sentence lives inside that fork").toBeGreaterThan(branch);
+        const draftClaims = [...cmd.matchAll(/Creates a draft/g)].map((m) => m.index ?? -1);
+        expect(draftClaims.length, "the draft sentence exists").toBeGreaterThan(0);
+        for (const at of draftClaims) {
+            const enclosing = cmd.lastIndexOf("t.reviewRequired ? (", at);
+            expect(enclosing, "every draft claim is inside a boundary fork").toBeGreaterThan(-1);
+        }
+        /* Both arms are authored: the fork is a real decision, not a conditional with one answer. */
+        expect(cmd, "the balance preview forks on the same boundary").toMatch(
+            /t\.reviewRequired \? \([\s\S]{0,900}\) : \(/,
+        );
+        expect(cmd, "and no draft is claimed outside the fork").not.toMatch(
+            /reviewRequired[\s\S]{0,40}\?[\s\S]{0,40}null[\s\S]{0,120}Creates a draft/,
+        );
     });
 });
 
@@ -1897,34 +1964,124 @@ describe("F43 · Due is the actionable figure, and the commands are peers", () =
     });
 });
 
-describe("F44 · no visible partial Details", () => {
+describe("F44 · no FALSE Details during progressive settlement", () => {
     /*
-     * THE DEFECT THIS EXISTS TO CATCH. Details opens, a ledger-shaped surface appears, and it is
-     * then replaced by the real ledger. Every previous pass attacked a symptom — the entrance
-     * animation, the skeleton's honesty, the reserved region — and the operator kept seeing two
-     * Details. The fact is structural: a Details destination may not be RENDERED until the deep
-     * read its ledger depends on has resolved.
+     * ── WHAT THIS GATE USED TO SAY, AND WHY IT SAID IT ─────────────────────────────────────────
+     *
+     * F44 was written as an absolute: a Details destination may not be RENDERED until the deep read
+     * its ledger depends on has resolved. Details was ABSENT, then COMPLETE.
+     *
+     * It was not arbitrary. An earlier partial Details drew the ledger over PLACEHOLDER ROWS, and
+     * three placeholder rows rewriting themselves into fifty-six real ones is the "double load" —
+     * the operator seeing two Details — that was reported in every pass of that thread. Previous
+     * attempts to soften it (the entrance animation, the skeleton's honesty, the reserved region)
+     * each addressed a symptom and the complaint survived. Making the destination all-or-nothing
+     * ended it.
+     *
+     * ── WHY IT IS RETIRED, AND WHAT REPLACED IT ────────────────────────────────────────────────
+     *
+     * The rule's cost was then measured on deployed staging. An ordinary no-dwell click waited
+     * ~1,030ms for a usable Details surface, because it waited for the entire deep read (~900-1,100ms,
+     * of which ~500ms is carried platform overhead). A read-ahead was deployed to make the strict
+     * guard cheap; it reaches the target only when the operator happens to dwell ~400ms before
+     * clicking, and past the read's own duration it discards its result and reads again. Head start
+     * that depends on hesitation is not a product contract.
+     *
+     * So the absolute is retired and a STRONGER one takes its place:
+     *
+     *     NO FALSE DETAILS
+     *
+     * Progressive Details is allowed. FABRICATED Details is not. The distinction is the whole
+     * doctrine: the defect was never that the surface appeared early — it was that the surface
+     * LIED, stating rows that did not exist and then replacing them.
+     *
+     * A pending floor may therefore state: the real selected account, real structure, reserved
+     * figures, the ledger's real columns, and an explicit reading state. It may never state:
+     * placeholder transactions, a zero for money nobody has read, the previous account's anything,
+     * copy implying no financial activity, or a command whose authority has not resolved.
      */
-    it("has exactly one Details branch, and it is the final anatomy", () => {
-        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
-        expect(branches, "one Details branch, not a pending one and a real one").toHaveLength(1);
-    });
-
-    it("has no skeleton Details surface left to fall into", () => {
-        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "no hydrating Details container").not.toMatch(/data-financials-hydrating/);
-        expect(card, "and no hydrating Details card is constructed").not.toMatch(
-            /<FinancialsDetailCard\s+hydrating/,
-        );
-    });
-
-    it("establishes the depth immediately, and reads ahead so it is usually ready", () => {
+    it("M · one canonical Details implementation, in two truthful states", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         /*
-         * The click no longer waits on the read: the shell is known the moment it is asked for. And
-         * the read starts while the compact card is still on screen, so by the time anyone clicks it
-         * has usually landed — the sanctioned idle prefetch, never a reveal gate.
+         * The old assertion counted Details BRANCHES and required exactly one. That is the property
+         * this slice deliberately changes — there are now a pending branch and a settled one. What
+         * must stay singular is the COMPONENT: both states are the same product surface, so they
+         * cannot drift into two Details the way the workspace once grew a second ledger.
+         */
+        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
+        expect(branches.length, "a pending Details branch and a settled one").toBeLessThanOrEqual(2);
+        expect(card, "and both render the canonical surface").toContain("<FinancialsDetailCard");
+        for (const forbidden of ["PendingFinancialsDetailCard", "AccountsFinancialsLoadingCard", "FinancialsAccountWorkspaceDetail"]) {
+            expect(card, `${forbidden} would be a second Details implementation`).not.toContain(forbidden);
+        }
+    });
+
+    it("C · unresolved money is reserved, never a zero and never the last account's figure", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the reserved evidence states every figure as an em dash").toContain("hydratingFinancialsEvidence()");
+        expect(upto, "and declares itself hydrating so the surface says it is reading").toContain("hydrating");
+        expect(upto, "no figure may be composed here at all").not.toMatch(/\$\d|toFixed\(|formatMoney|moneyExact/);
+    });
+
+    it("D/E · the pending ledger states columns and NO rows — the defect F44 was created for", () => {
+        /*
+         * THIS IS THE LINE. The historical failure was placeholder rows becoming real rows. The
+         * pending region draws the ledger's head and says it is reading; it states no rows, so
+         * there is nothing to rewrite and the real ledger commits exactly once.
+         */
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "ledgerPending holds the region instead of drawing rows").toContain("ledgerPending");
+        expect(upto, "and no periods are supplied for it to draw").toMatch(/periods=\{\[\]\}/);
+
+        const floor = code("components/operationalCards/FinancialsDetailCard.tsx");
+        const region = floor.slice(floor.indexOf("data-financials-ledger-hydrating"));
+        const head = region.slice(0, region.indexOf("</div>"));
+        expect(head, "the real columns commit").toContain("<FinancialsLedgerHead />");
+        expect(head, "and it says it is reading").toContain('data-financials-ledger-reading="true"');
+        expect(head, "absence of loaded rows is not evidence of no activity").not.toContain("Nothing charged yet");
+        expect(head, "and no fabricated transaction may be drawn").not.toMatch(/LedgerRow|placeholderRow|skeletonRow/);
+    });
+
+    it("F/G · no stale administration truth, and no command bound to an unresolved account", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the relationship row waits rather than restating the last account's").toContain("loading: true");
+        for (const live of ["onPayment=", "onAddCharge=", "onPostCharge=", "onReverseCharge=", "onAdjustCharge=", "onApplyPayment=", "onMovePayment=", "onResolveResponsibility=", "onReallocateResponsibility="]) {
+            expect(upto, `${live} must not be wired before this account's authority resolves`).not.toContain(live);
+        }
+        expect(upto, "the gears are inert by name, not by accident").toContain("NO_COMMAND");
+    });
+
+    it("A/N · the floor identifies its account, and stays a floor", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(
+            (card.match(/data-financials-detail-account=\{subjectKey \?\? ""\}/g) ?? []).length,
+            "pending AND settled name the account, by canonical id — never a display name",
+        ).toBe(2);
+        /*
+         * A permanent scrim over the account list was a measured defect: every row refused an
+         * ordinary click. Both branches ask the one surface-role authority rather than deciding it
+         * twice, so the pending floor cannot reintroduce it.
+         */
+        expect(
+            (card.match(/data-financials-surface-role=\{financialsSurfaceRole\(\{/g) ?? []).length,
+            "both branches ask financialsSurfaceRole",
+        ).toBeGreaterThanOrEqual(2);
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the pending floor introduces no modal or scrim of its own").not.toMatch(/backdrop|scrim|modalClass/i);
+    });
+
+    it("establishes the depth immediately, and reads ahead so settlement is sooner", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /*
+         * Read-ahead is KEPT. It no longer decides whether Details may exist — the floor does that
+         * — but it still shortens how long the reserved state is on screen.
          */
         expect(card, "the click commits the surface").toMatch(
             /const requestDetails = useCallback\(\(\) => \{[\s\S]{0,900}setStack\(\[\{ kind: "detail" \}\]\)/,

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useFocusPanelRenderedSubject } from "@/components/admin/focusPanel/focusPanelRenderedSubjectContext";
 import clsx from "clsx";
 
 import { formatFocusPanelChipLabelDisplay } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
@@ -27,6 +28,24 @@ export type UniversalCardProps = {
     children?: ReactNode;
     className?: string;
     "data-universal-card-key"?: string;
+    /**
+     * DIAGNOSTIC ONLY — which SUBJECT this card's content belongs to.
+     *
+     * The Focus Panel deliberately retains the previous subject's cards while the new one resolves,
+     * so "six cells, none reserved" is satisfied by subject A while subject B is selected. Any
+     * readiness probe built on geometry therefore measures the wrong record — Slice 4 proved exactly
+     * that and had to discard its own T5/T6 numbers.
+     *
+     * This carries the card's own subject into the DOM so a measurement can ask "is this B's content
+     * yet?" instead of "does a card exist?". It changes no behaviour, gates nothing, and is read only
+     * by instrumentation.
+     */
+    /**
+     * Explicit override. Normally unset: the value comes from the Focus Panel rendered-subject
+     * context, so every UniversalCard is covered without each of the 30+ bespoke call sites having
+     * to remember to pass it — which is why the previous renderer-level attempts reached none of them.
+     */
+    "data-card-subject"?: string;
     receded?: boolean;
     /**
      * WHICH OF THE THREE ELEVATED SIZES this card takes when it is raised into the depth layer.
@@ -91,8 +110,15 @@ export default function UniversalCard({
     children,
     className,
     "data-universal-card-key": cardKey,
+    "data-card-subject": cardSubjectOverride,
     receded = false,
 }: UniversalCardProps) {
+    /*
+     * The subject whose payload this card is rendering. Diagnostic only — read, never written, and
+     * absent when unknown so a card never asserts a subject it cannot vouch for.
+     */
+    const renderedSubject = useFocusPanelRenderedSubject();
+    const cardSubject = cardSubjectOverride ?? renderedSubject ?? undefined;
     const hasBody = children != null && children !== false;
     const isMicro = density === "micro";
     const isMetricArchetype = archetype === "metric";
@@ -120,6 +146,7 @@ export default function UniversalCard({
             data-system5-card="true"
             data-universal-card-span={gridSpan ?? undefined}
             data-universal-card-key={cardKey}
+            data-card-subject={cardSubject ?? undefined}
         >
             <header className="alloy-os-ucard__header">
                 <UniversalCardIcon name={iconName ?? null} />

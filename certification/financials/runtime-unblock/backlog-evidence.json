@@ -1,0 +1,36 @@
+{
+  "focusCard": {
+    "headText": "FINANCIALS",
+    "headHasMoney": false,
+    "cardTitleArea": "FINANCIALS CURRENT PERIOD September 2026 CHARGES Tuition $1,450.00 Fee $150.00 Consumable "
+  },
+  "detail": {
+    "ledgerColumns": "DATE\nTYPE",
+    "firstRowText": "Sep 29, 2026 Tuition Certa Certhouse 4000 · Tuition Revenue $185.00 scheduled Not allocated Monthly tuition",
+    "filterDropdownTops": [],
+    "filtersSideBySide": false,
+    "lensBox": {
+      "top": 533,
+      "height": 57
+    },
+    "ledgerTop": {
+      "top": 734,
+      "height": 23
+    },
+    "whitespaceAboveLedger": 143,
+    "hasDescriptionColumn": true
+  },
+  "ws": {
+    "workStudio": true,
+    "tabs": [
+      "overview",
+      "accounts",
+      "charges",
+      "payments",
+      "subsidy",
+      "activity"
+    ],
+    "siteFilter": "All locations",
+    "overviewKpis": []
+  }
+}

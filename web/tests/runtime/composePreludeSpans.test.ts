@@ -187,12 +187,19 @@ describe("the compose's own semantics are untouched", () => {
          *                             composition rather than after it.
          *   4 resolveWorkViewTotalsSeed
          *                           — the counts themselves, inside the announcement listener.
-         *   10 seedRef.run          — the join. It awaits work already in flight, and whatever it
+         *   9  tourRef.run         — the tour signal's join. Started from the SAME
+         *                             `onSubjectResolved` announcement as the participant read, so
+         *                             it too awaits work already in flight. It is listed here
+         *                             because it drifted in without argument once: the gate went
+         *                             red, the list was not updated, and a red gate stops guarding
+         *                             anything. `null` from it means NOT ESTABLISHED — never
+         *                             "no tour" — so the join can settle honestly either way.
+         *   11 seedRef.run          — the join. It awaits work already in flight, and whatever it
          *                             waits is published as `join_wait_ms`, the ADDED DOCUMENT
          *                             WAIT, rather than disappearing into page_total.
          *
          * None of these is a new serial step ahead of the answer: 3 and 4 run inside a listener
-         * the composer fires mid-composition, and 10 is the join for that work.
+         * the composer fires mid-composition, and 9 and 11 are the joins for that work.
          */
         expect(awaits).toEqual([
             "resolveWorkUnitRouteIdentity",
@@ -203,8 +210,32 @@ describe("the compose's own semantics are untouched", () => {
             "projectFocusPanelCardProducers",
             "earlyRef.run",
             "(async",
+            "tourRef.run",
             "(async",
-            "seedRef.run",
+            /*
+             * 11 runSettlement — the INLINE settlement join, taken only when the caller did NOT ask
+             *                    for `deferSettlement`. The HTTP seam's consumer has no second
+             *                    delivery to wait for, so it still receives one fully settled
+             *                    answer and this await is how it gets one. The RSC route asks to
+             *                    defer, and then this branch is not taken at all — pinned by the
+             *                    next gate, which is the architectural property that moved
+             *                    FIRST_AUTHORITATIVE_FRAME off the producer join.
+             */
+            "runSettlement",
+            /*
+             * `seedRef.run` USED TO BE AWAITED HERE, and Candidate A removed that await.
+             *
+             * It was the honest price of delivering Work View totals with the document, published
+             * as `join_wait_ms` — P50 252ms of a 1,273ms frame on deployed 31fb4b0c. The totals are
+             * FACTS: membership and order come from configuration and are final at the frame, and
+             * only the values were outstanding. They are still computed and still started from the
+             * composer's announcement; the frame simply no longer waits for them, and an unlanded
+             * seed leaves the field null, which the client already reads as "resolve these
+             * yourself" rather than as zero.
+             *
+             * Its absence from this list is the assertion. Restoring the await would put the frame
+             * back behind the totals while every latency number still looked healthy.
+             */
         ]);
         /*
          * THE SEED MUST START FROM THE ANNOUNCEMENT, NOT FROM THE FINISHED ANSWER.
@@ -221,13 +252,38 @@ describe("the compose's own semantics are untouched", () => {
         expect(seedCallAt).toBeGreaterThan(listenerAt);
         // The listener is an ARGUMENT to the compose call, so the seed sits inside it.
         expect(seedCallAt).toBeGreaterThan(composeAt);
-        expect(ROUTE_CODE.indexOf("await seedRef.run")).toBeGreaterThan(seedCallAt);
+        /*
+         * The join is gone (Candidate A), so the ordering that survives is: the seed is READ after
+         * it is started, and never awaited. `seedSettled.value` is that read.
+         */
+        expect(ROUTE_CODE).not.toContain("await seedRef.run");
+        expect(ROUTE_CODE.indexOf("const seed = seedSettled.value")).toBeGreaterThan(seedCallAt);
         // The two IIFEs exist to COUNT, and for nothing else. An IIFE that wrapped real new work
         // would be a serial addition wearing a diagnostic's clothes.
         expect((ROUTE_CODE.match(/await \(async \(\) => \{/g) ?? []).length).toBe(2);
         for (const m of ROUTE_CODE.matchAll(/await \(async \(\) => \{([\s\S]{0,200}?)return /g)) {
             expect(m[1]).toMatch(/overlapDiag\.(producer_invocations|participant_reads) \+= 1;/);
         }
+    });
+
+    it("THE GATE: the deferred path starts the settlement and does NOT await it", () => {
+        /*
+         * The whole of two-phase emission rests on this. If `deferSettlement` ever came to await
+         * `runSettlement()`, the frame would go back to waiting behind the card producers (740ms on
+         * deployed a5eb2f29) and every measurement would look healthy while the architecture had
+         * silently reverted.
+         */
+        const fork = ROUTE_CODE.slice(
+            ROUTE_CODE.indexOf("if (input.deferSettlement) {"),
+            ROUTE_CODE.indexOf("const tSeedJoin = mark();"),
+        );
+        expect(fork).toContain("deferredSettlement = runSettlement()");
+        const deferredBranch = fork.slice(0, fork.indexOf("} else {"));
+        expect(deferredBranch).not.toContain("await runSettlement");
+        // and the inline branch must still settle, or the HTTP seam would ship an unsettled answer
+        const inlineBranch = fork.slice(fork.indexOf("} else {"));
+        expect(inlineBranch).toContain("await runSettlement()");
+        expect(inlineBranch).toContain("applyProvisioningSettlement");
     });
 
     it("the document actor is still derived from the same gate, just measured", () => {

@@ -116,19 +116,41 @@ describe("links never send a reader somewhere they cannot go", () => {
 describe("the advertised surface is the implemented surface", () => {
     it("the operations shown are read from the governed OpenAPI document", () => {
         const operations = publicOperations();
-        expect(operations).toHaveLength(3);
+        expect(operations).toHaveLength(19);
         expect(operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
+            "GET /api/v1/attendance-events",
+            "GET /api/v1/children",
             "GET /api/v1/context",
+            "GET /api/v1/enrollments",
+            "GET /api/v1/households",
             "GET /api/v1/locations",
+            "GET /api/v1/placements",
+            "GET /api/v1/relationships",
+            "GET /api/v1/schedule-assignments",
+            "GET /api/v1/schedule-days",
+            "GET /api/v1/staff",
+            "POST /api/v1/attendance-events",
+            "POST /api/v1/enrollments",
+            "POST /api/v1/enrollments/end",
             "POST /api/v1/oauth/token",
+            "POST /api/v1/placements",
+            "POST /api/v1/placements/move",
+            "POST /api/v1/schedule-assignments",
+            "POST /api/v1/schedule-assignments/change",
         ]);
         for (const operation of operations) {
             expect(operation.summary.length, `${operation.path} has a summary`).toBeGreaterThan(0);
         }
     });
 
-    it("no public attendance operation is advertised", () => {
-        expect(publicOperations().some((o) => /attendance/i.test(o.path))).toBe(false);
+    it("attendance is advertised as a read and a submission, never an edit", () => {
+        /*
+         * The landing lists what a credential can actually do. Since slice 7.4 that includes
+         * authoring attendance facts — and must never include changing or deleting one, because the
+         * ledger's correction and reversal semantics are the only honest way to fix a mistake.
+         */
+        const attendance = publicOperations().filter((o) => /attendance/i.test(o.path));
+        expect(attendance.map((o) => o.method).sort()).toEqual(["GET", "POST"]);
     });
 
     it("the landing derives the list rather than hard-coding it", () => {
@@ -140,6 +162,7 @@ describe("the advertised surface is the implemented surface", () => {
         expect(landing).toContain("publicOperations()");
         expect(landing).not.toContain("/api/v1/locations");
         expect(landing).not.toContain("/api/v1/oauth/token");
+        expect(landing).not.toContain("/api/v1/attendance-events");
     });
 
     it("the landing names the scope-versus-endpoint distinction", () => {

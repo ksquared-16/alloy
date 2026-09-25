@@ -15,6 +15,11 @@ import {
 import { opportunityDrawerViewModelStructureSettled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelContract";
 import { fetchOpportunityDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient";
 import {
+    publishActionableDrawerCarrier,
+    publishDrawerTruthPatch,
+    retireActionableDrawerCarrier,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrierStore";
+import {
     opportunityDrawerVmCacheEntryExistsForOtherScope,
     peekDrawerViewModelCacheEntry,
     putDrawerViewModelCacheEntry,
@@ -142,11 +147,30 @@ async function loadOpportunityDrawerViaViewModelCold(
     const id = opportunityId.trim();
     const coldStart = typeof performance !== "undefined" ? performance.now() : 0;
 
+    /*
+     * THE COLD FETCH IS THE TWO-PHASE ONE.
+     *
+     * Only this path can be: a cache hit or an in-flight join already has, or is about to have, the
+     * complete answer, so there is nothing for an early delivery to be earlier THAN. Supplying the
+     * sink is what puts `?phased=1` on the request, so the phased wire is reached from exactly one
+     * call site and every other consumer of this seam is untouched.
+     */
     const fetchResult = await fetchOpportunityDrawerViewModelClient(
         id,
         workspaceContext,
-        init ?? workspaceDataFetchInit()
+        init ?? workspaceDataFetchInit(),
+        publishActionableDrawerCarrier,
+        /*
+         * Progressive canonical truth lands in the SAME store as the carrier, under the same
+         * subject key and the same phase-2 retirement, so neither can outlive the drawer that
+         * supersedes it. `retireActionableDrawerCarrier` below clears both.
+         */
+        publishDrawerTruthPatch
     );
+    // Phase 2 is in hand. The carrier has been superseded and must stop being readable, whether the
+    // compose succeeded or skipped — a carrier outliving its own lifecycle is the failure mode this
+    // retirement exists to prevent.
+    retireActionableDrawerCarrier(id);
 
     if (!fetchResult.ok) {
         if ("skipped" in fetchResult && fetchResult.skipped) {

@@ -28,13 +28,14 @@ import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPol
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import {
     reductionKey,
+    REDUCTION_KINDS,
     resolveFinancialReductions,
     type AppliedReduction,
     type ReductionPolicy,
     type ReductionPolicyKind,
 } from "@/lib/financials/reductions/resolveFinancialReductions";
 
-const REDUCTION_KINDS: readonly ReductionPolicyKind[] = ["waiver", "sibling_discount", "discount"];
+/* The canonical list, imported rather than re-declared. */
 /** The category a policy reduction posts through — contra-revenue, already in the code-owned taxonomy. */
 const REDUCTION_CATEGORY = "discount";
 

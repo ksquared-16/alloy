@@ -9,6 +9,7 @@
  */
 
 import {
+    LOCATION_WORKSPACE_ADVANCED_TABS,
     LOCATION_WORKSPACE_TABS,
     locationWorkspaceHref,
     locationsLandingHref,
@@ -121,7 +122,12 @@ export function getLocationConcernDefinition(key: LocationConcernKey): LocationC
 
 export function isLocationConcernKey(raw: string | null | undefined): raw is LocationConcernKey {
     const value = String(raw ?? "").trim();
-    return LOCATION_WORKSPACE_TABS.some((tab) => tab.key === value);
+    // Advanced destinations count: they are not offered as primary tabs, but a
+    // deep link to one must still resolve rather than normalizing to overview.
+    return (
+        LOCATION_WORKSPACE_TABS.some((tab) => tab.key === value) ||
+        LOCATION_WORKSPACE_ADVANCED_TABS.some((tab) => tab.key === value)
+    );
 }
 
 /** Route → active concern. Invalid tabs normalize to overview (replace semantics at caller). */

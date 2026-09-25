@@ -167,3 +167,51 @@ Production data segregated by `org_id`. No cross-org test fixtures in shared sta
 - `api-contracts.md`
 - `docs/audits/supabase-schema-alignment-audit.md`
 - Root `README.md` for clone/setup
+
+## Compute placement — `pdx1`, beside the primary database
+
+`web/vercel.json` pins `"regions": ["pdx1"]`. That is a deliberate decision, not a
+default, and it is recorded here because a JSON config file cannot carry the reason.
+
+**Why.** Every server-side data call in Alloy is an HTTPS request to the Supabase
+REST API: there is no PostgreSQL driver in the dependency tree at all, only
+`@supabase/supabase-js` via `lib/supabaseAdmin.ts`. So each logical query costs one
+round trip to the Supabase region, and measured on deployed staging that round trip
+was **~112ms**, paid per hop:
+
+| DB round trips | observed server phase |
+|---|---|
+| 0 | 0ms |
+| 1 | ~116ms (range 104–124) |
+| 2 | ~222ms |
+| 3 | ~334ms |
+| 5 | ~558ms |
+
+Different tables, different row counts, different product areas — the same cost,
+including one call that fetches an entire cohort bundle. That is fixed network cost,
+not query work. It made `shared_deps_wall` (~11 hops) cost ~1,214ms, and it
+dominated every composition repair in the OX programme: each removed hop was worth
+one quantum and nothing more.
+
+**The placement.** The Supabase primary is **West US (Oregon), AWS `us-west-2`**
+(operator-verified from the project). Vercel's region list maps `us-west-2` to
+**`pdx1` (Portland)**. Note that `sfo1` is `us-west-1`, a *different* AWS region —
+the intuitive "US West" choice would not have been co-located. Functions previously
+ran in `iad1` (`us-east-1`) purely because that is the Vercel default for new
+projects; no region had ever been declared in this repository.
+
+**Why a single region.** Alloy is write-heavy with one primary canonical database.
+One compute region beside that primary is the correct shape; multi-region compute
+would add consistency and connection complexity to reduce an edge hop that is paid
+once per request, while the database round trip is paid on every hop.
+
+**What was audited before moving.** 601 of 677 API routes import Supabase, so the
+overwhelming majority of the runtime is database-dominant. The external-provider
+surface is small and globally anycast (8 Stripe call sites, 4 Resend) and sits on
+write paths. Routing middleware is unaffected — Vercel deploys it to all regions
+regardless of the `regions` setting. The 5-minute `/api/scheduled-work/wake` cron is
+database-dominant and benefits. Render does not appear on any server path.
+
+**The trade, stated plainly.** Operators far from Oregon pay more on the
+edge-to-function leg, once per request. They stop paying ~112ms on every database
+hop. On the drawer path that is roughly eleven hops.

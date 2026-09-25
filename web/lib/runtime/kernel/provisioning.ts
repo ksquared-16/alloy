@@ -38,6 +38,8 @@
 import type { AttentionRef, AttentionMovedEvent, AttentionScope } from "./attention";
 import { ATTENTION_SCOPE, supersedes } from "./attention";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { applyProvisioningSettlement } from "@/lib/runtime/provisioning/provisioningSettlement";
+import { settlementForAnswer } from "./workUnitProvisioningPrefetch";
 
 /**
  * The terminal outcomes. There is no NON-outcome — see the header note on why this is four, not three.
@@ -243,6 +245,34 @@ export class ProvisioningRuntime {
         return f.promise;
     }
 
+    /**
+     * Await this frame's deferred settlement and re-emit the settled snapshot.
+     *
+     * Never throws and never blocks the first terminal: phase 1 has already been returned to the
+     * caller by the time this runs. A frame that arrived already settled has no settlement to await,
+     * which is why an ABSENT association and a settlement resolving to `null` are kept distinct.
+     */
+    private async settle(
+        f: Inflight,
+        frame: ProvisioningAnswer,
+        emit: (outcome: PreparationOutcome, snapshot: ProvisioningAnswer) => PreparationTerminal | null,
+    ): Promise<void> {
+        try {
+            const pending = settlementForAnswer(frame);
+            if (!pending) return;
+            const patch = await pending;
+            if (!patch) return;
+            if (f.disposed) return;
+            const settled = applyProvisioningSettlement(frame, patch, patch.navigation);
+            // Reference identity IS the duplicate check: the applier returns the same object when the
+            // patch carried nothing this frame did not already know.
+            if (settled === frame) return;
+            emit(settled.terminal, settled);
+        } catch {
+            /* A settlement is an improvement, never a failure mode for a frame that already answered. */
+        }
+    }
+
     private async run(f: Inflight): Promise<PreparationTerminal | null> {
         const emit = (outcome: PreparationOutcome, snapshot: ProvisioningAnswer): PreparationTerminal | null => {
             // ── THE STALE GUARD ──
@@ -313,7 +343,23 @@ export class ProvisioningRuntime {
             }
 
             // D1 terminal maps 1:1. K2 invents nothing and upgrades nothing.
-            return emit(answer.terminal, answer);
+            const first = emit(answer.terminal, answer);
+            /*
+             * PHASE 2 — THE SAME EMIT PATH, DELIBERATELY (OX Slice 8).
+             *
+             * The settlement is delivered by re-emitting the settled snapshot rather than by mutating
+             * the committed one. That is not a stylistic choice: `emit` carries the stale guard, so a
+             * settlement that arrives after attention has moved is discarded by exactly the same rule
+             * that discards a superseded first answer. A late B cannot repaint C, and it cannot do so
+             * for free rather than because a second guard was remembered here.
+             *
+             * `applyProvisioningSettlement` is the ONE authority for what a settlement changes: it
+             * refuses a patch whose navigation or identity does not match the frame, never lets a
+             * known field regress to unknown, and returns the SAME object when nothing moved — which
+             * is what stops a duplicate delivery from emitting a second terminal.
+             */
+            if (first) void this.settle(f, answer, emit);
+            return first;
         } catch (err) {
             return emit("error", {
                 terminal: "error",

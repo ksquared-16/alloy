@@ -145,7 +145,17 @@ const EMPTY_TOTALS: FinancialPositionTotals = {
 export async function resolveFinancialPositionCohort(
     supabase: SupabaseClient,
     args: FinancialPositionArgs,
+    /*
+     * ── SAY WHERE THE COHORT'S TIME GOES ───────────────────────────────────────────────────────
+     *
+     * This branch is 650-960ms of the Accounts list's wait and reports one opaque `cohort` label.
+     * Its sibling, the subjects cohort, was the same shape until it was given an interior — and
+     * two repairs made against the opaque version moved nothing, because reading the code said
+     * what COULD be parallel and not what was expensive. Same instrument, same reason.
+     */
+    mark?: (name: string) => void,
 ): Promise<FinancialPositionCohort> {
+    const phase = (name: string) => mark?.(name);
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
     const scanCap = Math.min(Math.max(args.scanCap ?? FINANCIAL_POSITION_SCAN_CAP, 1), FINANCIAL_POSITION_SCAN_CAP);
     const scope = { siteLocationId: activeSiteLocationId, siteScope: args.siteScope };
@@ -244,6 +254,7 @@ export async function resolveFinancialPositionCohort(
      * it does not produce a wrong number — it produces no account at all, which is indistinguishable
      * on screen from a family that has no financial history.
      */
+    phase("charges");
     const agreementRows = await readInBatches<{
         id: string;
         customer_id: string | null;
@@ -330,42 +341,35 @@ export async function resolveFinancialPositionCohort(
         };
     }
 
-    const chargeIds = visible.map((v) => v.charge.id);
-    const facts = await readPositionFacts(supabase, args.orgId, chargeIds);
+    phase("agreements");
+    /* One reader for both callers — see `resolveCollectiblePositionsForCharges`. */
+    const positionsByCharge = await resolveCollectiblePositionsForCharges(supabase, {
+        orgId: args.orgId,
+        charges: visible.map((v) => ({
+            id: v.charge.id,
+            currencyCode: v.charge.currency_code,
+            status: v.charge.status,
+            amountCents: Number(v.charge.amount_cents),
+        })),
+    });
 
     /* Names, so a list of accounts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
+    phase("collectible");
     const customerRows = await readInBatches<{ id: string; name: string | null }>(
         "household names",
         customerIds,
         (batch) => supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", batch),
     );
     const customerNames = new Map(customerRows.map((c) => [c.id, c.name]));
+    phase("customers");
 
     const rows: FinancialPositionRow[] = visible.map((v) => {
-        const reductions = facts.reductionsByCharge.get(v.charge.id) ?? [];
-        const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);
-        const grossCents = Number(v.charge.amount_cents);
-        const netCents = grossCents + reductionsCents;
-        const allocations = facts.allocationsByCharge.get(v.charge.id) ?? [];
-
-        const position = computeCollectiblePosition({
-            chargeId: v.charge.id,
-            currencyCode: v.charge.currency_code,
-            chargeStatus: v.charge.status,
-            grossCents,
-            reductionsCents,
-            netCents,
-            applications: facts.applicationsByCharge.get(v.charge.id) ?? [],
-            allocations: allocations.map((a) => ({
-                assignedAmountCents: a.assignedAmountCents,
-                isUnassigned: a.isUnassigned,
-            })),
-            expectedFunding: facts.fundingForCharge(allocations),
-            claimLines: facts.claimLinesByCharge.get(v.charge.id) ?? [],
-            variances: facts.variancesByCharge.get(v.charge.id) ?? [],
-        });
-
+        /*
+         * The position is the shared reader's, not a second computation. A charge the reader could
+         * not speak for is impossible here: it was given exactly these ids.
+         */
+        const position = positionsByCharge.get(v.charge.id)!;
         return {
             position,
             customerId: v.customerId,
@@ -539,55 +543,220 @@ export async function readInBatches<T>(
     return out;
 }
 
-async function readPositionFacts(supabase: SupabaseClient, orgId: string, chargeIds: string[]) {
-    const [
-        reductionRows,
-        applicationRows,
-        allocationRows,
-        claimLineRows,
-    ] = await Promise.all([
+/**
+ * COLLECTIBLE POSITIONS FOR A KNOWN SET OF CHARGES, read once per table.
+ *
+ * ── WHY THIS IS EXPORTED ──
+ *
+ * `resolveFamilyCollectible` answers the same question with `.eq(charge)` — one round trip per
+ * charge, and roughly six of them. The account card looped it over every posted charge in the
+ * period, which on the Certhouse specimen is 49 charges and therefore ~294 database round trips.
+ * Measured through Server-Timing on deployed staging: `collectible;dur=2841.7` of a `total;dur=3755.1`
+ * response — 76% of the wait, and O(posted rows).
+ *
+ * The note above `readPositionFacts` already named that divergence as a risk. This is the other
+ * half of the repair: the cohort scan and the single account now reach the SAME set-based reader
+ * and the SAME `computeCollectiblePosition`, so there is one implementation rather than two that
+ * must be kept in agreement. The cohort's own mapper below calls this too.
+ *
+ * The caller supplies the charge facts it already holds — gross, status, currency — because a
+ * caller that has read the charges must not read them again to be told what it already knows.
+ */
+export async function resolveCollectiblePositionsForCharges(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        /**
+         * The charge facts, when the caller has already read them — the cohort scan has. A caller
+         * that only holds ids passes `chargeIds` instead and the charges are read here, ONCE, from
+         * the same table `resolveAllocatableNet` reads per charge. Gross, status and currency are
+         * never inferred from a projection: they decide money.
+         */
+        charges?: ReadonlyArray<{ id: string; currencyCode: string; status: string; amountCents: number }>;
+        chargeIds?: readonly string[];
+        /**
+         * The position facts, already gathered. The card passes the account fact bundle, so the
+         * two dependent waves this function used to spend are already paid for by the time it is
+         * called. The arithmetic below is unchanged and still the only authority on a position.
+         */
+        facts?: PositionFactRows;
+    },
+): Promise<Map<string, CollectiblePosition>> {
+    const out = new Map<string, CollectiblePosition>();
+    /*
+     * THE FACTS DO NOT WAIT ON THE CHARGE ROWS.
+     *
+     * A caller that passed `chargeIds` has already named every id, so the cohort's fact reads
+     * start immediately rather than after the charges come back — two independent questions asked
+     * at once. A caller that passed `facts` has already paid for them in one round trip and starts
+     * nothing here at all.
+     */
+    const supplied = args.facts ? shapePositionFacts(args.facts) : null;
+    const knownIds = args.charges?.map((c) => c.id) ?? [...(args.chargeIds ?? [])];
+    const factRowsP = supplied || !knownIds.length
+        ? null
+        : readPositionFactRows(supabase, args.orgId, knownIds);
+    const charges =
+        args.charges
+        ?? (args.chargeIds?.length
+            ? (
+                  await readInBatches<{ id: string; amount_cents: number; currency_code: string; status: string }>(
+                      "charges",
+                      [...args.chargeIds],
+                      (batch) =>
+                          supabase
+                              .from("charges")
+                              .select("id, amount_cents, currency_code, status")
+                              .eq("org_id", args.orgId)
+                              .in("id", batch),
+                  )
+              ).map((c) => ({
+                  id: c.id,
+                  currencyCode: c.currency_code,
+                  status: c.status,
+                  amountCents: Number(c.amount_cents),
+              }))
+            : []);
+    if (charges.length === 0) return out;
+    const facts =
+        supplied
+        ?? shapePositionFacts(await (factRowsP ?? readPositionFactRows(supabase, args.orgId, charges.map((c) => c.id))));
+    for (const charge of charges) {
+        const reductions = facts.reductionsByCharge.get(charge.id) ?? [];
+        const reductionsCents = reductions.reduce((acc, r) => acc + r, 0);
+        const grossCents = Number(charge.amountCents);
+        const allocations = facts.allocationsByCharge.get(charge.id) ?? [];
+        out.set(
+            charge.id,
+            computeCollectiblePosition({
+                chargeId: charge.id,
+                currencyCode: charge.currencyCode,
+                chargeStatus: charge.status,
+                grossCents,
+                reductionsCents,
+                netCents: grossCents + reductionsCents,
+                applications: facts.applicationsByCharge.get(charge.id) ?? [],
+                allocations: allocations.map((a) => ({
+                    assignedAmountCents: a.assignedAmountCents,
+                    isUnassigned: a.isUnassigned,
+                })),
+                expectedFunding: facts.fundingForCharge(allocations),
+                claimLines: facts.claimLinesByCharge.get(charge.id) ?? [],
+                variances: facts.variancesByCharge.get(charge.id) ?? [],
+            }),
+        );
+    }
+    return out;
+}
+
+/**
+ * THE COHORT'S ACQUISITION — many accounts at once, so the account bundle does not fit.
+ *
+ * The Details card asks about ONE account and gets its facts in a single round trip from
+ * `financials_account_fact_bundle`. The workspace cohort asks about many accounts in one scan,
+ * which is a different question, so it still reads set-wise here. That is not two answers to one
+ * question: both hand their rows to the SAME `shapePositionFacts`, which is where the economic
+ * meaning lives, and neither computes a position of its own.
+ */
+export async function readPositionFactRows(
+    supabase: SupabaseClient,
+    orgId: string,
+    chargeIds: string[],
+): Promise<PositionFactRows> {
+    const [reductions, applications, responsibilityAllocations, claimLines] = await Promise.all([
         readInBatches<{ source_charge_id: string; amount_cents: number }>(
-            "reductions",
-            chargeIds,
-            (batch) =>
-                supabase
-                    .from("financial_reduction_applications")
-                    .select("source_charge_id, amount_cents")
-                    .eq("org_id", orgId)
-                    .in("source_charge_id", batch),
+            "reductions", chargeIds,
+            (batch) => supabase.from("financial_reduction_applications")
+                .select("source_charge_id, amount_cents").eq("org_id", orgId).in("source_charge_id", batch),
         ),
         readInBatches<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>(
-            "payment applications",
-            chargeIds,
-            (batch) =>
-                supabase
-                    .from("payment_allocations")
-                    .select("charge_id, allocated_amount_cents, status, payment_id")
-                    .eq("org_id", orgId)
-                    .in("charge_id", batch),
+            "payment applications", chargeIds,
+            (batch) => supabase.from("payment_allocations")
+                .select("charge_id, allocated_amount_cents, status, payment_id").eq("org_id", orgId).in("charge_id", batch),
         ),
         readInBatches<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>(
-            "responsibility allocations",
-            chargeIds,
-            (batch) =>
-                supabase
-                    .from("financial_responsibility_allocations")
-                    .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
-                    .eq("org_id", orgId)
-                    .eq("state", "active")
-                    .in("charge_id", batch),
+            "responsibility allocations", chargeIds,
+            (batch) => supabase.from("financial_responsibility_allocations")
+                .select("id, charge_id, assigned_amount_cents, is_unassigned, share_id")
+                .eq("org_id", orgId).eq("state", "active").in("charge_id", batch),
         ),
         readInBatches<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>(
-            "subsidy claim lines",
-            chargeIds,
-            (batch) =>
-                supabase
-                    .from("financial_subsidy_claim_lines")
-                    .select("id, charge_id, claim_id, claimed_amount_cents")
-                    .eq("org_id", orgId)
-                    .in("charge_id", batch),
+            "subsidy claim lines", chargeIds,
+            (batch) => supabase.from("financial_subsidy_claim_lines")
+                .select("id, charge_id, claim_id, claimed_amount_cents").eq("org_id", orgId).in("charge_id", batch),
         ),
     ]);
+
+    /* Everything the first round unlocks goes out together: none of these needs another's rows. */
+    const paymentIds = [...new Set(applications.map((a) => a.payment_id).filter(Boolean))];
+    const allocationIds = responsibilityAllocations.map((a) => a.id);
+    const shareIds = [...new Set(responsibilityAllocations.map((a) => a.share_id).filter((v): v is string => !!v))];
+    const claimIds = [...new Set(claimLines.map((l) => l.claim_id))];
+    const lineIds = claimLines.map((l) => l.id);
+    const [paymentsBacking, { data: fundingByAllocation }, { data: fundingByShare }, { data: claims }, { data: variances }] =
+        await Promise.all([
+            readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
+                "payments backing applied money", paymentIds,
+                (batch) => supabase.from("payments")
+                    .select("id, status, payer_entity_type").eq("org_id", orgId).in("id", batch),
+            ),
+            allocationIds.length
+                ? supabase.from("financial_expected_funding")
+                      .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                      .eq("org_id", orgId).eq("state", "active").in("allocation_id", allocationIds)
+                : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+            shareIds.length
+                ? supabase.from("financial_expected_funding")
+                      .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
+                      .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
+                : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+            claimIds.length
+                ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds)
+                : Promise.resolve({ data: [] as Array<{ id: string; state: string }> }),
+            lineIds.length
+                ? supabase.from("financial_subsidy_variances")
+                      .select("claim_line_id, variance_cents, state, resolution_kind")
+                      .eq("org_id", orgId).in("claim_line_id", lineIds)
+                : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        ]);
+
+    return {
+        reductions, applications, responsibilityAllocations, claimLines, paymentsBacking,
+        fundingByAllocation: (fundingByAllocation ?? []) as Array<Record<string, unknown>>,
+        fundingByShare: (fundingByShare ?? []) as Array<Record<string, unknown>>,
+        claims: (claims ?? []) as Array<{ id: string; state: string }>,
+        variances: (variances ?? []) as Array<Record<string, unknown>>,
+    };
+}
+
+/**
+ * THE ROWS A POSITION IS COMPUTED FROM, however they were acquired.
+ *
+ * This read AND shaped in one function, which tied the economic meaning of these facts to one
+ * transport. The shaping is the half that decides money — which applications count, how share
+ * funding is deduped per charge, what a variance attaches to — and it must exist exactly once.
+ *
+ * So it lives here, over rows the caller supplies. Production supplies them from
+ * `financials_account_fact_bundle`: one round trip in place of the two dependent waves this used
+ * to spend. The waved read survives only inside the parity oracle, as the comparison it is.
+ */
+export type PositionFactRows = {
+    reductions: ReadonlyArray<{ source_charge_id: string; amount_cents: number }>;
+    applications: ReadonlyArray<{ charge_id: string; allocated_amount_cents: number; status: string | null; payment_id: string }>;
+    responsibilityAllocations: ReadonlyArray<{ id: string; charge_id: string; assigned_amount_cents: number; is_unassigned: boolean; share_id: string | null }>;
+    claimLines: ReadonlyArray<{ id: string; charge_id: string; claim_id: string; claimed_amount_cents: number }>;
+    paymentsBacking: ReadonlyArray<{ id: string; status: string; payer_entity_type: string | null }>;
+    fundingByAllocation: ReadonlyArray<Record<string, unknown>>;
+    fundingByShare: ReadonlyArray<Record<string, unknown>>;
+    claims: ReadonlyArray<{ id: string; state: string }>;
+    variances: ReadonlyArray<Record<string, unknown>>;
+};
+
+export function shapePositionFacts(rows: PositionFactRows) {
+    const reductionRows = rows.reductions;
+    const applicationRows = rows.applications;
+    const allocationRows = rows.responsibilityAllocations;
+    const claimLineRows = rows.claimLines;
 
     const reductionsByCharge = new Map<string, number[]>();
     for (const r of ((reductionRows ?? []) as Array<{ source_charge_id: string; amount_cents: number }>)) {
@@ -596,6 +765,21 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         reductionsByCharge.set(r.source_charge_id, list);
     }
 
+    /*
+     * ── EVERYTHING ROUND ONE UNLOCKS GOES OUT TOGETHER ───────────────────────────────────────
+     *
+     * Payments, expected funding and the subsidy claim/variance pair each need ids that the four
+     * reads above produced, and NONE of them needs anything the other two return: payments are
+     * keyed by `payment_id` off the allocations, funding by `allocation_id`/`share_id` off the
+     * responsibility allocations, claims and variances by ids off the claim lines. They ran as
+     * three consecutive awaits purely because each sat where its rows were first consumed — the
+     * same source-order-as-dependency mistake the card's own builder had.
+     *
+     * Measured on deployed staging through Server-Timing, `collectible;dur=` was 1,414–1,997 ms of
+     * a 2,677–3,446 ms response, the single largest span left after the per-charge N+1 came out.
+     * Four serial rounds become two. The ids are derived first, from round one's rows only, so the
+     * keys are computed rather than the reads reordered: same queries, same predicates, same rows.
+     */
     const rawApplications = ((applicationRows ?? []) as Array<{
         charge_id: string;
         allocated_amount_cents: number;
@@ -603,16 +787,45 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         payment_id: string;
     }>);
     const paymentIds = [...new Set(rawApplications.map((a) => a.payment_id).filter(Boolean))];
-    const paymentRows = await readInBatches<{ id: string; status: string; payer_entity_type: string | null }>(
-        "payments backing applied money",
-        paymentIds,
-        (batch) =>
-            supabase
-                .from("payments")
-                .select("id, status, payer_entity_type")
-                .eq("org_id", orgId)
-                .in("id", batch),
-    );
+
+    const allocationsByCharge = new Map<string, AllocationFact[]>();
+    for (const a of ((allocationRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        assigned_amount_cents: number;
+        is_unassigned: boolean;
+        share_id: string | null;
+    }>)) {
+        const list = allocationsByCharge.get(a.charge_id) ?? [];
+        list.push({
+            id: a.id,
+            assignedAmountCents: Number(a.assigned_amount_cents),
+            isUnassigned: a.is_unassigned,
+            shareId: a.share_id,
+        });
+        allocationsByCharge.set(a.charge_id, list);
+    }
+    /* Expected funding hangs off BOTH anchors a claim reads: the allocation, or the share. */
+    const allocationIds = [...allocationsByCharge.values()].flat().map((a) => a.id);
+    const shareIds = [
+        ...new Set([...allocationsByCharge.values()].flat().map((a) => a.shareId).filter((v): v is string => !!v)),
+    ];
+
+    const rawClaimLines = ((claimLineRows ?? []) as Array<{
+        id: string;
+        charge_id: string;
+        claim_id: string;
+        claimed_amount_cents: number;
+    }>);
+    const claimIds = [...new Set(rawClaimLines.map((l) => l.claim_id))];
+    const lineIds = rawClaimLines.map((l) => l.id);
+
+    const paymentRows = rows.paymentsBacking;
+    const fundingByAllocationRows = rows.fundingByAllocation;
+    const fundingByShareRows = rows.fundingByShare;
+    const claimRows = rows.claims;
+    const varianceRows = rows.variances;
+
     const payments = new Map(paymentRows.map((p) => [p.id, p]));
     const applicationsByCharge = new Map<string, Array<{
         allocatedAmountCents: number;
@@ -632,43 +845,6 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         applicationsByCharge.set(a.charge_id, list);
     }
 
-    const allocationsByCharge = new Map<string, AllocationFact[]>();
-    for (const a of ((allocationRows ?? []) as Array<{
-        id: string;
-        charge_id: string;
-        assigned_amount_cents: number;
-        is_unassigned: boolean;
-        share_id: string | null;
-    }>)) {
-        const list = allocationsByCharge.get(a.charge_id) ?? [];
-        list.push({
-            id: a.id,
-            assignedAmountCents: Number(a.assigned_amount_cents),
-            isUnassigned: a.is_unassigned,
-            shareId: a.share_id,
-        });
-        allocationsByCharge.set(a.charge_id, list);
-    }
-
-    /* Expected funding hangs off BOTH anchors a claim reads: the allocation, or the share. */
-    const allocationIds = [...allocationsByCharge.values()].flat().map((a) => a.id);
-    const shareIds = [
-        ...new Set([...allocationsByCharge.values()].flat().map((a) => a.shareId).filter((v): v is string => !!v)),
-    ];
-    const [{ data: fundingByAllocationRows }, { data: fundingByShareRows }] = await Promise.all([
-        allocationIds.length
-            ? supabase
-                  .from("financial_expected_funding")
-                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-                  .eq("org_id", orgId).eq("state", "active").in("allocation_id", allocationIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-        shareIds.length
-            ? supabase
-                  .from("financial_expected_funding")
-                  .select("expected_amount_cents, percent_basis_points, basis, allocation_id, share_id")
-                  .eq("org_id", orgId).eq("state", "active").is("allocation_id", null).in("share_id", shareIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    ]);
     const fundingRow = (f: Record<string, unknown>) => ({
         basis: (f.basis as string | null) ?? null,
         expectedAmountCents: f.expected_amount_cents == null ? null : Number(f.expected_amount_cents),
@@ -688,27 +864,6 @@ async function readPositionFacts(supabase: SupabaseClient, orgId: string, charge
         list.push(fundingRow(f));
         fundingByShareId.set(key, list);
     }
-
-    const rawClaimLines = ((claimLineRows ?? []) as Array<{
-        id: string;
-        charge_id: string;
-        claim_id: string;
-        claimed_amount_cents: number;
-    }>);
-    const claimIds = [...new Set(rawClaimLines.map((l) => l.claim_id))];
-    const lineIds = rawClaimLines.map((l) => l.id);
-    const [{ data: claimRows }, { data: varianceRows }] = await Promise.all([
-        claimIds.length
-            ? supabase.from("financial_subsidy_claims").select("id, state").eq("org_id", orgId).in("id", claimIds)
-            : Promise.resolve({ data: [] as Array<{ id: string; state: string }> }),
-        lineIds.length
-            ? supabase
-                  .from("financial_subsidy_variances")
-                  .select("claim_line_id, variance_cents, state, resolution_kind")
-                  .eq("org_id", orgId)
-                  .in("claim_line_id", lineIds)
-            : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    ]);
     const claimStateById = new Map(
         ((claimRows ?? []) as Array<{ id: string; state: string }>).map((c) => [c.id, c.state]),
     );

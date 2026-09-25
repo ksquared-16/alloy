@@ -58,6 +58,10 @@ function supabaseStub() {
         builder.select = vi.fn(() => builder);
         builder.order = vi.fn(() => builder);
         builder.or = vi.fn(() => builder);
+        builder.is = vi.fn((col: string, val: unknown) => {
+            filters.push((r) => (val === null ? r[col] == null : r[col] === val));
+            return builder;
+        });
         builder.neq = vi.fn((col: string, val: unknown) => {
             filters.push((r) => r[col] !== val);
             return builder;

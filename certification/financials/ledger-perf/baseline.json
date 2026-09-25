@@ -1,0 +1,458 @@
+[
+  {
+    "host": "focus",
+    "pass": "cold",
+    "shellAt": 142,
+    "firstRowsAt": 7550,
+    "settledAt": 7554,
+    "rows": 116,
+    "apiRequestCount": 15,
+    "financialsRequests": 4,
+    "slowest": [
+      "-1790250107155ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250109595ms 84391B /api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a",
+      "-1790250110557ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250111998ms 9734B /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250113039ms 690B /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250113451ms 3566B /api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&comp"
+    ],
+    "cardRequest": [
+      {
+        "ms": -1790250110557,
+        "bytes": 218680,
+        "startedAt": 4084,
+        "serverTiming": "auth;dur=329.6, perm;dur=199.0, collectible;dur=2910.6, payments;dur=105.0, policies;dur=96.7, read;dur=0.1, identity;dur=0.4, serialize;dur=1.1, total;dur=3642.6",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250107155,
+        "bytes": 218680,
+        "startedAt": 7538,
+        "serverTiming": "auth;dur=362.4, perm;dur=216.8, collectible;dur=2436.3, payments;dur=91.8, policies;dur=107.7, read;dur=0.1, identity;dur=0.3, serialize;dur=1.1, total;dur=3216.6",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ],
+    "allRequests": [
+      {
+        "ms": -1790250109595,
+        "bytes": 84391,
+        "at": 574,
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a"
+      },
+      {
+        "ms": -1790250114419,
+        "bytes": 16754,
+        "at": 1188,
+        "url": "/api/admin/locations?hierarchy=1"
+      },
+      {
+        "ms": -1790250114520,
+        "bytes": 13,
+        "at": 1193,
+        "url": "/api/admin/activity?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=100"
+      },
+      {
+        "ms": -1790250114278,
+        "bytes": 22,
+        "at": 1325,
+        "url": "/api/admin/operational-tasks?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250114267,
+        "bytes": 115,
+        "at": 1448,
+        "url": "/api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250113039,
+        "bytes": 690,
+        "at": 1628,
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250113769,
+        "bytes": 14,
+        "at": 1943,
+        "url": "/api/admin/communications/threads?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=40"
+      },
+      {
+        "ms": -1790250113518,
+        "bytes": 14590,
+        "at": 2085,
+        "url": "/api/admin/communications/conversations"
+      },
+      {
+        "ms": -1790250113571,
+        "bytes": 7533,
+        "at": 2141,
+        "url": "/api/admin/communications/bindings"
+      },
+      {
+        "ms": -1790250113451,
+        "bytes": 3566,
+        "at": 2207,
+        "url": "/api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&comp"
+      },
+      {
+        "ms": -1790250111998,
+        "bytes": 9734,
+        "at": 2674,
+        "url": "/api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250115477,
+        "bytes": 366,
+        "at": 3214,
+        "url": "/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250115265,
+        "bytes": 22617,
+        "at": 3310,
+        "url": "/api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&threa"
+      },
+      {
+        "ms": -1790250110557,
+        "bytes": 218680,
+        "at": 4084,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250107155,
+        "bytes": 218680,
+        "at": 7538,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-1",
+    "shellAt": 244,
+    "firstRowsAt": 7270,
+    "settledAt": 7273,
+    "rows": 116,
+    "apiRequestCount": 15,
+    "financialsRequests": 4,
+    "slowest": [
+      "-1790250120446ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250122262ms 84393B /api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a",
+      "-1790250123707ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250125009ms 9734B /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250125951ms 690B /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250126709ms 3566B /api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&comp"
+    ],
+    "cardRequest": [
+      {
+        "ms": -1790250123707,
+        "bytes": 218680,
+        "startedAt": 3607,
+        "serverTiming": "auth;dur=335.6, perm;dur=212.8, collectible;dur=2453.5, payments;dur=114.1, policies;dur=93.9, read;dur=0.2, identity;dur=0.3, serialize;dur=1.0, total;dur=3211.4",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250120446,
+        "bytes": 218680,
+        "startedAt": 7218,
+        "serverTiming": "auth;dur=331.3, perm;dur=229.0, collectible;dur=2552.6, payments;dur=101.5, policies;dur=114.0, read;dur=0.1, identity;dur=0.3, serialize;dur=1.3, total;dur=3330.1",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ],
+    "allRequests": [
+      {
+        "ms": -1790250122262,
+        "bytes": 84393,
+        "at": 817,
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a"
+      },
+      {
+        "ms": -1790250127395,
+        "bytes": 16754,
+        "at": 1465,
+        "url": "/api/admin/locations?hierarchy=1"
+      },
+      {
+        "ms": -1790250127362,
+        "bytes": 22,
+        "at": 1494,
+        "url": "/api/admin/operational-tasks?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250127494,
+        "bytes": 115,
+        "at": 1521,
+        "url": "/api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250127429,
+        "bytes": 13,
+        "at": 1588,
+        "url": "/api/admin/activity?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=100"
+      },
+      {
+        "ms": -1790250125951,
+        "bytes": 690,
+        "at": 1691,
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250127003,
+        "bytes": 14,
+        "at": 2011,
+        "url": "/api/admin/communications/threads?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=40"
+      },
+      {
+        "ms": -1790250126953,
+        "bytes": 7533,
+        "at": 2063,
+        "url": "/api/admin/communications/bindings"
+      },
+      {
+        "ms": -1790250126730,
+        "bytes": 14590,
+        "at": 2131,
+        "url": "/api/admin/communications/conversations"
+      },
+      {
+        "ms": -1790250126709,
+        "bytes": 3566,
+        "at": 2197,
+        "url": "/api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&comp"
+      },
+      {
+        "ms": -1790250125009,
+        "bytes": 9734,
+        "at": 2644,
+        "url": "/api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250128234,
+        "bytes": 366,
+        "at": 3071,
+        "url": "/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250127881,
+        "bytes": 22617,
+        "at": 3553,
+        "url": "/api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&threa"
+      },
+      {
+        "ms": -1790250123707,
+        "bytes": 218680,
+        "at": 3607,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250120446,
+        "bytes": 218680,
+        "at": 7218,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ]
+  },
+  {
+    "host": "focus",
+    "pass": "warm-2",
+    "shellAt": 78,
+    "firstRowsAt": 7251,
+    "settledAt": 7254,
+    "rows": 116,
+    "apiRequestCount": 16,
+    "financialsRequests": 4,
+    "slowest": [
+      "-1790250132416ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250134380ms 84391B /api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a",
+      "-1790250135149ms 2168B /api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries?include_previews=false&count_mode=",
+      "-1790250135832ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250137141ms 9734B /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250137862ms 690B /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+    ],
+    "cardRequest": [
+      {
+        "ms": -1790250135832,
+        "bytes": 218680,
+        "startedAt": 3779,
+        "serverTiming": "auth;dur=307.3, perm;dur=195.0, collectible;dur=2673.6, payments;dur=135.7, policies;dur=99.2, read;dur=0.6, identity;dur=0.3, serialize;dur=0.6, total;dur=3412.4",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250132416,
+        "bytes": 218680,
+        "startedAt": 7241,
+        "serverTiming": "auth;dur=334.2, perm;dur=248.4, collectible;dur=2398.3, payments;dur=91.2, policies;dur=110.4, read;dur=0.1, identity;dur=0.3, serialize;dur=0.9, total;dur=3183.7",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ],
+    "allRequests": [
+      {
+        "ms": -1790250135149,
+        "bytes": 2168,
+        "at": 92,
+        "url": "/api/admin/departments/3933ac47-077a-4de8-aaac-8aed48d80413/work-unit-queue-summaries?include_previews=false&count_mode="
+      },
+      {
+        "ms": -1790250134380,
+        "bytes": 84391,
+        "at": 837,
+        "url": "/api/admin/view-models/drawer/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a?attention_subject_id=b5b62172-8b27-44ff-a"
+      },
+      {
+        "ms": -1790250139812,
+        "bytes": 16754,
+        "at": 1427,
+        "url": "/api/admin/locations?hierarchy=1"
+      },
+      {
+        "ms": -1790250139845,
+        "bytes": 13,
+        "at": 1525,
+        "url": "/api/admin/activity?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=100"
+      },
+      {
+        "ms": -1790250139648,
+        "bytes": 22,
+        "at": 1589,
+        "url": "/api/admin/operational-tasks?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250139619,
+        "bytes": 115,
+        "at": 1750,
+        "url": "/api/admin/related/opportunity/e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250137862,
+        "bytes": 690,
+        "at": 1771,
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250139249,
+        "bytes": 14590,
+        "at": 1990,
+        "url": "/api/admin/communications/conversations"
+      },
+      {
+        "ms": -1790250139362,
+        "bytes": 14,
+        "at": 2007,
+        "url": "/api/admin/communications/threads?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&limit=40"
+      },
+      {
+        "ms": -1790250139093,
+        "bytes": 3566,
+        "at": 2201,
+        "url": "/api/admin/communications/family-workspace?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a&comp"
+      },
+      {
+        "ms": -1790250139025,
+        "bytes": 7533,
+        "at": 2344,
+        "url": "/api/admin/communications/bindings"
+      },
+      {
+        "ms": -1790250137141,
+        "bytes": 9734,
+        "at": 2496,
+        "url": "/api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250140910,
+        "bytes": 366,
+        "at": 3290,
+        "url": "/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=e56e72d5-c7bc-41ff-8d34-f5d34fd4160a"
+      },
+      {
+        "ms": -1790250140189,
+        "bytes": 22617,
+        "at": 3304,
+        "url": "/api/admin/communications/family-workspace?customer_id=84ad457f-d129-4b50-95d7-0efb194c1830&composer_channel=email&threa"
+      },
+      {
+        "ms": -1790250135832,
+        "bytes": 218680,
+        "at": 3779,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250132416,
+        "bytes": 218680,
+        "at": 7241,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ]
+  },
+  {
+    "host": "accounts",
+    "pass": "warm",
+    "shellAt": 8911,
+    "firstRowsAt": 8919,
+    "settledAt": 8920,
+    "rows": 116,
+    "apiRequestCount": 6,
+    "financialsRequests": 6,
+    "slowest": [
+      "-1790250170473ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250174015ms 218680B /api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250174418ms 4142B /api/admin/financials/subjects",
+      "-1790250174724ms 52925B /api/admin/financials/position",
+      "-1790250175289ms 9734B /api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+      "-1790250176083ms 690B /api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+    ],
+    "cardRequest": [
+      {
+        "ms": -1790250174015,
+        "bytes": 218680,
+        "startedAt": 5000,
+        "serverTiming": "auth;dur=300.5, perm;dur=197.2, collectible;dur=2460.5, payments;dur=89.1, policies;dur=99.4, read;dur=0.2, identity;dur=0.5, serialize;dur=0.9, total;dur=3148.4",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250170473,
+        "bytes": 218680,
+        "startedAt": 8581,
+        "serverTiming": "auth;dur=355.6, perm;dur=198.7, collectible;dur=2529.4, payments;dur=96.9, policies;dur=102.8, read;dur=0.1, identity;dur=0.4, serialize;dur=0.9, total;dur=3284.8",
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ],
+    "allRequests": [
+      {
+        "ms": -1790250174724,
+        "bytes": 52925,
+        "at": 1234,
+        "url": "/api/admin/financials/position"
+      },
+      {
+        "ms": -1790250174418,
+        "bytes": 4142,
+        "at": 1544,
+        "url": "/api/admin/financials/subjects"
+      },
+      {
+        "ms": -1790250176083,
+        "bytes": 690,
+        "at": 2928,
+        "url": "/api/admin/financials/responsibility-positions?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250175289,
+        "bytes": 9734,
+        "at": 3723,
+        "url": "/api/admin/financials/family-discount-position?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250174015,
+        "bytes": 218680,
+        "at": 5000,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      },
+      {
+        "ms": -1790250170473,
+        "bytes": 218680,
+        "at": 8581,
+        "url": "/api/admin/financials/card?customer_id=29944d3e-8267-45b7-8dcb-7405060e2573"
+      }
+    ]
+  }
+]

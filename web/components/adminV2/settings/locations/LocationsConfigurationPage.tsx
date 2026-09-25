@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { rowsBelongingToSite } from "@/lib/location/canonicalRoomProvider";
 import { eligibleInsideOptions } from "@/lib/locations/roomTypeVocabulary";
 import { useLocationOperationalRules } from "@/components/adminV2/settings/locations/useLocationOperationalRules";
-import { siteAcceptsLegacyCapacityCapture } from "@/lib/locations/capacityAdoptionState";
 import { CalendarDays, MapPin } from "lucide-react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import {
@@ -295,7 +294,12 @@ export default function LocationsConfigurationPage({
 
     // Canonical capacity rules drive coverage, room capacity standing and the
     // Add Room debt stop. One org-scoped read, shared by every surface below.
-    const { capacityRules, refresh: refreshCapacityRules } = useLocationOperationalRules();
+    const {
+        capacityRules,
+        ratioRules,
+        ratioRuleTiers,
+        refresh: refreshCapacityRules,
+    } = useLocationOperationalRules();
     const ownedConcernSetup = selectedSite ? ownedConcernSetupByLocation[selectedSite.id] : undefined;
     const model =
         selectedSite ?
@@ -568,7 +572,7 @@ export default function LocationsConfigurationPage({
                     }))}
                     rooms={selectedRooms.map((room) => ({
                         id: room.id,
-                        label: String(room.label ?? "").trim() || "Room",
+                        label: String(room.label ?? "").trim() || "Untitled space",
                         is_active: room.is_active !== false,
                         metadata: room.metadata,
                     }))}
@@ -644,6 +648,8 @@ export default function LocationsConfigurationPage({
                         excludeLocationId: selectedRoom?.id ?? null,
                     })}
                     capacityRules={capacityRules}
+                    ratioRules={ratioRules}
+                    ratioTiers={ratioRuleTiers}
                     todayYmd={operationalEnrollmentClientTodayYmd()}
                     onCapacityChanged={async () => {
                         await refreshCapacityRules();
@@ -667,10 +673,28 @@ export default function LocationsConfigurationPage({
                                 programOptions={programOptionsForSite(selectedSite.id)}
                                 schedulePatterns={selectedSchedules}
                                 insideOptions={eligibleInsideOptions(roomRows, selectedSite.id)}
-                                acceptsLegacyCapacity={siteAcceptsLegacyCapacityCapture(selectedRooms, capacityRules)}
                                 onCancel={() => setCreatingRoom(false)}
                                 onCreate={async (input) => {
                                     const newId = await createRoomUnit(selectedSite.id, input);
+                                    // The space has to exist before a rule can point at it,
+                                    // so capacity is a second call rather than part of the
+                                    // payload. A failure here leaves a real space with no
+                                    // capacity — visibly empty on the object, and fixable
+                                    // by typing the number again.
+                                    if (input.capacity != null) {
+                                        await fetch("/api/admin/operational-config/capacity-rules", {
+                                            method: "POST",
+                                            credentials: "include",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                                action: "set_object_capacity",
+                                                room_location_id: newId,
+                                                unit_role: input.unit_role,
+                                                capacity: input.capacity,
+                                            }),
+                                        });
+                                        await refreshCapacityRules();
+                                    }
                                     setCreatingRoom(false);
                                     setSelectedRoomId(newId);
                                     navigate("rooms", newId);

@@ -93,7 +93,60 @@ function pagingClient(fixture: Record<string, Row[]>, trips: { table: string; fr
         };
         return self;
     };
-    return { from: (tbl: string) => build(tbl), rpc: () => build("(rpc)") } as never;
+    /*
+     * ── THE BUNDLE IS NOT PAGE-CAPPED, AND THAT IS THE POINT ────────────────────────────────────
+     *
+     * The defect this file locks was PostgREST's silent row ceiling: a balance computed from the
+     * first thousand rows of a longer ledger. The account fact bundle answers as one jsonb value,
+     * so the ceiling does not apply to it — which is why this fake serves the RPC WITHOUT the cap
+     * while still capping every table read. If the card ever walks the tables again, it meets the
+     * cap again and these tests fail, which is exactly the regression worth catching.
+     */
+    const rpcBundle = () => {
+        const all = (t: string) => fixture[t] ?? [];
+        const agreements = all("child_enrollment_agreements");
+        const charges = all("charges");
+        trips.push({ table: "rpc:financials_account_fact_bundle", from: null });
+        return {
+            resolved_customer_id: HOUSEHOLD,
+            agreements,
+            members: all("customer_members"),
+            reductions_by_agreement: all("financial_reduction_applications"),
+            commercial_policies: all("commercial_policies"),
+            charges,
+            reductions_by_charge: all("financial_reduction_applications"),
+            payment_allocations: all("payment_allocations"),
+            responsibility_allocations: all("financial_responsibility_allocations"),
+            subsidy_claim_lines: all("financial_subsidy_claim_lines"),
+            payments_backing: all("payments"),
+            responsibility_attributions: all("payment_responsibility_attributions"),
+            responsible_persons: all("persons"),
+            funding_by_allocation: [],
+            funding_by_share: [],
+            funding_for_responsibility: [],
+            subsidy_claims: all("financial_subsidy_claims"),
+            subsidy_variances: [],
+            collection_attempts: all("payment_collection_attempts"),
+            payments_by_source: all("payments"),
+            payments_for_views: all("payments"),
+            charges_for_allocations: charges,
+            payer_customers: all("customers"),
+            payment_refunds: [],
+            counts: {
+                agreements: agreements.length,
+                charges: charges.length,
+                allocations: all("financial_responsibility_allocations").length,
+                claim_lines: all("financial_subsidy_claim_lines").length,
+            },
+        };
+    };
+    return {
+        from: (tbl: string) => build(tbl),
+        rpc: (name: string) =>
+            name === "financials_account_fact_bundle"
+                ? { then: (r: (v: unknown) => unknown) => r({ data: rpcBundle(), error: null }) }
+                : build("(rpc)"),
+    } as never;
 }
 
 function charge(i: number, over: Row = {}): Row {

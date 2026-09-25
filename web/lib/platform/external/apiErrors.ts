@@ -31,6 +31,17 @@ export type ApiErrorType =
     | "forbidden_resource"
     | "not_found"
     | "conflict"
+    /*
+     * A REPLAY THAT CONTRADICTS ITSELF — distinct from `conflict` on purpose.
+     *
+     * `conflict` means the domain refused: the fact cannot coexist with what Alloy already holds.
+     * This means something narrower and more actionable — the caller reused an identity it had
+     * already used, with a different payload. The client fix is different in each case (reconcile
+     * your data versus stop reusing the id), so a client that cannot tell them apart will retry the
+     * one it should not. Overloading `conflict` would have hidden that distinction behind a status
+     * code they share.
+     */
+    | "idempotency_conflict"
     | "rate_limited"
     | "internal_error";
 
@@ -51,6 +62,7 @@ const STATUS_BY_TYPE: Record<ApiErrorType, number> = {
     forbidden_resource: 403,
     not_found: 404,
     conflict: 409,
+    idempotency_conflict: 409,
     rate_limited: 429,
     internal_error: 500,
 };

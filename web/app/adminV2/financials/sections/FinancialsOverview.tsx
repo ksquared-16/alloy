@@ -28,6 +28,7 @@
  * figure lies.
  */
 
+import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import { useMemo } from "react";
 
 import { SurfaceHeaderKpiCard } from "@/components/presentation/workspace/WorkspaceHeader";
@@ -238,18 +239,45 @@ export default function FinancialsOverview({
                                     </p>
                                     <p className="mt-0.5 text-xs text-alloy-midnight/55">{why}</p>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenSection(section)}
-                                    data-financials-overview-open={section}
-                                    className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium shadow-sm transition ${
-                                        waiting
-                                            ? "bg-alloy-midnight text-white hover:bg-alloy-midnight/90"
-                                            : "border border-alloy-stone/25 bg-white text-alloy-midnight/70 hover:bg-alloy-stone/[0.08]"
-                                    }`}
-                                >
-                                    {cta}
-                                </button>
+                                {/*
+                                  * THE ACTIONABLE ONE IS A PRIMARY ACTION, in the language the
+                                  * rest of Alloy already uses for primary actions.
+                                  *
+                                  * It was `bg-alloy-midnight` — navy — which is the colour this
+                                  * product uses for chrome and headers, not for the thing an
+                                  * operator is being asked to do. Financials configuration has
+                                  * spoken Bend Pine for primary actions since Slice 3, so an
+                                  * operator moving between the two surfaces met two different
+                                  * languages for the same idea.
+                                  *
+                                  * The token comes from the shared primitive rather than a green
+                                  * written here: a Financials-only green would be the same
+                                  * divergence again, pointing the other way.
+                                  *
+                                  * A section with nothing waiting keeps its quiet treatment. It is
+                                  * not disabled — an operator may always go and look — but it is
+                                  * not asking for anything either, and painting it Bend Pine for
+                                  * visual consistency would make four identical calls to action
+                                  * out of one real one.
+                                  */}
+                                {waiting ? (
+                                    <ConfigurationPrimaryButton
+                                        onClick={() => onOpenSection(section)}
+                                        data-financials-overview-open={section}
+                                        className="shrink-0 whitespace-nowrap"
+                                    >
+                                        {cta}
+                                    </ConfigurationPrimaryButton>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenSection(section)}
+                                        data-financials-overview-open={section}
+                                        className="shrink-0 whitespace-nowrap rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-xs font-medium text-alloy-midnight/70 shadow-sm transition hover:bg-alloy-stone/[0.08]"
+                                    >
+                                        {cta}
+                                    </button>
+                                )}
                             </div>
                         );
                     })}

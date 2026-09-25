@@ -77,7 +77,13 @@ describe("Household is explicit, and never an absence", () => {
 
     it("an empty target cannot be committed", () => {
         const cmd = src(CMD);
-        const row = cmd.slice(cmd.indexOf("<ActionRow>"));
+        /*
+         * THE COMMIT ROW, NOT MERELY THE FIRST ROW. The command grew a second `<ActionRow>` above
+         * this one — "Add a party", in the charge-scoped responsibility editor — and anchoring on
+         * the first occurrence silently moved this rule onto a control that commits nothing. The
+         * row this lock is about is the one carrying the submit.
+         */
+        const row = cmd.slice(cmd.lastIndexOf("<ActionRow>", cmd.indexOf("onClick={controls?.onSubmit}")));
         expect(row.slice(0, 700)).toContain("householdSelected");
         expect(row.slice(0, 700)).toContain("selectedChildIds.length === 0");
         expect(row.slice(0, 700)).toContain("disabled=");

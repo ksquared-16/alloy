@@ -143,6 +143,12 @@ export type RouteTimingMarks = {
             overlap_ms: number | null;
             /** ADDED DOCUMENT WAIT: what was left after everything else finished. */
             join_wait_ms: number | null;
+            /**
+             * 1 when the Work View totals had landed by the commit boundary, 0 when they settle
+             * afterwards. Candidate A stopped the frame waiting for them, so `join_wait_ms` is now
+             * zero by construction; this is what says whether the values were actually there.
+             */
+            seed_at_commit?: number | null;
             /** resolved | seed_failed | no_announcement | a specific unavailable reason. */
             outcome: string;
             /** Distinct (work unit, queue key) lanes the seed evaluated. */
@@ -222,20 +228,18 @@ export type RouteTimingMarks = {
             health_contacts_ms: number | null;
         };
         financials?: {
-            agreements_ms: number | null;
-            members_ms: number | null;
-            reductions_ms: number | null;
-            charges_ms: number | null;
-            config_ms: number | null;
-            responsibility_ms: number | null;
             collectible_ms: number | null;
-            collectible_calls: number | null;
-            payments_ms: number | null;
-            payment_views_ms: number | null;
+            config_ms: number | null;
+            fact_bundle_ms: number | null;
             merchant_ms: number | null;
-            payment_setup_ms: number | null;
             payer_candidates_ms: number | null;
-            open_collections_ms: number | null;
+            payment_holds_ms: number | null;
+            payment_setup_ms: number | null;
+            payment_views_ms: number | null;
+            payments_ms: number | null;
+            policies_ms: number | null;
+            responsibility_ms: number | null;
+            collectible_calls: number | null;
         };
     } | null;
 
@@ -417,19 +421,17 @@ export function recordHealthSpans(spans: Partial<Record<HealthSpanName, number>>
 
 /** The Financials build spans, by the names the payload carries. */
 export type FinancialsSpanName =
-    | "agreements_ms"
-    | "members_ms"
-    | "reductions_ms"
-    | "charges_ms"
-    | "config_ms"
-    | "responsibility_ms"
     | "collectible_ms"
-    | "payments_ms"
-    | "payment_views_ms"
+    | "config_ms"
+    | "fact_bundle_ms"
     | "merchant_ms"
-    | "payment_setup_ms"
     | "payer_candidates_ms"
-    | "open_collections_ms";
+    | "payment_holds_ms"
+    | "payment_setup_ms"
+    | "payment_views_ms"
+    | "payments_ms"
+    | "policies_ms"
+    | "responsibility_ms";
 
 /**
  * A CLOCK FOR THE FINANCIALS BUILD'S INTERNAL BOUNDARIES.
@@ -483,20 +485,18 @@ export function recordFinancialsSpans(
         const { marks } = routeTimingCollector();
         const existing = marks.route_compose_spans;
         const financials = {
-            agreements_ms: spans.agreements_ms ?? null,
-            members_ms: spans.members_ms ?? null,
-            reductions_ms: spans.reductions_ms ?? null,
-            charges_ms: spans.charges_ms ?? null,
-            config_ms: spans.config_ms ?? null,
-            responsibility_ms: spans.responsibility_ms ?? null,
             collectible_ms: spans.collectible_ms ?? null,
-            collectible_calls: spans.collectible_calls ?? null,
-            payments_ms: spans.payments_ms ?? null,
-            payment_views_ms: spans.payment_views_ms ?? null,
+            config_ms: spans.config_ms ?? null,
+            fact_bundle_ms: spans.fact_bundle_ms ?? null,
             merchant_ms: spans.merchant_ms ?? null,
-            payment_setup_ms: spans.payment_setup_ms ?? null,
             payer_candidates_ms: spans.payer_candidates_ms ?? null,
-            open_collections_ms: spans.open_collections_ms ?? null,
+            payment_holds_ms: spans.payment_holds_ms ?? null,
+            payment_setup_ms: spans.payment_setup_ms ?? null,
+            payment_views_ms: spans.payment_views_ms ?? null,
+            payments_ms: spans.payments_ms ?? null,
+            policies_ms: spans.policies_ms ?? null,
+            responsibility_ms: spans.responsibility_ms ?? null,
+            collectible_calls: spans.collectible_calls ?? null,
         };
         // Same merge discipline as `recordProducerSpans`: the outer compose writes
         // `route_compose_spans` after this runs, and merges into whatever is already here.

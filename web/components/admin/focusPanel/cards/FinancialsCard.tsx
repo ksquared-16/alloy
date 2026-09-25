@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
+import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
+import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
@@ -19,6 +22,10 @@ import {
 } from "@/components/financials/FinancialCommandChannel";
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
+import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
+import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
+import PaymentMethodsSection from "@/components/operationalCards/PaymentMethodsSection";
+import AutopaySection from "@/components/operationalCards/AutopaySection";
 import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import CardCollectionField from "./CardCollectionField";
@@ -79,6 +86,21 @@ type Props = {
      * summary: balance, due, past due, `Payment`, `Add charge`, and nothing else in the header.
      */
     summaryVariant?: "period" | "account";
+    /**
+     * ── THE ACCOUNT WORKSPACE OPENS ON DETAILS ────────────────────────────────────────────────
+     *
+     * The Focus Panel shows a compact card and reaches Details through an action, because there
+     * Financials is context beside other work. A workspace whose whole subject IS the account has
+     * nothing to reach FROM — the operator selected the account; Details is what they asked for.
+     *
+     * Accounts passed `showDetailsAction={false}`, which left `onDetails` undefined and the
+     * `detail` surface unreachable. And the compact relationship row, the discount gear, Manage
+     * payments and the responsibility gear all live on that surface — so the workspace had no way
+     * to any of them, and grew its own ledger composition underneath to compensate.
+     *
+     * This is not a second mode. It is the same surface, entered at open rather than on request.
+     */
+    detailsAreTheSurface?: boolean;
 };
 
 /**
@@ -116,6 +138,144 @@ type Props = {
  * row is never itself reversed — the bound is the database's (`20260902140000`) and the read model
  * projects it, so this card renders the answer rather than deciding it.
  */
+/**
+ * ── TURNING TWO CANONICAL READS INTO TWO ROWS ────────────────────────────────────────────────
+ *
+ * Both of these are PRESENTATION. They choose words for answers the server already gave, per
+ * child, and neither computes money, resolves specificity, or decides what applies to whom. Every
+ * number they render was carried through from the read that produced it.
+ *
+ * They live at module scope so it is obvious they hold no state and can see no other source: a
+ * summariser that could reach the view model is a summariser that can quietly substitute one
+ * child's answer for another's, which is the exact defect the child grain exists to prevent.
+ */
+
+
+/**
+ * WHO OWES, AND WHERE THAT ANSWER COMES FROM — in that order.
+ *
+ * This read "The account's arrangement: Cert Certhouse $18.00", which leads with the model and
+ * makes the operator step over it to reach the people. `Charge to` asks who owes; the parties are
+ * the answer, and that the answer is the account's standing one is CONTEXT — true, worth saying,
+ * and said second.
+ *
+ * "2 responsible parties" when there are too many to name: the card has one line, and a truthful
+ * count beats a truncated list of people.
+ */
+function summariseHouseholdArrangement(body: unknown): string {
+    const household = (body as {
+        household?: {
+            shares?: Array<{
+                name?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        } | null;
+    } | null)?.household;
+    const shares = household?.shares ?? [];
+    if (shares.length === 0) return "No standing responsibility on record";
+    /* Beyond two, naming everybody costs more room than the row has and says less. */
+    if (shares.length > 2) return `${shares.length} responsible parties · household responsibility`;
+    return `${shares
+        .map((share) => {
+            const who = (share.name ?? "").trim() || "Unnamed";
+            if (share.method === "percentage" && share.percentBasisPoints != null) {
+                return `${who} ${share.percentBasisPoints / 100}%`;
+            }
+            if (share.method === "fixed" && share.amountCents != null) {
+                return `${who} $${(share.amountCents / 100).toFixed(2)}`;
+            }
+            if (share.method === "remainder") return `${who} remainder`;
+            return who;
+        })
+        .join(" · ")} · household responsibility`;
+}
+
+/**
+ * THE FAMILY'S DISCOUNT POSITION IN ONE PHRASE — for the relationship row, which has one line.
+ *
+ * This replaced a per-child list. The list was right about grain and wrong about weight: naming
+ * every child needed a permanent full-width row of its own, and two children on one policy at one
+ * rate produced two lines saying the same thing.
+ *
+ * Three honest answers, and the rule that picks between them is about AGREEMENT, not counting:
+ *
+ *   every child resolves the same policies at the same authored rate  →  "Sibling discount · 10%"
+ *   the children disagree                                             →  "2 discount arrangements"
+ *   no policy reaches any child                                       →  "No discount"
+ *
+ * Collapsing is only truthful when the answers are identical, which is why the AUTHORED RATE has
+ * to travel from the resolver rather than be inferred. One sibling policy produced -$18.50 for one
+ * child and -$145.00 for the other: the same 10% on two different tuitions. Comparing expected
+ * AMOUNTS would call that a disagreement and print "2 discount arrangements" for a family that has
+ * one discount — the row would be lying about the simplest case there is.
+ *
+ * A child the policies never mention counts as a child with no discount. A family where one child
+ * is covered and one is not has NOT agreed, however few policies are in play.
+ */
+function summariseFamilyDiscount(
+    body: unknown,
+    allChildren: readonly { customerMemberId: string }[],
+): string {
+    const parsed = body as {
+        policies?: Array<{
+            policyId?: string | null;
+            label?: string | null;
+            subjects?: Array<{
+                customerMemberId?: string | null;
+                currencyCode?: string | null;
+                basis?: "percentage" | "amount" | null;
+                basisValue?: number | null;
+            }>;
+        }>;
+    } | null;
+    const policies = parsed?.policies;
+    if (!Array.isArray(policies)) return "No discount";
+
+    /* What each child resolves: the policies reaching them, each with its authored rate. */
+    const byChild = new Map<string, Array<{ policyId: string; label: string; rate: string }>>();
+    for (const child of allChildren) byChild.set(child.customerMemberId, []);
+    for (const policy of policies) {
+        for (const subject of policy.subjects ?? []) {
+            const key = (subject.customerMemberId ?? "").trim();
+            if (!key) continue;
+            const rate =
+                subject.basis === "percentage" && subject.basisValue != null
+                    ? `${subject.basisValue}%`
+                    : subject.basis === "amount" && subject.basisValue != null
+                      ? money(subject.basisValue, subject.currencyCode ?? "USD")
+                      : "";
+            const entry = byChild.get(key) ?? [];
+            entry.push({ policyId: (policy.policyId ?? "").trim(), label: (policy.label ?? "Discount").trim(), rate });
+            byChild.set(key, entry);
+        }
+    }
+
+    const reached = [...byChild.values()].filter((list) => list.length > 0);
+    if (reached.length === 0) return "No discount";
+
+    /* One child's whole position as a stable fingerprint — policy AND rate, order-independent. */
+    const fingerprint = (list: Array<{ policyId: string; rate: string }>) =>
+        list.map((l) => `${l.policyId}@${l.rate}`).sort().join("|");
+    const fingerprints = new Set([...byChild.values()].map(fingerprint));
+
+    if (fingerprints.size === 1) {
+        return reached[0]!.map((l) => (l.rate ? `${l.label} · ${l.rate}` : l.label)).join(" · ");
+    }
+
+    /*
+     * THEY DISAGREE, AND THE ROW SAYS SO RATHER THAN CHOOSING ONE CHILD'S ANSWER. Enumerating
+     * every child here is exactly what made this a second permanent row; the gear opens the card
+     * that can afford the breakdown.
+     */
+    const count = reached.length;
+    return `${count} discount ${count === 1 ? "arrangement" : "arrangements"}`;
+}
+
+/** A command that cannot be aimed yet. Rendered inert rather than omitted, so geometry holds. */
+const NO_COMMAND = () => undefined;
+
 export default function FinancialsCard({
     model,
     context,
@@ -123,6 +283,7 @@ export default function FinancialsCard({
     coordination,
     showDetailsAction = true,
     summaryVariant = "period",
+    detailsAreTheSurface = false,
 }: Props) {
     const scope = context.participantScope ?? null;
     const scopedMemberId = scope?.customerMemberId ?? null;
@@ -171,6 +332,13 @@ export default function FinancialsCard({
      * `awaitingFirstAnswer` below.
      */
     const answeredKeyRef = useRef<string | null>(null);
+    /** The account a FULL read is in flight for, so a late projection cannot restart it. */
+    const deepReadInFlightForRef = useRef<string | null>(null);
+    /**
+     * The one read currently in the air, keyed by the composed query. A second caller for the same
+     * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
+     * not a cache, and never outlives the operation.
+     */
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -211,11 +379,72 @@ export default function FinancialsCard({
      * was cleared.
      */
     const [extraChildIds, setExtraChildIds] = useState<string[]>([]);
-    const [stack, setStack] = useState<FinancialsSurface[]>([]);
+    const [stack, setStack] = useState<FinancialsSurface[]>(
+        /*
+         * The workspace host starts ON Details; the Focus Panel starts compact and pushes it. Same
+         * stack either way, so every depth card, every dismissal and the whole escape-ownership
+         * doctrine behave identically in both hosts.
+         */
+        detailsAreTheSurface ? [{ kind: "detail" }] : [],
+    );
     const surface = stack.length ? stack[stack.length - 1] : null;
     const overlay = surface?.kind ?? null;
     const push = useCallback((next: FinancialsSurface) => setStack((st) => [...st, next]), []);
-    const pop = useCallback(() => setStack((st) => st.slice(0, -1)), []);
+    const pop = useCallback(
+        () =>
+            setStack((st) => {
+                /*
+                 * ── DETAILS IS A FLOOR IN THE WORKSPACE, NOT A LAYER ─────────────────────────
+                 *
+                 * Dismissing a depth card must return the operator to the account they were
+                 * working, and in the workspace that account IS Details — popping past it would
+                 * strand them on a compact summary they never asked for and cannot leave, because
+                 * the workspace has no Details action to get back.
+                 *
+                 * In the Focus Panel there is one, so Details stays an ordinary layer there.
+                 */
+                if (detailsAreTheSurface && st.length <= 1) return st;
+                return st.slice(0, -1);
+            }),
+        [detailsAreTheSurface],
+    );
+
+    /*
+     * ── FOCUS RETURNS TO THE CONTROL THAT OPENED THE DEPTH CARD ───────────────────────────────
+     *
+     * The ownership doctrine says a dismissed depth card hands focus back to the control that
+     * opened it; without that, Escape drops a keyboard operator on <body> and they restart from
+     * the top of the page. The Accounts host keeps a ref, because there the gear and the card
+     * live in one component. Here they do not: opening a depth card returns early, Details
+     * unmounts, and the gear element is removed from the document — a ref would hold a node that
+     * is no longer anywhere.
+     *
+     * So the opener records WHAT it opened from, as a selector, and the restore runs after
+     * Details is back in the document. Same rule as Accounts, expressed the only way that
+     * survives an unmount.
+     */
+    const adminFocusSelector = useRef<string | null>(null);
+    const openAdmin = useCallback(
+        (kind: "responsibility_admin" | "discount_admin" | "payments_admin", selector: string) => {
+            adminFocusSelector.current = selector;
+            push({ kind });
+        },
+        [push],
+    );
+    useEffect(() => {
+        const selector = adminFocusSelector.current;
+        /* Only once the depth card is actually gone, and only for the card that set it. */
+        if (!selector || overlay === "responsibility_admin" || overlay === "discount_admin" || overlay === "payments_admin") {
+            return;
+        }
+        adminFocusSelector.current = null;
+        /* One frame, so the restored Details subtree exists to be queried. */
+        const frame = requestAnimationFrame(() => {
+            const gear = document.querySelector<HTMLElement>(selector);
+            gear?.focus();
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [overlay]);
     const resetStack = useCallback(() => setStack([]), []);
     /*
      * ── ONE ENTRY, TWO OPERATIONS ─────────────────────────────────────────────────────────────
@@ -231,6 +460,175 @@ export default function FinancialsCard({
     const [entryMode, setEntryMode] = useState<"charge" | "adjustment">("charge");
 
     const expanded = overlay === "detail";
+
+    /*
+     * ── WHAT THE RELATIONSHIP ROW SAYS ───────────────────────────────────────────────────────
+     *
+     * One phrase, read from the authority that owns the grain and collapsed here for a surface
+     * that has one line. It is deliberately NOT built from `vm.payers`: that field means
+     * responsibility and names the parties on the ACCOUNT, so composing a child-grain answer out
+     * of it would assert one child's position for a sibling who may have their own.
+     *
+     * Responsibility no longer appears on this row at all — it has a first-class KPI at the top
+     * of the card, and its gear sits with the responsible-party filter. The per-child breakdown
+     * of both lives in the depth cards, which are the surfaces that can afford it.
+     */
+    const [adminDiscountSummary, setAdminDiscountSummary] = useState("No discount");
+    const [adminPositionsLoading, setAdminPositionsLoading] = useState(false);
+    /*
+     * THE POLICIES THEMSELVES, kept from the same read rather than fetched again for Add Charge —
+     * which needs their IDS to offer waiving one. Two fetches of one canonical answer would be two
+     * answers the moment configuration changed between them.
+     */
+    const [expectedPolicies, setExpectedPolicies] = useState<Array<{ id: string; label: string }>>([]);
+    /* What the ACCOUNT's standing arrangement says, so Add Charge can show what it would override. */
+    const [standingResponsibilitySummary, setStandingResponsibilitySummary] = useState("Not on record");
+    /*
+     * THE RAW BODY OF THE DISCOUNT READ, kept so the depth card can paint real content on its
+     * first frame. The compact row and the depth card ask the identical question of the identical
+     * route; making the card ask again meant the operator pressed a gear and waited out a second
+     * round trip for an answer this component was already holding.
+     */
+    const [discountPositionBody, setDiscountPositionBody] = useState<FamilyPosition | null>(null);
+    /* Kept so the discount row can be RE-LABELLED when the subjects land, without re-reading. */
+    const [responsibilityPositionBody, setResponsibilityPositionBody] = useState<Record<string, unknown> | null>(null);
+
+    useEffect(() => {
+        /*
+         * ── ONLY WHEN THE SURFACE THAT USES IT IS IN PLAY ────────────────────────────────────
+         *
+         * The compact card does not render the relationship row, so reading each child's
+         * responsibility and discount position for it was two round trips whose answers nothing
+         * displayed — issued for every Financials card on the panel, including the ones an
+         * operator never opens.
+         *
+         * Caught by the root lifecycle's stale guarantee, which asserts the compact card issues
+         * NO request for the initial account: the reads made it fail, and the reason it failed was
+         * the reason they should not have been there.
+         */
+        const detailInPlay = overlay === "detail" || detailsAreTheSurface;
+        if (!customerId || !detailInPlay) return;
+        let cancelled = false;
+        setAdminPositionsLoading(true);
+        /*
+         * CONCURRENT. Two independent questions of two independent authorities; asking them in
+         * series doubles the time the rows say "Reading…" and buys nothing.
+         */
+        void Promise.all([
+            fetch(`/api/admin/financials/responsibility-positions?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+            fetch(`/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`, {
+                credentials: "include",
+            })
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null),
+        ]).then(([positionsBody, discountBody]) => {
+            if (cancelled) return;
+            setAdminPositionsLoading(false);
+
+            /*
+             * THE HOUSEHOLD'S ROSTER decides who counts as a child with no discount. It comes from
+             * the responsibility read because that is the reader that owns "which children does
+             * this household have" — the discount route only knows the children its policies
+             * happened to reach, and a child no policy mentions is exactly the one the collapse
+             * rule must not overlook.
+             */
+            const roster = ((positionsBody as { positions?: Array<{ customerMemberId?: string }> } | null)
+                ?.positions ?? [])
+                .map((position) => ({ customerMemberId: position.customerMemberId ?? "" }))
+                .filter((child) => child.customerMemberId.length > 0);
+            const discountSummary = summariseFamilyDiscount(discountBody, roster);
+            /*
+             * A FAILED READ IS NOT AN ANSWER. The row keeps its last truthful value rather than
+             * falling back to "No discount", which an operator would act on.
+             */
+            if (discountBody) setAdminDiscountSummary(discountSummary);
+
+            if (discountBody) {
+                setDiscountPositionBody(discountBody as FamilyPosition);
+                const policies = (discountBody as { policies?: Array<{ policyId?: string | null; label?: string | null }> })
+                    .policies ?? [];
+                setExpectedPolicies(
+                    policies
+                        .map((policy) => ({ id: (policy.policyId ?? "").trim(), label: (policy.label ?? "Discount").trim() }))
+                        .filter((policy) => policy.id.length > 0),
+                );
+            }
+            if (positionsBody) {
+                setResponsibilityPositionBody(positionsBody as Record<string, unknown>);
+                setStandingResponsibilitySummary(summariseHouseholdArrangement(positionsBody));
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+        /*
+         * ── THE RE-LABEL MUST NOT BE A RE-FETCH ──────────────────────────────────────────────
+         *
+         * `vm?.subjects` used to be in this list, so that a card resolving its subjects after this
+         * read would re-label the discount row rather than leave it naming ids. It re-labelled —
+         * and it also issued both requests a second time. Measured on deployed staging, opening
+         * Accounts fired `responsibility-positions` and `family-discount-position` at +1,414 ms and
+         * again at +2,436 ms, the second pair taking 2,099 ms and 2,255 ms.
+         *
+         * The naming is a rendering concern and belongs downstream of the answer, not to its
+         * acquisition. The bodies are kept and re-derived by the effect below when the subjects
+         * arrive, so the row still stops naming ids and the network is asked once.
+         */
+    }, [customerId, detailsAreTheSurface, overlay]);
+
+    /*
+     * ── RE-LABEL WHEN THE SUBJECTS ARRIVE, WITHOUT ASKING AGAIN ────────────────────────────────
+     *
+     * The discount route identifies a child by id; the card's subjects are what turn that into a
+     * name. When they resolve after the read, the row must stop naming ids — but that is a
+     * rendering concern over an answer already in hand, not a reason to issue the two requests a
+     * second time. This derives from the bodies the effect above kept.
+     */
+    useEffect(() => {
+        if (!discountPositionBody && !responsibilityPositionBody) return;
+        const roster = ((responsibilityPositionBody as { positions?: Array<{ customerMemberId?: string }> } | null)
+            ?.positions ?? [])
+            .map((position) => ({ customerMemberId: position.customerMemberId ?? "" }))
+            .filter((child) => child.customerMemberId.length > 0);
+        if (discountPositionBody) setAdminDiscountSummary(summariseFamilyDiscount(discountPositionBody, roster));
+        if (responsibilityPositionBody) {
+            setStandingResponsibilitySummary(summariseHouseholdArrangement(responsibilityPositionBody));
+        }
+    }, [discountPositionBody, responsibilityPositionBody, vm?.subjects]);
+
+    /*
+     * ── EVERY CHILD THE ACCOUNT MAY ARRANGE FOR ───────────────────────────────────────────────
+     *
+     * Read when the responsibility depth card opens, not on every card open: the ledger does not
+     * need it. This fetch used to live in Details, next to the editor it fed. The editor moved to
+     * depth and the fetch has to follow it — a panel handed no member options can only arrange at
+     * household grain, which silently retires child-scoped responsibility rather than declaring it.
+     */
+    const [responsibilityScopeMembers, setResponsibilityScopeMembers] = useState<
+        { customerMemberId: string; label: string }[]
+    >([]);
+    useEffect(() => {
+        if (overlay !== "responsibility_admin" || !customerId || responsibilityScopeMembers.length > 0) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/responsibility-scopes?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: { members?: { customerMemberId: string; label: string }[] } | null) => {
+                if (!cancelled && body?.members) setResponsibilityScopeMembers(body.members);
+            })
+            .catch(() => {
+                /* The card still arranges the household; it simply cannot offer a child. */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [overlay, customerId, responsibilityScopeMembers.length]);
+
     /*
      * ── THE DETAILS VIEW BELONGS TO THE CARD, NOT TO THE DETAILS COMPONENT ────────────────────
      *
@@ -375,40 +773,81 @@ export default function FinancialsCard({
         return null;
     }, [customerId, scopedMemberId]);
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (): Promise<void> => {
         if (!requestQuery) {
             requestSeq.current += 1;
             setVm(null);
             return;
         }
         const answeringKey = customerId ?? scopedMemberId ?? null;
+        /*
+         * ── ONE OPERATION, ONE REQUEST, HOWEVER MANY CALLERS ASK FOR IT ───────────────────────
+         *
+         * MEASURED at the fetch boundary on deployed staging, not inferred: opening Details issued
+         * two identical `financials/card` requests 48ms apart, for the same account, overlapping —
+         * the second reported `identicalInFlight: 1`. Their stacks name two different legitimate
+         * callers of this same `load()`:
+         *
+         *   #1  requestIdleCallback.timeout   the prewarm, which predicted the operator's ask
+         *   #2  the React commit path         the same effect's "asked for: now" branch, once the
+         *                                     overlay opened
+         *
+         * Neither is wrong to ask. The prewarm exists so the operator never waits for what was
+         * predictable, and the click must not depend on a prediction having already landed. What
+         * was wrong is that asking twice ISSUED twice: two ~2.4s server reads racing each other,
+         * each slower for the contention, and the ledger waiting on the later one.
+         *
+         * So the second caller CONSUMES THE FIRST'S RESULT. This is request-scoped coalescing, not
+         * a cache: one entry, keyed by the composed query, cleared the moment it settles. It holds
+         * no financial truth between operations, survives no navigation, and answers no question a
+         * second way — the single response still flows through the same `setVm` and the same
+         * `requestSeq` supersession that keeps one family's balance off another's screen.
+         */
+        /*
+         * The coalescer now lives in `financialsCardRead`, MODULE-SCOPED rather than on this
+         * instance's ref. In the Accounts workspace the card is keyed by account, so a switch
+         * mounts a new instance with a new ref — there was no shared ownership for a prewarm to
+         * hand its in-flight read to, which is why that host never received the read-ahead its
+         * Details guard assumes. Same mechanism, same one-request guarantee, wider scope.
+         */
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
+        /*
+         * WHICH ACCOUNT A FULL READ IS CURRENTLY IN FLIGHT FOR.
+         *
+         * `deepLoadedForRef` records a read that has LANDED, which is one instant too late to stop
+         * the duplicate: measured on deployed staging, the settlement projection almost always
+         * arrives while the read is still in the air, so the guard below found no completed read
+         * and cleared everything — and the second request went out. Recording the read at its
+         * START closes that window. Cleared in `finally`, so a superseded or failed read leaves
+         * nothing latched.
+         */
+        deepReadInFlightForRef.current = answeringKey;
         setLoading(true);
-        try {
-            const query = requestQuery;
-                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
-            const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
-            if (!current()) return;
-            const fresh = json?.ok && json.vm ? json.vm : null;
-            // The endpoint's answer is the FULL model; record which account now has it.
-            if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
-            setVm(fresh);
-        } catch {
-            if (!current()) return;
-            setVm(null);
-        } finally {
-            // A superseded request must not clear the spinner belonging to the one that replaced it.
-            if (current()) {
-                /*
-                 * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before the
-                 * spinner clears, because the frame after `setLoading(false)` is exactly the one
-                 * that decides between "still reading" and "no account".
-                 */
-                answeredKeyRef.current = answeringKey;
-                setLoading(false);
+        const query = requestQuery;
+            try {
+                /* Starts the read, or joins the one a prewarm already has in the air for this account. */
+                const fresh = await readFinancialsCardVm(query);
+                if (!current()) return;
+                // The endpoint's answer is the FULL model; record which account now has it.
+                if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
+                setVm(fresh);
+            } catch {
+                if (!current()) return;
+                setVm(null);
+            } finally {
+                // A superseded request must not clear the spinner belonging to the one that replaced it.
+                if (current()) {
+                    /*
+                     * THIS SUBJECT HAS NOW BEEN ANSWERED — whatever the answer was. Recorded before
+                     * the spinner clears, because the frame after `setLoading(false)` is exactly the
+                     * one that decides between "still reading" and "no account".
+                     */
+                    answeredKeyRef.current = answeringKey;
+                    deepReadInFlightForRef.current = null;
+                    setLoading(false);
+                }
             }
-        }
     }, [customerId, requestQuery, scopedMemberId]);
 
     /*
@@ -1086,6 +1525,36 @@ export default function FinancialsCard({
     }, [overlay]);
 
     useEffect(() => {
+        /*
+         * ── A BOUNDED SUMMARY MUST NOT DISCARD A FULL READ OF THE SAME ACCOUNT ─────────────────
+         *
+         * Measured on deployed staging: opening Details issued `financials/card` TWICE, ~3.2s each,
+         * 218,680 bytes each, the second starting the instant the first returned — so the operator
+         * waited 7.3 seconds for an answer that arrived at 3.5.
+         *
+         * The cause is here. The settlement projection lands AFTER the deep read the click started.
+         * This effect then superseded that read, replaced the full model with the bounded summary,
+         * and cleared `deepLoadedForRef` — which is exactly the condition the prewarm effect below
+         * treats as "this account has not been read", so it read it again. Identical request,
+         * identical bytes, identical answer.
+         *
+         * The projection is a SUBSET of what a full read holds for the same account. So when that
+         * account has been read in full — or is being read right now — the summary carries nothing
+         * and the deeper answer stands. Covering the IN-FLIGHT case is what actually closes the
+         * duplicate: the projection usually lands mid-read, not after it.
+         *
+         * SUBJECT SAFETY IS UNCHANGED, and it is the reason this is scoped so tightly: the guard
+         * applies only when the projection is READY for the account this card has already read.
+         * A projection for a DIFFERENT subject still clears everything, still supersedes any
+         * in-flight read, and still prevents one family's balance appearing under another's name.
+         */
+        const readKey = customerId ?? scopedMemberId;
+        const fullReadCoversThisAccount =
+            provisioned?.state === "ready"
+            && readKey != null
+            && (deepLoadedForRef.current === readKey || deepReadInFlightForRef.current === readKey);
+        if (fullReadCoversThisAccount) return;
+
         // Clear FIRST: the previous household's balance must not linger while the next resolves.
         // Any in-flight RELOAD is superseded too — its ordinal can no longer be current.
         requestSeq.current += 1;
@@ -1093,6 +1562,8 @@ export default function FinancialsCard({
         setDeniedRead(provisioned?.state === "forbidden");
         // A new projection is the BOUNDED summary by construction, whichever account it is for.
         deepLoadedForRef.current = null;
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the identity guard reads this
+        // render's account; adding it as a dependency would re-run the clear on every subject echo.
     }, [provisioned]);
 
     /*
@@ -1178,8 +1649,20 @@ export default function FinancialsCard({
      * matches what they are looking at.
      */
     useEffect(() => {
+        /*
+         * ── THE PRESELECT BELONGS TO THE COMPACT CARD, NOT TO THE ACCOUNT SURFACE ───────────────
+         *
+         * A panel about one child should summarise that child, and the compact card does. Details
+         * is a different object: it is the ACCOUNT, it lists every child's rows, and its own
+         * control says "Everyone". Carrying the preselect into it is what made the band answer for
+         * one child above a household ledger — a total that reconciles to no rows on screen.
+         *
+         * So the preselect applies while the account surface is not open. Opening Details resets
+         * the scope to the account below, and the operator can still narrow it there.
+         */
+        if (detailsAreTheSurface) return;
         setSubjectFilter(scopedMemberId ?? "all");
-    }, [scopedMemberId]);
+    }, [scopedMemberId, detailsAreTheSurface]);
 
     const visibleRows = useMemo(() => {
         if (!vm) return [];
@@ -1442,6 +1925,244 @@ export default function FinancialsCard({
         [chargeInvocation, chargeUnavailableReason, chargeEventDate, chargeNote, running, vm],
     );
 
+    /*
+     * ── WHAT THE OPERATOR DECIDED ABOUT THIS CHARGE, BEFORE THE CHARGE EXISTS ─────────────────
+     *
+     * Responsibility and exclusions are both keyed by charge id, and there is no charge id until
+     * `charge.add` returns one. So the decisions are held here and applied afterwards, against the
+     * charges that were actually created — which is also why there is no durable charge-intent
+     * model: nothing is written that a later step has to reconcile or clean up. An operator who
+     * abandons the command leaves no trace, because these are React state and nothing else.
+     */
+    /*
+     * CHANGING, NOT SCOPING. The operator opens the Charge to editor or leaves it closed; whether
+     * an override becomes a charge-scoped arrangement is this host's problem and always was.
+     */
+    const [chargeToChanging, setChargeToChanging] = useState(false);
+    const [chargeShares, setChargeShares] = useState<
+        Array<{ partyId: string; method: "percentage" | "fixed" | "remainder"; value: string }>
+    >([]);
+    /*
+     * ONE DISCOUNT DECISION. `undefined` means "not yet answered — use what resolution says";
+     * a policy id means that one; `null` means No discount, which is an answer and not an absence.
+     */
+    const [chargeDiscountChoice, setChargeDiscountChoice] = useState<string | null | undefined>(undefined);
+    /*
+     * ── WHAT WOULD REDUCE THE CHARGE THE OPERATOR IS TYPING ──────────────────────────────────
+     *
+     * Asked of the ONE canonical resolver, about a charge that does not exist yet: the template's
+     * category, the amount entered, the child selected, the service date chosen. Re-asked when any
+     * of those change, because a discount that covered tuition may not cover a registration fee
+     * and a selection that was valid a keystroke ago must not survive into a charge it cannot
+     * reduce.
+     *
+     * `wouldApplyPolicyId` is the answer if the operator changes nothing — the canonical default —
+     * and it is also what tells "No discount" apart from a suppression: declining a discount that
+     * WOULD have applied is a decision, declining one that was never coming is the truth.
+     */
+    const [proposedDiscounts, setProposedDiscounts] = useState<{
+        /*
+         * `expectedCents` IS THE RESOLVER'S ANSWER, NOT A RATE TO MULTIPLY BY.
+         *
+         * The route already returns what each policy is worth against this proposed charge —
+         * `resolveFinancialReductions` priced it, through every gate a real charge passes. It was
+         * being dropped on the way in, which left the preview able to name a policy and its rate
+         * but not what it takes off, and left the card the only place a figure could come from.
+         * Carried, never recomputed: a second answer here would make this card a reduction
+         * authority, which is the one thing the selector exists not to be.
+         */
+        options: Array<{
+            policyId: string;
+            label: string;
+            basis: string | null;
+            basisValue: number | null;
+            expectedCents: number | null;
+        }>;
+        wouldApplyPolicyId: string | null;
+    }>({ options: [], wouldApplyPolicyId: null });
+    const chargeDiscountSuppresses = proposedDiscounts.wouldApplyPolicyId;
+
+    useEffect(() => {
+        if (overlay !== "add_charge" || !customerId) return;
+        const template = (vm?.chargeTemplates ?? []).find((tpl) => tpl.id === pending?.templateId)
+            ?? (vm?.chargeTemplates ?? [])[0];
+        const categoryKey = template?.categoryKey ?? "";
+        /* A household charge names no child, and a child's discounts are not the account's. */
+        const memberId = subjectFilter && subjectFilter !== "all" ? subjectFilter : "";
+        if (!categoryKey || !memberId) {
+            setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            return;
+        }
+        const amountCents = Math.round(Number(chargeAmount || "0") * 100) || template?.amountCents || 0;
+        const serviceDate = chargeEventDate || new Date().toISOString().slice(0, 10);
+        let cancelled = false;
+        const query = new URLSearchParams({
+            customer_id: customerId,
+            customer_member_id: memberId,
+            category_key: categoryKey,
+            amount_cents: String(amountCents),
+            service_date: serviceDate,
+        });
+        void fetch(`/api/admin/financials/proposed-charge-discounts?${query.toString()}`, { credentials: "include" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: {
+                options?: Array<{
+                    policyId: string;
+                    label: string;
+                    basis: string | null;
+                    basisValue: number | null;
+                    expectedCents?: number | null;
+                }>;
+                wouldApplyPolicyId?: string | null;
+            } | null) => {
+                if (cancelled) return;
+                setProposedDiscounts({
+                    options: (body?.options ?? []).map((o) => ({
+                        ...o,
+                        expectedCents: o.expectedCents ?? null,
+                    })),
+                    wouldApplyPolicyId: body?.wouldApplyPolicyId ?? null,
+                });
+            })
+            .catch(() => {
+                /* FAIL CLOSED: offer nothing rather than a discount nothing confirmed. */
+                if (!cancelled) setProposedDiscounts({ options: [], wouldApplyPolicyId: null });
+            });
+        return () => { cancelled = true; };
+        /*
+         * EVERY INPUT THE ANSWER DEPENDS ON. Charge type, child, amount and service date all move
+         * eligibility, and a selection that was valid a keystroke ago must not survive into a
+         * charge it cannot reduce.
+         */
+    }, [overlay, customerId, pending?.templateId, subjectFilter, chargeAmount, chargeEventDate, vm?.chargeTemplates]);
+
+    /*
+     * ── WHICH DISCOUNT THIS CHARGE WILL GET, AND WHAT IT IS WORTH ────────────────────────────
+     *
+     * One selection rule, stated once. The card had it inline where the control is built, so the
+     * preview had no way to ask the same question without restating it — and two copies of
+     * "unanswered means the canonical default" is exactly how a preview comes to describe a
+     * different decision from the one the operator is about to make.
+     *
+     * The MONEY is looked up, never derived. `expectedCents` came from the resolver; this picks
+     * the row and hands it on.
+     */
+    const chargeDiscountSelectedPolicyId =
+        chargeDiscountChoice === undefined ? proposedDiscounts.wouldApplyPolicyId : chargeDiscountChoice;
+    const chargeDiscountCents =
+        chargeDiscountSelectedPolicyId
+            ? proposedDiscounts.options.find((o) => o.policyId === chargeDiscountSelectedPolicyId)?.expectedCents
+              ?? null
+            : null;
+
+    const [waiverReason, setWaiverReason] = useState("");
+    const resetChargeDecisions = useCallback(() => {
+        setChargeToChanging(false);
+        setChargeShares([]);
+        setChargeDiscountChoice(undefined);
+        setWaiverReason("");
+    }, []);
+
+    /*
+     * ── AFTER THE CHARGE EXISTS, THE DECISIONS ABOUT IT ──────────────────────────────────────
+     *
+     * Two registered actions, each per created charge: a charge-scoped arrangement when the
+     * operator divided this charge themselves, and a charge-level exclusion per waived policy.
+     * Both are keyed by a charge id that did not exist a moment ago, which is the entire reason
+     * this runs after the create rather than inside it.
+     *
+     * NOTHING IS ROLLED BACK. The charge is canonical the instant it is written, and reversing it
+     * because a waiver failed would destroy real money to tidy up a follow-up — so every refusal
+     * is COLLECTED and returned, and the caller reports them. Each step is independently
+     * retryable, which is what makes reporting rather than unwinding the honest answer.
+     */
+    const applyChargeDecisions = useCallback(
+        async (chargeIds: readonly string[]): Promise<string[]> => {
+            const failures: string[] = [];
+            if (chargeIds.length === 0) return failures;
+
+            const run = async (actionKey: string, payload: Record<string, unknown>): Promise<string | null> => {
+                try {
+                    const res = await fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            action_key: actionKey,
+                            /*
+                             * THE SAME SUBJECT THE CHARGE WAS RAISED AGAINST. There is no `charge`
+                             * entity type in the action runtime; the charge these decisions are
+                             * about travels in the payload, where every other charge-scoped
+                             * financial action carries it.
+                             */
+                            entity_type: chargeInvocation?.entityType ?? "child",
+                            entity_id: chargeInvocation?.entityId ?? "",
+                            mode: "execute",
+                            confirmation: { confirmed: true },
+                            payload,
+                        }),
+                    });
+                    const body = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+                    if (body?.ok) return null;
+                    const message = typeof body?.error === "string" ? body.error : body?.error?.message;
+                    return message || "refused";
+                } catch {
+                    return "could not be sent";
+                }
+            };
+
+            for (const chargeId of chargeIds) {
+                if (chargeToChanging && chargeShares.length > 0) {
+                    /*
+                     * THE SHARES ARE TRANSLATED, NOT COMPUTED. A percentage becomes basis points
+                     * and an amount becomes cents because that is how the domain stores them; what
+                     * a share is WORTH against this charge is the resolver's answer, and this card
+                     * never asks itself that question.
+                     */
+                    const shares = chargeShares
+                        .filter((share) => share.partyId.trim().length > 0)
+                        .map((share) => ({
+                            responsible_party_id: share.partyId,
+                            method: share.method,
+                            percent_basis_points:
+                                share.method === "percentage" ? Math.round(Number(share.value || 0) * 100) : null,
+                            amount_cents:
+                                share.method === "fixed" ? Math.round(Number(share.value || 0) * 100) : null,
+                        }));
+                    const error = await run("billing.configure_responsibility", {
+                        customer_id: customerId,
+                        charge_id: chargeId,
+                        /* Today: the arrangement governs this charge from the moment it is made. */
+                        effective_start: new Date().toISOString().slice(0, 10),
+                        shares,
+                    });
+                    if (error) failures.push(`responsibility for this charge — ${error}`);
+                }
+
+                /*
+                 * ── "NO DISCOUNT" WRITES SOMETHING ONLY WHEN IT MEANS SOMETHING ──────────────
+                 *
+                 * Declining a discount that WOULD otherwise have applied is a decision about a
+                 * real family's money, and it is recorded as a charge-level exclusion with its
+                 * reason. Choosing No discount where canonical resolution already says none
+                 * applies is the truthful result and writes NOTHING — an exclusion row there
+                 * would be a decision nobody made, against a policy that was never going to
+                 * reduce this charge, sitting in the record forever for somebody to explain.
+                 */
+                if (chargeDiscountChoice === null && chargeDiscountSuppresses) {
+                    const error = await run("billing.waive_charge_discount", {
+                        charge_id: chargeId,
+                        policy_id: chargeDiscountSuppresses,
+                        reason: waiverReason,
+                    });
+                    if (error) failures.push(`recording no discount — ${error}`);
+                }
+            }
+            return failures;
+        },
+        [chargeDiscountChoice, chargeDiscountSuppresses, chargeInvocation, chargeShares, chargeToChanging, customerId, waiverReason],
+    );
+
     const commit = useCallback(async () => {
         if (!pending || running) return;
         if (!chargeInvocation) {
@@ -1488,14 +2209,59 @@ export default function FinancialsCard({
                     },
                 }),
             });
-            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                result?: {
+                    affectedId?: string | null;
+                    detail?: {
+                        per_child?: Array<{ charge_id?: string | null; error?: string | null }>;
+                        charges_failed?: number;
+                    } | null;
+                } | null;
+            };
             if (!json?.ok) {
                 const err = typeof json?.error === "string" ? json.error : json?.error?.message;
                 // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
                 setCommandError(err || "The charge was refused.");
                 return;
             }
+
+            /*
+             * ── THE CHARGES THAT NOW EXIST ───────────────────────────────────────────────────
+             *
+             * One per billed child, or one for the household. `charge.add` reports a multi-child
+             * operation as SUCCESS carrying its failures, so the list below can be shorter than
+             * what the operator selected — and the follow-up work must run against the charges
+             * that exist rather than the ones that were asked for.
+             */
+            const detail = json.result?.detail ?? null;
+            const createdChargeIds = detail?.per_child
+                ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
+                : [String(json.result?.affectedId ?? "").trim()].filter(Boolean);
+            const followUpFailures = await applyChargeDecisions(createdChargeIds);
+
+            /*
+             * ── PARTIAL COMPLETION IS REPORTED, NOT ROUNDED ──────────────────────────────────
+             *
+             * The charge is written and cannot be un-written by a later step failing. An operator
+             * told only "done" would believe a waiver stands that does not, and would find out
+             * from an invoice. So a follow-up refusal keeps the command open, naming what DID
+             * happen first — the charge is real — and then exactly what did not.
+             */
+            if (followUpFailures.length > 0) {
+                const created = createdChargeIds.length;
+                setCommandError(
+                    `${created === 1 ? "The charge was created" : `${created} charges were created`}, `
+                    + `but ${followUpFailures.length === 1 ? "one step" : `${followUpFailures.length} steps`} `
+                    + `did not complete: ${followUpFailures.join("; ")}`,
+                );
+                /* Nothing is reset: the decisions stay on screen so the operator can retry them. */
+                return;
+            }
+
             setPending(null);
+            resetChargeDecisions();
             // The command card closes on success only. A refusal keeps it open with the domain's
             // own message, so the operator can correct the charge rather than re-open and retype it.
             resetStack();
@@ -1513,7 +2279,17 @@ export default function FinancialsCard({
         // dependency list. Without them the commit closed over the empty initial values and the
         // domain refused with `missing_event_date` — after the operator had entered a date, and
         // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
-    }, [chargeEventDate, chargeNote, chargeInvocation, chargeUnavailableReason, load, pending, running]);
+    }, [
+        applyChargeDecisions,
+        chargeEventDate,
+        chargeNote,
+        chargeInvocation,
+        chargeUnavailableReason,
+        load,
+        pending,
+        resetChargeDecisions,
+        running,
+    ]);
 
     /**
      * A LEDGER ROW'S OWN TRANSITION — post a draft, reverse posted money.
@@ -1729,6 +2505,8 @@ export default function FinancialsCard({
          * difference between this and the skeleton that was rejected three passes running.
          */
         setDetailPending(true);
+        /* Details is the account. It opens at the account's own scope, which is what its control says. */
+        setSubjectFilter("all");
         setStack([{ kind: "detail" }]);
     }, []);
 
@@ -2226,14 +3004,21 @@ export default function FinancialsCard({
                         </label>
                         <label className="alloy-os-fdetail__movefield">
                             <span>Effective date</span>
-                            <input
-                                data-testid="adjustment-effective-date"
-                                type="date"
+                            {/*
+                              * The canonical date control, for the same reason Add Charge and
+                              * Responsibility now carry it: an adjustment decides money, and the
+                              * one field on the card that asked the browser for its widget was the
+                              * one field that did not look like Alloy. Same stored `YYYY-MM-DD`,
+                              * same effective-date meaning.
+                              */}
+                            <AlloyDateInput
                                 value={adjustEffectiveDate}
-                                onChange={(e) => {
-                                    setAdjustEffectiveDate(e.target.value);
+                                onChange={(next) => {
+                                    setAdjustEffectiveDate(next);
                                     setAdjustPreview(null);
                                 }}
+                                aria-label="Effective date"
+                                testId="adjustment-effective-date"
                             />
                         </label>
                         {adjustPreview ? (
@@ -3013,6 +3798,12 @@ export default function FinancialsCard({
                             currency,
                             previewSummary: pending?.summary ?? null,
                             previewChanges: pending?.changes ?? [],
+                            /*
+                             * The resolver's figure for the discount this charge would get, so the
+                             * preview can state the net instead of leaving the operator to do the
+                             * subtraction they came here to have done for them.
+                             */
+                            discountCents: chargeDiscountCents,
                         })}
                         controls={{
                             selectedTemplateId: selected.key,
@@ -3156,12 +3947,114 @@ export default function FinancialsCard({
                             onNote: setChargeNote,
                             eventDate: chargeEventDate,
                             onEventDate: setChargeEventDate,
+                            /*
+                             * WHO OWES THIS CHARGE — offered only when there are parties on record
+                             * to divide it between. With none, the account has no arrangement to
+                             * depart from and the control would be an empty form.
+                             */
+                            ...((vm.payers ?? []).length > 0
+                                ? {
+                                      chargeResponsibility: {
+                                          standingSummary: standingResponsibilitySummary,
+                                          parties: (vm.payers ?? [])
+                                              .filter((party) => party.name.trim().length > 0)
+                                              .map((party) => ({
+                                                  id: party.personId,
+                                                  label: party.name,
+                                              })),
+                                          changing: chargeToChanging,
+                                          onChanging: (changing: boolean) => {
+                                              setChargeToChanging(changing);
+                                              /*
+                                               * Opening the editor offers ONE empty share rather
+                                               * than a copy of the standing answer: a pre-filled
+                                               * copy would be committed unread, creating an
+                                               * override that overrides nothing and hides the next
+                                               * real change to the arrangement it duplicated.
+                                               */
+                                              if (changing && chargeShares.length === 0) {
+                                                  setChargeShares([
+                                                      { partyId: "", method: "percentage", value: "" },
+                                                  ]);
+                                              }
+                                          },
+                                          shares: chargeShares,
+                                          onShare: (
+                                              index: number,
+                                              patch: {
+                                                  partyId?: string;
+                                                  method?: "percentage" | "fixed" | "remainder";
+                                                  value?: string;
+                                              },
+                                          ) =>
+                                              setChargeShares((prior) =>
+                                                  prior.map((share, i) => (i === index ? { ...share, ...patch } : share)),
+                                              ),
+                                          onAddShare: () =>
+                                              setChargeShares((prior) => [
+                                                  ...prior,
+                                                  { partyId: "", method: "percentage", value: "" },
+                                              ]),
+                                          onRemoveShare: (index: number) =>
+                                              setChargeShares((prior) => prior.filter((_, i) => i !== index)),
+                                      },
+                                  }
+                                : {}),
+                            /*
+                             * ── ONE DISCOUNT DECISION, OVER THE ELIGIBLE SET ────────────────
+                             *
+                             * The options are the resolver's answer about THIS proposed charge —
+                             * category, amount and child — so a policy the family receives but
+                             * which does not cover this charge type is not offered. That is §36
+                             * made structural: the operator cannot overrule policy impossibility
+                             * because the impossible option never reaches the control.
+                             */
+                            ...(proposedDiscounts.options.length > 0 || proposedDiscounts.wouldApplyPolicyId
+                                ? {
+                                      chargeDiscount: {
+                                          options: proposedDiscounts.options.map((o) => ({
+                                              policyId: o.policyId,
+                                              label: o.basis === "percentage" && o.basisValue != null
+                                                  ? `${o.label} · ${o.basisValue}%`
+                                                  : o.label,
+                                              /*
+                                               * What the resolver said this policy takes off THIS
+                                               * charge, formatted and handed on. The card does not
+                                               * know how it was arrived at and must not.
+                                               */
+                                              expectedAmount:
+                                                  o.expectedCents != null ? money(o.expectedCents, currency) : null,
+                                          })),
+                                          /*
+                                           * UNANSWERED MEANS "WHAT RESOLUTION SAYS". The operator
+                                           * who changes nothing gets the discount that would have
+                                           * applied anyway, which is what "default to the
+                                           * canonical answer" means — and no exclusion is written
+                                           * for a decision they never made.
+                                           */
+                                          selectedPolicyId: chargeDiscountSelectedPolicyId,
+                                          onSelect: (policyId: string | null) => setChargeDiscountChoice(policyId),
+                                          /*
+                                           * A REASON ONLY WHERE ONE IS OWED. Declining a discount
+                                           * that WOULD otherwise apply takes money's worth from a
+                                           * family; declining one that was never going to apply
+                                           * is the truth and costs nothing to say.
+                                           */
+                                          reasonRequired:
+                                              chargeDiscountChoice === null && Boolean(chargeDiscountSuppresses),
+                                          reason: waiverReason,
+                                          onReason: setWaiverReason,
+                                      },
+                                  }
+                                : {}),
                             onSubmit: () => void commit(),
                             onCancel: () => {
                                 /* One level back. Raised from Details, this returns to Details. */
                                 pop();
                                 setPending(null);
                                 setCommandError(null);
+                                /* An abandoned command leaves no decision behind, because none was written. */
+                                resetChargeDecisions();
                             },
                             running,
                             error: commandError,
@@ -3191,6 +4084,153 @@ export default function FinancialsCard({
      * already answers this with its own overlay, and settling is the same kind of act, so it gets
      * the same treatment rather than a CSS argument with a card that is not ours to restyle.
      */
+    /*
+     * ── ADMINISTRATION AS DEPTH ───────────────────────────────────────────────────────────────
+     *
+     * Three surfaces, one shape, and it is the shape Add Charge and Payment already use: the
+     * platform card with the command modal class, hosted by the elevated cell that grants it
+     * interaction. Each hosts the component that already existed — this adds no second writer, no
+     * second read model and no second visual language.
+     *
+     * They return EARLY, like every other overlay, so Details is not rendering underneath them in
+     * the document flow. That is the whole difference between a depth card and an inline editor,
+     * and it is why the ledger no longer moves when an operator manages a discount.
+     */
+    if (overlay === "responsibility_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="responsibility_admin" data-financials-manage-responsibility="depth-card">
+                <UniversalCard
+                    title="Responsibility"
+                    insight=""
+                    iconName="Users"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="responsibility_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="responsibility_admin">
+                        <FinancialsResponsibilityPanel
+                            customerId={customerId}
+                            /*
+                             * ACCOUNT GRAIN. This is the standing arrangement, not one charge's —
+                             * the per-charge surface is `responsibility`, opened from a ledger row,
+                             * and it carries the charge it is about.
+                             */
+                            customerMemberId={null}
+                            parties={(vm.payers ?? [])
+                                .map((party) => ({ personId: party.personId ?? null, name: party.name }))
+                                .filter((party) => party.name.trim().length > 0)}
+                            memberOptions={responsibilityScopeMembers}
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                                pop();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "discount_admin" && vm && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="discount_admin" data-financials-manage-discounts="depth-card">
+                <UniversalCard
+                    title="Discounts"
+                    insight=""
+                    iconName="Receipt"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="discount_admin"
+                    footerAction={null}
+                >
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="discount_admin">
+                        <FinancialsDiscountPanel
+                            customerId={customerId}
+                            /* Real content on the first frame; the panel re-reads and still owns it. */
+                            initialPosition={discountPositionBody}
+                            childLabelFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.displayName ?? null
+                            }
+                            /*
+                             * CANONICAL IDENTITY, LOOKED UP BY THE CHILD'S OWN ID. Keyed rather
+                             * than positional: a list resolved by index puts one sibling's face on
+                             * another the first time the two lists are ordered differently, and
+                             * they are ordered by different things.
+                             */
+                            childImageFor={(_ocmId: string, customerMemberId: string | null) =>
+                                (vm.subjects ?? []).find((sub) => sub.customerMemberId === customerMemberId)
+                                    ?.imageUrl ?? null
+                            }
+                            hostedOpen
+                            onHostedClose={pop}
+                            onCommitted={async () => {
+                                await load();
+                            }}
+                        />
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
+    if (overlay === "payments_admin" && customerId) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payments_admin">
+                <UniversalCard
+                    title="Payments"
+                    insight=""
+                    iconName="CreditCard"
+                    tier="work"
+                    archetype="status"
+                    modalClass="command"
+                    density="expanded"
+                    gridSpan="row"
+                    data-universal-card-key="payments_admin"
+                    footerAction={null}
+                >
+                    {/*
+                      * THE CANONICAL PAYMENTS SURFACES, REHOSTED — not rebuilt. Add card, add bank
+                      * account, the method list and Autopay all stay exactly the components
+                      * Payments W2/W5 own; what changed is where they are rendered, so Details no
+                      * longer carries a permanent setup band for an account that may never need
+                      * one.
+                      */}
+                    <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
+                        <PaymentMethodsSection customerId={customerId} />
+                        <AutopaySection customerId={customerId} />
+                        {/*
+                          * A VISIBLE WAY BACK. The card ended after the Autopay copy with nothing
+                          * below it, so on an account with no methods it read as a surface that
+                          * had failed to finish loading rather than one waiting to be used.
+                          * Escape has always dismissed it; a keyboard gesture is not an answer to
+                          * "how do I get out of here".
+                          */}
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-payments-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </UniversalCard>
+            </div>
+        );
+    }
+
     if (overlay === "payment" && vm && reconciliation) {
         return (
             <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="payment">
@@ -3568,9 +4608,104 @@ export default function FinancialsCard({
      * this path or any future one — while the read its ledger depends on is unresolved. The
      * request is held in `detailPending` until then and the compact card stays on screen.
      */
+    /*
+     * ── THE FLOOR IS THE ACCOUNT'S SURFACE, SO IT MOUNTS WITH THE ACCOUNT ───────────────────────
+     *
+     * Measured on deployed staging: the account list is interactive at ~856 ms and the selected
+     * Details pane arrives at ~1,196 ms after the click, because the guard below waits for BOTH the
+     * view model and the reconciliation. In the Accounts workspace, where Details IS the floor and
+     * not something the operator pushed on top, that is 1.2 seconds of an empty pane under a row
+     * that is already selected.
+     *
+     * ── WHY THIS IS NOT THE BRANCH THAT WAS REMOVED ────────────────────────────────────────────
+     *
+     * A previous branch committed the shape of Details while the deep read was in flight and was
+     * removed for a measured reason, recorded below: it drew the ledger over PLACEHOLDER ROWS, and
+     * three placeholder rows becoming fifty-six real ones is the "double load" that was reported in
+     * every pass of that thread. The objection was never the shape — it was the rows.
+     *
+     * `ledgerPending` is the difference. The ledger region draws its columns and says it is reading;
+     * it states no rows at all, so there is nothing to rewrite and the real ledger commits ONCE.
+     * Every figure is an em dash from `hydratingFinancialsEvidence`, never a zero, because a
+     * placeholder mistaken for $0.00 is worse than a wait.
+     *
+     * Scoped to `detailsAreTheSurface`. The Focus Panel keeps the compact card as its honest
+     * intermediate, which is what that earlier decision chose for the surface it was about.
+     *
+     * NO COMMANDS ARE RENDERED HERE, deliberately: Payment, Add, Responsibility and Discounts each
+     * need account-specific authority that has not resolved, and an action that is visible before
+     * its authority is an action that can be aimed at the wrong account.
+     */
+    if (overlay === "detail" && detailsAreTheSurface && !(vm && reconciliation) && !deniedRead) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                data-financials-detail-pending="true"
+                /*
+                 * NOT YET KNOWN vs UNAVAILABLE. `reservingAccount` is true while the read is still
+                 * in the air. Once it has answered and produced nothing usable, the surface must
+                 * stop saying it is reading — without ever saying the account is empty, which a
+                 * failed read has no standing to claim.
+                 */
+                data-financials-detail-truth={reservingAccount ? "not_yet_known" : "unavailable"}
+                data-financials-detail-account={subjectKey ?? ""}
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                })}
+            >
+                <FinancialsDetailCard
+                    evidence={hydratingFinancialsEvidence()}
+                    periods={[]}
+                    hydrating
+                    ledgerPending
+                    unavailable={!reservingAccount}
+                    administration={{
+                        discountSummary: "",
+                        loading: true,
+                        onManagePayments: NO_COMMAND,
+                        onManageResponsibility: NO_COMMAND,
+                        onManageDiscount: NO_COMMAND,
+                    }}
+                />
+            </div>
+        );
+    }
+
     if (overlay === "detail" && vm && reconciliation) {
         return (
-            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                /* Whose floor this is. Without it, "A truth under B" is not observable in the DOM. */
+                data-financials-detail-account={subjectKey ?? ""}
+                /*
+                 * ── IS THIS LAYER A COMMAND, OR IS IT THE HOST'S RESTING SURFACE? ────────────
+                 *
+                 * The workspace presents a command as a focused layer: a fixed, centred shell over
+                 * a full-viewport scrim. It decided which layers those were by asking whether ANY
+                 * `data-financials-overlay` existed — true, while Details was something the
+                 * operator pushed on top of the account.
+                 *
+                 * Convergence made Details the FLOOR of this host (`detailsAreTheSurface`), and
+                 * that assumption silently inverted: the floor is always present, so the scrim was
+                 * always up. Measured on deployed staging — the account list sat under a
+                 * full-viewport backdrop, every row refused an ordinary click, the selected account
+                 * never changed, and the ledger floated over the list belonging to a family whose
+                 * row had scrolled out of sight.
+                 *
+                 * So the card states the distinction it is the only one that can know, and the
+                 * stylesheet reads it instead of inferring it. A layer pushed ABOVE the floor is a
+                 * command in either host; the floor is a command in neither.
+                 */
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                })}
+            >
                 {/*
                   * The Move / Apply panel. One panel serves both intents because they differ only in
                   * whether a reversal has to happen first — the destination question is identical, and
@@ -3749,6 +4884,30 @@ export default function FinancialsCard({
 
                 <FinancialsDetailCard
                     /*
+                     * ── THE COMPACT ADMINISTRATION ROW, AND ITS THREE DOORS ───────────────────
+                     *
+                     * The summaries are read from canonical truth the card already holds — the
+                     * payers line means responsibility, and the discount position is the same
+                     * forecast the depth card shows. Nothing here computes money.
+                     *
+                     * Each door pushes a depth surface onto the SAME stack Add Charge and Payment
+                     * use, so Escape pops exactly one layer and Details survives underneath.
+                     */
+                    administration={
+                        customerId
+                            ? {
+                                  discountSummary: adminDiscountSummary,
+                                  loading: adminPositionsLoading,
+                                  onManagePayments: () =>
+                                      openAdmin("payments_admin", '[data-financials-manage-payments="open"]'),
+                                  onManageResponsibility: () =>
+                                      openAdmin("responsibility_admin", '[data-financials-manage-responsibility="gear"]'),
+                                  onManageDiscount: () =>
+                                      openAdmin("discount_admin", '[data-financials-manage-discounts="gear"]'),
+                              }
+                            : null
+                    }
+                    /*
                      * PAYMENT METHODS (Payments W2) — administered here, in Details, beside the
                      * ledger. Passed only when the household is actually resolved: a card with no
                      * account cannot truthfully say "no payment method on file".
@@ -3855,6 +5014,18 @@ export default function FinancialsCard({
                         currency,
                         openPeriodKey: vm.period.key,
                     })}
+                    /*
+                     * ── THE ROWS AND THE TOTALS ARE SCOPED BY THE SAME STATE ─────────────────
+                     *
+                     * The KPI band above this ledger is derived from `subjectFilter`
+                     * (`reconciliationBySubject` / `pastDueBySubject`). The ledger used to be
+                     * scoped by a SECOND state this card held privately, keyed by display label,
+                     * and the two disagreed on deployed staging — the band answered for one child
+                     * while the control read "Everyone" and the rows showed the whole household.
+                     * One scope, passed to whoever renders under it.
+                     */
+                    subject={subjectFilter === "all" ? null : subjectFilter}
+                    onSubjectChange={(next) => setSubjectFilter(next ?? "all")}
                     /*
                      * `Payment` enters the settle operation. Slice H is that lane, so the control is
                      * live: it selects the obligation the operator is most likely to settle — the
@@ -4549,6 +5720,24 @@ export type FinancialsSurface =
     | { kind: "detail" }
     | { kind: "add_charge" }
     | { kind: "payment" }
+    /*
+     * ── ADMINISTRATION IS DEPTH, NOT DOCUMENT FLOW ────────────────────────────────────────────
+     *
+     * These three ride the same stack Add Charge and Payment ride, for the same reason: an
+     * elevated Focus Panel cell grants interaction to the platform card alone, so a surface that
+     * wants clicks has to BE one. Rendering them inside Details made them part of the record an
+     * operator scrolls, which is what pushed the ledger down a screen.
+     *
+     * Each hosts the component that already exists. None of them is a second writer.
+     *
+     * Named `_admin` deliberately: `responsibility` already exists below as the PER-CHARGE resolve
+     * and reallocate surface a ledger row opens, and the two are different acts. One changes what a
+     * household arranges; the other divides one obligation. Sharing a name would make the stack
+     * ambiguous about which was open.
+     */
+    | { kind: "responsibility_admin" }
+    | { kind: "discount_admin" }
+    | { kind: "payments_admin" }
     | { kind: "adjust_charge"; chargeId: string }
     | { kind: "reverse_charge"; chargeId: string; label: string }
     /*

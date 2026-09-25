@@ -1345,6 +1345,30 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   pointer-events: none;
 }
 
+/*
+ * RESERVED CHIP — the fact is not known yet, and this holds its place.
+ *
+ * The chip row must have the same shape before and after the owner answers, so the reserved chip
+ * keeps the real chip's height and a min-width in the range a status label occupies. It carries no
+ * text: an UNKNOWN status is not a placeholder value, an ellipsis or a dash, because each of those
+ * reads as a fact the record does not have. Chip-row analogue of `ReservedFocusPanelCell`.
+ */
+.alloy-os-fp-header-compact__context-chip--reserved {
+  min-width: 4.5rem;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 70%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-border, #e5e9ef) 22%, #fff);
+  color: transparent;
+  pointer-events: none;
+}
+
+/* The reserved chip is scaffolding, not content — it must not animate attention to itself. */
+@media (prefers-reduced-motion: no-preference) {
+  .alloy-os-fp-header-compact__context-chip--reserved {
+    transition: none;
+  }
+}
+
 .alloy-os-fp-header-compact__context-chip--process,
 .alloy-os-fp-header-compact__context-chip--location {
   border-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, var(--alloy-os-border, #e5e9ef));
@@ -3865,6 +3889,107 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-time-input__option--selected {
   background: rgba(0, 162, 131, 0.08);
   color: #00a283;
+}
+
+/*
+ * AlloyDateInput — the date sibling of AlloyTimeInput, same grammar, wider field.
+ *
+ * Written out rather than folded into the time selectors above: the two differ in width and the
+ * option row (a date offers a label AND the date it resolves to), and a shared selector list that
+ * then needs three overrides is harder to read than one block that says what it is.
+ */
+.alloy-date-input {
+  position: relative;
+  display: inline-block;
+  width: min(176px, 100%);
+  max-width: 100%;
+  vertical-align: top;
+  box-sizing: border-box;
+}
+/*
+ * While the list is open this field owns the stack. Without it the next field in the form paints
+ * over the popover's lower rows — the list is absolutely positioned, and a sibling later in the
+ * document wins on equal footing.
+ */
+.alloy-date-input--open {
+  z-index: 41;
+}
+.alloy-date-input__field {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.alloy-date-input__control {
+  width: 100%;
+  min-width: 0;
+  padding-right: 34px !important;
+}
+.alloy-date-input__field--invalid .alloy-date-input__control {
+  border-color: #f04438 !important;
+  box-shadow: 0 0 0 3px rgba(240, 68, 56, 0.12);
+}
+.alloy-date-input__calendar {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  font-size: 13px;
+  opacity: 0.55;
+}
+.alloy-date-input__calendar:hover:not(:disabled) {
+  opacity: 0.95;
+}
+.alloy-date-input__calendar:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.alloy-date-input__list {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e9ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(24, 39, 58, 0.12);
+}
+.alloy-date-input__option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #18273a;
+  cursor: pointer;
+}
+.alloy-date-input__option:hover,
+.alloy-date-input__option--selected {
+  background: rgba(0, 162, 131, 0.08);
+  color: #00a283;
+}
+.alloy-date-input__option-label {
+  white-space: nowrap;
+}
+.alloy-date-input__option-date {
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0.6;
+  white-space: nowrap;
 }
 
 /* Shared identity drill-in — fully opaque elevated surface (no canvas bleed-through). */
@@ -10610,7 +10735,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     display: none;
 }
 
-.alloy-accounts-command-host:has([data-financials-overlay]) .alloy-accounts-command-backdrop {
+.alloy-accounts-command-host:has([data-financials-overlay]:not([data-financials-surface-role="floor"])) .alloy-accounts-command-backdrop {
     display: block;
     position: fixed;
     inset: 0;
@@ -10619,7 +10744,15 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     cursor: default;
 }
 
-.alloy-accounts-command-host [data-financials-overlay] {
+/*
+ * THE FOCUSED LAYER IS A COMMAND, AND ONLY A COMMAND.
+ *
+ * `:not([data-financials-surface-role="floor"])` is what keeps Details in the account pane. Without
+ * it the floor took these rules too — fixed, centred, 38rem wide — so the account's own ledger
+ * rendered as a modal floating over the list it belongs to, above a scrim that made every other
+ * account unclickable.
+ */
+.alloy-accounts-command-host [data-financials-overlay]:not([data-financials-surface-role="floor"]) {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -10733,6 +10866,48 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 /*
+ * ── THE FLOOR IS THE ACCOUNT'S BODY, NOT A LAYER ON TOP OF IT ─────────────────────────────────
+ *
+ * Every rule above distinguishes "in-flow card" from "command layer" by asking whether an element
+ * carries `data-financials-overlay`. That was a sound proxy until Details became the floor of this
+ * host: the floor carries the attribute and is not a layer, so it fell on the wrong side of every
+ * one of them — it kept a command's chrome inside a pane that already draws the surface, and the
+ * scope above it stayed `flex: 0 0 auto`, which is the right answer for a fixed layer that takes
+ * no space and the wrong one for the thing that IS the pane's body.
+ *
+ * So the floor is stated once, positively. It fills the pane, it draws no second box, and it owns
+ * a scroll of its own — the last part deliberately belt-and-braces: `.alloy-os-fdetail__scroll`
+ * inside it is already a bounded flex scroller, and if any link in that chain declines to shrink
+ * the ledger must still scroll rather than be clipped by the pane's `overflow: hidden`.
+ */
+.alloy-accounts-account-card > [data-financials-command-scope]:has([data-financials-surface-role="floor"]) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.alloy-accounts-account-card [data-financials-overlay][data-financials-surface-role="floor"] {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+/* And the card inside it draws no chrome either — one object, one surface. */
+.alloy-accounts-account-card [data-financials-surface-role="floor"] .alloy-os-ucard {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/*
  * ADD CHARGE FITS. The command body carried its own 420px cap from an earlier pass, so the form
  * scrolled inside a layer that had room for it. The host bounds the layer; the body inside it
  * simply grows to its content, and the action footer therefore stays on screen without scrolling at
@@ -10759,7 +10934,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
  * are the panel's own values, applied once to whatever overlay the card enters, so Add Charge and
  * Take Payment share one shell instead of resembling each other.
  */
-.alloy-accounts-command-host [data-financials-overlay] {
+.alloy-accounts-command-host [data-financials-overlay]:not([data-financials-surface-role="floor"]) {
     border-radius: 14px;
     border: 1px solid rgba(203, 213, 214, 0.9);
     box-shadow:

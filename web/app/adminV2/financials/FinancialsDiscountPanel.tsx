@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { reductionReasonLabel } from "@/lib/financials/reductions/reductionReasonLabels";
 import { Settings2 } from "lucide-react";
 
@@ -34,6 +37,13 @@ type Subject = {
     currencyCode: string;
     /** How THIS relationship's effect was derived — the basis differs per child. */
     explanation: string | null;
+    /*
+     * THE AUTHORED RATE, carried from the resolver. An operator must be able to read "10%" without
+     * inferring it from the expected amount — and they could not, because one sibling policy
+     * produced -$18.50 on one tuition and -$145.00 on another. Two numbers, one rate.
+     */
+    basis?: "percentage" | "amount" | null;
+    basisValue?: number | null;
 };
 type PolicyPosition = {
     policyId: string;
@@ -55,7 +65,7 @@ type ExceptionRow = {
     superseded: boolean;
     opportunityCustomerMemberId: string;
 };
-type FamilyPosition = {
+export type FamilyPosition = {
     ok: true;
     policies: PolicyPosition[];
     exceptions: ExceptionRow[];
@@ -104,18 +114,54 @@ function basisWithoutPolicyName(explanation: string | null, policyName: string):
 export default function FinancialsDiscountPanel({
     customerId,
     childLabelFor,
+    childImageFor,
+    hostedOpen,
+    onHostedClose,
+    initialPosition,
     onCommitted,
 }: {
     customerId: string;
+    /**
+     * ── HOSTED AS A DEPTH CARD ────────────────────────────────────────────────────────────────
+     *
+     * Given, this panel is the CONTENT of a depth surface someone else opened, so management is
+     * already open and dismissing it must dismiss that surface — not fold back to a position view
+     * sitting inside an otherwise empty card. Without this, Escape took two presses: one to close
+     * the section, another to pop the overlay.
+     */
+    hostedOpen?: boolean;
+    onHostedClose?: () => void;
+    /**
+     * ── THE POSITION THE HOST HAS ALREADY READ ────────────────────────────────────────────────
+     *
+     * Measured in source: opening this card fired the SAME canonical route the parent had already
+     * read to render its compact discount row, so the operator pressed a gear and waited out a
+     * second round trip for an answer the page was holding. The card shell painted immediately and
+     * its contents did not, which is what reads as a dead click.
+     *
+     * This is a SEED, not a second projection. It is the identical body of the identical route —
+     * the panel's own read still runs, still owns the answer, and overwrites this the moment it
+     * lands. What it buys is a first paint with real content instead of a skeleton, and a
+     * skeleton is still what shows when no host supplies one.
+     */
+    initialPosition?: FamilyPosition | null;
     /** Names the relationship in the operator's words. The panel never invents a label. */
     childLabelFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
+    /**
+     * CANONICAL IDENTITY, SUPPLIED — never resolved here. The host holds the view model whose
+     * subjects carry an already-authorized reference; this panel renders what it is given and
+     * falls through to the canonical initials avatar when there is none.
+     */
+    childImageFor?: (opportunityCustomerMemberId: string, customerMemberId: string | null) => string | null;
     /** Re-read committed truth. This panel reports no success of its own. */
     onCommitted: () => Promise<void> | void;
 }) {
-    const [position, setPosition] = useState<FamilyPosition | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [position, setPosition] = useState<FamilyPosition | null>(initialPosition ?? null);
+    /* Seeded, there is nothing to wait for on the first paint — only something to confirm. */
+    const [loading, setLoading] = useState(!initialPosition);
     const [error, setError] = useState<string | null>(null);
-    const [manageOpen, setManageOpen] = useState(false);
+    /* Hosted, management IS the surface — it opens with it rather than behind another gear. */
+    const [manageOpen, setManageOpen] = useState(Boolean(hostedOpen));
     const [nonce, setNonce] = useState(0);
     const gearRef = useState<{ current: HTMLButtonElement | null }>({ current: null })[0];
 
@@ -126,7 +172,12 @@ export default function FinancialsDiscountPanel({
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
+        /*
+         * A SEEDED CARD DOES NOT FLASH BACK TO A SKELETON. The re-read still runs — it is the
+         * authority — but replacing real content with "Reading discounts…" while confirming it
+         * would be a worse flicker than the wait this removed.
+         */
+        if (!position) setLoading(true);
         void fetch(`/api/admin/financials/family-discount-position?customer_id=${encodeURIComponent(customerId)}`, {
             credentials: "include",
         })
@@ -151,14 +202,105 @@ export default function FinancialsDiscountPanel({
         setManageOpen(false);
         setDraft(null);
         setActionError(null);
+        /* Hosted, the surface itself is what closes; the gear that opened it lives elsewhere. */
+        if (hostedOpen) {
+            onHostedClose?.();
+            return;
+        }
         gearRef.current?.focus();
-    }, [gearRef]);
+    }, [gearRef, hostedOpen, onHostedClose]);
 
     /**
      * One governed exception, through the certified action. The panel supplies a RELATIONSHIP, a
      * POLICY and a REASON — never an amount, never a rate, never a boolean. What the exception
      * does to the money is the policy engine's business.
      */
+    /*
+     * ── WHAT THIS CHILD MAY BE GIVEN ──────────────────────────────────────────────────────────
+     *
+     * Read only when the operator asks to add one. The card's default job is to say what each
+     * child receives; the catalogue of what they COULD receive is a second question and a second
+     * read, and asking it on every open would spend a round trip on a list most operators never
+     * look at.
+     */
+    const [candidates, setCandidates] = useState<
+        Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>
+    >([]);
+    const [assignedByMember, setAssignedByMember] = useState<
+        Record<string, Array<{ assignmentId: string; policyId: string; opportunityCustomerMemberId: string }>>
+    >({});
+    const [addingFor, setAddingFor] = useState<{ ocmId: string; memberId: string; label: string } | null>(null);
+    const [chosenPolicyId, setChosenPolicyId] = useState("");
+
+    useEffect(() => {
+        if (!customerId) return;
+        let cancelled = false;
+        void fetch(`/api/admin/financials/assignable-discounts?customer_id=${encodeURIComponent(customerId)}`, {
+            credentials: "include",
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((body: {
+                candidates?: Array<{ policyId: string; label: string; basis: string | null; basisValue: number | null }>;
+                assignedByMember?: Record<string, Array<{ assignmentId: string; policyId: string; opportunityCustomerMemberId: string }>>;
+            } | null) => {
+                if (cancelled || !body) return;
+                setCandidates(body.candidates ?? []);
+                setAssignedByMember(body.assignedByMember ?? {});
+            })
+            .catch(() => {
+                /* The card still states what each child receives; it simply cannot offer a new one. */
+            });
+        return () => { cancelled = true; };
+    }, [customerId, nonce]);
+
+    /*
+     * ── GIVING AND TAKING BACK ────────────────────────────────────────────────────────────────
+     *
+     * The affirmative pair, beside the exception pair below it. Both go through registered
+     * actions; neither writes a rate, because what a discount is worth is the policy's answer.
+     */
+    const runAssignment = useCallback(
+        async (op: "assign" | "end", args: {
+            ocmId: string;
+            memberId?: string;
+            policyId?: string;
+            assignmentId?: string;
+        }) => {
+            setBusy(true);
+            setActionError(null);
+            const today = new Date().toISOString().slice(0, 10);
+            try {
+                await executeFinancialsAction({
+                    action_key:
+                        op === "assign"
+                            ? "billing.assign_commercial_policy"
+                            : "billing.end_commercial_policy_assignment",
+                    entity_type: "opportunity_customer_member",
+                    entity_id: args.ocmId,
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload:
+                        op === "assign"
+                            ? {
+                                  policy_id: args.policyId,
+                                  opportunity_customer_member_id: args.ocmId,
+                                  customer_member_id: args.memberId,
+                                  effective_start: today,
+                              }
+                            : { assignment_id: args.assignmentId, effective_end: today },
+                });
+                setAddingFor(null);
+                setChosenPolicyId("");
+                await reread();
+            } catch (e) {
+                setActionError((e as Error).message);
+            } finally {
+                setBusy(false);
+            }
+        },
+        [reread],
+    );
+
     const runException = useCallback(
         async (op: "create" | "end", args: { ocmId: string; policyId?: string; exceptionId?: string; reason?: string }) => {
             setBusy(true);
@@ -191,8 +333,117 @@ export default function FinancialsDiscountPanel({
     const policies = position?.policies ?? [];
     const liveExceptions = (position?.exceptions ?? []).filter((e) => e.isLiveNow);
 
+    /*
+     * ── THE CARD IS ABOUT CHILDREN, AND THE ROUTE ANSWERS BY POLICY ──────────────────────────
+     *
+     * Inverting it is the whole of this view model. The operator's question is "what does Certa
+     * receive", asked once per child; the forecast's answer is "which children does this policy
+     * reach", grouped the other way. Nothing is computed here — every figure is carried from the
+     * position, and the rate is the policy's authored value rather than anything divided out of
+     * an expected amount.
+     *
+     * A CHILD WITH NOTHING STILL APPEARS. They are the child an operator came here to give a
+     * discount to, and a row that omits them says the surface did not consider them.
+     */
+    const childRows = (() => {
+        type Row = {
+            ocmId: string;
+            memberId: string | null;
+            label: string;
+            imageUrl: string | null;
+            lines: Array<{
+                policyId: string;
+                policyLabel: string;
+                rate: string;
+                expectedCents: number;
+                currencyCode: string;
+                why: string | null;
+                assignmentId: string | null;
+                exception: ExceptionRow | null;
+            }>;
+        };
+        const byChild = new Map<string, Row>();
+
+        /* Every relationship the position knows about, discount or not. */
+        for (const p of policies) {
+            for (const sub of p.subjects) {
+                const row = byChild.get(sub.opportunityCustomerMemberId) ?? {
+                    ocmId: sub.opportunityCustomerMemberId,
+                    memberId: sub.customerMemberId,
+                    label: label(sub),
+                    imageUrl: childImageFor?.(sub.opportunityCustomerMemberId, sub.customerMemberId) ?? null,
+                    lines: [],
+                };
+                const assigned = (assignedByMember[sub.customerMemberId ?? ""] ?? [])
+                    .find((a) => a.policyId === p.policyId);
+                row.lines.push({
+                    policyId: p.policyId,
+                    policyLabel: p.label,
+                    rate:
+                        sub.basis === "percentage" && sub.basisValue != null
+                            ? `${sub.basisValue}%`
+                            : sub.basis === "amount" && sub.basisValue != null
+                              ? money(sub.basisValue, sub.currencyCode)
+                              : "",
+                    expectedCents: sub.expectedCents,
+                    currencyCode: sub.currencyCode,
+                    why: basisWithoutPolicyName(sub.explanation, p.label),
+                    /*
+                     * ASSIGNED vs RULE-DERIVED, and the difference decides what may be done. An
+                     * assignment an operator made can be removed; a discount the rules grant can
+                     * only be waived, because there is no assignment to end.
+                     */
+                    assignmentId: assigned?.assignmentId ?? null,
+                    exception: (position?.exceptions ?? []).find(
+                        (e) => e.policyId === p.policyId
+                            && e.opportunityCustomerMemberId === sub.opportunityCustomerMemberId
+                            && e.isLiveNow,
+                    ) ?? null,
+                });
+                byChild.set(sub.opportunityCustomerMemberId, row);
+            }
+        }
+
+        /* And the relationships no policy reached — named, with nothing, which is a real state. */
+        for (const n of position?.notExpected ?? []) {
+            if (byChild.has(n.opportunityCustomerMemberId)) continue;
+            byChild.set(n.opportunityCustomerMemberId, {
+                ocmId: n.opportunityCustomerMemberId,
+                memberId:
+                    Object.entries(assignedByMember).find(([, list]) =>
+                        list.some((a) => a.opportunityCustomerMemberId === n.opportunityCustomerMemberId),
+                    )?.[0] ?? null,
+                label: childLabelFor?.(n.opportunityCustomerMemberId, null) ?? HOUSEHOLD_LABEL,
+                imageUrl: childImageFor?.(n.opportunityCustomerMemberId, null) ?? null,
+                lines: [],
+            });
+        }
+        return [...byChild.values()];
+    })();
+
+    /*
+     * ── ONE STATEMENT OF ONE FACT ─────────────────────────────────────────────────────────────
+     *
+     * This panel has two regions: a position summary, and a management section the gear opens.
+     * Inline on Accounts that is right — the summary is what an operator reads, and management is
+     * a door beside it.
+     *
+     * HOSTED AS A DEPTH CARD it is wrong, and was rendering both: `manageOpen` starts true, so the
+     * card opened with "Certa · Expected $18.50" in the summary and "Certa · Expected $18.50"
+     * again four lines below it under a "Manage discounts" heading that repeated the card's own
+     * title. The operator read the same sentence twice and had to work out which copy could be
+     * acted on.
+     *
+     * Hosted, the management list IS the content — it states every figure the summary did and
+     * carries the action for each row. So the summary and the heading it sat under are suppressed,
+     * and nothing is lost but the duplicate.
+     */
+    const summaryIsSeparate = !hostedOpen;
+
     return (
         <div className="mb-3" data-financials-discount-position="true">
+            {summaryIsSeparate ? (
+            <>
             <div className="flex items-center gap-1.5">
                 <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">Discounts</p>
                 {/*
@@ -213,7 +464,6 @@ export default function FinancialsDiscountPanel({
                     <Settings2 aria-hidden size={13} strokeWidth={1.9} />
                 </button>
             </div>
-
             {loading ? (
                 <p className="text-[11px] text-alloy-midnight/45" data-financials-discount-loading="true">Reading discounts…</p>
             ) : error ? (
@@ -257,6 +507,8 @@ export default function FinancialsDiscountPanel({
                     ) : null}
                 </div>
             )}
+            </>
+            ) : null}
 
             {manageOpen ? (
                 /*
@@ -279,105 +531,252 @@ export default function FinancialsDiscountPanel({
                         tabIndex={-1}
                         ref={(el) => el?.focus({ preventScroll: true })}
                     >
-                        <p className="text-sm font-semibold text-alloy-midnight">Manage discounts</p>
-                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                            {/* The law this intent obeys, said where the operator is about to act on it. */}
-                            Which policies reach this family, and whether a relationship is excepted from one.
-                            Rates and eligibility are organization configuration.
-                        </p>
+                        {/*
+                          * THE TITLE BELONGS TO WHICHEVER SURFACE IS THE OUTERMOST ONE. Hosted,
+                          * the depth card's own header already says "Discounts"; repeating it
+                          * here made the card look like it contained a second, smaller card.
+                          */}
+                        {hostedOpen ? null : (
+                            <p className="text-sm font-semibold text-alloy-midnight">Manage discounts</p>
+                        )}
+                        {/*
+                          * NO EXPLANATORY PARAGRAPH. It described the architecture — which policies
+                          * reach a family, what is organization configuration — to an operator who
+                          * came here to answer one question about one child. The rows below state
+                          * the position and offer the action, which is the same information
+                          * arranged so it can be acted on rather than read.
+                          */}
 
-                        {policies.length === 0 ? (
-                            <p className="mt-2 text-[11px] text-alloy-midnight/45">
-                                No discount policy is expected to apply to this family's current period.
-                            </p>
-                        ) : (
-                            policies.map((p) => (
-                                <div key={p.policyId} className="mt-2 border-t border-alloy-stone/10 pt-2" data-financials-discount-manage-policy={p.policyId}>
-                                    <p className="text-[12px] font-medium text-alloy-midnight">{p.label}</p>
-                                    {p.subjects.map((s) => {
-                                        const excepted = (position?.exceptions ?? []).find(
-                                            (e) => e.policyId === p.policyId
-                                                && e.opportunityCustomerMemberId === s.opportunityCustomerMemberId
-                                                && e.isLiveNow,
-                                        );
-                                        return (
-                                            <div key={s.opportunityCustomerMemberId} className="mt-1 pl-2">
-                                                <p className="text-[11px] text-alloy-midnight/70">
-                                                    {label(s)} · Expected {money(Math.abs(s.expectedCents), s.currencyCode)}
-                                                    {basisWithoutPolicyName(s.explanation, p.label) ? (
-                                                        <span className="text-alloy-midnight/45"> · {basisWithoutPolicyName(s.explanation, p.label)}</span>
-                                                    ) : null}
-                                                </p>
-                                                {excepted ? (
-                                                    <p className="text-[11px] text-alloy-ember" data-financials-discount-exception={excepted.id}>
-                                                        {reductionReasonLabel("excluded_by_exception")}
-                                                        {excepted.reason ? ` — ${excepted.reason}` : ""}
-                                                        {excepted.effectiveStart ? ` · from ${excepted.effectiveStart}` : ""}
-                                                        {" "}
-                                                        <button
-                                                            type="button"
-                                                            disabled={busy}
-                                                            data-end-policy-exception={excepted.id}
-                                                            className="font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
-                                                            onClick={() => void runException("end", {
-                                                                ocmId: excepted.opportunityCustomerMemberId,
-                                                                exceptionId: excepted.id,
-                                                                reason: "Ended from family discount administration",
-                                                            })}
-                                                        >
-                                                            End exception
-                                                        </button>
+                        {/*
+                          * ── ONE ROW PER CHILD ──────────────────────────────────────────────
+                          *
+                          * The card's job is "manage the discounts each child receives", so the
+                          * child is the unit and the policies are what a child has. It used to be
+                          * the other way round, grouped by policy, which is how the forecast
+                          * answers and not how an operator asks.
+                          */}
+                        {childRows.map((child) => (
+                            <div
+                                key={child.ocmId}
+                                className="alloy-os-depthcard__unit"
+                                data-financials-discount-child={child.ocmId}
+                            >
+                                {/*
+                                  * IDENTITY LEADS THE UNIT. The child's name is what an operator
+                                  * is looking for when they open this card, and it was set at the
+                                  * same weight as the metadata under it.
+                                  */}
+                                <p className="alloy-os-depthcard__identity">
+                                    {/*
+                                      * THE CANONICAL AVATAR, at Financials density. Small enough to
+                                      * be recognition rather than decoration, and the same component
+                                      * every other Alloy surface uses — so a child looks like
+                                      * themselves here, in Records and on the card.
+                                      */}
+                                    <IdentityAvatar
+                                        name={child.label}
+                                        imageUrl={child.imageUrl}
+                                        size={22}
+                                        allowZoom={false}
+                                    />
+                                    <span className="alloy-os-depthcard__identity-name">{child.label}</span>
+                                </p>
+
+                                {child.lines.length === 0 ? (
+                                    /*
+                                     * A CHILD WITH NOTHING IS THE POINT OF THIS CARD. They are who
+                                     * an operator came to give a discount to, and one word plus a
+                                     * door is the whole of what that state needs.
+                                     */
+                                    <p className="alloy-os-depthcard__value" data-financials-discount-none-for-child="true">
+                                        No discount
+                                    </p>
+                                ) : (
+                                    child.lines.map((line) => (
+                                        <div key={line.policyId} className="mt-1 pl-2" data-financials-discount-line={line.policyId}>
+                                            {/* THE STATE, at full strength — this is what the card is for. */}
+                                            <p className="alloy-os-depthcard__value">
+                                                <span>{line.policyLabel}</span>
+                                                {line.rate ? (
+                                                    <span data-financials-discount-rate={child.ocmId}>{" · "}{line.rate}</span>
+                                                ) : null}
+                                            </p>
+                                            <p className="alloy-os-depthcard__label">
+                                                Expected {money(Math.abs(line.expectedCents), line.currencyCode)}
+                                                {/* WHY it is that, which is genuinely secondary. */}
+                                                {line.why ? (
+                                                    <span className="alloy-os-depthcard__hint"> · {line.why}</span>
+                                                ) : null}
+                                            </p>
+
+                                            {line.exception ? (
+                                                <div data-financials-discount-exception={line.exception.id}>
+                                                    <p className="text-[11px] font-medium text-alloy-ember" data-financials-discount-waived="true">
+                                                        Waived
                                                     </p>
-                                                ) : draft && draft.policyId === p.policyId && draft.ocmId === s.opportunityCustomerMemberId ? (
-                                                    <div className="mt-0.5" data-financials-discount-exception-draft="true">
-                                                        {/* A REASON IS REQUIRED. An exception carries provenance or it is not one. */}
-                                                        <input
-                                                            className="block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
-                                                            placeholder="Why is this relationship excepted?"
-                                                            value={draft.reason}
-                                                            data-financials-discount-exception-reason="true"
-                                                            onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
-                                                        />
-                                                        <div className="mt-1 flex gap-2">
-                                                            <button
-                                                                type="button"
-                                                                disabled={busy || draft.reason.trim().length === 0}
-                                                                data-financials-discount-exception-confirm="true"
-                                                                className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
-                                                                onClick={() => void runException("create", {
-                                                                    ocmId: s.opportunityCustomerMemberId,
-                                                                    policyId: p.policyId,
-                                                                    reason: draft.reason.trim(),
-                                                                })}
-                                                            >
-                                                                Confirm exception
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="text-[11px] text-alloy-midnight/55 hover:underline"
-                                                                onClick={() => setDraft(null)}
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
+                                                    {line.exception.reason ? (
+                                                        <p className="text-[11px] text-alloy-midnight/55" data-financials-discount-waived-reason="true">
+                                                            {line.exception.reason}
+                                                        </p>
+                                                    ) : null}
                                                     <button
                                                         type="button"
                                                         disabled={busy}
-                                                        data-add-policy-exception={p.policyId}
-                                                        className="text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
-                                                        onClick={() => setDraft({ policyId: p.policyId, ocmId: s.opportunityCustomerMemberId, reason: "" })}
+                                                        data-end-policy-exception={line.exception.id}
+                                                        data-financials-restore-discount={child.ocmId}
+                                                        className="mt-0.5 text-[11px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                        onClick={() => void runException("end", {
+                                                            ocmId: child.ocmId,
+                                                            exceptionId: line.exception!.id,
+                                                            reason: "Ended from family discount administration",
+                                                        })}
                                                     >
-                                                        Add exception
+                                                        Restore discount <span aria-hidden>&rarr;</span>
                                                     </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))
-                        )}
+                                                </div>
+                                            ) : draft && draft.policyId === line.policyId && draft.ocmId === child.ocmId ? (
+                                                <div className="mt-0.5" data-financials-discount-exception-draft="true">
+                                                    <p className="text-[11px] font-medium text-alloy-midnight" data-financials-waive-heading="true">
+                                                        Waive discount
+                                                    </p>
+                                                    <input
+                                                        className="mt-0.5 block w-full rounded border border-alloy-stone/25 px-2 py-1 text-[11px]"
+                                                        placeholder="Why is this discount being waived?"
+                                                        value={draft.reason}
+                                                        data-financials-discount-exception-reason="true"
+                                                        onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+                                                    />
+                                                    <div className="mt-1 flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy || draft.reason.trim().length === 0}
+                                                            data-financials-discount-exception-confirm="true"
+                                                            className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                                                            onClick={() => void runException("create", {
+                                                                ocmId: child.ocmId,
+                                                                policyId: line.policyId,
+                                                                reason: draft.reason.trim(),
+                                                            })}
+                                                        >
+                                                            Confirm waiver
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="text-[11px] text-alloy-midnight/55 hover:underline"
+                                                            onClick={() => setDraft(null)}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="alloy-os-depthcard__actionrow">
+                                                    {/*
+                                                      * REMOVE vs WAIVE, and the authority decides
+                                                      * which is offered. An assignment an operator
+                                                      * made can be removed; a discount the rules
+                                                      * grant has no assignment to end, so the only
+                                                      * honest act is to waive it — offering
+                                                      * "Remove" there would be a control with
+                                                      * nothing to remove.
+                                                      */}
+                                                    {line.assignmentId ? (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy}
+                                                            data-financials-remove-discount={line.assignmentId}
+                                                            className="alloy-os-depthcard__action--quiet"
+                                                            onClick={() => void runAssignment("end", {
+                                                                ocmId: child.ocmId,
+                                                                assignmentId: line.assignmentId!,
+                                                            })}
+                                                        >
+                                                            Remove discount <span aria-hidden>&rarr;</span>
+                                                        </button>
+                                                    ) : null}
+                                                    <button
+                                                        type="button"
+                                                        disabled={busy}
+                                                        data-add-policy-exception={line.policyId}
+                                                        className="alloy-os-depthcard__action--quiet"
+                                                        onClick={() => setDraft({ policyId: line.policyId, ocmId: child.ocmId, reason: "" })}
+                                                    >
+                                                        Waive discount <span aria-hidden>&rarr;</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+
+                                {/*
+                                  * ── ADD DISCOUNT ───────────────────────────────────────────
+                                  *
+                                  * The affirmative act, on the child it is about. The operator
+                                  * chooses a CONFIGURED policy; they do not author one, and the
+                                  * option states the rate the organisation set so the choice is
+                                  * legible without being editable.
+                                  */}
+                                {addingFor?.ocmId === child.ocmId ? (
+                                    <div className="mt-1 pl-2" data-financials-add-discount-draft="true">
+                                        <p className="text-[11px] font-medium text-alloy-midnight">Add discount</p>
+                                        <div className="mt-0.5">
+                                            <AlloySelect
+                                                testId="add-discount-policy"
+                                                aria-label="Discount"
+                                                value={chosenPolicyId}
+                                                onChange={setChosenPolicyId}
+                                                options={candidates
+                                                    .filter((c) => !child.lines.some((l) => l.policyId === c.policyId))
+                                                    .map((c) => ({
+                                                        value: c.policyId,
+                                                        label:
+                                                            c.basis === "percentage" && c.basisValue != null
+                                                                ? `${c.label} · ${c.basisValue}%`
+                                                                : c.basis === "amount" && c.basisValue != null
+                                                                  ? `${c.label} · ${money(c.basisValue, "USD")}`
+                                                                  : c.label,
+                                                    }))}
+                                                placeholder="Choose a discount…"
+                                                disabled={busy}
+                                            />
+                                        </div>
+                                        <div className="mt-1 flex gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={busy || !chosenPolicyId}
+                                                data-financials-add-discount-confirm="true"
+                                                className="rounded border border-alloy-bend-pine bg-alloy-bend-pine px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                                                onClick={() => void runAssignment("assign", {
+                                                    ocmId: child.ocmId,
+                                                    memberId: child.memberId ?? "",
+                                                    policyId: chosenPolicyId,
+                                                })}
+                                            >
+                                                Confirm
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="text-[11px] text-alloy-midnight/55 hover:underline"
+                                                onClick={() => { setAddingFor(null); setChosenPolicyId(""); }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        data-financials-add-discount={child.ocmId}
+                                        className="alloy-os-depthcard__action mt-1 inline-block"
+                                        onClick={() => setAddingFor({ ocmId: child.ocmId, memberId: child.memberId ?? "", label: child.label })}
+                                    >
+                                        Add discount <span aria-hidden>&rarr;</span>
+                                    </button>
+                                )}
+                            </div>
+                        ))}
 
                         {/* Why a relationship expects nothing — the canonical reason, never silence. */}
                         {(position?.notExpected ?? []).length > 0 ? (
@@ -394,13 +793,28 @@ export default function FinancialsDiscountPanel({
                             <p className="mt-2 text-[11px] text-alloy-ember" data-financials-discount-action-error="true">{actionError}</p>
                         ) : null}
 
-                        <button
-                            type="button"
-                            className="mt-2 text-[11px] font-medium text-alloy-midnight/55 hover:underline"
-                            onClick={closeManage}
-                        >
-                            Close
-                        </button>
+
+                        {/*
+                          * ── AN ACTION THAT LOOKS LIKE ONE ─────────────────────────────────
+                          *
+                          * This was faint underlined body text at the foot of a card with no other
+                          * way out visible, so a card whose content ran past the fold appeared to
+                          * have no return path at all. Escape has always worked; a keyboard
+                          * gesture is not an answer to "how do I get out of here".
+                          *
+                          * It sits in the card's own action row, which is what every other card in
+                          * this family ends with.
+                          */}
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-discount-close="true"
+                                onClick={closeManage}
+                            >
+                                Close
+                            </button>
+                        </div>
                     </section>
                 </div>
             ) : null}

@@ -5,8 +5,10 @@ import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod
 import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import {
+    REDUCTION_KINDS,
     resolveFinancialReductions,
     type NotEligibleReason,
+    type ReductionBasis,
     type ReductionPolicy,
     type ReductionPolicyKind,
 } from "@/lib/financials/reductions/resolveFinancialReductions";
@@ -32,7 +34,24 @@ import {
  */
 
 export type ForecastOutcome =
-    | { kind: "expected"; policyId: string; policyKind: ReductionPolicyKind; label: string; amountCents: number; explanation: string }
+    /*
+     * `basis` and `basisValue` are the AUTHORED RATE, carried rather than re-derived. The resolver
+     * already computes both — a percentage policy knows it is 10%, not merely that it produced
+     * $18.50 on one child and $145.00 on another. Dropping them here forced every surface above to
+     * either parse the rate back out of the explanation sentence or infer it by dividing the
+     * expected amount by a basis it was not given, and two children on ONE policy at ONE rate
+     * could not be recognised as the same answer.
+     */
+    | {
+          kind: "expected";
+          policyId: string;
+          policyKind: ReductionPolicyKind;
+          label: string;
+          amountCents: number;
+          basis: ReductionBasis;
+          basisValue: number;
+          explanation: string;
+      }
     | { kind: "not_expected"; reason: NotEligibleReason }
     | { kind: "unavailable"; reason: string };
 
@@ -48,7 +67,7 @@ export type AssignmentReductionForecast = {
     netCents: number;
 };
 
-const REDUCTION_KINDS: readonly string[] = ["waiver", "sibling_discount", "discount"];
+/* The canonical list, imported rather than re-declared. */
 
 export async function forecastAssignmentReductions(
     supabase: SupabaseClient,
@@ -84,7 +103,12 @@ export async function forecastAssignmentReductions(
     const active = allPolicies.filter(
         (p) =>
             p.isActive
-            && REDUCTION_KINDS.includes(p.kind)
+            /*
+             * The policy reader's kind is the whole commercial vocabulary — proration and
+             * approval included — and this list is the reductions within it, so the widening is
+             * where the narrowing happens rather than an assertion about the value.
+             */
+            && (REDUCTION_KINDS as readonly string[]).includes(p.kind)
             && (!p.effective.start || p.effective.start <= period.end)
             && (!p.effective.end || p.effective.end >= period.start),
     );
@@ -156,6 +180,8 @@ export async function forecastAssignmentReductions(
                 policyKind: r.policyKind,
                 label: policies.find((p) => p.id === r.policyId)?.label ?? r.policyKind,
                 amountCents: r.amountCents,
+                basis: r.basis,
+                basisValue: r.basisValue,
                 explanation: r.explanation,
             })),
             totalCents: decision.totalCents,

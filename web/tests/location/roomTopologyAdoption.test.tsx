@@ -59,6 +59,10 @@ function supabaseStub() {
         b.select = vi.fn(() => b);
         b.order = vi.fn(() => b);
         b.or = vi.fn(() => b);
+        b.is = vi.fn((c: string, v: unknown) => {
+            filters.push((r) => (v === null ? r[c] == null : r[c] === v));
+            return b;
+        });
         b.eq = vi.fn((c: string, v: unknown) => { filters.push((r) => r[c] === v); return b; });
         b.neq = vi.fn((c: string, v: unknown) => { filters.push((r) => r[c] !== v); return b; });
         b.in = vi.fn((c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c] as never)); return b; });
@@ -206,7 +210,11 @@ describe("1-2. a historical NULL-role room edits as a Classroom", () => {
         await enterEdit();
         expect(need<HTMLSelectElement>("locations-room-type").value).toBe("operational_group");
         const shown = [...need<HTMLSelectElement>("locations-room-type").options].map((o) => o.textContent);
-        expect(shown).toEqual(["Classroom", "Physical room", "Shared space"]);
+        // Two types, not three. "Shared space" was withdrawn from the operator
+        // vocabulary because no behavioral branch distinguished it from a
+        // physical space, and "Physical room" became "Physical space" so the
+        // word can honestly cover a playground.
+        expect(shown).toEqual(["Operational", "Physical"]);
         expect(need("locations-room-type").textContent).not.toContain("operational_group");
     });
 
@@ -305,12 +313,13 @@ describe("3-8. adopting the historical room into a physical room", () => {
         expect(captured.update).toMatchObject({ unit_role: "physical_space", parent_location_id: SITE });
     });
 
-    it("an empty Physical room may become a Shared space", async () => {
+    it("a Physical space can no longer be turned into a Shared space", async () => {
+        // The editor cannot produce the role because the picker no longer offers
+        // it. Stored shared spaces keep working; new ones are never authored.
         await renderPanel("room2");
         await enterEdit();
-        await setValue("locations-room-type", "shared_space");
-        await save();
-        expect(captured.update).toMatchObject({ unit_role: "shared_space" });
+        const roles = [...need<HTMLSelectElement>("locations-room-type").options].map((o) => o.value);
+        expect(roles).toEqual(["operational_group", "physical_space"]);
     });
 
     it("19-20. presentation explains the adopted room immediately afterwards", async () => {
@@ -319,8 +328,8 @@ describe("3-8. adopting the historical room into a physical room", () => {
         await setValue("locations-room-inside", "room1");
         await save();
         const t = presentRoomTopology(rowOf("toddler"), rowsOf());
-        expect(t.subtitle).toBe("Classroom · Room 1 · North Campus");
-        expect(t.typeLabel).toBe("Classroom");
+        expect(t.subtitle).toBe("Operational · Room 1 · North Campus");
+        expect(t.typeLabel).toBe("Operational");
         expect(t.containingSpaceLabel).toBe("Room 1");
         expect(t.siteLabel).toBe("North Campus");
     });

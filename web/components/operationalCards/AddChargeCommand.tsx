@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
+import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloyMultiSelect, AlloySelect } from "@/components/workspace/AlloySelect";
 
 /**
@@ -15,6 +16,29 @@ import { AlloyMultiSelect, AlloySelect } from "@/components/workspace/AlloySelec
  * that must never silently become "everybody" on the surface that commits money.
  */
 const ADDCHARGE_HOUSEHOLD_VALUE = "__household__";
+
+/**
+ * "No discount" needs a value, and it must not be an empty string.
+ *
+ * An empty selection means the operator has chosen nothing yet; choosing No discount means they
+ * have decided. On a surface that commits money those two must never be the same value.
+ */
+const NO_DISCOUNT_VALUE = "__no_discount__";
+
+/**
+ * THE SHARE VOCABULARY, which is the canonical authority's and not this card's.
+ *
+ * `percentage`, `fixed` and `remainder` are what `financial_responsibility_arrangement_shares`
+ * records and what `configureResponsibilityArrangement` accepts. A fourth word invented here
+ * would be a share method the domain cannot store.
+ */
+type ShareMethod = "percentage" | "fixed" | "remainder";
+
+const SHARE_METHODS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
+    { value: "percentage", label: "Percentage" },
+    { value: "fixed", label: "Fixed amount" },
+    { value: "remainder", label: "Remainder" },
+];
 
 /**
  * Add charge — the command surface, driven by `financial_charge_templates`.
@@ -127,6 +151,80 @@ export default function AddChargeCommand({
          */
         eventDate: string;
         onEventDate: (value: string) => void;
+        /**
+         * ── RESPONSIBILITY FOR THIS CHARGE, NOT FOR THE ACCOUNT ───────────────────────────────
+         *
+         * CHARGE > CHILD > HOUSEHOLD. The standing arrangement answers "who owes this family's
+         * obligations"; a charge-scoped one answers "who owes THIS obligation" and supersedes
+         * nothing — it is the narrowest scope, and the standing answers keep governing every
+         * charge it does not name.
+         *
+         * Absent when the operator may not decide it: without `fin.responsibility` this is a
+         * stated value, because a control an operator cannot commit is a lie about what they own.
+         */
+        chargeResponsibility?: {
+            /** Who owes it today, by the standing answer. Shown, not chosen. */
+            standingSummary: string;
+            /** The parties on record. The command never invents a payer. */
+            parties: Array<{ id: string; label: string }>;
+            /*
+             * ── THE OPERATOR NEVER CHOOSES A PERSISTENCE SCOPE ────────────────────────────────
+             *
+             * This used to ask "Divided by: the account's arrangement / this charge only", which
+             * is the data model talking. An operator raising a charge is deciding WHO OWES THIS
+             * CHARGE; whether that becomes a charge-scoped arrangement is the host's problem and
+             * always was — changing it here has only ever meant "this charge", and saying so in
+             * two options made them prove they understood arrangement scope first.
+             *
+             * `changing` is open/closed, nothing more. Closed, the standing answer governs and
+             * nothing is written. Open, the operator authors shares for this charge.
+             */
+            changing: boolean;
+            onChanging: (changing: boolean) => void;
+            shares: Array<{ partyId: string; method: ShareMethod; value: string }>;
+            onShare: (index: number, patch: { partyId?: string; method?: ShareMethod; value?: string }) => void;
+            onAddShare: () => void;
+            onRemoveShare: (index: number) => void;
+        };
+        /**
+         * ── THE DISCOUNTS THAT WOULD OTHERWISE REDUCE THIS CHARGE ─────────────────────────────
+         *
+         * Applying them is what happens by default — that is what an authored policy IS. What the
+         * operator may decide here is whether one of them does NOT apply to this charge, and why.
+         * The reason is not optional: an exclusion without one is exactly the unattributable
+         * decision the charge-level model was built to prevent.
+         */
+        /**
+         * ── ONE DISCOUNT DECISION, EXPRESSED ONCE ─────────────────────────────────────────────
+         *
+         * This was a row of checkboxes, one per policy, ticked to apply and unticked to waive. It
+         * underspecified the decision — an operator reading two ticked boxes could not tell which
+         * of them would actually reduce this charge — and it used browser checkbox grammar for a
+         * financial choice.
+         *
+         * It is a selection: which of this child's eligible discounts should affect THIS charge,
+         * or none. `options` are already filtered by canonical policy eligibility for the proposed
+         * charge, so an ineligible policy is not offered rather than offered and refused.
+         */
+        chargeDiscount?: {
+            /**
+             * `expectedAmount` is what the resolver said this policy takes off THIS charge,
+             * already formatted. The card prints it; it never derives it from the rate in `label`.
+             */
+            options: Array<{ policyId: string; label: string; expectedAmount?: string | null }>;
+            /** `null` means No discount — an explicit answer, never an empty one. */
+            selectedPolicyId: string | null;
+            onSelect: (policyId: string | null) => void;
+            /*
+             * TRUE only when declining a discount that WOULD otherwise apply. Choosing "No
+             * discount" where canonical resolution already says none applies is the truthful
+             * result and creates nothing, so demanding prose for it would teach operators to type
+             * into a box that changes no money.
+             */
+            reasonRequired: boolean;
+            reason: string;
+            onReason: (value: string) => void;
+        };
         onSubmit: () => void;
         onCancel: () => void;
         running: boolean;
@@ -136,6 +234,13 @@ export default function AddChargeCommand({
 }) {
     const t = specimen.template;
     const amountLocked = t.amountStrategy !== "manual";
+    /* The chosen policy, resolved once so the control and the preview line cannot name different ones. */
+    const selectedDiscount =
+        controls?.chargeDiscount?.selectedPolicyId
+            ? controls.chargeDiscount.options.find(
+                  (o) => o.policyId === controls.chargeDiscount!.selectedPolicyId,
+              ) ?? null
+            : null;
 
     return (
         <div className="alloy-os-addcharge-host">
@@ -186,24 +291,14 @@ export default function AddChargeCommand({
                 </span>
             </Field>
             {/*
-                What this charge type DOES, in words — not the strategy keys that encode it.
-                `occurs event_date · billable next_billing_cycle` is a schema read-out; "dated by the
-                event · billed next cycle" is the same fact an operator can act on.
-            */}
-            <p className="alloy-os-addcharge__config">
-                {[
-                    t.responsibility,
-                    t.occursOn === "event_date" ? "dated by the event"
-                    : t.occursOn === "service_period_start" ? "dated to the service period"
-                    : "dated today",
-                    t.billableOn === "next_billing_cycle" ? "billed next cycle"
-                    : t.billableOn === "immediate" ? "billed immediately"
-                    : "billed on a configured offset",
-                    t.amountStrategy === "fixed" ? "fixed amount"
-                    : t.amountStrategy === "rate_derived" ? "priced from the rate"
-                    : "you set the amount",
-                ].join(" · ")}
-            </p>
+              * THE CONFIG STRIP IS GONE, and the semantics it described are untouched.
+              *
+              * It read "Household · dated by the event · billed next cycle · fixed amount" — four
+              * facts an operator cannot act on while adding a charge, describing rules the
+              * template already enforces. Responsibility is now a control below rather than a
+              * word here; the dating and billing rules still govern the charge exactly as they
+              * did, and the preview states the effect they produce.
+              */}
 
             {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
                 Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
@@ -314,42 +409,18 @@ export default function AddChargeCommand({
                     )}
                 </Field>
             )}
-            {controls?.alsoChildren && controls.alsoChildren.options.length > 0 && !controls.unifiedTarget ? (
-                <Field label="Also bill">
-                    {/*
-                     * ── PER CHILD, STATED SO IT CANNOT BE MISREAD ────────────────────────────
-                     *
-                     * The amount is what EACH selected child is billed. Two children at $40 is two
-                     * $40 obligations totalling $80 — never $40 split in half, and never one $80
-                     * household charge. The count and the total are both said out loud, because
-                     * those are the two numbers an operator checks before committing money.
-                     */}
-                    <div className="alloy-os-addcharge__children" data-addcharge-children>
-                        {controls.alsoChildren.options.map((c) => {
-                            const checked = controls.alsoChildren!.selectedIds.includes(c.id);
-                            return (
-                                <label key={c.id} className="alloy-os-addcharge__child">
-                                    <input
-                                        type="checkbox"
-                                        data-addcharge-child={c.id}
-                                        checked={checked}
-                                        onChange={() => controls.alsoChildren!.onToggle(c.id)}
-                                    />
-                                    <span>{c.label}</span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                    {controls.alsoChildren.selectedIds.length > 1 ? (
-                        <p className="alloy-os-addcharge__childsum" data-addcharge-childsum>
-                            {controls.alsoChildren.perChildLabel
-                                ? `${controls.alsoChildren.perChildLabel} per child · `
-                                : ""}
-                            {controls.alsoChildren.selectedIds.length} children · each receives their own charge
-                        </p>
-                    ) : null}
-                </Field>
-            ) : null}
+            {/*
+              * THE LEGACY "ALSO BILL" CHECKBOX ROW IS GONE.
+              *
+              * It was unreachable: `unifiedTarget` is checked first and the host always supplies
+              * it, so the branch rendered nowhere. What it left behind was a row of browser
+              * checkboxes in a file whose every other control is canonical — a native control
+              * that cannot render is still a native control a reader has to reason about, and
+              * the census that forbids them cannot tell the difference.
+              *
+              * The grain it expressed is unchanged and lives in the unified target above: each
+              * ticked child receives their own independent obligation at the full amount.
+              */}
             <Field label="Amount" required={!amountLocked}>
                 {controls && !amountLocked ? (
                     <input
@@ -382,13 +453,20 @@ export default function AddChargeCommand({
             <SectionHead ruled={false}>Dates</SectionHead>
             <Field label="Service date" required={t.occursOn === "event_date"}>
                 {controls && t.occursOn === "event_date" ? (
-                    <input
-                        className="alloy-os-addcharge__input"
-                        data-addcharge-event-date
-                        type="date"
-                        value={controls.eventDate}
-                        onChange={(e) => controls.onEventDate(e.target.value)}
-                    />
+                    /*
+                      * The canonical date control. This was a raw `<input type="date">` — the one
+                      * browser-styled widget on a card of Alloy dropdowns, on the surface that
+                      * commits money. The stored value is still `YYYY-MM-DD` and still the same
+                      * `event_date` the resolver is given, so nothing about dating semantics moved.
+                      */
+                    <span data-addcharge-event-date>
+                        <AlloyDateInput
+                            value={controls.eventDate}
+                            onChange={controls.onEventDate}
+                            aria-label="Service date"
+                            testId="addcharge-event-date"
+                        />
+                    </span>
                 ) : (
                     <Value>{specimen.serviceDate}</Value>
                 )}
@@ -410,25 +488,220 @@ export default function AddChargeCommand({
                 `reviewRequired` is the server's answer — the posting_review policy for this
                 template's service, OR'd with the template's own flag — so this states the act.
             */}
-            <Field label="Posting">
-                <Value locked>
-                    {t.reviewRequired
-                        ? "Creates a draft — not yet owed"
-                        : "Posts on confirm — owed immediately"}
-                </Value>
-            </Field>
-
-            <SectionHead ruled={false}>Charge to</SectionHead>
             {/*
-                RESPONSIBILITY IS SHOWN, NOT OFFERED — unless configuration says the operator may
-                choose it. `operator_selectable` is the only targeting that puts a decision in the
-                operator's hands; everything else is a resolved result they need to see and cannot
-                change, so it reads as a stated value rather than an inert control.
+              * ONLY THE ANSWER THAT CHANGES THE OPERATOR'S DECISION.
+              *
+              * "Posts on confirm — owed immediately" described the ordinary case in
+              * implementation language; a review requirement is the case worth saying out loud,
+              * because it changes what happens when they press Confirm. The posting semantics
+              * themselves are unchanged — `reviewRequired` still governs.
+              */}
+            {t.reviewRequired ? (
+                <Field label="Posting">
+                    <Value locked>Creates a draft — not yet owed</Value>
+                </Field>
+            ) : null}
+
+            {/*
+                ── ONE ANSWER TO "WHO OWES THIS", NOT TWO ──────────────────────────────────────
+
+                This block said it first — "Charge to · Responsibility: Household" — and the
+                section below said it again with the actual parties and amounts. Two headings,
+                two renderings, one fact, and an operator reading them had to work out whether
+                they disagreed.
+
+                The section below survives because it is the one that can be ACTED on: it names
+                the parties, carries the standing source quietly, and offers Change. What was
+                here was the same truth with less of it.
+
+                `operator_selectable` targeting is not lost — a template that puts the payer in
+                the operator's hands reaches the same Change control, which is where choosing
+                one belongs.
             */}
-            <Field label="Responsibility">
-                <Value>{specimen.chargeTo}</Value>
-                {t.payerTargeting === "operator_selectable" ? <Hint>you may target a payer</Hint> : null}
-            </Field>
+
+            {/*
+                ── WHO OWES THIS ONE ────────────────────────────────────────────────────────────
+                Offered only when the host supplies it, which it does only when the operator holds
+                the grant to decide it. The default is the standing arrangement — an operator who
+                changes nothing creates no charge-scoped anything, and the account's answer governs
+                exactly as it did before this control existed.
+            */}
+            {/*
+                ── CHARGE TO — WHO OWES THIS CHARGE ─────────────────────────────────────────────
+                One decision, stated as an answer with a way to change it. What it used to be was
+                two decisions: who owes, and which arrangement scope should record that. The second
+                was never the operator's — an override here has only ever meant "this charge" —
+                and asking it made them understand the data model before they could bill a family.
+            */}
+            {controls?.chargeResponsibility ? (
+                <div data-addcharge-charge-responsibility="section">
+                    <SectionHead ruled={false}>Charge to</SectionHead>
+                    <Field label="">
+                        {/*
+                            WHO OWES, THEN WHERE IT COMES FROM — in that order and at that weight.
+                            The parties and their amounts are the answer; that the answer is the
+                            account's standing one is context, said quietly beneath it rather than
+                            wrapped around it as "The account's arrangement: …".
+                        */}
+                        <span className="alloy-os-addcharge__chargeto" data-addcharge-charge-to="summary">
+                            <Value>{controls.chargeResponsibility.standingSummary}</Value>
+                            {!controls.chargeResponsibility.changing ? (
+                                <button
+                                    type="button"
+                                    className="alloy-os-addcharge__changeto"
+                                    data-addcharge-change-charge-to="true"
+                                    onClick={() => controls.chargeResponsibility!.onChanging(true)}
+                                    disabled={controls.running}
+                                >
+                                    Change <span aria-hidden>&rarr;</span>
+                                </button>
+                            ) : null}
+                        </span>
+                    </Field>
+
+                    {controls.chargeResponsibility.changing ? (
+                        <div data-addcharge-charge-shares="editor">
+                            {controls.chargeResponsibility.shares.map((share, index) => (
+                                <Field key={`share-${index}`} label={index === 0 ? "Responsible" : ""} required={index === 0}>
+                                    <span className="alloy-os-addcharge__share-row">
+                                        <AlloySelect
+                                            testId={`addcharge-share-party-${index}`}
+                                            aria-label="Responsible party"
+                                            value={share.partyId}
+                                            onChange={(v) => controls.chargeResponsibility!.onShare(index, { partyId: v })}
+                                            options={controls.chargeResponsibility!.parties.map((party) => ({
+                                                value: party.id,
+                                                label: party.label,
+                                            }))}
+                                            placeholder="Choose a party…"
+                                            disabled={controls.running}
+                                        />
+                                        <AlloySelect
+                                            testId={`addcharge-share-method-${index}`}
+                                            aria-label="How the share is stated"
+                                            value={share.method}
+                                            onChange={(v) =>
+                                                controls.chargeResponsibility!.onShare(index, { method: v as ShareMethod })
+                                            }
+                                            options={SHARE_METHODS.map((m) => ({ value: m.value, label: m.label }))}
+                                            disabled={controls.running}
+                                        />
+                                        {/*
+                                            REMAINDER TAKES NO NUMBER. It is defined as what is left
+                                            after the others, so offering a box to type one in would
+                                            invite a figure the domain will ignore.
+                                        */}
+                                        {share.method === "remainder" ? (
+                                            <Value locked>whatever is left</Value>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                className="alloy-os-addcharge__input"
+                                                data-addcharge-share-value={index}
+                                                value={share.value}
+                                                onChange={(e) =>
+                                                    controls.chargeResponsibility!.onShare(index, { value: e.target.value })
+                                                }
+                                                placeholder={share.method === "percentage" ? "50" : "0.00"}
+                                                aria-label={share.method === "percentage" ? "Percent" : "Amount"}
+                                                disabled={controls.running}
+                                            />
+                                        )}
+                                        {controls.chargeResponsibility!.shares.length > 1 ? (
+                                            <button
+                                                type="button"
+                                                className="alloy-os-addcharge__sharedrop"
+                                                data-addcharge-remove-share={index}
+                                                onClick={() => controls.chargeResponsibility!.onRemoveShare(index)}
+                                                disabled={controls.running}
+                                            >
+                                                Remove
+                                            </button>
+                                        ) : null}
+                                    </span>
+                                </Field>
+                            ))}
+                            <ActionRow>
+                                <Action
+                                    onClick={() => controls.chargeResponsibility!.onAddShare()}
+                                    disabled={controls.running}
+                                    data-addcharge-add-share="true"
+                                >
+                                    Add a party
+                                </Action>
+                                <Action
+                                    onClick={() => controls.chargeResponsibility!.onChanging(false)}
+                                    disabled={controls.running}
+                                    data-addcharge-cancel-charge-to="true"
+                                >
+                                    Keep the standing answer
+                                </Action>
+                            </ActionRow>
+                        </div>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {/*
+                ── DISCOUNT — ONE DECISION, ONE CONTROL ─────────────────────────────────────────
+                Which of this child's eligible discounts should affect THIS charge, or none.
+
+                The options arrive already filtered by canonical policy eligibility for the
+                proposed charge, so a policy the child receives but which does not cover this
+                charge type is NOT offered. An operator cannot overrule policy impossibility from
+                here, and a control that let them try would be lying about who decides.
+            */}
+            {controls?.chargeDiscount ? (
+                <div data-addcharge-charge-discount="section">
+                    <SectionHead ruled={false}>Discount</SectionHead>
+                    <Field label="">
+                        <AlloySelect
+                            testId="addcharge-discount"
+                            aria-label="Discount"
+                            value={controls.chargeDiscount.selectedPolicyId ?? NO_DISCOUNT_VALUE}
+                            onChange={(v) =>
+                                controls.chargeDiscount!.onSelect(v === NO_DISCOUNT_VALUE ? null : v)
+                            }
+                            options={[
+                                ...controls.chargeDiscount.options.map((o) => ({
+                                    value: o.policyId,
+                                    label: o.label,
+                                })),
+                                /*
+                                  NO DISCOUNT IS AN OPTION, NOT AN EMPTY SELECTION. An operator who
+                                  means "none" has decided something, and a blank control cannot
+                                  tell that apart from one they never touched.
+                                */
+                                { value: NO_DISCOUNT_VALUE, label: "No discount" },
+                            ]}
+                            disabled={controls.running}
+                        />
+                    </Field>
+
+                    {/*
+                        THE REASON APPEARS ONLY WHERE IT MEANS SOMETHING. Declining a discount that
+                        WOULD otherwise have applied takes money's worth away from a family and
+                        carries provenance. Choosing "No discount" where canonical resolution says
+                        none applies is simply the truthful result — demanding prose for it would
+                        teach operators to type into a box that changes no money.
+                    */}
+                    {controls.chargeDiscount.reasonRequired ? (
+                        <Field label="Why no discount" required>
+                            <input
+                                type="text"
+                                className="alloy-os-addcharge__input"
+                                data-addcharge-waiver-reason="true"
+                                value={controls.chargeDiscount.reason}
+                                onChange={(e) => controls.chargeDiscount!.onReason(e.target.value)}
+                                placeholder="Say why this discount does not apply here"
+                                aria-label="Why this discount does not apply"
+                                disabled={controls.running}
+                            />
+                        </Field>
+                    ) : null}
+                </div>
+            ) : null}
 
             <SectionHead ruled={false}>Preview</SectionHead>
             <div className="alloy-os-addcharge__preview">
@@ -436,6 +709,93 @@ export default function AddChargeCommand({
                     <span className="alloy-os-billing__line-label">{t.label}</span>
                     <span className="alloy-os-billing__line-value">+{specimen.amount}</span>
                 </p>
+                {/*
+                    ── WHAT THE OPERATOR JUST DECIDED, RESTATED BEFORE THEY COMMIT IT ───────────
+                    Both of these are decisions taken a few lines above and applied after the
+                    charge exists, which means the preview is the ONLY place they are visible
+                    together. They are STATED, never computed: the card says who it will divide
+                    this charge between and which policy it will record as not applying, and it
+                    leaves what either is worth to the resolver that owns that question.
+                */}
+                {controls?.chargeResponsibility?.changing
+                    && controls.chargeResponsibility.shares.some((share) => share.partyId) ? (
+                    <>
+                        <p className="alloy-os-billingdetail__group" data-addcharge-preview-responsibility="true">
+                            Charge to
+                        </p>
+                        {controls.chargeResponsibility.shares
+                            .filter((share) => share.partyId)
+                            .map((share, index) => (
+                                <p key={`preview-share-${index}`} className="alloy-os-billing__line">
+                                    <span className="alloy-os-billing__line-label">
+                                        {controls.chargeResponsibility!.parties.find((p) => p.id === share.partyId)?.label
+                                            ?? "—"}
+                                    </span>
+                                    <span className="alloy-os-billing__line-value">
+                                        {share.method === "remainder"
+                                            ? "remainder"
+                                            : share.method === "percentage"
+                                              ? `${share.value || "0"}%`
+                                              : `$${share.value || "0.00"}`}
+                                    </span>
+                                </p>
+                            ))}
+                        {/* The standing arrangement is untouched, and says so rather than being assumed. */}
+                        {/*
+                            SAID WITHOUT NAMING THE MODEL. The operator needs to know this answer
+                            applies here and nowhere else; they do not need the word "arrangement"
+                            to understand it.
+                        */}
+                        <p className="alloy-os-addcharge__draftnote" data-addcharge-preview-standing="true">
+                            This applies to this charge only. Other charges keep the usual answer.
+                        </p>
+                    </>
+                ) : null}
+
+                {/*
+                    ── THE DISCOUNT LINE STATES THE DECISION, AND WHAT IT IS WORTH ─────────────
+                    One line, matching the one control above it. "None" is an answer and reads as
+                    one; naming a policy says which of the eligible ones will reduce this charge.
+
+                    STILL NO ARITHMETIC. The figure is `resolveFinancialReductions`' own — the
+                    same resolver a real charge passes through — carried here by the route that
+                    priced it. What changed is that it is carried at all: the line used to name a
+                    policy and its rate in a money column with no money in it, and left the
+                    operator to work out what came off a charge they were a click from committing.
+                */}
+                {controls?.chargeDiscount ? (
+                    <p className="alloy-os-billing__line" data-addcharge-preview-discount="true">
+                        <span className="alloy-os-billing__line-label">
+                            Discount
+                            {selectedDiscount ? (
+                                <span className="alloy-os-addcharge__share">{selectedDiscount.label}</span>
+                            ) : null}
+                        </span>
+                        <span className="alloy-os-billing__line-value" data-addcharge-preview-discount-amount="true">
+                            {!controls.chargeDiscount.selectedPolicyId
+                                ? "None"
+                                : specimen.previewDiscountAmount
+                                  ? specimen.previewDiscountAmount
+                                  : (selectedDiscount?.label ?? "Selected")}
+                        </span>
+                    </p>
+                ) : null}
+
+                {/*
+                    ── NET, WHICH IS THE NUMBER THE OPERATOR CAME FOR ─────────────────────────
+                    Rendered only where a discount is actually coming off: with no reduction the
+                    net IS the gross, and a second line repeating it would be ceremony.
+                */}
+                {specimen.previewNet && specimen.previewDiscountAmount ? (
+                    <p
+                        className="alloy-os-billing__line alloy-os-billing__line--emphasis"
+                        data-addcharge-preview-net="true"
+                    >
+                        <span className="alloy-os-billing__line-label">Net charge</span>
+                        <span className="alloy-os-billing__line-value">{specimen.previewNet}</span>
+                    </p>
+                ) : null}
+
                 {/* Allocation math renders ONLY when the split is authoritative. */}
                 {specimen.allocation ? (
                     <>
@@ -451,36 +811,54 @@ export default function AddChargeCommand({
                     </>
                 ) : null}
                 {/*
-                    THE BALANCE LINE MUST MATCH THE ACT.
+                    ── WHAT CONFIRMING DOES, SAID AS THE WRITER ACTUALLY BEHAVES ──────────────
 
-                    Under a review boundary a draft is not yet owed, so the balance genuinely does
-                    not move and stating it unchanged is the fact. Without one the charge posts on
-                    confirm — and showing the balance UNCHANGED there would be the same lie in the
-                    other direction, telling an operator nothing will happen a moment before it does.
+                    `charge.add` writes a draft, and then — only where no review boundary applies —
+                    posts it in the same gesture through `postChildcareCharge`. Two different
+                    consequences, and the template's own `reviewRequired` is what decides which.
+
+                    Both branches used to end in a balance. The review branch was right: a draft is
+                    not owed, so the balance genuinely does not move. The posting branch printed
+                    "After posting" beside the UNCHANGED balance, so a +$400.00 charge promised, in
+                    bold, that pressing the button would leave $536.00 at $536.00. The label was
+                    accurate and the figure was not.
+
+                    The projection adds the GROSS. The discount comes off later and separately —
+                    `applyFinancialReductions` writes it as its own negative row when discounts run
+                    — so a balance quietly netted here would be a balance this action never
+                    produces. The net is stated above, where it belongs, as what the charge comes
+                    to rather than as what the account will read.
                 */}
+                <p className="alloy-os-billing__line">
+                    <span className="alloy-os-billing__line-label">Current balance</span>
+                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
+                </p>
+                <p className="alloy-os-billingdetail__group" data-addcharge-preview-consequence="true">
+                    On confirm
+                </p>
                 {t.reviewRequired ? (
-                    <>
-                        <p className="alloy-os-addcharge__draftnote">
-                            Creates a draft — the balance does not change until it posts.
-                        </p>
-                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                            <span className="alloy-os-billing__line-label">Current balance</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                        </p>
-                    </>
+                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="draft">
+                        Creates a draft charge for review. The balance does not change until it is posted.
+                    </p>
                 ) : (
                     <>
-                        <p className="alloy-os-addcharge__draftnote">
-                            Posts on confirm — this is what the family will owe.
+                        <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="posts">
+                            Creates this charge and posts it.
+                            {specimen.previewDiscountAmount
+                                ? " The discount is recorded separately when discounts run, and lowers the balance then."
+                                : ""}
                         </p>
-                        <p className="alloy-os-billing__line">
-                            <span className="alloy-os-billing__line-label">Current balance</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
-                        </p>
-                        <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
-                            <span className="alloy-os-billing__line-label">After posting</span>
-                            <span className="alloy-os-billing__line-value">{specimen.previewAfter}</span>
-                        </p>
+                        {specimen.previewPostedBalance ? (
+                            <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
+                                <span className="alloy-os-billing__line-label">Balance after posting</span>
+                                <span
+                                    className="alloy-os-billing__line-value"
+                                    data-addcharge-posted-balance="true"
+                                >
+                                    {specimen.previewPostedBalance}
+                                </span>
+                            </p>
+                        ) : null}
                     </>
                 )}
             </div>

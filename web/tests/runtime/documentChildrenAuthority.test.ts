@@ -78,19 +78,39 @@ describe("gate C — awaited before commit, delivered to both consumers", () => 
      * context would have carried the children-less bag, the predicate would have stayed false, and
      * the card would still have waited for the drawer. The slice would have measured as a no-op.
      */
-    it("the children answer is awaited BEFORE the commit-critical context is built", () => {
-        const awaited = ANSWER.indexOf("await documentChildrenP");
+    /*
+     * THE WAIT WAS REMOVED ON PURPOSE, AND THE ORDERING REQUIREMENT SURVIVED IT.
+     *
+     * These two gates used to assert `await documentChildrenP` before the commit context, and that
+     * await is gone: P0-7.6 made the roster OBSERVED rather than awaited, because
+     * `document_children_tail_ms` was P50 786ms of the 1,596ms the frame spent holding an
+     * already-decided geometry. The card's absent state was always the honest one — absent means
+     * "not loaded", never the authoritative `[]`.
+     *
+     * What did NOT change is the ordering the original slice discovered the hard way: whatever HAS
+     * landed must be READ and folded before the commit context is built, or the context carries the
+     * children-less bag and folding buys nothing. That is what these now assert.
+     */
+    it("the children answer is READ before the commit-critical context is built", () => {
+        const read = ANSWER.indexOf("documentChildrenSettled.value");
         const commitCtx = ANSWER.indexOf("buildCommitCriticalOperationalContext(");
-        expect(awaited).toBeGreaterThan(-1);
+        expect(read).toBeGreaterThan(-1);
         expect(commitCtx).toBeGreaterThan(-1);
-        expect(awaited).toBeLessThan(commitCtx);
+        expect(read).toBeLessThan(commitCtx);
     });
 
-    it("the chain STARTS well before it is awaited, so it overlaps the composition", () => {
+    it("the frame does not WAIT for it — the roster is observed, not awaited", () => {
+        // The specific regression this guards: restoring the await would silently put the frame
+        // back behind the roster and every latency measurement would still look healthy.
+        expect(ANSWER).not.toContain("await documentChildrenP");
+        expect(ANSWER).toContain("settledNow(documentChildrenP)");
+    });
+
+    it("the chain STARTS well before it is read, so it overlaps the composition", () => {
         const started = ANSWER.indexOf("attachOpportunityInquiryChildrenShell(");
-        const awaited = ANSWER.indexOf("await documentChildrenP");
+        const read = ANSWER.indexOf("documentChildrenSettled.value");
         expect(started).toBeGreaterThan(-1);
-        expect(started).toBeLessThan(awaited);
+        expect(started).toBeLessThan(read);
     });
 
     it("the folded bag — not the bare one — reaches the commit context AND the answer", () => {

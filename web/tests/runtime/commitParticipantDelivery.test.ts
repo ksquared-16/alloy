@@ -28,13 +28,36 @@ const BODY = codeOf(read("components/admin/focusPanel/OpportunityFocusPanelBody.
 
 describe("gate A — the identity reaches the browser's commit model", () => {
     it("the document puts it on the answer", () => {
-        expect(DOC).toContain("answer.resolvedParticipant = resolvedParticipant");
+        /*
+         * THE DELIVERY MECHANISM CHANGED; THE OBLIGATION DID NOT.
+         *
+         * This asserted a direct write, `answer.resolvedParticipant = resolvedParticipant`, which
+         * was the only way to deliver it while the route produced one settled answer. Two-phase
+         * seed emission (P0-7.6) made the participant part of the SETTLEMENT patch, because
+         * resolving it costs a read the frame must not wait for — measured `card_producers_ms`
+         * P50 740ms sitting between a decided geometry and a committed frame.
+         *
+         * So the gate now asserts what it always meant: the route RESOLVES the participation
+         * identity and hands it to the browser. It no longer dictates which of the two payloads
+         * carries it, because both are the same answer to the browser.
+         */
+        expect(DOC).toContain("resolvedParticipant");
+        expect(DOC).toContain("resolveSoleEnrollmentParticipantForOpportunity");
+        // ...and it reaches the browser through the settlement contract, applied monotonically.
+        expect(DOC).toContain("applyProvisioningSettlement");
     });
 
     it("every hop of the transport chain is wired", () => {
         // Each of these is a separate file; a break anywhere silently reserves the cards again,
         // which is exactly the defect this closes and is invisible from any single file.
-        expect(SURFACE).toContain("resolvedParticipant={op ? op.resolvedParticipant ?? null : null}");
+        /*
+         * The hop is unchanged; its GUARD is. `resolvedParticipant` is a fact about a record, so it
+         * now flows through `factsOp`, which is the answer only while that answer describes the
+         * SELECTED subject. Identity commits as soon as the operator picks a row, so an ungated
+         * `op` here would deliver the previous subject's participant under the new subject's
+         * identity — the mixed-subject frame, reached through this very chain.
+         */
+        expect(SURFACE).toContain("resolvedParticipant={factsOp ? factsOp.resolvedParticipant ?? null : null}");
         expect(CTX).toContain("resolvedParticipant: resolvedParticipant ?? null");
         expect(PANEL).toContain("resolvedParticipant: operational.resolvedParticipant ?? null");
         expect(BODY).toContain("resolvedParticipant: commitCritical.resolvedParticipant ?? null");

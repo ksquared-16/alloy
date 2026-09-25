@@ -80,6 +80,7 @@ import {
     resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { FocusPanelRenderedSubjectProvider } from "@/components/admin/focusPanel/focusPanelRenderedSubjectContext";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
 import {
     beginDrawerTabPrefetchEpoch,
@@ -94,6 +95,8 @@ import { useFocusPanelModePrewarm } from "@/lib/adminV2/runtime/focusPanel/useFo
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
+import { useActionableDrawerCarrier } from "@/lib/adminV2/viewModel/drawer/opportunity/useActionableDrawerCarrier";
+import FocusPanelCarrierActionRail from "@/components/admin/focusPanel/FocusPanelCarrierActionRail";
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
 
 export function InlineOpportunityFocusPanel() {
@@ -189,6 +192,24 @@ export function InlineOpportunityFocusPanel() {
          */
         isChildSubject ? operationalSubjectId : null,
     );
+    /*
+     * WHEN THIS BROWSER RECEIVED THE FULL DRAWER, on the browser's own clock.
+     *
+     * Paired with the server's `children_truth_ready_ms`, this is what turns "the cards clear at
+     * 2,680ms" into an attributable interval instead of a subtraction across two populations. It is
+     * a diagnostic stamp: it records the first render at which a VM for this subject is in hand and
+     * changes nothing about what renders.
+     */
+    const serverPhases =
+        (displayVm as { timing?: { phases_ms?: Record<string, number> } } | null | undefined)?.timing
+            ?.phases_ms ?? null;
+    const vmAppliedAtRef = useRef<number | null>(null);
+    const vmAppliedForRef = useRef<string | null>(null);
+    const vmIdForStamp = displayVm?.entity?.id != null ? String(displayVm.entity.id) : null;
+    if (vmIdForStamp && vmAppliedForRef.current !== vmIdForStamp) {
+        vmAppliedForRef.current = vmIdForStamp;
+        vmAppliedAtRef.current = typeof performance !== "undefined" ? Math.round(performance.now()) : null;
+    }
     if (typeof window !== "undefined") {
         (window as Window & { __ALLOY_FOCUS_SETTLEMENT_DIAG__?: Record<string, unknown> }).__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
             isChildSubject,
@@ -200,8 +221,69 @@ export function InlineOpportunityFocusPanel() {
             settlementSubjectId,
             identitySeed: operational.identitySeed,
             truthFamily: operational.subjectIdentityTruth?.["child.family_opportunity_id"] ?? null,
+            /*
+             * WHY CHILDREN AND HOUSEHOLD WAIT — PRESENCE ONLY, NEVER CONTENT.
+             *
+             * Both are declared COMMIT_CRITICAL and both gate on identity carried in
+             * `subjectIdentityTruth`, yet both stay reserved a median 3,495ms while
+             * business_process and financials clear around 1,000ms. Two different defects produce
+             * that and they need different repairs: the truth is absent at this boundary, or it is
+             * present and the cards are not admitted from it. Nothing deployed could tell them
+             * apart — the answer is server-rendered into the RSC payload, so there is no response to
+             * read, and the identity bag lives only in this component's props.
+             *
+             * These are classifications and counts. A key's PRESENCE and how many children there
+             * are, never a name, a phone, an email, a child, or any business value. `identity_families`
+             * maps each key to its family so a new binding cannot leak a value through its own name.
+             */
+            identityTruthPresent: operational.subjectIdentityTruth != null,
+            identityKeyCount: operational.subjectIdentityTruth
+                ? Object.keys(operational.subjectIdentityTruth).length
+                : null,
+            inquiryChildrenIdentityPresent:
+                operational.subjectIdentityTruth?._inquiry_children != null,
+            inquiryChildrenCount: Array.isArray(operational.subjectIdentityTruth?._inquiry_children)
+                ? (operational.subjectIdentityTruth._inquiry_children as unknown[]).length
+                : null,
+            primaryContactIdentityPresent:
+                operational.subjectIdentityTruth?.["person.primary_contact_name"] != null,
+            customerIdentityPresent: operational.subjectIdentityTruth?.["customer.id"] != null,
+            identityFamilies: operational.subjectIdentityTruth
+                ? [
+                      ...new Set(
+                          Object.keys(operational.subjectIdentityTruth).map((k) =>
+                              k.startsWith("person.") ? "person"
+                              : k.startsWith("customer.") ? "customer"
+                              : k.startsWith("child.") ? "child"
+                              : k.startsWith("_mission") ? "mission"
+                              : k === "_inquiry_children" ? "children"
+                              : "other",
+                          ),
+                      ),
+                  ].sort()
+                : null,
             displayVmId: displayVm?.entity?.id ?? null,
             structureSettled: displayVm?.structureSettled ?? null,
+            /*
+             * THE CORRELATED BOUNDARIES FOR ONE J5 EVENT.
+             *
+             * Measured n=22 cold switches on deployed 4899d4d9: children and household are reserved
+             * from P50 122ms and clear at P50 2,680ms, and the gate keys are absent in 22 of 22 — so
+             * the cards wait for the FULL DRAWER, not for the fact. Sizing that wait needs the
+             * server instant the fact became canonical and the client instant this VM landed, for
+             * the SAME request. Subtracting two population P50s taken on different clocks would not
+             * be a phase.
+             *
+             * `children_truth_ready_ms` / `contact_truth_ready_ms` are offsets on the server's own
+             * request clock; `vmAppliedAt` is this browser's. Offsets and counts only — no identity,
+             * contact, child or business value crosses this boundary.
+             */
+            serverChildrenTruthReadyMs: serverPhases?.children_truth_ready_ms ?? null,
+            serverContactTruthReadyMs: serverPhases?.contact_truth_ready_ms ?? null,
+            serverSharedDepsWallMs: serverPhases?.shared_deps_wall_ms ?? null,
+            serverVisibleEntityMs: serverPhases?.visible_entity_ms ?? null,
+            serverTotalMs: serverPhases?.total_ms ?? null,
+            vmAppliedAt: vmAppliedAtRef.current,
             runtimeError: error,
             bookingCount: displayVm?.summaries?.active_tour_bookings?.length ?? null,
             activityCount: Array.isArray(
@@ -424,10 +506,34 @@ export function InlineOpportunityFocusPanel() {
         reloadOpportunityDisplayVm: reloadDisplayVm,
     });
 
+    /*
+     * PHASE 1 OF THE SELECTED-DRAWER LIFECYCLE, for THIS subject.
+     *
+     * Asked for by the subject already committed here, never by "whatever arrived last". A carrier
+     * for a row the operator hovered and did not click, or for B after they have moved to C, is not
+     * the carrier this asks for and is therefore never read.
+     */
+    const carrier = useActionableDrawerCarrier({ opportunityId: settlementSubjectId });
+
+    /*
+     * ONE ACTION AUTHORITY, WHICHEVER PHASE IS IN HAND.
+     *
+     * Phase 2 wins outright the moment it exists — this is not a merge, and a resolved view model is
+     * never topped up from a carrier. Phase 1 fills the gap and nothing else, and it can only fill it
+     * with values the view model will itself publish: `workspace.department_id` and
+     * `workspace.work_unit_id` are the compose inputs verbatim, and the carrier quotes the same two.
+     * So the arguments an action executes with do not depend on which phase the operator clicked in.
+     */
+    const actionExecutionScope =
+        displayVm ? displayVm.workspace
+        : carrier ?
+            { department_id: carrier.execution.department_id, work_unit_id: carrier.execution.work_unit_id }
+        :   null;
+
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
         opportunityId: drawer.id,
-        departmentId: displayVm?.workspace.department_id,
-        workUnitId: displayVm?.workspace.work_unit_id,
+        departmentId: actionExecutionScope?.department_id,
+        workUnitId: actionExecutionScope?.work_unit_id,
         registryHostExtensions,
         actionHost: headerActionHost,
     });
@@ -453,8 +559,27 @@ export function InlineOpportunityFocusPanel() {
     // skeleton. During a hold `displayVm`/`record` still carry the prior subject's payload
     // (the payload hook returns the held VM), so the previously-resolved composed grid stays
     // on screen while the new subject fetches — no flash back to a placeholder.
+    /*
+     * HOLDING THE PRIOR SUBJECT IS ONLY TRUTHFUL WHILE IT IS STILL THE COMMITTED SUBJECT.
+     *
+     * The committed subject now commits as soon as the operator selects a row, rather than when the
+     * provisioning answer for it lands. That is what removes ~1,094ms from the operator's wait - but
+     * it means this hold can no longer be unconditional: continuing to paint the previous record's
+     * VM underneath the new subject's identity is exactly the mixed-subject frame the atomic-subject
+     * contract forbids, and would be a correctness regression traded for latency.
+     *
+     * So the hold applies only while the held payload IS the committed subject. Once selection has
+     * moved on, this yields null and the panel falls to its identity-safe frame: the new subject's
+     * identity, the published configured geometry, and reserved UNKNOWN cells - no previous value
+     * survives under the new record.
+     */
+    const heldPriorMatchesCommittedSubject =
+        displayVm != null
+        && operationalSubjectId != null
+        && String(displayVm.entity.id) === String(operationalSubjectId);
     const heldPrior =
-        !resolved && holdPriorPayload && displayVm != null && record != null ?
+        !resolved && holdPriorPayload && displayVm != null && record != null
+        && heldPriorMatchesCommittedSubject ?
             { displayVm, record }
             : null;
 
@@ -854,6 +979,27 @@ export function InlineOpportunityFocusPanel() {
                             onModeChange={setFocusPanelMode}
                             onClose={closeDrawer}
                             hideClose
+                            /*
+                             * THE REAL PHASE-1 CONSUMER.
+                             *
+                             * The identity-safe frame has always rendered this header with no
+                             * commands at all, so the operator's wait for FIRST ACTIONABLE was the
+                             * whole drawer compose even though canonical action authority existed
+                             * about 1.9s earlier. When a carrier for THIS subject is in hand it
+                             * mounts here, through the same menu and the same selection handler the
+                             * resolved header uses; actions still missing a canonical execution
+                             * input stay disabled until phase 2 supplies it.
+                             */
+                            secondaryActions={
+                                carrier ?
+                                    <FocusPanelCarrierActionRail
+                                        carrier={carrier}
+                                        onActionSelect={onActionSelect}
+                                        actionLoadingKey={actionLoadingKey}
+                                        canMutate={manageCanMutate}
+                                    />
+                                :   null
+                            }
                         />}
                 </div>
                 <div
@@ -869,6 +1015,17 @@ export function InlineOpportunityFocusPanel() {
                     }
                 >
                     {/* STABLE body surface. Subject changes inside it; it is not rebuilt per subject. */}
+                    <FocusPanelRenderedSubjectProvider
+                        /*
+                         * The payload the cards are ACTUALLY rendering, which is not
+                         * `bodyRenderKey`. That id is the committed operational snapshot and moves
+                         * to the destination fast, while `visible` (resolved ?? heldPrior) is what
+                         * is on screen — so during a hold this correctly names the PRIOR subject
+                         * and only becomes the destination at the atomic swap. Feeding a diagnostic
+                         * from the fast id would label the prior subject's cards as the new one.
+                         */
+                        value={visible ? String(visible.displayVm.entity.id) : null}
+                    >
                     <div
                         key="focus-panel-body"
                         data-focus-panel-body-subject={bodyRenderKey}
@@ -926,6 +1083,7 @@ export function InlineOpportunityFocusPanel() {
                             <AlloyThinkingLabel size="sm" />
                         </div>}
                     </div>
+                    </FocusPanelRenderedSubjectProvider>
                 </div>
                 {resolved ?
                     <div className="shrink-0 overflow-visible">

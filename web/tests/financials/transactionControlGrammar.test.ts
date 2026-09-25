@@ -122,8 +122,15 @@ describe("Details can change who owes, not only filter by it", () => {
     it("the gear sits with the filter, and the filter never mutates", () => {
         const detail = src(DETAIL);
         const filterAt = detail.indexOf('testId="responsible-party"');
-        const gearAt = detail.indexOf('data-financials-manage-responsibility="gear"');
         expect(filterAt).toBeGreaterThan(-1);
+        /*
+         * THERE ARE TWO GEARS NOW, and only one of them is this rule's business. Administration
+         * moved to a compact row above the ledger, which carries its own gear; matching the FIRST
+         * occurrence in the file started matching that one, which sits above the filters by design.
+         * The gear this rule is about is the one in the filter row — so look for it from the
+         * filter forward, which is exactly the relationship being asserted.
+         */
+        const gearAt = detail.indexOf('data-financials-manage-responsibility="gear"', filterAt);
         expect(gearAt, "the gear follows the filter it belongs to").toBeGreaterThan(filterAt);
         /*
          * ADJACENCY IS NOT A CHARACTER COUNT. This asserted a source distance under 1,600 chars,
@@ -146,19 +153,40 @@ describe("Details can change who owes, not only filter by it", () => {
     });
 
     it("opens the ONE existing panel — not a second management UI", () => {
-        const detail = src(DETAIL);
-        expect(detail).toContain("<FinancialsResponsibilityPanel");
-        expect(detail).toContain("hostedOpen={manageResponsibilityOpen}");
-        /* No second writer, and no local arrangement authoring in the host. */
-        expect(code(DETAIL)).not.toContain("billing.configure_responsibility");
-        expect(code(DETAIL)).not.toContain("responsibility-arrangement");
+        /*
+         * The panel used to be rendered by Details and unfolded in place, which is what pushed the
+         * ledger down the card. It is now opened as a depth surface by the host. The rule is
+         * unchanged and is the reason this lock exists: ONE authoring surface for responsibility,
+         * reached from wherever the operator asks. What moved is who renders it — so Details must
+         * now render NO panel at all, and the host must render exactly one at account grain.
+         */
+        const detail = code(DETAIL);
+        expect(detail, "Details renders no editor of its own").not.toContain("<FinancialsResponsibilityPanel");
+        expect(detail, "it asks the host instead").toContain("administration.onManageResponsibility");
+        /* No second writer, and no local arrangement authoring in the card. */
+        expect(detail).not.toContain("billing.configure_responsibility");
+        expect(detail).not.toContain("responsibility-arrangement");
+
+        const card = code(CARD);
+        const panels = card.match(/<FinancialsResponsibilityPanel/g) ?? [];
+        /* One for the account-grain depth card, one for the per-charge surface — and no third. */
+        expect(panels.length, "the host opens the one panel, not a family of them")
+            .toBeLessThanOrEqual(2);
+        expect(card, "and the account-grain card is a real surface").toMatch(
+            /if \(overlay === "responsibility_admin"/,
+        );
     });
 
     it("Save re-reads committed truth instead of faking optimistic state", () => {
-        const detail = src(DETAIL);
-        expect(detail).toMatch(/onCommitted=\{async \(\) => \{[\s\S]{0,260}responsibilityAdmin\.onCommitted\(\)/);
-        /* The card holds no copy of the arrangement, so there is nothing to optimistically set. */
+        /* The commit handler moved to the host with the panel; the rule did not move. */
+        const card = code(CARD);
+        const at = card.indexOf('if (overlay === "responsibility_admin"');
+        expect(at, "the account-grain depth card exists").toBeGreaterThan(-1);
+        expect(card.slice(at, at + 2200), "committing re-reads canonical truth")
+            .toMatch(/onCommitted=\{async \(\) => \{[\s\S]{0,200}await load\(\)/);
+        /* Neither surface holds a copy of the arrangement, so there is nothing to fake. */
         expect(code(DETAIL)).not.toMatch(/setArrangement\(|setResponsibilityArrangement\(/);
+        expect(card).not.toMatch(/setResponsibilityArrangement\(/);
     });
 
     it("the host supplies canonical parties and the canonical re-read", () => {
@@ -182,16 +210,18 @@ describe("a depth card dismisses itself, not the account beneath it", () => {
      * MEASURED on deployed 9675a76be: one Escape with the responsibility card open closed the card
      * AND the whole Details surface, and focus went to <body>. The operator lost the account, the
      * lens, the filters and their place in the ledger. Accounts had answered Escape itself since
-     * 24ffad5bb; the Details host I added did not, so the migration regressed the depth stack on
-     * exactly the surface this slice introduced.
+     * 24ffad5bb; the Details host did not, so that migration regressed the depth stack on exactly
+     * the surface the slice introduced.
+     *
+     * The two hosts reach the same guarantee by different means, and the means are forced by where
+     * the card lives. Accounts renders the panel inline, so it takes the keypress on the wrapper
+     * and stops it there. The Financials card renders the panel as its own surface on a stack it
+     * owns, so it answers Escape once for the whole stack and COALESCES: two announcers in one
+     * gesture window pop one level, not two. Requiring `stopPropagation` of both would force the
+     * stack host into a mechanism that breaks its own backdrop signal.
      */
-    const HOSTS = [
-        ["components/operationalCards/FinancialsDetailCard.tsx", "Details"],
-        ["app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx", "Accounts"],
-    ] as const;
-
-    it.each(HOSTS)("%s answers Escape itself and stops it there", (rel) => {
-        const host = code(rel);
+    it("Accounts takes the keypress on the card and stops it there", () => {
+        const host = code("app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx");
         const at = host.indexOf('data-financials-manage-responsibility="depth-card"');
         expect(at, "the panel is wrapped in a depth card").toBeGreaterThan(-1);
         const guard = host.slice(at, at + 420);
@@ -199,19 +229,29 @@ describe("a depth card dismisses itself, not the account beneath it", () => {
         expect(guard, "and stops it reaching the workspace behind").toContain("stopPropagation");
     });
 
-    it.each(HOSTS)("%s returns focus to the gear that opened the card", (rel) => {
-        const host = code(rel);
-        /* A ref on the gear, and a close path that focuses it — not a bare setState(false). */
-        expect(host).toMatch(/ref=\{manage\w*GearRef\}/);
-        expect(host).toMatch(/GearRef\.current\?\.focus\(\)/);
+    it("the Financials card pops exactly one level per gesture", () => {
+        const card = code(CARD);
+        expect(card, "the depth card is marked like the other host's")
+            .toContain('data-financials-manage-responsibility="depth-card"');
+        expect(card, "Escape is answered here").toMatch(/key !== "Escape"/);
+        /* One gesture, one level: a second announcer inside the window is the same keypress. */
+        expect(card, "dismissal pops one level").toMatch(/dismissOneLevel/);
+        const at = card.indexOf("const dismissOneLevel");
+        expect(card.slice(at, at + 400), "and repeat announcements in one gesture are coalesced")
+            .toMatch(/lastDismissRef\.current < \d+/);
     });
 
-    it("neither host closes the card without going through that path", () => {
-        for (const [rel] of HOSTS) {
-            const host = code(rel);
-            /* onHostedClose must route through the focus-restoring close, never a raw setter. */
-            expect(host, `${rel} routes onHostedClose through the restoring close`)
-                .toMatch(/onHostedClose=\{close\w*\}/);
-        }
+    it("neither host closes the card without going through its restoring path", () => {
+        /*
+         * `onHostedClose` must route through the path that also restores focus — never a raw
+         * setter that leaves the operator on <body>. Accounts closes through `closeManage`; the
+         * stack host closes through `pop`, which its focus effect watches.
+         */
+        expect(code("app/adminV2/financials/FinancialsAccountWorkspaceDetail.tsx"))
+            .toMatch(/onHostedClose=\{close\w*\}/);
+        const card = code(CARD);
+        expect(card).toMatch(/onHostedClose=\{pop\}/);
+        expect(card, "and the focus restore is driven by the surface going away")
+            .toMatch(/adminFocusSelector/);
     });
 });

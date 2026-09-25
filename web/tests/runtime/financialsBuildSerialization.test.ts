@@ -69,10 +69,72 @@ function latencyClient(fixture: Record<string, unknown[]>, trips: Trip[], t0: ()
         };
         return self;
     };
-    return { from: (tbl: string) => build(tbl), rpc: () => build("(rpc)") } as never;
+    /*
+     * ONE trip, resolved without a timer. The table reads model latency so these tests can count
+     * ROUND-TRIP WINDOWS; the bundle is a single trip whose whole point is that nothing waits on
+     * it in sequence, and giving it its own timer only couples this fake to each test's clock.
+     */
+    const bundleRpc = () => ({
+        then: (onOk: (v: unknown) => unknown) => {
+            const at = Math.round(performance.now() - t0());
+            trips.push({ table: "financials_account_fact_bundle", startRel: at, endRel: at });
+            const answer = { data: bundleFor(fixture), error: null };
+            return Promise.resolve(onOk(answer));
+        },
+    });
+    return {
+        from: (tbl: string) => build(tbl),
+        rpc: (name: string) => (name === "financials_account_fact_bundle" ? bundleRpc() : build("(rpc)")),
+    } as never;
 }
 
 /** A household with `posted` obligations in the current billing period. */
+
+/**
+ * What the account fact bundle returns for a fixture.
+ *
+ * Production acquires every dependent fact in one server-side round trip, so a fake that answers
+ * only table reads answers nothing at all. This models that boundary from the same fixture the
+ * table reads use, which keeps these contracts pointed at the acquisition production actually has.
+ */
+function bundleFor(fixture: Record<string, unknown[]>) {
+    const all = (t: string) => (fixture[t] ?? []) as Array<Record<string, unknown>>;
+    const agreements = all("child_enrollment_agreements");
+    const charges = all("charges");
+    return {
+        resolved_customer_id: (agreements[0]?.customer_id as string) ?? null,
+        agreements,
+        members: all("customer_members"),
+        reductions_by_agreement: all("financial_reduction_applications"),
+        commercial_policies: all("commercial_policies"),
+        charges,
+        reductions_by_charge: all("financial_reduction_applications"),
+        payment_allocations: all("payment_allocations"),
+        responsibility_allocations: all("financial_responsibility_allocations"),
+        subsidy_claim_lines: all("financial_subsidy_claim_lines"),
+        payments_backing: all("payments"),
+        responsibility_attributions: all("payment_responsibility_attributions"),
+        responsible_persons: all("persons"),
+        funding_by_allocation: [],
+        funding_by_share: [],
+        funding_for_responsibility: all("financial_expected_funding"),
+        subsidy_claims: all("financial_subsidy_claims"),
+        subsidy_variances: all("financial_subsidy_variances"),
+        collection_attempts: all("payment_collection_attempts"),
+        payments_by_source: all("payments"),
+        payments_for_views: all("payments"),
+        charges_for_allocations: charges,
+        payer_customers: all("customers"),
+        payment_refunds: [],
+        counts: {
+            agreements: agreements.length,
+            charges: charges.length,
+            allocations: all("financial_responsibility_allocations").length,
+            claim_lines: all("financial_subsidy_claim_lines").length,
+        },
+    };
+}
+
 function fixture(posted: number, agreements = 3): Record<string, unknown[]> {
     const ids = Array.from({ length: agreements }, (_, i) => `agr-${i + 1}`);
     return {
@@ -238,13 +300,21 @@ describe("the concurrency was not bought with extra database work", () => {
         }
     }, 30_000);
 
-    it("THE GATE: members, reductions and charges go out together, not in single file", async () => {
+    it("THE GATE: members, reductions and charges no longer cost the client a round trip at all", async () => {
+        /*
+         * These three used to be measured against each other: they needed the agreements and
+         * nothing else, so a card that read them in single file paid three round trips for one
+         * question. They are not read by the client any more — they arrive with the rest of the
+         * account's dependent facts — so "together" is no longer the strongest thing that can be
+         * said about them. "Not a client trip at all" is, and that is what is asserted.
+         */
         const { trips } = await measure(3);
-        const start = (t: string) => trips.find((x) => x.table === t)!.startRel;
-        const members = start("customer_members");
-        const reductions = start("financial_reduction_applications");
-        const charges = start("charges");
-        expect(Math.max(members, reductions, charges) - Math.min(members, reductions, charges)).toBeLessThan(LATENCY);
+        const tables = trips.map((t) => t.table);
+        expect(tables, "the canonical acquisition is the bundle").toContain("financials_account_fact_bundle");
+        for (const table of ["customer_members", "financial_reduction_applications", "charges"]) {
+            expect(tables, `${table} came with the bundle; reading it again is the old chain returning`)
+                .not.toContain(table);
+        }
     }, 30_000);
 });
 
@@ -271,53 +341,80 @@ describe("financial truth is untouched — this is scheduling only", () => {
         expect(vm.subjects.map((s) => s.displayName)).toEqual(["C1", "C2", "C3"]);
     }, 30_000);
 
-    it("THE GATE: a payments read that fails is still UNAVAILABLE, never 'nothing has been paid'", async () => {
+    it("THE GATE: a failed acquisition is UNAVAILABLE, never 'nothing has been paid'", async () => {
         /*
-         * The repair moved this read earlier and wrapped it in a `.catch`, which is exactly where a
-         * failure could quietly become an empty result. It must not: a family that has paid must
-         * never be shown the full amount owed because a read failed.
-         */
-        const trips: Trip[] = [];
-        let base = 0;
-        const rows = fixture(3);
-        const inner = latencyClient(rows, trips, () => base) as unknown as { from: (t: string) => unknown };
-        const supabase = {
-            from: (table: string) => {
-                if (table === "payments") {
-                    return { then: (_ok: unknown, err?: (e: unknown) => unknown) => Promise.reject(new Error("payments down")).catch((e) => (err ? err(e) : Promise.reject(e))) };
-                }
-                return inner.from(table);
-            },
-        } as never;
-        base = performance.now();
-        const vm = await buildFinancialsCardVM(supabase, { orgId: "o", customerId: "cust-1", today: TODAY });
-        expect(vm.unavailable.map((u) => u.fact)).toContain("payments");
-        /*
-         * Nothing is claimed as paid. Every row owes its whole amount, which is the safe direction:
-         * the card says it cannot answer rather than showing a family money they have already sent
-         * as still outstanding-and-settled.
+         * ── THE FAILURE CONTRACT, AFTER THE ACQUISITION BOUNDARY MOVED ─────────────────────────
          *
-         * NOT asserted here: `offersPayment`. The comment beside that loop says a failed read leaves
-         * rows "offering nothing", but the recompute runs unconditionally after the catch, so a
-         * posted row still offers Record-payment. That divergence between the comment and the code
-         * is PRE-EXISTING — identical on `c911a6644` — and a latency slice is the wrong place to
-         * change what a card offers. Recorded in the slice evidence instead.
+         * The account's receipts used to be their own read, so a failure there could be reported
+         * as "cannot answer about payments" while the ledger still rendered with nothing applied.
+         * They now arrive with every other dependent fact in ONE server-side round trip, and there
+         * is no state where the charges answered and the receipts did not.
+         *
+         * So the contract is whole-card: a bundle that cannot answer makes the account's financial
+         * answer UNAVAILABLE. That is the direction this gate always protected — a family that has
+         * paid must never be shown the full amount owed because a read failed — and it is now
+         * enforced for every fact at once rather than one family of facts at a time.
          */
-        for (const r of vm.rows) {
-            expect(r.appliedCents).toBe(0);
-            expect(r.outstandingCents).toBe(r.amountCents);
-        }
+        const rows = fixture(3);
+        const supabase = {
+            from: (table: string) => (latencyClient(rows, [], () => 0) as unknown as { from: (t: string) => unknown }).from(table),
+            rpc: () => ({
+                then: (ok: (v: unknown) => unknown) => ok({ data: null, error: { message: "bundle down" } }),
+            }),
+        } as never;
+        const vm = await buildFinancialsCardVM(supabase, { orgId: "o", customerId: "cust-1", today: TODAY });
+        expect(vm.unavailableReason, "the card says it cannot answer").toMatch(/unavailable/i);
+        /* No ledger assembled from an acquisition that failed — not one row, not a zero balance. */
+        expect(vm.rows, "no partial ledger").toEqual([]);
+        expect(vm.collectible?.currentlyCollectibleCents ?? 0, "no balance claimed").toBe(0);
     }, 30_000);
 
-    it("a reductions read that fails is an empty history, not a dead card", async () => {
-        expect(CODE).toMatch(/\.catch\(\(\) => \[\] as AccountReduction\[\]\)/);
-    });
+    it("a reduction history is a fact the bundle carries, not a second read that can half-fail", async () => {
+        /*
+         * This asserted a `.catch(() => [] as AccountReduction[])` on a reductions read that no
+         * longer exists — the history arrives with the rest of the account's facts. The RULE it
+         * protected still holds and is what is asserted now: an account whose bundle answered and
+         * whose reduction history is genuinely empty is a KNOWN ZERO and renders; only a failed
+         * acquisition is UNAVAILABLE. A spelling in SQL would be no better a gate than a spelling
+         * in TypeScript, so this asserts the behaviour.
+         */
+        const rows = fixture(3);
+        rows.financial_reduction_applications = [];
+        const supabase = latencyClient(rows, [], () => 0) as never;
+        const vm = await buildFinancialsCardVM(supabase, { orgId: "o", customerId: "cust-1", today: TODAY });
+        expect(vm.unavailableReason, "an empty history is not an unavailable card").toBeFalsy();
+        expect(vm.reductions, "asked, and there are none").toEqual([]);
+        expect(vm.rows.length, "the ledger still renders").toBeGreaterThan(0);
+    }, 30_000);
 
-    it("THE GATE: the account is still scoped by the agreements this household owns", async () => {
-        // Concurrency must not have widened what the card reads. The charges read is still bounded
-        // by `billableSourceIds`, and the sentinel still stands in for an empty scope.
-        expect(CODE).toMatch(/\.in\("billable_source_id", billableSourceIds\.length \? billableSourceIds : \[NO_SOURCE_SENTINEL\]\)/);
-    });
+    it("THE GATE: the account is still scoped to the household the request named", async () => {
+        /*
+         * Collapsing the acquisition must not widen what the card can see. The scope moved WITH the
+         * acquisition — `financials_account_fact_bundle` bounds charges to this household's
+         * agreements plus the household itself, and org-scopes every statement — so the rule this
+         * gate protects is now proven in two places and asserted in the one a unit run can reach:
+         * the card asks about the identities the request carried, and invents none.
+         *
+         * That the function HONOURS those identities is proven against the real database by
+         * `accountFactBundleParity.live`, where a household read under another org returns nothing
+         * rather than that tenant's ledger. Asserting the SQL's spelling here would replace a
+         * TypeScript spelling with a SQL one and prove no more than either.
+         */
+        const asked: Array<Record<string, unknown>> = [];
+        const rows = fixture(3);
+        const supabase = {
+            from: (table: string) => (latencyClient(rows, [], () => 0) as unknown as { from: (t: string) => unknown }).from(table),
+            rpc: (name: string, params: Record<string, unknown>) => {
+                asked.push({ name, ...params });
+                return { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok({ data: bundleFor(rows), error: null })) };
+            },
+        } as never;
+        await buildFinancialsCardVM(supabase, { orgId: "o", customerId: "cust-1", today: TODAY });
+        const call = asked.find((a) => a.name === "financials_account_fact_bundle");
+        expect(call, "the card acquires through the canonical bundle").toBeDefined();
+        expect(call!.p_org_id, "the org comes from the request, never widened").toBe("o");
+        expect(call!.p_customer_id, "and the household it named").toBe("cust-1");
+    }, 30_000);
 });
 
 describe("authorization is untouched", () => {
@@ -356,8 +453,14 @@ describe("the instrument names every boundary it crosses", () => {
         const declared = [...DIAG.slice(at, DIAG.indexOf("};", at)).matchAll(/^\s+(\w+_ms):/gm)]
             .map((m) => m[1]).sort();
         const recorded = [...new Set([...CODE.matchAll(/clock\s*\.\s*time\("(\w+_ms)"/g)].map((m) => m[1]))].sort();
-        expect(declared.length, "the build crosses thirteen awaited boundaries; the payload must name them all")
-            .toBe(13);
+        /*
+         * Fourteen since the policies read became a measured boundary. It was always an awaited
+         * database read; it was simply issued nine reads deep, where nobody had put a timer on it.
+         * Hoisting it to the org-grain wave is what made it worth naming — and this gate is what
+         * required the name, because a recorded span the payload does not declare is a boundary
+         * the instrument cannot report.
+         */
+        expect(declared.length, "the payload names every boundary the build still crosses").toBe(recorded.length);
         expect(recorded).toEqual(declared);
     });
 
@@ -367,14 +470,35 @@ describe("the instrument names every boundary it crosses", () => {
          * measured where it was CREATED. An unmeasured read is how a boundary gets called cheap
          * because nobody ever saw its number — which is the whole reason this slice exists.
          */
-        const body = CODE.slice(CODE.indexOf("async function buildFinancialsCardVMInner"));
-        const awaited = [...body.matchAll(/await ([A-Za-z_.]+)/g)].map((m) => m[1]);
+        /*
+         * COMMENTS ARE NOT CODE. This scanned the raw source, so the prose "never await these" and
+         * "never await it" in two explanatory blocks read as unmeasured awaits — and a gate that
+         * cannot pass guards nothing. It had been failing on them long enough to hide two reads
+         * that genuinely had no timer: the `commercial_policies` window read and the payment holds
+         * read. Stripping comments first is what let it say so.
+         */
+        const source = CODE.slice(CODE.indexOf("async function buildFinancialsCardVMInner"));
+        const body = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        /*
+         * `await (` is captured too. The first version matched only an identifier, so wrapping the
+         * expression in parentheses — `await (supabase.from(...))` — captured nothing and the gate
+         * had nothing to object to. A planted removal of the policy-window timer walked straight
+         * past it in exactly that shape.
+         */
+        const awaited = [...body.matchAll(/await\s+(\(|[A-Za-z_.]+)/g)].map((m) => m[1]);
         const measuredPromises = [
             "configRead", "merchantRead", "responsibilityP", "paymentsP", "setupP", "payersP",
             // Slice 12F: the payment views, in flight from entry and measured where they are created.
             // Admitted BY NAME, not by loosening the pattern — this gate caught the new await on its
             // first run, which is the gate doing its job.
             "paymentViewsP",
+            /*
+             * Both measured where they are CREATED, in the org-grain and post-charges waves, and
+             * awaited later where their answers are assembled. Admitted by name for the same reason
+             * `paymentViewsP` was: the pattern stays tight, and a genuinely unmeasured await still
+             * fails this gate.
+             */
+            "financialPoliciesP", "collectiblePositionsP",
             "openCollectionsP", "Promise.all", "clock.time",
         ];
         for (const a of awaited) {

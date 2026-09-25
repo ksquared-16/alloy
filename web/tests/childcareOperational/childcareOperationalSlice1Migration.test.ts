@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -24,11 +24,34 @@ describe("childcare operational enrollment slice 1 migration", () => {
         expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.schedule_assignments");
     });
 
-    it("defines agreement status check aligned with doctrine", () => {
-        for (const status of CHILD_ENROLLMENT_AGREEMENT_STATUSES) {
+    /*
+     * Slice 1 defines the statuses SLICE 1 introduced, not every status that will ever exist.
+     *
+     * This asserted the whole current vocabulary against this one file, which held only until a
+     * later migration extended it: `voided` arrives in
+     * `20261021120000_enrollment_voided_state.sql`, so slice 1 correctly does not mention it and
+     * the assertion started failing on a file nobody had touched. The guard is still worth having —
+     * it catches a status added to the TypeScript vocabulary that NO migration admits — so it now
+     * checks exactly that, rather than pinning the vocabulary to its first migration forever.
+     */
+    const SLICE_1_AGREEMENT_STATUSES = ["pending_start", "active", "ending", "ended", "canceled"];
+
+    it("defines the agreement statuses slice 1 introduced", () => {
+        for (const status of SLICE_1_AGREEMENT_STATUSES) {
             expect(sql).toContain(`'${status}'::text`);
         }
         expect(sql).not.toContain("'withdrawn'::text");
+    });
+
+    it("every agreement status in the vocabulary is admitted by some migration", () => {
+        const migrationsDir = resolve(__dirname, "../../../supabase/migrations");
+        const everyMigration = readdirSync(migrationsDir)
+            .filter((f) => f.endsWith(".sql"))
+            .map((f) => readFileSync(resolve(migrationsDir, f), "utf8"))
+            .join("\n");
+        for (const status of CHILD_ENROLLMENT_AGREEMENT_STATUSES) {
+            expect(everyMigration, `no migration admits the status "${status}"`).toContain(`'${status}'::text`);
+        }
     });
 
     it("defines placement and schedule assignment status checks aligned with doctrine", () => {

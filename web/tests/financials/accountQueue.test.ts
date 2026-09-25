@@ -36,6 +36,12 @@ const BLUEBELL = { id: "room-bluebell", label: "Bluebell Room" };
 
 function row(over: Partial<AccountRow> & { customerId: string }): AccountRow {
     return {
+        /*
+         * These rows are all POSITION-ANSWERED: their zeros are real zeros, which is what every
+         * assertion in this file is about. A row whose money is merely unknown is a different
+         * thing and is gated in accountsProgressivePosition.
+         */
+        financialTruth: "known",
         householdName: "Household",
         currencyCode: "USD",
         outstandingCents: 0,

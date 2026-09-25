@@ -404,6 +404,25 @@ export default function FocusPanelCardRenderer({
             density={model.density}
             gridSpan={model.span}
             data-universal-card-key={model.key}
+            /*
+             * THE SUBJECT THIS CARD ACTUALLY COMPOSED AGAINST.
+             *
+             * This first read `context.subject.id`, on the strength of the comment above saying
+             * subject identity derives from the Operational Context. Measured on deployed 4b1dea3a:
+             * the attribute never reached the DOM at all, because that field is null on this path -
+             * React drops an undefined attribute, so the instrumentation failed silently and
+             * cardsBoundToB read 0 while six UniversalCards were on screen.
+             *
+             * `context.truth` is the record the card was composed from, so its id is the honest
+             * answer to "whose content is this". Falls back to the subject id where truth carries
+             * none, and is omitted entirely when neither is known - an absent attribute is UNKNOWN,
+             * which is the correct reading, rather than a subject the card cannot vouch for.
+             */
+            data-card-subject={
+                (typeof (record as { id?: unknown })?.id === "string" ?
+                    ((record as { id?: string }).id as string)
+                :   null) || drawerId || undefined
+            }
             receded={receded}
             className={isPrimaryNextAction ? "alloy-os-ucard--primary-action" : undefined}
             footerAction={

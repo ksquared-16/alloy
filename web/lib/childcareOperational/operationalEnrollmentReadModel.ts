@@ -142,23 +142,36 @@ function buildWarnings(
     return warnings;
 }
 
-async function buildLabels(
+/**
+ * The three LOOKED-UP labels. Split from the schedule label deliberately: these are the only part
+ * of the label set that costs a round trip, and none of them reads the schedule pattern.
+ */
+async function resolveLookedUpLabels(
     supabase: SupabaseClient,
     orgId: string,
     agreement: ChildEnrollmentAgreementRow | null,
-    placement: ChildPlacementRow | null,
-    schedulePattern: SchedulePatternRow | null
-): Promise<OperationalEnrollmentDisplayLabels> {
-    const siteLabel = agreement
-        ? await resolveLocationLabel(supabase, orgId, agreement.site_location_id)
-        : null;
-    const programLabel = placement
-        ? await resolveProgramLabel(supabase, orgId, placement.program_category_id)
-        : null;
-    const roomLabel = placement
-        ? await resolveLocationLabel(supabase, orgId, placement.room_location_id)
-        : null;
+    placement: ChildPlacementRow | null
+): Promise<Pick<OperationalEnrollmentDisplayLabels, "site" | "program" | "room">> {
+    /*
+     * THREE INDEPENDENT LOOKUPS, RESOLVED TOGETHER.
+     *
+     * The site label reads the AGREEMENT's location, the program and room labels read the
+     * PLACEMENT's category and room. None consumes another's result, so the serial `await` chain
+     * bought nothing but three round trips in sequence.
+     */
+    const [siteLabel, programLabel, roomLabel] = await Promise.all([
+        agreement ? resolveLocationLabel(supabase, orgId, agreement.site_location_id) : Promise.resolve(null),
+        placement ? resolveProgramLabel(supabase, orgId, placement.program_category_id) : Promise.resolve(null),
+        placement ? resolveLocationLabel(supabase, orgId, placement.room_location_id) : Promise.resolve(null),
+    ]);
+    return { site: siteLabel, program: programLabel, room: roomLabel };
+}
 
+/** The schedule label is a pure format of the pattern row — no read, so it never gated the others. */
+function composeLabels(
+    lookedUp: Pick<OperationalEnrollmentDisplayLabels, "site" | "program" | "room">,
+    schedulePattern: SchedulePatternRow | null
+): OperationalEnrollmentDisplayLabels {
     let scheduleLabel: string | null = null;
     if (schedulePattern) {
         const weekdays = formatWeekdays(schedulePattern.weekdays ?? []);
@@ -168,9 +181,9 @@ async function buildLabels(
     }
 
     return {
-        site: siteLabel,
-        program: programLabel,
-        room: roomLabel,
+        site: lookedUp.site,
+        program: lookedUp.program,
+        room: lookedUp.room,
         schedule: scheduleLabel,
     };
 }
@@ -180,7 +193,33 @@ export async function buildOperationalEnrollmentReadModelForAgreement(
     orgId: string,
     agreementId: string
 ): Promise<OperationalEnrollmentReadModel> {
-    const agreement = await getAgreementById(supabase, orgId, agreementId);
+    /*
+     * SEVEN SERIAL ROUND TRIPS BECAME THREE DEPENDENT STAGES.
+     *
+     * Measured on deployed c619afee/d88755c8, n=11 warm J5 samples: `durableFacts` was the longest
+     * of the three overlay legs in 11/11, at P50 556ms against placementLabeled 0ms and
+     * processInstances 106ms, and it explained the overlay wall exactly — residual P50 0ms. The
+     * children input was ONE, so this is not the per-child fan-out the enclosing comment describes;
+     * it is a single agreement costing 556ms, and the cost is the shape of this function.
+     *
+     * The dependencies are narrow. `getOperationalPlacementForAgreement` and
+     * `getOperationalScheduleAssignmentForAgreement` are keyed by `agreementId` ALONE — neither
+     * reads the agreement row — so the only true edges are schedulePattern needing the schedule
+     * assignment, and the labels needing agreement + placement + pattern. Everything else was
+     * sequential by habit.
+     *
+     * THE EARLY RETURN MOVES, AND THAT IS THE ONE BEHAVIOURAL TRADE. Previously a missing agreement
+     * short-circuited before the placement and assignment reads; now those two are already in
+     * flight. The returned model is byte-identical either way — this branch has always produced the
+     * empty model — so the trade is two speculative reads on a branch `resolveDurableFactsForChildren`
+     * reaches only when its own agreements query found nothing, against four fewer serial round
+     * trips on the path that is actually measured.
+     */
+    const [agreement, placement, scheduleAssignment] = await Promise.all([
+        getAgreementById(supabase, orgId, agreementId),
+        getOperationalPlacementForAgreement(supabase, orgId, agreementId),
+        getOperationalScheduleAssignmentForAgreement(supabase, orgId, agreementId),
+    ]);
     if (!agreement) {
         return {
             agreement: null,
@@ -192,17 +231,29 @@ export async function buildOperationalEnrollmentReadModelForAgreement(
         };
     }
 
-    const placement = await getOperationalPlacementForAgreement(supabase, orgId, agreementId);
-    const scheduleAssignment = await getOperationalScheduleAssignmentForAgreement(
-        supabase,
-        orgId,
-        agreementId
-    );
-    const schedulePattern = scheduleAssignment
-        ? await loadSchedulePattern(supabase, orgId, scheduleAssignment.schedule_pattern_id)
-        : null;
+    /*
+     * THE PATTERN READ AND THE LABEL READS ARE THE SAME STAGE, NOT TWO.
+     *
+     * `buildLabels` took `schedulePattern` and so was awaited after `loadSchedulePattern` — but its
+     * three round trips never read it. Only `scheduleLabel` does, and that is a pure format of a row
+     * already in hand. The pattern read was gating three lookups that do not depend on it.
+     *
+     * Measured n=24 on deployed staging: `children_overlay_durable_facts_ms` P50 360ms owned the
+     * overlay wall (P50 360ms) in 9/12 sampled switches, with `overlay_children_in` P50 = 1 — one
+     * child, so this is chain DEPTH, not per-child fan-out. Four dependent stages at the ~90ms
+     * round trip this deployment measures everywhere else (`customer_lookup` 113, `primary_person_hydrate`
+     * 106, `process_instances` 104, `ocm_members_batch` 120) is exactly the 360ms observed.
+     *
+     * Three stages become two. Same reads, same results, one less round trip in sequence.
+     */
+    const [schedulePattern, lookedUpLabels] = await Promise.all([
+        scheduleAssignment
+            ? loadSchedulePattern(supabase, orgId, scheduleAssignment.schedule_pattern_id)
+            : Promise.resolve(null),
+        resolveLookedUpLabels(supabase, orgId, agreement, placement),
+    ]);
 
-    const labels = await buildLabels(supabase, orgId, agreement, placement, schedulePattern);
+    const labels = composeLabels(lookedUpLabels, schedulePattern);
     const warnings = buildWarnings(agreement, placement, scheduleAssignment, schedulePattern);
 
     return {

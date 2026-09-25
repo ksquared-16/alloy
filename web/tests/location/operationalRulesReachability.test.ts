@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+    LOCATION_WORKSPACE_ADVANCED_TABS,
     LOCATION_WORKSPACE_TABS,
     locationWorkspaceHref,
 } from "@/lib/locations/locationWorkspaceModel";
@@ -40,11 +41,28 @@ const CONCERN = "operational-rules";
 // ---------------------------------------------------------------------------
 // 1-2 — reachable, and actually mounted.
 // ---------------------------------------------------------------------------
-describe("1-2. Operational Rules is a first-class Locations concern", () => {
-    it("1. appears in the canonical tab registry with an operator label", () => {
-        const tab = LOCATION_WORKSPACE_TABS.find((t) => t.key === CONCERN);
-        expect(tab).toBeDefined();
-        expect(tab!.label).toBe("Operational Rules");
+describe("1-2. Operational Rules is reachable, but no longer a primary destination", () => {
+    it("1. is ABSENT from the primary Site tabs", () => {
+        /*
+         * INVERTED DELIBERATELY. Ordinary operating facts now belong to the
+         * space they describe — capacity and staffing ratio are authored on the
+         * object — so an operator should never have to decide whether a fact
+         * lives under Spaces or under a rules page.
+         *
+         * Measured before removing it: of the four families this page hosts,
+         * capacity and ratio had moved to the object, and operating windows and
+         * schedule rules had ZERO rows in the entire deployed database.
+         */
+        // Widened deliberately: the key has left the primary union, so a narrow
+        // comparison is a type error. The runtime guard is what must survive.
+        const primary = LOCATION_WORKSPACE_TABS as readonly { key: string }[];
+        expect(primary.some((t) => t.key === CONCERN)).toBe(false);
+    });
+
+    it("1. is still a declared advanced destination, so the page is demoted and not deleted", () => {
+        const advanced = LOCATION_WORKSPACE_ADVANCED_TABS.find((t) => t.key === CONCERN);
+        expect(advanced).toBeDefined();
+        expect(advanced!.label).toBe("Operational Rules");
     });
 
     it("1. is a registered concern, not a page-local special case", () => {
@@ -124,14 +142,33 @@ describe("3-8, 19-20. the panel uses the canonical authoring authority", () => {
         }
     });
 
-    it("20. no second capacity editor was introduced", () => {
-        // Exactly one component in the repository authors capacity_kind.
+    it("20. no second capacity AUTHORITY was introduced", () => {
+        /*
+         * SHARPENED, not relaxed. The object editor now writes capacity, so the
+         * old test — "the room panel must never call the capacity route" — would
+         * forbid the feature rather than protect it.
+         *
+         * What must remain true is that nothing outside the rule console names a
+         * capacity KIND. The object editor sends a number and an object; the
+         * server derives `operational` or `physical` from the object's role. A
+         * kind literal appearing in a panel would mean a second place deciding
+         * what a number means, which is the thing worth forbidding.
+         */
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         const roomDetail = read("components/adminV2/settings/locations/LocationRoomDetailPanel.tsx");
         for (const src of [page, roomDetail]) {
             expect(src).not.toContain("capacity_kind");
-            expect(src).not.toContain("operational-config/capacity-rules");
+            for (const kind of ['"operational"', '"physical"', '"licensed"']) {
+                expect(src).not.toContain(`capacity_kind: ${kind}`);
+            }
         }
+        // The page writes capacity only for a space that did not exist yet, and
+        // only through the same derived action.
+        const pageCalls = page.match(/action: "[a-z_]*capacity[a-z_]*"/g) ?? [];
+        expect(pageCalls).toEqual(['action: "set_object_capacity"']);
+        // And the panel's only capacity call is the derived, object-level one.
+        const calls = roomDetail.match(/action: "[a-z_]*capacity[a-z_]*"/g) ?? [];
+        expect(calls).toEqual(['action: "set_object_capacity"']);
     });
 });
 

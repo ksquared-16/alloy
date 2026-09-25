@@ -26,6 +26,8 @@ export const REDUCTION_REASON_LABEL: Record<string, string> = {
     category_not_discountable: "Not eligible — this charge category cannot be discounted",
     no_accepted_gross: "No accepted tuition to forecast against",
     excluded_by_exception: "Excluded for this assignment",
+    /* One charge, not the relationship — the family keeps the policy everywhere else. */
+    excluded_by_charge_exception: "Waived for this charge",
 };
 
 /** The label, or the code spelled out — never silence, and never a guess. */
