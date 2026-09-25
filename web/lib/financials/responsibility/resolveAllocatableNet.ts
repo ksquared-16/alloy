@@ -17,9 +17,36 @@
  * they reduced, carry the basis, and are the row Thread 10 certifies. A reduction charge only says
  * `metadata.reduces_charge_id`, which is a convenience, not a contract. Allocating money against
  * the decision keeps this reading the same source the reduction's own explanation reads.
+ *
+ * ── WHY A HOUSEHOLD CHARGE CARRIES RESPONSIBILITY TOO ──
+ *
+ * This refused anything that was not enrolment-backed — "Only an enrolment-backed charge carries
+ * responsibility" — and that sentence was never a financial invariant. It was this resolver's
+ * convenience: the only reason it wanted an agreement was to look up the household, and it had no
+ * other way to find one.
+ *
+ * Meanwhile `writeTemplateDraftCharge` accepts a `customer` billable source deliberately, naming "a
+ * waitlist fee, a registration fee, a deposit" — charges a family incurs before anyone is enrolled.
+ * So Financials would create and post household money and then refuse to say who owed it. The
+ * arrangement model never had that limit: `financial_responsibility_arrangements` is keyed on
+ * `customer_id NOT NULL` with an OPTIONAL `customer_member_id`, and its own migration says so —
+ * "Scope. The account always; ONE CHILD optionally".
+ *
+ * BILLABLE-SOURCE GRAIN DETERMINES ATTRIBUTION, NOT WHETHER RESPONSIBILITY EXISTS. An agreement
+ * charge is child-attributed and an account-wide or child-narrowed arrangement may bear it; a
+ * customer charge is household-attributed, names no child, and only an account-wide arrangement can
+ * bear it — which `readArrangementInForce` already gets right, because a child-narrowed arrangement
+ * cannot match a null child.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
+import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
+
+function isChildcareBillableSourceType(value: string | null): boolean {
+    return (CHILDCARE_BILLABLE_SOURCE_TYPES as readonly string[]).includes((value ?? "").trim());
+}
 
 export type AllocatableNet = {
     chargeId: string;
@@ -31,8 +58,10 @@ export type AllocatableNet = {
     netCents: number;
     currencyCode: string;
     customerId: string | null;
+    /** The child, when the obligation is child-attributed. Null for a household obligation. */
     customerMemberId: string | null;
-    enrollmentAgreementId: string;
+    /** Null when the obligation is household-sourced — there is no agreement, and none is invented. */
+    enrollmentAgreementId: string | null;
     serviceDate: string | null;
     periodKey: string | null;
     status: string;
@@ -83,8 +112,18 @@ export async function resolveAllocatableNet(
     if (charge.status === "void") {
         throw new AllocatableNetError("not_allocatable", "A void charge has nothing to allocate.");
     }
-    if (charge.billable_source_type !== "enrollment_agreement" || !charge.billable_source_id) {
-        throw new AllocatableNetError("not_allocatable", "Only an enrolment-backed charge carries responsibility.");
+    /*
+     * A SOURCE IS REQUIRED; AN AGREEMENT IS NOT.
+     *
+     * The refusal that remains is the one that was always real: money whose owner cannot be named
+     * must not be divided between people. Which of the two childcare sources it is decides the
+     * ATTRIBUTION, and that is settled below.
+     */
+    if (!isChildcareBillableSourceType(charge.billable_source_type) || !charge.billable_source_id) {
+        throw new AllocatableNetError(
+            "not_allocatable",
+            "Responsibility needs a childcare billable source — an enrolment agreement or a household.",
+        );
     }
 
     const { data: reductionRows, error: reductionError } = await supabase
@@ -112,16 +151,39 @@ export async function resolveAllocatableNet(
         throw new AllocatableNetError("negative_net", `Charge ${args.chargeId} nets below zero.`);
     }
 
-    // The household and child come from the agreement, which is where every other childcare
-    // financial read resolves them — never re-derived from the reduction rows.
-    const { data: agreementRow, error: agreementError } = await supabase
-        .from("child_enrollment_agreements")
-        .select("customer_id, customer_member_id")
-        .eq("org_id", args.orgId)
-        .eq("id", charge.billable_source_id)
-        .maybeSingle();
-    if (agreementError) throw new AllocatableNetError("db_error", agreementError.message);
-    const agreement = agreementRow as { customer_id: string | null; customer_member_id: string | null } | null;
+    /*
+     * WHOSE ACCOUNT THIS IS — asked of the one owner that already answers it for both sources.
+     *
+     * `resolveBillableSourceHouseholdId` is the resolver the payment/charge gate uses to decide
+     * whether two sources belong to the same household. It knows that a household source IS the
+     * household, and it recovers the household from the CHILD when an agreement's denormalised
+     * `customer_id` is null — a fallback the inline lookup here never had. Quoting it means a charge
+     * and a payment cannot disagree about whose money they are.
+     */
+    const isAgreement = charge.billable_source_type === "enrollment_agreement";
+    const customerId = await resolveBillableSourceHouseholdId(
+        supabase,
+        args.orgId,
+        charge.billable_source_type,
+        charge.billable_source_id,
+    );
+
+    /*
+     * The CHILD comes only from an agreement. A household obligation names no child, and inventing
+     * one — the household's only child, say — would attach account money to a person who never
+     * incurred it and would let a child-narrowed arrangement bear a charge it was never written for.
+     */
+    let customerMemberId: string | null = null;
+    if (isAgreement) {
+        const { data: agreementRow, error: agreementError } = await supabase
+            .from("child_enrollment_agreements")
+            .select("customer_member_id")
+            .eq("org_id", args.orgId)
+            .eq("id", charge.billable_source_id)
+            .maybeSingle();
+        if (agreementError) throw new AllocatableNetError("db_error", agreementError.message);
+        customerMemberId = (agreementRow as { customer_member_id: string | null } | null)?.customer_member_id ?? null;
+    }
 
     return {
         chargeId: charge.id,
@@ -129,9 +191,9 @@ export async function resolveAllocatableNet(
         reductionsCents,
         netCents,
         currencyCode: charge.currency_code,
-        customerId: agreement?.customer_id ?? null,
-        customerMemberId: agreement?.customer_member_id ?? null,
-        enrollmentAgreementId: charge.billable_source_id,
+        customerId,
+        customerMemberId,
+        enrollmentAgreementId: isAgreement ? charge.billable_source_id : null,
         serviceDate: charge.service_date,
         periodKey: charge.service_date ? charge.service_date.slice(0, 7) : null,
         status: charge.status,

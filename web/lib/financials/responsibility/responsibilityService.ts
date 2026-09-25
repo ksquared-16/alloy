@@ -135,7 +135,8 @@ export async function resolveChargeResponsibility(
         throw err;
     }
     if (!net.customerId) {
-        return { kind: "refused", chargeId: args.chargeId, reason: "no_account", detail: "The charge's enrolment names no household." };
+        // Wording covers both sources now: a household charge has no enrolment to blame.
+        return { kind: "refused", chargeId: args.chargeId, reason: "no_account", detail: "The charge's billable source names no household." };
     }
 
     const onDate = net.serviceDate ?? new Date().toISOString().slice(0, 10);
