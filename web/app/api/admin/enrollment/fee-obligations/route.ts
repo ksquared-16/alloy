@@ -19,6 +19,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import {
+    findReversalChargeId,
     resolveEnrollmentFeeObligations,
     reverseEnrollmentFeeObligation,
     type EnrollingChild,
@@ -170,6 +171,10 @@ async function handle(request: NextRequest) {
              * disagreement inside Financials, and Enrollment resolves it in neither direction: the
              * obligation is reported without a position, and an operator is told.
              */
+            const reversedByChargeId = await findReversalChargeId(supabase, {
+                orgId: ctx.orgId,
+                chargeId: outcome.chargeId,
+            });
             let raw: Awaited<ReturnType<typeof resolveFamilyCollectible>> | null = null;
             let unavailable: string | null = null;
             try {
@@ -185,6 +190,7 @@ async function handle(request: NextRequest) {
                     subjectCustomerMemberId: outcome.subjectCustomerMemberId,
                     position: null,
                     positionUnavailableReason: unavailable ?? "Collectible position is unavailable.",
+                    reversedByChargeId,
                 });
                 continue;
             }
@@ -194,6 +200,7 @@ async function handle(request: NextRequest) {
                 chargeTemplateKey,
                 billableSource: outcome.billableSource,
                 subjectCustomerMemberId: outcome.subjectCustomerMemberId,
+                reversedByChargeId,
                 position: {
                     chargeId: position.chargeId,
                     currencyCode: position.currencyCode,

@@ -81,6 +81,30 @@ export type FeeObligationOutcome =
           readonly subjectCustomerMemberId: string | null;
       };
 
+/**
+ * Has Financials retired this obligation with a correction?
+ *
+ * The predicate is `childcareChargeService`'s own, quoted rather than re-derived: a non-void charge
+ * whose `source_charge_id` is this one and whose `correction_kind` is a reversal. Asking Financials
+ * what it recorded is not the same as Enrollment deciding what money is worth.
+ */
+export async function findReversalChargeId(
+    supabase: SupabaseClient,
+    args: { readonly orgId: string; readonly chargeId: string },
+): Promise<string | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .select("id, status, metadata")
+        .eq("org_id", args.orgId)
+        .eq("source_charge_id", args.chargeId);
+    if (error) return null;
+    const rows = (data ?? []) as { id: string; status: string; metadata: Record<string, unknown> | null }[];
+    const reversal = rows.find(
+        (r) => r.status !== "void" && (r.metadata ?? {}).correction_kind === "reversal",
+    );
+    return reversal?.id ?? null;
+}
+
 export type ResolveEnrollmentFeeResult = {
     /** False when no active template carries this key — a configuration problem, not a money one. */
     readonly templateResolved: boolean;

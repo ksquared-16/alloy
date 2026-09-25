@@ -69,6 +69,17 @@ export type EnrollmentFeeObligation = {
     readonly position: QuotedCollectiblePosition | null;
     /** Why there is no position, in Financials' own words. Present exactly when `position` is null. */
     readonly positionUnavailableReason?: string;
+    /**
+     * The correction charge that reversed this obligation, when one exists.
+     *
+     * A correction is its OWN charge row referencing the original through `source_charge_id`, so
+     * netting happens across a cohort and not within one charge. This projection reads one charge at
+     * a time — which is right, because that is the obligation Enrollment created — and would
+     * therefore go on reporting a reversed fee as owed forever. Reading the lineage is not money
+     * arithmetic: the amount is still never recomputed here, only the fact that Financials retired
+     * the obligation.
+     */
+    readonly reversedByChargeId?: string | null;
 };
 
 export type EnrollmentFinancialState =
@@ -141,7 +152,20 @@ const ZERO: EnrollmentFinancialAmounts = {
 };
 
 /** The state of ONE obligation. The family's state is derived from these, never independently. */
-export function stateForObligation(position: QuotedCollectiblePosition | null): EnrollmentFinancialState {
+export function stateForObligation(
+    position: QuotedCollectiblePosition | null,
+    reversedByChargeId?: string | null,
+): EnrollmentFinancialState {
+    /*
+     * A REVERSED OBLIGATION STOPS BLOCKING, AND NOBODY PAID IT.
+     *
+     * A child withdrew, Financials wrote the correction, and the original charge still reports its
+     * own outstanding balance because that is what a per-charge reading says. Continuing to hold the
+     * family to it would make withdrawal impossible to complete. The history is untouched — the
+     * charge and its correction both remain — and this only stops treating a retired obligation as
+     * something still owed.
+     */
+    if (reversedByChargeId) return "SATISFIED";
     /*
      * A CHARGE NOBODY CAN POSITION NEEDS A PERSON, NOT A DEFAULT.
      *
@@ -199,7 +223,7 @@ function sum(obligations: readonly EnrollmentFeeObligation[]): EnrollmentFinanci
     // stand behind must not appear in one Enrollment shows a family. Its state still carries.
     return obligations.reduce<EnrollmentFinancialAmounts>(
         (acc, o) =>
-            o.position === null
+            o.position === null || o.reversedByChargeId
                 ? acc
                 : {
                       currencyCode: acc.currencyCode ?? o.position.currencyCode,
@@ -288,7 +312,10 @@ export function projectEnrollmentFinancialRequirement(
         };
     }
 
-    const obligations = input.obligations.map((o) => ({ ...o, state: stateForObligation(o.position) }));
+    const obligations = input.obligations.map((o) => ({
+        ...o,
+        state: stateForObligation(o.position, o.reversedByChargeId),
+    }));
     const state = worst(obligations.map((o) => o.state));
     const amounts = sum(input.obligations);
 

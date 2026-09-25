@@ -83,6 +83,54 @@ describe("one obligation's state", () => {
     });
 });
 
+describe("a child withdraws after the fee posted", () => {
+    /*
+     * Measured on the real stack: the reversal posts as its OWN charge row referencing the original,
+     * and the database refuses a second one. The original charge therefore keeps reporting its own
+     * outstanding balance, because that is what a per-charge reading says — netting happens across a
+     * cohort. Without reading the lineage, a withdrawn child's fee stays owed forever and the
+     * withdrawal can never complete.
+     */
+    it("stops blocking once Financials has reversed it", () => {
+        expect(stateForObligation(position(), "chg-reversal")).toBe("SATISFIED");
+    });
+
+    it("drops out of the family total without deleting anything", () => {
+        const p = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            obligations: [
+                obligation({
+                    subjectCustomerMemberId: "emma",
+                    position: position({ chargeId: "chg-emma" }),
+                    reversedByChargeId: "chg-emma-reversal",
+                }),
+                obligation({ subjectCustomerMemberId: "liam", position: position({ chargeId: "chg-liam" }) }),
+            ],
+        });
+        // Only Liam's $200 is owed; Emma's reversed fee contributes nothing.
+        expect(p.amounts.grossCents).toBe(20000);
+        expect(p.amounts.collectibleNowCents).toBe(20000);
+        expect(p.state).toBe("DUE");
+        // Both obligations are still REPORTED — the history is not hidden.
+        expect(p.obligations).toHaveLength(2);
+        expect(p.obligations[0].state).toBe("SATISFIED");
+        expect(p.obligations[0].reversedByChargeId).toBe("chg-emma-reversal");
+    });
+
+    it("converges to SATISFIED when every obligation is reversed", () => {
+        const p = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            obligations: [obligation({ reversedByChargeId: "chg-rev" })],
+        });
+        expect(p.state).toBe("SATISFIED");
+        expect(p.amounts.collectibleNowCents).toBe(0);
+    });
+});
+
 describe("an obligation Financials created but cannot position", () => {
     /*
      * Not hypothetical, and measured on the real stack: a per-family fee posts against a `customer`
