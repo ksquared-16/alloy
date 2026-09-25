@@ -78,8 +78,29 @@ A token-addressed participant runtime already exists and is the intended host �
   entity_id, expires_at, consumed_at, metadata }`
 - sibling token surfaces: `app/a/[token]`, `app/forms/embed/[token]`, `app/tour-booking/[token]`
 
-The action-link row already carries expiry and single-consumption, which is most of what a payment
-setup link needs.
+`public.action_links` already carries most of what a payment setup link needs, measured from the
+migrations rather than assumed:
+
+| Column | What it gives the slice |
+| --- | --- |
+| `org_id` | tenancy, resolved from the row and never from provider metadata |
+| `entity_type` / `entity_id` | names the payer |
+| `metadata` (jsonb) | account + intended rail, with no schema change |
+| `token_hash` | the plaintext `token` column was DROPPED (S-3); links are stored hashed |
+| `expires_at` | lapsed on schedule |
+| `consumed_at` | legitimately used, once |
+| `revoked_at` / `revoked_reason` | withdrawn by the organization, failing closed at authorization |
+| `short_code` | SMS-friendly `/a/{code}` URLs — a parent already receives links this way |
+
+Three of those matter more than they look. Revocation is already a first-class, *distinct* state
+from expiry and consumption, which is exactly what "resend/restart setup where appropriate" needs.
+Tokens are already hashed at rest. And a parent-facing SMS delivery path already exists, so the
+payer does not need an Alloy login to reach the surface.
+
+**One default must be changed for this use.** `expires_at` defaults to `now() + 02:00:00`. Two
+hours is right for confirming an appointment and wrong for a bank authorization a parent will get
+to that evening or the next day. The slice must set an explicit, longer expiry rather than inherit
+the default — and must not widen the default for every other link type to get it.
 
 ## The follow-on slice, stated exactly
 
