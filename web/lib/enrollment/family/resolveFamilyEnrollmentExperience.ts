@@ -191,13 +191,18 @@ export async function resolveFamilyEnrollmentExperience(
         });
     }
 
+    /*
+     * `customers.name` is the household's name — the same column `resolveChargeDetail` reads for
+     * `householdName`. Reading `display_name` here silently fell back to "Your family" for every
+     * household, which is the failure mode of a wrong column name: plausible output, no error.
+     */
     const { data: customerRow } = await supabase
         .from("customers")
-        .select("display_name")
+        .select("name")
         .eq("org_id", input.orgId)
         .eq("id", customerId)
         .maybeSingle();
-    const familyName = ((customerRow as { display_name?: string | null } | null)?.display_name ?? "").trim() || "Your family";
+    const familyName = ((customerRow as { name?: string | null } | null)?.name ?? "").trim() || "Your family";
 
     return {
         ok: true,
@@ -208,12 +213,15 @@ export async function resolveFamilyEnrollmentExperience(
             /*
              * SHARED INFORMATION IS COMPLETE WHEN THE HOUSEHOLD'S OWN FACTS ARE KNOWN.
              *
-             * Derived from canonical prefill reaching every child rather than from a family-owned
-             * record: if each child's session has satisfied something, the household half of the
-             * packet has been answered once and reused. It is deliberately NOT a stored flag —
-             * there is no family system of record to keep in sync.
+             * SOME, not EVERY — because the household's facts are answered ONCE and reused.
+             *
+             * `every` conflated two different things: a household that has not told us who its
+             * guardians are, and a child who simply has not started yet. A newly added sibling with
+             * nothing done would have reset "Family information" to incomplete for a family that had
+             * already given it, and asked them for it again — the exact re-entry this shell exists
+             * to remove. Deliberately not a stored flag: there is no family system of record.
              */
-            sharedInformationComplete: children.length > 0 && children.every((c) => c.satisfiedRequirements > 0 || c.submitted),
+            sharedInformationComplete: children.some((c) => c.satisfiedRequirements > 0 || c.submitted),
             financials: input.financials ?? null,
             focusedCustomerMemberId: input.focusedCustomerMemberId ?? null,
         }),
