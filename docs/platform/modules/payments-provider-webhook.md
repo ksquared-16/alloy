@@ -50,8 +50,21 @@ Subscribe to what the adapter actually consumes — no more, and not "everything
 | Disputes / returns | `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn` |
 | Payment methods and mandates (W2/W5) | `setup_intent.succeeded`, `setup_intent.setup_failed`, `payment_method.updated`, `payment_method.automatically_updated`, `payment_method.detached`, `mandate.updated` |
 
-Twenty types, enumerated from `stripeWebhook.ts`. Adding an event the adapter does not handle buys
-nothing; omitting one silently disables the convergence that depends on it.
+**Nineteen** types, enumerated from `stripeWebhook.ts`. Adding an event the adapter does not handle
+buys nothing; omitting one silently disables the convergence that depends on it.
+
+### The count, corrected
+
+An earlier report called this "twenty". It was wrong, and the way it was wrong is worth keeping:
+the twentieth string in the source is `"charge.dispute."` — a **prefix matcher** used as
+`eventType.startsWith("charge.dispute.")`, not a subscribable event name. Counting quoted dotted
+strings is not the same as counting event types.
+
+That prefix has a consequence in the other direction. Because disputes are matched by family rather
+than by name, the adapter handles **any** `charge.dispute.*` event, including ones not named above —
+notably `charge.dispute.funds_reinstated`, which Stripe does emit and which the four named events do
+not cover. A destination may safely subscribe to the whole `charge.dispute.*` family; the adapter
+will route all of it.
 
 ## Signing secret
 
@@ -93,6 +106,30 @@ been inert.
 
 Repointing the URL without provisioning the secret turns 404s into 400s — the Stripe dashboard would
 still show failures, and it would look like the repair had half-worked. They are one change.
+
+## The environment the secret must reach
+
+`staging.workwithalloy.com` does **not** run as a Vercel *Production* deployment. Its own build
+endpoint reports:
+
+```json
+{ "vercelEnv": "preview", "nodeEnv": "production" }
+```
+
+Vercel scopes environment variables per environment — Production, Preview, Development — and a
+variable set for Production alone is **absent** from the Preview deployment that actually serves
+this hostname. `nodeEnv: "production"` is a Node-level value and says nothing about which Vercel
+scope the deployment reads.
+
+Measured 2026-09-25, after the destination and secret were reported configured and staging
+redeployed: the behaviour probe still answers `no webhook signing secret is configured`, and
+`payment_provider_events` is still empty. `STRIPE_SECRET_KEY` demonstrably *is* readable by this
+same deployment — the connected account `acct_…` was created through it on 2026-09-22 — so the
+environment is not broadly unset. It is this one variable, in the scope this hostname reads.
+
+**So `STRIPE_WEBHOOK_SECRET` must be present for the Preview scope** (or for all scopes), and the
+deployment must be rebuilt after it is set. Setting it and not redeploying leaves the running
+instance with the old environment.
 
 ## How this is reconciled
 
