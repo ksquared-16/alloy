@@ -1,0 +1,47 @@
+{
+  "trusted_host_action_id": "tha_3168bf03eb32b2",
+  "query_hash": "87cbddab8c5041f74c017ba091f407c8f7155584c7d921b8e70114160a08b376",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-25T16:58:20.169Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_3168bf03eb32b2",
+    "query_hash": "87cbddab8c5041f74c017ba091f407c8f7155584c7d921b8e70114160a08b376",
+    "authorization_id": "grnt_0a02ae98f9394e9c",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-25T16:58:26.544Z",
+    "question_ids": [
+      "w5_fixture"
+    ],
+    "questions": {
+      "w5_fixture": {
+        "question_id": "w5_fixture",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_methods_total": 0,
+            "autopay_total": 0,
+            "merchant_readiness": "ready",
+            "merchant_ach_readiness": "ready",
+            "direct_candidates": null,
+            "agreement_candidates": [
+              {
+                "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+                "due_charges": 5,
+                "earliest_due": "2026-09-11",
+                "outstanding_cents": 160100
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}
