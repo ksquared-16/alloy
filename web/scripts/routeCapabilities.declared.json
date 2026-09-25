@@ -2360,6 +2360,14 @@
         "reason": "Which configured discount policies a household's children could be given. Reads commercial_policies through the canonical config reader and the live assignments beside them; writes nothing, decides no eligibility, and states no amount it did not read."
       }
     },
+    "app/api/admin/financials/payments-health/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed",
+        "reason": "Payments configuration health. Whether this runtime can take money is an ordinary Financials read; it returns presence and mode only, never a credential value, and mutates nothing. It exists so a missing configuration input is discoverable without pressing a financial control."
+      }
+    },
     "app/api/admin/financials/payment-methods/route.ts": {
       "GET": {
         "status": "declared",
