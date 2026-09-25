@@ -41,3 +41,9 @@ select
         'collection_attempts',     (select count(*) from public.payment_collection_attempts),
         'payments_total',          (select count(*) from public.payments)
     )::text as payload;
+
+-- RE-MEASURED 2026-09-25 after the operator reported the webhook infrastructure complete:
+-- stale Render destination removed, canonical destination configured at
+-- staging.workwithalloy.com/api/stripe/webhook, Connect delivery on, STRIPE_WEBHOOK_SECRET
+-- provisioned, staging redeployed. A behaviour probe still answers
+-- "no webhook signing secret is configured", so this asks whether any delivery has been admitted.
