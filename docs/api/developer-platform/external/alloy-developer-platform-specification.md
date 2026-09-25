@@ -815,7 +815,7 @@ a refusal has structured detail.
 | 403 | `forbidden_scope` | The token is valid but the installation was not granted the scope this operation requires | Ask for the scope during provisioning. Do not retry |
 | 404 | `not_found` | The identifier does not exist **or** is outside your boundary — deliberately indistinguishable | Check the id came from a read you are authorized for. Never infer existence from a 404 |
 | 409 | `conflict` | A well-formed, authorized operation that cannot truthfully be performed in the record's current lifecycle state | Re-read the record. The state has moved, or the intent is wrong for it |
-| 422 | `validation_failed` | Understood and authorized, but the values break a domain rule — for example an effective date that does not move forward | Correct the values. Retrying unchanged will fail again |
+| 422 | `invalid_request` | Understood and authorized, but the values break a domain rule — for example an effective date that does not move forward. The `code` is `validation_failed`, which is what you branch on | Correct the values. Retrying unchanged will fail again |
 | 429 | `rate_limited` | A budget is exhausted | Wait for `RateLimit-Reset`, then retry |
 | 500 | `internal_error` | Alloy failed. Never your input | Retry with backoff. Quote `request_id` if it persists |
 

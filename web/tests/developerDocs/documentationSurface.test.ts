@@ -11,6 +11,8 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { implementedOperations } from "../support/publicSurfaceInventory";
+
 import {
     API_REFERENCE_PATH,
     DOCUMENTATION_SECTIONS,
@@ -116,28 +118,10 @@ describe("links never send a reader somewhere they cannot go", () => {
 describe("the advertised surface is the implemented surface", () => {
     it("the operations shown are read from the governed OpenAPI document", () => {
         const operations = publicOperations();
-        expect(operations).toHaveLength(19);
-        expect(operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
-            "GET /api/v1/attendance-events",
-            "GET /api/v1/children",
-            "GET /api/v1/context",
-            "GET /api/v1/enrollments",
-            "GET /api/v1/households",
-            "GET /api/v1/locations",
-            "GET /api/v1/placements",
-            "GET /api/v1/relationships",
-            "GET /api/v1/schedule-assignments",
-            "GET /api/v1/schedule-days",
-            "GET /api/v1/staff",
-            "POST /api/v1/attendance-events",
-            "POST /api/v1/enrollments",
-            "POST /api/v1/enrollments/end",
-            "POST /api/v1/oauth/token",
-            "POST /api/v1/placements",
-            "POST /api/v1/placements/move",
-            "POST /api/v1/schedule-assignments",
-            "POST /api/v1/schedule-assignments/change",
-        ]);
+        // The reference is DERIVED from the governed OpenAPI document, so the expectation is derived
+        // from the route files it is supposed to describe — never a second hand-kept list.
+        expect(operations).toHaveLength(implementedOperations().length);
+        expect(operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual(implementedOperations());
         for (const operation of operations) {
             expect(operation.summary.length, `${operation.path} has a summary`).toBeGreaterThan(0);
         }
