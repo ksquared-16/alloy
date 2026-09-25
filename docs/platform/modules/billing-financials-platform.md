@@ -1232,3 +1232,52 @@ chargebacks. Card disputes share the dispute plumbing but are deliberately out o
 - The subsidy contract changes — the collection-suppression policy or its bounds, the shortfall non-default, agency identity, the advice/cash separation, the authorization supersession rule, or the Processing ingestion seam.
 - The workspace contract changes — the location provenance rules, the org-scoped visibility choice, the site-filter intersection, the account-wide detail labelling, or the single-read counts.
 - The provider collection contract changes — the rail/processor separation, which rails require an executor, the collectible authority the collection path consumes, the pre-recognition boundary, what `collection-state` is allowed to report, the connected-account tenancy rule, or the no-platform-fallback guarantee.
+
+### Stored payment methods have one owner, and it is `payment_methods` (September 2026)
+
+`public.payment_methods` (`20260921120000_payments_payment_method_reference.sql`) is the canonical
+model for a stored, reusable payment instrument. `customer_payment_methods` was retired alongside it
+(`20260921130000`). There is no second stored-method model, and nothing should introduce one.
+
+**FIVE IDENTITIES, NONE IMPLYING ANOTHER.**
+
+| Identity | Owner | Record |
+|---|---|---|
+| Respondent | Enrollment | packet session / link recipient |
+| Responsible party | Financials | `financial_responsibility_shares` / `_allocations` |
+| Expected funder | Financials | `financial_expected_funding` — not money |
+| Actual payer | Financials | `payments.payer_entity_type` / `payer_entity_id` |
+| Payment-method owner | Financials | `payment_methods.payer_entity_type` / `payer_entity_id` |
+
+Owning a stored method assigns no responsibility, modifies no arrangement, changes no subsidy and
+creates no obligation. Becoming responsible grants no access to another person's method. Paying makes
+nobody responsible. Completing paperwork makes a person neither payer nor owner. `payment_methods`
+keeps account CONTEXT (`customer_id`) deliberately separate from OWNERSHIP, which is what makes
+"which stored methods may this payer use" answerable without consulting who owes anything.
+
+**A SUPERSEDED EXPERIMENT, RECORDED SO IT IS NOT REPEATED.** An Enrollment certification lane authored
+a parallel `payment_instruments` model in late September 2026, having measured a base 1,309 commits
+behind staging in which `customer_payment_methods` was still the only stored-method model — it was, in
+that lane. It was applied to the certification database and never promoted; `payment_methods` is
+materially more complete (owner columns NOT NULL rather than CHECK-paired, and `usability_state`
+separating verified from collectable-now). It is **CERTIFICATION-LANE EXPERIMENT / NOT PROMOTED /
+SUPERSEDED BY `payment_methods`**, and it is not future architecture.
+
+The lesson generalises: "no canonical owner exists" is a claim about a BASE, not about the platform,
+and a lane far behind staging cannot make it safely.
+
+### Two payers are two payments (September 2026)
+
+`payment.record` derives an idempotency key when the caller supplies none. The key already carried the
+date, for a reason its own comment states: "a second $500 cash payment against the same charge on a
+LATER day is a real, legitimate second payment, and must not be swallowed as a retry." The same
+argument applies across PEOPLE, and the payer was missing.
+
+Measured on a split-payment certification: two payers each paid $37.50 against one household charge on
+one day, and the second request returned the FIRST payer's payment id with `already_recorded: true`.
+One payment existed, the family's outstanding stopped halfway, and nothing was reported to anyone.
+
+The payer entity now joins the derived key. A payer-less payment keys exactly as before, so nothing
+that never named a payer changes; the same payer repeating the same request is still correctly a retry;
+and a later day remains a separate payment. Certified live: two distinct payments, two applications,
+outstanding reaching zero exactly once, and responsibility unchanged throughout.

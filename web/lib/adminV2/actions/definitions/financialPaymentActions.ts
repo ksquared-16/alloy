@@ -140,6 +140,22 @@ function idempotencyKeyFor(payload: Record<string, unknown>, prefix: string): st
         t(payload.amount_cents),
         t(payload.payment_method),
         day,
+        /*
+         * THE PAYER IS PART OF THE KEY, because two payers are two payments.
+         *
+         * The date above was included for exactly this class of reason — "a second $500 cash payment
+         * against the same charge on a LATER day is a real, legitimate second payment, and must not
+         * be swallowed as a retry". The same argument applies across PEOPLE and was missed: Mom
+         * paying $37.50 and Dad paying $37.50 against one charge on one day are two real payments,
+         * and without the payer here the second was returned as a replay of the first. Measured on a
+         * split-payment certification: Dad's request came back carrying Mom's payment id with
+         * `already_recorded: true`, and the family's outstanding stopped halfway with no error shown
+         * to anyone.
+         *
+         * A payer-less payment keys exactly as before, so nothing that never named a payer changes.
+         */
+        t(payload.payer_entity_type),
+        t(payload.payer_entity_id),
     ].join(":");
 }
 
