@@ -57,6 +57,26 @@ describe("Admissions v12 draft", () => {
     });
 
     /*
+     * A SUPPLIED VALUE IS A REFERENCE, AND A REFERENCE HAS TO RESOLVE.
+     *
+     * The fee is not copied into the Form — it holds `supplied_by { charge_template, <key> }` and
+     * the amount is read at generation. That indirection is right, and it is also silent: this was
+     * authored as `material_fee` while the org's template is `materials_fee`, so every generated
+     * packet would have carried "No active charge template named ..." where the amount belongs.
+     * Nothing about the Form is invalid, which is exactly why it needs asserting.
+     */
+    it("supplies the fee from a charge template by its real key", () => {
+        const fee = schema.fields.find((f: { supplied_by?: unknown }) => Boolean(f.supplied_by));
+        expect(fee.supplied_by).toEqual({
+            resolve_at: "generation",
+            source_kind: "charge_template",
+            source_key: "materials_fee",
+        });
+        // The Form references the amount; it never holds one.
+        expect(fee.default_value).toBeUndefined();
+    });
+
+    /*
      * THE APPROVED SIBLING GATE, AS THE FAMILY MEETS IT.
      *
      * A collection that does not apply cannot be incomplete — but it also cannot be revealed by a

@@ -814,7 +814,7 @@
    "read_only": false,
    "supplied_by": {
     "resolve_at": "generation",
-    "source_key": "material_fee",
+    "source_key": "materials_fee",
     "source_kind": "charge_template"
    }
   },
