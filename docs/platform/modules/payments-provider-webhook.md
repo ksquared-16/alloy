@@ -107,6 +107,40 @@ been inert.
 Repointing the URL without provisioning the secret turns 404s into 400s — the Stripe dashboard would
 still show failures, and it would look like the repair had half-worked. They are one change.
 
+## Certified state, 2026-09-25
+
+The operator removed the stale destination, configured the canonical one with Connect delivery,
+provisioned the signing secret and redeployed. The admission boundary is now demonstrably live.
+
+| Check | Result | How |
+|---|---|---|
+| Signing secret present | **yes** | the probe flipped from `no webhook signing secret is configured` to `signature did not match` — the value was never read or exposed |
+| Invalid signature fails closed | **yes** | `400 signature did not match`, stable across three samples |
+| Missing signature fails closed | **yes** | `400 missing Stripe-Signature header` |
+| Wrong method rejected | **yes** | `GET` → `405` |
+| Stale Render host | **still 404** | a direct `POST` confirms the host; the *destination* removal is operator-reported, not inspectable from this lane |
+| Consumed event types | **19** | enumerated from source, plus the `charge.dispute.*` family by prefix |
+| Real admitted delivery | **none yet** | `payment_provider_events` remains empty |
+
+## Why no event has arrived, and what will produce one
+
+Nothing is wrong with the boundary. **There is simply no event to send.** The connected account has
+had no activity since the secret went live: the merchant is `restricted` pending an outstanding
+Stripe requirement, there are no collection attempts, and the old destination's retry backlog died
+with that destination — a newly created destination has no queue.
+
+The natural first event is **`account.updated`**, which Stripe emits when the connected account
+changes. That happens the moment the operator satisfies the outstanding requirement in Stripe's
+hosted flow.
+
+So one operator action closes both open threads at once:
+
+- it emits a real **connected-account** event, which certifies this boundary end to end — signature
+  verified, `event.account` resolved through `payment_provider_merchants` to the org, disposition
+  recorded, row persisted
+- and it moves the merchant toward card-ready, which is what
+  `PAYMENTS_V1_W5_REAL_CLOCK_OCCURRENCE_PENDING_PROVIDER` has been waiting for
+
 ## The environment the secret must reach
 
 `staging.workwithalloy.com` does **not** run as a Vercel *Production* deployment. Its own build
