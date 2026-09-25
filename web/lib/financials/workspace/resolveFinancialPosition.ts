@@ -145,7 +145,17 @@ const EMPTY_TOTALS: FinancialPositionTotals = {
 export async function resolveFinancialPositionCohort(
     supabase: SupabaseClient,
     args: FinancialPositionArgs,
+    /*
+     * ── SAY WHERE THE COHORT'S TIME GOES ───────────────────────────────────────────────────────
+     *
+     * This branch is 650-960ms of the Accounts list's wait and reports one opaque `cohort` label.
+     * Its sibling, the subjects cohort, was the same shape until it was given an interior — and
+     * two repairs made against the opaque version moved nothing, because reading the code said
+     * what COULD be parallel and not what was expensive. Same instrument, same reason.
+     */
+    mark?: (name: string) => void,
 ): Promise<FinancialPositionCohort> {
+    const phase = (name: string) => mark?.(name);
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
     const scanCap = Math.min(Math.max(args.scanCap ?? FINANCIAL_POSITION_SCAN_CAP, 1), FINANCIAL_POSITION_SCAN_CAP);
     const scope = { siteLocationId: activeSiteLocationId, siteScope: args.siteScope };
@@ -244,6 +254,7 @@ export async function resolveFinancialPositionCohort(
      * it does not produce a wrong number — it produces no account at all, which is indistinguishable
      * on screen from a family that has no financial history.
      */
+    phase("charges");
     const agreementRows = await readInBatches<{
         id: string;
         customer_id: string | null;
@@ -330,6 +341,7 @@ export async function resolveFinancialPositionCohort(
         };
     }
 
+    phase("agreements");
     /* One reader for both callers — see `resolveCollectiblePositionsForCharges`. */
     const positionsByCharge = await resolveCollectiblePositionsForCharges(supabase, {
         orgId: args.orgId,
@@ -343,12 +355,14 @@ export async function resolveFinancialPositionCohort(
 
     /* Names, so a list of accounts reads as families. Presentation only — never a key. */
     const customerIds = [...new Set(visible.map((v) => v.customerId).filter((v): v is string => !!v))];
+    phase("collectible");
     const customerRows = await readInBatches<{ id: string; name: string | null }>(
         "household names",
         customerIds,
         (batch) => supabase.from("customers").select("id, name").eq("org_id", args.orgId).in("id", batch),
     );
     const customerNames = new Map(customerRows.map((c) => [c.id, c.name]));
+    phase("customers");
 
     const rows: FinancialPositionRow[] = visible.map((v) => {
         /*
@@ -356,7 +370,6 @@ export async function resolveFinancialPositionCohort(
          * not speak for is impossible here: it was given exactly these ids.
          */
         const position = positionsByCharge.get(v.charge.id)!;
-
         return {
             position,
             customerId: v.customerId,

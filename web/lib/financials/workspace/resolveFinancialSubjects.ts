@@ -199,7 +199,9 @@ export async function resolveFinancialSubjectCohort(
      */
     const households: Array<{ id: string; name: string | null }> = [];
     let reachedEnd = false;
+    let householdPages = 0;
     while (households.length < scanCap) {
+        householdPages += 1;
         const want = Math.min(PAGE, scanCap - households.length);
         const { data, error } = await supabase
             .from("customers")
@@ -218,7 +220,8 @@ export async function resolveFinancialSubjectCohort(
     }
     const truncated = !reachedEnd && households.length >= scanCap;
 
-    phase("households");
+    /* The page count and the cohort size ARE the finding: a serial walk costs one round trip per page. */
+    phase(`households_${householdPages}p_n${households.length}`);
     const customerIds = households.map((h) => h.id).filter(Boolean);
     /*
      * ── THE FACETS NEVER NEEDED THE AGREEMENT SITES ────────────────────────────────────────────
@@ -237,21 +240,37 @@ export async function resolveFinancialSubjectCohort(
      * predicates, same rows, same per-facet failure tolerance — each still degrades to an empty
      * facet rather than failing the cohort.
      */
-    const sitesP = readAgreementSites(supabase, args.orgId, customerIds);
-    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds).catch(() => [] as HouseholdMemberRow[]);
+    const sitesP = readAgreementSites(supabase, args.orgId, customerIds, phase);
+    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds)
+        .then((rows) => {
+            phase("members");
+            return rows;
+        })
+        .catch(() => [] as HouseholdMemberRow[]);
     const facetsP = Promise.all([
         membersP.then(childNamesFrom).catch(() => new Map<string, string[]>()),
-        readContactNames(supabase, args.orgId, customerIds).catch(() => new Map<string, string[]>()),
-        membersP.then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members)).catch((e) => {
+        readContactNames(supabase, args.orgId, customerIds)
+            .then((m) => {
+                phase("contacts");
+                return m;
+            })
+            .catch(() => new Map<string, string[]>()),
+        membersP
+            .then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members))
+            .then((m) => {
+                phase("placements");
+                return m;
+            })
+            .catch((e) => {
             /*
              * Non-fatal, and NOT silent. A household an operator cannot filter by room is still a
              * household they must be able to reach, so the rail renders — but a swallowed facet
              * failure once looked exactly like "this tenant has no rooms", which is how a wrong
              * column name survived a full pass.
              */
-            console.warn(`financial subjects: placement facets unavailable — ${e instanceof Error ? e.message : String(e)}`);
-            return new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
-        }),
+                console.warn(`financial subjects: placement facets unavailable — ${e instanceof Error ? e.message : String(e)}`);
+                return new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
+            }),
     ]);
     const sitesByCustomer = await sitesP;
     phase("agreement_sites");
@@ -303,7 +322,15 @@ async function readAgreementSites(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
+    mark?: (name: string) => void,
 ): Promise<Map<string, Set<string>>> {
+    /*
+     * Three dependent waves live in here, and until now they reported as one 229-249 ms label.
+     * The marks carry completion offsets, not just deltas, because this whole function runs
+     * CONCURRENTLY with the facet chain — a delta measured against the previous mark would
+     * attribute one branch's wait to the other.
+     */
+    const phase = (name: string) => mark?.(name);
     const byCustomer = new Map<string, Set<string>>();
     const add = (customerId: string, siteLocationId: string | null) => {
         const site = typeof siteLocationId === "string" ? siteLocationId.trim() : "";
@@ -325,6 +352,7 @@ async function readAgreementSites(
                 .eq("org_id", orgId)
                 .in("customer_id", batch),
     );
+    phase("sites_direct");
     for (const row of direct) add(String(row.customer_id ?? ""), row.site_location_id);
 
     /*
@@ -332,7 +360,9 @@ async function readAgreementSites(
      * those rows rather than by the org's whole agreement history.
      */
     const orphans: Array<{ customer_member_id: string | null; site_location_id: string | null }> = [];
+    let orphanPages = 0;
     while (orphans.length < FINANCIAL_SUBJECT_SCAN_CAP) {
+        orphanPages += 1;
         const want = Math.min(PAGE, FINANCIAL_SUBJECT_SCAN_CAP - orphans.length);
         const { data, error } = await supabase
             .from("child_enrollment_agreements")
@@ -348,6 +378,7 @@ async function readAgreementSites(
         for (const row of page) orphans.push(row);
         if (page.length < want) break;
     }
+    phase(`sites_orphans_${orphanPages}p`);
     if (orphans.length === 0) return byCustomer;
 
     const memberIds = orphans.map((o) => String(o.customer_member_id ?? "")).filter(Boolean);
@@ -361,6 +392,7 @@ async function readAgreementSites(
                 .eq("org_id", orgId)
                 .in("id", batch),
     );
+    phase("sites_members");
     const customerByMember = new Map(members.map((m) => [String(m.id), String(m.customer_id ?? "")]));
     for (const row of orphans) {
         const customerId = customerByMember.get(String(row.customer_member_id ?? "")) ?? "";
