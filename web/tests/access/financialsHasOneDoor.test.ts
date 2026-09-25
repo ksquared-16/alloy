@@ -30,6 +30,34 @@ const TABLE = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, "web/scripts/routeCapabilities.declared.json"), "utf8"),
 ) as { routes: Record<string, Record<string, { status: string; capability?: string; helper?: string }>> };
 
+/**
+ * THE GATES THAT SATISFY EACH CAPABILITY, and the argument each must carry.
+ *
+ * Two shapes are canonical. `assertFinancials*Allowed` carries the capability in its NAME, so the
+ * name is the proof and there is no argument to check. `requireFinancialsCapability` takes the
+ * capability as an argument — it is the shape the fin.read permission read was moved to when that
+ * read went from 211 ms to 0.2 ms — so the name proves nothing and the argument is the proof.
+ *
+ * A helper absent from this table cannot satisfy a Financials declaration, which is the property
+ * that stops a route claiming the capability via some other module that happens to mention the key.
+ */
+const FINANCIALS_GATES: Record<string, Record<string, string | null>> = {
+    "fin.read": {
+        assertFinancialsReadAllowed: null,
+        requireFinancialsCapability: "FINANCIALS_READ_PERMISSION_KEY",
+    },
+    "fin.write": {
+        assertFinancialsWriteAllowed: null,
+        requireFinancialsCapability: "FINANCIALS_WRITE_PERMISSION_KEY",
+    },
+};
+
+/** Comments and string bodies blanked, so a mention can never read as a call. */
+const executable = (src: string) =>
+    src
+        .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+        .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+
 /** The API surface that serves financial records. */
 const FINANCIALS_API = "web/app/api/admin/financials";
 
@@ -96,12 +124,46 @@ describe("the Financials API surface", () => {
             const source = fs.readFileSync(file, "utf8");
             for (const [method, decl] of Object.entries(TABLE.routes[rel] ?? {})) {
                 if (!decl.capability?.startsWith("fin.")) continue;
-                const expected =
-                    decl.capability === "fin.read" ? "assertFinancialsReadAllowed" : "assertFinancialsWriteAllowed";
-                expect(decl.helper, `${rel}:${method} declares ${decl.capability} with the wrong helper`).toBe(
-                    expected,
-                );
-                expect(source, `${rel}:${method} declares ${expected} and does not call it`).toContain(expected);
+                const gate = FINANCIALS_GATES[decl.capability];
+                expect(
+                    gate ? Object.keys(gate) : [],
+                    `${rel}:${method} declares ${decl.capability}, which names no Financials gate`,
+                ).not.toEqual([]);
+                expect(
+                    Object.keys(gate ?? {}),
+                    `${rel}:${method} declares ${decl.capability} with the wrong helper`,
+                ).toContain(decl.helper);
+                /*
+                 * The helper must be CALLED, not merely mentioned. Both helper names appear in these
+                 * routes' own comments and both survive as imports after a call is deleted, so a
+                 * substring test passes on a route whose gate has been removed outright.
+                 */
+                const code = executable(source);
+                const helper = decl.helper ?? "\u0000";
+                expect(
+                    new RegExp(`\\b${helper}\\s*\\(`).test(code),
+                    `${rel}:${method} declares ${helper} and does not call it`,
+                ).toBe(true);
+                /*
+                 * ── AND THE CAPABILITY IT IS CALLED WITH ─────────────────────────────────────────
+                 *
+                 * `assertFinancialsReadAllowed` could only ever allow reading: the capability was in
+                 * its name, so naming the helper settled the question. `requireFinancialsCapability`
+                 * takes the capability as an ARGUMENT, so its name settles nothing — the same call
+                 * gates read or write depending on what is passed.
+                 *
+                 * Without this, a route could declare `fin.read`, call the right helper, and hand it
+                 * the write key (or the reverse: a mutation gated only by the read key, which is the
+                 * precise failure "WRITE IS NOT READ" below exists to prevent). The lock checks the
+                 * argument wherever the helper takes one.
+                 */
+                const argument = gate?.[helper];
+                if (argument) {
+                    expect(
+                        new RegExp(`\\b${helper}\\s*\\([^)]*\\b${argument}\\b`).test(code),
+                        `${rel}:${method} declares ${decl.capability} but does not pass ${argument} to ${helper}`,
+                    ).toBe(true);
+                }
             }
         }
     });
