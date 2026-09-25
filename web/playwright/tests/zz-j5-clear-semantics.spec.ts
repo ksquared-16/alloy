@@ -99,6 +99,12 @@ test("j5 clear semantics", async ({ page }) => {
             const marks = td && subj_now ? (td.subjects || {})[subj_now] || null : null;
             return {
                 sha,
+                /*
+                 * The click origin on the SAME clock the diagnostic marks use. Without it the marks
+                 * (absolute performance.now) and the clear (click-relative) cannot be placed on one
+                 * timeline, and the legs between them cannot be computed at all.
+                 */
+                t0_abs: Math.round(t0),
                 observed: td ? td.observed : null,
                 marks,
                 subjectAtEnd: subj_now,
