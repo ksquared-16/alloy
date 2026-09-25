@@ -75,7 +75,55 @@ const FOCUS_PANEL_DEPTH_MS = 240;
  * shows the card's IDENTITY (title) and a compact preparing state, so the committed panel reads as a
  * complete surface whose secondary detail is settling — not a loading placeholder.
  */
-function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardKey; settled?: boolean }) {
+/**
+ * WHY a reserved cell stopped being reserved. Two very different facts share one rendering.
+ *
+ * `not_applicable` is an ANSWER: the surface resolved this card and it does not apply to this record,
+ * so an empty cell is the truth. `phase_settled_unresolved` is the ABSENCE of one: the surface
+ * declared itself settled while this card never became ready, so the cell stops looking like it is
+ * loading — which is right for the operator and wrong for a milestone, because no fact arrived.
+ *
+ * Both render identically and both drop `data-focus-panel-cell-reserved`, so a probe that counts
+ * reserved cells cannot tell them apart and scores the second as ready. That is the difference
+ * between the two cold T6 numbers this programme measured on one build, and it is the reason the
+ * reason is now stated rather than inferred.
+ */
+export type ReservedCellSettledReason = "not_applicable" | "phase_settled_unresolved";
+
+/**
+ * The rule, in one place, so the milestone and the cell cannot drift apart.
+ *
+ * ORDER IS THE SEMANTICS. `not_applicable` is a resolution and outranks everything: a card the
+ * surface answered "does not apply" is settled whatever the phase says. An EXPLICIT `reserved` then
+ * outranks the phase inference — it is a positive statement that this cell is settling for the
+ * current subject, and calling it resolved-empty would assert a fact about the record that is false
+ * while the fact is still arriving. Only with neither of those does the settled phase decide, and
+ * that branch is the one that produces an empty cell with no answer behind it.
+ */
+export function resolveReservedCellSettledReason(input: {
+    readiness: string;
+    phase: string;
+    explicitlyReserved: boolean;
+}): ReservedCellSettledReason | null {
+    if (input.readiness === "not_applicable") return "not_applicable";
+    if (input.phase === "settled" && !input.explicitlyReserved) return "phase_settled_unresolved";
+    return null;
+}
+
+export function ReservedFocusPanelCell({
+    typeKey,
+    settledReason,
+    readiness,
+    cellSubject,
+}: {
+    typeKey: FocusPanelCardKey;
+    settledReason?: ReservedCellSettledReason | null;
+    /** The readiness the grid resolved for this cell — stated, so a reader never infers it. */
+    readiness?: string | null;
+    /** The subject of the MODEL this cell belongs to. Absent reads as UNKNOWN, never as a guess. */
+    cellSubject?: string | null;
+}) {
+    const settled = settledReason != null;
     const title = cardTitle(typeKey);
     // CALM NEUTRAL HOLD (Kelly). Not a loading placeholder and not a "Preparing…" spinner: the cell
     // shows the card's IDENTITY plus a quiet, STATIC content hint (no pulse — Settlement fills it in
@@ -92,6 +140,12 @@ function ReservedFocusPanelCell({ typeKey, settled }: { typeKey: FocusPanelCardK
             data-focus-panel-cell-reserved={settled ? undefined : "true"}
             data-focus-panel-cell-not-applicable={settled ? "true" : undefined}
             data-focus-panel-cell-preparing={settled ? undefined : typeKey}
+            // The cell's card key, on EVERY state. Without it a settled-empty cell is anonymous, so
+            // "which first-order fact never arrived" is unanswerable exactly when it matters.
+            data-focus-panel-cell-key={typeKey}
+            data-focus-panel-cell-settled-reason={settledReason ?? undefined}
+            data-focus-panel-cell-readiness={readiness ?? undefined}
+            data-focus-panel-cell-subject={cellSubject ?? undefined}
             style={{ minHeight: "7.5rem", padding: "0.875rem", opacity: settled ? 0.72 : undefined }}
         >
             {title ? (
@@ -770,14 +824,49 @@ export default function OpportunityFocusPanelModeGrid({
                          */
                         const explicitlyReserved =
                             cardReadiness.has(typeKey) && cardReadiness.get(typeKey) === "reserved";
-                        const settled =
-                            readiness === "not_applicable"
-                            || (model.phase === "settled" && !explicitlyReserved);
-                        return <ReservedFocusPanelCell typeKey={typeKey} settled={settled} />;
+                        const settledReason = resolveReservedCellSettledReason({
+                            readiness,
+                            phase: model.phase,
+                            explicitlyReserved,
+                        });
+                        return (
+                            <ReservedFocusPanelCell
+                                typeKey={typeKey}
+                                settledReason={settledReason}
+                                readiness={readiness}
+                                cellSubject={model.subject.id}
+                            />
+                        );
                     }
                     const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);
                     const receded = mode === "work" && workflowActive && typeKey === "work_launcher";
+                    /*
+                     * THE CELL STATES ITS OWN READINESS — because the card cannot.
+                     *
+                     * `data-card-subject` is the only per-card subject in the DOM, and it is fed from
+                     * `visible.displayVm.entity.id`, which by its own contract names the payload on
+                     * screen and becomes the destination ONLY at the atomic swap. Measured on deployed
+                     * 84a3e00a it was absent on all six cards for the entire switch and appeared on all
+                     * six at once at 1.8-2.3s. Any milestone built on it therefore measures full-drawer
+                     * completion, which is exactly what T6 must not mean — and that is what both prior
+                     * T6 predicates were measuring without saying so.
+                     *
+                     * This is the honest alternative: the GRID knows, at the moment it decides, which
+                     * card key this cell is, what readiness it resolved, and which subject the model it
+                     * is rendering belongs to. Stating those three is subject-bound, truth-aware and
+                     * independent of the swap. It is diagnostic only — read, never branched on.
+                     */
                     return (
+                        <div
+                            data-focus-panel-cell-key={typeKey}
+                            data-focus-panel-cell-readiness={readiness}
+                            data-focus-panel-cell-subject={model.subject.id || undefined}
+                            data-focus-panel-cell-mounted="true"
+                            // `display: contents` keeps the grid geometry EXACTLY as it was: the cell
+                            // wrapper generates no box, so the card remains the grid item it always
+                            // was. A diagnostic that moves a pixel is not a diagnostic.
+                            style={{ display: "contents" }}
+                        >
                         <FocusPanelCardRenderer
                             model={cardModel}
                             context={operationalContext}
@@ -792,6 +881,7 @@ export default function OpportunityFocusPanelModeGrid({
                             mutation={mutation}
                             compat={{ onSelectTab }}
                         />
+                        </div>
                     );
                 }}
             />
