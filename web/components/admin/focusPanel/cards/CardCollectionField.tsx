@@ -13,6 +13,11 @@
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
 import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
+import {
+    ALLOY_ELEMENTS_APPEARANCE,
+    ALLOY_ELEMENTS_FONTS,
+    createAlloyOperatorPaymentElement,
+} from "@/lib/financials/payments/stripeElementsPresentation";
 
 let stripePromise: Promise<Stripe | null> | null = null;
 function stripeClient(): Promise<Stripe | null> {
@@ -66,8 +71,12 @@ export default function CardCollectionField({
                 setUnavailable("Card entry is unavailable because card processing is not configured for this environment.");
                 return;
             }
-            const els = s.elements({ clientSecret });
-            const payment = els.create("payment", { layout: "tabs" });
+            const els = s.elements({
+                clientSecret,
+                appearance: ALLOY_ELEMENTS_APPEARANCE,
+                fonts: ALLOY_ELEMENTS_FONTS,
+            });
+            const payment = createAlloyOperatorPaymentElement(els);
             if (mountRef.current) payment.mount(mountRef.current);
             payment.on("ready", () => !cancelled && setReady(true));
             setStripe(s);

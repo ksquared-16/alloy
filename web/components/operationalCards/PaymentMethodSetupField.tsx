@@ -19,6 +19,11 @@
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
 import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
+import {
+    ALLOY_ELEMENTS_APPEARANCE,
+    ALLOY_ELEMENTS_FONTS,
+    createAlloyOperatorPaymentElement,
+} from "@/lib/financials/payments/stripeElementsPresentation";
 
 export default function PaymentMethodSetupField({
     clientSecret,
@@ -58,8 +63,12 @@ export default function PaymentMethodSetupField({
                 );
                 return;
             }
-            const els = s.elements({ clientSecret });
-            const payment = els.create("payment", { layout: "tabs" });
+            const els = s.elements({
+                clientSecret,
+                appearance: ALLOY_ELEMENTS_APPEARANCE,
+                fonts: ALLOY_ELEMENTS_FONTS,
+            });
+            const payment = createAlloyOperatorPaymentElement(els);
             if (mountRef.current) payment.mount(mountRef.current);
             payment.on("ready", () => !cancelled && setReady(true));
             setStripe(s);
@@ -87,9 +96,18 @@ export default function PaymentMethodSetupField({
             data-testid="payment-method-setup-field"
             data-setup-rail={rail}
         >
+            {/*
+              * ALLOY'S HEADING OVER STRIPE'S FIELDS. The operator should read this as a section of
+              * Financials that happens to contain secure inputs, not as a checkout page that
+              * happens to sit inside Alloy — so the label is ours and the inputs are Stripe's.
+              */}
+            <p className="text-xs font-medium text-alloy-midnight/80" data-testid="payment-method-setup-heading">
+                {rail === "ach" ? "Bank account details" : "Card details"}
+            </p>
             <p className="text-xs text-alloy-midnight/65">
-                {rail === "ach" ? "Enter the bank account details." : "Enter the card details."} Alloy never
-                sees them.
+                {rail === "ach"
+                    ? "Entered securely with the bank. Alloy never sees the account or routing number."
+                    : "Entered securely with Stripe. Alloy never sees the card number or security code."}
             </p>
 
             <div ref={mountRef} data-testid="payment-method-setup-mount" />
@@ -146,7 +164,8 @@ export default function PaymentMethodSetupField({
                         const status = String(result.setupIntent?.status ?? "");
                         onResult({ status: status === "succeeded" ? "succeeded" : "pending" });
                     }}
-                    className="rounded-md border border-alloy-stone/40 bg-alloy-midnight px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                    /* Bend Pine, matching the sibling Autopay actions on this same card. */
+                    className="inline-flex items-center gap-1 rounded-md bg-alloy-bend-pine px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                 >
                     {rail === "ach" ? "Authorize and save" : "Save card"}
                 </button>
