@@ -76,7 +76,12 @@ function watch(page: Page, clickAt: () => number) {
         const t = r.request().timing();
         const header = r.headers()["server-timing"] ?? "";
         const endedAt = Date.now() - clickAt();
-        const ms = Math.round(t.responseEnd - t.startTime);
+        /*
+         * Playwright's ResourceTiming.startTime is a WALL-CLOCK epoch value; every other field,
+         * responseEnd included, is already relative to it. Subtracting one from the other yields a
+         * number near -1.79e12, which is how the first baseline run reported its wire times.
+         */
+        const ms = Math.round(t.responseEnd);
         routes.push({ url: u, startedAt: endedAt - ms, endedAt, ms, bytes, ...parseServerTiming(header) });
     };
     page.on("response", onResponse);
