@@ -249,3 +249,82 @@ export async function claimLegacyInstrument(
     if (updateError) return { ok: false, reason: updateError.message };
     return { ok: true };
 }
+
+/**
+ * RECORD AN INSTRUMENT THE PROVIDER ALREADY HOLDS.
+ *
+ * Alloy never sees a credential: the provider's client collects it and returns a token, and this
+ * records the token plus who may reuse it. The owner is REQUIRED for a reusable instrument — the
+ * database refuses the alternative — and a one-time instrument may legitimately have none.
+ */
+export async function recordPaymentInstrument(
+    supabase: SupabaseClient,
+    input: {
+        readonly orgId: string;
+        readonly customerId: string;
+        readonly ownerPersonId: string | null;
+        readonly rail: PaymentInstrumentRail;
+        readonly providerInstrumentRef: string;
+        readonly providerCustomerRef?: string | null;
+        readonly reusable: boolean;
+        readonly verificationState?: string | null;
+        readonly mandateReference?: string | null;
+        readonly brand?: string | null;
+        readonly last4?: string | null;
+        readonly legacyCustomerPaymentMethodId?: string | null;
+        readonly actorUserId?: string | null;
+    },
+): Promise<{ readonly ok: true; readonly id: string } | { readonly ok: false; readonly reason: string }> {
+    const { data, error } = await supabase
+        .from("payment_instruments")
+        .insert({
+            org_id: input.orgId,
+            customer_id: input.customerId,
+            owner_entity_type: input.ownerPersonId ? "person" : null,
+            owner_entity_id: input.ownerPersonId,
+            provider: "stripe",
+            provider_customer_ref: input.providerCustomerRef ?? null,
+            provider_instrument_ref: input.providerInstrumentRef,
+            rail: input.rail,
+            reusable: input.reusable,
+            status: "active",
+            verification_state: input.verificationState ?? null,
+            mandate_reference: input.mandateReference ?? null,
+            mandate_accepted_at: input.mandateReference ? new Date().toISOString() : null,
+            brand: input.brand ?? null,
+            last4: input.last4 ?? null,
+            legacy_customer_payment_method_id: input.legacyCustomerPaymentMethodId ?? null,
+            created_by: input.actorUserId ?? null,
+            updated_by: input.actorUserId ?? null,
+        })
+        .select("id")
+        .maybeSingle();
+    if (error) return { ok: false, reason: error.message };
+    const id = (data as { id?: string } | null)?.id;
+    return id ? { ok: true, id } : { ok: false, reason: "The instrument was not recorded." };
+}
+
+/**
+ * REVOKING AN INSTRUMENT IS NOT DELETING IT.
+ *
+ * The row stays, with its owner, its provider reference and its actors, because a past payment made
+ * with it must remain explicable. Revocation only stops it being offered: `status` leaves `active`
+ * and `reusable` goes false, which is the same pair every read already filters on.
+ */
+export async function revokePaymentInstrument(
+    supabase: SupabaseClient,
+    args: { readonly orgId: string; readonly instrumentId: string; readonly actorUserId?: string | null },
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }> {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+        .from("payment_instruments")
+        .update({ status: "revoked", reusable: false, revoked_at: now, revoked_by: args.actorUserId ?? null, updated_at: now, updated_by: args.actorUserId ?? null })
+        .eq("org_id", args.orgId)
+        .eq("id", args.instrumentId)
+        .select("id")
+        .maybeSingle();
+    if (error) return { ok: false, reason: error.message };
+    return (data as { id?: string } | null)?.id
+        ? { ok: true }
+        : { ok: false, reason: "No such payment instrument in this organisation." };
+}
