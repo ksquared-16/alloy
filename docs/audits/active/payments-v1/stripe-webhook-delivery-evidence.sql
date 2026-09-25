@@ -47,3 +47,8 @@ select
 -- staging.workwithalloy.com/api/stripe/webhook, Connect delivery on, STRIPE_WEBHOOK_SECRET
 -- provisioned, staging redeployed. A behaviour probe still answers
 -- "no webhook signing secret is configured", so this asks whether any delivery has been admitted.
+
+-- RE-MEASURED AGAIN 2026-09-25, after the behaviour probe flipped from
+-- "no webhook signing secret is configured" to "signature did not match" — the secret is live on the
+-- deployed runtime and an invalid signature still fails closed. This asks whether Stripe has since
+-- admitted a real delivery.
