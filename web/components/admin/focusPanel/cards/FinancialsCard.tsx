@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
-import { createInFlightCoalescer } from "@/lib/adminV2/runtime/focusPanel/financials/coalesceInFlight";
+import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -336,7 +336,6 @@ export default function FinancialsCard({
      * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
      * not a cache, and never outlives the operation.
      */
-    const coalescerRef = useRef(createInFlightCoalescer<void>());
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -801,8 +800,13 @@ export default function FinancialsCard({
          * second way — the single response still flows through the same `setVm` and the same
          * `requestSeq` supersession that keeps one family's balance off another's screen.
          */
-        /* The mechanism lives in `createInFlightCoalescer`, where it is tested with real concurrency. */
-        return coalescerRef.current.run(requestQuery, async () => {
+        /*
+         * The coalescer now lives in `financialsCardRead`, MODULE-SCOPED rather than on this
+         * instance's ref. In the Accounts workspace the card is keyed by account, so a switch
+         * mounts a new instance with a new ref — there was no shared ownership for a prewarm to
+         * hand its in-flight read to, which is why that host never received the read-ahead its
+         * Details guard assumes. Same mechanism, same one-request guarantee, wider scope.
+         */
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
         /*
@@ -819,10 +823,9 @@ export default function FinancialsCard({
         setLoading(true);
         const query = requestQuery;
             try {
-                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
-                const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+                /* Starts the read, or joins the one a prewarm already has in the air for this account. */
+                const fresh = await readFinancialsCardVm(query);
                 if (!current()) return;
-                const fresh = json?.ok && json.vm ? json.vm : null;
                 // The endpoint's answer is the FULL model; record which account now has it.
                 if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
                 setVm(fresh);
@@ -842,7 +845,6 @@ export default function FinancialsCard({
                     setLoading(false);
                 }
             }
-        });
     }, [customerId, requestQuery, scopedMemberId]);
 
     /*

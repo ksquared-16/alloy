@@ -90,15 +90,49 @@ describe("two callers, one operation", () => {
 
 describe("the card routes its read through that mechanism", () => {
     it("load() coalesces on the composed query, so both callers share one request", () => {
+        /*
+         * ── WHY THIS NO LONGER ASKS FOR A PER-INSTANCE REF ─────────────────────────────────────
+         *
+         * It used to require `useRef(createInFlightCoalescer<void>())` — the coalescer owned by the
+         * card instance. That was right while the only caller was the Focus Panel, where one
+         * instance asks twice.
+         *
+         * In the Accounts workspace the card is KEYED BY ACCOUNT, so a selection mounts a new
+         * instance with a new ref and an empty slot. A prewarm had nothing to hand its in-flight
+         * read to, which is exactly why that host never received the read-ahead F44 assumes, and
+         * why a click cost a full ~1.1s read.
+         *
+         * So the ownership moved out of the instance — and the property this test exists to protect
+         * did not change at all. It was never "the ref is local"; it was ONE REQUEST PER LOAD, and
+         * NO FINANCIAL TRUTH KEPT FOR SPEED. Both are asserted here, now against the seam that
+         * actually performs the read.
+         */
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card).toMatch(/coalescerRef\.current\.run\(requestQuery,/);
-        expect(card, "the coalescer is per card instance, not global").toMatch(
-            /useRef\(createInFlightCoalescer<void>\(\)\)/,
+        expect(card, "the card asks the shared read rather than fetching the route itself").toMatch(
+            /await readFinancialsCardVm\(query\)/,
         );
-        expect(
-            /localStorage|sessionStorage/.test(card),
-            "financial truth is never persisted for speed",
-        ).toBe(false);
+        expect(card, "and does not open a second path to the same endpoint").not.toMatch(
+            /fetch\(`\/api\/admin\/financials\/card/,
+        );
+
+        const seam = code("lib/adminV2/runtime/focusPanel/financials/financialsCardRead.ts");
+        expect(seam, "one coalescer, keyed by the composed query").toMatch(
+            /createInFlightCoalescer<FinancialsCardVM \| null>\(\)/,
+        );
+        expect(seam, "the request is composed in one place, so two callers cannot spell it two ways")
+            .toMatch(/financials\/card\?\$\{query\}/);
+        for (const src of [card, seam]) {
+            expect(
+                /localStorage|sessionStorage|indexedDB/.test(src),
+                "financial truth is never persisted for speed",
+            ).toBe(false);
+        }
+        /*
+         * AND IT IS STILL NOT A CACHE. The slot is cleared the instant the operation settles, which
+         * is what keeps a mutation from having anything to invalidate.
+         */
+        const mech = code("lib/adminV2/runtime/focusPanel/financials/coalesceInFlight.ts");
+        expect(mech).toMatch(/if \(slot\?\.promise === promise\) slot = null;/);
     });
 
     it("both callers still exist — the repair coalesced them, it did not delete the prewarm", () => {
