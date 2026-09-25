@@ -209,8 +209,34 @@ export class ProvisioningRuntime {
         // ── REUSE: a completed, still-valid snapshot for this exact key. ──
         const done = this.completed.get(key);
         if (done && this.isReusable(done, ref)) {
+            const reused: PreparationTerminal = { ...done.terminal, attentionVersion: ref.version };
             this.instr.onReused?.(key, ref.version);
-            return Promise.resolve({ ...done.terminal, attentionVersion: ref.version });
+            /*
+             * A REUSED TERMINAL IS STILL A TERMINAL, AND K3 ONLY LEARNS ABOUT TERMINALS ONE WAY.
+             *
+             * This branch returned the terminal and told nobody. `RuntimeKernelContext` feeds Focus
+             * from `onTerminal` and discards what the preparation promise resolves with, so a reused
+             * answer reached the caller and never reached the commit. First visit to a Work View
+             * missed this cache, ran, and emitted through `onTerminal`; every RETURN to a view
+             * visited earlier in the session hit it and committed nothing.
+             *
+             * Measured on deployed d2776af1 with real pills: first visit always took, return never
+             * did, and clicking again never rescued it — because the second click hit the same cache
+             * entry and was silent in the same way. Attention had moved and the pill lit within
+             * ~150ms, so the operator was left reading the previous view's rows under the new view's
+             * name, which is what human QA reported as the view changing by itself.
+             *
+             * Reusing the DATA is right and stays. What was wrong was reusing it so quietly that
+             * navigation authority never moved: visited is not current.
+             *
+             * Emitting here is the same canonical delivery `emit` performs, so the commit goes
+             * through K3's one entry point with K3's staleness rules intact. It cannot resurrect a
+             * superseded movement: `onAttentionMoved` has just set `currentAttention` to this very
+             * ref and disposed everything this movement supersedes, and Focus independently refuses
+             * any terminal whose attention has moved on.
+             */
+            this.instr.onTerminal?.(reused);
+            return Promise.resolve(reused);
         }
 
         // ── SHARE / DEDUPLICATE: identical in-flight work is consumed, never duplicated. ──
