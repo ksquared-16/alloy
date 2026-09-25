@@ -16,6 +16,7 @@ import { opportunityDrawerViewModelStructureSettled } from "@/lib/adminV2/viewMo
 import { fetchOpportunityDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient";
 import {
     publishActionableDrawerCarrier,
+    publishDrawerTruthPatch,
     retireActionableDrawerCarrier,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrierStore";
 import {
@@ -158,7 +159,13 @@ async function loadOpportunityDrawerViaViewModelCold(
         id,
         workspaceContext,
         init ?? workspaceDataFetchInit(),
-        publishActionableDrawerCarrier
+        publishActionableDrawerCarrier,
+        /*
+         * Progressive canonical truth lands in the SAME store as the carrier, under the same
+         * subject key and the same phase-2 retirement, so neither can outlive the drawer that
+         * supersedes it. `retireActionableDrawerCarrier` below clears both.
+         */
+        publishDrawerTruthPatch
     );
     // Phase 2 is in hand. The carrier has been superseded and must stop being readable, whether the
     // compose succeeded or skipped — a carrier outliving its own lifecycle is the failure mode this

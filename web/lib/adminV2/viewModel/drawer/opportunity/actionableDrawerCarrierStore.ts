@@ -1,6 +1,11 @@
 "use client";
 
 import {
+    drawerTruthPatchDescribesSubject,
+    mergeDrawerTruthPatchFields,
+    type DrawerTruthPatch,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
+import {
     actionableCarrierDescribesSubject,
     type ActionableDrawerCarrier,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrier";
@@ -24,7 +29,22 @@ import {
  * speculatively warmed carrier for a row the operator never clicked is simply never requested.
  */
 
-type Entry = { carrier: ActionableDrawerCarrier; storedAt: number };
+/*
+ * ONE ENTRY PER SUBJECT, CARRYING BOTH PROGRESSIVE PHASES.
+ *
+ * The action carrier and the progressive truth patch are two facts about the same selected subject,
+ * arriving on the same stream and superseded by the same phase 2. Giving the patch its own store
+ * would mean a second lifetime, a second retirement and a second chance for one of them to outlive
+ * the drawer that replaced it. They share this entry, so `retireActionableDrawerCarrier` retires
+ * both and neither can be read underneath a resolved drawer.
+ *
+ * Either half may be null: the carrier is usually first, but nothing in the wire guarantees it.
+ */
+type Entry = {
+    carrier: ActionableDrawerCarrier | null;
+    truthPatch: DrawerTruthPatch | null;
+    storedAt: number;
+};
 
 /**
  * Small on purpose. The operator is switching between a handful of rows; a larger store would only
@@ -89,7 +109,8 @@ function recordCarrierArrival(carrier: ActionableDrawerCarrier): void {
 export function publishActionableDrawerCarrier(carrier: ActionableDrawerCarrier): void {
     recordCarrierArrival(carrier);
     const key = keyOf(carrier.subject.opportunity_id);
-    entries.set(key, { carrier, storedAt: Date.now() });
+    const prior = entries.get(key);
+    entries.set(key, { carrier, truthPatch: prior?.truthPatch ?? null, storedAt: Date.now() });
     while (entries.size > MAX_ENTRIES) {
         const oldest = entries.keys().next();
         if (oldest.done) break;
@@ -117,7 +138,7 @@ export function peekActionableDrawerCarrier(selected: {
     const id = selected.opportunityId?.trim();
     if (!id) return null;
     const entry = entries.get(keyOf(id));
-    if (!entry) return null;
+    if (!entry?.carrier) return null;
     // Re-validated on the way out as well as on the way in: the guard that makes a late B carrier
     // unmountable under C is cheap, and running it at BOTH ends means neither a store bug nor a
     // caller bug alone can put one subject's actions under another's identity.
@@ -135,4 +156,42 @@ export function subscribeToActionableDrawerCarriers(listener: () => void): () =>
 export function clearActionableDrawerCarriersForTests(): void {
     entries.clear();
     notify();
+}
+
+/**
+ * A progressive truth patch landed for this subject. Validated by the fetch seam before it reaches
+ * here, and folded onto any patch already held so a second patch ADDS facts rather than replacing
+ * the set — `mergeDrawerTruthPatchFields` is what keeps KNOWN from regressing.
+ */
+export function publishDrawerTruthPatch(patch: DrawerTruthPatch): void {
+    const id = patch.subject.opportunity_id?.trim();
+    if (!id) return;
+    const key = keyOf(id);
+    const prior = entries.get(key);
+    const merged: DrawerTruthPatch = {
+        ...patch,
+        fields: mergeDrawerTruthPatchFields(prior?.truthPatch?.fields ?? null, patch.fields),
+    };
+    entries.set(key, { carrier: prior?.carrier ?? null, truthPatch: merged, storedAt: Date.now() });
+    while (entries.size > MAX_ENTRIES) {
+        const oldest = entries.keys().next();
+        if (oldest.done) break;
+        entries.delete(oldest.value);
+    }
+    notify();
+}
+
+/**
+ * The progressive truth for exactly this subject, or null. Re-validated on the way out as well as
+ * on the way in, for the reason the carrier is: a late B patch must be unreadable under C whether
+ * the bug is in the store or in the caller.
+ */
+export function peekDrawerTruthPatch(selected: {
+    opportunityId: string | null | undefined;
+}): DrawerTruthPatch | null {
+    const id = selected.opportunityId?.trim();
+    if (!id) return null;
+    const entry = entries.get(keyOf(id));
+    if (!entry?.truthPatch) return null;
+    return drawerTruthPatchDescribesSubject(entry.truthPatch, selected) ? entry.truthPatch : null;
 }

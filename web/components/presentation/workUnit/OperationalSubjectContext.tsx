@@ -16,7 +16,13 @@
  * The drawer keeps PRESENTATION (open/close chrome, render slots, scroll). It no longer decides WHO
  * the operator is working on. That answer comes from the committed snapshot and nowhere else.
  */
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
+
+import { mergeDrawerTruthPatchFields } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
+import {
+    peekDrawerTruthPatch,
+    subscribeToActionableDrawerCarriers,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/actionableDrawerCarrierStore";
 import type { OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { FocusPanelOperationalProjection } from "@/lib/adminV2/runtime/focusPanel/focusPanelOperationalProjectionContract";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
@@ -216,6 +222,39 @@ export function OperationalSubjectProvider({
     summaryDocSeed?: FocusPanelSummaryDocProjection | null;
     children: ReactNode;
 }) {
+    /*
+     * PROGRESSIVE CANONICAL TRUTH, FOLDED INTO THE SAME BAG THE COMMIT-CRITICAL CARDS READ.
+     *
+     * `focusPanelWorkModeModelFromProvisioningAnswer` builds `context.truth` by spreading this
+     * `subjectIdentityTruth` and admits a commit-critical card only when its `isKnowable` holds. The
+     * bag arrives from the RSC provisioning answer and, until now, nothing updated it after commit —
+     * so a fact that became canonical mid-request could not clear a reserved cell however early it
+     * was produced. Measured on deployed 96f37f1a: `_inquiry_children` is canonical at P50 1,148ms,
+     * and the children and household cells cleared at P50 3,194ms, 46ms after the full view model
+     * finally arrived.
+     *
+     * This is the SAME bag, not a second one: answer truth is the base, progressive truth folds on
+     * top, the full drawer converges later — one lifecycle, three phases.
+     * `mergeDrawerTruthPatchFields` keeps it honest; a patch may add a fact or restate it
+     * identically, never remove or silently contradict one, and a field absent from a patch asserts
+     * nothing at all.
+     *
+     * Keyed on `subjectId`, so a late patch for B is not this subject's and C is unaffected.
+     */
+    const progressiveTruth = useSyncExternalStore(
+        subscribeToActionableDrawerCarriers,
+        () => peekDrawerTruthPatch({ opportunityId: subjectId }),
+        () => null,
+    );
+    const settledIdentityTruth = useMemo<SubjectIdentityTruth | null>(() => {
+        const base = (subjectIdentityTruth ?? null) as SubjectIdentityTruth | null;
+        if (!progressiveTruth) return base;
+        return mergeDrawerTruthPatchFields(
+            base as Record<string, unknown> | null,
+            progressiveTruth.fields,
+        ) as SubjectIdentityTruth;
+    }, [subjectIdentityTruth, progressiveTruth]);
+
     const value = useMemo<OperationalSubject>(
         () => ({
             subjectId,
@@ -234,12 +273,12 @@ export function OperationalSubjectProvider({
             stageWorkRuntime: stageWorkRuntime ?? null,
             operationalProjection: operationalProjection ?? null,
             workIntentRuntime: workIntentRuntime ?? null,
-            subjectIdentityTruth: subjectIdentityTruth ?? null,
+            subjectIdentityTruth: settledIdentityTruth,
             resolvedParticipant: resolvedParticipant ?? null,
             resolvedTour: resolvedTour ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, subjectIdentityTruth, resolvedParticipant, resolvedTour, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, operationalProjection, workIntentRuntime, settledIdentityTruth, resolvedParticipant, resolvedTour, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

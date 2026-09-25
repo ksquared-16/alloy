@@ -3,6 +3,11 @@ import type {
     OpportunityDrawerViewModel,
     OpportunityDrawerViewModelSkipped,
 } from "@/lib/adminV2/viewModel/drawer/types";
+import {
+    TRUTH_PATCH_LINE_KEY,
+    drawerTruthPatchDescribesSubject,
+    type DrawerTruthPatch,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
     actionableCarrierDescribesSubject,
@@ -50,7 +55,8 @@ export function buildOpportunityDrawerViewModelUrl(
 async function readPhasedDrawerViewModelBody(
     response: Response,
     expect: { opportunityId: string; attentionSubjectId: string | null },
-    onCarrier: (carrier: ActionableDrawerCarrier) => void
+    onCarrier: (carrier: ActionableDrawerCarrier) => void,
+    onTruthPatch?: ((patch: DrawerTruthPatch) => void) | null
 ): Promise<
     | { ok: true; viewModel: OpportunityDrawerViewModel }
     | { ok: false; skipped: OpportunityDrawerViewModelSkipped; status: number }
@@ -81,6 +87,16 @@ async function readPhasedDrawerViewModelBody(
         if (CARRIER_LINE_KEY in parsed) {
             const carrier = parsed[CARRIER_LINE_KEY];
             if (actionableCarrierDescribesSubject(carrier, expect)) onCarrier(carrier);
+            return;
+        }
+        if (TRUTH_PATCH_LINE_KEY in parsed) {
+            /*
+             * A canonical fact that is ready before the view model. Validated against the SELECTED
+             * subject on the way in — a late patch for B must be unreadable once C is selected, and
+             * a mismatched patch is refused whole rather than partially merged.
+             */
+            const patch = parsed[TRUTH_PATCH_LINE_KEY];
+            if (drawerTruthPatchDescribesSubject(patch, expect)) onTruthPatch?.(patch);
             return;
         }
         if (DRAWER_VIEW_MODEL_LINE_KEY in parsed) {
@@ -134,7 +150,8 @@ export async function fetchOpportunityDrawerViewModelClient(
      * authority exists, and the returned promise still settles on the complete view model. Omit it
      * and the request is exactly the single-answer one it has always been.
      */
-    onCarrier?: ((carrier: ActionableDrawerCarrier) => void) | null
+    onCarrier?: ((carrier: ActionableDrawerCarrier) => void) | null,
+    onTruthPatch?: ((patch: DrawerTruthPatch) => void) | null
 ): Promise<
     | { ok: true; viewModel: OpportunityDrawerViewModel }
     | { ok: false; skipped: OpportunityDrawerViewModelSkipped; status: number }
@@ -151,7 +168,8 @@ export async function fetchOpportunityDrawerViewModelClient(
                     opportunityId: opportunityId.trim(),
                     attentionSubjectId: workspaceContext?.attention_subject_id?.trim() || null,
                 },
-                onCarrier
+                onCarrier,
+                onTruthPatch
             );
         }
         const viewModel = (await response.json()) as OpportunityDrawerViewModel;
