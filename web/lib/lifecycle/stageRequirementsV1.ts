@@ -84,6 +84,16 @@ export const REQUIREMENT_KINDS_V1 = [
      */
     "packet",
     "work",
+    /**
+     * A financial obligation the family must satisfy before the stage may be left.
+     *
+     * The requirement references a CHARGE DEFINITION, never an amount. Enrollment says whether a fee
+     * applies, against which definition, and at what grain; Financials resolves what it costs, who is
+     * responsible, what a subsidy is expected to cover, and what is collectible now. A stage that
+     * carried a number would be carrying a copy of Financials' answer, stale the moment a rate,
+     * discount or funding arrangement changed.
+     */
+    "financial",
     "document",
     "consent",
     "acknowledgment",
@@ -128,11 +138,21 @@ export const REQUIREMENT_KINDS_AUTHORABLE_V1: readonly RequirementKindV1[] = Obj
     // durable record that can prove the requirement was met.
     "packet",
     "work",
+    /*
+     * `financial` passes the same bar, and it is the only one of the remaining kinds that does.
+     *
+     * The four refused below are refused because nothing canonical can PROVE them. Money is the
+     * opposite case: `charges`, `payments`, their applications and the collectible resolver are the
+     * most heavily proven evidence owners in the platform. "Is this obligation satisfied" already
+     * has a canonical answer that predates this requirement kind, exactly as `work` did — so
+     * nothing had to be built to satisfy it, which is the test.
+     */
+    "financial",
 ]);
 
 /** Why a declared kind cannot yet be authored. Surfaced to operators and to controls. */
 export const REQUIREMENT_KIND_UNSUPPORTED_REASON_V1: Readonly<
-    Record<Exclude<RequirementKindV1, "field" | "form" | "packet" | "work">, string>
+    Record<Exclude<RequirementKindV1, "field" | "form" | "packet" | "work" | "financial">, string>
 > = Object.freeze({
     document:
         "No canonical document-requirement owner exists. Document evidence is bound to a form submission, so a document required outside a form has no owner that can prove it was satisfied.",
@@ -176,6 +196,14 @@ export type RequirementRefV1 =
      * time, and a requirement that pointed at it would break on a rename.
      */
     | { readonly kind: "work"; readonly work_template_key: string }
+    /**
+     * The charge DEFINITION by its stable key — the same rule `work` follows, and for the same
+     * reason: a requirement is authored once against configuration and must survive every charge
+     * instantiated from it, including ones that do not exist yet. Deliberately not a template id
+     * (templates are versioned, and an org requires "the registration fee", not "version 3 of it")
+     * and emphatically not an amount.
+     */
+    | { readonly kind: "financial"; readonly charge_template_key: string }
     | { readonly kind: "document"; readonly document_type_key: string }
     | { readonly kind: "consent"; readonly consent_key: string }
     | { readonly kind: "acknowledgment"; readonly acknowledgment_key: string }
@@ -288,6 +316,10 @@ function parseRef(kindRaw: unknown, row: Record<string, unknown>): RequirementRe
         case "packet": {
             const packet_definition_id = trimmedString(row.packet_definition_id);
             return packet_definition_id ? { kind, packet_definition_id } : null;
+        }
+        case "financial": {
+            const charge_template_key = trimmedString(row.charge_template_key);
+            return charge_template_key ? { kind, charge_template_key } : null;
         }
         case "document": {
             const document_type_key = trimmedString(row.document_type_key);
@@ -451,6 +483,8 @@ function refFields(ref: RequirementRefV1): Record<string, string> {
             return { work_template_key: ref.work_template_key };
         case "packet":
             return { packet_definition_id: ref.packet_definition_id };
+        case "financial":
+            return { charge_template_key: ref.charge_template_key };
         case "document":
             return { document_type_key: ref.document_type_key };
         case "consent":
@@ -603,7 +637,7 @@ export function refuseUnauthorableRequirement(
     if (!isAuthorableRequirementKind(candidate.ref.kind)) {
         const reason =
             REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
-                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "packet" | "work">
+                candidate.ref.kind as Exclude<RequirementKindV1, "field" | "form" | "packet" | "work" | "financial">
             ];
         return { code: "unsupported_kind", detail: reason };
     }
