@@ -170,16 +170,29 @@ describe("A/B/K — the host participates, and F44 is untouched", () => {
         );
     });
 
-    it("K: F44's contract is still asserted, and this repair does not touch it", () => {
+    it("K: read-ahead no longer decides whether Details may exist", () => {
         /*
-         * The product decision stands: no visible partial Details. This slice makes the strict
-         * guard cheap rather than weaker, so the assertion must survive verbatim.
+         * ── WHAT THIS ASSERTION USED TO SAY ────────────────────────────────────────────────────
+         *
+         * It required F44's absolute: exactly one Details branch, and no hydrating Details card
+         * constructed. That was correct while read-ahead was the ONLY answer to the wait.
+         *
+         * The deployed measurement retired it. Read-ahead reaches the target only when the operator
+         * happens to dwell ~400ms before clicking (420-550ms post-click) and misses it badly on an
+         * ordinary no-dwell click (~1,030ms) — head start that depends on hesitation is not a
+         * product contract. So the floor now mounts on SELECTION, and read-ahead does what it is
+         * actually good at: shortening how long the reserved state is on screen.
+         *
+         * The successor doctrine is NO FALSE DETAILS, and it is held in
+         * accountSurfaceConvergence (F44's own file) and progressiveDetailsFloor. What this file
+         * still owns is the relationship between the two mechanisms: they compose, and neither
+         * replaced the other.
          */
-        const f44 = read("tests/financials/accountSurfaceConvergence.test.ts");
-        expect(f44).toContain("F44 · no visible partial Details");
-        expect(f44).toContain('expect(branches, "one Details branch, not a pending one and a real one").toHaveLength(1)');
         const card = executable(read("components/admin/focusPanel/cards/FinancialsCard.tsx"));
-        expect((card.match(/if \(overlay === "detail"[^)]*\)/g) ?? []).length, "still exactly one Details branch").toBe(1);
-        expect(card, "and no hydrating Details card is constructed").not.toMatch(/<FinancialsDetailCard\s+hydrating/);
+        expect(card, "the floor mounts without the view model").toMatch(
+            /if \(overlay === "detail" && detailsAreTheSurface && !\(vm && reconciliation\)/,
+        );
+        expect(card, "and read-ahead is KEPT, not replaced").toContain("await readFinancialsCardVm(query)");
+        expect(card, "one canonical surface in both states").not.toContain("PendingFinancialsDetailCard");
     });
 });
