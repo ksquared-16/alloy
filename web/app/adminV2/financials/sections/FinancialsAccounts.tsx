@@ -48,7 +48,7 @@
  */
 
 import { Receipt } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import WorkspaceEmptyState from "@/components/workspace/WorkspaceEmptyState";
@@ -75,6 +75,7 @@ import {
     stateCounts,
 } from "@/lib/financials/workspace/accountQueue";
 import { accountMoneyIsKnown, accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
+import { financialsCardQuery, prewarmFinancialsCard } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -148,6 +149,7 @@ function RailState({ account }: { account: AccountRow }) {
  * and one line of secondary context. What it stops doing is inventing its own chrome to say them.
  */
 function AccountQueueRow({
+    onWarm,
     account,
     selected,
     onSelect,
@@ -155,11 +157,27 @@ function AccountQueueRow({
     account: AccountRow;
     selected: boolean;
     onSelect: (customerId: string) => void;
+    /** Start this account's canonical read on intent. Reads only — never selects. */
+    onWarm: (customerId: string) => void;
 }) {
     return (
         <button
             type="button"
             onClick={() => onSelect(account.customerId)}
+            /*
+             * ── INTENT WARMS THE READ; ONLY THE CLICK SELECTS ──────────────────────────────────
+             *
+             * The account's canonical read takes ~1.1s, and until now it started at the click, so
+             * the operator paid all of it after deciding. Pointer and keyboard focus are the
+             * earliest honest signal that this account is the likely next one.
+             *
+             * It READS and does nothing else: it cannot change the selection, commit truth, run an
+             * action or make this account authoritative. That distinction is the repository's own —
+             * a prepare/mint is never warmed on intent, because it is a mutation; a canonical read
+             * is, which is what the family workspace already does on hover.
+             */
+            onPointerEnter={() => onWarm(account.customerId)}
+            onFocus={() => onWarm(account.customerId)}
             data-financials-account-row={account.customerId}
             data-financials-account-state={accountState(account)}
             data-financials-account-selected={selected ? "true" : "false"}
@@ -233,6 +251,22 @@ export default function FinancialsAccounts({
      * render is how the QA harness lost the Director's position twice.
      */
     const [chosen, setChosen] = useState<string | null>(null);
+    /*
+     * ── THE READ THE DETAILS GUARD ALREADY ASSUMES ─────────────────────────────────────────────
+     *
+     * F44 holds a strict rule: a Details destination may not be rendered until the deep read its
+     * ledger depends on has resolved. That rule is tolerable because the card "reads ahead and is
+     * usually ready" — and in this workspace it never did. The card is keyed by account, so the
+     * coalescer that shares an in-flight read used to mount and die with each selection, leaving a
+     * prewarm nothing to hand its work to.
+     *
+     * Warming here is the missing half of that contract, not a new mechanism: the same coalesced
+     * read the card itself performs, started earlier. A read already in the air when the card
+     * mounts is JOINED, never duplicated.
+     */
+    const warmAccount = useCallback((customerId: string) => {
+        prewarmFinancialsCard(financialsCardQuery({ customerId }));
+    }, []);
     const [filter, setFilter] = useState(NO_ACCOUNT_FILTER);
     const [filtersOpen, setFiltersOpen] = useState(false);
     /*
@@ -290,6 +324,15 @@ export default function FinancialsAccounts({
     const counts = useMemo(() => stateCounts(accounts), [accounts]);
 
     const selected = resolveAccountSelection(visible, chosen);
+    /*
+     * THE DEFAULT SELECTION IS A SELECTION. It is resolved from the cohort the moment the list
+     * lands, so its read may start then rather than when the Details component later asks for the
+     * same truth. Warming the CURRENT selection also covers the click path: the read is already in
+     * the air by the time the card for it mounts.
+     */
+    useEffect(() => {
+        if (selected) warmAccount(selected);
+    }, [selected, warmAccount]);
     const selectedAccount = visible.find((a) => a.customerId === selected) ?? null;
 
     return (
@@ -510,6 +553,7 @@ export default function FinancialsAccounts({
                                 account={account}
                                 selected={selected === account.customerId}
                                 onSelect={setChosen}
+                                onWarm={warmAccount}
                             />
                         ))
                     )}
