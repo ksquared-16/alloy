@@ -74,6 +74,119 @@ async function waves() {
     return Object.assign(out, { reads });
 }
 
+/*
+ * A SECOND FIXTURE, DELIBERATELY RICHER THAN `ROWS`.
+ *
+ * The placement chain stops early when nothing is placed, so the shared fixture never reaches its
+ * last three waves. These rows place children in programs and rooms, which is the shortest path
+ * that visits every wave. It is kept separate because adding a `child_placements` row to `ROWS`
+ * would add a round trip and move the wave counts the tests above are pinned to.
+ *
+ * TWO CHILDREN, NOT ONE, AND THAT IS THE POINT. A mark written inside a row loop fires once per
+ * row — against a single-row fixture it fires exactly once and is indistinguishable from a correct
+ * mark. The first cut of this fixture had one placement and the duplicate-mark test stayed green on
+ * a real planted defect. Any fixture meant to catch per-row behaviour needs at least two rows.
+ */
+const PLACED_ROWS: Record<string, Array<Record<string, unknown>>> = {
+    ...ROWS,
+    customer_members: [
+        { id: "mem-1", customer_id: "cust-1", first_name: "A", last_name: "B", display_name: "A B" },
+        { id: "mem-2", customer_id: "cust-1", first_name: "C", last_name: "B", display_name: "C B" },
+    ],
+    child_placements: [
+        { customer_member_id: "mem-1", program_category_id: "prog-1", room_location_id: "room-1", status: "active" },
+        { customer_member_id: "mem-2", program_category_id: "prog-2", room_location_id: "room-2", status: "active" },
+    ],
+    location_program_categories: [
+        { id: "prog-1", label: "Toddler", key: "toddler" },
+        { id: "prog-2", label: "Preschool", key: "preschool" },
+    ],
+    locations: [
+        { id: "room-1", label: "Room A" },
+        { id: "room-2", label: "Room B" },
+    ],
+};
+
+/** Answers immediately. The question here is which marks fire, not how many waves it takes. */
+function resolvingClient(rows: Record<string, Array<Record<string, unknown>>>) {
+    const builder = (table: string) => {
+        const chain: Record<string, unknown> = {};
+        for (const k of ["select", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "range", "overlaps", "contains", "eq", "in", "is", "neq"]) {
+            chain[k] = () => chain;
+        }
+        const answer = { data: rows[table] ?? [], error: null, count: (rows[table] ?? []).length };
+        chain.maybeSingle = () => Promise.resolve({ data: (rows[table] ?? [])[0] ?? null, error: null });
+        chain.single = chain.maybeSingle;
+        chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve().then(() => resolve(answer));
+        return chain;
+    };
+    return { from: (t: string) => builder(t) } as never;
+}
+
+describe("the instrument actually fires", () => {
+    /*
+     * ── WHY THIS EXISTS ALONGSIDE THE SOURCE GATES ─────────────────────────────────────────────
+     *
+     * Every other assertion about these phases reads the SOURCE: it checks that a name is passed to
+     * `phase(`. That is a claim about the text, and text-scanning gates have false-greened twice in
+     * this file's history — once because a mention in a comment satisfied a `contains`, once because
+     * a bracket-depth scan popped its own marker on a type annotation.
+     *
+     * This drives the real cohort and records what it actually emits. A phase that is never reached,
+     * or reached many times, is caught here regardless of how the source reads.
+     */
+    async function marksFor() {
+        const marks: string[] = [];
+        await resolveFinancialSubjectCohort(
+            resolvingClient(PLACED_ROWS),
+            { orgId: "org", siteLocationIds: [] } as never,
+            (name: string) => marks.push(name),
+        );
+        return marks;
+    }
+
+    it("every declared wave is reached", async () => {
+        const marks = await marksFor();
+        const heads = marks.map((m) => m.replace(/_\d+p.*$|_n\d+$/, ""));
+        for (const span of [
+            "households", "sites_direct", "sites_orphans", "sites_members",
+            "members", "contacts", "placements",
+            "pl_members", "pl_placements", "pl_instances", "pl_programs", "pl_rooms",
+            "agreement_sites", "facets", "assemble",
+        ]) {
+            expect(heads, `the ${span} wave is never reached: got ${heads.join(" -> ")}`).toContain(span);
+        }
+    });
+
+    it("no wave is marked twice", async () => {
+        /*
+         * THE DEFECT THIS CATCHES BEHAVIOURALLY. A mark written inside a row loop fires once per
+         * row: it resets the delta baseline every time and emits N copies of the label. It
+         * typechecks and it reads as instrumentation. `phase("customers")` was in exactly that
+         * position on the position branch before this slice found it.
+         */
+        const marks = await marksFor();
+        const heads = marks.map((m) => m.replace(/_\d+p.*$|_n\d+$/, ""));
+        const repeated = [...new Set(heads.filter((h, i) => heads.indexOf(h) !== i))];
+        expect(repeated, `a wave is marked more than once: ${marks.join(" -> ")}`).toEqual([]);
+    });
+
+    it("the cohort opens on the households and closes on the assembly", async () => {
+        const marks = await marksFor();
+        expect(marks[0], "the first mark is the household scan").toMatch(/^households/);
+        expect(marks[marks.length - 1], "the last mark is the assembly").toBe("assemble");
+    });
+
+    it("the paged scans report what they paged", async () => {
+        /* For a serial page walk the page count IS the cost: one round trip per page. */
+        const marks = await marksFor();
+        expect(marks.find((m) => m.startsWith("households")), "the household scan reports pages and rows")
+            .toMatch(/^households_\d+p_n\d+$/);
+        expect(marks.find((m) => m.startsWith("sites_orphans")), "the orphan scan reports its pages")
+            .toMatch(/^sites_orphans_\d+p$/);
+    });
+});
+
 describe("the account list's cohort does not queue reads that share an input", () => {
     it("four waves, not seven", async () => {
         const w = await waves();
