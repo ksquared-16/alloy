@@ -1,0 +1,155 @@
+
+==============================================================================
+COLD  n=5
+==============================================================================
+
+CLIENT MILESTONES (ms from click)
+  milestone        P50   min   max 
+  ---------------  ----  ----  ----
+  acknowledgement  136   95    152 
+  geometry         144   104   161 
+  listVisible      1511  1341  2004
+  listInteractive  1514  1343  2007
+  selectedAccount  2723  2719  3230
+  settled          2730  2725  3236
+
+/api/admin/financials/subjects  (wire P50 1222ms, n=5)
+  phase              offset P50  delta P50  gap from prev
+  -----------------  ----------  ---------  -------------
+  auth               2.8         2.8        2.8          
+  perm               3.2         0.3        0.4          
+  households_1p_n12  122.3       118.6      119.1        
+  members            242.8       20.1       120.5        
+  pl_members         243.5       0.7        0.7          
+  contacts           248         17.3       4.5          
+  sites_direct       257.1       12.6       9.1          
+  pl_placements_n7   360.2       61.7       103.1        
+  sites_orphans_1p   372.4       36.3       12.2         
+  agreement_sites    372.4       0          0.0          
+  pl_instances       481.5       111.6      109.1        
+  pl_programs        582         107        100.5        
+  pl_rooms           679.2       103.8      97.2         
+  placements         679.5       0.3        0.3          
+  facets             679.5       0          0.0          
+  assemble           679.7       0.2        0.2          
+  serialize          679.7       0          0.0          
+
+/api/admin/financials/position  (wire P50 1321ms, n=5)
+  phase        offset P50  delta P50  gap from prev
+  -----------  ----------  ---------  -------------
+  auth         5.9         5.9        5.9          
+  perm         6.1         0.2        0.2          
+  charges      154         126.7      147.9        
+  agreements   328.4       125.6      174.4        
+  collectible  585.7       269        257.3        
+  customers    684.6       98.9       98.9         
+  serialize    684.8       0.3        0.2          
+
+SLOWER BRANCH: {'position': 2, 'subjects': 3}   (of 5 openings where both were seen)
+  subjects P50 1222ms   position P50 1321ms
+  max(branch) P50 1321ms  <- the list's data wait; NEVER the sum
+  click -> interactive P50 1514ms
+  data wait is 87% of click -> interactive; the remaining 193ms is client/host
+
+CLICK -> INTERACTIVE, DECOMPOSED (P50 ms)
+  segment                           P50   owned by                   
+  --------------------------------  ----  ---------------------------
+  click -> first request starts     135   client: tab mount + effects
+  data wait (max of both branches)  1325  server + network           
+  last response -> interactive      54    client: join + render      
+  TOTAL                             1514                             
+  LARGEST SEGMENT: data at 1325ms (88% of click -> interactive)
+
+ROUTE TIMELINE (ms from click)
+  route     starts P50  ends P50  wire P50
+  --------  ----------  --------  --------
+  subjects  135         1375      1222    
+  position  139         1460      1321    
+
+----------------------------------------------------------------------
+PLACEMENT CHAIN
+  members@243 -> last wave@679  = 436ms of its own
+  concurrent region (households@122 -> end@680) = 557ms
+  sibling site branch ends @372; chain overhang = +307ms
+    (overhang is the ONLY part removing the chain could recover)
+  recoverable 307ms = 55% of the concurrent region -> DOMINANT
+
+==============================================================================
+WARM  n=8
+==============================================================================
+
+CLIENT MILESTONES (ms from click)
+  milestone        P50     min   max 
+  ---------------  ------  ----  ----
+  acknowledgement  135.5   38    202 
+  geometry         136.5   39    204 
+  listVisible      137.5   39    206 
+  listInteractive  137.5   40    210 
+  selectedAccount  1477.0  1155  1538
+  settled          1480.0  1157  1541
+
+/api/admin/financials/subjects  (wire P50 1199.5ms, n=8)
+  phase              offset P50  delta P50  gap from prev
+  -----------------  ----------  ---------  -------------
+  auth               2.5         2.5        2.5          
+  perm               2.7         0.2        0.2          
+  households_1p_n12  116.5       114.2      113.8        
+  members            223.4       95.7       106.9        
+  pl_members         223.5       0.1        0.1          
+  sites_direct       248.4       27.5       24.9         
+  contacts           261.1       17.8       12.7         
+  sites_orphans_1p   350.8       16.6       89.7         
+  agreement_sites    350.8       0.0        0.0          
+  pl_placements_n7   355.2       88.0       4.4          
+  pl_instances       471.9       112.6      116.7        
+  pl_programs        574.2       106.3      102.3        
+  pl_rooms           689.3       103.8      115.1        
+  placements         689.4       0.1        0.1          
+  facets             689.4       0.0        0.0          
+  assemble           689.5       0.1        0.1          
+  serialize          689.5       0.1        0.0          
+
+/api/admin/financials/position  (wire P50 1104.5ms, n=8)
+  phase        offset P50  delta P50  gap from prev
+  -----------  ----------  ---------  -------------
+  auth         2.4         2.4        2.4          
+  perm         2.5         0.2        0.1          
+  charges      134.2       131.5      131.7        
+  agreements   254.4       114.0      120.2        
+  collectible  515.0       245.2      260.6        
+  customers    623.9       114.0      108.9        
+  serialize    624.5       0.3        0.6          
+
+SLOWER BRANCH: {'position': 3, 'subjects': 5}   (of 8 openings where both were seen)
+  subjects P50 1199.5ms   position P50 1104.5ms
+  max(branch) P50 1239.0ms  <- the list's data wait; NEVER the sum
+  click -> interactive P50 137.5ms
+  data wait is 901% of click -> interactive; the remaining -1102ms is client/host
+
+  *** 8 of 8 openings became INTERACTIVE BEFORE their data landed.
+      The list rendered from the cohort already in memory and refetched behind it.
+      For these openings the interactive time measures the CLIENT CACHE, not the cohorts.
+      Their server cost was still paid: subjects P50 1248ms of data wait.
+
+CLICK -> INTERACTIVE, DECOMPOSED (P50 ms)
+  segment                           P50      owned by                   
+  --------------------------------  -------  ---------------------------
+  click -> first request starts     137.5    client: tab mount + effects
+  data wait (max of both branches)  1248.5   server + network           
+  last response -> interactive      -1247.5  client: join + render      
+  TOTAL                             137.5                               
+  LARGEST SEGMENT: data at 1248ms (908% of click -> interactive)
+
+ROUTE TIMELINE (ms from click)
+  route     starts P50  ends P50  wire P50
+  --------  ----------  --------  --------
+  subjects  138.0       1337.5    1199.5  
+  position  137.5       1302.0    1104.5  
+
+----------------------------------------------------------------------
+PLACEMENT CHAIN
+  members@223 -> last wave@689  = 466ms of its own
+  concurrent region (households@116 -> end@690) = 573ms
+  sibling site branch ends @351; chain overhang = +338ms
+    (overhang is the ONLY part removing the chain could recover)
+  recoverable 338ms = 59% of the concurrent region -> DOMINANT
