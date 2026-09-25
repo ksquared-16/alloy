@@ -160,19 +160,30 @@ export function adaptFinancialsVmToFinancialsCard(input: {
      * arrives here because a persisted responsibility allocation named them, and their share is the
      * cents that allocation assigned — never a percentage derived here.
      *
-     * `method` is still null, and for the original reason: there is no per-payer payment method
-     * store, and inventing one here would repeat exactly the mistake this note was written about.
+     * `method` NO LONGER FALLS BACK TO A CLAIM.
+     *
+     * The original note said there was no per-payer payment-method store, so `vm.payers[].method`
+     * was hardcoded null — and that was true when it was written. Payments W2 then shipped
+     * `payment_methods`, and this line did not move: it kept turning "we never looked" into the
+     * positive sentence "No payment method on file", which an operator read beside a Manage
+     * payments panel showing `visa •••• 4242 Ready`.
+     *
+     * `paymentSubjectModel` already holds the answer and already states the rule — its
+     * `summaryLine` is "the one line a compact surface may show", and it is null "when there is
+     * genuinely nothing to say, which is different from 'no payment method on file', a claim this
+     * cannot make without looking". That module DOES look: it says the brand and last four when a
+     * usable method exists, names an unverified bank or one needing attention, and only says "No
+     * payment method on file" when the household genuinely has none AND storing one is something
+     * this organisation could do.
+     *
+     * So the fallback is now that line, and null stays null. Saying nothing is the correct output
+     * for an unknown; the bug was never the wording, it was answering at all.
      */
+    const methodLine = vm.paymentCapabilities?.summaryLine ?? null;
     const payers: FinancialsPayer[] = vm.payers.map((p) => ({
         name: p.name,
         share: p.share ?? "",
-        /*
-         * THE CANONICAL SENTENCE FOR THIS STATE, not a shorter one meaning the same thing.
-         * `paymentSubjectModel` and the payment-methods surface both say "No payment method on
-         * file"; this said "No method on file", so the same fact wore two names depending on
-         * which surface an operator happened to read it on.
-         */
-        method: p.method ?? "No payment method on file",
+        method: p.method ?? methodLine ?? "",
     }));
 
     return {

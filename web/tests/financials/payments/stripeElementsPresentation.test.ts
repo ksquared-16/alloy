@@ -36,15 +36,32 @@ describe("the operator Payment Element declines consumer checkout", () => {
         expect(code(SETUP_FIELD)).not.toMatch(/terms\s*:/);
     });
 
-    it("asks for the postal code where required rather than never, so confirm owes Stripe nothing", () => {
+    it("collects the postal code for AVS rather than letting Stripe drop it", () => {
         /*
-         * `never` would make the CALLER responsible for supplying the omitted billing details at
-         * confirm time. A surface that never collected them would then fail at the last step,
-         * which is why `if_required` is the correct choice and not merely the softer one.
+         * AMENDED. This shipped as `if_required`, and mounted QA showed Stripe then collected no
+         * postal code at all for this account — number, expiry and CVC only. For a card-on-file
+         * charged unattended for months, the postal code is the AVS signal, so `auto` is correct.
+         *
+         * `never` remains wrong for the original reason: it makes the CALLER owe Stripe the
+         * omitted values at confirm time, and a surface that never collected them fails at the
+         * last step.
          */
         const billing = ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS.fields?.billingDetails;
-        expect(billing?.address).toBe("if_required");
-        expect(billing).not.toHaveProperty("never");
+        expect(billing?.address).toBe("auto");
+        expect(billing?.address).not.toBe("never");
+    });
+
+    it("prefills the canonical payer name without asserting a billing address", () => {
+        /*
+         * A prefill is not an assertion, and the ADDRESS is deliberately absent: the canonical
+         * address Alloy holds is a SERVICE location, which is not necessarily where the card is
+         * billed. Prefilling it would assert exactly that.
+         */
+        const src = read("lib/financials/payments/stripeElementsPresentation.ts");
+        expect(src).toMatch(/export type OperatorBillingPrefill/);
+        const plain = code("lib/financials/payments/stripeElementsPresentation.ts");
+        expect(plain, "name is offered").toMatch(/billingDetails:\s*\{\s*name\s*\}/);
+        expect(plain, "address is not prefilled").not.toMatch(/defaultValues[\s\S]{0,200}address/);
     });
 
     it("both Elements surfaces use the one shared configuration, so they cannot drift", () => {

@@ -16,6 +16,8 @@
  * opinion about what a family owes.
  */
 import { useCallback, useEffect, useState } from "react";
+
+import { onPaymentMethodsChanged } from "@/lib/financials/payments/paymentMethodEvents";
 import { CalendarClock, Pause, Play, RefreshCw, ShieldCheck, X } from "lucide-react";
 
 type Arrangement = {
@@ -121,6 +123,16 @@ export default function AutopaySection({
     }, [customerId, payerEntityId, payerName]);
 
     useEffect(() => { void load(); }, [load]);
+
+    /*
+     * RE-READ WHEN THE SIBLING CHANGES A METHOD.
+     *
+     * Autopay's eligibility is a function of the stored methods, and Payment methods sits directly
+     * above it administering exactly those. Without this, storing a card left Autopay holding the
+     * answer it fetched on mount and still saying "Add a usable payment method before setting up
+     * Autopay" underneath a card the operator had just successfully stored.
+     */
+    useEffect(() => onPaymentMethodsChanged(customerId, () => { void load(); }), [customerId, load]);
 
     const run = useCallback(
         async (actionKey: string, payload: Record<string, unknown>) => {
