@@ -21,7 +21,7 @@
  * when the choice falls out of it, and never fabricate a selection over an empty cohort.
  */
 
-import { accountState, type AccountRow } from "@/lib/financials/workspace/accountsRail";
+import { accountMoneyIsKnown, accountState, type AccountRow } from "@/lib/financials/workspace/accountsRail";
 import type { FinancialSubjectFacet } from "@/lib/financials/workspace/resolveFinancialSubjects";
 
 export type AccountQueueFilter = {
@@ -94,6 +94,21 @@ export function filterAccounts(rows: readonly AccountRow[], filter: AccountQueue
     const needle = filter.search.trim().toLowerCase();
     return rows.filter((row) => {
         if (!matchesSearch(row, needle)) return false;
+        /*
+         * ── AN UNRESOLVED ROW IS NOT SILENTLY EXCLUDED ─────────────────────────────────────────
+         *
+         * The state filter is answered from position money. While position is pending the answer
+         * does not exist yet, and there are only two honest options: hold the classification, or
+         * represent the unresolved membership. Dropping the row is neither — it would tell an
+         * operator filtering by Outstanding that a household owing $2,023.87 is not outstanding,
+         * which is the exact failure the three-state contract exists to prevent.
+         *
+         * So an unresolved row is RETAINED under every state filter and wears its reserved
+         * treatment. When position lands it is classified for real and leaves if it does not
+         * belong. The count beside the control says how many are still unresolved, so the operator
+         * is never shown a narrowed list that quietly claims to be complete.
+         */
+        if (filter.state && !accountMoneyIsKnown(row)) return true;
         if (filter.state && accountState(row) !== filter.state) return false;
         if (filter.programId && !row.programs.some((p) => p.id === filter.programId)) return false;
         if (filter.roomId && !row.rooms.some((r) => r.id === filter.roomId)) return false;
@@ -110,8 +125,18 @@ export function stateCounts(rows: readonly AccountRow[]): Record<AccountStateFil
         settled: 0,
         no_activity: 0,
     };
-    for (const row of rows) counts[accountState(row)] += 1;
+    /* Only rows whose money is known can be counted into a money-derived state. */
+    for (const row of rows) {
+        if (!accountMoneyIsKnown(row)) continue;
+        const state = accountState(row) as AccountStateFilter;
+        if (state in counts) counts[state] += 1;
+    }
     return counts;
+}
+
+/** How many rows are still waiting on position, so a narrowed list never claims to be complete. */
+export function unresolvedCount(rows: readonly AccountRow[]): number {
+    return rows.reduce((n, row) => (accountMoneyIsKnown(row) ? n : n + 1), 0);
 }
 
 /**

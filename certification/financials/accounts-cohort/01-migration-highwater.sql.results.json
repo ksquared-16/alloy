@@ -1,0 +1,109 @@
+{
+  "trusted_host_action_id": "tha_23f2bc53da9f74",
+  "query_hash": "ad9ea6da169ebcd51b9bd177c8fa12a2fac525cc29526e908e23133d604932f1",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-25T02:46:54.153Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_23f2bc53da9f74",
+    "query_hash": "ad9ea6da169ebcd51b9bd177c8fa12a2fac525cc29526e908e23133d604932f1",
+    "authorization_id": "grnt_71403de39a9a41b0",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-25T02:46:59.849Z",
+    "question_ids": [
+      "highwater",
+      "cohort_fn_exists",
+      "subject_tables"
+    ],
+    "questions": {
+      "highwater": {
+        "question_id": "highwater",
+        "row_count": null,
+        "rows": [
+          {
+            "max_version": "20261025120000",
+            "applied_count": 495,
+            "newest_five": [
+              "20261025120000",
+              "20261024120000",
+              "20261023120000",
+              "20261022120000",
+              "20261021120000"
+            ]
+          }
+        ]
+      },
+      "cohort_fn_exists": {
+        "question_id": "cohort_fn_exists",
+        "row_count": null,
+        "rows": [
+          {
+            "names": [
+              {
+                "name": "financials_account_fact_bundle",
+                "args": "p_org_id uuid, p_customer_id uuid, p_customer_member_id uuid",
+                "security_definer": false,
+                "settings": [
+                  "search_path=public, pg_temp"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "subject_tables": {
+        "question_id": "subject_tables",
+        "row_count": null,
+        "rows": [
+          {
+            "tables": [
+              {
+                "table": "child_enrollment_agreements",
+                "has_org_id": true
+              },
+              {
+                "table": "child_placements",
+                "has_org_id": true
+              },
+              {
+                "table": "customer_members",
+                "has_org_id": true
+              },
+              {
+                "table": "customer_persons",
+                "has_org_id": true
+              },
+              {
+                "table": "customers",
+                "has_org_id": true
+              },
+              {
+                "table": "location_program_categories",
+                "has_org_id": true
+              },
+              {
+                "table": "locations",
+                "has_org_id": true
+              },
+              {
+                "table": "persons",
+                "has_org_id": true
+              },
+              {
+                "table": "process_instances",
+                "has_org_id": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}

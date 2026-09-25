@@ -74,7 +74,7 @@ import {
     roomOptions,
     stateCounts,
 } from "@/lib/financials/workspace/accountQueue";
-import { accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
+import { accountMoneyIsKnown, accountState, joinAccounts, type AccountRow } from "@/lib/financials/workspace/accountsRail";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -93,6 +93,21 @@ import type { FinancialSubjectCohort } from "@/lib/financials/workspace/resolveF
  * Every input is a field the position cohort already produced. Nothing here derives money.
  */
 function RailState({ account }: { account: AccountRow }) {
+    /*
+     * Every branch below reads position money. While that money is unknown the chip must say so
+     * rather than fall through to the most reassuring label available.
+     */
+    if (!accountMoneyIsKnown(account)) {
+        const label = account.financialTruth === "unavailable" ? "Balance unavailable" : "Balance pending";
+        return (
+            <span
+                data-financials-account-chip={account.financialTruth}
+                className="shrink-0 rounded-full border border-alloy-midnight/15 px-1.5 py-px text-[10.5px] font-semibold text-alloy-midnight/45"
+            >
+                {label}
+            </span>
+        );
+    }
     const { tone, label } =
         account.outstandingCents > 0
             ? { tone: "due" as const, label: "Outstanding" }
@@ -162,8 +177,15 @@ function AccountQueueRow({
                 <span
                     className="shrink-0 text-[12.5px] font-semibold tabular-nums text-alloy-midnight/90"
                     data-financials-account-outstanding={account.customerId}
+                    data-financials-account-truth={account.financialTruth}
                 >
-                    {moneyExact(account.outstandingCents, account.currencyCode)}
+                    {/*
+                     * RESERVED, NOT ZERO. An em dash in the same tabular slot keeps the row's
+                     * geometry identical before and after position lands, so nothing shifts when
+                     * the figure arrives — and it never claims a household owes nothing merely
+                     * because nobody has asked yet.
+                     */}
+                    {accountMoneyIsKnown(account) ? moneyExact(account.outstandingCents, account.currencyCode) : "—"}
                 </span>
             </span>
             {/*
@@ -228,12 +250,26 @@ export default function FinancialsAccounts({
      * alone would turn an outage into a screen full of families who appear to owe nothing. The
      * failure is surfaced instead — which is the same rule the account detail already keeps.
      */
+    /*
+     * ── SUBJECTS OWNS THE LIST; POSITION DECORATES IT ──────────────────────────────────────────
+     *
+     * This used to wait for BOTH, which made the list's wait max(subjects, position) even though
+     * position cannot add, remove or reorder a row. Measured on deployed staging that was ~685ms
+     * of pure gate. The rows now render as soon as subjects answers, and each one says honestly
+     * whether its money is known yet.
+     */
+    const positionTruth = position.data ? "resolved" : position.error ? "unavailable" : "pending";
     const accounts = useMemo(
-        () => (subjects.data && position.data ? joinAccounts(subjects.data, position.data) : []),
-        [subjects.data, position.data],
+        () => (subjects.data ? joinAccounts(subjects.data, position.data ?? null, positionTruth) : []),
+        [subjects.data, position.data, positionTruth],
     );
-    const readError = position.error ?? subjects.error;
-    const loading = (position.loading || subjects.loading) && accounts.length === 0;
+    /*
+     * A position failure no longer empties the queue — the row stays reachable and wears
+     * UNAVAILABLE. Only a subjects failure is an outage for this list, because only subjects can
+     * say which households exist.
+     */
+    const readError = subjects.error;
+    const loading = subjects.loading && accounts.length === 0;
     const truncated = Boolean(subjects.data?.truncated || position.data?.truncated);
 
     /* The facets on offer describe the cohort, not the organisation — see `accountQueue`. */

@@ -60,6 +60,7 @@ import {
     type FinancialWorkLocation,
 } from "@/lib/financials/workspace/financialWorkLocation";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import type { SubjectFactRows } from "@/lib/financials/workspace/readAccountSubjectFacts";
 import { ID_BATCH, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 
 /** How many households one subject read will look at. Mirrors the position scan cap deliberately. */
@@ -185,6 +186,18 @@ export async function resolveFinancialSubjectCohort(
      * twice, so the caller may pass a mark and get the phases.
      */
     mark?: (name: string) => void,
+    /*
+     * ── ONE ACQUISITION, OR THE SIX WAVES ──────────────────────────────────────────────────────
+     *
+     * When the caller has already acquired the cohort's facts in a single round trip, every read
+     * below is served from those rows. When it has not, the original waves run unchanged.
+     *
+     * BOTH PATHS ARE KEPT ON PURPOSE. The shaping below — visibility, the cap, contact
+     * eligibility, placement liveness, program precedence — is the same code either way, so old
+     * and new can be run against the same tenant and compared fact for fact and row for row. A
+     * cutover that cannot be compared is a cutover that cannot be checked.
+     */
+    facts?: SubjectFactRows,
 ): Promise<FinancialSubjectCohort> {
     const phase = (name: string) => mark?.(name);
     const activeSiteLocationId = args.activeSiteLocationId?.trim() || null;
@@ -200,7 +213,18 @@ export async function resolveFinancialSubjectCohort(
     const households: Array<{ id: string; name: string | null }> = [];
     let reachedEnd = false;
     let householdPages = 0;
-    while (households.length < scanCap) {
+    if (facts) {
+        /*
+         * The acquisition returns up to `scanCap + 1` rows. The extra row is not a household to
+         * show — it is how the caller learns there were more, which is exactly what the paged loop
+         * concluded when a full page came back. The verdict stays here.
+         */
+        const rows = facts.households;
+        householdPages = 1;
+        reachedEnd = rows.length <= scanCap;
+        for (const row of rows.slice(0, scanCap)) households.push(row);
+    }
+    while (!facts && households.length < scanCap) {
         householdPages += 1;
         const want = Math.min(PAGE, scanCap - households.length);
         const { data, error } = await supabase
@@ -240,8 +264,8 @@ export async function resolveFinancialSubjectCohort(
      * predicates, same rows, same per-facet failure tolerance — each still degrades to an empty
      * facet rather than failing the cohort.
      */
-    const sitesP = readAgreementSites(supabase, args.orgId, customerIds, phase);
-    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds)
+    const sitesP = readAgreementSites(supabase, args.orgId, customerIds, phase, facts);
+    const membersP = readHouseholdMembers(supabase, args.orgId, customerIds, facts)
         .then((rows) => {
             phase("members");
             return rows;
@@ -249,14 +273,14 @@ export async function resolveFinancialSubjectCohort(
         .catch(() => [] as HouseholdMemberRow[]);
     const facetsP = Promise.all([
         membersP.then(childNamesFrom).catch(() => new Map<string, string[]>()),
-        readContactNames(supabase, args.orgId, customerIds)
+        readContactNames(supabase, args.orgId, customerIds, facts)
             .then((m) => {
                 phase("contacts");
                 return m;
             })
             .catch(() => new Map<string, string[]>()),
         membersP
-            .then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members, phase))
+            .then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members, phase, facts))
             .then((m) => {
                 phase("placements");
                 return m;
@@ -323,6 +347,7 @@ async function readAgreementSites(
     orgId: string,
     customerIds: string[],
     mark?: (name: string) => void,
+    facts?: SubjectFactRows,
 ): Promise<Map<string, Set<string>>> {
     /*
      * Three dependent waves live in here, and until now they reported as one 229-249 ms label.
@@ -341,6 +366,22 @@ async function readAgreementSites(
     };
 
     if (customerIds.length === 0) return byCustomer;
+
+    /*
+     * Served from the one acquisition. The three waves below become three row sets that already
+     * arrived; `add` — and with it the site-visibility contract it feeds — is untouched.
+     */
+    if (facts) {
+        for (const row of facts.agreement_sites_direct) add(String(row.customer_id ?? ""), row.site_location_id);
+        const customerByMember = new Map(facts.orphan_members.map((m) => [String(m.id ?? ""), String(m.customer_id ?? "")]));
+        for (const row of facts.agreement_sites_orphan) {
+            add(customerByMember.get(String(row.customer_member_id ?? "")) ?? "", row.site_location_id);
+        }
+        phase("sites_direct");
+        phase("sites_orphans_0p");
+        phase("sites_members");
+        return byCustomer;
+    }
 
     const direct = await readInBatches<{ customer_id: string | null; site_location_id: string | null }>(
         "enrolment sites",
@@ -451,7 +492,9 @@ async function readHouseholdMembers(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
+    facts?: SubjectFactRows,
 ): Promise<HouseholdMemberRow[]> {
+    if (facts) return facts.members;
     if (customerIds.length === 0) return [];
     return readInBatches<HouseholdMemberRow>("household children", customerIds, (batch) =>
         supabase
@@ -490,10 +533,13 @@ async function readContactNames(
     supabase: SupabaseClient,
     orgId: string,
     customerIds: string[],
+    facts?: SubjectFactRows,
 ): Promise<Map<string, string[]>> {
     const out = new Map<string, Set<string>>();
     if (customerIds.length === 0) return new Map();
-    const rows = await readInBatches<{
+    const fetched = facts
+        ? []
+        : await readInBatches<{
         customer_id: string | null;
         role_type: string | null;
         status: string | null;
@@ -512,6 +558,19 @@ async function readContactNames(
             .eq("org_id", orgId)
             .in("customer_id", batch),
     );
+    /*
+     * The acquisition flattens the embedded `persons` row to first/last name, so it is re-shaped
+     * into the form `personName` already understands rather than teaching a second name rule.
+     */
+    const rows = facts
+        ? facts.contacts.map((c) => ({
+              customer_id: c.customer_id,
+              role_type: c.role_type,
+              status: c.status,
+              end_date: c.end_date,
+              persons: { first_name: c.first_name, last_name: c.last_name },
+          }))
+        : fetched;
     for (const row of rows) {
         const customerId = named(row.customer_id);
         if (!customerId) continue;
@@ -546,6 +605,7 @@ async function readCurrentPlacements(
     /* The households' children, already read for their names. Same rows, one scan. */
     suppliedMembers?: ReadonlyArray<{ id: string | null; customer_id: string | null }>,
     mark?: (name: string) => void,
+    facts?: SubjectFactRows,
 ): Promise<Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>> {
     /*
      * FOUR DEPENDENT WAVES, reported until now as part of one `facets` label: the members (free when
@@ -574,7 +634,9 @@ async function readCurrentPlacements(
     }
     if (customerByMember.size === 0) return empty;
 
-    const placements = await readInBatches<{
+    const placements = facts
+        ? facts.placements
+        : await readInBatches<{
         customer_member_id: string | null;
         program_category_id: string | null;
         room_location_id: string | null;
@@ -622,7 +684,15 @@ async function readCurrentPlacements(
      */
     const unplacedProgramMembers = [...customerByMember.keys()].filter((id) => !programByMember.has(id));
     if (unplacedProgramMembers.length) {
-        const instances = await readInBatches<{ subject_id: string | null; metadata: unknown }>(
+        /*
+         * The acquisition returns an intent for EVERY member, deliberately unfiltered, so that the
+         * placement-first precedence stays here rather than drifting into SQL. Narrowing to the
+         * unplaced members is that rule, and it is applied in the same place either way.
+         */
+        const unplaced = new Set(unplacedProgramMembers);
+        const instances = facts
+            ? facts.enrolment_intents.filter((i) => unplaced.has(named(i.subject_id)))
+            : await readInBatches<{ subject_id: string | null; metadata: unknown }>(
             "enrolment program intent",
             unplacedProgramMembers,
             (batch) =>
@@ -661,7 +731,9 @@ async function readCurrentPlacements(
     phase("pl_instances");
     const programLabels = new Map<string, string>();
     if (programIds.size) {
-        const rows = await readInBatches<{ id: string; label: string | null; key: string | null }>(
+        const rows = facts
+            ? facts.program_labels.filter((r) => programIds.has(named(r.id)))
+            : await readInBatches<{ id: string; label: string | null; key: string | null }>(
             "program categories",
             [...programIds],
             (batch) =>
@@ -676,7 +748,9 @@ async function readCurrentPlacements(
     phase("pl_programs");
     const roomLabels = new Map<string, string>();
     if (roomIds.size) {
-        const rows = await readInBatches<{ id: string; label: string | null }>("placement rooms", [...roomIds], (batch) =>
+        const rows = facts
+            ? facts.room_labels.filter((r) => roomIds.has(named(r.id)))
+            : await readInBatches<{ id: string; label: string | null }>("placement rooms", [...roomIds], (batch) =>
             supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", batch),
         );
         for (const row of rows) roomLabels.set(named(row.id), named(row.label));

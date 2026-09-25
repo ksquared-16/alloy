@@ -1,0 +1,730 @@
+[
+  {
+    "pass": "c1",
+    "kind": "cold",
+    "click": 0,
+    "acknowledgement": 28,
+    "geometry": 37,
+    "listVisible": 1743,
+    "listInteractive": 1746,
+    "selectedAccount": 2969,
+    "settled": 2972,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302627276,
+        "bytes": 52925,
+        "phases": {
+          "auth": 2.9,
+          "perm": 0.2,
+          "cohort": 1043.5,
+          "serialize": 0.2,
+          "total": 1047
+        },
+        "offsets": {
+          "auth": 2.9,
+          "perm": 3.1,
+          "cohort": 1046.6,
+          "serialize": 1046.8
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302627137,
+        "bytes": 4280,
+        "phases": {
+          "auth": 5.2,
+          "perm": 0.3,
+          "households": 133.7,
+          "agreement_sites": 257.9,
+          "facets": 604.7,
+          "assemble": 0.3,
+          "serialize": 0.1,
+          "total": 1002.2
+        },
+        "offsets": {
+          "auth": 5.2,
+          "perm": 5.4,
+          "households": 139.1,
+          "agreement_sites": 397.1,
+          "facets": 1001.8,
+          "assemble": 1002.1,
+          "serialize": 1002.1
+        }
+      }
+    ]
+  },
+  {
+    "pass": "c2",
+    "kind": "cold",
+    "click": 0,
+    "acknowledgement": 166,
+    "geometry": 174,
+    "listVisible": 1514,
+    "listInteractive": 1516,
+    "selectedAccount": 2871,
+    "settled": 2874,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302660642,
+        "bytes": 52925,
+        "phases": {
+          "auth": 3.4,
+          "perm": 0.3,
+          "cohort": 596.5,
+          "serialize": 0.2,
+          "total": 600.7
+        },
+        "offsets": {
+          "auth": 3.4,
+          "perm": 3.7,
+          "cohort": 600.3,
+          "serialize": 600.5
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302660566,
+        "bytes": 4280,
+        "phases": {
+          "auth": 3.9,
+          "perm": 0.3,
+          "households": 129.7,
+          "agreement_sites": 235.4,
+          "facets": 328,
+          "assemble": 0.2,
+          "serialize": 0.1,
+          "total": 697.5
+        },
+        "offsets": {
+          "auth": 3.9,
+          "perm": 4.2,
+          "households": 133.9,
+          "agreement_sites": 369.2,
+          "facets": 697.2,
+          "assemble": 697.4,
+          "serialize": 697.4
+        }
+      }
+    ]
+  },
+  {
+    "pass": "c3",
+    "kind": "cold",
+    "click": 0,
+    "acknowledgement": 99,
+    "geometry": 107,
+    "listVisible": 1628,
+    "listInteractive": 1629,
+    "selectedAccount": 2784,
+    "settled": 2787,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302693780,
+        "bytes": 52925,
+        "phases": {
+          "auth": 2.5,
+          "perm": 0.2,
+          "cohort": 609.2,
+          "serialize": 0.2,
+          "total": 612.1
+        },
+        "offsets": {
+          "auth": 2.5,
+          "perm": 2.7,
+          "cohort": 611.8,
+          "serialize": 612
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302693435,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.1,
+          "perm": 0.2,
+          "households": 129.7,
+          "agreement_sites": 416.6,
+          "facets": 335.5,
+          "assemble": 0.1,
+          "serialize": 0.1,
+          "total": 884.2
+        },
+        "offsets": {
+          "auth": 2.1,
+          "perm": 2.3,
+          "households": 132,
+          "agreement_sites": 548.6,
+          "facets": 884,
+          "assemble": 884.1,
+          "serialize": 884.2
+        }
+      }
+    ]
+  },
+  {
+    "pass": "c4",
+    "kind": "cold",
+    "click": 0,
+    "acknowledgement": 185,
+    "geometry": 192,
+    "listVisible": 2079,
+    "listInteractive": 2080,
+    "selectedAccount": 3267,
+    "settled": 3270,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302726341,
+        "bytes": 52925,
+        "phases": {
+          "auth": 343.2,
+          "perm": 0.3,
+          "cohort": 746.7,
+          "serialize": 0.2,
+          "total": 1090.4
+        },
+        "offsets": {
+          "auth": 343.2,
+          "perm": 343.4,
+          "cohort": 1090.1,
+          "serialize": 1090.3
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302726043,
+        "bytes": 4280,
+        "phases": {
+          "auth": 343.1,
+          "perm": 0.2,
+          "households": 104.9,
+          "agreement_sites": 386.2,
+          "facets": 398.3,
+          "assemble": 0,
+          "serialize": 0.1,
+          "total": 1232.8
+        },
+        "offsets": {
+          "auth": 343.1,
+          "perm": 343.4,
+          "households": 448.2,
+          "agreement_sites": 834.4,
+          "facets": 1232.7,
+          "assemble": 1232.7,
+          "serialize": 1232.8
+        }
+      }
+    ]
+  },
+  {
+    "pass": "c5",
+    "kind": "cold",
+    "click": 0,
+    "acknowledgement": 128,
+    "geometry": 136,
+    "listVisible": 1390,
+    "listInteractive": 1391,
+    "selectedAccount": 2591,
+    "settled": 2594,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302759717,
+        "bytes": 4280,
+        "phases": {
+          "auth": 12.5,
+          "perm": 0.3,
+          "households": 118.1,
+          "agreement_sites": 234.5,
+          "facets": 327,
+          "assemble": 0.2,
+          "serialize": 0,
+          "total": 692.7
+        },
+        "offsets": {
+          "auth": 12.5,
+          "perm": 12.8,
+          "households": 130.9,
+          "agreement_sites": 365.4,
+          "facets": 692.4,
+          "assemble": 692.6,
+          "serialize": 692.6
+        }
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302759604,
+        "bytes": 52925,
+        "phases": {
+          "auth": 2.3,
+          "perm": 0.2,
+          "cohort": 805.6,
+          "serialize": 0.2,
+          "total": 808.5
+        },
+        "offsets": {
+          "auth": 2.3,
+          "perm": 2.6,
+          "cohort": 808.2,
+          "serialize": 808.4
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w1",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 66,
+    "geometry": 67,
+    "listVisible": 67,
+    "listInteractive": 68,
+    "selectedAccount": 1729,
+    "settled": 1733,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302799318,
+        "bytes": 52925,
+        "phases": {
+          "auth": 1.8,
+          "perm": 0.2,
+          "cohort": 579.8,
+          "serialize": 0.2,
+          "total": 582
+        },
+        "offsets": {
+          "auth": 1.8,
+          "perm": 2,
+          "cohort": 581.8,
+          "serialize": 582
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302799013,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.3,
+          "perm": 0.2,
+          "households": 283.1,
+          "agreement_sites": 405.3,
+          "facets": 184.3,
+          "assemble": 0.3,
+          "serialize": 0.1,
+          "total": 875.6
+        },
+        "offsets": {
+          "auth": 2.3,
+          "perm": 2.5,
+          "households": 285.6,
+          "agreement_sites": 690.9,
+          "facets": 875.2,
+          "assemble": 875.5,
+          "serialize": 875.6
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w2",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 80,
+    "geometry": 81,
+    "listVisible": 82,
+    "listInteractive": 83,
+    "selectedAccount": 1341,
+    "settled": 1344,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302806065,
+        "bytes": 52925,
+        "phases": {
+          "auth": 3.6,
+          "perm": 0.2,
+          "cohort": 638.9,
+          "serialize": 0.2,
+          "total": 643
+        },
+        "offsets": {
+          "auth": 3.6,
+          "perm": 3.8,
+          "cohort": 642.7,
+          "serialize": 642.9
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302806040,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.1,
+          "perm": 0.2,
+          "households": 118,
+          "agreement_sites": 250.1,
+          "facets": 317.5,
+          "assemble": 0.2,
+          "serialize": 0,
+          "total": 688.1
+        },
+        "offsets": {
+          "auth": 2.1,
+          "perm": 2.3,
+          "households": 120.2,
+          "agreement_sites": 370.3,
+          "facets": 687.8,
+          "assemble": 688,
+          "serialize": 688.1
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w3",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 80,
+    "geometry": 81,
+    "listVisible": 81,
+    "listInteractive": 82,
+    "selectedAccount": 2624,
+    "settled": 2627,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302812140,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2,
+          "perm": 0.2,
+          "households": 115.7,
+          "agreement_sites": 223,
+          "facets": 517.6,
+          "assemble": 0.1,
+          "serialize": 0,
+          "total": 858.6
+        },
+        "offsets": {
+          "auth": 2,
+          "perm": 2.2,
+          "households": 117.9,
+          "agreement_sites": 340.9,
+          "facets": 858.5,
+          "assemble": 858.6,
+          "serialize": 858.6
+        }
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302810885,
+        "bytes": 52925,
+        "phases": {
+          "auth": 1.8,
+          "perm": 0.2,
+          "cohort": 2087.7,
+          "serialize": 0.1,
+          "total": 2089.8
+        },
+        "offsets": {
+          "auth": 1.8,
+          "perm": 1.9,
+          "cohort": 2089.6,
+          "serialize": 2089.8
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w4",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 127,
+    "geometry": 129,
+    "listVisible": 130,
+    "listInteractive": 132,
+    "selectedAccount": 1414,
+    "settled": 1417,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302820209,
+        "bytes": 4280,
+        "phases": {
+          "auth": 1.6,
+          "perm": 0.2,
+          "households": 96.1,
+          "agreement_sites": 220,
+          "facets": 312.4,
+          "assemble": 0.1,
+          "serialize": 0,
+          "total": 630.4
+        },
+        "offsets": {
+          "auth": 1.6,
+          "perm": 1.8,
+          "households": 97.9,
+          "agreement_sites": 317.9,
+          "facets": 630.3,
+          "assemble": 630.4,
+          "serialize": 630.4
+        }
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302820040,
+        "bytes": 52925,
+        "phases": {
+          "auth": 3.4,
+          "perm": 0.2,
+          "cohort": 656.2,
+          "serialize": 0.1,
+          "total": 660
+        },
+        "offsets": {
+          "auth": 3.4,
+          "perm": 3.6,
+          "cohort": 659.8,
+          "serialize": 660
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w5",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 169,
+    "geometry": 170,
+    "listVisible": 171,
+    "listInteractive": 172,
+    "selectedAccount": 1455,
+    "settled": 1458,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302826834,
+        "bytes": 52925,
+        "phases": {
+          "auth": 2.5,
+          "perm": 0.2,
+          "cohort": 519.8,
+          "serialize": 0.2,
+          "total": 522.9
+        },
+        "offsets": {
+          "auth": 2.5,
+          "perm": 2.7,
+          "cohort": 522.6,
+          "serialize": 522.8
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302826611,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.1,
+          "perm": 0.2,
+          "households": 96.6,
+          "agreement_sites": 192,
+          "facets": 407.3,
+          "assemble": 0.1,
+          "serialize": 0.1,
+          "total": 698.3
+        },
+        "offsets": {
+          "auth": 2.1,
+          "perm": 2.3,
+          "households": 98.9,
+          "agreement_sites": 290.8,
+          "facets": 698.1,
+          "assemble": 698.2,
+          "serialize": 698.3
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w6",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 97,
+    "geometry": 98,
+    "listVisible": 99,
+    "listInteractive": 100,
+    "selectedAccount": 1450,
+    "settled": 1453,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302833118,
+        "bytes": 52925,
+        "phases": {
+          "auth": 1.6,
+          "perm": 0.2,
+          "cohort": 598.5,
+          "serialize": 0.1,
+          "total": 600.5
+        },
+        "offsets": {
+          "auth": 1.6,
+          "perm": 1.8,
+          "cohort": 600.3,
+          "serialize": 600.4
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302832688,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.1,
+          "perm": 0.2,
+          "households": 137.6,
+          "agreement_sites": 228.3,
+          "facets": 555.1,
+          "assemble": 0.1,
+          "serialize": 0.1,
+          "total": 923.4
+        },
+        "offsets": {
+          "auth": 2.1,
+          "perm": 2.2,
+          "households": 139.9,
+          "agreement_sites": 368.2,
+          "facets": 923.2,
+          "assemble": 923.3,
+          "serialize": 923.4
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w7",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 57,
+    "geometry": 59,
+    "listVisible": 60,
+    "listInteractive": 60,
+    "selectedAccount": 1501,
+    "settled": 1504,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302839636,
+        "bytes": 52925,
+        "phases": {
+          "auth": 1.9,
+          "perm": 0.2,
+          "cohort": 584.9,
+          "serialize": 0.2,
+          "total": 587.3
+        },
+        "offsets": {
+          "auth": 1.9,
+          "perm": 2.2,
+          "cohort": 587.1,
+          "serialize": 587.3
+        }
+      },
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302839435,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.3,
+          "perm": 0.2,
+          "households": 104.3,
+          "agreement_sites": 224.4,
+          "facets": 291.3,
+          "assemble": 0.1,
+          "serialize": 0,
+          "total": 622.6
+        },
+        "offsets": {
+          "auth": 2.3,
+          "perm": 2.5,
+          "households": 106.8,
+          "agreement_sites": 331.2,
+          "facets": 622.5,
+          "assemble": 622.6,
+          "serialize": 622.6
+        }
+      }
+    ]
+  },
+  {
+    "pass": "w8",
+    "kind": "warm",
+    "click": 0,
+    "acknowledgement": 47,
+    "geometry": 48,
+    "listVisible": 48,
+    "listInteractive": 49,
+    "selectedAccount": 1798,
+    "settled": 1801,
+    "rows": 116,
+    "routes": [
+      {
+        "url": "/api/admin/financials/subjects",
+        "ms": -1790302845772,
+        "bytes": 4280,
+        "phases": {
+          "auth": 2.3,
+          "perm": 0.2,
+          "households": 114.6,
+          "agreement_sites": 729.1,
+          "facets": 75.3,
+          "assemble": 0.1,
+          "serialize": 0.1,
+          "total": 921.7
+        },
+        "offsets": {
+          "auth": 2.3,
+          "perm": 2.4,
+          "households": 117,
+          "agreement_sites": 846.1,
+          "facets": 921.5,
+          "assemble": 921.6,
+          "serialize": 921.6
+        }
+      },
+      {
+        "url": "/api/admin/financials/position",
+        "ms": -1790302845337,
+        "bytes": 52925,
+        "phases": {
+          "auth": 1.8,
+          "perm": 0.2,
+          "cohort": 1419.5,
+          "serialize": 0.1,
+          "total": 1421.6
+        },
+        "offsets": {
+          "auth": 1.8,
+          "perm": 2,
+          "cohort": 1421.5,
+          "serialize": 1421.6
+        }
+      }
+    ]
+  }
+]

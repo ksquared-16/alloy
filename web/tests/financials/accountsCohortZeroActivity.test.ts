@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { accountState, joinAccounts } from "@/lib/financials/workspace/accountsRail";
+import { accountMoneyIsKnown, accountState, joinAccounts } from "@/lib/financials/workspace/accountsRail";
 import type { FinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
 import {
     isFinancialSubjectVisible,
@@ -217,23 +217,55 @@ describe("a failed read is never rendered as a legitimate zero", () => {
         ).rejects.toThrow(/households could not be read/i);
     });
 
-    it("composes rows only when BOTH sides were read", () => {
+    it("never composes a row that CLAIMS zero from a position it does not have", () => {
         /*
-         * A $0 row is a claim that the account was looked at and carries nothing. If the position
-         * read failed, that claim is false for every household on the rail — so the rail must not
-         * be composed from the subject cohort alone.
-         */
-        const src = read("app/adminV2/financials/sections/FinancialsAccounts.tsx");
-        expect(src).toContain("subjects.data && position.data ? joinAccounts(subjects.data, position.data) : []");
-        expect(src).toContain("position.error ?? subjects.error");
-        /*
-         * THE ERROR BRANCH IS FIRST IN THE LIST, so a failure is never a screen of zeroes.
+         * ── THE CLAIM THIS PROTECTS, AND WHY THE MECHANISM CHANGED ─────────────────────────────
          *
-         * This used to compare source positions across the whole FILE, which stopped meaning
-         * anything the moment the row became its own component declared above the section — the
-         * ordering it measured was declaration order, not render order. It now reads the list
-         * region itself and asserts the order of the branches actually rendered there.
+         * A $0 row is a claim that the account was looked at and carries nothing. If position has
+         * not answered, that claim is false for every household on the rail.
+         *
+         * This used to be protected by refusing to compose the rail at all until BOTH sides were
+         * read — which cost ~685ms of measured gate for a branch that cannot add, remove or
+         * reorder a row. The claim is now protected directly instead: a row composed without
+         * position says so, and the assertion drives the real join rather than reading the
+         * component's source for a substring.
          */
+        const subjects = {
+            subjects: [{
+                customerId: "cust-1", householdName: "Certhouse", siteLocationIds: ["site-1"],
+                hasEnrollmentAgreement: true, childNames: [], contactNames: [], programs: [], rooms: [],
+            }],
+            scope: { siteLocationId: null, siteScope: "all" }, truncated: false, scanCap: 2000,
+        } as never;
+
+        for (const truth of ["pending", "unavailable"] as const) {
+            const rows = joinAccounts(subjects, null, truth);
+            expect(rows.length, `${truth}: the household is still reachable`).toBe(1);
+            const row = rows[0];
+            expect(row.financialTruth, `${truth}: the row says what is known`).toBe(
+                truth === "pending" ? "not_yet_known" : "unavailable",
+            );
+            expect(accountMoneyIsKnown(row), `${truth}: its money is NOT known`).toBe(false);
+            expect(
+                ["settled", "no_activity"],
+                `${truth}: an unanswered position must never read as a settled account`,
+            ).not.toContain(accountState(row));
+            expect(row.noActivity, `${truth}: "no activity" is an answer nobody gave`).toBe(false);
+        }
+
+        /* And the genuine zero is still a genuine zero. */
+        const zero = joinAccounts(subjects, { rows: [], totals: {}, truncated: false } as never, "resolved");
+        expect(zero[0].financialTruth, "position answered: this really is zero").toBe("known_zero");
+        expect(zero[0].noActivity).toBe(true);
+        expect(accountState(zero[0])).toBe("no_activity");
+    });
+
+    it("renders a reserved figure, never a zero, while the money is unknown", () => {
+        const src = read("app/adminV2/financials/sections/FinancialsAccounts.tsx");
+        /* The money slot is guarded, and the guard is the one the join sets. */
+        expect(src).toContain("accountMoneyIsKnown(account) ? moneyExact(account.outstandingCents, account.currencyCode) : \"\u2014\"");
+        /* Only a SUBJECTS failure is an outage for this list; position failing is a row state. */
+        expect(src).toContain("const readError = subjects.error;");
         const list = src.slice(src.indexOf('data-financials-accounts-list'));
         const error = list.indexOf("data-financials-accounts-error");
         const rows = list.indexOf("<AccountQueueRow");
