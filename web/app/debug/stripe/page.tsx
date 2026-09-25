@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Section from "@/components/Section";
+import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
 
 export default function StripeDebugPage() {
     const [mounted, setMounted] = useState(false);
@@ -13,7 +14,7 @@ export default function StripeDebugPage() {
         setMounted(true);
         
         // Check if publishable key exists (but don't log the actual key)
-        const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE;
+        const key = stripePublishableKey();
         setHasPublishableKey(key !== undefined && key !== null && key.trim() !== "");
         
         // Get hostname and environment info
@@ -96,7 +97,7 @@ export default function StripeDebugPage() {
                                     The Stripe publishable key is not configured. Please:
                                 </p>
                                 <ul className="text-sm text-red-700 mt-2 list-disc list-inside space-y-1">
-                                    <li>Set NEXT_PUBLIC_STRIPE_PUBLISHABLE in Vercel project settings</li>
+                                    <li>Set NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (or the legacy NEXT_PUBLIC_STRIPE_PUBLISHABLE) in Vercel project settings</li>
                                     <li>Redeploy the application for changes to take effect</li>
                                 </ul>
                             </div>
