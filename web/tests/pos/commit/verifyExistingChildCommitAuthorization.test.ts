@@ -23,14 +23,14 @@ describe("verifyExistingChildCommitAuthorization", () => {
             orgId: "org-1",
             caseId: "case-1",
             proposalId: "p1",
-            proposalContext: { proposal: baseProposal, expectedCustomerId: "cust-1", source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
+            proposalContext: { proposal: baseProposal, expectedCustomerId: "cust-1", expectedOpportunityId: null, source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
             currentRecord: { ...record, org_id: "other" },
         }).ok).toBe(false);
         expect(verifyExistingChildCommitAuthorization({
             orgId: "org-1",
             caseId: "case-1",
             proposalId: "p1",
-            proposalContext: { proposal: baseProposal, expectedCustomerId: "cust-1", source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
+            proposalContext: { proposal: baseProposal, expectedCustomerId: "cust-1", expectedOpportunityId: null, source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
             currentRecord: { ...record, customer_id: "other" },
         }).ok).toBe(false);
     });
@@ -40,14 +40,14 @@ describe("verifyExistingChildCommitAuthorization", () => {
             orgId: "org-1",
             caseId: "case-1",
             proposalId: "p1",
-            proposalContext: { proposal: { ...baseProposal, proposal_id: "other" }, expectedCustomerId: "cust-1", source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
+            proposalContext: { proposal: { ...baseProposal, proposal_id: "other" }, expectedCustomerId: "cust-1", expectedOpportunityId: null, source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
             currentRecord: record,
         }).ok).toBe(false);
         expect(verifyExistingChildCommitAuthorization({
             orgId: "org-1",
             caseId: "case-1",
             proposalId: "p1",
-            proposalContext: { proposal: { ...baseProposal, origin: "proposed_new_record", existing_record_id: undefined }, expectedCustomerId: "cust-1", source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
+            proposalContext: { proposal: { ...baseProposal, origin: "proposed_new_record", existing_record_id: undefined }, expectedCustomerId: "cust-1", expectedOpportunityId: null, source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } },
             currentRecord: record,
         }).ok).toBe(false);
     });

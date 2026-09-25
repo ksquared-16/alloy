@@ -116,9 +116,14 @@ describe("which editor a fact deserves", () => {
 
     it("lets the AUTHORED control lead where it says something specific", () => {
         expect(editor({ canonicalKey: "customer_member:dob", inputType: "date" })).toEqual({ kind: "value", inputType: "date" });
-        expect(editor({ canonicalKey: "customer_member:gender", inputType: "select", options: ["Male", "Female"] })).toEqual({
+        // A choice is a value AND the words shown for it — the editor passes the pair through.
+        const gender = [
+            { value: "male", label: "Male" },
+            { value: "female", label: "Female" },
+        ];
+        expect(editor({ canonicalKey: "customer_member:gender", inputType: "select", options: gender })).toEqual({
             kind: "options",
-            options: ["Male", "Female"],
+            options: gender,
         });
     });
 

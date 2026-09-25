@@ -168,6 +168,7 @@ describe("controls are semantic, not one text box", () => {
                 missing: [need({ state: "missing", current_value: null })],
                 next_turn: {
                     kind: "collect_missing_value",
+                absence_label: null,
                     need: need({ state: "missing", current_value: null }),
                     prompt: "What is Child Dob?",
                     proposed_value: null,
@@ -186,6 +187,7 @@ describe("controls are semantic, not one text box", () => {
         expect(
             controlForTurn({
                 kind: "collect_missing_value",
+                absence_label: null,
                 prompt: "",
                 proposed_value: null,
                 resolves_occurrences: 1,
@@ -206,11 +208,13 @@ describe("controls are semantic, not one text box", () => {
 
     it("boolean and closed-enum needs get their own controls", () => {
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
+            controlForTurn({ kind: "collect_missing_value",
+                absence_label: null, prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
         ).toMatchObject({ kind: "boolean" });
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
-        ).toMatchObject({ kind: "options", options: ["AM", "PM"] });
+            controlForTurn({ kind: "collect_missing_value",
+                absence_label: null, prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: [{ value: "am", label: "AM" }, { value: "pm", label: "PM" }], optional: false, field_ids: [], editor: null, party: null, evidence: [] }),
+        ).toMatchObject({ kind: "options", options: [{ value: "am", label: "AM" }, { value: "pm", label: "PM" }] });
     });
 
     it("the card renders each control kind rather than one input", () => {

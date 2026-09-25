@@ -49,7 +49,7 @@ function proposal(overrides: Partial<RelatedRecordInstanceProposal> = {}): Relat
 }
 
 function context(p: RelatedRecordInstanceProposal = proposal()): RelatedRecordProposalCaseContext {
-    return { proposal: p, expectedCustomerId: "cust-1", source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } };
+    return { proposal: p, expectedCustomerId: "cust-1", expectedOpportunityId: null, source: { source_kind: "form_submission", source_id: "sub-1" }, provenance: { formSubmissionId: "sub-1", formDefinitionVersionId: "ver-1", packetSessionId: null, packetStepIndex: null, formName: "Enrollment Application" } };
 }
 
 function verify(args: {

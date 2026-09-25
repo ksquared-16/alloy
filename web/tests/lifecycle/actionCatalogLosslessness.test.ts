@@ -210,7 +210,11 @@ describe("both configuration families are lossless now", () => {
                     },
                 ],
             },
-        } as (typeof base.lifecycle_builder_v1.processes)[0]["stages"][number];
+            // `metadata()` infers its stages from a literal that has never carried a requirement, so
+            // the very field under test is absent from the inferred type. The cast widens through
+            // `unknown` deliberately: the point of this case is that an unrelated save preserves a
+            // key the fixture builder does not model.
+        } as unknown as (typeof base.lifecycle_builder_v1.processes)[0]["stages"][number];
 
         const builder = lifecycleBuilderFromDepartmentMetadata(base);
         const written = JSON.stringify(

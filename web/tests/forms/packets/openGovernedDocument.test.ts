@@ -91,7 +91,7 @@ describe("openGovernedDocument", () => {
      */
     it("keeps the tab handle — it must not ask for noopener", async () => {
         const tab = { location: { href: "" }, close: vi.fn(), opener: {} as unknown };
-        const open = vi.fn(() => tab);
+        const open = vi.fn((..._args: unknown[]) => tab);
         withWindow(open);
         vi.stubGlobal("fetch", vi.fn(async () => ({
             ok: true,

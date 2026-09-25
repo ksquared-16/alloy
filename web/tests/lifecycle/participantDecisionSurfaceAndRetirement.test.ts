@@ -88,7 +88,7 @@ function makeSupabase(
     members?: Array<{ customer_member_id: string; outcome_status_key?: string | null }>,
 ) {
     const memberships = (
-        members ?? [...new Set(instances.map((i) => i.subject_id))].map((id) => ({ customer_member_id: id }))
+        members ?? [...new Set(instances.map((i) => i.subject_id))].map((id) => ({ customer_member_id: id, outcome_status_key: null }))
     ).map((m, i) => ({
         id: `ocm-${i}`,
         customer_member_id: m.customer_member_id,

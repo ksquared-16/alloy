@@ -64,10 +64,12 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
         subject_display_name: "Ava",
         phase: "shared_collection",
         progress: { total: 9, satisfied: 1, remaining: 8 },
+        known: [],
         things_remaining: 2,
         work: { total: 5, settled: 3, remaining: 2, percent: 60 },
         next_turn: {
             kind: "confirm_known_value",
+            absence_label: null,
             prompt: "We have Child Dob as 2025-08-19. Is that correct?",
             proposed_value: "2025-08-19",
             resolves_occurrences: 5,

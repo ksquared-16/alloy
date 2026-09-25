@@ -39,6 +39,8 @@ function need(input: {
             subject_id: input.subjectId ?? null,
             canonical_key: input.key,
             shared_value_key: input.key,
+            subject_party: null,
+            journey_subject_id: null,
             entity_type: input.entity ?? null,
             // Required by EnrollmentNeedIdentity. Absent here, the cast had
             // insufficient overlap and the whole literal stopped type-checking.
@@ -65,6 +67,9 @@ function need(input: {
                 section_title: input.section ?? null,
                 field_type: input.fieldType ?? "text",
                 options: [],
+                absence_label: null,
+                form_only_evidence: false,
+                configuration_supplied: false,
             },
         ],
         requirement_ids: ["r"],

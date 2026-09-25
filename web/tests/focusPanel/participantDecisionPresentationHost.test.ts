@@ -32,11 +32,18 @@ type RuntimeArg = Parameters<typeof resolveParticipantDecisionScopeFromRuntime>[
 const runtime = (over: Record<string, unknown> = {}) =>
     ({
         stage_key: "decision",
+        stage_label: "Decision",
+        purpose: null,
+        journey_segment: "child",
+        template_keys: ["decide_paths"],
         primary: { template_key: "decide_paths" },
         additional: [],
         execution: { department_id: "dept-1" },
         ...over,
-    }) as RuntimeArg;
+        // `primary` is a deliberate stub: this suite asserts how the scope resolver reads a runtime,
+        // and it reads the template key. Widening through `unknown` keeps the fixture to the fields
+        // under test rather than hand-maintaining all 15 of a work item's.
+    }) as unknown as RuntimeArg;
 
 describe("both hosts resolve the SAME scope", () => {
     it("the runtime resolver answers what the Current Work resolver answers", () => {

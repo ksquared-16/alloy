@@ -117,6 +117,7 @@ describe("requiredness is the Form's, and optional has a real way out", () => {
     it("offers a truthful resolution instead of forcing a fake answer", () => {
         const base = {
             kind: "collect_missing_value",
+            absence_label: null,
             prompt: "",
             proposed_value: null,
             resolves_occurrences: 1,
@@ -124,11 +125,20 @@ describe("requiredness is the Form's, and optional has a real way out", () => {
             label: "Allergies",
             options: [],
         };
-        const optional = { ...base, optional: true };
-        expect(
-            optionalSkipLabel({ next_turn: optional } as never),
-        ).toBe("No known allergies");
-        // Required needs get no skip — the way past them is to answer.
+
+        /*
+         * ABSENCE IS NOT OPTIONALITY, and the way out is AUTHORED, never inferred from the wording.
+         *
+         * "No known allergies" is an answer, not a refusal to give one, so the Form's own absence
+         * statement stands even on a REQUIRED question. Where the Form authored none, an optional
+         * question still needs a way past — and it is worded as a skip, because that is what it is.
+         */
+        const authored = { ...base, absence_label: "No known allergies" };
+        expect(optionalSkipLabel({ next_turn: { ...authored, optional: true } } as never)).toBe("No known allergies");
+        expect(optionalSkipLabel({ next_turn: { ...authored, optional: false } } as never)).toBe("No known allergies");
+
+        expect(optionalSkipLabel({ next_turn: { ...base, optional: true } } as never)).toBe("Nothing to add");
+        // Required, and the Form authored no absence answer: the way past it is to answer.
         expect(optionalSkipLabel({ next_turn: { ...base, optional: false } } as never)).toBeNull();
     });
 });
@@ -138,6 +148,7 @@ describe("an authored date cannot degrade into a text box", () => {
         for (const label of ["Child Dob", "Anything At All", ""]) {
             const control = controlForTurn({
                 kind: "collect_missing_value",
+                absence_label: null,
                 prompt: "",
                 proposed_value: null,
                 resolves_occurrences: 1,

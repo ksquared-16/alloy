@@ -225,7 +225,7 @@ describe("configuration health tells draft and live apart", () => {
         const { participantPaperworkReadiness } = await import("@/lib/lifecycle/participantPaperworkReadiness");
         const rows = participantPaperworkReadiness({
             requirements: [{ requirement_id: "r1", form_definition_id: "f1", level: "required" }],
-            forms: [{ form_definition_id: "f1", name: "A form", exists: true, has_published_version: true, uploads: [], signature_field_ids: [], signature_placement_field_ids: [], renders_source_document: false }],
+            forms: [{ form_definition_id: "f1", name: "A form", exists: true, has_published_version: true, published_field_count: 1, uploads: [], signature_field_ids: [], signature_placement_field_ids: [], renders_source_document: false }],
             draftObligationCount: 3,
         });
         const row = rows.find((r) => r.id === "participant_work_exists")!;
