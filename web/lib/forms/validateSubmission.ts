@@ -671,7 +671,29 @@ export function validateFormPayload(input: {
     };
 
     for (const field of schema.fields) {
+        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
+
         if (field.type === "group") {
+            /*
+             * A COLLECTION THAT DOES NOT APPLY CANNOT BE INCOMPLETE.
+             *
+             * This branch used to run before visibility was consulted at all, so a conditional
+             * collection was validated unconditionally. "Does the child have siblings?" → No then
+             * failed submission with "Expected at least 1 group instance(s)": the family had
+             * answered the gate truthfully and the platform demanded the entries the gate had just
+             * said do not exist. The same blindness accepted the mirror error — a hidden collection
+             * arriving WITH rows was let through, while a hidden scalar carrying a value is
+             * refused a few lines below.
+             *
+             * The scalar treatment was already right. This is the same rule, applied to a group:
+             * hidden means not asked, and not asked means neither required nor permitted.
+             */
+            if (!vis) {
+                if (mode === "submit" && (payload.groups?.[field.id]?.length ?? 0) > 0) {
+                    errors.push(err(["groups", field.id], "Group is hidden and must be empty on submit", "custom"));
+                }
+                continue;
+            }
             validateGroupInstances(
                 field,
                 payload.groups?.[field.id],
@@ -684,8 +706,6 @@ export function validateFormPayload(input: {
             );
             continue;
         }
-
-        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
 
         if (field.type === "signature") {
             const sig = payload.signatures?.[field.id];
