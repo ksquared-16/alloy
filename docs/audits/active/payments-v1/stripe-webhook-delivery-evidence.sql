@@ -52,3 +52,8 @@ select
 -- "no webhook signing secret is configured" to "signature did not match" — the secret is live on the
 -- deployed runtime and an invalid signature still fails closed. This asks whether Stripe has since
 -- admitted a real delivery.
+
+-- RE-MEASURED 2026-09-25 (third reading), BEFORE any mutation in the W5 certification run.
+-- The connected account has since transitioned reviewing -> ready (readiness=ready, both rails
+-- available, attention null, checked 16:13Z). That transition is the most likely source of the first
+-- real account.updated, and this asks before anything else is done to the tenant.
