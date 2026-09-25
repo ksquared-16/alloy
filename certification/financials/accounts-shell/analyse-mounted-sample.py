@@ -93,6 +93,20 @@ for kind in ("cold", "warm"):
         last_end = max(r["endedAt"] for r in rs)
         seg.append((first_start, last_end - first_start, d["listInteractive"] - last_end, d["listInteractive"]))
     if seg:
+        """
+        A NEGATIVE RENDER SEGMENT IS A FINDING, NOT AN ERROR.
+
+        It means the list became interactive BEFORE the responses it is built from arrived: the
+        component rendered the cohort it already held and refetched behind it. The openings are then
+        cache hits, and their interactive time says nothing about what the cohorts cost — reporting
+        such a number as a target met would be reporting the cache, not the product.
+        """
+        cached = [x for x in seg if x[2] < 0]
+        if cached:
+            print(f"\n  *** {len(cached)} of {len(seg)} openings became INTERACTIVE BEFORE their data landed.")
+            print("      The list rendered from the cohort already in memory and refetched behind it.")
+            print("      For these openings the interactive time measures the CLIENT CACHE, not the cohorts.")
+            print(f"      Their server cost was still paid: subjects P50 {p50(x[1] for x in cached):.0f}ms of data wait.")
         table("CLICK -> INTERACTIVE, DECOMPOSED (P50 ms)",
               [["click -> first request starts", p50(x[0] for x in seg), "client: tab mount + effects"],
                ["data wait (max of both branches)", p50(x[1] for x in seg), "server + network"],
