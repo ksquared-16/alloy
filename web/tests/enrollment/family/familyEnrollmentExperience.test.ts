@@ -129,6 +129,37 @@ describe("the family journey a parent reads", () => {
         expect(f.progress.some((r) => r.label === "Payment")).toBe(false);
     });
 
+    /*
+     * MEASURED ON DEPLOYED STAGING, not imagined. A launched child resolved to zero requirements and
+     * its own participant screen reported `complete: true, phase: "complete"` — while this row
+     * rendered "0 of 0 complete" and marked the child unfinished. The family shell disagreeing with
+     * the child's own screen is the precise bleed this file exists to prevent.
+     */
+    it("agrees with a launched child whose own screen says nothing is outstanding", () => {
+        const f = compose({
+            children: [child({ totalRequirements: 0, satisfiedRequirements: 0, remainingRequirements: 0 })],
+        });
+        const row = f.progress.find((r) => r.label === "Emma");
+        expect(row?.detail).toBe("Nothing outstanding");
+        expect(row?.complete).toBe(true);
+    });
+
+    it("still keeps the informative fraction for a child mid-way", () => {
+        // The repair must not swallow "3 of 4 complete", which is the useful form.
+        const f = compose();
+        expect(f.progress.find((r) => r.label === "Liam")?.detail).toBe("3 of 4 complete");
+    });
+
+    it("does not call an unlaunched child complete just because nothing is outstanding", () => {
+        // Not-started is `processInstanceId === null`, asked directly rather than inferred from a count.
+        const f = compose({
+            children: [child({ processInstanceId: null, sessionId: null, totalRequirements: 0, satisfiedRequirements: 0, remainingRequirements: 0 })],
+        });
+        const row = f.progress.find((r) => r.label === "Emma");
+        expect(row?.detail).toBe("Not started");
+        expect(row?.complete).toBe(false);
+    });
+
     it("reports a child that has not started as not started", () => {
         const f = compose({
             children: [child({ processInstanceId: null, sessionId: null, totalRequirements: 0, satisfiedRequirements: 0 })],

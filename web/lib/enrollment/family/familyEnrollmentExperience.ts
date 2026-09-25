@@ -108,6 +108,20 @@ export type ComposeFamilyEnrollmentInput = {
 function childDetail(child: FamilyChildJourney): string {
     if (child.processInstanceId === null) return "Not started";
     if (child.submitted) return child.processingState ? `Submitted · ${child.processingState}` : "Submitted";
+    /*
+     * A CHILD WITH NOTHING OUTSTANDING IS COMPLETE, and "0 of 0 complete" is not a sentence.
+     *
+     * Measured on deployed staging: a launched child resolved to zero requirements, its own
+     * participant screen reported `complete: true, phase: "complete"`, and this row rendered
+     * "0 of 0 complete" while marking the child unfinished. The family shell disagreeing with the
+     * child's own screen is the exact bleed this file exists to prevent — so the fraction is only
+     * shown when there is a fraction to show.
+     */
+    /*
+     * Only when there is no fraction to show. A child mid-way keeps "3 of 4 complete", which is the
+     * informative form; what must never render is "0 of 0 complete".
+     */
+    if (child.totalRequirements === 0) return "Nothing outstanding";
     return `${child.satisfiedRequirements} of ${child.totalRequirements} complete`;
 }
 
@@ -134,8 +148,14 @@ export function composeFamilyEnrollmentExperience(
              * A child row is complete when that CHILD's record says so — never because the family
              * looks finished. Rolling a sibling's completion onto another child is the exact bleed
              * the grain rule exists to prevent, and it would be invisible to the parent.
+             *
+             * "Nothing outstanding" is the test, and a launched child is the precondition. The guard
+             * used to require `totalRequirements > 0`, which was reaching for "has this child even
+             * started" and got it wrong: a launched child with zero resolved requirements read as
+             * unfinished while its own screen said complete. Not-started is `processInstanceId ===
+             * null`, which is asked directly.
              */
-            complete: c.submitted || (c.totalRequirements > 0 && c.remainingRequirements === 0),
+            complete: c.submitted || (c.processInstanceId !== null && c.remainingRequirements === 0),
             customerMemberId: c.customerMemberId,
         })),
     ];
