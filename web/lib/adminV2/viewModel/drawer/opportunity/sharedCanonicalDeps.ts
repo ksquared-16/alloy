@@ -54,6 +54,8 @@ export type ResolveSharedCanonicalDepsParams = {
      * department authority is already known, and this signature makes that a type-level fact: there
      * is no way to publish an action set that was resolved against an unknown department.
      */
+    /** Forwarded to the visible-payload builder: canonical record facts, the moment each is known. */
+    onCanonicalTruth?: (fields: Record<string, unknown>) => void;
     onEarlyHeaderActions?: (published: {
         resolved: ResolvedActionsBySlot;
         departmentId: string;
@@ -302,7 +304,11 @@ export async function resolveSharedCanonicalDeps(
         // Without the actor this payload reaches the Focus Panel with `_inquiry_children` carrying no
         // `resolved_photo_url`, so every child avatar placement falls back to initials while the same
         // children resolve correctly through the entity-record path (R-019).
-        { hintDepartmentId: ctxDept, documentActor: documentActorFromAdminGate(gate) }
+        {
+            hintDepartmentId: ctxDept,
+            documentActor: documentActorFromAdminGate(gate),
+            onCanonicalTruth: params.onCanonicalTruth,
+        }
     );
     phases_ms.visible_entity_ms = Date.now() - tVisible0;
     // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
