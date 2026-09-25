@@ -275,7 +275,7 @@ describe("the requirement as Enrollment reads it", () => {
         expect(p.amounts.collectibleNowCents).toBe(25000);
         expect(p.obligations.map((o) => o.subjectCustomerMemberId)).toEqual(["emma", "liam"]);
         // Two obligations, never merged into one — the attribution IS the per-child grain.
-        expect(new Set(p.obligations.map((o) => o.position.chargeId)).size).toBe(2);
+        expect(new Set(p.obligations.map((o) => o.position?.chargeId)).size).toBe(2);
     });
 
     it("is only as settled as its least settled child", () => {
