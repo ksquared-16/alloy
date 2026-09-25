@@ -147,6 +147,8 @@ type Inflight = {
     key: string;
     ref: AttentionRef;
     promise: Promise<PreparationTerminal | null>;
+    /** Caused by pointer intent. Populates the cache; never reaches K3. */
+    speculative?: boolean;
     controller: AbortController;
     /** Set the moment a coarser/newer attention supersedes this work. Checked at the emit boundary. */
     disposed: DisposalReason | null;
@@ -203,7 +205,24 @@ export class ProvisioningRuntime {
      * Begin (or share, or reuse) the preparation for this attention.
      * Resolves `null` when the preparation was disposed — disposal is not an outcome.
      */
-    prepare(ref: AttentionRef): Promise<PreparationTerminal | null> {
+    /**
+     * WARMING IS NOT NAVIGATING.
+     *
+     * `speculative` says this preparation was caused by POINTER INTENT, not by an operator
+     * navigating. A speculative preparation may do everything a real one does — fetch, dedupe,
+     * populate `completed`, serve the click that follows — except reach K3. It must not, because K3
+     * is where navigation authority is established.
+     *
+     * Hover reached it. `prepareOperationalDestination` builds a LENS ref by spreading the CURRENT
+     * attention, so the terminal carries the committed attention's own version; K3's staleness guard
+     * compares versions, finds them equal, and commits the hovered view's snapshot. The operator sees
+     * the Work View change with no click. Reported from staging as exactly that.
+     *
+     * The fix is not to stop warming and not to undo the reuse redelivery that made return-to-visited
+     * work: it is to let the DATA be shared while the AUTHORITY stays with explicit intent.
+     */
+    prepare(ref: AttentionRef, opts?: { speculative?: boolean }): Promise<PreparationTerminal | null> {
+        const speculative = opts?.speculative === true;
         const key = provisioningKey(ref);
 
         // ── REUSE: a completed, still-valid snapshot for this exact key. ──
@@ -235,7 +254,9 @@ export class ProvisioningRuntime {
              * ref and disposed everything this movement supersedes, and Focus independently refuses
              * any terminal whose attention has moved on.
              */
-            this.instr.onTerminal?.(reused);
+            // Explicit navigation redelivers so a revisited view re-commits; a speculative warm
+            // stops here with the cache populated and navigation untouched.
+            if (!speculative) this.instr.onTerminal?.(reused);
             return Promise.resolve(reused);
         }
 
@@ -263,7 +284,7 @@ export class ProvisioningRuntime {
 
         const controller = new AbortController();
         const startedAt = this.clock();
-        const f: Inflight = { key, ref, promise: Promise.resolve(null), controller, disposed: null, startedAt };
+        const f: Inflight = { key, ref, promise: Promise.resolve(null), controller, disposed: null, startedAt, speculative };
         f.promise = this.run(f);
         this.inflight.set(key, f);
         this.instr.onStarted?.(key, ref.version);
@@ -330,7 +351,8 @@ export class ProvisioningRuntime {
                 principal: f.ref.principal,
                 invalidated: false,
             });
-            this.instr.onTerminal?.(terminal);
+            // Same law on the miss path: a warm that had to fetch still may not commit.
+            if (!f.speculative) this.instr.onTerminal?.(terminal);
             return terminal;
         };
 

@@ -150,6 +150,69 @@ describe("returning to a visited work view", () => {
         expect(committedLens(h.focus), "a late lens answer must not replace the committed one").toBe("all");
     });
 
+    it("PLANT — HOVER WARMS AND DOES NOT NAVIGATE, even for a view already visited", async () => {
+        /*
+         * The other edge of the reuse repair, reported from staging as "hovering a Work View pill
+         * changes to it".
+         *
+         * `prepareOperationalDestination` builds its LENS ref by spreading the CURRENT attention, so
+         * the terminal carries the committed attention's own version. K3's staleness guard compares
+         * versions, finds them EQUAL, and commits — so once reuse began redelivering through
+         * onTerminal, a hover could commit the hovered view's snapshot with no click at all.
+         *
+         * Warming must still work: the answer has to land in the cache so the click that follows
+         * consumes it. Only the commit is forbidden.
+         */
+        const h = harness();
+        await h.drive(h.hydrated);
+        h.attention.move({ scope: ATTENTION_SCOPE.LENS, lens: "waitlist", source: "work_view_selection" });
+        await h.drive(h.attention.get());
+        expect(committedLens(h.focus)).toBe("waitlist");
+
+        const committedRef = h.attention.get()!;
+        const preparedBefore = h.prepared.length;
+        const hoverRef = (lens: string) => ({
+            ...committedRef, lens, scope: ATTENTION_SCOPE.LENS, subject: null,
+            destination: committedRef.destination
+                ? { ...committedRef.destination, workViewId: lens, subjectId: null, focusMode: null }
+                : null,
+        });
+        await h.k2.prepare(hoverRef("all") as never, { speculative: true });
+        await Promise.resolve();
+        expect(committedLens(h.focus), "hover must not commit the hovered view").toBe("waitlist");
+        expect(h.prepared.length, "hover must still warm").toBeGreaterThan(preparedBefore);
+
+        // A hover over a view ALREADY WARMED — the cached path — must also not commit.
+        await h.k2.prepare(hoverRef("all") as never, { speculative: true });
+        await Promise.resolve();
+        expect(committedLens(h.focus), "a cached hover must not commit either").toBe("waitlist");
+    });
+
+    it("PLANT — the warmed answer is CONSUMED by the click that follows", async () => {
+        /*
+         * Fixing hover by refusing to warm would trade one defect for another. The warm must be keyed
+         * EXACTLY as the movement it is warming: `attention.move` at LENS scope carries the previous
+         * destination forward and re-points its workViewId, so the warm does the same. A first
+         * version of this test invented a destination the click would never produce, keyed the warm
+         * under a different work unit, and failed for its own reason rather than the product's.
+         */
+        const h = harness();
+        await h.drive(h.hydrated);
+        const ref = h.attention.get()!;
+        await h.k2.prepare({
+            ...ref, lens: "waitlist", scope: ATTENTION_SCOPE.LENS, subject: null,
+            destination: ref.destination
+                ? { ...ref.destination, workViewId: "waitlist", subjectId: null, focusMode: null }
+                : null,
+        } as never, { speculative: true });
+        const afterWarm = h.prepared.length;
+
+        h.attention.move({ scope: ATTENTION_SCOPE.LENS, lens: "waitlist", source: "work_view_selection" });
+        await h.drive(h.attention.get());
+        expect(committedLens(h.focus), "the click must still commit").toBe("waitlist");
+        expect(h.prepared.length, "the click must reuse the warm, not refetch").toBe(afterWarm);
+    });
+
     it("PLANT 2 — a SUBJECT movement cannot express a lens change", () => {
         // Structural, not behavioural: the subject scope inherits lens/target from the previous ref,
         // so selecting a row has no shape in which it could carry a Work View.
