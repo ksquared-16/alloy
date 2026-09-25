@@ -344,6 +344,27 @@ test("j5 t6 convergence and tail forensics", async ({ page }) => {
                         });
                         if (unmet.length === 0) mark('T6_canonical', now);
                     }
+
+                    /*
+                     * THE SAME TEST OVER EVERY CONFIGURED CELL, not only the first-order ones.
+                     *
+                     * The canonical gate is scoped to the commit-critical registry, which is three of
+                     * the six cells this surface configures. Reporting only that invites the obvious
+                     * objection that the scope was chosen to fit the gate, so the wider number is
+                     * measured on the same samples and reported beside it. It is never the gate: the
+                     * self-loading cards own their own reads, and waiting for them is waiting for
+                     * second-order enrichment.
+                     */
+                    const allKeys = Object.keys(byKey);
+                    if (allKeys.length >= 6) {
+                        const bad = allKeys.filter((k2) => {
+                            const c = byKey[k2];
+                            if (c.subject !== s.body) return true;
+                            if (c.reason === 'not_applicable') return false;
+                            return !(c.mounted && (c.readiness === 'ready' || c.readiness === 'self_loading'));
+                        });
+                        if (bad.length === 0) mark('T6_all_cells', now);
+                    }
                 }
 
                 for (const k2 of FIRST_ORDER) {
