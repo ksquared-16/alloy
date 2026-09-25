@@ -247,6 +247,72 @@ The third instance of the same defect the section above describes, and the last 
 
 **Expected funding still is not money.** Certified: a $60 `government_subsidy` expectation on a share surfaces as `expectedSubsidyCents` beside the position and does **not** reduce `currentlyCollectibleCents`. Only a governed **submitted claim** suppresses a balance — an expectation or an authorization does not.
 
+### Payment-method ownership — a saved card belongs to a person (September 2026)
+
+Migration `supabase/migrations/20260925200000_payment_instrument_ownership.sql`. **Authored and
+unit-certified; NOT yet applied** — see the lineage note at the end of this section.
+
+`customer_payment_methods` is household grain: `customer_id`, a Stripe token, brand, last4,
+`is_default`. It has no owner, so a stored instrument belongs to an ACCOUNT and every adult attached
+to it is implicitly entitled to use it. In a family where two parents both pay, that is Dad's card
+being offered to Mom. It was also short of nearly everything a reusable instrument needs — no
+`org_id` (isolation rested on traversing `customers`), no rail, status, verification or mandate
+state, no provider customer reference, no lifecycle or actor columns — so it could express neither a
+revoked card nor an ACH mandate, and its unique constraint was account-scoped.
+
+`payment_instruments` adds the model rather than eight columns to six, and reuses the vocabulary
+canonical payments already have: `owner_entity_type` / `owner_entity_id` mirror
+`payments.payer_entity_type` / `payer_entity_id` with the same paired-null check, so **who owns an
+instrument** and **who sent money** stay comparable facts rather than two invented models.
+
+**FIVE IDENTITIES, NONE IMPLYING ANOTHER.**
+
+| Identity | Owner | Record |
+|---|---|---|
+| Respondent | Enrollment | packet session / link recipient |
+| Responsible party | Financials | `financial_responsibility_shares` / `_allocations` |
+| Expected funder | Financials | `financial_expected_funding` — not money |
+| Actual payer | Financials | `payments.payer_entity_type/id` |
+| **Instrument owner** | **Financials** | **`payment_instruments.owner_entity_type/id`** |
+
+Owning a saved card assigns no responsibility, modifies no arrangement, changes no subsidy and
+creates no obligation. Becoming responsible grants no access to another person's instrument. Paying
+makes nobody responsible. Completing the paperwork makes a person neither payer nor owner.
+
+**AN UNOWNED INSTRUMENT IS FIRST-CLASS.** Legacy household rows are not given an owner and are not
+migrated into ownership: nobody recorded who owned them, and the only ways to guess are the primary
+contact, the account owner, or the first adult found — the same inference responsibility may never be
+made by. Unowned means visible, never offered to a payer, and reusable only after an explicit
+recorded claim. `legacy_customer_payment_method_id` keeps the provenance without asserting the fact.
+
+**TWO RULES THE DATABASE ENFORCES**, rather than every reader remembering them: an unverified
+`us_bank_account` cannot be reusable, and an unowned instrument cannot be reusable.
+
+**REUSABLE IS NOT AUTOPAY.** Permission to reuse an instrument when its owner chooses to pay is not
+permission to charge it on a schedule. This table carries the first and deliberately not the second.
+
+**PAYER ELIGIBILITY IS THE HOUSEHOLD EDGE.** `customer_persons` — the same canonical edge
+`resolveResponsibilityPartyCandidates` reads for who may be made responsible. So a grandmother
+attached as an emergency contact is an eligible payer while owing nothing, and eligibility is
+deliberately NOT "every guardian", "the respondent only", or "the responsible parties".
+
+**PARTICIPANT VISIBILITY IS PAYER-SCOPED, IN THE QUERY.** `listReusableInstrumentsForPayer`
+constrains org, account, owner, reusable and status in the database. A read that fetched the
+household's instruments and filtered by owner afterwards would pass a naive test and leak the other
+parent's card the first time the filter was refactored out. The operator read is a separate function
+for the same reason. Grants are revoked from `anon` and `authenticated` rather than left to RLS
+alone, since a default privilege on a new public table is how `authenticated` quietly acquires
+SELECT; participants never reach the table directly.
+
+**No credential is ever stored.** Stripe executes and holds the credential; Alloy keeps a token —
+unchanged from what `customer_payment_methods` already did correctly.
+
+**LINEAGE NOTE.** `database.apply_migration` was filed against certification and refused with
+`source_sha_not_reachable`: the trusted host only scans pushed refs, and this lane's commits are
+local because "commit" never implies "push". The model, its constraints and its payer-scoped reads
+are therefore proven by 16 unit guards and NOT yet against real persistence. Applying it needs a
+push authorization, and no live claim should be made for it until then.
+
 ### Correction lineage — a charge is corrected once (September 2026)
 
 Migration `supabase/migrations/20260902140000_charge_correction_lineage.sql`.

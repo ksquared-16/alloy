@@ -198,3 +198,74 @@ Open Record (config-resolved Work Unit route — not legacy drawer)
 - **Stage movement, Work Unit Header, Actions/Comms/Waitlist operator flows** — next sprint; not part of this stabilization closeout.
 
 Handoff record: [`docs/archive/2026-06-handoffs/process-runtime-stabilization.md`](../../archive/2026-06-handoffs/process-runtime-stabilization.md).
+
+## Family Enrollment Experience — composition over child journeys (September 2026)
+
+`web/lib/enrollment/family/`. A parent with two children enrolling had two disconnected journeys:
+two links, two conversations, two signatures, and the household's own facts asked twice. Every
+RECORD underneath was already correctly grained — one process instance, session, link, submission,
+artifact and Processing case per child — so the deficiency was the EXPERIENCE, and the fix is a
+composition layer with no system of record of its own.
+
+### The grouping authority — existing, and no schema added
+
+`resolveLiveEnrollmentContextForHousehold` already answers "which child journeys are one family
+enrolment". It defines a household's live episode as an Opportunity containing at least one running
+`process_instances` row, refuses "the newest opportunity" by name because attaching a later sibling
+to a finished enrolment "would reopen finished history", breaks ties deterministically so grouping
+cannot depend on row order, and returns the running children as evidence. Being DERIVED from process
+state rather than stored, the grouping survives reload, resume, one child finishing first, Processing
+transitions and payment with nothing to keep in sync.
+
+Three candidates were rejected, each for a stated reason:
+
+| Rejected | Why |
+|---|---|
+| the session's `crm_snapshot` opportunity | D-95's migration exists precisely to stop a CRM Opportunity being load-bearing for runtime correctness |
+| `form_packet_sessions.packet_instance_id` | that mechanism groups by sharing ONE session between recipients — it MERGES sessions, which the grain rule forbids for process-governed Enrollment. It remains correct for a hand-composed packet |
+| recency, first child, client arrays, name matching | the context resolver already refuses these |
+
+### What it may not do
+
+It composes and never merges child process instances, sessions, links, submissions, artifacts,
+Processing cases or financial obligations, and stores no rollup. Every figure is quoted from the
+child's own projection (`resolveEnrollmentParticipantProgress`, one call per child, so the family
+list and the child's own screen cannot disagree) or from Financials. There is **no family
+submission**: the authoritative completion actions are child-scoped, and a family-level submit would
+be a second finalization authority over work that already has one. Family state is derived, one
+incomplete child stays visibly incomplete, and the shell stays open while any sibling is going.
+
+### Shared versus per-child
+
+Declared in code as `FAMILY_FACT_OWNERSHIP`, with a reason per concept, because the real risk of a
+family shell is OVER-deduplication — asking once for something whose evidence belongs separately to
+each child.
+
+| Ownership | Concepts |
+|---|---|
+| Reused canonical | guardians, home/mailing address, emergency contacts |
+| Shared once | other children in the household, handbook acknowledgment + signature (per recipient), per-family fee |
+| Repeated per child | health/allergies/providers, immunization, routines/eating/personality, placement + schedule + location, consent, per-child fee |
+
+Health, immunization and consent stay per child because each answer is its own evidence on its own
+submission; deduplicating them would attach one child's medical record to another.
+
+### Sibling visibility is a bounded boundary
+
+A participant arrives on ONE child's token. The family view returns a sibling's NAME and PROGRESS and
+never their answers, uploads or documents — a token minted for one child's session is not authority
+over another child's evidence. The focused child is read from the session's own snapshot, never from
+the query string, so a caller-supplied id cannot make one family's link ask about another child.
+Every row is confined to the same organization, household and live episode.
+
+### Certified (September 2026)
+
+Live, from one child's link on the Tourb0913 household: "Tourb0913 Family Enrollment", 2 children, 2
+distinct process instances, 2 distinct sessions, family information complete once, one child
+submitted while the other sat at 0 of 3, family correctly incomplete, grouping stable across
+repeated reads, and 404 on a bogus or empty token.
+
+**Not wired:** the family shell's financial slot. It consumes the Enrollment Financial Bridge's
+projection, whose canonical parity is certified separately, but the participant family route passes
+`financials: null` today rather than discovering fee requirements through a second reader. Connecting
+it belongs to the participant payment slice.
