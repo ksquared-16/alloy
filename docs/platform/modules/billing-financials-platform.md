@@ -340,11 +340,32 @@ SELECT; participants never reach the table directly.
 **No credential is ever stored.** Stripe executes and holds the credential; Alloy keeps a token —
 unchanged from what `customer_payment_methods` already did correctly.
 
-**LINEAGE NOTE.** `database.apply_migration` was filed against certification and refused with
-`source_sha_not_reachable`: the trusted host only scans pushed refs, and this lane's commits are
-local because "commit" never implies "push". The model, its constraints and its payer-scoped reads
-are therefore proven by 16 unit guards and NOT yet against real persistence. Applying it needs a
-push authorization, and no live claim should be made for it until then.
+**APPLIED, AND VERIFIED LIVE AT THE SCHEMA LEVEL (September 2026).** Applied to the certification
+database from the pushed candidate `3f547dc3f` (`ledger: applied`, `idempotent: false`). Verified
+directly against that database, without credentials, by distinguishing PostgREST's two error codes —
+`42501 permission denied` proves a column exists, `42703 does not exist` proves it does not:
+
+- all 22 required columns present: `org_id`, `customer_id`, `owner_entity_type`, `owner_entity_id`,
+  `provider`, `provider_customer_ref`, `provider_instrument_ref`, `rail`, `reusable`, `status`,
+  `verification_state`, `mandate_reference`, `mandate_accepted_at`, `brand`, `last4`,
+  `legacy_customer_payment_method_id`, and the six created/updated/revoked actor and timestamp columns;
+- **no credential column exists** — `card_number`, `pan`, `cvc`, `cvv`, `account_number`,
+  `routing_number`, `bank_account_number` and `iban` all return `42703`;
+- **`anon` is refused** — a direct read returns `42501`, so the REVOKE took effect, and the same probe
+  against a genuinely absent table returns `404 PGRST205` instead, which is the control that makes the
+  other two readings mean what they say.
+
+**THE MOUNTED QA APP CANNOT EXERCISE IT, AND THAT IS A TOPOLOGY FACT, NOT A DEFECT.** The app this
+program certifies against reads a hosted Supabase project; `database.apply_migration` can only reach
+`staging` or `certification`, and pre-merge work may only go to `certification`. Those are different
+databases. So a NEW table is reachable by the certification database and invisible to the mounted app
+until the change is promoted. Every earlier certification in this program worked because it exercised
+tables that already existed in the app's database.
+
+What therefore remains uncertified for `payment_instruments`: the CHECK constraints and unique index
+(they need writes, and this lane holds no database credentials), and the participant/operator privacy
+reads end to end (they need the table in the app's own database). Those are proven only by unit guards
+today, and no live claim is made for them.
 
 ### Correction lineage — a charge is corrected once (September 2026)
 
