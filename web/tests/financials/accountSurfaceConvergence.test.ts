@@ -1964,34 +1964,124 @@ describe("F43 · Due is the actionable figure, and the commands are peers", () =
     });
 });
 
-describe("F44 · no visible partial Details", () => {
+describe("F44 · no FALSE Details during progressive settlement", () => {
     /*
-     * THE DEFECT THIS EXISTS TO CATCH. Details opens, a ledger-shaped surface appears, and it is
-     * then replaced by the real ledger. Every previous pass attacked a symptom — the entrance
-     * animation, the skeleton's honesty, the reserved region — and the operator kept seeing two
-     * Details. The fact is structural: a Details destination may not be RENDERED until the deep
-     * read its ledger depends on has resolved.
+     * ── WHAT THIS GATE USED TO SAY, AND WHY IT SAID IT ─────────────────────────────────────────
+     *
+     * F44 was written as an absolute: a Details destination may not be RENDERED until the deep read
+     * its ledger depends on has resolved. Details was ABSENT, then COMPLETE.
+     *
+     * It was not arbitrary. An earlier partial Details drew the ledger over PLACEHOLDER ROWS, and
+     * three placeholder rows rewriting themselves into fifty-six real ones is the "double load" —
+     * the operator seeing two Details — that was reported in every pass of that thread. Previous
+     * attempts to soften it (the entrance animation, the skeleton's honesty, the reserved region)
+     * each addressed a symptom and the complaint survived. Making the destination all-or-nothing
+     * ended it.
+     *
+     * ── WHY IT IS RETIRED, AND WHAT REPLACED IT ────────────────────────────────────────────────
+     *
+     * The rule's cost was then measured on deployed staging. An ordinary no-dwell click waited
+     * ~1,030ms for a usable Details surface, because it waited for the entire deep read (~900-1,100ms,
+     * of which ~500ms is carried platform overhead). A read-ahead was deployed to make the strict
+     * guard cheap; it reaches the target only when the operator happens to dwell ~400ms before
+     * clicking, and past the read's own duration it discards its result and reads again. Head start
+     * that depends on hesitation is not a product contract.
+     *
+     * So the absolute is retired and a STRONGER one takes its place:
+     *
+     *     NO FALSE DETAILS
+     *
+     * Progressive Details is allowed. FABRICATED Details is not. The distinction is the whole
+     * doctrine: the defect was never that the surface appeared early — it was that the surface
+     * LIED, stating rows that did not exist and then replacing them.
+     *
+     * A pending floor may therefore state: the real selected account, real structure, reserved
+     * figures, the ledger's real columns, and an explicit reading state. It may never state:
+     * placeholder transactions, a zero for money nobody has read, the previous account's anything,
+     * copy implying no financial activity, or a command whose authority has not resolved.
      */
-    it("has exactly one Details branch, and it is the final anatomy", () => {
-        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
-        expect(branches, "one Details branch, not a pending one and a real one").toHaveLength(1);
-    });
-
-    it("has no skeleton Details surface left to fall into", () => {
-        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "no hydrating Details container").not.toMatch(/data-financials-hydrating/);
-        expect(card, "and no hydrating Details card is constructed").not.toMatch(
-            /<FinancialsDetailCard\s+hydrating/,
-        );
-    });
-
-    it("establishes the depth immediately, and reads ahead so it is usually ready", () => {
+    it("M · one canonical Details implementation, in two truthful states", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         /*
-         * The click no longer waits on the read: the shell is known the moment it is asked for. And
-         * the read starts while the compact card is still on screen, so by the time anyone clicks it
-         * has usually landed — the sanctioned idle prefetch, never a reveal gate.
+         * The old assertion counted Details BRANCHES and required exactly one. That is the property
+         * this slice deliberately changes — there are now a pending branch and a settled one. What
+         * must stay singular is the COMPONENT: both states are the same product surface, so they
+         * cannot drift into two Details the way the workspace once grew a second ledger.
+         */
+        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
+        expect(branches.length, "a pending Details branch and a settled one").toBeLessThanOrEqual(2);
+        expect(card, "and both render the canonical surface").toContain("<FinancialsDetailCard");
+        for (const forbidden of ["PendingFinancialsDetailCard", "AccountsFinancialsLoadingCard", "FinancialsAccountWorkspaceDetail"]) {
+            expect(card, `${forbidden} would be a second Details implementation`).not.toContain(forbidden);
+        }
+    });
+
+    it("C · unresolved money is reserved, never a zero and never the last account's figure", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the reserved evidence states every figure as an em dash").toContain("hydratingFinancialsEvidence()");
+        expect(upto, "and declares itself hydrating so the surface says it is reading").toContain("hydrating");
+        expect(upto, "no figure may be composed here at all").not.toMatch(/\$\d|toFixed\(|formatMoney|moneyExact/);
+    });
+
+    it("D/E · the pending ledger states columns and NO rows — the defect F44 was created for", () => {
+        /*
+         * THIS IS THE LINE. The historical failure was placeholder rows becoming real rows. The
+         * pending region draws the ledger's head and says it is reading; it states no rows, so
+         * there is nothing to rewrite and the real ledger commits exactly once.
+         */
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "ledgerPending holds the region instead of drawing rows").toContain("ledgerPending");
+        expect(upto, "and no periods are supplied for it to draw").toMatch(/periods=\{\[\]\}/);
+
+        const floor = code("components/operationalCards/FinancialsDetailCard.tsx");
+        const region = floor.slice(floor.indexOf("data-financials-ledger-hydrating"));
+        const head = region.slice(0, region.indexOf("</div>"));
+        expect(head, "the real columns commit").toContain("<FinancialsLedgerHead />");
+        expect(head, "and it says it is reading").toContain('data-financials-ledger-reading="true"');
+        expect(head, "absence of loaded rows is not evidence of no activity").not.toContain("Nothing charged yet");
+        expect(head, "and no fabricated transaction may be drawn").not.toMatch(/LedgerRow|placeholderRow|skeletonRow/);
+    });
+
+    it("F/G · no stale administration truth, and no command bound to an unresolved account", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the relationship row waits rather than restating the last account's").toContain("loading: true");
+        for (const live of ["onPayment=", "onAddCharge=", "onPostCharge=", "onReverseCharge=", "onAdjustCharge=", "onApplyPayment=", "onMovePayment=", "onResolveResponsibility=", "onReallocateResponsibility="]) {
+            expect(upto, `${live} must not be wired before this account's authority resolves`).not.toContain(live);
+        }
+        expect(upto, "the gears are inert by name, not by accident").toContain("NO_COMMAND");
+    });
+
+    it("A/N · the floor identifies its account, and stays a floor", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        expect(
+            (card.match(/data-financials-detail-account=\{subjectKey \?\? ""\}/g) ?? []).length,
+            "pending AND settled name the account, by canonical id — never a display name",
+        ).toBe(2);
+        /*
+         * A permanent scrim over the account list was a measured defect: every row refused an
+         * ordinary click. Both branches ask the one surface-role authority rather than deciding it
+         * twice, so the pending floor cannot reintroduce it.
+         */
+        expect(
+            (card.match(/data-financials-surface-role=\{financialsSurfaceRole\(\{/g) ?? []).length,
+            "both branches ask financialsSurfaceRole",
+        ).toBeGreaterThanOrEqual(2);
+        const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
+        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        expect(upto, "the pending floor introduces no modal or scrim of its own").not.toMatch(/backdrop|scrim|modalClass/i);
+    });
+
+    it("establishes the depth immediately, and reads ahead so settlement is sooner", () => {
+        const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
+        /*
+         * Read-ahead is KEPT. It no longer decides whether Details may exist — the floor does that
+         * — but it still shortens how long the reserved state is on screen.
          */
         expect(card, "the click commits the surface").toMatch(
             /const requestDetails = useCallback\(\(\) => \{[\s\S]{0,900}setStack\(\[\{ kind: "detail" \}\]\)/,
