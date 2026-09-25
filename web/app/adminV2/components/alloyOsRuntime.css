@@ -10899,6 +10899,41 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     overflow-y: auto;
     overscroll-behavior: contain;
 }
+/*
+ * ── THE TWO LINKS THAT DECLINED TO SHRINK ─────────────────────────────────────────────────────
+ *
+ * Reported from staging: the account Details ledger cannot be scrolled. Measured on the mounted
+ * workspace, the chain from the ledger up reads
+ *
+ *   .alloy-os-fdetail__scroll      929px box, 929px content   — nothing to scroll
+ *   .alloy-os-ucard__body         1149px box, 1149px content  — nothing to scroll
+ *   article.alloy-os-ucard        1199px, flex 0 1 auto
+ *   .alloy-os-billing--detail     1199px, flex 0 1 auto, MIN-HEIGHT: AUTO
+ *   the floor                      423px box, 1199px content  — the only thing that can scroll
+ *
+ * `min-height: auto` is a flex item's default and it refuses to shrink below content, so these two
+ * links expanded to the full ledger inside a 423px floor. Every descendant inherited that height,
+ * which is why the scroller meant to own this — already `flex: 1 1 auto; min-height: 0` — had zero
+ * scrollable extent and sat inert.
+ *
+ * It did not merely fail to scroll; it swallowed the gesture. `.alloy-os-fdetail__scroll` also sets
+ * `overscroll-behavior: contain`, which is right for a real scroller and, on one with nothing to
+ * scroll, stops the wheel chaining to the floor that could have handled it. A real wheel over the
+ * ledger moved nothing at all, while setting the floor's `scrollTop` directly worked — so the
+ * content was always there and always scrollable, and the event simply never reached it.
+ *
+ * Restoring the shrink on these two links restores the intended owner: the ledger scroller becomes
+ * bounded, gets real extent, and `contain` goes back to meaning what it says. The floor's own
+ * belt-and-braces scroll above stays as the fallback it was written to be.
+ */
+.alloy-accounts-account-card [data-financials-surface-role="floor"] .alloy-os-billing--detail,
+.alloy-accounts-account-card [data-financials-surface-role="floor"] .alloy-os-billing--detail > .alloy-os-ucard {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 /* And the card inside it draws no chrome either — one object, one surface. */
 .alloy-accounts-account-card [data-financials-surface-role="floor"] .alloy-os-ucard {
     border: 0;
