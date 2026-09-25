@@ -35,12 +35,18 @@ async function reach(page: Page) {
 
 /** Select the nth account row and time every milestone from the click. */
 async function selectAccount(page: Page, nth: number, kind: string, pass: string) {
-    const net: Array<{ url: string; at: number; ms: number }> = [];
+    const net: Array<{ url: string; query: string; start: number; end: number; ms: number; bytes: number }> = [];
     const t0 = { t: Date.now() };
-    const onResponse = (r: import("@playwright/test").Response) => {
-        const u = r.url().replace(/https:\/\/[^/]+/, "").split("?")[0];
+    const onResponse = async (r: import("@playwright/test").Response) => {
+        const full = r.url().replace(/https:\/\/[^/]+/, "");
+        const u = full.split("?")[0];
         if (!/^\/api\//.test(u)) return;
-        net.push({ url: u.slice(0, 90), at: Date.now() - t0.t, ms: Math.round(r.request().timing().responseEnd) });
+        let bytes = 0;
+        try { bytes = (await r.body()).byteLength; } catch { /* streamed */ }
+        /* responseEnd is already relative to startTime; subtracting the two is meaningless. */
+        const ms = Math.round(r.request().timing().responseEnd);
+        const end = Date.now() - t0.t;
+        net.push({ url: u.slice(0, 90), query: (full.split("?")[1] ?? "").slice(0, 60), start: end - ms, end, ms, bytes });
     };
     page.on("response", onResponse);
 
@@ -75,19 +81,46 @@ async function selectAccount(page: Page, nth: number, kind: string, pass: string
     const ledger = await page.waitForFunction(
         () => document.querySelectorAll("[data-financials-ledger-row]").length > 0, undefined, { timeout: 180_000 }).then(at).catch(() => null);
 
+    /*
+     * SETTLED IS A STABLE COUNT, AND ZERO IS A COUNT. Requiring n > 0 made an account with no
+     * ledger rows wait the full timeout — 190 seconds recorded as its "settled" time, which is a
+     * measurement artefact and not a product fact. Stability is judged once the region has stopped
+     * saying it is reading.
+     */
     let prev = -1, stable = 0, settled: number | null = null;
     for (let i = 0; i < 40 && stable < 2; i++) {
-        const n = await page.evaluate(() => document.querySelectorAll("[data-financials-ledger-row]").length);
-        if (n === prev && n > 0) stable += 1; else { stable = 0; settled = at(); }
+        const n = await page.evaluate(() => {
+            const reading = document.querySelector("[data-financials-ledger-reading], [data-financials-ledger-hydrating]");
+            return reading ? -1 : document.querySelectorAll("[data-financials-ledger-row]").length;
+        });
+        if (n >= 0 && n === prev) stable += 1; else { stable = 0; settled = at(); }
         prev = n;
         await page.waitForTimeout(250);
     }
     page.off("response", onResponse);
 
+    /*
+     * §19/§20 — did the prewarm buy time, or only move the work?
+     *
+     * PREWARM_HEAD_START is how long the account's read had been in the air when the click landed.
+     * A card request that starts before 0 was warmed; one starting after 0 was not.
+     */
+    const cardReqs = net.filter((n) => /financials\/card$/.test(n.url));
+    const mine = cardReqs.filter((n) => n.query.includes(encodeURIComponent(target ?? "\u0000")) || n.query.includes(target ?? "\u0000"));
+    const warmed = mine.find((n) => n.start < 0) ?? null;
     const row = { kind, pass, account: target, selectedRow, floorGeometry, usableFloor, firstMeaning, ledger, settled, rows: prev,
-        requests: net.filter((n) => /financ|card|position|subjects/i.test(n.url)).slice(0, 12) };
+        prewarmHeadStart: warmed ? -warmed.start : 0,
+        cardRequestStart: mine.length ? Math.min(...mine.map((n) => n.start)) : null,
+        cardResponseAt: mine.length ? Math.max(...mine.map((n) => n.end)) : null,
+        cardRequestsForThisAccount: mine.length,
+        cardRequestsTotal: cardReqs.length,
+        cardBytesTotal: cardReqs.reduce((a, n) => a + n.bytes, 0),
+        unusedCardRequests: cardReqs.length - mine.length,
+        unusedCardBytes: cardReqs.filter((n) => !mine.includes(n)).reduce((a, n) => a + n.bytes, 0),
+        requests: cardReqs.slice(0, 12) };
+    log(`   card reqs: mine=${mine.length} total=${cardReqs.length} headStart=${warmed ? -warmed.start : 0}ms unusedBytes=${row.unusedCardBytes}`);
     log(`${kind}/${pass} selected=${selectedRow} floor=${floorGeometry} usable=${usableFloor} meaning=${firstMeaning} ledger=${ledger} settled=${settled} rows=${prev}`);
-    log(`   requests: ${net.filter((n) => /financ/i.test(n.url)).map((n) => `${n.url.split("/").pop()}@${n.at}(+${n.ms})`).join(" ")}`);
+    log(`   requests: ${net.filter((n) => /financ/i.test(n.url)).map((n) => `${n.url.split("/").pop()} start${n.start >= 0 ? "+" : ""}${n.start} end+${n.end}`).join(" ")}`);
     all.push(row);
     return row;
 }
