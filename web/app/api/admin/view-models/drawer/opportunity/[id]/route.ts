@@ -9,6 +9,12 @@ import { logOpportunityDrawerViewModelComposeFailureShadowSummary } from "@/lib/
 import { logDrawerViewModelRuntimeFlagsServerSummary } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelRuntimeFlagsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+    DRAWER_TRUTH_PATCH_VERSION,
+    TRUTH_PATCH_LINE_KEY,
+    mergeDrawerTruthPatchFields,
+    type DrawerTruthPatch,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
+import {
     CARRIER_LINE_KEY,
     DRAWER_VIEW_MODEL_LINE_KEY,
     PHASED_CONTENT_TYPE,
@@ -360,6 +366,35 @@ function streamPhasedDrawerViewModel(args: {
                 write({ [CARRIER_LINE_KEY]: carrier, __carrier_route_ms: Date.now() - routeT0 });
             };
 
+            /*
+             * PROGRESSIVE TRUTH RIDES THE SAME AUTHORIZATION HOLD AS THE CARRIER.
+             *
+             * A canonical business fact is exactly the thing that must not reach a caller whose
+             * right to this record is still unestablished, so a patch produced before the org
+             * assertion answers is held and flushed by the same `authorized` gate below. Held
+             * patches are folded rather than queued: a second fact must ADD to the first, never
+             * replace the set.
+             */
+            let heldTruth: Record<string, unknown> | null = null;
+            const sendTruthPatch = (fields: Record<string, unknown>) => {
+                if (!fields || Object.keys(fields).length === 0) return;
+                if (!authorized) {
+                    heldTruth = mergeDrawerTruthPatchFields(heldTruth, fields);
+                    return;
+                }
+                write({
+                    [TRUTH_PATCH_LINE_KEY]: {
+                        version: DRAWER_TRUTH_PATCH_VERSION,
+                        subject: {
+                            opportunity_id: opportunityId,
+                            attention_subject_id: (sp.get("attention_subject_id") ?? "").trim() || null,
+                        },
+                        fields,
+                    } satisfies DrawerTruthPatch,
+                    __truth_patch_route_ms: Date.now() - routeT0,
+                });
+            };
+
             try {
                 const attentionSubjectId = (sp.get("attention_subject_id") ?? "").trim() || null;
                 const composePromise = composeOpportunityDrawerViewModel({
@@ -384,6 +419,7 @@ function streamPhasedDrawerViewModel(args: {
                         return r;
                     })(),
                     onActionableCarrier: sendCarrier,
+                    onCanonicalTruth: sendTruthPatch,
                 });
                 /*
                  * A rejection here is handled below by the await. Attaching a no-op catch now stops
@@ -401,6 +437,11 @@ function streamPhasedDrawerViewModel(args: {
                     return;
                 }
                 authorized = true;
+                if (heldTruth) {
+                    const fields = heldTruth;
+                    heldTruth = null;
+                    sendTruthPatch(fields);
+                }
                 if (heldCarrier && !carrierSent) {
                     carrierSent = true;
                     write({ [CARRIER_LINE_KEY]: heldCarrier, __carrier_route_ms: Date.now() - routeT0 });

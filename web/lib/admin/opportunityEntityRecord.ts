@@ -1519,6 +1519,15 @@ export type BuildOpportunityDrawerVisiblePayloadOptions = {
   hintPrimaryPersonPhone?: string | null;
   /** Admin document actor for request-scoped profile-photo URL minting. */
   documentActor?: DocumentActor | null;
+  /**
+   * Called the moment a canonical record fact becomes KNOWN, before the payload is finished.
+   *
+   * Delivery only — this never produces a fact, it reports one the composition just produced. The
+   * roster is still resolved exactly once, by the shell leg below, and still travels in the finished
+   * payload. Measured on deployed 96f37f1a: `_inquiry_children` is canonical at P50 1,148ms and the
+   * cards that gate on it do not clear until P50 3,194ms.
+   */
+  onCanonicalTruth?: (fields: Record<string, unknown>) => void;
 };
 
 export async function buildOpportunityDrawerVisiblePayload(
@@ -1686,7 +1695,26 @@ export async function buildOpportunityDrawerVisiblePayload(
     }
   };
   const shellP = Promise.all([
-    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
+    timedLeg(
+      "shell_children_ms",
+      attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor).then((r) => {
+        /*
+         * The roster is canonical HERE, not when the payload finishes. Emitted only when the shell
+         * actually produced an array: absent stays UNKNOWN, and an explicit `[]` is the canonical
+         * answer "this family has no children" and is emitted as such. A throwing sink must never
+         * take down the composition it is reporting on.
+         */
+        const roster = (vis as Record<string, unknown>)._inquiry_children;
+        if (Array.isArray(roster)) {
+          try {
+            options?.onCanonicalTruth?.({ _inquiry_children: roster });
+          } catch {
+            /* delivery is best-effort; the finished payload still carries the same fact */
+          }
+        }
+        return r;
+      }),
+    ),
     timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
     timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
     timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),

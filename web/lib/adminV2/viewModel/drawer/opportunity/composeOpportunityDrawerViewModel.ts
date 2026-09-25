@@ -68,6 +68,12 @@ export type ComposeOpportunityDrawerViewModelParams = {
      * slower and correct rather than faster and invented.
      */
     onActionableCarrier?: (carrier: ActionableDrawerCarrier) => void;
+    /**
+     * Canonical record facts, delivered the moment each becomes known rather than with the finished
+     * view model. Same producer, same result — only the delivery moves. See
+     * {@link DrawerTruthPatch}.
+     */
+    onCanonicalTruth?: (fields: Record<string, unknown>) => void;
 };
 
 export async function composeOpportunityDrawerViewModel(
@@ -101,6 +107,7 @@ export async function composeOpportunityDrawerViewModel(
         opportunityId,
         departmentId: params.departmentId,
         workUnitId: params.workUnitId,
+        onCanonicalTruth: params.onCanonicalTruth,
         /*
          * THE CARRIER IS BUILT FROM THE SAME VALUES PHASE 2 WILL PUBLISH, NOT FROM NEW ONES.
          *
