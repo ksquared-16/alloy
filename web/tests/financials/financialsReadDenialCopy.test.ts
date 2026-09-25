@@ -57,9 +57,26 @@ describe("the financial read refusal", () => {
      */
     it.each(GATED_ROUTES)("%s returns the shared message and the diagnostic field", (rel) => {
         const src = read(rel);
-        expect(src, "the route uses the named guard").toContain("assertFinancialsReadAllowed");
-        expect(src, "operator copy comes from the verdict").toContain("error: allowed.message");
-        expect(src, "the key travels as diagnostics").toContain("required_permission: allowed.requiredPermission");
+        /*
+         * TWO NAMED GUARDS, ONE OWNER OF THE COPY.
+         *
+         * `assertFinancialsReadAllowed` returns a verdict the route renders, so the route must
+         * forward the helper's message and key rather than compose its own. `requireFinancialsCapability`
+         * returns the finished 403 itself, so there is nothing for a route to forward and nothing for
+         * it to get wrong — it satisfies this rule more strictly, not less. Either is acceptable; a
+         * route with neither is hand-rolling its refusal, which is the drift this guards.
+         */
+        // Comments stripped first: a route may legitimately DISCUSS the other guard in prose (why it
+        // moved off it, what it cost), and a grep that counts that as a call site reads the wrong
+        // shape. The key check below already strips for the same reason.
+        const code = src.replace(/^\s*(\*|\/\/).*$/gm, "");
+        const usesVerdict = code.includes("assertFinancialsReadAllowed");
+        const usesCapability = code.includes("requireFinancialsCapability");
+        expect(usesVerdict || usesCapability, "the route uses a named guard").toBe(true);
+        if (usesVerdict) {
+            expect(code, "operator copy comes from the verdict").toContain("error: allowed.message");
+            expect(code, "the key travels as diagnostics").toContain("required_permission: allowed.requiredPermission");
+        }
         // No route may write the key into a string of its own.
         expect(src.replace(/^\s*(\*|\/\/).*$/gm, ""), "no hand-rolled key copy").not.toMatch(
             /"[^"]*fin\.read[^"]*"/,
