@@ -247,6 +247,39 @@ The third instance of the same defect the section above describes, and the last 
 
 **Expected funding still is not money.** Certified: a $60 `government_subsidy` expectation on a share surfaces as `expectedSubsidyCents` beside the position and does **not** reduce `currentlyCollectibleCents`. Only a governed **submitted claim** suppresses a balance — an expectation or an authorization does not.
 
+### Who may pay, and how much — certified policy (September 2026)
+
+Measured against real persistence rather than inferred, because two of these were open assumptions.
+
+**RESPONSIBILITY IS NEVER CONSULTED WHEN MONEY IS APPLIED.** `applyPaymentToCharge` enforces exactly
+two ceilings — `requested > unapplied` ("would over-apply payment") and
+`requested > charge.outstandingCents` ("would over-pay charge") — and the default is
+`min(unapplied, outstanding)`. Nothing in the application path reads an allocation or a share.
+
+The consequences, each certified on a $75 household obligation split 50/50:
+
+| Case | Result |
+|---|---|
+| A responsible party pays MORE than their own share | **Permitted.** One party responsible for $37.50 paid the full $75.00; responsibility stayed $37.50/$37.50 |
+| Two parties each pay their own share | **Two distinct canonical payments**, outstanding reaches zero exactly once, responsibility unchanged |
+| A non-responsible third party pays | **Permitted.** An emergency contact paid $40 and did not become responsible; the responsible parties were byte-identical before and after |
+| Anyone applies beyond outstanding | **Refused** — "This charge is already paid in full." |
+
+Money received beyond outstanding is still a legitimate state: it stays unapplied on the account
+(`unapplied = amount − activeApplied − refunded`) rather than being rejected at receipt.
+
+**AN EXPECTED SUBSIDY DOES NOT SUPPRESS COLLECTION.** Certified: a $30 `government_subsidy`
+expectation on a share surfaced as `expectedSubsidyCents: 3000` with `submittedClaimSuppressionCents:
+0`, `suppressionBoundBy: "none"`, and `currentlyCollectibleCents` equal to `outstandingCents`. Only a
+claim in a **governed submitted state** suppresses — `SUPPRESSING_CLAIM_STATES = ["submitted",
+"accepted"]`, and `currentlyCollectible = max(0, outstanding − suppression)`.
+
+**A SUBSIDY CLAIM TARGETS TUITION, NOT AN ENROLLMENT FEE.** `buildSubsidyClaim` filters
+`charge_category = 'tuition'`, so a registration or materials fee is not claimable against an
+authorization at all. For an Enrollment fee, therefore, collectible-now always equals outstanding and
+any expected funding recorded against it is informational. This is a product fact worth stating
+plainly: subsidy relieves tuition, not enrolment fees.
+
 ### Payment-method ownership — a saved card belongs to a person (September 2026)
 
 Migration `supabase/migrations/20260925200000_payment_instrument_ownership.sql`. **Authored and
