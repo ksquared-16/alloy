@@ -8,7 +8,7 @@ import {
 } from "@/lib/documents/projectPersonProfilePhotos";
 import { buildFinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { FINANCIALS_READ_PERMISSION_KEY, assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 
 /**
  * GET /api/admin/financials/card?customer_id=…&customer_member_id=…&date=…
@@ -110,45 +110,31 @@ export async function GET(request: NextRequest) {
         });
 
         /*
-         * ── THE VERDICT IS ASKED WHILE THE READ IS IN THE AIR, AND ANSWERED BEFORE ANY OF IT ────
+         * ── THE VERDICT IS ANSWERED FROM THE KEYS THIS REQUEST ALREADY RESOLVED ──────────────
          *
-         * `fin.read` resolves through two reads — memberships, then the grants those roles carry —
-         * and measured on deployed staging that cost `perm;dur=` 204–565 ms sitting alone on the
-         * critical path with the composed read not yet started. The read above is issued first, so
-         * this await overlaps it instead of preceding it.
+         * `fin.read` used to resolve through two more reads here — memberships, then the grants
+         * those roles carry — measured on deployed staging at `perm;dur=` 204-565ms. This request
+         * had already paid for exactly those two tables: `getAdminContextCached` resolves the access
+         * bundle through `resolveAdminAccessCore`, whose `fetchPermissionKeys` reads
+         * `role_permission_grants` with the same predicates (org_id, role_key in the caller's roles,
+         * allowed = true) that `resolveActorPermissionGrants` uses. Same rows, same fact, handed
+         * over as `ctx.permissionKeys` — which this module's own contract names as what a handler
+         * reads to decide what a caller may do.
          *
-         * The gate itself is unchanged, and deliberately not any of the three shapes that would
-         * weaken it: the verdict is resolved per request, from the live grants tables, and is never
-         * persisted, cached across requests, or carried over from an earlier answer. Only WHEN it
-         * is asked moved. Nothing is returned until it answers, and a grants lookup that throws
-         * denies exactly as one that answers null does.
+         * NOT a cache and NOT a reused verdict. Nothing crosses a request boundary and no earlier
+         * allow is replayed; the capability is evaluated at request time against the keys this
+         * request resolved, by the module that names the key. The gate is otherwise untouched:
+         * `requireAdminOrOps` still resolves portal admission through its own separate resolver, and
+         * the org used below is still the session's, never the query's.
          *
-         * It is bound and tested under ONE name on purpose. An earlier cut held the promise as
-         * `allowedReadP` and tested the awaited `allowedRead`, which reads identically at runtime
-         * and broke the declared route-capability table's second join — the checker could no longer
-         * see the verdict being tested, and said so. The binding is part of the guarantee, not
-         * paperwork around it.
-         *
-         * The trade this accepts is explicit: an operator who clears `requireAdminOrOps` but lacks
-         * `fin.read` now causes a service-role SELECT whose rows are discarded — reads only, no
-         * writes, nothing returned, and nothing reaching the client but the 403.
+         * Fail-closed is strengthened rather than kept. Absent or null `permissionKeys` contains
+         * nothing, so the capability is refused; and because the answer no longer needs a round
+         * trip, the refusal now lands BEFORE the composed read is awaited, so the discarded
+         * service-role SELECT that the previous overlap deliberately accepted no longer happens.
          */
-        const allowedRead = await assertFinancialsReadAllowed({
-            supabase: createAdminClient(),
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-        }).catch(() => ({
-            ok: false as const,
-            message: "Financial access could not be verified.",
-            requiredPermission: FINANCIALS_READ_PERMISSION_KEY,
-        }));
+        const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
         mark("perm");
-        if (!allowedRead.ok) {
-            return NextResponse.json(
-                { error: allowedRead.message, required_permission: allowedRead.requiredPermission },
-                { status: 403 },
-            );
-        }
+        if (denied) return denied;
 
         const vm = await vmP;
         if (!vm) throw readFailure ?? new Error("Financial records unavailable.");

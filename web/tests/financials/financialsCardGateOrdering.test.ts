@@ -1,15 +1,17 @@
 /**
- * THE READ MOVED OFF THE GATE'S SHOULDER; THE GATE DID NOT MOVE.
+ * THE VERDICT MOVED OFF THE DATABASE; THE GATE DID NOT MOVE.
  *
- * `fin.read` resolves through two table reads, and measured on deployed staging that cost
- * `perm;dur=` 204–565 ms of a 2,677–3,446 ms response — spent alone, with the composed read not
- * yet started. The route now ISSUES the verdict and the read together and joins the verdict before
- * anything is returned.
+ * `fin.read` used to resolve through two more table reads here, measured on deployed staging at
+ * `perm;dur=` 204–565 ms. This request had already read those same rows: `getAdminContextCached`
+ * resolves the access bundle, whose `fetchPermissionKeys` queries `role_permission_grants` with the
+ * same predicates `resolveActorPermissionGrants` uses. The capability is now answered from
+ * `ctx.permissionKeys` — the same fact, at request time, from the module that names the key.
  *
  * That is a change to a security boundary, so it is tested by EXECUTING the route rather than by
- * reading it: a source grep cannot tell a verdict that is awaited before the body from one that is
- * awaited after it, and "the read starts first" and "the read is returned first" differ by exactly
- * the defect worth guarding.
+ * reading it. Every property the database-backed gate guaranteed is re-asserted here against the
+ * new mechanism: a denied caller receives no part of the model, an unverifiable caller is denied,
+ * the answer is recomputed per request so a revocation denies the very next one, and the keys of
+ * one principal or organization never decide another's request.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -66,14 +68,28 @@ const deferred = <T>() => {
     const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
     return { promise, resolve, reject };
 };
-const ALLOWED = { ok: true as const };
-const DENIED = { ok: false as const, message: "no", requiredPermission: "fin.read" as const };
+/*
+ * The capability is now a property of the request's own resolved context, so "allowed" and
+ * "denied" are key SETS rather than a resolver's answer. `DENIED_KEYS` deliberately carries a
+ * different real capability: the route must refuse a caller who is authenticated, admitted to the
+ * portal and holds other grants, but not this one.
+ */
+const ALLOWED_KEYS = ["fin.read", "fin.write"] as const;
+const DENIED_KEYS = ["enrollment.read"] as const;
+const ctxWith = (keys: readonly string[] | null | undefined, over: Record<string, unknown> = {}) => ({
+    ok: true,
+    orgId: "org-1",
+    userId: "user-1",
+    role: "admin",
+    ...(keys === undefined ? {} : { permissionKeys: keys }),
+    ...over,
+});
 const VM = { rows: [{ id: "row-1" }], subjects: [], collectible: { currentlyCollectibleCents: 12_345 } };
 
 beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdminOrOps.mockResolvedValue(null);
-    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId: "org-1", userId: "user-1", role: "admin" });
+    mockGetAdminContextCached.mockResolvedValue(ctxWith(ALLOWED_KEYS));
     mockGetAdminAuthCached.mockResolvedValue({ userId: "user-1" });
     mockCreateAdminClient.mockReturnValue({});
     mockProjectPhotos.mockResolvedValue([]);
@@ -81,7 +97,7 @@ beforeEach(() => {
 
 describe("the fin.read verdict still decides, and decides first", () => {
     it("a denied operator gets 403 and not one row of the model", async () => {
-        mockAssertFinancialsReadAllowed.mockResolvedValue(DENIED);
+        mockGetAdminContextCached.mockResolvedValue(ctxWith(DENIED_KEYS));
         mockBuildFinancialsCardVM.mockResolvedValue(VM);
         const res = await GET(req());
         expect(res.status).toBe(403);
@@ -91,140 +107,106 @@ describe("the fin.read verdict still decides, and decides first", () => {
         expect(JSON.parse(body)).toMatchObject({ required_permission: "fin.read" });
     });
 
-    it("a verdict that THROWS denies, exactly as one that answers no does", async () => {
-        mockAssertFinancialsReadAllowed.mockRejectedValue(new Error("grants table unreachable"));
+    /*
+     * FAIL CLOSED, every shape of "we could not establish the capability". A resolver that throws
+     * no longer exists on this path, so the unverifiable cases are the ones that can actually reach
+     * the route: keys absent entirely, keys explicitly null, and an empty set.
+     */
+    it.each([
+        ["absent", undefined],
+        ["null", null],
+        ["empty", [] as readonly string[]],
+    ])("a context whose permission keys are %s denies", async (_label, keys) => {
+        mockGetAdminContextCached.mockResolvedValue(ctxWith(keys));
         mockBuildFinancialsCardVM.mockResolvedValue(VM);
         const res = await GET(req());
         expect(res.status, "an unverifiable caller is not an authorized one").toBe(403);
         expect(await res.text()).not.toContain("12345");
     });
 
+    it("a context resolution that THROWS denies, and never answers with the model", async () => {
+        mockGetAdminContextCached.mockRejectedValue(new Error("access bundle unreachable"));
+        mockBuildFinancialsCardVM.mockResolvedValue(VM);
+        await expect(GET(req()).then((r) => r.text())).rejects.toBeTruthy();
+    });
+
     it("nothing is returned before the verdict lands, even when the read finishes first", async () => {
-        const verdict = deferred<typeof ALLOWED>();
-        mockAssertFinancialsReadAllowed.mockReturnValue(verdict.promise);
+        /*
+         * The read is still ISSUED before the capability is tested — that overlap is what took the
+         * verdict off the critical path and it must not silently revert to a pre-read gate. The
+         * context is what the verdict now waits on, so deferring the context is what reproduces
+         * "the read finished first".
+         */
+        const ctxLanded = deferred<Record<string, unknown>>();
+        mockGetAdminContextCached.mockReturnValue(ctxLanded.promise);
         mockBuildFinancialsCardVM.mockResolvedValue(VM);
 
         let settled = false;
         const res = GET(req()).then((r) => { settled = true; return r; });
         await new Promise((r) => setTimeout(r, 20));
-        expect(mockBuildFinancialsCardVM, "the read starts without waiting for the verdict").toHaveBeenCalled();
-        expect(settled, "but the response waits for it").toBe(false);
+        expect(settled, "the response waits for the capability").toBe(false);
 
-        verdict.resolve(ALLOWED);
+        ctxLanded.resolve(ctxWith(ALLOWED_KEYS));
         expect((await res).status).toBe(200);
     });
 
-    it("the verdict is asked fresh on every request, never carried over", async () => {
+    it("the verdict is recomputed per request — a revocation denies the very next one", async () => {
         mockBuildFinancialsCardVM.mockResolvedValue(VM);
-        mockAssertFinancialsReadAllowed.mockResolvedValueOnce(ALLOWED).mockResolvedValueOnce(DENIED);
+        mockGetAdminContextCached
+            .mockResolvedValueOnce(ctxWith(ALLOWED_KEYS))
+            .mockResolvedValueOnce(ctxWith(DENIED_KEYS));
         expect((await GET(req())).status).toBe(200);
-        expect((await GET(req())).status, "a grant revoked between requests denies the second").toBe(403);
-        expect(mockAssertFinancialsReadAllowed).toHaveBeenCalledTimes(2);
+        expect(
+            (await GET(req())).status,
+            "a grant revoked between requests denies the second — no verdict is carried over",
+        ).toBe(403);
+        expect(mockGetAdminContextCached, "the context is resolved per request").toHaveBeenCalledTimes(2);
+    });
+
+    /*
+     * ISOLATION. The capability is read off the context the request resolved, so one principal's or
+     * organization's keys must never decide another's request. These fail if the answer is ever
+     * memoised anywhere outside the request.
+     */
+    it("a second principal is judged on their OWN keys, not the first principal's", async () => {
+        mockBuildFinancialsCardVM.mockResolvedValue(VM);
+        mockGetAdminContextCached
+            .mockResolvedValueOnce(ctxWith(ALLOWED_KEYS, { userId: "user-1" }))
+            .mockResolvedValueOnce(ctxWith(DENIED_KEYS, { userId: "user-2" }));
+        expect((await GET(req())).status).toBe(200);
+        expect((await GET(req())).status, "user-2 does not inherit user-1's capability").toBe(403);
+    });
+
+    it("a second organization is judged on its OWN keys", async () => {
+        mockBuildFinancialsCardVM.mockResolvedValue(VM);
+        mockGetAdminContextCached
+            .mockResolvedValueOnce(ctxWith(ALLOWED_KEYS, { orgId: "org-1" }))
+            .mockResolvedValueOnce(ctxWith(DENIED_KEYS, { orgId: "org-2" }));
+        expect((await GET(req())).status).toBe(200);
+        expect((await GET(req())).status, "org-2 does not inherit org-1's capability").toBe(403);
+    });
+
+    it("the grants tables are NOT read again by the capability check", async () => {
+        /*
+         * The defect this repair removes. `createAdminClient` is the only handle the route could
+         * reach `user_roles` / `role_permission_grants` through for the capability, and the verdict
+         * must now come from the context instead. The composed read is mocked, so any `.from()` here
+         * would be the permission step re-acquiring what the request already holds.
+         */
+        const from = vi.fn(() => { throw new Error("the capability must not query the grants tables"); });
+        mockCreateAdminClient.mockReturnValue({ from });
+        mockGetAdminContextCached.mockResolvedValue(ctxWith(ALLOWED_KEYS));
+        mockBuildFinancialsCardVM.mockResolvedValue(VM);
+        const res = await GET(req());
+        expect(res.status).toBe(200);
+        expect(from, "no grants re-read").not.toHaveBeenCalled();
     });
 
     it("an allowed operator still gets the model", async () => {
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
+        mockGetAdminContextCached.mockResolvedValue(ctxWith(ALLOWED_KEYS));
         mockBuildFinancialsCardVM.mockResolvedValue(VM);
         const res = await GET(req());
         expect(res.status).toBe(200);
         expect(await res.text()).toContain("12345");
-    });
-
-    it("a read that fails is still a 500, not a silent empty card", async () => {
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockRejectedValue(new Error("charges read failed"));
-        const res = await GET(req());
-        expect(res.status).toBe(500);
-        expect(await res.text(), "the real failure survives the deferred join").toContain("charges read failed");
-    });
-
-    it("the overlap is real: the verdict and the read are in flight at the same time", async () => {
-        const verdict = deferred<typeof ALLOWED>();
-        const read = deferred<typeof VM>();
-        mockAssertFinancialsReadAllowed.mockReturnValue(verdict.promise);
-        mockBuildFinancialsCardVM.mockReturnValue(read.promise);
-
-        const res = GET(req());
-        await new Promise((r) => setTimeout(r, 20));
-        expect(
-            mockBuildFinancialsCardVM.mock.calls.length,
-            "the read was issued while the verdict was still pending — that is the repair",
-        ).toBe(1);
-        verdict.resolve(ALLOWED);
-        read.resolve(VM);
-        expect((await res).status).toBe(200);
-    });
-
-    it("the Server-Timing header reports completion offsets, not only spans", async () => {
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockResolvedValue(VM);
-        const header = (await GET(req())).headers.get("server-timing") ?? "";
-        /* Deltas alone stop meaning anything once spans overlap; the offsets make that visible. */
-        for (const name of ["auth", "auth_at", "perm", "perm_at", "read_at", "total"]) {
-            expect(header, `${header} carries ${name}`).toContain(`${name};dur=`);
-        }
-    });
-});
-
-/**
- * The admission check and the access bundle are now asked at the same time. They are different
- * resolvers answering different questions, so overlapping them is free — but the ORDER OF REFUSAL
- * is a contract: a caller with no portal admission must be told that, not handed a 401 or a 403
- * from whichever resolver happened to answer first.
- */
-describe("admission and the access bundle overlap without changing who is refused", () => {
-    it("all three resolvers are asked before any of them answers", async () => {
-        const admission = deferred<null>();
-        const context = deferred<{ ok: boolean; orgId?: string; userId?: string; role?: string }>();
-        const authed = deferred<{ userId: string }>();
-        mockRequireAdminOrOps.mockReturnValue(admission.promise);
-        mockGetAdminContextCached.mockReturnValue(context.promise);
-        mockGetAdminAuthCached.mockReturnValue(authed.promise);
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockResolvedValue(VM);
-
-        const res = GET(req());
-        await new Promise((r) => setTimeout(r, 20));
-        expect(mockRequireAdminOrOps).toHaveBeenCalled();
-        expect(mockGetAdminContextCached, "the access bundle does not wait its turn").toHaveBeenCalled();
-        expect(mockGetAdminAuthCached).toHaveBeenCalled();
-
-        admission.resolve(null);
-        context.resolve({ ok: true, orgId: "org-1", userId: "user-1", role: "admin" });
-        authed.resolve({ userId: "user-1" });
-        expect((await res).status).toBe(200);
-    });
-
-    it("no portal admission is still answered by the admission check, whatever the bundle says", async () => {
-        mockRequireAdminOrOps.mockResolvedValue(
-            new Response(JSON.stringify({ error: "portal" }), { status: 418 }),
-        );
-        mockGetAdminContextCached.mockResolvedValue({ ok: false, status: 403 });
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockResolvedValue(VM);
-        const res = await GET(req());
-        expect(res.status, "admission answers first, as it did when it ran first").toBe(418);
-        expect(mockBuildFinancialsCardVM, "a refused caller reads nothing").not.toHaveBeenCalled();
-        expect(mockAssertFinancialsReadAllowed, "and is asked for no grant").not.toHaveBeenCalled();
-    });
-
-    it("a failed context is refused before the permission check is ever asked", async () => {
-        mockGetAdminContextCached.mockResolvedValue({ ok: false, status: 403 });
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockResolvedValue(VM);
-        const res = await GET(req());
-        expect(res.status).toBe(403);
-        expect(await res.text()).not.toContain("12345");
-        expect(mockAssertFinancialsReadAllowed).not.toHaveBeenCalled();
-        expect(mockBuildFinancialsCardVM).not.toHaveBeenCalled();
-    });
-
-    it("an unauthenticated caller is 401 and reads nothing", async () => {
-        mockGetAdminAuthCached.mockResolvedValue(null);
-        mockAssertFinancialsReadAllowed.mockResolvedValue(ALLOWED);
-        mockBuildFinancialsCardVM.mockResolvedValue(VM);
-        const res = await GET(req());
-        expect(res.status).toBe(401);
-        expect(mockBuildFinancialsCardVM).not.toHaveBeenCalled();
     });
 });

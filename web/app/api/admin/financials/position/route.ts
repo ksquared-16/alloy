@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
-import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
+import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
 import { resolveFinancialPositionCohort } from "@/lib/financials/workspace/resolveFinancialPosition";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -57,15 +57,29 @@ export async function GET(request: NextRequest) {
     mark("auth");
 
     const supabase = createAdminClient();
-    const allowed = await assertFinancialsReadAllowed({ supabase, orgId: ctx.orgId, userId: ctx.userId });
-    if (!allowed.ok) {
-        return NextResponse.json(
-            // `error` is what the operator reads; `required_permission` is for diagnostics,
-            // logging and tests — the grant key is not operator vocabulary.
-            { error: allowed.message, required_permission: allowed.requiredPermission },
-            { status: 403 },
-        );
-    }
+    /*
+     * THE CAPABILITY IS ALREADY IN THIS REQUEST'S CONTEXT.
+     *
+     * `assertFinancialsReadAllowed` re-reads `user_roles` then `role_permission_grants` to learn
+     * `fin.read`. The route gate has already resolved exactly those two tables, with the same
+     * predicates (org_id, role_key in the caller's roles, allowed = true), and hands them over as
+     * `ctx.permissionKeys` — `resolveAdminAccessCore.fetchPermissionKeys` and
+     * `resolveActorPermissionGrants` are the same fact from the same rows. Measured on deployed
+     * staging that second read cost `perm;dur=` 248ms on subjects and 256ms on position, in parallel
+     * requests that had both already paid for it.
+     *
+     * This is NOT a cache and NOT a reused verdict. Nothing is carried across requests and no
+     * historical allow is replayed: the capability is evaluated at request time, against the keys
+     * this request resolved, by the module that names the key. `requireFinancialsCapability` is the
+     * existing synchronous sibling written for exactly this case and already used by the
+     * service-plan-template and charge-template routes.
+     *
+     * Fail-closed is unchanged: absent or null `permissionKeys` contains nothing, so the capability
+     * is refused. Scope and tenancy remain the handler's, exactly as before — the org used below is
+     * still the gate's, never the query's.
+     */
+    const denied = requireFinancialsCapability(ctx, FINANCIALS_READ_PERMISSION_KEY);
+    if (denied) return denied;
 
     mark("perm");
 
