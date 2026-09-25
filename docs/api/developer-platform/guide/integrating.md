@@ -361,7 +361,7 @@ The public API has **no `PUT`, no `PATCH` and no `DELETE`** on any resource, and
 none is planned. Creation, change and ending happen through named operations that
 express intent:
 
-This is the complete catalog. Ten operations, each one an intent.
+This is the complete HTTP operation catalog.
 
 **Enrollment** — scope `enrollment.write`
 
