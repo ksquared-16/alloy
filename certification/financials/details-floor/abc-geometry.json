@@ -1,0 +1,143 @@
+[
+  {
+    "specimen": "a-b-c",
+    "A": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "B": "fd000000-0000-4000-8000-0000000c0001",
+    "C": "fd000000-0000-4000-8000-0000000c0002",
+    "afterB": {
+      "selected": "fd000000-0000-4000-8000-0000000c0001",
+      "floorAccount": "fd000000-0000-4000-8000-0000000c0001",
+      "pending": "true",
+      "truth": "not_yet_known",
+      "ledgerRows": 0,
+      "reading": true,
+      "money": []
+    },
+    "frames": [
+      {
+        "at": 129,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": "true",
+        "truth": "not_yet_known",
+        "ledgerRows": 0,
+        "reading": true,
+        "money": []
+      },
+      {
+        "at": 386,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": "true",
+        "truth": "not_yet_known",
+        "ledgerRows": 0,
+        "reading": true,
+        "money": []
+      },
+      {
+        "at": 735,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": "true",
+        "truth": "not_yet_known",
+        "ledgerRows": 0,
+        "reading": true,
+        "money": []
+      },
+      {
+        "at": 1422,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": "true",
+        "truth": "not_yet_known",
+        "ledgerRows": 0,
+        "reading": true,
+        "money": []
+      },
+      {
+        "at": 2621,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": null,
+        "truth": null,
+        "ledgerRows": 0,
+        "reading": false,
+        "money": [
+          "$0.00",
+          "$0.00",
+          "$0.00"
+        ]
+      },
+      {
+        "at": 4235,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": null,
+        "truth": null,
+        "ledgerRows": 0,
+        "reading": false,
+        "money": [
+          "$0.00",
+          "$0.00",
+          "$0.00"
+        ]
+      },
+      {
+        "at": 6539,
+        "selected": "fd000000-0000-4000-8000-0000000c0002",
+        "floorAccount": "fd000000-0000-4000-8000-0000000c0002",
+        "pending": null,
+        "truth": null,
+        "ledgerRows": 0,
+        "reading": false,
+        "money": [
+          "$0.00",
+          "$0.00",
+          "$0.00"
+        ]
+      }
+    ]
+  },
+  {
+    "specimen": "geometry",
+    "width": 1280,
+    "pending": {
+      "w": 717,
+      "lenses": true,
+      "overflow": 0
+    },
+    "settled": {
+      "w": 717,
+      "lenses": true,
+      "overflow": 0
+    }
+  },
+  {
+    "specimen": "geometry",
+    "width": 1440,
+    "pending": {
+      "w": 838,
+      "lenses": true,
+      "overflow": 0
+    },
+    "settled": {
+      "w": 838,
+      "lenses": true,
+      "overflow": 0
+    }
+  },
+  {
+    "specimen": "geometry",
+    "width": 1680,
+    "pending": {
+      "w": 1066,
+      "lenses": true,
+      "overflow": 0
+    },
+    "settled": {
+      "w": 1066,
+      "lenses": true,
+      "overflow": 0
+    }
+  }
+]
