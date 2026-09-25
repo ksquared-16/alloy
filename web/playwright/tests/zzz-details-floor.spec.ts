@@ -141,6 +141,72 @@ test("warm selections", async ({ page }) => {
     for (let i = 0; i < WARM; i++) await selectAccount(page, (i % 5) + 1, "warm", `w${i + 1}`);
 });
 
+test("rapid A to B, and a prewarm nobody consumes", async ({ page }) => {
+    await reach(page);
+    const rows = page.locator("[data-financials-account-row]");
+
+    /*
+     * ── A PREWARM NOBODY CONSUMES ──────────────────────────────────────────────────────────────
+     *
+     * Hover one account, then select a DIFFERENT one. The first read is started and never used,
+     * which is exactly the waste a read-ahead can quietly introduce. §20 asks what that costs, so
+     * it is produced deliberately rather than hoped to be absent.
+     */
+    const wasted: Array<{ url: string; bytes: number }> = [];
+    const onResponse = async (r: import("@playwright/test").Response) => {
+        const u = r.url().replace(/https:\/\/[^/]+/, "");
+        if (!/financials\/card\?/.test(u)) return;
+        let bytes = 0;
+        try { bytes = (await r.body()).byteLength; } catch { /* streamed */ }
+        wasted.push({ url: u.slice(0, 80), bytes });
+    };
+    page.on("response", onResponse);
+
+    const hoverTarget = await rows.nth(6).getAttribute("data-financials-account-row");
+    await rows.nth(6).hover();
+    await page.waitForTimeout(1_600);
+    const clickTarget = await rows.nth(7).getAttribute("data-financials-account-row");
+    await rows.nth(7).click({ timeout: 30_000 });
+    await page.waitForTimeout(4_000);
+    page.off("response", onResponse);
+
+    const unconsumed = wasted.filter((w) => w.url.includes(encodeURIComponent(hoverTarget ?? "\u0000")) || w.url.includes(hoverTarget ?? "\u0000"));
+    const unusedBytes = unconsumed.reduce((a, w) => a + w.bytes, 0);
+    log(`UNCONSUMED PREWARM hovered=${hoverTarget?.slice(0, 8)} clicked=${clickTarget?.slice(0, 8)} reqs=${unconsumed.length} bytes=${unusedBytes} totalCardReqs=${wasted.length}`);
+    all.push({ kind: "waste", pass: "unconsumed", hovered: hoverTarget, clicked: clickTarget, unconsumedRequests: unconsumed.length, unconsumedBytes: unusedBytes, totalCardRequests: wasted.length });
+
+    /*
+     * ── RAPID A TO B ───────────────────────────────────────────────────────────────────────────
+     *
+     * Two selections with no pause between them. B must be what settles, and A's answer - which is
+     * still in the air - must not appear under it.
+     */
+    const aId = await rows.nth(0).getAttribute("data-financials-account-row");
+    const bId = await rows.nth(3).getAttribute("data-financials-account-row");
+    await rows.nth(0).click({ timeout: 30_000 });
+    await page.waitForTimeout(120);
+    const clickB = Date.now();
+    await rows.nth(3).click({ timeout: 30_000 });
+    const frames: Array<{ at: number; selected: string | null; floorAccount: string | null }> = [];
+    for (const d of [150, 300, 600, 1200, 2500, 4000]) {
+        await page.waitForTimeout(d - (frames.length ? [150, 300, 600, 1200, 2500, 4000][frames.length - 1] : 0));
+        frames.push(await page.evaluate(() => ({
+            at: 0,
+            selected: document.querySelector("[data-financials-account-row][data-financials-account-selected='true']")?.getAttribute("data-financials-account-row") ?? null,
+            floorAccount: document.querySelector("[data-financials-detail='true']")?.closest("[data-financials-detail-account]")?.getAttribute("data-financials-detail-account")
+                ?? document.querySelector("[data-financials-detail-account]")?.getAttribute("data-financials-detail-account") ?? null,
+        })).then((f) => ({ ...f, at: Date.now() - clickB })));
+    }
+    log(`RAPID A->B  A=${aId?.slice(0, 8)} B=${bId?.slice(0, 8)}`);
+    for (const f of frames) {
+        const underA = f.floorAccount === aId && f.selected === bId;
+        log(`   +${f.at}ms selected=${f.selected?.slice(0, 8)} floorFor=${f.floorAccount?.slice(0, 8)}${underA ? "  <<< A TRUTH UNDER B" : ""}`);
+        expect(underA, "A's floor may never appear under B").toBe(false);
+        if (f.selected) expect(f.selected, "B is the selection B's click made").toBe(bId);
+    }
+    all.push({ kind: "rapid", pass: "a-to-b", a: aId, b: bId, frames });
+});
+
 test("record", async () => {
     mkdirSync(OUT, { recursive: true });
     writeFileSync(`${OUT}/floor-sample.json`, JSON.stringify(all, null, 2));
