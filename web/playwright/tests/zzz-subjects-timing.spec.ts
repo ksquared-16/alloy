@@ -22,9 +22,15 @@ test("the subjects route names its own cost", async ({ page }) => {
         seen.push({ url: u, timing: r.headers()["server-timing"] ?? "(none published)", ms: Math.round(t.responseEnd - t.startTime), bytes });
     });
 
-    await page.goto("/workspace/work-unit/enrolled-children", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(13_000);
-    await page.locator("[data-adminv2-sidebar-modal-nav='financials']").first().click({ force: true, timeout: 20_000 });
+    /* One re-navigation, reported — a silent retry would hide a session that expired. */
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        await page.goto("/workspace/work-unit/enrolled-children", { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(13_000);
+        const nav = page.locator("[data-adminv2-sidebar-modal-nav='financials']").first();
+        if (await nav.count()) { await nav.click({ force: true, timeout: 20_000 }); break; }
+        log(`workspace nav not ready on attempt ${attempt} (url=${page.url()})`);
+        if (attempt === 2) throw new Error(`workspace nav never mounted at ${page.url()}`);
+    }
     await page.waitForTimeout(11_000);
     seen.length = 0;
     await page.locator("[data-workspace-section-tab='accounts']").first().click({ timeout: 20_000 });

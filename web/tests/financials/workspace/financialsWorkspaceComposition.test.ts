@@ -45,6 +45,22 @@ const SECTION_FILES = [
     "app/adminV2/financials/sections/FinancialsBulkCharge.tsx",
 ];
 
+/* Both canonical gate helpers; the migration between them is partial and deliberately so. */
+const CAPABILITY_HELPERS = ["requireFinancialsCapability", "assertFinancialsReadAllowed"] as const;
+
+/*
+ * COMMENTS ARE NOT CODE, and an import is not a call.
+ *
+ * A first cut asked whether the route SOURCE contained the helper's name. Both names appear in
+ * these routes' explanatory comments — one describes what the other used to do — so deleting the
+ * gate outright left the assertion green, and so did declaring a helper the route never calls.
+ * This strips comments and requires a CALL.
+ */
+const callsHelper = (source: string, helper: string) =>
+    new RegExp(`\\b${helper}\\s*\\(`).test(
+        source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""),
+    );
+
 const NEW_ROUTES = [
     "app/api/admin/financials/position/route.ts",
     "app/api/admin/financials/payment-flow/route.ts",
@@ -179,10 +195,26 @@ describe("Financials workspace — BOS may explain, and may not decide money", (
 
 describe("Financials workspace — the reads are gated and scoped by the server", () => {
     it("every new route is gated by fin.read through the named helper", () => {
+        /*
+         * TWO canonical helpers stand here now, and the migration between them is PARTIAL.
+         *
+         * The shared permission repair moved `position` and `subjects` to
+         * `requireFinancialsCapability`, which answers the verdict from the keys the request
+         * already resolved instead of re-reading `user_roles` and `role_permission_grants` per
+         * route — measured at 211ms to 0.2ms. `payment-flow`, `activity` and `overview-metrics`
+         * still call `assertFinancialsReadAllowed`.
+         *
+         * So this asserts what is actually required: every route is gated through ONE of the two
+         * named helpers. Naming a single helper would either fail on the routes not yet migrated
+         * or, worse, quietly pass once someone deleted the assertion to make it green.
+         */
         for (const rel of NEW_ROUTES) {
             const source = read(rel);
             expect(source, rel).toContain("loadAdminRouteGate");
-            expect(source, rel).toContain("assertFinancialsReadAllowed");
+            expect(
+                CAPABILITY_HELPERS.some((h) => callsHelper(source, h)),
+                `${rel} must CALL a named capability helper (${CAPABILITY_HELPERS.join(" or ")})`,
+            ).toBe(true);
         }
     });
 
@@ -191,11 +223,16 @@ describe("Financials workspace — the reads are gated and scoped by the server"
             routes: Record<string, Record<string, { status: string; capability?: string; helper?: string }>>;
         };
         for (const rel of NEW_ROUTES) {
-            expect(declared.routes[rel]?.GET, rel).toEqual({
-                status: "declared",
-                capability: "fin.read",
-                helper: "assertFinancialsReadAllowed",
-            });
+            const entry = declared.routes[rel]?.GET;
+            expect(entry?.status, rel).toBe("declared");
+            expect(entry?.capability, rel).toBe("fin.read");
+            /* The declaration must name the helper the route ACTUALLY calls — that binding is the
+               whole point of the table, and it is what a partial migration can silently break. */
+            expect(CAPABILITY_HELPERS, `${rel} declares ${entry?.helper}`).toContain(entry?.helper);
+            expect(
+                callsHelper(read(rel), entry?.helper ?? "\u0000"),
+                `${rel} declares ${entry?.helper} but does not call it`,
+            ).toBe(true);
         }
     });
 

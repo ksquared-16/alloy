@@ -90,8 +90,7 @@ export async function GET(request: NextRequest) {
             siteScope: ctx.siteScope === "restricted" ? "restricted" : "all",
             allowedSiteLocationIds: ctx.siteScope === "restricted" ? (ctx.allowedSiteLocationIds ?? []) : [],
             activeSiteLocationId: requestedSite,
-        });
-        mark("cohort");
+        }, mark);
         const body = JSON.stringify({ ok: true, ...cohort });
         mark("serialize");
         return new NextResponse(body, {
