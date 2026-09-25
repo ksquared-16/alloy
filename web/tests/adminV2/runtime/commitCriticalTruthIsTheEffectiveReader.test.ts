@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
-import type { SubjectIdentityTruth } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 const baseInput = (truth: SubjectIdentityTruth | null) =>
     ({

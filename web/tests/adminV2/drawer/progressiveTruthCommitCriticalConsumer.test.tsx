@@ -29,7 +29,7 @@ import {
     DRAWER_TRUTH_PATCH_VERSION,
     type DrawerTruthPatch,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
-import type { SubjectIdentityTruth } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
 const patchFor = (opportunityId: string, fields: Record<string, unknown>): DrawerTruthPatch => ({
     version: DRAWER_TRUTH_PATCH_VERSION,
