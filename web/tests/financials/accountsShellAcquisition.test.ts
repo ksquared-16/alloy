@@ -74,6 +74,119 @@ async function waves() {
     return Object.assign(out, { reads });
 }
 
+/*
+ * A SECOND FIXTURE, DELIBERATELY RICHER THAN `ROWS`.
+ *
+ * The placement chain stops early when nothing is placed, so the shared fixture never reaches its
+ * last three waves. These rows place children in programs and rooms, which is the shortest path
+ * that visits every wave. It is kept separate because adding a `child_placements` row to `ROWS`
+ * would add a round trip and move the wave counts the tests above are pinned to.
+ *
+ * TWO CHILDREN, NOT ONE, AND THAT IS THE POINT. A mark written inside a row loop fires once per
+ * row — against a single-row fixture it fires exactly once and is indistinguishable from a correct
+ * mark. The first cut of this fixture had one placement and the duplicate-mark test stayed green on
+ * a real planted defect. Any fixture meant to catch per-row behaviour needs at least two rows.
+ */
+const PLACED_ROWS: Record<string, Array<Record<string, unknown>>> = {
+    ...ROWS,
+    customer_members: [
+        { id: "mem-1", customer_id: "cust-1", first_name: "A", last_name: "B", display_name: "A B" },
+        { id: "mem-2", customer_id: "cust-1", first_name: "C", last_name: "B", display_name: "C B" },
+    ],
+    child_placements: [
+        { customer_member_id: "mem-1", program_category_id: "prog-1", room_location_id: "room-1", status: "active" },
+        { customer_member_id: "mem-2", program_category_id: "prog-2", room_location_id: "room-2", status: "active" },
+    ],
+    location_program_categories: [
+        { id: "prog-1", label: "Toddler", key: "toddler" },
+        { id: "prog-2", label: "Preschool", key: "preschool" },
+    ],
+    locations: [
+        { id: "room-1", label: "Room A" },
+        { id: "room-2", label: "Room B" },
+    ],
+};
+
+/** Answers immediately. The question here is which marks fire, not how many waves it takes. */
+function resolvingClient(rows: Record<string, Array<Record<string, unknown>>>) {
+    const builder = (table: string) => {
+        const chain: Record<string, unknown> = {};
+        for (const k of ["select", "not", "gte", "lte", "lt", "gt", "or", "order", "limit", "range", "overlaps", "contains", "eq", "in", "is", "neq"]) {
+            chain[k] = () => chain;
+        }
+        const answer = { data: rows[table] ?? [], error: null, count: (rows[table] ?? []).length };
+        chain.maybeSingle = () => Promise.resolve({ data: (rows[table] ?? [])[0] ?? null, error: null });
+        chain.single = chain.maybeSingle;
+        chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve().then(() => resolve(answer));
+        return chain;
+    };
+    return { from: (t: string) => builder(t) } as never;
+}
+
+describe("the instrument actually fires", () => {
+    /*
+     * ── WHY THIS EXISTS ALONGSIDE THE SOURCE GATES ─────────────────────────────────────────────
+     *
+     * Every other assertion about these phases reads the SOURCE: it checks that a name is passed to
+     * `phase(`. That is a claim about the text, and text-scanning gates have false-greened twice in
+     * this file's history — once because a mention in a comment satisfied a `contains`, once because
+     * a bracket-depth scan popped its own marker on a type annotation.
+     *
+     * This drives the real cohort and records what it actually emits. A phase that is never reached,
+     * or reached many times, is caught here regardless of how the source reads.
+     */
+    async function marksFor() {
+        const marks: string[] = [];
+        await resolveFinancialSubjectCohort(
+            resolvingClient(PLACED_ROWS),
+            { orgId: "org", siteLocationIds: [] } as never,
+            (name: string) => marks.push(name),
+        );
+        return marks;
+    }
+
+    it("every declared wave is reached", async () => {
+        const marks = await marksFor();
+        const heads = marks.map((m) => m.replace(/_\d+p.*$|_n\d+$/, ""));
+        for (const span of [
+            "households", "sites_direct", "sites_orphans", "sites_members",
+            "members", "contacts", "placements",
+            "pl_members", "pl_placements", "pl_instances", "pl_programs", "pl_rooms",
+            "agreement_sites", "facets", "assemble",
+        ]) {
+            expect(heads, `the ${span} wave is never reached: got ${heads.join(" -> ")}`).toContain(span);
+        }
+    });
+
+    it("no wave is marked twice", async () => {
+        /*
+         * THE DEFECT THIS CATCHES BEHAVIOURALLY. A mark written inside a row loop fires once per
+         * row: it resets the delta baseline every time and emits N copies of the label. It
+         * typechecks and it reads as instrumentation. `phase("customers")` was in exactly that
+         * position on the position branch before this slice found it.
+         */
+        const marks = await marksFor();
+        const heads = marks.map((m) => m.replace(/_\d+p.*$|_n\d+$/, ""));
+        const repeated = [...new Set(heads.filter((h, i) => heads.indexOf(h) !== i))];
+        expect(repeated, `a wave is marked more than once: ${marks.join(" -> ")}`).toEqual([]);
+    });
+
+    it("the cohort opens on the households and closes on the assembly", async () => {
+        const marks = await marksFor();
+        expect(marks[0], "the first mark is the household scan").toMatch(/^households/);
+        expect(marks[marks.length - 1], "the last mark is the assembly").toBe("assemble");
+    });
+
+    it("the paged scans report what they paged", async () => {
+        /* For a serial page walk the page count IS the cost: one round trip per page. */
+        const marks = await marksFor();
+        expect(marks.find((m) => m.startsWith("households")), "the household scan reports pages and rows")
+            .toMatch(/^households_\d+p_n\d+$/);
+        expect(marks.find((m) => m.startsWith("sites_orphans")), "the orphan scan reports its pages")
+            .toMatch(/^sites_orphans_\d+p$/);
+    });
+});
+
 describe("the account list's cohort does not queue reads that share an input", () => {
     it("four waves, not seven", async () => {
         const w = await waves();
@@ -191,8 +304,111 @@ describe("the account list's own boundaries are published", () => {
          */
         expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark\)/);
         const COHORT = readFileSync(join(process.cwd(), "lib/financials/workspace/resolveFinancialSubjects.ts"), "utf8");
+        /*
+         * A span may carry its own shape in the label — `households_2p_n847` says the walk took two
+         * serial pages over 847 rows, and the page count IS the finding for a paged read. So the
+         * binding is on the phase NAME at the head of the label, not on a literal string: the name
+         * must still be passed to `phase(`, and a renamed or deleted phase still reddens.
+         */
+        const namesPhase = (src: string, span: string) =>
+            new RegExp(`phase\\(\\s*["\`']${span}(["\`']|_|\\$\\{)`).test(src);
         for (const span of ["households", "agreement_sites", "facets", "assemble"]) {
-            expect(COHORT, `the cohort names its ${span} phase`).toContain(`phase("${span}")`);
+            expect(namesPhase(COHORT, span), `the cohort names its ${span} phase`).toBe(true);
+        }
+        /*
+         * The interior of the two waves that were opaque. `agreement_sites` hid three dependent
+         * reads behind one label and the facet chain hid two, and because those two branches run
+         * CONCURRENTLY the delta on each was measuring the other's wait.
+         */
+        for (const span of ["sites_direct", "sites_orphans", "sites_members"]) {
+            expect(namesPhase(COHORT, span), `the site walk names its ${span} wave`).toBe(true);
+        }
+        for (const span of ["members", "contacts", "placements"]) {
+            expect(namesPhase(COHORT, span), `the facet chain names its ${span} branch`).toBe(true);
+        }
+        /*
+         * The placement facets are themselves a four-wave dependent chain — members, the placements
+         * they hold, the process instances that say which are live, then the labels those name. It
+         * is the deepest thing on either branch and it reported as part of one `facets` label.
+         */
+        for (const span of ["pl_members", "pl_placements", "pl_instances", "pl_programs", "pl_rooms"]) {
+            expect(namesPhase(COHORT, span), `the placement chain names its ${span} wave`).toBe(true);
+        }
+    });
+
+    it("no phase mark sits inside a callback", () => {
+        /*
+         * A mark that lands inside a `.map()` body fires once PER ROW. It still typechecks, still
+         * reads as instrumentation, and silently destroys the instrument: the delta baseline resets
+         * on every row, so every later span reports near-zero, and the header carries N copies of
+         * the label. This happened here — `phase("customers")` was written into the row map and
+         * only a reading of the region found it.
+         *
+         * The test is NOT "mark at top level". A mark inside a `.then()` is correct — that callback
+         * runs once, and the three facet branches must each report when THEY land. What must never
+         * happen is a mark inside an ARRAY-ITERATION callback, which runs once per element. So this
+         * tracks brace depth from each `.map(`/`.forEach(`/`.filter(`/`.reduce(` and flags a mark
+         * that falls inside one.
+         */
+        /*
+         * Bracket depth must be counted over CODE ONLY, and the open-iterator marker must be pushed
+         * at the `(` it belongs to — not at the start of the line that opens it.
+         *
+         * Two earlier cuts of this gate stayed GREEN against a real planted defect. The first
+         * counted depth over raw source, and this file's prose carries unbalanced parentheses, so
+         * the drift popped the marker early. The second blanked the comments but still pushed the
+         * marker per line: on `const rows: FinancialPositionRow[] = visible.map((v) => {` the `[]`
+         * of the type annotation closed back down to the marker's own depth and popped it before
+         * the callback body was ever reached.
+         */
+        const codeOnly = (src: string) =>
+            src
+                .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+                .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length))
+                .replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g, (m) => m[0] + " ".repeat(Math.max(0, m.length - 2)) + m[0]);
+        const ITER = /\.(map|forEach|filter|reduce|flatMap|some|every)$/;
+        for (const file of [
+            "lib/financials/workspace/resolveFinancialSubjects.ts",
+            "lib/financials/workspace/resolveFinancialPosition.ts",
+        ]) {
+            const src = codeOnly(readFileSync(join(process.cwd(), file), "utf8"));
+            const nested: string[] = [];
+            let depth = 0;
+            let line = 1;
+            /* Depths INSIDE which an array-iteration callback is currently open. */
+            const iterating: number[] = [];
+            for (let i = 0; i < src.length; i++) {
+                const ch = src[i];
+                if (ch === "\n") {
+                    line += 1;
+                    continue;
+                }
+                if (ch === "(" && src.slice(Math.max(0, i - 5), i) === "phase" && iterating.length > 0) {
+                    nested.push(`${file}:${line}`);
+                }
+                if (ch === "(" || ch === "{" || ch === "[") {
+                    depth += 1;
+                    if (ch === "(" && ITER.test(src.slice(Math.max(0, i - 40), i))) iterating.push(depth);
+                } else if (ch === ")" || ch === "}" || ch === "]") {
+                    depth -= 1;
+                    while (iterating.length > 0 && depth < iterating[iterating.length - 1]) iterating.pop();
+                }
+            }
+            expect(nested, `${file}: a phase mark fires once per element, not once`).toEqual([]);
+        }
+    });
+
+    it("the position cohort reports its own interior", () => {
+        /*
+         * Its sibling was one opaque label until it was given phases, and two repairs made against
+         * the opaque version moved nothing. This branch is 650-960ms of the list's wait; a single
+         * timer would invite the same mistake a third time.
+         */
+        const POSITION = readFileSync(join(process.cwd(), "app/api/admin/financials/position/route.ts"), "utf8");
+        expect(POSITION, "the cohort is handed the mark").toMatch(/resolveFinancialPositionCohort\([\s\S]{0,400}\}, mark\)/);
+        const COHORT = readFileSync(join(process.cwd(), "lib/financials/workspace/resolveFinancialPosition.ts"), "utf8");
+        for (const span of ["charges", "agreements", "collectible", "customers"]) {
+            expect(COHORT, `the position cohort names its ${span} phase`).toContain(`phase("${span}")`);
         }
     });
 
@@ -204,7 +420,7 @@ describe("the account list's own boundaries are published", () => {
          */
         const POSITION = readFileSync(join(process.cwd(), "app/api/admin/financials/position/route.ts"), "utf8");
         expect(POSITION, "the response publishes Server-Timing").toContain('"server-timing"');
-        for (const span of ["auth", "perm", "cohort", "serialize"]) {
+        for (const span of ["auth", "perm", "serialize"]) {
             expect(POSITION, `${span} is a named boundary`).toContain(`mark("${span}")`);
         }
     });
