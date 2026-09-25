@@ -18,6 +18,7 @@
  */
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
+import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
 
 export default function PaymentMethodSetupField({
     clientSecret,
@@ -47,7 +48,7 @@ export default function PaymentMethodSetupField({
     useEffect(() => {
         let cancelled = false;
         void (async () => {
-            const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+            const key = stripePublishableKey();
             /* No `stripeAccount`: the setup is the PLATFORM's. See this component's header. */
             const s = key ? await loadStripe(key) : null;
             if (cancelled) return;

@@ -7,6 +7,7 @@ import { adminPaymentRunFeedback } from "@/lib/admin/paymentRunFeedback";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import type { JobChargeBalanceRow } from "@/lib/admin/jobPaymentBalances";
+import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
 
 export type AdminCollectPaymentModalContext = {
   jobId: string;
@@ -185,7 +186,7 @@ export function AdminCollectPaymentModal({
       setCardEl(null);
       return;
     }
-    const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE?.trim();
+    const pk = stripePublishableKey();
     if (!pk) return;
     let cancelled = false;
     void (async () => {
@@ -621,7 +622,7 @@ export function AdminCollectPaymentModal({
                   />
                   <span>
                     Enter new card
-                    {!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE?.trim() && (
+                    {!stripePublishableKey() && (
                       <span className="block text-xs text-alloy-ember mt-0.5">NEXT_PUBLIC_STRIPE_PUBLISHABLE is not set.</span>
                     )}
                   </span>

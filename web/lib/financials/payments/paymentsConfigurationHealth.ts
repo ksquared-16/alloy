@@ -24,6 +24,8 @@
  * carries its own caveat — it is the single fact that cost this workstream two round trips.
  */
 
+import { resolvePublishableFromEnv } from "@/lib/financials/payments/stripePublishableKey";
+
 export type ConfigPresence = "present" | "absent";
 export type StripeMode = "test" | "live" | "unknown";
 
@@ -39,7 +41,8 @@ export type PaymentsConfigurationHealth = {
     browserTokenization: {
         status: ConfigPresence;
         mode: StripeMode;
-        variable: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY";
+        /** WHICH name supplied it. Null when neither is set. */
+        variable: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" | "NEXT_PUBLIC_STRIPE_PUBLISHABLE" | null;
         caveat: string;
     };
     /** The origin Stripe returns onboarding to. Falls back to localhost when absent. */
@@ -74,7 +77,13 @@ export function computePaymentsConfigurationHealth(
     env: Record<string, string | undefined>,
 ): PaymentsConfigurationHealth {
     const secret = env.STRIPE_SECRET_KEY;
-    const publishable = env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    /*
+     * TWO NAMES, ONE VALUE. Reporting which one supplied it is the point: a product reading one
+     * name while the environment carries the other is exactly how Add card refused for days with
+     * the key correctly configured the whole time.
+     */
+    const resolvedPublishable = resolvePublishableFromEnv(env);
+    const publishable = resolvedPublishable.key;
 
     const providerApi = {
         status: present(secret),
@@ -84,7 +93,7 @@ export function computePaymentsConfigurationHealth(
     const browserTokenization = {
         status: present(publishable),
         mode: stripeModeOf(publishable),
-        variable: "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" as const,
+        variable: resolvedPublishable.variable,
         caveat: BUILD_TIME_CAVEAT,
     };
     const webhookVerification = {
