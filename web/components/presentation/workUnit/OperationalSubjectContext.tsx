@@ -19,6 +19,7 @@
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
 import { mergeDrawerTruthPatchFields } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatch";
+import { markFocusTruthHasRoster } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatchDiag";
 import {
     peekDrawerTruthPatch,
     subscribeToActionableDrawerCarriers,
@@ -254,6 +255,19 @@ export function OperationalSubjectProvider({
             progressiveTruth.fields,
         ) as SubjectIdentityTruth;
     }, [subjectIdentityTruth, progressiveTruth]);
+
+    /*
+     * B6 — the first MOUNTED truth bag for this subject that contains the roster key.
+     *
+     * Presence only, and it is what separates "the merge ran" from "a consumer can see it": the
+     * store can hold a patch while React has not yet re-rendered the provider, and that interval is
+     * invisible to every mark before this one. Recorded during render rather than in an effect
+     * because an effect fires after paint, which would fold the card's own render into this leg.
+     */
+    if (settledIdentityTruth && (settledIdentityTruth as Record<string, unknown>)._inquiry_children != null) {
+        markFocusTruthHasRoster(subjectId);
+    }
+
 
     const value = useMemo<OperationalSubject>(
         () => ({

@@ -1,5 +1,6 @@
 "use client";
 
+import { markTruthPatchMerged } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatchDiag";
 import {
     drawerTruthPatchDescribesSubject,
     mergeDrawerTruthPatchFields,
@@ -165,13 +166,23 @@ export function clearActionableDrawerCarriersForTests(): void {
  */
 export function publishDrawerTruthPatch(patch: DrawerTruthPatch): void {
     const id = patch.subject.opportunity_id?.trim();
-    if (!id) return;
+    if (!id) {
+        markTruthPatchMerged(patch.subject?.opportunity_id, "REFUSED_SUBJECT");
+        return;
+    }
     const key = keyOf(id);
     const prior = entries.get(key);
     const merged: DrawerTruthPatch = {
         ...patch,
         fields: mergeDrawerTruthPatchFields(prior?.truthPatch?.fields ?? null, patch.fields),
     };
+    /*
+     * B4/B5 — the canonical merge ran. The outcome distinguishes a patch that added a fact from one
+     * that restated what was already known, so "the merge happened" and "the merge changed
+     * something" cannot be confused for each other in the measurement.
+     */
+    const priorKeys = Object.keys(prior?.truthPatch?.fields ?? {}).length;
+    markTruthPatchMerged(id, Object.keys(merged.fields).length > priorKeys ? "APPLIED" : "NO_CHANGE");
     entries.set(key, { carrier: prior?.carrier ?? null, truthPatch: merged, storedAt: Date.now() });
     while (entries.size > MAX_ENTRIES) {
         const oldest = entries.keys().next();
