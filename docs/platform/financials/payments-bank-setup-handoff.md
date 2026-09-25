@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-25
+supersedes: []
+---
+
 # Bank account setup is the payer's act — the handoff, and the slice that builds it
 
 **Status:** boundary established; participant flow NOT built.
