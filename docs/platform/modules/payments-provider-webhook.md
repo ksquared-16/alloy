@@ -107,6 +107,41 @@ been inert.
 Repointing the URL without provisioning the secret turns 404s into 400s — the Stripe dashboard would
 still show failures, and it would look like the repair had half-worked. They are one change.
 
+## CERTIFIED — the first real deliveries, 2026-09-25
+
+`payment_provider_events` was empty at 15:51 and carries two rows now. Both are real Stripe
+deliveries to the canonical deployed endpoint, and together they close this boundary.
+
+| | Event 1 | Event 2 |
+|---|---|---|
+| Stripe event id | `evt_1UJbjOAN…` | `evt_1UJbkKAN…` |
+| Type | `account.updated` | `account.updated` |
+| Connected account | `acct_1UIV5…` | `acct_1UIV5…` |
+| Org attributed | **yes** | **yes** |
+| Org matches merchant binding | **yes** | **yes** |
+| Disposition | `applied` | `applied` |
+| Adapter's own detail | *merchant readiness is now restricted, bank restricted* | *merchant readiness is now **ready**, bank ready* |
+| Stripe created → received → processed | 16:12:14 → 16:12:15.02 → 16:12:15.7 | 16:13:12 → 16:13:12.41 → 16:13:12.88 |
+
+**The webhook did not merely arrive — it drove the convergence.** The second event is what turned the
+merchant ready. That is the entire architecture executing end to end:
+
+```
+Stripe → real signed POST → deployed /api/stripe/webhook → signature verified
+       → durable claim → event.account → payment_provider_merchants → correct org
+       → readiness persisted → disposition `applied`
+```
+
+Tenancy came from the connected account, matched against the merchant binding — `org_matches_merchant`
+is true for both. No metadata was consulted, which is what the adapter has always claimed and what
+had never before been exercised by a real event.
+
+**Idempotency shape:** 2 rows, 2 distinct event ids, `max_rows_per_event_id = 1`. One durable event
+authority per Stripe identity. A legitimate Stripe redelivery could not be produced from this lane —
+that needs dashboard authority — so the previously certified deterministic duplicate proof stands.
+
+**Classification: `PAYMENTS_STRIPE_WEBHOOK_CONFIGURATION_COMPLETE_CERTIFIED`.**
+
 ## Certified state, 2026-09-25
 
 The operator removed the stale destination, configured the canonical one with Connect delivery,
