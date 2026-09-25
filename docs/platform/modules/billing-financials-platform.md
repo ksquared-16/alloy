@@ -220,6 +220,33 @@ Migration `supabase/migrations/20260902130000_financial_spine_actor_and_househol
 
 **Idempotency scope is the billable source.** `resolution_key` is `tpl:<template_key>:<occurs_on>:<scopeKey>` where `scopeKey` is the **billable source id**. It was the agreement id falling back to the literal `"org"`, which made two different households' fees share a key on the same day and skipped the dedupe read entirely for household charges — two submissions wrote two drafts.
 
+### Household obligations carry responsibility (September 2026)
+
+No migration. `web/lib/financials/responsibility/resolveAllocatableNet.ts`.
+
+The third instance of the same defect the section above describes, and the last one. `20260827120000_household_billable_source` admitted `billable_source_type = 'customer'` so a family could be charged before anyone is enrolled; `20260902130000` made those rows immutable once posted and put them behind the role gate. What neither reached was **responsibility**. `resolveAllocatableNet` refused every non-agreement source outright — *"Only an enrolment-backed charge carries responsibility"* — so Financials would create, protect and post real household money and then decline to say who owed it. Enrollment V0.5 hit this on per-family fees and correctly refused either to invent a position or to hide the charge.
+
+**That sentence was never a financial invariant.** It was one resolver's convenience: the only reason it wanted an agreement was to look up the household, and it had no other way to find one.
+
+**BILLABLE-SOURCE GRAIN DETERMINES ATTRIBUTION, NOT WHETHER RESPONSIBILITY EXISTS.**
+
+- `customer` is a **valid billable source** for the whole canonical chain — charge → reductions → allocatable net → responsibility → expected funding → collectible-now → applications → outstanding.
+- A household obligation is **account-attributed**: it names no child, and none is invented for it. Attaching account money to the household's only child would make a person responsible for something they never incurred, and would let a child-narrowed arrangement bear a charge never written for it. `AllocatableNet.enrollmentAgreementId` is therefore nullable, and null is the honest answer rather than a placeholder.
+- An `enrollment_agreement` obligation stays **child-attributed**, unchanged.
+- **Child attribution is optional and orthogonal** for household obligations. Provenance — an Enrollment episode, a fee definition, an initiating event — may be retained on the charge; responsibility authority remains Financials'.
+
+**Nothing downstream needed changing, which is the evidence the limit was local.** `resolveResponsibilitySplit` is pure — net plus shares, indifferent to source. `readArrangementInForce` already filters `customer_member_id === null || === the charge's child`, so an account-wide arrangement bears a household charge and a child-narrowed one cannot. And the arrangement model never had the limit: `financial_responsibility_arrangements` is keyed on `customer_id NOT NULL` with an optional `customer_member_id`, and its own migration says why — *"Scope. The account always; ONE CHILD optionally"*.
+
+**The household now comes from one owner.** `resolveBillableSourceHouseholdId` — the resolver the payment/charge gate already consults to decide whether two sources belong to the same household. It knows a household source IS the household, and it recovers the household from the child when an agreement's denormalised `customer_id` is null, a fallback the inline lookup never had. A charge and a payment can no longer disagree about whose money they are.
+
+**Every refusal that was real is still real:** money whose owner cannot be named, a reduction (dividing a discount between two parents takes it off the family twice), a negative net, and a void charge.
+
+**UNASSIGNED remains first-class.** Certified on a $200 household charge with a single fixed $80 share: Mom $80, UNASSIGNED $120, and the reconciliation invariant exact — assigned plus unassigned equals allocatable net. Nobody is assigned automatically; not the packet respondent, not the primary contact, not a guardian, not the payment-method owner.
+
+**Responsibility remains independent of payer identity.** Certified on a $200 household charge split Dana 50% / Rosa 50%: a third party (an emergency contact, never a responsible party) paid $40 with `payer_entity_type = 'person'`. The responsibility parties were byte-identical before and after, the payer did not join them, and outstanding moved $200 → $160 through payment application alone.
+
+**Expected funding still is not money.** Certified: a $60 `government_subsidy` expectation on a share surfaces as `expectedSubsidyCents` beside the position and does **not** reduce `currentlyCollectibleCents`. Only a governed **submitted claim** suppresses a balance — an expectation or an authorization does not.
+
 ### Correction lineage — a charge is corrected once (September 2026)
 
 Migration `supabase/migrations/20260902140000_charge_correction_lineage.sql`.

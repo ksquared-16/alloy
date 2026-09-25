@@ -9,11 +9,13 @@ and `lib/pos` imported nothing from `lib/financials`. This slice builds that wir
 
 ## A. Outcome
 
-`ADMISSIONS_V12_PUBLISHED_ENROLLMENT_FINANCIAL_BRIDGE_V1_COMPLETE` — **with one named exception.**
+`ADMISSIONS_V12_PUBLISHED_ENROLLMENT_FINANCIAL_BRIDGE_V1_COMPLETE`.
 
-Per-child fees are certified end to end. **Per-family fees are blocked** by a disagreement inside
-Financials, reported rather than worked around (§D.4). Cases F and G are proven by unit contract but
-not live, for want of subsidy and payment fixtures (§J).
+Per-child fees were certified end to end in this run. Per-family fees were blocked by a
+disagreement inside Financials (§D.4), reported rather than worked around — and **that gap was
+closed in `erun_b1327e12532e2269`**, where per-family fees were certified end to end with exact
+parity against canonical Financials. Cases F and G below were proven by unit contract at the time;
+both are now proven live in the Financials repair closeout.
 
 ## B. Admissions v12 closeout
 
@@ -114,7 +116,18 @@ balance this design exists to prevent; dropping the obligation would hide posted
 obligation is reported **without** a position, contributes nothing to any total shown to a family,
 and reads `ATTENTION_REQUIRED` — a charge nobody can position needs a person, not a default.
 
-**This is the gap that blocks per-family fees, and it belongs to Financials.**
+**This was the gap that blocked per-family fees, and it belonged to Financials.**
+
+> **RESOLVED — `erun_b1327e12532e2269`.** The refusal was never a financial invariant; it was one
+> resolver's convenience, because the only reason it wanted an agreement was to look up the
+> household. `resolveAllocatableNet` now resolves the household through
+> `resolveBillableSourceHouseholdId` and accepts either childcare billable source. Nothing
+> downstream needed changing — the share engine is pure, `readArrangementInForce` already filtered
+> on a nullable child, and `financial_responsibility_arrangements` was keyed
+> `customer_id NOT NULL` with an optional `customer_member_id` from the start. Per-family fees are
+> certified end to end in §G below. See
+> `docs/platform/modules/billing-financials-platform.md` → *Household obligations carry
+> responsibility*.
 
 ## E. Readiness contract
 
@@ -145,8 +158,17 @@ The projection holds **no** balance. `gross`, `expectedFunding`, `collectibleNow
 `outstanding` are each quoted field-for-field from `CollectiblePosition`; the only arithmetic is
 summing per-child obligations into a family total, which is Enrollment's own question.
 
-**The funding law**, asserted directly: gross $200, expected subsidy $100, collectible $100 — a
-family that pays $100 is **SATISFIED**, and Enrollment never waits for a second $100.
+**The funding law**, as the projection applies it: whatever Financials reports as
+`currentlyCollectible` is what the family owes, so a family that pays it is **SATISFIED** and
+Enrollment never waits for the gross.
+
+**Corrected against the runtime (`erun_b1327e12532e2269`).** An earlier reading of this section
+implied that an expected subsidy reduces what is collectible. It does not. Measured on a $200
+household charge with a $60 `government_subsidy` expectation: `expectedSubsidyCents` becomes 60 and
+`currentlyCollectibleCents` stays 20000. Only a governed **submitted claim** suppresses a balance —
+an expectation or an authorization never does, which is `expectedFundingService`'s own stated rule
+("Expected funding is not money"). The projection was always right because it quotes rather than
+computes; the prose was wrong.
 
 ## G. Multi-child proof — live
 
@@ -233,3 +255,23 @@ payment · saved-method privacy · payer invitations · partial contributions.
 **Recommended predecessor:** close §D.4 first. Per-family fees cannot work until Financials decides
 whether a household-sourced charge carries responsibility, and a payer experience built over a
 position that cannot be resolved would inherit the same hole.
+
+---
+
+## N. D.4 closed — per-family parity certified (`erun_b1327e12532e2269`)
+
+The Financials repair generalized `resolveAllocatableNet`; the bridge needed **no change at all**,
+which is the strongest evidence the ownership split was drawn in the right place.
+
+Certified live on the Alvarez household with a $200 household fee:
+
+| Step | Result |
+|---|---|
+| per-family arrangement | Dana 60% / Rosa 40% |
+| per-family Enrollment config | exactly **one** `customer` charge |
+| canonical responsibility | 2 allocations · Dana $120 · Rosa $80 · UNASSIGNED $0 · net $200 |
+| Financials truth | `source=customer`, `agreement=null`, `child=null` |
+| Enrollment projection | `DUE` · gross $200 · funding $0 · collectible $200 · applied $0 · outstanding $200 |
+
+**Parity: gross, expected funding, collectible-now, applied and outstanding all matched exactly.**
+The projection still holds no balance of its own.
