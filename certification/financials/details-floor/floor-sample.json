@@ -1,0 +1,112 @@
+[
+  {
+    "kind": "cold",
+    "pass": "c1",
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "selectedRow": 99,
+    "floorGeometry": 100,
+    "usableFloor": 101,
+    "firstMeaning": 103,
+    "ledger": 104,
+    "settled": 105,
+    "rows": 116,
+    "requests": []
+  },
+  {
+    "kind": "cold",
+    "pass": "c2",
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedRow": 113,
+    "floorGeometry": 1194,
+    "usableFloor": 1196,
+    "firstMeaning": 1197,
+    "ledger": 1198,
+    "settled": 1199,
+    "rows": 2,
+    "requests": [
+      {
+        "url": "/api/admin/financials/responsibility-positions",
+        "at": 499,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/family-discount-position",
+        "at": 1104,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/family-discount-position",
+        "at": 1121,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/card",
+        "at": 1177,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions",
+        "at": 1207,
+        "ms": -1
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w1",
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedRow": 91,
+    "floorGeometry": 1030,
+    "usableFloor": 1031,
+    "firstMeaning": 1032,
+    "ledger": 1033,
+    "settled": 1034,
+    "rows": 2,
+    "requests": [
+      {
+        "url": "/api/admin/financials/family-discount-position",
+        "at": 995,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/card",
+        "at": 1013,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions",
+        "at": 1181,
+        "ms": -1
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w2",
+    "account": "fd000000-0000-4000-8000-0000000c0001",
+    "selectedRow": 118,
+    "floorGeometry": 1016,
+    "usableFloor": 1021,
+    "firstMeaning": 1023,
+    "ledger": null,
+    "settled": 190924,
+    "rows": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/family-discount-position",
+        "at": 885,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/card",
+        "at": 994,
+        "ms": -1
+      },
+      {
+        "url": "/api/admin/financials/responsibility-positions",
+        "at": 1156,
+        "ms": -1
+      }
+    ]
+  }
+]
