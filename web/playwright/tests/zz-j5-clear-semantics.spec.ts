@@ -89,8 +89,19 @@ test("j5 clear semantics", async ({ page }) => {
                 if (!sawReserved && t > 6000) break;
             }
             const end = snap();
+            /*
+             * REGION B MARKS for this switch, plus the positive control. A missing mark is reported
+             * as missing; it is never substituted with zero. Three probes in this programme have run
+             * green while observing nothing, so the observed counters are what a reader checks first.
+             */
+            const td = window.__ALLOY_TRUTH_PATCH_DIAG__ || null;
+            const subj_now = subj();
+            const marks = td && subj_now ? (td.subjects || {})[subj_now] || null : null;
             return {
                 sha,
+                observed: td ? td.observed : null,
+                marks,
+                subjectAtEnd: subj_now,
                 switched: subj() !== was,
                 sawReserved,
                 reservedAt,
