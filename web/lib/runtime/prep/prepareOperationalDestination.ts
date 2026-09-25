@@ -25,7 +25,13 @@ import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRunti
 
 /** The minimal kernel surface this prep needs — satisfied by the runtime kernel. */
 export type DestinationPrepKernel = {
-    provisioning: { prepare: (ref: AttentionRef) => Promise<PreparationTerminal | null> };
+    provisioning: {
+        /** `speculative` keeps a warm out of K3 — it may populate the cache, never commit navigation. */
+        prepare: (
+            ref: AttentionRef,
+            opts?: { speculative?: boolean },
+        ) => Promise<PreparationTerminal | null>;
+    };
 };
 
 /**
@@ -37,7 +43,13 @@ export async function prepareOperationalDestination(
     ref: AttentionRef,
 ): Promise<void> {
     try {
-        const terminal = await kernel.provisioning.prepare(ref);
+        /*
+         * SPECULATIVE. This function has exactly one caller — the Work View hover prewarm — so every
+         * preparation it makes is caused by pointer intent and none of them may establish navigation.
+         * The warmed answer still lands in K2's completed cache, so the click that follows consumes
+         * it instead of refetching.
+         */
+        const terminal = await kernel.provisioning.prepare(ref, { speculative: true });
         const snapshot = terminal?.snapshot;
         /**
          * `prewarmRecordWork` loads the OPPORTUNITY record-work VM. On a child-grain work view

@@ -352,8 +352,8 @@ does not.
 - **`.write`** — permission to invoke specific **named operations** on that
   resource. It is not permission to read, and it is not a generic mutation right.
 - **No read implies a write, and no write implies a read.** An integration
-  granted `enrollment.write` can start and end enrollments and cannot read a
-  single one.
+  granted `enrollment.write` can start, end and void enrollments and assign, move
+  and cancel placements — and cannot read a single one.
 
 ### There is no CRUD contract
 
