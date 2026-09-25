@@ -33,6 +33,7 @@
  */
 
 import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
+import { selectOpenCollections } from "@/lib/adminV2/runtime/focusPanel/financials/selectOpenCollections";
 import {
     deriveAccountChargeLedgerRows, reversalBySourceChargeId,
     type AccountChargeLedgerRow,
@@ -1809,21 +1810,17 @@ async function buildFinancialsCardVMInner(
      * exactly as it was in this query; the processor-state list and the ordering stay here, where
      * they have always lived.
      *
-     * The 200-charge slice is PRESERVED deliberately. It was a URI-length guard for a request that
-     * no longer exists, and on an account with more than 200 charges it silently stopped looking —
-     * so it is a real defect, and dropping it here would change which attempts an operator sees in
-     * a slice that is meant to change transport and nothing else. It is reported rather than
-     * quietly fixed.
+     * The 200-charge slice is GONE. It guarded a request that no longer exists — the attempts
+     * arrive with the bundle, gathered set-based in SQL — and what it still did was stop looking
+     * after the two-hundredth charge, with ledger row order deciding which 200 those were. The
+     * selection moved to `selectOpenCollections`, where the boundary is tested directly.
      */
-    const OPEN_STATES = new Set(["initiated", "requires_payment_method", "requires_action", "processing", "succeeded"]);
-    const attemptChargeIds = new Set(chargeIdsForReads.filter(Boolean).slice(0, 200));
     const openCollectionsP = Promise.resolve({
-        data: attemptChargeIds.size
-            ? (bundle.collectionAttempts
-                  .filter((a) => attemptChargeIds.has(t(a.charge_id)) && OPEN_STATES.has(t(a.processor_state)))
-                  .slice()
-                  .sort((a, b) => t(b.updated_at).localeCompare(t(a.updated_at))) as Array<Record<string, unknown>>)
-            : null,
+        data: (() => {
+            const open = selectOpenCollections(bundle.collectionAttempts, chargeIdsForReads.filter(Boolean));
+            /* null is "no charges to ask about"; an empty array is "asked, and none are open". */
+            return chargeIdsForReads.filter(Boolean).length ? (open as Array<Record<string, unknown>>) : null;
+        })(),
     });
 
     /*

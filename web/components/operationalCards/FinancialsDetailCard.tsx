@@ -66,6 +66,7 @@ export default function FinancialsDetailCard({
     onApplyPayment,
     hydrating = false,
     ledgerPending = false,
+    unavailable = false,
     paymentBand,
     paymentMethodsAccount,
     administration,
@@ -253,6 +254,19 @@ export default function FinancialsDetailCard({
      * replace it; the region waits instead, and the complete ledger commits once.
      */
     ledgerPending?: boolean;
+    /**
+     * THE READ ANSWERED, AND THE ANSWER WAS NOTHING IT COULD USE.
+     *
+     * Distinct from `hydrating`, which means the read is still in flight. This account has been
+     * asked about and could not be spoken for — so the surface must stop saying it is reading,
+     * without ever saying the account is empty. An absence of rows is the absence of an answer; the
+     * sentence "Nothing charged yet" is a claim about the family that a failed read has no standing
+     * to make.
+     *
+     * The shape does not change, because the operator has not gone anywhere: same regions, same
+     * columns, same geometry, and every figure still an em dash.
+     */
+    unavailable?: boolean;
 }) {
     const { period, pastDue } = evidence;
 
@@ -823,13 +837,19 @@ export default function FinancialsDetailCard({
                         <div
                             className="alloy-os-billingdetail__ledger"
                             role="table"
-                            data-financials-ledger-hydrating="true"
+                            data-financials-ledger-hydrating={unavailable ? "unavailable" : "true"}
                             aria-busy="true"
                         >
                             <FinancialsLedgerHead />
-                            <p className="alloy-os-fdetail__ledgerpending" data-financials-ledger-reading="true">
-                                Reading this account&rsquo;s activity&hellip;
-                            </p>
+                            {unavailable ? (
+                                <p className="alloy-os-fdetail__ledgerpending" data-financials-ledger-unavailable="true">
+                                    This account&rsquo;s activity could not be read.
+                                </p>
+                            ) : (
+                                <p className="alloy-os-fdetail__ledgerpending" data-financials-ledger-reading="true">
+                                    Reading this account&rsquo;s activity&hellip;
+                                </p>
+                            )}
                         </div>
                     ) : visiblePeriods.length === 0 ? (
                         <p className="alloy-os-fdetail__collapsed" data-financials-ledger-empty="true">

@@ -1,0 +1,429 @@
+[
+  {
+    "kind": "cold",
+    "pass": "c1",
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "selectedRow": 109,
+    "floorGeometry": 110,
+    "usableFloor": 111,
+    "firstMeaning": 113,
+    "ledger": 113,
+    "settled": 115,
+    "rows": 116,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": null,
+    "cardResponseAt": null,
+    "cardRequestsForThisAccount": 0,
+    "cardRequestsTotal": 0,
+    "cardBytesTotal": 0,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": []
+  },
+  {
+    "kind": "cold",
+    "pass": "c2",
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedRow": 114,
+    "floorGeometry": 116,
+    "usableFloor": 118,
+    "firstMeaning": 1152,
+    "ledger": 1154,
+    "settled": 1155,
+    "rows": 2,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 110,
+    "cardResponseAt": 1152,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 23059,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "start": 110,
+        "end": 1152,
+        "ms": 1042,
+        "bytes": 23059
+      }
+    ]
+  },
+  {
+    "kind": "cold",
+    "pass": "c3",
+    "account": "fd000000-0000-4000-8000-0000000c0001",
+    "selectedRow": 111,
+    "floorGeometry": 111,
+    "usableFloor": 112,
+    "firstMeaning": 1046,
+    "ledger": null,
+    "settled": 181049,
+    "rows": 0,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 104,
+    "cardResponseAt": 1041,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 4368,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=fd000000-0000-4000-8000-0000000c0001",
+        "start": 104,
+        "end": 1041,
+        "ms": 937,
+        "bytes": 4368
+      }
+    ]
+  },
+  {
+    "kind": "cold",
+    "pass": "c4",
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "selectedRow": 143,
+    "floorGeometry": 145,
+    "usableFloor": 147,
+    "firstMeaning": 1603,
+    "ledger": 1606,
+    "settled": 1607,
+    "rows": 12,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 140,
+    "cardResponseAt": 1508,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 24858,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "start": 140,
+        "end": 1508,
+        "ms": 1368,
+        "bytes": 24858
+      }
+    ]
+  },
+  {
+    "kind": "cold",
+    "pass": "c5",
+    "account": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "selectedRow": 45,
+    "floorGeometry": 47,
+    "usableFloor": 49,
+    "firstMeaning": 51,
+    "ledger": 54,
+    "settled": 56,
+    "rows": 116,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": null,
+    "cardResponseAt": null,
+    "cardRequestsForThisAccount": 0,
+    "cardRequestsTotal": 0,
+    "cardBytesTotal": 0,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": []
+  },
+  {
+    "kind": "warm",
+    "pass": "w1",
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedRow": 148,
+    "floorGeometry": 149,
+    "usableFloor": 150,
+    "firstMeaning": 1298,
+    "ledger": 1300,
+    "settled": 1301,
+    "rows": 2,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 143,
+    "cardResponseAt": 1280,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 2,
+    "cardBytesTotal": 241739,
+    "unusedCardRequests": 1,
+    "unusedCardBytes": 218680,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=29944d3e-8267-45b7-8dcb-7405060e2573",
+        "start": -786,
+        "end": 533,
+        "ms": 1319,
+        "bytes": 218680
+      },
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "start": 143,
+        "end": 1280,
+        "ms": 1137,
+        "bytes": 23059
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w2",
+    "account": "fd000000-0000-4000-8000-0000000c0001",
+    "selectedRow": 175,
+    "floorGeometry": 176,
+    "usableFloor": 177,
+    "firstMeaning": 1097,
+    "ledger": null,
+    "settled": 181101,
+    "rows": 0,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 169,
+    "cardResponseAt": 1005,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 4368,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=fd000000-0000-4000-8000-0000000c0001",
+        "start": 169,
+        "end": 1005,
+        "ms": 836,
+        "bytes": 4368
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w3",
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "selectedRow": 74,
+    "floorGeometry": 75,
+    "usableFloor": 76,
+    "firstMeaning": 1356,
+    "ledger": 1358,
+    "settled": 1359,
+    "rows": 12,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 78,
+    "cardResponseAt": 1307,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 24858,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "start": 78,
+        "end": 1307,
+        "ms": 1229,
+        "bytes": 24858
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w4",
+    "account": "fd000000-0000-4000-8000-0000000c0002",
+    "selectedRow": 46,
+    "floorGeometry": 47,
+    "usableFloor": 47,
+    "firstMeaning": 872,
+    "ledger": null,
+    "settled": 180880,
+    "rows": 0,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 41,
+    "cardResponseAt": 850,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 3925,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=fd000000-0000-4000-8000-0000000c0002",
+        "start": 41,
+        "end": 850,
+        "ms": 809,
+        "bytes": 3925
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w5",
+    "account": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+    "selectedRow": 137,
+    "floorGeometry": 139,
+    "usableFloor": 140,
+    "firstMeaning": 1424,
+    "ledger": null,
+    "settled": 181397,
+    "rows": 0,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 129,
+    "cardResponseAt": 1409,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 3629,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "start": 129,
+        "end": 1409,
+        "ms": 1280,
+        "bytes": 3629
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w6",
+    "account": "0658832a-48d6-4b80-beae-0b12d573fdf2",
+    "selectedRow": 82,
+    "floorGeometry": 83,
+    "usableFloor": 84,
+    "firstMeaning": 1858,
+    "ledger": 1861,
+    "settled": 1862,
+    "rows": 2,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 88,
+    "cardResponseAt": 1829,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 23059,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=0658832a-48d6-4b80-beae-0b12d573fdf2",
+        "start": 88,
+        "end": 1829,
+        "ms": 1741,
+        "bytes": 23059
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w7",
+    "account": "fd000000-0000-4000-8000-0000000c0001",
+    "selectedRow": 77,
+    "floorGeometry": 79,
+    "usableFloor": 80,
+    "firstMeaning": 1458,
+    "ledger": null,
+    "settled": 181460,
+    "rows": 0,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 74,
+    "cardResponseAt": 1437,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 4368,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=fd000000-0000-4000-8000-0000000c0001",
+        "start": 74,
+        "end": 1437,
+        "ms": 1363,
+        "bytes": 4368
+      }
+    ]
+  },
+  {
+    "kind": "warm",
+    "pass": "w8",
+    "account": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "selectedRow": 222,
+    "floorGeometry": 223,
+    "usableFloor": 223,
+    "firstMeaning": 4132,
+    "ledger": 4133,
+    "settled": 4134,
+    "rows": 12,
+    "prewarmHeadStart": 0,
+    "cardRequestStart": 221,
+    "cardResponseAt": 4104,
+    "cardRequestsForThisAccount": 1,
+    "cardRequestsTotal": 1,
+    "cardBytesTotal": 24858,
+    "unusedCardRequests": 0,
+    "unusedCardBytes": 0,
+    "requests": [
+      {
+        "url": "/api/admin/financials/card",
+        "query": "customer_id=e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "start": 221,
+        "end": 4104,
+        "ms": 3883,
+        "bytes": 24858
+      }
+    ]
+  },
+  {
+    "kind": "waste",
+    "pass": "unconsumed",
+    "hovered": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+    "clicked": "fd000000-0000-4000-8000-0000000c0003",
+    "unconsumedRequests": 1,
+    "unconsumedBytes": 4076,
+    "totalCardRequests": 3
+  },
+  {
+    "kind": "rapid",
+    "pass": "a-to-b",
+    "a": "29944d3e-8267-45b7-8dcb-7405060e2573",
+    "b": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "frames": [
+      {
+        "at": 377,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      },
+      {
+        "at": 532,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      },
+      {
+        "at": 837,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      },
+      {
+        "at": 1440,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      },
+      {
+        "at": 2746,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      },
+      {
+        "at": 4249,
+        "selected": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+        "floorAccount": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+      }
+    ]
+  }
+]

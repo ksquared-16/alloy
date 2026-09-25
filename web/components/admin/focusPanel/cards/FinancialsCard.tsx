@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
-import { createInFlightCoalescer } from "@/lib/adminV2/runtime/focusPanel/financials/coalesceInFlight";
+import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -273,6 +273,9 @@ function summariseFamilyDiscount(
     return `${count} discount ${count === 1 ? "arrangement" : "arrangements"}`;
 }
 
+/** A command that cannot be aimed yet. Rendered inert rather than omitted, so geometry holds. */
+const NO_COMMAND = () => undefined;
+
 export default function FinancialsCard({
     model,
     context,
@@ -336,7 +339,6 @@ export default function FinancialsCard({
      * query awaits this instead of issuing its own. Cleared on settle — it is a coalescing slot,
      * not a cache, and never outlives the operation.
      */
-    const coalescerRef = useRef(createInFlightCoalescer<void>());
     const [loading, setLoading] = useState(false);
     /*
      * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
@@ -801,8 +803,13 @@ export default function FinancialsCard({
          * second way — the single response still flows through the same `setVm` and the same
          * `requestSeq` supersession that keeps one family's balance off another's screen.
          */
-        /* The mechanism lives in `createInFlightCoalescer`, where it is tested with real concurrency. */
-        return coalescerRef.current.run(requestQuery, async () => {
+        /*
+         * The coalescer now lives in `financialsCardRead`, MODULE-SCOPED rather than on this
+         * instance's ref. In the Accounts workspace the card is keyed by account, so a switch
+         * mounts a new instance with a new ref — there was no shared ownership for a prewarm to
+         * hand its in-flight read to, which is why that host never received the read-ahead its
+         * Details guard assumes. Same mechanism, same one-request guarantee, wider scope.
+         */
         const seq = (requestSeq.current += 1);
         const current = () => seq === requestSeq.current;
         /*
@@ -819,10 +826,9 @@ export default function FinancialsCard({
         setLoading(true);
         const query = requestQuery;
             try {
-                const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
-                const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+                /* Starts the read, or joins the one a prewarm already has in the air for this account. */
+                const fresh = await readFinancialsCardVm(query);
                 if (!current()) return;
-                const fresh = json?.ok && json.vm ? json.vm : null;
                 // The endpoint's answer is the FULL model; record which account now has it.
                 if (fresh) deepLoadedForRef.current = customerId ?? scopedMemberId;
                 setVm(fresh);
@@ -842,7 +848,6 @@ export default function FinancialsCard({
                     setLoading(false);
                 }
             }
-        });
     }, [customerId, requestQuery, scopedMemberId]);
 
     /*
@@ -4603,12 +4608,80 @@ export default function FinancialsCard({
      * this path or any future one — while the read its ledger depends on is unresolved. The
      * request is held in `detailPending` until then and the compact card stays on screen.
      */
+    /*
+     * ── THE FLOOR IS THE ACCOUNT'S SURFACE, SO IT MOUNTS WITH THE ACCOUNT ───────────────────────
+     *
+     * Measured on deployed staging: the account list is interactive at ~856 ms and the selected
+     * Details pane arrives at ~1,196 ms after the click, because the guard below waits for BOTH the
+     * view model and the reconciliation. In the Accounts workspace, where Details IS the floor and
+     * not something the operator pushed on top, that is 1.2 seconds of an empty pane under a row
+     * that is already selected.
+     *
+     * ── WHY THIS IS NOT THE BRANCH THAT WAS REMOVED ────────────────────────────────────────────
+     *
+     * A previous branch committed the shape of Details while the deep read was in flight and was
+     * removed for a measured reason, recorded below: it drew the ledger over PLACEHOLDER ROWS, and
+     * three placeholder rows becoming fifty-six real ones is the "double load" that was reported in
+     * every pass of that thread. The objection was never the shape — it was the rows.
+     *
+     * `ledgerPending` is the difference. The ledger region draws its columns and says it is reading;
+     * it states no rows at all, so there is nothing to rewrite and the real ledger commits ONCE.
+     * Every figure is an em dash from `hydratingFinancialsEvidence`, never a zero, because a
+     * placeholder mistaken for $0.00 is worse than a wait.
+     *
+     * Scoped to `detailsAreTheSurface`. The Focus Panel keeps the compact card as its honest
+     * intermediate, which is what that earlier decision chose for the surface it was about.
+     *
+     * NO COMMANDS ARE RENDERED HERE, deliberately: Payment, Add, Responsibility and Discounts each
+     * need account-specific authority that has not resolved, and an action that is visible before
+     * its authority is an action that can be aimed at the wrong account.
+     */
+    if (overlay === "detail" && detailsAreTheSurface && !(vm && reconciliation) && !deniedRead) {
+        return (
+            <div
+                className="alloy-os-financials"
+                data-financials-card="true"
+                data-financials-overlay="detail"
+                data-financials-detail-pending="true"
+                /*
+                 * NOT YET KNOWN vs UNAVAILABLE. `reservingAccount` is true while the read is still
+                 * in the air. Once it has answered and produced nothing usable, the surface must
+                 * stop saying it is reading — without ever saying the account is empty, which a
+                 * failed read has no standing to claim.
+                 */
+                data-financials-detail-truth={reservingAccount ? "not_yet_known" : "unavailable"}
+                data-financials-detail-account={subjectKey ?? ""}
+                data-financials-surface-role={financialsSurfaceRole({
+                    detailsAreTheSurface,
+                    stackDepth: stack.length,
+                })}
+            >
+                <FinancialsDetailCard
+                    evidence={hydratingFinancialsEvidence()}
+                    periods={[]}
+                    hydrating
+                    ledgerPending
+                    unavailable={!reservingAccount}
+                    administration={{
+                        discountSummary: "",
+                        loading: true,
+                        onManagePayments: NO_COMMAND,
+                        onManageResponsibility: NO_COMMAND,
+                        onManageDiscount: NO_COMMAND,
+                    }}
+                />
+            </div>
+        );
+    }
+
     if (overlay === "detail" && vm && reconciliation) {
         return (
             <div
                 className="alloy-os-financials"
                 data-financials-card="true"
                 data-financials-overlay="detail"
+                /* Whose floor this is. Without it, "A truth under B" is not observable in the DOM. */
+                data-financials-detail-account={subjectKey ?? ""}
                 /*
                  * ── IS THIS LAYER A COMMAND, OR IS IT THE HOST'S RESTING SURFACE? ────────────
                  *
