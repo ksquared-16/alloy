@@ -99,18 +99,23 @@ export async function GET(request: NextRequest) {
          * facts are acquired once here; every rule that decides what they mean still runs in the
          * cohort resolver below.
          */
+        /*
+         * `null` means the acquisition function has not reached this database yet — the migration
+         * and the deploy are two clocks. The cohort then acquires itself the original way, which
+         * returns the same facts more slowly, and the list is never broken by the gap.
+         */
         const facts = await readAccountSubjectFacts(supabase, {
             orgId: ctx.orgId,
             scanCap: FINANCIAL_SUBJECT_SCAN_CAP,
             enrollmentProcessKey: ENROLLMENT_PROCESS_KEY,
         });
-        mark("acquire");
+        mark(facts ? "acquire" : "acquire_absent");
         const cohort = await resolveFinancialSubjectCohort(supabase, {
             orgId: ctx.orgId,
             siteScope: ctx.siteScope === "restricted" ? "restricted" : "all",
             allowedSiteLocationIds: ctx.siteScope === "restricted" ? (ctx.allowedSiteLocationIds ?? []) : [],
             activeSiteLocationId: requestedSite,
-        }, mark, facts);
+        }, mark, facts ?? undefined);
         const body = JSON.stringify({ ok: true, ...cohort });
         mark("serialize");
         return new NextResponse(body, {

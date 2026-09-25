@@ -91,16 +91,39 @@ export function subjectFactsFrom(payload: unknown): SubjectFactRows {
 
 export const EMPTY_SUBJECT_FACTS: SubjectFactRows = EMPTY;
 
+/**
+ * THE FUNCTION IS NOT THERE YET, WHICH IS NOT THE SAME AS FAILING.
+ *
+ * A migration reaches staging's database through governed authority, and the code that calls it
+ * reaches staging through a deploy. Those are two clocks. For the minutes between them the route
+ * is running against a database that has never heard of this function, and an account list that
+ * breaks in that window is a worse outcome than one that is briefly slow.
+ *
+ * PostgREST answers an unknown function with PGRST202; Postgres answers with 42883. Only those two
+ * mean "not there yet". Everything else is a real failure and is still raised, because a cohort
+ * that cannot be read must not be rendered as an organisation with no households.
+ */
+const ABSENT_FUNCTION = new Set(["PGRST202", "42883"]);
+
+export function isAbsentAcquisition(error: { code?: string | null; message?: string | null } | null): boolean {
+    if (!error) return false;
+    if (error.code && ABSENT_FUNCTION.has(error.code)) return true;
+    /* Some proxies drop the code and keep only the sentence. */
+    return /could not find the function|does not exist/i.test(error.message ?? "");
+}
+
 export async function readAccountSubjectFacts(
     supabase: SupabaseClient,
     args: { orgId: string; scanCap: number; enrollmentProcessKey: string },
-): Promise<SubjectFactRows> {
+): Promise<SubjectFactRows | null> {
     const { data, error } = await supabase.rpc("financials_account_subject_facts", {
         p_org_id: args.orgId,
         p_scan_cap: args.scanCap,
         p_enrollment_process_key: args.enrollmentProcessKey,
     });
     if (error) {
+        /* Null means "acquire the old way", never "this organisation has no households". */
+        if (isAbsentAcquisition(error)) return null;
         throw new Error(`financial subjects: the account cohort is unavailable (${error.message.trim()})`);
     }
     return subjectFactsFrom(data);

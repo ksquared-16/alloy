@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { resolveFinancialSubjectCohort } from "@/lib/financials/workspace/resolveFinancialSubjects";
+import { readAccountSubjectFacts } from "@/lib/financials/workspace/readAccountSubjectFacts";
 
 const ROWS: Record<string, Array<Record<string, unknown>>> = {
     customers: [{ id: "cust-1", name: "H", status: "active" }],
@@ -122,6 +123,52 @@ function resolvingClient(rows: Record<string, Array<Record<string, unknown>>>) {
     };
     return { from: (t: string) => builder(t) } as never;
 }
+
+describe("a missing acquisition is not a missing cohort", () => {
+    /*
+     * The migration reaches the database through governed authority; the code that calls it
+     * reaches staging through a deploy. For the minutes between those two clocks the route runs
+     * against a database that has never heard of the function.
+     *
+     * That window must degrade to the ORIGINAL acquisition — same facts, more round trips — and
+     * must never be confused with a failure, because a failure that returns an empty cohort would
+     * render as an organisation with no households.
+     */
+    const call = async (error: { code?: string; message: string } | null) => {
+        const supabase = { rpc: async () => ({ data: error ? null : { households: [] }, error }) } as never;
+        return readAccountSubjectFacts(supabase, { orgId: "org", scanCap: 2000, enrollmentProcessKey: "enrollment" });
+    };
+
+    it("falls back when the function is not there yet", async () => {
+        expect(await call({ code: "PGRST202", message: "Could not find the function" }), "PostgREST").toBeNull();
+        expect(await call({ code: "42883", message: "function does not exist" }), "Postgres").toBeNull();
+        expect(await call({ message: "Could not find the function public.financials_account_subject_facts" }),
+            "a proxy that dropped the code").toBeNull();
+    });
+
+    it("still FAILS CLOSED on a real failure", async () => {
+        /*
+         * The distinction is the whole point. A permission refusal, a timeout or a connection reset
+         * must throw — degrading those to the slow path would hide a broken database behind a
+         * merely slower account list, and degrading them to an empty cohort would be a lie.
+         */
+        for (const error of [
+            { code: "42501", message: "permission denied for function" },
+            { code: "57014", message: "canceling statement due to statement timeout" },
+            { message: "connection reset" },
+        ]) {
+            await expect(call(error), `${error.message} must not be treated as "not deployed yet"`).rejects.toThrow(
+                /account cohort is unavailable/i,
+            );
+        }
+    });
+
+    it("the route acquires the old way when the acquisition is absent, and says so", () => {
+        const src = readFileSync(join(process.cwd(), "app/api/admin/financials/subjects/route.ts"), "utf8");
+        expect(src, "the span names which acquisition ran").toContain('mark(facts ? "acquire" : "acquire_absent")');
+        expect(src, "null means acquire the old way, not an empty cohort").toContain("facts ?? undefined");
+    });
+});
 
 describe("the account cohort is acquired ONCE", () => {
     /*
@@ -407,7 +454,7 @@ describe("the account list's own boundaries are published", () => {
          * exactly what let a slice guess wrong about what was inside it, so the route hands the
          * mark to the resolver and the resolver names its phases.
          */
-        expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark(, facts)?\)/);
+        expect(ROUTE, "the cohort reports its own interior").toMatch(/resolveFinancialSubjectCohort\([\s\S]{0,400}\}, mark(, facts( \?\? undefined)?)?\)/);
         const COHORT = readFileSync(join(process.cwd(), "lib/financials/workspace/resolveFinancialSubjects.ts"), "utf8");
         /*
          * A span may carry its own shape in the label — `households_2p_n847` says the walk took two
