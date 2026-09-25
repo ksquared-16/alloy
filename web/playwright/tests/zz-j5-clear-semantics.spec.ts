@@ -1,0 +1,91 @@
+import { test } from "@playwright/test";
+
+/**
+ * OX J5 — WHAT DOES "THE CARD CLEARED" ACTUALLY MEAN?
+ *
+ * T6 is measured as the moment `[data-focus-panel-cell-preparing]` disappears for children and
+ * household. But the reserved cell computes
+ *
+ *   settled = readiness === "not_applicable" || (model.phase === "settled" && !explicitlyReserved)
+ *
+ * and `data-focus-panel-cell-preparing={settled ? undefined : typeKey}`. So the attribute also
+ * disappears when the panel model merely reaches phase "settled" and the card is declared
+ * resolved-empty — WITHOUT the children/household truth ever arriving. Those are different events
+ * with the same signature, and a repair aimed at the wrong one would be aimed at nothing.
+ *
+ * This separates them using COUNTS and BOOLEANS only — no names, no contacts, no business values.
+ * If the cards clear by settling empty, the not-applicable cell count rises at the same instant the
+ * preparing count falls, and the identity-truth booleans stay false.
+ */
+const RUNS = Number(process.env.OX_SEM_RUNS ?? "10");
+
+test("j5 clear semantics", async ({ page }) => {
+    test.setTimeout(1_800_000);
+
+    for (let run = 0; run < RUNS; run += 1) {
+        /*
+         * RELOAD BETWEEN SAMPLES. A warm subject has its full drawer already in hand and never shows
+         * a reserved phase at all, so pooling warm visits with cold ones does not average the event
+         * being measured -- it mixes in a different one. This programme already produced a P50 of
+         * minus 174 seconds by pooling cache hits with real switches.
+         */
+        await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
+        await page.waitForTimeout(14_000);
+
+        const out = await page.evaluate(`(async (idx) => {
+            const rows = [...document.querySelectorAll('.alloy-os-queue-row-card')];
+            if (rows.length < 2) return { skipped: 'no_rows' };
+            const target = rows[1 + (idx % Math.max(1, rows.length - 1))];
+            const subj = () => document.querySelector('[data-focus-panel-body-subject]')?.getAttribute('data-focus-panel-body-subject') || null;
+            const was = subj();
+            const snap = () => {
+                const prep = [...document.querySelectorAll('[data-focus-panel-cell-preparing]')]
+                    .map((e) => e.getAttribute('data-focus-panel-cell-preparing'));
+                const d = window.__ALLOY_FOCUS_SETTLEMENT_DIAG__ || {};
+                return {
+                    prep,
+                    nNA: document.querySelectorAll('[data-focus-panel-cell-not-applicable]').length,
+                    nRes: document.querySelectorAll('[data-focus-panel-cell-reserved]').length,
+                    ch: d.inquiryChildrenIdentityPresent ?? null,
+                    ct: d.primaryContactIdentityPresent ?? null,
+                };
+            };
+            const t0 = performance.now();
+            target.click();
+            /*
+             * THE RESERVED PHASE MUST BE OBSERVED BEFORE A CLEAR COUNTS.
+             *
+             * The safe frame flips the subject attribute within ~5ms, so "subject changed and no
+             * cell is preparing" is ALSO true in the window before the new subject's cells mount.
+             * Counting that as a clear reports ~100ms for an event that has not begun. A sample that
+             * never shows children/household reserved is reported as such, not folded into the P50.
+             */
+            let sawReserved = false, reservedAt = null, clearedAt = null, atClear = null, lastWaiting = null;
+            for (let i = 0; i < 260; i += 1) {
+                await new Promise((r) => setTimeout(r, 40));
+                const s = snap();
+                const t = Math.round(performance.now() - t0);
+                const waiting = s.prep.includes('children') || s.prep.includes('household');
+                if (waiting) {
+                    if (!sawReserved) { sawReserved = true; reservedAt = t; }
+                    lastWaiting = s;
+                }
+                if (sawReserved && !waiting && clearedAt == null) { clearedAt = t; atClear = s; }
+                if (clearedAt != null && t > clearedAt + 800) break;
+                if (!sawReserved && t > 6000) break;
+            }
+            const end = snap();
+            return {
+                switched: subj() !== was,
+                sawReserved,
+                reservedAt,
+                clearedAt,
+                beforeClear: lastWaiting ? { nNA: lastWaiting.nNA, nRes: lastWaiting.nRes, ch: lastWaiting.ch, ct: lastWaiting.ct } : null,
+                atClear: atClear ? { nNA: atClear.nNA, nRes: atClear.nRes, ch: atClear.ch, ct: atClear.ct } : null,
+                end: { nNA: end.nNA, nRes: end.nRes, ch: end.ch, ct: end.ct },
+            };
+        })(${run})`);
+        console.log(`[sem] ${JSON.stringify({ run, out })}`);
+    }
+    console.log(`[sem] done runs=${RUNS}`);
+});
