@@ -807,18 +807,6 @@
    "read_only": false
   },
   {
-   "id": "untitled_number",
-   "type": "number",
-   "label": "Non-refundable annual material fee",
-   "required": false,
-   "read_only": false,
-   "supplied_by": {
-    "resolve_at": "generation",
-    "source_key": "materials_fee",
-    "source_kind": "charge_template"
-   }
-  },
-  {
    "id": "untitled_text_block",
    "type": "text_block",
    "label": "Tuition agreement",
@@ -946,7 +934,6 @@
    "id": "sec_muh49vrx_8",
    "title": "Tuition and enrollment agreement",
    "field_ids": [
-    "untitled_number",
     "untitled_text_block",
     "untitled_signature"
    ]

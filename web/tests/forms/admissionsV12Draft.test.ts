@@ -1,9 +1,11 @@
 /**
- * The authored Admissions v12 draft, measured as the publisher would measure it.
+ * The PUBLISHED Admissions v12 schema, measured as the publisher measured it.
  *
- * A read-only assertion over the saved draft schema captured from the Studio. It exists so the
- * counts in the Director handoff are machine-checked rather than eyeballed, and so the draft is
- * known to satisfy `validateFormSchema` BEFORE anyone presses Publish.
+ * A read-only assertion over the schema captured from the Studio. It began as a pre-publish check —
+ * that the draft satisfied `validateFormSchema` before anyone pressed Publish — and it now pins what
+ * was actually published: form 57507992-db0e-4ceb-b4ba-ba2d9bc0155f, version 2,
+ * ee75bbc6-bfec-41a8-821f-a8a427afe0cf. An immutable published version deserves an immutable
+ * assertion, so the counts in the Director handoff stay machine-checked rather than eyeballed.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -28,8 +30,8 @@ describe("Admissions v12 draft", () => {
 
     it("has the authored shape", () => {
         expect(schema.sections.length).toBe(8);
-        // 58 authored from the plan + the one Director-approved sibling gate (below).
-        expect(schema.fields.length).toBe(59);
+        // 58 authored from the plan, + the approved sibling gate, − the fee (removed below).
+        expect(schema.fields.length).toBe(58);
     });
 
     it("carries every normalization semantic the plan called for", () => {
@@ -50,30 +52,39 @@ describe("Admissions v12 draft", () => {
         // 9 held for Health (D-H5), 3 for the medical providers Alloy has no party model for,
         // and 1 for Consent (D-H3).
         expect(n((f) => Boolean(f.retention))).toBe(13);
-        expect(n((f) => Boolean(f.supplied_by))).toBe(1);
+        expect(n((f) => Boolean(f.supplied_by))).toBe(0);
         expect(n((f) => Boolean(f.address_binding))).toBe(2);
         expect(n((f) => Boolean(f.party_collection))).toBe(3);
         expect(n((f) => f.type === "signature")).toBe(1);
     });
 
     /*
-     * A SUPPLIED VALUE IS A REFERENCE, AND A REFERENCE HAS TO RESOLVE.
+     * THE FEE IS NOT ADMISSIONS INFORMATION.
      *
-     * The fee is not copied into the Form — it holds `supplied_by { charge_template, <key> }` and
-     * the amount is read at generation. That indirection is right, and it is also silent: this was
-     * authored as `material_fee` while the org's template is `materials_fee`, so every generated
-     * packet would have carried "No active charge template named ..." where the amount belongs.
-     * Nothing about the Form is invalid, which is exactly why it needs asserting.
+     * This Form briefly carried a fee as a supplied value — `supplied_by { charge_template, key }`,
+     * resolved at generation. The indirection was sound and the key was even wrong at first
+     * (`material_fee` for a template named `materials_fee`), which is what made the deeper question
+     * visible: a Form should not be the thing that says a family owes money.
+     *
+     * The Director settled it. Admissions v12 owns ADMISSIONS information. Enrollment owns the
+     * requirement that a financial obligation be satisfied. Financials owns the amount, the charge,
+     * the responsibility and the payment. A number rendered inside a Form is none of those things —
+     * it is a copy of one, and it cannot be paid, corrected, split or attributed.
+     *
+     * What STAYS is the agreement itself: assenting to the tuition terms and signing is admissions
+     * information, and it is evidence of assent, not of money owed.
      */
-    it("supplies the fee from a charge template by its real key", () => {
-        const fee = schema.fields.find((f: { supplied_by?: unknown }) => Boolean(f.supplied_by));
-        expect(fee.supplied_by).toEqual({
-            resolve_at: "generation",
-            source_kind: "charge_template",
-            source_key: "materials_fee",
-        });
-        // The Form references the amount; it never holds one.
-        expect(fee.default_value).toBeUndefined();
+    it("carries no fee, and no supplied value at all", () => {
+        expect(schema.fields.filter((f: { supplied_by?: unknown }) => Boolean(f.supplied_by))).toHaveLength(0);
+        expect(schema.fields.find((f: { label?: string }) => /fee/i.test(f.label ?? ""))).toBeUndefined();
+    });
+
+    it("still asks the family to agree and sign", () => {
+        const section = schema.sections.find((x: { title: string }) => /Tuition/i.test(x.title));
+        const labels = section.field_ids.map(
+            (id: string) => schema.fields.find((f: { id: string }) => f.id === id).type,
+        );
+        expect(labels).toEqual(["text_block", "signature"]);
     });
 
     /*
