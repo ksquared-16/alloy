@@ -210,15 +210,23 @@ export default function PaymentMethodsSection({
                         >
                             <Plus className="h-3 w-3" strokeWidth={2} /> Add card
                         </button>
-                        <button
-                            type="button"
-                            data-testid="payment-method-add-bank"
-                            disabled={busy !== null || pendingSetup !== null}
-                            onClick={() => void startAdd("ach")}
-                            className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight/80 hover:bg-alloy-cloud/50 disabled:opacity-50"
-                        >
-                            <Plus className="h-3 w-3" strokeWidth={2} /> Add bank account
-                        </button>
+                        {/*
+                          * NO OPERATOR "ADD BANK ACCOUNT" CONTROL. THIS IS A PRODUCT BOUNDARY,
+                          * NOT AN UNFINISHED BUTTON.
+                          *
+                          * Saving a bank account is not the same act as saving a card. It
+                          * establishes a DEBIT MANDATE, and Stripe's ACH terms have the platform
+                          * warrant that it holds the account holder's authorization — by name —
+                          * before any debit is initiated. An operator pressing through that
+                          * mandate on a parent's behalf would make Alloy warrant an authorization
+                          * nobody obtained, and Stripe emails the mandate confirmation to the
+                          * payer, who never agreed to it.
+                          *
+                          * A disabled button was rejected: disabled reads as "your action, not
+                          * right now", and this is not the operator's action at all. The control
+                          * returns as "Request bank account setup" when the payer-authorized flow
+                          * exists — see docs/platform/financials/payments-bank-setup-handoff.md.
+                          */}
                     </div>
                 ) : null}
             </div>
@@ -271,8 +279,15 @@ export default function PaymentMethodsSection({
                       * which is the fact an operator came to check — read like disabled chrome.
                       */}
                     <p className="alloy-os-depthcard__value">No payment method on file.</p>
+                    {/*
+                      * The hint names ONLY what this operator can actually do. It used to offer
+                      * "a card or a bank account"; a bank account is the payer's own act to
+                      * authorize, so promising it here sent the operator looking for a control
+                      * that should not exist.
+                      */}
                     <p className="alloy-os-depthcard__hint mt-0.5">
-                        Add a card or a bank account above to collect from this family automatically.
+                        Add a card above to collect from this family automatically. A bank account is
+                        set up by the payer, who authorizes the debit themselves.
                     </p>
                 </div>
             ) : (

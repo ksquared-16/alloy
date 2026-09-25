@@ -93,12 +93,27 @@ afterEach(() => {
 });
 
 describe("the Payment methods section, mounted", () => {
-    it("says NO payment method on file when there is none, and offers both ways to add one", async () => {
+    it("says NO payment method on file when there is none, and offers the ONE way an operator may add one", async () => {
         await render([]);
         expect(text()).toContain("No payment method on file");
         expect(container.querySelector('[data-testid="payment-method-add-card"]')).toBeTruthy();
-        expect(container.querySelector('[data-testid="payment-method-add-bank"]')).toBeTruthy();
+        /*
+         * NOT an omission. Saving a bank account establishes a debit mandate, and Stripe's ACH
+         * terms have the platform warrant it holds the account holder's own authorization. An
+         * operator control here would invite one person to authorize another person's debit, so
+         * the control is absent until the payer-authorized flow exists.
+         */
+        expect(
+            container.querySelector('[data-testid="payment-method-add-bank"]'),
+            "an operator must not be invited to authorize the payer's debit mandate",
+        ).toBeNull();
         expect(rows()).toHaveLength(0);
+    });
+
+    it("tells the operator who sets up a bank account, rather than pointing at a missing control", async () => {
+        await render([]);
+        expect(text()).toContain("Add a card above");
+        expect(text()).toContain("set up by the payer");
     });
 
     it("names a ready card by brand and last four, with its expiry", async () => {

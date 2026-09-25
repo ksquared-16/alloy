@@ -602,9 +602,12 @@ describe("every centred card ends the same way", () => {
         const at = section.indexOf('data-testid="payment-methods-empty"');
         const block = section.slice(at - 200, at + 700);
         expect(block, "the empty state is a bounded region").toMatch(/border-dashed|rounded-md border/);
-        expect(block, "and says what to do next").toMatch(/Add a card or a bank account/);
-        expect(section, "the controls it points at are still there")
-            .toMatch(/Add card|Add bank account/);
+        /* The hint must name only the act this operator may perform — see PaymentMethodsSection. */
+        expect(block, "and says what to do next").toMatch(/Add a card above/);
+        expect(block, "and says who owns the bank mandate").toMatch(/set up by the payer/);
+        expect(section, "the control it points at is still there").toMatch(/Add card/);
+        expect(section, "and the operator bank control is gone")
+            .not.toMatch(/data-testid="payment-method-add-bank"/);
     });
 
     it("the action row is a real rule, not a class name with nothing behind it", () => {
