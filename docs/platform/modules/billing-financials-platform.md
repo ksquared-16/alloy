@@ -355,6 +355,34 @@ directly against that database, without credentials, by distinguishing PostgREST
   against a genuinely absent table returns `404 PGRST205` instead, which is the control that makes the
   other two readings mean what they say.
 
+**THE INVARIANTS ARE NOW PROVEN BEHAVIOURALLY, NOT JUST STRUCTURALLY (September 2026).** Migration
+`20260925220000_payment_instrument_invariants_selftest.sql`, applied to certification from candidate
+`854ddcc0a3a2` (`ledger: applied`, `idempotent: false`). It follows the repository's existing
+self-test convention — an inner block ends with a deliberate `RAISE` carrying its observations, which
+rolls that block back to its implicit savepoint, and a second block then counts the residue rather
+than assuming it. The migration aborts unless the observation string matches exactly, so a successful
+apply IS the proof:
+
+| Probe | Result |
+|---|---|
+| unowned + `reusable = true` | **refused** (`payment_instruments_reuse_requires_owner`) |
+| unowned + one-time | accepted — unowned is a legitimate state |
+| `owner_entity_type` without id | **refused** (`payment_instruments_owner_paired`) |
+| `owner_entity_id` without type | **refused** |
+| properly owned reusable card | accepted |
+| unverified `us_bank_account` + reusable | **refused** (`payment_instruments_ach_reuse_requires_verification`) |
+| verified bank + reusable + mandate | accepted |
+| duplicate provider ref, same org | **refused** (unique index) |
+| same provider ref, different org | accepted — uniqueness is org-scoped, as authored |
+| owner who is responsible for nothing | accepted — **no constraint equates an account with its payers** |
+| revoked state with actor and timestamp | accepted |
+| `status = 'revoked'` with `reusable = true` | **accepted — OBSERVED, not asserted** |
+
+That last row is recorded as observed because nothing in the table relates those two columns. The
+payer-scoped read filters on both, so no revoked instrument is ever offered — but the rule lives in
+the query rather than the schema, and saying which is more useful than implying a constraint nobody
+wrote. Residue after the probe: zero instrument rows, zero orgs.
+
 **THE MOUNTED QA APP CANNOT EXERCISE IT, AND THAT IS A TOPOLOGY FACT, NOT A DEFECT.** The app this
 program certifies against reads a hosted Supabase project; `database.apply_migration` can only reach
 `staging` or `certification`, and pre-merge work may only go to `certification`. Those are different
