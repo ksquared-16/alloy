@@ -213,6 +213,14 @@ describe("the account list's own boundaries are published", () => {
         for (const span of ["members", "contacts", "placements"]) {
             expect(namesPhase(COHORT, span), `the facet chain names its ${span} branch`).toBe(true);
         }
+        /*
+         * The placement facets are themselves a four-wave dependent chain — members, the placements
+         * they hold, the process instances that say which are live, then the labels those name. It
+         * is the deepest thing on either branch and it reported as part of one `facets` label.
+         */
+        for (const span of ["pl_members", "pl_placements", "pl_instances", "pl_programs", "pl_rooms"]) {
+            expect(namesPhase(COHORT, span), `the placement chain names its ${span} wave`).toBe(true);
+        }
     });
 
     it("no phase mark sits inside a callback", () => {

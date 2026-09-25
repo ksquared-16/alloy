@@ -256,7 +256,7 @@ export async function resolveFinancialSubjectCohort(
             })
             .catch(() => new Map<string, string[]>()),
         membersP
-            .then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members))
+            .then((members) => readCurrentPlacements(supabase, args.orgId, customerIds, members, phase))
             .then((m) => {
                 phase("placements");
                 return m;
@@ -545,7 +545,16 @@ async function readCurrentPlacements(
     customerIds: string[],
     /* The households' children, already read for their names. Same rows, one scan. */
     suppliedMembers?: ReadonlyArray<{ id: string | null; customer_id: string | null }>,
+    mark?: (name: string) => void,
 ): Promise<Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>> {
+    /*
+     * FOUR DEPENDENT WAVES, reported until now as part of one `facets` label: the members (free when
+     * supplied), the placements those members hold, the process instances that say which placements
+     * are live, and the labels the live ones name. The two label reads are independent of each other
+     * and are awaited in sequence — whether that costs anything real is a question for the
+     * measurement, not for a third parallelisation guess.
+     */
+    const phase = (name: string) => mark?.(name);
     const empty = new Map<string, { programs: FinancialSubjectFacet[]; rooms: FinancialSubjectFacet[] }>();
     if (customerIds.length === 0) return empty;
 
@@ -556,6 +565,7 @@ async function readCurrentPlacements(
         (batch) =>
             supabase.from("customer_members").select("id, customer_id").eq("org_id", orgId).in("customer_id", batch),
     );
+    phase("pl_members");
     const customerByMember = new Map<string, string>();
     for (const row of memberRows) {
         const memberId = named(row.id);
@@ -576,6 +586,7 @@ async function readCurrentPlacements(
             .eq("org_id", orgId)
             .in("customer_member_id", batch),
     );
+    phase(`pl_placements_n${placements.length}`);
 
     const programIds = new Set<string>();
     const roomIds = new Set<string>();
@@ -647,6 +658,7 @@ async function readCurrentPlacements(
      * as an empty Room filter rather than as a failure. Hence the warning below: a facet that
      * cannot be read must stay non-fatal AND must stop being silent.
      */
+    phase("pl_instances");
     const programLabels = new Map<string, string>();
     if (programIds.size) {
         const rows = await readInBatches<{ id: string; label: string | null; key: string | null }>(
@@ -661,6 +673,7 @@ async function readCurrentPlacements(
         );
         for (const row of rows) programLabels.set(named(row.id), named(row.label) || named(row.key));
     }
+    phase("pl_programs");
     const roomLabels = new Map<string, string>();
     if (roomIds.size) {
         const rows = await readInBatches<{ id: string; label: string | null }>("placement rooms", [...roomIds], (batch) =>
@@ -668,6 +681,7 @@ async function readCurrentPlacements(
         );
         for (const row of rows) roomLabels.set(named(row.id), named(row.label));
     }
+    phase("pl_rooms");
 
     const byCustomer = new Map<string, { programs: Map<string, string>; rooms: Map<string, string> }>();
     for (const row of live) {
