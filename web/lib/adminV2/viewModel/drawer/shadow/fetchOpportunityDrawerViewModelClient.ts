@@ -4,6 +4,10 @@ import type {
     OpportunityDrawerViewModelSkipped,
 } from "@/lib/adminV2/viewModel/drawer/types";
 import {
+    markTruthPatchArrived,
+    markTruthPatchValidated,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/drawerTruthPatchDiag";
+import {
     TRUTH_PATCH_LINE_KEY,
     drawerTruthPatchDescribesSubject,
     type DrawerTruthPatch,
@@ -95,8 +99,15 @@ async function readPhasedDrawerViewModelBody(
              * subject on the way in — a late patch for B must be unreadable once C is selected, and
              * a mismatched patch is refused whole rather than partially merged.
              */
+            // B1 — the phase is recognized here, before any validation work. `parsed` above is the
+            // reader's own JSON.parse, so this is the earliest in-page instant that can be marked.
+            markTruthPatchArrived(expect.opportunityId);
             const patch = parsed[TRUTH_PATCH_LINE_KEY];
-            if (drawerTruthPatchDescribesSubject(patch, expect)) onTruthPatch?.(patch);
+            if (drawerTruthPatchDescribesSubject(patch, expect)) {
+                // B2/B3 — parsed and identity-validated.
+                markTruthPatchValidated(expect.opportunityId);
+                onTruthPatch?.(patch);
+            }
             return;
         }
         if (DRAWER_VIEW_MODEL_LINE_KEY in parsed) {
