@@ -1,0 +1,956 @@
+{
+ "title": "Admissions Packet",
+ "fields": [
+  {
+   "id": "untitled_short_text",
+   "type": "text",
+   "label": "Child's first name",
+   "required": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "child_first_name",
+    "entity_type": "child",
+    "shared_value_key": "child_first_name"
+   }
+  },
+  {
+   "id": "untitled_short_text_2",
+   "type": "text",
+   "label": "Child's last name",
+   "required": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "child_last_name",
+    "entity_type": "child",
+    "shared_value_key": "child_last_name"
+   }
+  },
+  {
+   "id": "untitled_date",
+   "type": "date",
+   "label": "Date of birth",
+   "required": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "child_date_of_birth",
+    "entity_type": "child",
+    "shared_value_key": "child_date_of_birth"
+   }
+  },
+  {
+   "id": "untitled_date_2",
+   "type": "date",
+   "label": "First day at school",
+   "required": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "start_date",
+    "entity_type": "enrollment",
+    "shared_value_key": "start_date"
+   }
+  },
+  {
+   "id": "untitled_short_text_3",
+   "type": "text",
+   "label": "Age at enrollment",
+   "derived": {
+    "kind": "age_from_date_of_birth",
+    "as_of_key": "untitled_date_2",
+    "source_key": "untitled_date"
+   },
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_dropdown",
+   "type": "select",
+   "label": "How would you describe your child's gender?",
+   "required": false,
+   "read_only": false,
+   "field_source": {
+    "field_key": "gender",
+    "entity_type": "customer_member"
+   },
+   "option_set_key": "person_gender"
+  },
+  {
+   "id": "emergency_contacts",
+   "type": "group",
+   "label": "Parents and guardians",
+   "fields": [
+    {
+     "id": "emergency_contacts_full_name",
+     "type": "text",
+     "label": "Full name",
+     "required": true,
+     "read_only": false
+    },
+    {
+     "id": "emergency_contacts_phone",
+     "type": "text",
+     "label": "Phone",
+     "required": true,
+     "read_only": false
+    },
+    {
+     "id": "emergency_contacts_relationship_to_the_child",
+     "type": "text",
+     "label": "Relationship to the child",
+     "required": false,
+     "read_only": false
+    }
+   ],
+   "repeat": {
+    "min": 1
+   },
+   "required": false,
+   "read_only": false,
+   "party_collection": {
+    "role": "guardian",
+    "scope": "household",
+    "subject": "person",
+    "allow_add": true,
+    "action_key": "add_parent_guardian",
+    "show_known": true
+   }
+  },
+  {
+   "id": "untitled_address",
+   "type": "group",
+   "label": "Home address",
+   "fields": [
+    {
+     "id": "untitled_address_address_line1",
+     "type": "text",
+     "label": "Street address",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "address_line1",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_city",
+     "type": "text",
+     "label": "City",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "city",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_state",
+     "type": "text",
+     "label": "State",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "state",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_postal_code",
+     "type": "text",
+     "label": "ZIP / postal code",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "postal_code",
+      "entity_type": "person"
+     }
+    }
+   ],
+   "required": false,
+   "read_only": false,
+   "address_binding": {
+    "role": "guardian",
+    "subject": "person"
+   }
+  },
+  {
+   "id": "untitled_yes_no",
+   "type": "boolean",
+   "label": "Is your mailing address different from your home address?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_address_2",
+   "type": "group",
+   "label": "Mailing address",
+   "fields": [
+    {
+     "id": "untitled_address_2_address_line1",
+     "type": "text",
+     "label": "Street address",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "address_line1",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_2_city",
+     "type": "text",
+     "label": "City",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "city",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_2_state",
+     "type": "text",
+     "label": "State",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "state",
+      "entity_type": "person"
+     }
+    },
+    {
+     "id": "untitled_address_2_postal_code",
+     "type": "text",
+     "label": "ZIP / postal code",
+     "required": false,
+     "read_only": false,
+     "field_source": {
+      "field_key": "postal_code",
+      "entity_type": "person"
+     }
+    }
+   ],
+   "required": false,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no"
+     }
+    ]
+   },
+   "address_binding": {
+    "role": "billing_contact",
+    "subject": "person"
+   }
+  },
+  {
+   "id": "emergency_contacts_2",
+   "type": "group",
+   "label": "Other children in your household",
+   "fields": [
+    {
+     "id": "emergency_contacts_2_full_name",
+     "type": "text",
+     "label": "Full name",
+     "required": true,
+     "read_only": false
+    },
+    {
+     "id": "emergency_contacts_2_date_of_birth",
+     "type": "date",
+     "label": "Date of birth",
+     "required": false,
+     "read_only": false
+    }
+   ],
+   "repeat": {
+    "min": 1
+   },
+   "required": false,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no_13"
+     }
+    ]
+   },
+   "party_collection": {
+    "scope": "household",
+    "subject": "child",
+    "allow_add": true,
+    "action_key": "add_child",
+    "show_known": true
+   }
+  },
+  {
+   "id": "emergency_contacts_3",
+   "type": "group",
+   "label": "Emergency contacts",
+   "fields": [
+    {
+     "id": "emergency_contacts_3_full_name",
+     "type": "text",
+     "label": "Full name",
+     "required": true,
+     "read_only": false
+    },
+    {
+     "id": "emergency_contacts_3_phone",
+     "type": "text",
+     "label": "Phone",
+     "required": true,
+     "read_only": false
+    },
+    {
+     "id": "emergency_contacts_3_relationship_to_the_child",
+     "type": "text",
+     "label": "Relationship to the child",
+     "required": false,
+     "read_only": false
+    }
+   ],
+   "repeat": {
+    "min": 2
+   },
+   "required": false,
+   "read_only": false,
+   "party_collection": {
+    "role": "emergency_contact",
+    "scope": "this_child",
+    "subject": "person",
+    "allow_add": true,
+    "action_key": "add_emergency_contact",
+    "show_known": true
+   }
+  },
+  {
+   "id": "untitled_long_text",
+   "type": "text",
+   "label": "Anything else about who may pick up your child",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Consent"
+   }
+  },
+  {
+   "id": "untitled_yes_no_2",
+   "type": "boolean",
+   "label": "Are there any custody or visiting arrangements we should know about?",
+   "required": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_2",
+   "type": "text",
+   "label": "Please explain the arrangements and who they involve",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no_2"
+     }
+    ]
+   }
+  },
+  {
+   "id": "untitled_yes_no_3",
+   "type": "boolean",
+   "label": "Is there anyone who has a legal restraining order regarding your child?",
+   "required": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_short_text_4",
+   "type": "text",
+   "label": "Their relationship to your child",
+   "required": false,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no_3"
+     }
+    ]
+   }
+  },
+  {
+   "id": "untitled_long_text_3",
+   "type": "text",
+   "label": "General health",
+   "absence": {
+    "label": "No concerns",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_long_text_4",
+   "type": "text",
+   "label": "Allergies",
+   "absence": {
+    "label": "No known allergies",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_long_text_5",
+   "type": "text",
+   "label": "Any known complications at birth",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_long_text_6",
+   "type": "text",
+   "label": "Serious illness or hospitalizations",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_yes_no_4",
+   "type": "boolean",
+   "label": "Has your child ever been stung by a bee or wasp?",
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_long_text_7",
+   "type": "text",
+   "label": "Regular medications",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_short_text_5",
+   "type": "text",
+   "label": "Primary physician",
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health providers"
+   }
+  },
+  {
+   "id": "untitled_short_text_6",
+   "type": "text",
+   "label": "Primary physician phone number",
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health providers"
+   }
+  },
+  {
+   "id": "untitled_short_text_7",
+   "type": "text",
+   "label": "Dentist",
+   "absence": {
+    "label": "We do not have one yet",
+    "offered": true
+   },
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health providers"
+   }
+  },
+  {
+   "id": "untitled_long_text_8",
+   "type": "text",
+   "label": "Developmental history",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_yes_no_5",
+   "type": "boolean",
+   "label": "Has your child ever taken part in speech, physical or occupational therapy?",
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_yes_no_6",
+   "type": "boolean",
+   "label": "Does your child need any accommodations or have any special needs?",
+   "required": false,
+   "read_only": false,
+   "retention": {
+    "kind": "form_only_pending_canonical_owner",
+    "owner_hint": "Health"
+   }
+  },
+  {
+   "id": "untitled_long_text_9",
+   "type": "text",
+   "label": "Eating habits",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "eating_habits",
+    "entity_type": "customer_member"
+   }
+  },
+  {
+   "id": "untitled_long_text_10",
+   "type": "text",
+   "label": "Special diet",
+   "absence": {
+    "label": "No special diet",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "special_diet",
+    "entity_type": "customer_member"
+   }
+  },
+  {
+   "id": "untitled_long_text_11",
+   "type": "text",
+   "label": "Favorite foods",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "favorite_foods",
+    "entity_type": "customer_member"
+   }
+  },
+  {
+   "id": "untitled_long_text_12",
+   "type": "text",
+   "label": "Foods refused",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "foods_refused",
+    "entity_type": "customer_member"
+   }
+  },
+  {
+   "id": "untitled_long_text_13",
+   "type": "text",
+   "label": "Toilet habits",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_14",
+   "type": "text",
+   "label": "How does your child let you know they need the bathroom?",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_7",
+   "type": "boolean",
+   "label": "Are they ever reluctant to use the bathroom?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_15",
+   "type": "text",
+   "label": "Any specific toileting needs we should know about",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_8",
+   "type": "boolean",
+   "label": "Does your child nap during the day?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_16",
+   "type": "text",
+   "label": "Any special naptime needs",
+   "absence": {
+    "label": "None",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no_8"
+     }
+    ]
+   }
+  },
+  {
+   "id": "untitled_short_text_8",
+   "type": "text",
+   "label": "When does your child go to sleep at night?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_short_text_9",
+   "type": "text",
+   "label": "When does your child wake up?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_17",
+   "type": "text",
+   "label": "Social relationships",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_9",
+   "type": "boolean",
+   "label": "Has your child been in a school or daycare before?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_18",
+   "type": "text",
+   "label": "Which school or daycare, and where?",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "visibility": {
+    "all": [
+     {
+      "op": "eq",
+      "value": true,
+      "field_id": "untitled_yes_no_9"
+     }
+    ]
+   }
+  },
+  {
+   "id": "untitled_yes_no_10",
+   "type": "boolean",
+   "label": "Will your child be enrolled somewhere else at the same time?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_19",
+   "type": "text",
+   "label": "How does your child react to strangers?",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_11",
+   "type": "boolean",
+   "label": "Is your child able to play alone?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_20",
+   "type": "text",
+   "label": "Favorite toys or activities",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_21",
+   "type": "text",
+   "label": "Does your child have any fears?",
+   "absence": {
+    "label": "None we know of",
+    "offered": true
+   },
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_22",
+   "type": "text",
+   "label": "How is your child comforted?",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_23",
+   "type": "text",
+   "label": "How does your child express anger or frustration?",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_12",
+   "type": "boolean",
+   "label": "Do you use any kind of behavior management at home?",
+   "required": false,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_24",
+   "type": "text",
+   "label": "How would you describe your child's personality?",
+   "required": false,
+   "multiline": true,
+   "read_only": false,
+   "field_source": {
+    "field_key": "temperament",
+    "entity_type": "customer_member"
+   }
+  },
+  {
+   "id": "untitled_long_text_25",
+   "type": "text",
+   "label": "What would you like your child to gain from this program?",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_long_text_26",
+   "type": "text",
+   "label": "Anything else you would like us to know",
+   "required": false,
+   "multiline": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_number",
+   "type": "number",
+   "label": "Non-refundable annual material fee",
+   "required": false,
+   "read_only": false,
+   "supplied_by": {
+    "resolve_at": "generation",
+    "source_key": "material_fee",
+    "source_kind": "charge_template"
+   }
+  },
+  {
+   "id": "untitled_text_block",
+   "type": "text_block",
+   "label": "Tuition agreement",
+   "content": "By signing below I agree to the Tuition and Enrollment Agreement, and I confirm that the information in this packet is accurate to the best of my knowledge.",
+   "required": false,
+   "read_only": false,
+   "token_ids": []
+  },
+  {
+   "id": "untitled_signature",
+   "type": "signature",
+   "label": "Parent or guardian signature",
+   "required": true,
+   "read_only": false
+  },
+  {
+   "id": "untitled_yes_no_13",
+   "type": "boolean",
+   "label": "Do you have other children in your household?",
+   "required": true,
+   "read_only": false,
+   "layout_width": "full"
+  }
+ ],
+ "sections": [
+  {
+   "id": "sec_muh45jfe_1",
+   "title": "Your child",
+   "field_ids": [
+    "untitled_short_text",
+    "untitled_short_text_2",
+    "untitled_date",
+    "untitled_date_2",
+    "untitled_short_text_3",
+    "untitled_dropdown"
+   ]
+  },
+  {
+   "id": "sec_muh49kyo_1",
+   "title": "Your family",
+   "field_ids": [
+    "emergency_contacts",
+    "untitled_address",
+    "untitled_yes_no",
+    "untitled_address_2",
+    "untitled_yes_no_13",
+    "emergency_contacts_2"
+   ]
+  },
+  {
+   "id": "sec_muh49mjq_2",
+   "title": "Emergency contacts and authorized adults",
+   "field_ids": [
+    "emergency_contacts_3",
+    "untitled_long_text",
+    "untitled_yes_no_2",
+    "untitled_long_text_2",
+    "untitled_yes_no_3",
+    "untitled_short_text_4"
+   ]
+  },
+  {
+   "id": "sec_muh49pn9_4",
+   "title": "Health",
+   "field_ids": [
+    "untitled_long_text_3",
+    "untitled_long_text_4",
+    "untitled_long_text_5",
+    "untitled_long_text_6",
+    "untitled_yes_no_4",
+    "untitled_long_text_7",
+    "untitled_short_text_5",
+    "untitled_short_text_6",
+    "untitled_short_text_7",
+    "untitled_long_text_8",
+    "untitled_yes_no_5",
+    "untitled_yes_no_6"
+   ]
+  },
+  {
+   "id": "sec_muh49r6w_5",
+   "title": "Eating",
+   "field_ids": [
+    "untitled_long_text_9",
+    "untitled_long_text_10",
+    "untitled_long_text_11",
+    "untitled_long_text_12"
+   ]
+  },
+  {
+   "id": "sec_muh49sq6_6",
+   "title": "Daily routines",
+   "field_ids": [
+    "untitled_long_text_13",
+    "untitled_long_text_14",
+    "untitled_yes_no_7",
+    "untitled_long_text_15",
+    "untitled_yes_no_8",
+    "untitled_long_text_16",
+    "untitled_short_text_8",
+    "untitled_short_text_9"
+   ]
+  },
+  {
+   "id": "sec_muh49u8l_7",
+   "title": "Your child as a person",
+   "field_ids": [
+    "untitled_long_text_17",
+    "untitled_yes_no_9",
+    "untitled_long_text_18",
+    "untitled_yes_no_10",
+    "untitled_long_text_19",
+    "untitled_yes_no_11",
+    "untitled_long_text_20",
+    "untitled_long_text_21",
+    "untitled_long_text_22",
+    "untitled_long_text_23",
+    "untitled_yes_no_12",
+    "untitled_long_text_24",
+    "untitled_long_text_25",
+    "untitled_long_text_26"
+   ]
+  },
+  {
+   "id": "sec_muh49vrx_8",
+   "title": "Tuition and enrollment agreement",
+   "field_ids": [
+    "untitled_number",
+    "untitled_text_block",
+    "untitled_signature"
+   ]
+  }
+ ],
+ "schema_version": 1
+}
