@@ -37,7 +37,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { currentTemplateFor } from "@/lib/forms/supplied/resolveConfigurationSuppliedValues";
 import { previewTemplateCharge, writeTemplateDraftCharge } from "@/lib/financials/chargeLifecycle/chargeLifecycleService";
-import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import { createChildcareCorrection, postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import type { RequirementScope } from "@/lib/lifecycle/requirementTimingTypes";
 
 /** One child currently enrolling, and the agreement its charges hang from. */
@@ -195,4 +195,34 @@ export async function resolveEnrollmentFeeObligations(
     }
 
     return { templateResolved: true, resolvesToZero, outcomes };
+}
+
+/**
+ * A CHILD WITHDRAWS AFTER THE FEE WAS POSTED.
+ *
+ * Financial history is not deleted and a posted charge is never mutated. Financials already owns the
+ * only correct answer — `createChildcareCorrection` writes a NEW row referencing the original
+ * through `source_charge_id`, and the database itself enforces that a charge is corrected once (an
+ * unbounded correction invents money: reversing a charge twice leaves a family owed an amount they
+ * were never charged).
+ *
+ * So this is a DELEGATION, deliberately thin, and it exists to make the wrong thing harder to
+ * write. The tempting Enrollment-side shape is a compensating negative charge of its own, which
+ * would be a second correction model that the lineage trigger does not know about and that no
+ * financial report would reconcile.
+ *
+ * Note what withdrawal does NOT need: nothing has to un-resolve the requirement. Once the reversal
+ * posts, `resolveFamilyCollectible` reports the corrected position, and the projection converges on
+ * its own — because it quotes Financials rather than remembering a balance.
+ */
+export async function reverseEnrollmentFeeObligation(
+    supabase: SupabaseClient,
+    input: { readonly orgId: string; readonly chargeId: string; readonly actorUserId?: string | null },
+) {
+    return createChildcareCorrection(supabase, {
+        orgId: input.orgId,
+        sourceChargeId: input.chargeId,
+        kind: "reversal",
+        actorUserId: input.actorUserId ?? null,
+    });
 }

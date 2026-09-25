@@ -20,6 +20,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 import {
     resolveEnrollmentFeeObligations,
+    reverseEnrollmentFeeObligation,
     type EnrollingChild,
 } from "@/lib/enrollment/financial/resolveEnrollmentFeeObligations";
 import {
@@ -43,6 +44,9 @@ type Body = {
     resolve?: boolean;
     /** False leaves charges in draft, so nothing becomes collectible. */
     post?: boolean;
+    /** "reverse" corrects a posted fee after a withdrawal. Requires `charge_id`. */
+    action?: string;
+    charge_id?: string;
 };
 
 function childrenFrom(body: Body): EnrollingChild[] {
@@ -68,6 +72,39 @@ async function handle(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
+    const supabaseForAction = createAdminClient();
+    if (String(body.action ?? "").trim() === "reverse") {
+        /*
+         * WITHDRAWAL DOES NOT DELETE HISTORY.
+         *
+         * Financials writes a correction as a NEW row referencing the original, and the database
+         * enforces that a charge is corrected once. Enrollment delegates rather than composing a
+         * negative charge of its own, which would be a second correction model nothing reconciles.
+         */
+        const chargeId = String(body.charge_id ?? "").trim();
+        if (!chargeId) return NextResponse.json({ error: "charge_id is required to reverse" }, { status: 400 });
+        try {
+            const correction = await reverseEnrollmentFeeObligation(supabaseForAction, {
+                orgId: ctx.orgId,
+                chargeId,
+                actorUserId: ctx.userId ?? null,
+            });
+            return NextResponse.json({
+                data: {
+                    correction_charge_id: correction.id,
+                    source_charge_id: chargeId,
+                    amount_cents: correction.amount_cents,
+                    status: correction.status,
+                },
+            });
+        } catch (e) {
+            return NextResponse.json(
+                { error: e instanceof Error ? e.message : "Failed to reverse the fee obligation" },
+                { status: 422 },
+            );
+        }
+    }
+
     const requirementId = String(body.requirement_id ?? "").trim();
     const chargeTemplateKey = String(body.charge_template_key ?? "").trim();
     const customerId = String(body.customer_id ?? "").trim();
@@ -84,7 +121,7 @@ async function handle(request: NextRequest) {
         return NextResponse.json({ error: `Unsupported fee scope "${scope}"` }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
+    const supabase = supabaseForAction;
     const enrollingChildren = childrenFrom(body);
 
     try {
@@ -103,6 +140,8 @@ async function handle(request: NextRequest) {
         });
 
         if (!resolved.templateResolved) {
+            // A misspelled definition is a CONFIGURATION failure, and must never read as a family
+            // that owes nothing — the two are opposite situations that look identical from outside.
             return NextResponse.json(
                 {
                     error: `No active charge template named "${chargeTemplateKey}".`,
@@ -110,6 +149,7 @@ async function handle(request: NextRequest) {
                         configured: true,
                         due: true,
                         resolvesToZero: false,
+                        definitionUnresolved: true,
                         obligations: [],
                     }),
                 },
@@ -120,10 +160,35 @@ async function handle(request: NextRequest) {
         const obligations: EnrollmentFeeObligation[] = [];
         for (const outcome of resolved.outcomes) {
             if (outcome.status === "not_writable") continue;
-            const position = await resolveFamilyCollectible(supabase, {
-                orgId: ctx.orgId,
-                chargeId: outcome.chargeId,
-            });
+            /*
+             * A CHARGE CAN EXIST AND STILL HAVE NO POSITION.
+             *
+             * `writeTemplateDraftCharge` accepts a `customer` billable source on purpose — a family
+             * incurs registration and deposit fees before anyone is enrolled — but
+             * `resolveAllocatableNet` refuses to position anything that is not enrolment-backed.
+             * A household-grain fee therefore posts as real money and then cannot be read. That is a
+             * disagreement inside Financials, and Enrollment resolves it in neither direction: the
+             * obligation is reported without a position, and an operator is told.
+             */
+            let raw: Awaited<ReturnType<typeof resolveFamilyCollectible>> | null = null;
+            let unavailable: string | null = null;
+            try {
+                raw = await resolveFamilyCollectible(supabase, { orgId: ctx.orgId, chargeId: outcome.chargeId });
+            } catch (e) {
+                unavailable = e instanceof Error ? e.message : "Collectible position is unavailable.";
+            }
+            if (!raw) {
+                obligations.push({
+                    requirementId,
+                    chargeTemplateKey,
+                    billableSource: outcome.billableSource,
+                    subjectCustomerMemberId: outcome.subjectCustomerMemberId,
+                    position: null,
+                    positionUnavailableReason: unavailable ?? "Collectible position is unavailable.",
+                });
+                continue;
+            }
+            const position = raw;
             obligations.push({
                 requirementId,
                 chargeTemplateKey,

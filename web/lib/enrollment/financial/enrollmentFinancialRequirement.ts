@@ -53,7 +53,22 @@ export type EnrollmentFeeObligation = {
     readonly chargeTemplateKey: string;
     readonly billableSource: { readonly type: "enrollment_agreement" | "customer"; readonly id: string };
     readonly subjectCustomerMemberId: string | null;
-    readonly position: QuotedCollectiblePosition;
+    /**
+     * Null when Financials CREATED the charge but cannot position it.
+     *
+     * That is a real state, not a defensive branch. `writeTemplateDraftCharge` deliberately accepts
+     * a `customer` billable source — its own comment names "a waitlist fee, a registration fee, a
+     * deposit" — while `resolveAllocatableNet` refuses anything that is not enrolment-backed: "Only
+     * an enrolment-backed charge carries responsibility." So a household-grain fee posts as real
+     * money and then has no collectible position to read.
+     *
+     * Enrollment must not resolve that disagreement, in either direction. Inventing a position here
+     * would be the second balance this file exists to prevent; suppressing the obligation would hide
+     * posted money from the family it belongs to.
+     */
+    readonly position: QuotedCollectiblePosition | null;
+    /** Why there is no position, in Financials' own words. Present exactly when `position` is null. */
+    readonly positionUnavailableReason?: string;
 };
 
 export type EnrollmentFinancialState =
@@ -105,6 +120,14 @@ export type ProjectEnrollmentFinancialRequirementInput = {
      * forever on a fee that costs nothing.
      */
     readonly resolvesToZero: boolean;
+    /**
+     * True when the configured charge definition names nothing active.
+     *
+     * Kept apart from `resolvesToZero` because the two look identical from the outside and mean
+     * opposite things: a family that owes nothing is finished, and a family whose fee cannot be
+     * priced is stuck. Collapsing them once let a misspelled template key read as SATISFIED.
+     */
+    readonly definitionUnresolved?: boolean;
     readonly obligations: readonly EnrollmentFeeObligation[];
 };
 
@@ -118,7 +141,15 @@ const ZERO: EnrollmentFinancialAmounts = {
 };
 
 /** The state of ONE obligation. The family's state is derived from these, never independently. */
-export function stateForObligation(position: QuotedCollectiblePosition): EnrollmentFinancialState {
+export function stateForObligation(position: QuotedCollectiblePosition | null): EnrollmentFinancialState {
+    /*
+     * A CHARGE NOBODY CAN POSITION NEEDS A PERSON, NOT A DEFAULT.
+     *
+     * Reading it as SATISFIED would tell a family it owes nothing while posted money sits against
+     * their account; reading it as DUE would name an amount this projection is not entitled to
+     * compute. Both are worse than saying an operator must look.
+     */
+    if (position === null) return "ATTENTION_REQUIRED";
     /*
      * A VARIANCE IS A PERSON'S PROBLEM, NOT A WAITING GAME.
      *
@@ -164,15 +195,20 @@ function worst(states: readonly EnrollmentFinancialState[]): EnrollmentFinancial
 }
 
 function sum(obligations: readonly EnrollmentFeeObligation[]): EnrollmentFinancialAmounts {
+    // An unpositioned obligation contributes nothing to the totals — an amount Financials would not
+    // stand behind must not appear in one Enrollment shows a family. Its state still carries.
     return obligations.reduce<EnrollmentFinancialAmounts>(
-        (acc, o) => ({
-            currencyCode: acc.currencyCode ?? o.position.currencyCode,
-            grossCents: acc.grossCents + o.position.grossCents,
-            expectedFundingCents: acc.expectedFundingCents + o.position.expectedSubsidyCents,
-            collectibleNowCents: acc.collectibleNowCents + o.position.currentlyCollectibleCents,
-            appliedCents: acc.appliedCents + o.position.appliedCents,
-            outstandingCents: acc.outstandingCents + o.position.outstandingCents,
-        }),
+        (acc, o) =>
+            o.position === null
+                ? acc
+                : {
+                      currencyCode: acc.currencyCode ?? o.position.currencyCode,
+                      grossCents: acc.grossCents + o.position.grossCents,
+                      expectedFundingCents: acc.expectedFundingCents + o.position.expectedSubsidyCents,
+                      collectibleNowCents: acc.collectibleNowCents + o.position.currentlyCollectibleCents,
+                      appliedCents: acc.appliedCents + o.position.appliedCents,
+                      outstandingCents: acc.outstandingCents + o.position.outstandingCents,
+                  },
         ZERO,
     );
 }
@@ -195,7 +231,7 @@ function explain(state: EnrollmentFinancialState, amounts: EnrollmentFinancialAm
                 ? "The configured enrollment fee resolves to no charge."
                 : "The enrollment fee has been satisfied.";
         case "ATTENTION_REQUIRED":
-            return "A funding variance is unresolved — somebody needs to decide what happens next.";
+            return "This fee needs an operator: a funding variance is unresolved, or a posted charge has no collectible position.";
     }
 }
 
@@ -212,6 +248,16 @@ export function projectEnrollmentFinancialRequirement(
             amounts: ZERO,
             obligations: [],
             explanation: explain("NOT_APPLICABLE", ZERO, 0),
+        };
+    }
+
+    if (input.definitionUnresolved) {
+        return {
+            state: "ATTENTION_REQUIRED",
+            needsAttention: true,
+            amounts: ZERO,
+            obligations: [],
+            explanation: "The configured charge definition does not name an active charge template.",
         };
     }
 

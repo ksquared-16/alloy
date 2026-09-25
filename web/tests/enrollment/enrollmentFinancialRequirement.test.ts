@@ -83,6 +83,62 @@ describe("one obligation's state", () => {
     });
 });
 
+describe("an obligation Financials created but cannot position", () => {
+    /*
+     * Not hypothetical, and measured on the real stack: a per-family fee posts against a `customer`
+     * billable source, which `writeTemplateDraftCharge` accepts by design, and then
+     * `resolveAllocatableNet` refuses it — "Only an enrolment-backed charge carries responsibility."
+     */
+    it("needs an operator rather than defaulting either way", () => {
+        expect(stateForObligation(null)).toBe("ATTENTION_REQUIRED");
+    });
+
+    it("contributes no amount to a total Enrollment would show a family", () => {
+        const p = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            obligations: [
+                obligation({ position: null, positionUnavailableReason: "Only an enrolment-backed charge carries responsibility." }),
+            ],
+        });
+        expect(p.state).toBe("ATTENTION_REQUIRED");
+        expect(p.amounts.grossCents).toBe(0);
+        // The obligation is still REPORTED — suppressing it would hide posted money.
+        expect(p.obligations).toHaveLength(1);
+        expect(p.obligations[0].positionUnavailableReason).toContain("enrolment-backed");
+    });
+});
+
+describe("a charge definition that names nothing", () => {
+    /*
+     * A misspelled key and a genuinely free fee look identical from outside and mean opposite
+     * things. Collapsing them once made `material_fee` (for a template named `materials_fee`) read
+     * as SATISFIED — telling a family it was finished because its fee could not be priced.
+     */
+    it("is ATTENTION_REQUIRED, never SATISFIED", () => {
+        const p = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            definitionUnresolved: true,
+            obligations: [],
+        });
+        expect(p.state).toBe("ATTENTION_REQUIRED");
+        expect(p.needsAttention).toBe(true);
+    });
+
+    it("stays distinguishable from a fee that genuinely costs nothing", () => {
+        const free = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: true,
+            obligations: [],
+        });
+        expect(free.state).toBe("SATISFIED");
+    });
+});
+
 describe("the requirement as Enrollment reads it", () => {
     it("is NOT_APPLICABLE when no fee is configured", () => {
         const p = projectEnrollmentFinancialRequirement({
