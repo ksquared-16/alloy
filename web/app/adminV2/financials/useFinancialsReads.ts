@@ -11,7 +11,8 @@
  * would put a second financial answer in the browser, where nothing can certify it.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createGenerationGate } from "@/lib/financials/workspace/latestResponseWins";
 
 import type { FinancialActivityFeed } from "@/lib/financials/workspace/resolveFinancialActivity";
 import type { FinancialPaymentFlow } from "@/lib/financials/workspace/resolveFinancialPaymentFlow";
@@ -51,14 +52,29 @@ function useFinancialsRead<T>(path: string, siteLocationId: string, enabled: boo
     const [data, setData] = useState<T | null>(null);
     const [loading, setLoading] = useState(enabled);
     const [error, setError] = useState<string | null>(null);
+    /*
+     * ── LATEST RESPONSE WINS ───────────────────────────────────────────────────────────────────
+     *
+     * Two reads are now in flight independently and the list no longer waits for both, so an older
+     * response can return after a newer one. Without a generation token, changing the site filter
+     * from A to B and back — or simply a slow A and a fast B — lets A's households and A's money
+     * land on top of B's, and the screen then shows one site's figures under another site's name.
+     *
+     * Every response checks that its own request is still the current one before it writes
+     * anything. A superseded response is dropped entirely: it must not set data, must not set an
+     * error, and must not clear the loading flag that the newer request is still holding.
+     */
+    const gate = useRef(createGenerationGate());
 
     const load = useCallback(async () => {
         if (!enabled) return;
+        const current = gate.current.begin();
         setLoading(true);
         try {
             const query = siteLocationId ? `?site_location_id=${encodeURIComponent(siteLocationId)}` : "";
             const res = await fetch(`${path}${query}`, { credentials: "include" });
             const json = (await res.json()) as { ok?: boolean; error?: string } & T;
+            if (!current()) return;
             if (!res.ok || json.ok === false) {
                 setData(null);
                 setError(json.error ?? failure);
@@ -67,10 +83,11 @@ function useFinancialsRead<T>(path: string, siteLocationId: string, enabled: boo
             setData(json);
             setError(null);
         } catch (e) {
+            if (!current()) return;
             setData(null);
             setError(e instanceof Error ? e.message : failure);
         } finally {
-            setLoading(false);
+            if (current()) setLoading(false);
         }
     }, [path, siteLocationId, enabled, failure]);
 

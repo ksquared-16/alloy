@@ -33,6 +33,21 @@ vi.mock("@/lib/admin/adminRouteGate", async () => {
 vi.mock("@/lib/supabaseAdmin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/financials/workspace/resolveFinancialSubjects", () => ({
     resolveFinancialSubjectCohort: mockSubjects,
+    FINANCIAL_SUBJECT_SCAN_CAP: 2000,
+}));
+/*
+ * The cohort's facts are now acquired in ONE round trip before the resolver runs. Stubbed here so
+ * this file keeps testing what it is about — that the capability is answered from the request's own
+ * keys — and NOT the acquisition. The stub is deliberately placed after the capability gate in the
+ * route, so a caller without `fin.read` never reaches it; the denial assertions below are unchanged
+ * and still fail if the gate moves.
+ */
+vi.mock("@/lib/financials/workspace/readAccountSubjectFacts", () => ({
+    readAccountSubjectFacts: vi.fn(async () => ({
+        households: [], members: [], agreement_sites_direct: [], agreement_sites_orphan: [],
+        orphan_members: [], contacts: [], placements: [], enrolment_intents: [],
+        program_labels: [], room_labels: [],
+    })),
 }));
 vi.mock("@/lib/financials/workspace/resolveFinancialPosition", () => ({
     resolveFinancialPositionCohort: mockPosition,
