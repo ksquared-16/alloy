@@ -1,0 +1,10 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateC-settle.spec.ts:18:5 › gate C — does loading resolve, and does KNOWN regress within one subject
+[1A[2K[chromium] › playwright/tests/zz-gateC-settle.spec.ts:18:5 › gate C — does loading resolve, and does KNOWN regress within one subject
+[GATEC2] {"results":[{"idx":1,"subject":"1a132b7f-4737-42af-897b-b942ccf5546e","framesAll":2,"framesOwnSubject":2,"ownSequence":[[0,null,null],[1500,null,4]],"RESOLVED":true,"finalClass":null,"finalFigs":4,"cardSubjectMatchesBody":true,"cardSubjectPresent":true,"REGRESSED_WITHIN_SUBJECT":false},{"idx":2,"subject":"8a0d0fb4-24f8-4716-bcb0-baf07b436471","framesAll":3,"framesOwnSubject":3,"ownSequence":[[0,null,null],[500,"loading",0],[750,null,4]],"RESOLVED":true,"finalClass":null,"finalFigs":4,"cardSubjectMatchesBody":true,"cardSubjectPresent":true,"REGRESSED_WITHIN_SUBJECT":false},{"idx":0,"subject":"7aa18e83-eea7-432c-af4b-684a1cef9386","framesAll":2,"framesOwnSubject":2,"ownSequence":[[0,null,null],[750,null,5]],"RESOLVED":true,"finalClass":null,"finalFigs":5,"cardSubjectMatchesBody":true,"cardSubjectPresent":true,"REGRESSED_WITHIN_SUBJECT":false}],"STILL_LOADING_AFTER_WATCH":0,"REGRESSIONS_WITHIN_SUBJECT":0,"CARD_SUBJECT_ABSENT":0}
+
+[1A[2K  1 passed (2.4m)
+2K  1 passed (2.4m)
