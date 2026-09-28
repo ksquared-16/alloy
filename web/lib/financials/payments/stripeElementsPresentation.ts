@@ -135,22 +135,50 @@ export const ALLOY_ELEMENTS_APPEARANCE = {
 type OperatorPaymentElementOptions = Omit<StripePaymentElementOptions, "wallets" | "fields"> & {
     wallets?: { applePay?: "auto" | "never"; googlePay?: "auto" | "never"; link?: "auto" | "never" };
     fields?: { billingDetails?: { address?: "auto" | "never" | "if_required" } };
+    defaultValues?: { billingDetails?: { name?: string } };
 };
 
 /**
  * Payment Element options for an ALLOY OPERATOR surface.
  *
  * `wallets.*: "never"` declines Link, Apple Pay and Google Pay — see this module's header.
- * `fields.billingDetails.address: "if_required"` keeps the postal code Stripe needs for a card
- * and drops address fields it does not, which is why the operator sees a ZIP and not a full
- * billing address form. `if_required` is chosen over `never` deliberately: with `never` the
- * caller becomes responsible for supplying the omitted values at confirm time, and a surface
- * that silently owes Stripe data it never collected fails at the last step.
+ *
+ * ── WHY `address: "auto"` AND NOT `if_required` ──
+ *
+ * This shipped as `if_required`, and mounted QA showed what that actually meant for this account:
+ * Stripe decided the postal code was NOT required and dropped it, so the card form collected
+ * number, expiry and CVC and nothing else. That is a defensible reading of "ZIP where required"
+ * and a poor one for a card-on-file that will be charged unattended for months — the postal code
+ * is the AVS signal on a card-not-present charge, and Stripe warns that reducing address
+ * collection can lower authorization rates.
+ *
+ * `auto` lets Stripe ask for the postal code it wants for authorization without turning the
+ * surface into a full billing-address form. `never` remains wrong for the original reason: it
+ * makes the CALLER owe Stripe the omitted values at confirm time, and a surface that never
+ * collected them fails at the last step.
  */
 export const ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS: OperatorPaymentElementOptions = {
     layout: { type: "tabs" },
     wallets: { link: "never", applePay: "never", googlePay: "never" },
-    fields: { billingDetails: { address: "if_required" } },
+    fields: { billingDetails: { address: "auto" } },
+};
+
+/**
+ * What Alloy already knows about the payer, offered to Stripe as a PREFILL.
+ *
+ * A prefill is not an assertion. Alloy knows who the payer is, so making the operator retype that
+ * name is pointless — but Alloy does NOT know that the payer's name and address are the
+ * cardholder's billing details, and Stripe's own fields remain editable so the operator or payer
+ * can correct them.
+ *
+ * ADDRESS IS DELIBERATELY ABSENT. The canonical address Alloy holds for a household is a SERVICE
+ * location (`locations`, customer-scoped, created by the booking flow) — where care happens. That
+ * is not necessarily where the card is billed, and prefilling it would quietly assert exactly the
+ * thing this comment refuses to assert. Wiring it needs a billing-address decision, not a lookup.
+ */
+export type OperatorBillingPrefill = {
+    /** The canonical payer's name. Safe: Alloy owns it and the field stays editable. */
+    name?: string | null;
 };
 
 /**
@@ -160,9 +188,13 @@ export const ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS: OperatorPaymentElementOptio
  * appearance, the declined wallets and the field policy cannot diverge between them — and the one
  * cast the pinned typings force lives here, once, instead of at every call site.
  */
-export function createAlloyOperatorPaymentElement(els: StripeElements): StripePaymentElement {
-    return els.create(
-        "payment",
-        ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS as unknown as StripePaymentElementOptions,
-    );
+export function createAlloyOperatorPaymentElement(
+    els: StripeElements,
+    prefill?: OperatorBillingPrefill,
+): StripePaymentElement {
+    const name = prefill?.name?.trim();
+    const options: OperatorPaymentElementOptions = name
+        ? { ...ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS, defaultValues: { billingDetails: { name } } }
+        : ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS;
+    return els.create("payment", options as unknown as StripePaymentElementOptions);
 }

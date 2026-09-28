@@ -28,6 +28,7 @@ import {
 export default function PaymentMethodSetupField({
     clientSecret,
     rail,
+    payerName,
     authorizationDisclosure,
     disabled,
     onResult,
@@ -36,6 +37,8 @@ export default function PaymentMethodSetupField({
     /** Stripe's handle on the setup. Not an Alloy credential, and never persisted. */
     clientSecret: string;
     rail: "card" | "ach";
+    /** Canonical payer name, offered to Stripe as an editable PREFILL — never an assertion. */
+    payerName?: string | null;
     /** Shown VERBATIM above the provider's own terms for a bank account. Null for a card. */
     authorizationDisclosure: string | null;
     disabled?: boolean;
@@ -68,7 +71,7 @@ export default function PaymentMethodSetupField({
                 appearance: ALLOY_ELEMENTS_APPEARANCE,
                 fonts: ALLOY_ELEMENTS_FONTS,
             });
-            const payment = createAlloyOperatorPaymentElement(els);
+            const payment = createAlloyOperatorPaymentElement(els, { name: payerName });
             if (mountRef.current) payment.mount(mountRef.current);
             payment.on("ready", () => !cancelled && setReady(true));
             setStripe(s);
@@ -77,7 +80,7 @@ export default function PaymentMethodSetupField({
         return () => {
             cancelled = true;
         };
-    }, [clientSecret]);
+    }, [clientSecret, payerName]);
 
     if (unavailable) {
         return (

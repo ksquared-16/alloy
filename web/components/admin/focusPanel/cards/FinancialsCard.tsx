@@ -3360,9 +3360,15 @@ export default function FinancialsCard({
                     </p>
                 ) : null}
 
-                {/* RECORD PAYMENT — the charges that can actually take money.
+                {/* TAKE OR RECORD PAYMENT — the charges that can actually take money.
                     `offersPayment` is the read model's answer, the same way
-                    `offersReverse` is; this renders it and does not restate it. */}
+                    `offersReverse` is; this renders it and does not restate it.
+
+                    The label names BOTH acts because the form behind it performs both: a card or
+                    bank method collects through the provider, cash and cheque record money that
+                    already arrived. A single "Record payment" made provider collection sound like
+                    bookkeeping. The command key stays `payment.record` — that is the canonical
+                    action, not the operator's word for it. */}
                 {payableRows.length ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -3372,7 +3378,7 @@ export default function FinancialsCard({
                                 data-financials-command="payment.record"
                                 disabled={running}
                             >
-                                Record payment →
+                                Take or record payment →
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" sideOffset={4} data-financials-payment-menu="true">
@@ -3588,11 +3594,18 @@ export default function FinancialsCard({
                                     })();
                                 }}
                             >
+                                {/*
+                                  * THREE ACTS, THREE NAMES. Collecting by card or bank is Alloy
+                                  * taking money through a provider. Cash and cheque are money
+                                  * that already arrived somewhere else, and calling that "Record
+                                  * payment" made the two sound interchangeable — which is the
+                                  * ambiguity human QA reported.
+                                  */}
                                 {payMethod === "card"
                                     ? "Collect by card"
                                     : payMethod === "ach"
                                         ? "Collect by bank account"
-                                        : "Record payment"}
+                                        : "Record manual payment"}
                             </button>
                             <button
                                 type="button"

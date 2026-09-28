@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CreditCard, Landmark, Plus, RefreshCw } from "lucide-react";
 
 import PaymentMethodSetupField from "@/components/operationalCards/PaymentMethodSetupField";
+import { announcePaymentMethodsChanged } from "@/lib/financials/payments/paymentMethodEvents";
 import { executePaymentMethodCommand } from "@/lib/financials/payments/paymentMethodCommands";
 
 export type StoredMethod = {
@@ -124,10 +125,21 @@ export default function PaymentMethodsSection({
             const out = await executePaymentMethodCommand(command, payload);
             if (!out.ok) setError(out.error);
             await load();
+            /*
+             * TELL THE SIBLINGS. Autopay reads the same authority and would otherwise keep the
+             * answer it fetched on mount — which is how a stored card and "Add a usable payment
+             * method before setting up Autopay" came to be on screen at the same time.
+             *
+             * `add/begin` is excluded on purpose: it opens the provider's session and writes
+             * nothing canonical, so announcing it would make every other surface refetch to learn
+             * that nothing had changed yet.
+             */
+            const beganOnly = command === "add" && payload.stage === "begin";
+            if (out.ok && !beganOnly) announcePaymentMethodsChanged(customerId);
             setBusy(null);
             return out;
         },
-        [load],
+        [load, customerId],
     );
 
     /*
@@ -244,6 +256,7 @@ export default function PaymentMethodsSection({
                 <PaymentMethodSetupField
                     clientSecret={pendingSetup.clientSecret}
                     rail={pendingSetup.rail}
+                    payerName={payerName}
                     authorizationDisclosure={pendingSetup.disclosure}
                     disabled={busy !== null}
                     onResult={(r) => {

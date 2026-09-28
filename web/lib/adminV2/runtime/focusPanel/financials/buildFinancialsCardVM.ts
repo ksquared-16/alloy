@@ -875,8 +875,19 @@ export async function readResponsibility(
             name: p.name,
             // A REAL share, because a real allocation assigned it.
             share: `$${(p.assignedCents / 100).toFixed(2)}`,
-            // Still null: there is no per-payer payment-method store, and inventing one here would
-            // repeat exactly the mistake Thread 2 refused to make about shares.
+            /*
+             * Still null HERE, and deliberately so — but no longer for the original reason.
+             *
+             * When this was written there was no stored-method authority at all. Payments W2 then
+             * shipped `payment_methods`, and `vm.paymentCapabilities` on this same VM now carries
+             * the canonical answer, including `summaryLine`. The presentation adapter reads it
+             * from there.
+             *
+             * What is still genuinely absent is a PER-PAYER answer: `methodsOnFile` is scoped to
+             * the household, not to one payer, so a per-payer line cannot be resolved without
+             * widening the canonical model. Leaving this null keeps that honest, and the adapter
+             * falls back to the account-level line rather than to a claim.
+             */
             method: null,
         })),
         expectedFunding: ((fundingRows ?? []) as Array<Record<string, unknown>>).map((f) => ({
