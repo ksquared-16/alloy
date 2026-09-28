@@ -1919,6 +1919,14 @@
                 "note": "Generates the tuition quote snapshot. NOT enrollment.pricing.override, which is the narrow authority to beat the recommended price."
             }
         },
+        "app/api/admin/enrollment/fee-obligations/route.ts": {
+            "POST": {
+                "status": "declared",
+                "capability": "fin.write",
+                "helper": "requireFinancialsCapability",
+                "reason": "Creates and POSTS canonical Financials charges for a configured Enrollment fee, which is minting money — so it takes the Financials write key, not organization context. Declared with the same capability and helper as app/api/admin/financial/charge-templates POST, whose own review records the rule this follows: portal admission is not financial authority. `requireAdminOrOps` is kept alongside, matching that sibling, so admission and financial authority are both required. The route invents no amount: it resolves the requirement's charge-definition key through canonical Financials and delegates creation, posting and idempotency to the charge lifecycle."
+            }
+        },
         "app/api/admin/entity-labels/route.ts": {
             "DELETE": {
                 "status": "declared",

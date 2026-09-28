@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
+import StageFinancialRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFinancialRequirementsEditor";
 import StageWorkRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageWorkRequirementsEditor";
 import StageStartableWorkEditor from "@/components/adminV2/settings/lifecycle/StageStartableWorkEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
@@ -1054,6 +1055,16 @@ export default function StageEditorV2({
                             {/* Work is a requirement kind like any other, so it is authored here
                                 beside forms rather than on a surface of its own. */}
                             <StageWorkRequirementsEditor
+                                departmentId={departmentId}
+                                stageKey={stageKey}
+                                stageRecord={stageRecord ?? null}
+                                process={process ?? null}
+                                onSaved={onReloadConfiguration}
+                            />
+                            {/* And a fee is one too. It sits here rather than in Financials because
+                                whether a fee is REQUIRED to leave this stage is an Enrollment
+                                decision; the amount, and everything else about the money, is not. */}
+                            <StageFinancialRequirementsEditor
                                 departmentId={departmentId}
                                 stageKey={stageKey}
                                 stageRecord={stageRecord ?? null}

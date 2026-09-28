@@ -51,9 +51,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             orgId: access.value.orgId,
             session,
             focusedCustomerMemberId: focused,
-            // Financials is composed by the caller that owns the fee requirement; the family shell
-            // never reaches into it, so that it cannot start computing a position of its own.
-            financials: null,
+            /*
+             * Left unset so the resolver reads the canonical projection itself. Passing null here is
+             * what previously made the family page silent about money; passing a computed figure would
+             * be worse, because this route has no business deciding one.
+             */
         });
 
         if (!family.ok) {

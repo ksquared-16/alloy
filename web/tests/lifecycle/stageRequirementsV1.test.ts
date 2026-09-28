@@ -66,11 +66,12 @@ const FORM_REQUIREMENT = {
 };
 
 describe("requirement kinds — architectural vocabulary vs executable subset", () => {
-    it("declares all seven kinds", () => {
+    it("declares all eight kinds", () => {
         expect([...REQUIREMENT_KINDS_V1]).toEqual([
             "field",
             "form",
             "work",
+            "financial",
             "document",
             "consent",
             "acknowledgment",
@@ -87,10 +88,19 @@ describe("requirement kinds — architectural vocabulary vs executable subset", 
          * distinction this constant exists to hold: architecture may admit a kind, and the
          * platform still refuses to pretend it can satisfy one.
          */
-        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work"]);
+        expect([...REQUIREMENT_KINDS_AUTHORABLE_V1]).toEqual(["field", "form", "work", "financial"]);
         expect(isAuthorableRequirementKind("form")).toBe(true);
         expect(isAuthorableRequirementKind("work")).toBe(true);
         expect(isAuthorableRequirementKind("consent")).toBe(false);
+        /*
+         * `financial` joined on the same terms as `work`, and money is the most heavily proven
+         * substrate on the platform: a charge, a payment, an application and a correction are all
+         * durable canonical rows that predate this kind, and `resolveFamilyCollectible` already
+         * answers what is outstanding without being asked twice. So satisfaction is READ, never
+         * asserted — which is also why the ref carries a charge-definition key and no amount. The
+         * four refused kinds below still have nothing that could answer for them.
+         */
+        expect(isAuthorableRequirementKind("financial")).toBe(true);
     });
 
     it("refuses an unsupported kind with a concrete missing-owner reason", () => {
