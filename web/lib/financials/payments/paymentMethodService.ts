@@ -138,6 +138,63 @@ export async function readAccountMethods(
     return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toRecord);
 }
 
+/**
+ * Every method ONE PAYER may actually use — payer-scoped, usable only, narrowed in the database.
+ *
+ * `readAccountMethods` above answers a different question, correctly: it returns everything the
+ * ACCOUNT may see, revoked rows included, because an operator who just removed a card must see that
+ * something happened. Handing that answer to a participant would be a privacy breach and a
+ * correctness one at once — a mother opening her child's enrolment would receive her co-parent's
+ * card, and an expired or revoked instrument would be offered as a way to pay.
+ *
+ * So this is not a filter applied to that result. The narrowing is in the query, because a
+ * fetch-all-then-filter has to be trusted not to leak the rows it read, and the rows here are
+ * another person's payment instruments. What a caller never receives, it cannot mishandle.
+ *
+ * `customerId` is required and applied as well: a payer may be known to several households, and
+ * their card in one is not an instrument for another's obligation. That mirrors the account scope
+ * `resolveCollectionMethod` enforces at collection time, so what this offers is what the engine
+ * will accept rather than a longer list that fails at the last step.
+ *
+ * Ordered so a default comes first — the one a payer is most likely to want — then newest.
+ */
+export async function readPayerUsableMethods(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        payerEntityType: string;
+        payerEntityId: string;
+        customerId: string;
+        /** Restrict to one rail when the caller can only execute one. Absent means every rail. */
+        rail?: MethodRail | null;
+    },
+): Promise<PaymentMethodRecord[]> {
+    const orgId = t(args.orgId);
+    const payerEntityType = t(args.payerEntityType);
+    const payerEntityId = t(args.payerEntityId);
+    const customerId = t(args.customerId);
+    // Every one of these is required. A missing scope must read as NOTHING, never as unscoped: an
+    // absent payer id with a permissive query would return the whole household.
+    if (!orgId || !payerEntityType || !payerEntityId || !customerId) return [];
+
+    let query = supabase
+        .from("payment_methods")
+        .select(COLUMNS)
+        .eq("org_id", orgId)
+        .eq("payer_entity_type", payerEntityType)
+        .eq("payer_entity_id", payerEntityId)
+        .eq("customer_id", customerId)
+        .eq("usability_state", "usable");
+    if (args.rail) query = query.eq("rail", args.rail);
+
+    const { data, error } = await query
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false });
+
+    if (error) return [];
+    return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toRecord);
+}
+
 /** One method, scoped by org. A method belonging to another tenant reads as absent, not as forbidden. */
 export async function readMethod(
     supabase: SupabaseClient,

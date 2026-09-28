@@ -36,6 +36,7 @@ import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstan
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
 import { readEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
+import type { EnrollmentFinancialRequirementProjection } from "@/lib/enrollment/financial/enrollmentFinancialRequirement";
 import {
     composeFamilyEnrollmentExperience,
     familyFinancialsFromProjection,
@@ -49,7 +50,17 @@ export type FamilyExperienceRefusal =
     | { readonly code: "no_live_episode"; readonly detail: string };
 
 export type ResolveFamilyEnrollmentResult =
-    | { readonly ok: true; readonly value: FamilyEnrollmentExperience }
+    | {
+          readonly ok: true;
+          readonly value: FamilyEnrollmentExperience;
+          /**
+           * The canonical fee projection this result was composed from, for a caller that needs more
+           * of it than the family shell shows (the participant payment surface needs reversal state
+           * and the requirement's explanation). Null when the caller injected `financials`, because
+           * then no projection was read here and inventing one would be a second answer.
+           */
+          readonly projection: EnrollmentFinancialRequirementProjection | null;
+      }
     | { readonly ok: false; readonly refusal: FamilyExperienceRefusal };
 
 type SessionRowLike = {
@@ -237,10 +248,18 @@ export async function resolveFamilyEnrollmentExperience(
      * existence — creating a charge on a GET would bill a family for looking. An injected projection
      * still wins, which is how a caller that already holds one avoids a second read.
      */
-    const financials =
-        input.financials
-        ?? familyFinancialsFromProjection(
-            await readEnrollmentFeeProjection(supabase, {
+    /*
+     * The RAW projection is kept as well as the family-shaped one.
+     *
+     * The participant payment surface needs what the family shell does not show — which obligations
+     * are reversed, and the requirement's own explanation — and it must not recompute dueness or the
+     * authored requirement set to get them. Re-deriving either in a second place is how the screen a
+     * parent pays from would eventually disagree with the screen that told them they owed something.
+     * So it is captured here, where it was already read, and handed out unchanged.
+     */
+    const rawProjection =
+        input.financials ? null
+        :   await readEnrollmentFeeProjection(supabase, {
                 orgId: input.orgId,
                 customerId,
                 enrollingChildren: children.map((c) => ({
@@ -249,8 +268,9 @@ export async function resolveFamilyEnrollmentExperience(
                 })),
                 requirements: authoredRequirements,
                 due: outstandingNonFinancial === 0,
-            }),
-        );
+            });
+    const financials =
+        input.financials ?? (rawProjection ? familyFinancialsFromProjection(rawProjection) : null);
 
     const { data: customerRow } = await supabase
         .from("customers")
@@ -262,6 +282,7 @@ export async function resolveFamilyEnrollmentExperience(
 
     return {
         ok: true,
+        projection: rawProjection,
         value: composeFamilyEnrollmentExperience({
             opportunityId,
             familyName,
