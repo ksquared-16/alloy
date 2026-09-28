@@ -5252,6 +5252,16 @@
                 "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
             }
         },
+        "app/api/public/forms/[token]/enrollment-payment/route.ts": {
+            "GET": {
+                "status": "none",
+                "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY - the same resolver named in the sibling reviews - refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the sibling public forms routes already reviewed. GET is read-only: it names no target the caller supplies and returns only the participant's own fee state, their own usable methods and a publishable key."
+            },
+            "POST": {
+                "status": "none",
+                "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY - the same resolver named in the sibling reviews - refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the sibling public forms routes already reviewed. This is the first route in that family that MOVES MONEY, so the authority it does NOT hold is the point: the payer is the link's mint-validated recipient rather than anything the request says, the payable obligation set is recomputed from this token's own fee projection so a substituted charge id is unreachable, the amount ceiling and currency are resolveFamilyCollectible's, a stored method is a canonical Alloy id whose ownership the engine's payer invariant enforces, and cash is recognised only from a provider intent read on the server - a browser reporting success is a prompt to look, never the finding. See the matching entry in serviceClientPrincipal.allowlist.json."
+            }
+        },
         "app/api/public/forms/[token]/enrollment-signature-asset/route.ts": {
             "POST": {
                 "status": "none",

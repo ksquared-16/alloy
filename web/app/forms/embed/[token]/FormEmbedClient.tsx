@@ -40,6 +40,7 @@ import {
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
+import ParticipantPaymentCard from "./ParticipantPaymentCard";
 import { CompiledArtifactReview } from "./CompiledArtifactReview";
 import { ParticipantDocumentCanvas } from "./ParticipantDocumentCanvas";
 import { SemanticFactEditor } from "./SemanticFactEditor";
@@ -1408,6 +1409,16 @@ export function FormEmbedClient({
                     ) : null}
                 </div>
             ) : null}
+            {/**
+             * THE FEE, WHERE THE PARENT ALREADY IS.
+             *
+             * An Enrollment fee is a requirement like the paperwork, so it is settled in the same
+             * place rather than on a Financials screen a family has no route to. The card gates
+             * itself: it renders nothing when no fee is configured, and when one exists but cannot be
+             * paid it says why instead of offering a button that would fail. Every figure on it is
+             * quoted from canonical Financials through the participant projection.
+             */}
+            {enrollmentObjective ? <ParticipantPaymentCard token={token} /> : null}
             {/**
              * RAW FORM SUPPRESSION.
              *
