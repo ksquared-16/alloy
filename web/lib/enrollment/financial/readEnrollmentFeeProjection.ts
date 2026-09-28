@@ -58,16 +58,29 @@ async function existingFeeCharges(
     supabase: SupabaseClient,
     args: { orgId: string; source: { type: string; id: string }; chargeTemplateKey: string },
 ): Promise<readonly string[]> {
+    /*
+     * THE TEMPLATE KEY IS MATCHED IN THE QUERY, NOT AFTERWARDS.
+     *
+     * This read once selected every charge on the billable source and picked the fee out in
+     * JavaScript, which is wrong for a reason no unit test could show: PostgREST caps a response at
+     * 1000 rows. A household or agreement that has accumulated more charges than that — years of
+     * tuition, late pickups, field trips — would return a page that simply did not contain the fee,
+     * and the projection would then report ATTENTION_REQUIRED ("no charge has been created") about a
+     * charge that exists and may already be paid.
+     *
+     * Certification found it: on the certification stack the fixture agreement carries exactly 1000
+     * readable charges, and the fee written moments earlier was invisible. Filtering in the database
+     * returns the one row that matters, so the cap stops being reachable.
+     */
     const { data, error } = await supabase
         .from("charges")
         .select("id, metadata")
         .eq("org_id", args.orgId)
         .eq("billable_source_type", args.source.type)
-        .eq("billable_source_id", args.source.id);
+        .eq("billable_source_id", args.source.id)
+        .eq("metadata->>charge_template_key", args.chargeTemplateKey);
     if (error) throw new Error(`enrollment fee charges could not be read (${error.message.trim()})`);
-    return ((data ?? []) as ChargeRow[])
-        .filter((c) => (c.metadata ?? {}).charge_template_key === args.chargeTemplateKey)
-        .map((c) => c.id);
+    return ((data ?? []) as ChargeRow[]).map((c) => c.id);
 }
 
 export type ReadEnrollmentFeeInput = {

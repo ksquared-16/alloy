@@ -59,7 +59,7 @@ describe("which authored requirements are financial", () => {
 });
 
 /** A fake that records every table touched, so a WRITE would be visible to the test. */
-function readOnlySupabase(charges: Record<string, unknown>[], touched: string[]) {
+function readOnlySupabase(charges: Record<string, unknown>[], touched: string[], eqs: string[] = []) {
     return {
         from(table: string) {
             touched.push(table);
@@ -67,7 +67,17 @@ function readOnlySupabase(charges: Record<string, unknown>[], touched: string[])
             const api: Record<string, unknown> = {
                 select: () => api,
                 eq: (col: string, val: unknown) => {
-                    rows = rows.filter((r) => r[col] === val);
+                    eqs.push(col);
+                    // `metadata->>key` is a JSON accessor, not a column. The fake honours it because
+                    // the code under test relies on the DATABASE doing this filtering, and a fake
+                    // that quietly ignored it would let a JavaScript-side filter pass as equivalent.
+                    const json = /^metadata->>(.+)$/.exec(col);
+                    rows = json
+                        ? rows.filter(
+                              (r) =>
+                                  ((r.metadata ?? {}) as Record<string, unknown>)[json[1]] === val,
+                          )
+                        : rows.filter((r) => r[col] === val);
                     return api;
                 },
                 in: () => api,
@@ -193,5 +203,52 @@ describe("the family shell carries Financials figures unchanged", () => {
         expect(f.lines).toHaveLength(1);
         expect(f.lines[0].chargeId).toBeNull();
         expect(f.lines[0].collectibleNowCents).toBe(0);
+    });
+});
+
+/*
+ * THE 1000-ROW CAP IS A CORRECTNESS BOUNDARY, NOT A PERFORMANCE ONE.
+ *
+ * This read used to select every charge on the billable source and pick the fee out in JavaScript.
+ * PostgREST returns at most 1000 rows, so a household with more charges than that — years of
+ * tuition, late pickups, field trips — could return a page that did not contain the fee at all. The
+ * projection would then report ATTENTION_REQUIRED about a charge that exists and may already be
+ * paid, which is the exact failure this slice exists to prevent, arriving from the other direction.
+ *
+ * Certification on the real stack is what found it: the fixture agreement carried exactly 1000
+ * readable charges and the fee written seconds earlier was invisible.
+ */
+describe("finding an existing fee among a family's whole charge history", () => {
+    it("matches the charge definition in the query, so a long history cannot hide the fee", async () => {
+        const noise = Array.from({ length: 1000 }, (_, i) => ({
+            id: `noise-${i}`,
+            org_id: ORG,
+            billable_source_type: "customer",
+            billable_source_id: ACCOUNT,
+            metadata: { charge_template_key: "monthly_tuition" },
+        }));
+        const eqs: string[] = [];
+        const charges = [
+            ...noise,
+            {
+                id: "the-fee",
+                org_id: ORG,
+                billable_source_type: "customer",
+                billable_source_id: ACCOUNT,
+                metadata: { charge_template_key: "registration_fee" },
+            },
+        ];
+
+        await readEnrollmentFeeProjection(readOnlySupabase(charges, [], eqs), {
+            orgId: ORG,
+            customerId: ACCOUNT,
+            enrollingChildren: [],
+            requirements: [feeRequirement()],
+            due: true,
+        });
+
+        // The narrowing must happen in the database. A JavaScript filter over a capped page is what
+        // lost the fee, so the query itself has to name the key.
+        expect(eqs).toContain("metadata->>charge_template_key");
     });
 });

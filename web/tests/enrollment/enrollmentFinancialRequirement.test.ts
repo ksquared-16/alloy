@@ -309,3 +309,80 @@ describe("the requirement as Enrollment reads it", () => {
         expect(p.needsAttention).toBe(true);
     });
 });
+
+describe("a reversed fee explains itself as reversed, not as free", () => {
+    const position = {
+        chargeId: "chg-1",
+        currencyCode: "USD",
+        chargeStatus: "posted" as const,
+        grossCents: 1800,
+        appliedCents: 0,
+        expectedSubsidyCents: 0,
+        currentlyCollectibleCents: 1800,
+        outstandingCents: 1800,
+        unresolvedVarianceCents: 0,
+        suppressionBoundBy: "none" as const,
+        openVarianceStates: [] as readonly string[],
+    };
+
+    it("says the fee was reversed when every obligation was corrected", () => {
+        const out = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            obligations: [
+                {
+                    requirementId: "fee_materials_fee",
+                    chargeTemplateKey: "materials_fee",
+                    billableSource: { type: "enrollment_agreement", id: "agr-1" },
+                    subjectCustomerMemberId: "child-1",
+                    position,
+                    reversedByChargeId: "chg-reversal",
+                },
+            ],
+        });
+        // The family owes nothing, and the reason is the correction — not a $0 price.
+        expect(out.state).toBe("SATISFIED");
+        expect(out.amounts.outstandingCents).toBe(0);
+        expect(out.explanation).toContain("reversed");
+        expect(out.explanation).not.toContain("resolves to no charge");
+    });
+
+    it("still says a zero-priced fee resolves to no charge", () => {
+        const out = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: true,
+            obligations: [],
+        });
+        expect(out.state).toBe("SATISFIED");
+        expect(out.explanation).toContain("resolves to no charge");
+    });
+
+    it("does not claim a reversal when only one of two obligations was corrected", () => {
+        const out = projectEnrollmentFinancialRequirement({
+            configured: true,
+            due: true,
+            resolvesToZero: false,
+            obligations: [
+                {
+                    requirementId: "fee_materials_fee",
+                    chargeTemplateKey: "materials_fee",
+                    billableSource: { type: "enrollment_agreement", id: "agr-1" },
+                    subjectCustomerMemberId: "child-1",
+                    position,
+                    reversedByChargeId: "chg-reversal",
+                },
+                {
+                    requirementId: "fee_materials_fee",
+                    chargeTemplateKey: "materials_fee",
+                    billableSource: { type: "enrollment_agreement", id: "agr-2" },
+                    subjectCustomerMemberId: "child-2",
+                    position,
+                    reversedByChargeId: null,
+                },
+            ],
+        });
+        expect(out.explanation).not.toContain("reversed");
+    });
+});

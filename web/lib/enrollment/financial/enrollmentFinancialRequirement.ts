@@ -237,7 +237,21 @@ function sum(obligations: readonly EnrollmentFeeObligation[]): EnrollmentFinanci
     );
 }
 
-function explain(state: EnrollmentFinancialState, amounts: EnrollmentFinancialAmounts, count: number): string {
+function explain(
+    state: EnrollmentFinancialState,
+    amounts: EnrollmentFinancialAmounts,
+    count: number,
+    /*
+     * A CANCELLED FEE IS NOT A FREE ONE.
+     *
+     * A reversed obligation is correctly excluded from every figure, which leaves gross at zero and
+     * makes "this fee costs nothing" and "this fee was withdrawn" arithmetically identical. They are
+     * not the same fact: one is how the fee was configured, the other is something an operator did
+     * after a family withdrew. Saying the wrong one sends someone to Financials to fix pricing that
+     * was never wrong.
+     */
+    allReversed = false,
+): string {
     const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
     switch (state) {
         case "NOT_APPLICABLE":
@@ -251,6 +265,7 @@ function explain(state: EnrollmentFinancialState, amounts: EnrollmentFinancialAm
         case "PROCESSING":
             return "A submitted funding claim covers the balance while the agency pays.";
         case "SATISFIED":
+            if (allReversed) return "The enrollment fee was reversed and is no longer owed.";
             return amounts.grossCents === 0
                 ? "The configured enrollment fee resolves to no charge."
                 : "The enrollment fee has been satisfied.";
@@ -345,6 +360,11 @@ export function projectEnrollmentFinancialRequirement(
         needsAttention: state === "ATTENTION_REQUIRED",
         amounts,
         obligations,
-        explanation: explain(state, amounts, obligations.length),
+        explanation: explain(
+            state,
+            amounts,
+            obligations.length,
+            obligations.every((o) => Boolean(o.reversedByChargeId)),
+        ),
     };
 }
