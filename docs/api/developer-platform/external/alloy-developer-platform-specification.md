@@ -10,8 +10,10 @@ supersedes: []
 
 # Alloy Developer Platform — Technical Specification
 
-**Every endpoint, field, status code and limit in this document was read from the
-implementation and exercised over HTTP against a running server.**
+**Every endpoint, field, parameter, limit and externally safe refusal in this
+document was read from the implementation and exercised over HTTP against a running
+server.** The one exception is a response that should not be deliberately induced on
+a shared environment: an internal `500` is proven by the test suite instead.
 Nothing here is aspirational. Where Alloy has ratified a design but not built it,
 this document says so in the same sentence rather than in a footnote.
 
@@ -1078,9 +1080,16 @@ not meet is more expensive to correct later than to plan around now.
 
 ## 19. How this document was verified
 
-Every endpoint, field, parameter, status code and limit in this document was read
-from the running implementation and then exercised over HTTP against a live
+Every endpoint, field, parameter, limit and externally safe refusal in this document
+was read from the running implementation and then exercised over HTTP against a live
 server — not transcribed from a design.
+
+One class is deliberately not exercised that way. Causing an internal failure on a
+shared environment just to watch it fail is inappropriate, so the `500` /
+`internal_error` response is proven by the test suite instead, which asserts that an
+unrecognised failure becomes `internal_error` and discloses no implementation detail.
+Every other status in §12 — including `404`, `409` and `422` — was produced by a real
+HTTP request.
 
 That exercise covers, for each resource: authentication and its refusals; the
 scope requirement and the fact that a neighbouring scope does not satisfy it;
