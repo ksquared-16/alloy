@@ -134,7 +134,15 @@ export const ALLOY_ELEMENTS_APPEARANCE = {
  */
 type OperatorPaymentElementOptions = Omit<StripePaymentElementOptions, "wallets" | "fields"> & {
     wallets?: { applePay?: "auto" | "never"; googlePay?: "auto" | "never"; link?: "auto" | "never" };
-    fields?: { billingDetails?: { address?: "auto" | "never" | "if_required" } };
+    fields?: {
+        billingDetails?: {
+            address?:
+                | "auto"
+                | "never"
+                | "if_required"
+                | { country?: "auto" | "never"; postalCode?: "auto" | "never" };
+        };
+    };
     defaultValues?: { billingDetails?: { name?: string } };
 };
 
@@ -188,13 +196,37 @@ export type OperatorBillingPrefill = {
  * appearance, the declined wallets and the field policy cannot diverge between them — and the one
  * cast the pinned typings force lives here, once, instead of at every call site.
  */
+/**
+ * ── WHY THE SETUP FLOW TELLS STRIPE *NOT* TO COLLECT A POSTAL CODE ──
+ *
+ * Measured twice on deployed staging: with `address: "auto"` AND with `"if_required"`, Stripe
+ * rendered `number`, `expiry`, `cvc` and no postal code at all. That is not a misconfiguration —
+ * `FieldOption` is `"auto" | "never"`, there is no `"always"`, and the Payment Element simply
+ * cannot be made to require one. So a card stored for unattended collection had no AVS signal.
+ *
+ * Alloy therefore owns the field. And once Alloy owns it, `postalCode: "never"` is the CORRECT
+ * setting rather than a redundant one: Stripe documents that "details collected by Elements will
+ * override values passed here", so leaving collection on `auto` would mean racing an override for
+ * a field the operator typed. `never` states plainly that this value arrives at confirmation, which
+ * is exactly the contract Stripe describes for fields omitted via `fields`.
+ *
+ * It is scoped to SETUP. The payment-collection surface keeps its own configuration, because a
+ * surface that stopped collecting a field without also supplying it at confirm would fail at the
+ * last step — the precise trap this option carries.
+ */
+const SETUP_ADDRESS_OWNED_BY_ALLOY = { postalCode: "never" as const };
+
 export function createAlloyOperatorPaymentElement(
     els: StripeElements,
-    prefill?: OperatorBillingPrefill,
+    prefill?: OperatorBillingPrefill & { alloyCollectsPostalCode?: boolean },
 ): StripePaymentElement {
     const name = prefill?.name?.trim();
-    const options: OperatorPaymentElementOptions = name
-        ? { ...ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS, defaultValues: { billingDetails: { name } } }
-        : ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS;
+    const options: OperatorPaymentElementOptions = {
+        ...ALLOY_OPERATOR_PAYMENT_ELEMENT_OPTIONS,
+        ...(name ? { defaultValues: { billingDetails: { name } } } : {}),
+        ...(prefill?.alloyCollectsPostalCode
+            ? { fields: { billingDetails: { address: SETUP_ADDRESS_OWNED_BY_ALLOY } } }
+            : {}),
+    };
     return els.create("payment", options as unknown as StripePaymentElementOptions);
 }

@@ -52,6 +52,19 @@ export default function PaymentMethodSetupField({
     const [unavailable, setUnavailable] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [fieldError, setFieldError] = useState<string | null>(null);
+    /*
+     * ALLOY OWNS THIS ONE FIELD, and only this one.
+     *
+     * Stripe's Payment Element cannot be made to require a postal code — `FieldOption` is
+     * "auto" | "never" with no "always" — and measured on deployed staging it collected none. For a
+     * card stored to be charged unattended for months, the postal code is the AVS signal, so it is
+     * collected here and handed to Stripe at confirmation.
+     *
+     * It is NOT prefilled. The address Alloy holds for a household is a SERVICE location: where care
+     * happens, which is not necessarily where the card is billed. Offering it here would assert
+     * exactly that, so the operator types what the cardholder actually uses.
+     */
+    const [postalCode, setPostalCode] = useState<string>("");
 
     useEffect(() => {
         let cancelled = false;
@@ -71,7 +84,11 @@ export default function PaymentMethodSetupField({
                 appearance: ALLOY_ELEMENTS_APPEARANCE,
                 fonts: ALLOY_ELEMENTS_FONTS,
             });
-            const payment = createAlloyOperatorPaymentElement(els, { name: payerName });
+            const payment = createAlloyOperatorPaymentElement(els, {
+                name: payerName,
+                /* Card only: the postal code is a card-verification input, not a bank one. */
+                alloyCollectsPostalCode: rail === "card",
+            });
             if (mountRef.current) payment.mount(mountRef.current);
             payment.on("ready", () => !cancelled && setReady(true));
             setStripe(s);
@@ -80,7 +97,7 @@ export default function PaymentMethodSetupField({
         return () => {
             cancelled = true;
         };
-    }, [clientSecret, payerName]);
+    }, [clientSecret, payerName, rail]);
 
     if (unavailable) {
         return (
@@ -116,6 +133,40 @@ export default function PaymentMethodSetupField({
             <div ref={mountRef} data-testid="payment-method-setup-mount" />
 
             {/*
+              * ALLOY'S FIELD, BELOW STRIPE'S — framed the same way, so the operator reads one form
+              * rather than two. Stripe still owns the number and the security code; this is the one
+              * value Stripe declines to ask for and a stored card needs.
+              */}
+            {rail === "card" ? (
+                <div className="space-y-1" data-testid="payment-method-setup-postal-field">
+                    <label
+                        className="block text-xs font-medium text-alloy-midnight/80"
+                        htmlFor="alloy-billing-postal"
+                    >
+                        Billing ZIP / postal code
+                    </label>
+                    <input
+                        id="alloy-billing-postal"
+                        data-testid="payment-method-setup-postal"
+                        value={postalCode}
+                        onChange={(e) => {
+                            setPostalCode(e.target.value);
+                            if (fieldError) setFieldError(null);
+                        }}
+                        inputMode="text"
+                        autoComplete="postal-code"
+                        placeholder="ZIP or postal code"
+                        aria-required="true"
+                        className="w-full rounded-lg border border-[#E2E6EC] px-2.5 py-2 text-sm text-alloy-midnight placeholder:text-alloy-midnight/40 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20"
+                    />
+                    <p className="text-xs text-alloy-midnight/55">
+                        Used to verify the card with the bank. Enter the billing ZIP for this card —
+                        it may differ from the family&rsquo;s address on file.
+                    </p>
+                </div>
+            ) : null}
+
+            {/*
               * THE AUTHORIZATION, ABOVE THE SUBMIT AND BEFORE THE ACT.
               *
               * Stripe requires that a payer collecting a bank account which the platform intends to
@@ -142,16 +193,49 @@ export default function PaymentMethodSetupField({
                 <button
                     type="button"
                     data-testid="payment-method-setup-submit"
-                    disabled={disabled || submitting || !ready || !stripe || !elements}
+                    disabled={disabled || submitting || !ready || !stripe || !elements || (rail === "card" && !postalCode.trim())}
                     onClick={async () => {
                         if (!stripe || !elements) return;
+                        /*
+                         * REQUIRED, and refused HERE rather than by Stripe. Letting the
+                         * confirmation start without it would contact the provider only to come
+                         * back with a message about a field Alloy owns.
+                         */
+                        if (rail === "card" && !postalCode.trim()) {
+                            setFieldError("Enter the billing ZIP or postal code for this card.");
+                            return;
+                        }
                         setSubmitting(true);
                         setFieldError(null);
                         /*
                          * `redirect: "if_required"` keeps the payer inside Financials for a plain
                          * card, and still honours a bank's own flow when one is demanded.
                          */
-                        const result = await stripe.confirmSetup({ elements, redirect: "if_required" });
+                        /*
+                         * THE POSTAL CODE TRAVELS IN STRIPE'S OWN CONFIRMATION CONTRACT.
+                         *
+                         * `payment_method_data.billing_details.address.postal_code` is the
+                         * documented way to supply a billing field the Element did not collect —
+                         * and the Element was told not to collect this one, so nothing overrides
+                         * it. Nothing is injected into the iframe and no DOM is touched.
+                         *
+                         * Sent only for a card: it is a card-verification input, and a bank setup
+                         * neither asks for it nor benefits from it.
+                         */
+                        const zip = postalCode.trim();
+                        const result = await stripe.confirmSetup({
+                            elements,
+                            redirect: "if_required",
+                            ...(rail === "card" && zip
+                                ? {
+                                      confirmParams: {
+                                          payment_method_data: {
+                                              billing_details: { address: { postal_code: zip } },
+                                          },
+                                      },
+                                  }
+                                : {}),
+                        });
                         setSubmitting(false);
 
                         if (result.error) {
