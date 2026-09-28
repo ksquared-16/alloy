@@ -34,8 +34,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
 import { CONCLUDED_ENROLLMENT_PROCESS_STATES } from "@/lib/process/processInstances";
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import type { StageRequirementV1 } from "@/lib/lifecycle/stageRequirementsV1";
+import { readEnrollmentFeeProjection } from "@/lib/enrollment/financial/readEnrollmentFeeProjection";
 import {
     composeFamilyEnrollmentExperience,
+    familyFinancialsFromProjection,
     type FamilyChildJourney,
     type FamilyEnrollmentExperience,
     type FamilyEnrollmentFinancials,
@@ -162,6 +165,14 @@ export async function resolveFamilyEnrollmentExperience(
      * is recomputed here and no rollup is stored.
      */
     const children: FamilyChildJourney[] = [];
+    /** The stage's authored requirements, as each child's own resolver read them. */
+    let authoredRequirements: readonly StageRequirementV1[] = [];
+    /*
+     * DUENESS, over the OTHER requirements. A fee that counted itself could never come due: it blocks,
+     * so not everything is resolved, so it never becomes due. Counted across children because a
+     * household fee is owed once the family's paperwork is done, not once one child's is.
+     */
+    let outstandingNonFinancial = 0;
     for (const pi of instances) {
         const subject = pi.subject_id as string;
         const session = sessionByInstance.get(pi.id) ?? null;
@@ -170,7 +181,16 @@ export async function resolveFamilyEnrollmentExperience(
         const progress = await resolveEnrollmentParticipantProgress(supabase, {
             orgId: input.orgId,
             processInstanceId: pi.id,
+            captureLoaded: (loaded) => {
+                if (loaded.requirements.length > 0) authoredRequirements = loaded.requirements;
+            },
         });
+        if (progress.ok) {
+            for (const r of progress.value.requirements) {
+                if (r.kind === "financial") continue;
+                if (r.status !== "satisfied") outstandingNonFinancial += 1;
+            }
+        }
 
         children.push({
             customerMemberId: subject,
@@ -196,6 +216,42 @@ export async function resolveFamilyEnrollmentExperience(
      * `householdName`. Reading `display_name` here silently fell back to "Your family" for every
      * household, which is the failure mode of a wrong column name: plausible output, no error.
      */
+    /*
+     * Each child's agreement, which is the billable source a child-scoped fee hangs from. Read here
+     * rather than inside the financial reader so that reader stays a pure consumer of identity it was
+     * handed, and so a family-scoped fee costs no extra query.
+     */
+    const { data: agreementRows } = await supabase
+        .from("child_enrollment_agreements")
+        .select("id, customer_member_id")
+        .eq("org_id", input.orgId)
+        .in("customer_member_id", subjectIds.length > 0 ? subjectIds : ["-"]);
+    const agreementByChild = new Map(
+        ((agreementRows ?? []) as Array<{ id: string; customer_member_id: string | null }>)
+            .filter((a) => a.customer_member_id)
+            .map((a) => [a.customer_member_id as string, a.id]),
+    );
+
+    /*
+     * READ, never materialize. A participant opening their family page must not bring money into
+     * existence — creating a charge on a GET would bill a family for looking. An injected projection
+     * still wins, which is how a caller that already holds one avoids a second read.
+     */
+    const financials =
+        input.financials
+        ?? familyFinancialsFromProjection(
+            await readEnrollmentFeeProjection(supabase, {
+                orgId: input.orgId,
+                customerId,
+                enrollingChildren: children.map((c) => ({
+                    customerMemberId: c.customerMemberId,
+                    agreementId: agreementByChild.get(c.customerMemberId) ?? null,
+                })),
+                requirements: authoredRequirements,
+                due: outstandingNonFinancial === 0,
+            }),
+        );
+
     const { data: customerRow } = await supabase
         .from("customers")
         .select("name")
@@ -222,7 +278,12 @@ export async function resolveFamilyEnrollmentExperience(
              * to remove. Deliberately not a stored flag: there is no family system of record.
              */
             sharedInformationComplete: children.some((c) => c.satisfiedRequirements > 0 || c.submitted),
-            financials: input.financials ?? null,
+            /*
+             * READ, never materialize. A participant opening their family page must not bring money
+             * into existence — creating a charge on a GET would bill a family for looking. An injected
+             * projection still wins, which is how a caller that already holds one avoids a second read.
+             */
+            financials,
             focusedCustomerMemberId: input.focusedCustomerMemberId ?? null,
         }),
     };
