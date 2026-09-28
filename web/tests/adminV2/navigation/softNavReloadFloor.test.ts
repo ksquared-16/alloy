@@ -10,6 +10,65 @@ import { shouldSoftNavigate } from "@/lib/adminV2/navigation/adminV2SoftNavLinkC
 beforeEach(() => resetSoftNavGenerationForTests());
 afterEach(() => vi.unstubAllEnvs());
 
+describe("WORKSPACE_SESSION_RESET — a stale floor must not evict the operator", () => {
+    /*
+     * Measured on staging: a long-lived session was thrown back to /workspace mid-task, roughly
+     * one action in six. The ring buffer captured BEFOREUNLOAD, PAGEHIDE and a fresh document at
+     * /workspace with no anchor click and no form — an application-initiated location assignment.
+     *
+     * The floor is armed ONLY by shell/sidebar link commits; the Work Unit entry path arms nothing
+     * and so never supersedes an earlier floor. Click the sidebar to /workspace, open a Work Unit
+     * by any other route, and 15s later the watchdog compares the path to its stale target, calls
+     * a perfectly healthy session stalled, and hard-reloads.
+     */
+    it("does NOT fire when the nav arrived and the operator then moved on", () => {
+        // Armed for /workspace from a Work Unit; the operator is now in a DIFFERENT Work Unit.
+        // Standing on a third path is proof navigation works and this target is stale.
+        expect(
+            shouldFireReloadFloor({
+                originPathname: "/workspace/work-unit/waitlist",
+                targetPathname: "/workspace",
+                currentPathname: "/workspace/work-unit/all",
+                superseded: false,
+            }),
+        ).toBe(false);
+    });
+
+    it("STILL fires when the operator never left the origin — a genuine hang", () => {
+        // The nav died: they are exactly where they started. The safety floor must be preserved.
+        expect(
+            shouldFireReloadFloor({
+                originPathname: "/workspace/work-unit/waitlist",
+                targetPathname: "/workspace",
+                currentPathname: "/workspace/work-unit/waitlist",
+                superseded: false,
+            }),
+        ).toBe(true);
+    });
+
+    it("keeps the old guaranteed recovery when the caller cannot say where it started", () => {
+        // Losing a safety floor silently would be worse than the bug it fixes.
+        expect(
+            shouldFireReloadFloor({
+                targetPathname: "/workspace",
+                currentPathname: "/workspace/work-unit/all",
+                superseded: false,
+            }),
+        ).toBe(true);
+    });
+
+    it("arrival at the target still wins over everything", () => {
+        expect(
+            shouldFireReloadFloor({
+                originPathname: "/workspace/work-unit/waitlist",
+                targetPathname: "/workspace",
+                currentPathname: "/workspace",
+                superseded: false,
+            }),
+        ).toBe(false);
+    });
+});
+
 describe("shouldFireReloadFloor — soft-nav stall detection", () => {
     it("does NOT fire when the nav arrived (path reached target)", () => {
         expect(

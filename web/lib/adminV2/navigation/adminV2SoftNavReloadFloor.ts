@@ -55,12 +55,38 @@ export function shouldFireReloadFloor(args: {
     currentPathname: string;
     targetPathname: string;
     superseded: boolean;
+    /**
+     * Where the operator was when this floor was armed. A genuinely hung soft nav leaves them
+     * sitting on it; see the note below for why its absence keeps the old behaviour.
+     */
+    originPathname?: string;
 }): boolean {
     if (args.superseded) return false;
-    return (
-        normalizeSoftNavReloadPathname(args.currentPathname) !==
-        normalizeSoftNavReloadPathname(args.targetPathname)
-    );
+    const current = normalizeSoftNavReloadPathname(args.currentPathname);
+    const target = normalizeSoftNavReloadPathname(args.targetPathname);
+    if (current === target) return false;
+
+    /*
+     * "NOT AT THE TARGET" IS TWO DIFFERENT SITUATIONS, AND ONLY ONE OF THEM IS A HANG.
+     *
+     * This predicate treated any mismatch as a stall, which is true of a nav that died — and
+     * equally true of one that SUCCEEDED and was followed by the operator going somewhere else.
+     * The floor is armed only by shell/sidebar link commits, and the Work Unit entry path arms
+     * nothing, so it never supersedes an earlier floor. The result, measured on staging: click
+     * the sidebar to /workspace, open a Work Unit by any other route, and ~15s later this fires
+     * `location.assign("/workspace")` and throws the operator out of the Work Unit they are
+     * working in. Eight of eight reset timelines captured exactly that — BEFOREUNLOAD, PAGEHIDE,
+     * then a fresh document at /workspace with no anchor click and no form anywhere in the ring.
+     *
+     * The origin separates the cases. A hung navigation never leaves where it started, so the
+     * operator is still on the ORIGIN. Standing on some third path is positive proof that
+     * navigation is working and that this floor's target is simply stale.
+     *
+     * Absent an origin the old rule stands: this is a safety floor, and a caller that cannot say
+     * where it started should keep its guaranteed recovery rather than silently lose it.
+     */
+    if (args.originPathname === undefined) return true;
+    return current === normalizeSoftNavReloadPathname(args.originPathname);
 }
 
 export type SoftNavReloadFloorDeps = {
@@ -82,6 +108,8 @@ export function armSoftNavReloadFloor(
     deps: SoftNavReloadFloorDeps,
 ): () => void {
     const myGeneration = ++softNavGeneration;
+    // Captured BEFORE the commit settles, so it is where the operator actually started.
+    const originPathname = deps.getPathname();
     const setT = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms));
     const clearT = deps.clearTimeoutFn ?? ((h) => clearTimeout(h));
     const timeoutMs = deps.timeoutMs ?? DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS;
@@ -96,6 +124,7 @@ export function armSoftNavReloadFloor(
                 currentPathname: deps.getPathname(),
                 targetPathname,
                 superseded: myGeneration !== softNavGeneration,
+                originPathname,
             })
         ) {
             // Attribution: a floor fire IS the "unexpected reload". It was silent, so an operator
