@@ -3488,6 +3488,37 @@ export default function FinancialsCard({
                             {money(payTarget.outstandingCents, currency)} outstanding
                         </p>
                         {/*
+                          * ── WHO OWES, SHOWN BUT NOT TOUCHED ────────────────────────────────────
+                          *
+                          * Responsibility is a different fact from who pays, and settling a charge
+                          * must never rewrite it. It is rendered here so the operator can SEE both
+                          * at the moment of collection — a grandparent may legitimately pay a bill
+                          * they owe nothing on — and it is read-only for exactly that reason.
+                          * Naming a payer below confers no responsibility.
+                          */}
+                        {vm.responsibility?.parties?.length ? (
+                            <p
+                                className="alloy-os-financials__note"
+                                data-financials-payment-responsible="true"
+                            >
+                                Responsible: {vm.responsibility.parties.map((p) => p.name).join(", ")}
+                            </p>
+                        ) : null}
+                        {/*
+                          * ── WHAT THIS MONEY WILL SETTLE ────────────────────────────────────────
+                          *
+                          * ONE charge, deliberately. The collection action targets a single charge
+                          * and the allocation follows it; saying so here makes an invariant visible
+                          * instead of leaving the operator to infer it from the heading. Broadening
+                          * it for UI convenience would change economics, which this does not.
+                          */}
+                        <p
+                            className="alloy-os-financials__note"
+                            data-financials-payment-application={payTarget.chargeId}
+                        >
+                            Applies to: {payTarget.label}
+                        </p>
+                        {/*
                          * LABELLED, like every other Alloy command field. This was three bare
                          * controls in a column — an amount, a method and a payer with nothing
                          * saying which was which, which is what made the command read as a raw form
