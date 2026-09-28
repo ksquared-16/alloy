@@ -61,7 +61,16 @@ describe("the operator Payment Element declines consumer checkout", () => {
         expect(src).toMatch(/export type OperatorBillingPrefill/);
         const plain = code("lib/financials/payments/stripeElementsPresentation.ts");
         expect(plain, "name is offered").toMatch(/billingDetails:\s*\{\s*name\s*\}/);
-        expect(plain, "address is not prefilled").not.toMatch(/defaultValues[\s\S]{0,200}address/);
+        /*
+         * ASSERT THE RULE, NOT ITS NEIGHBOURHOOD. This used to ban "address" within 200 characters
+         * of `defaultValues`, which caught the `fields` option that tells Stripe NOT to collect a
+         * postal code — the opposite of a prefill, and now sitting right beside it.
+         *
+         * The rule is that `defaultValues` carries a name and nothing else.
+         */
+        const dv = plain.match(/defaultValues:\s*\{[\s\S]*?\}\s*\}/g) ?? [];
+        expect(dv.length, "defaultValues is set in exactly one place").toBe(1);
+        expect(dv[0], "no address may be asserted as billing").not.toMatch(/address|postal|line1|city|state/i);
     });
 
     it("both Elements surfaces use the one shared configuration, so they cannot drift", () => {
