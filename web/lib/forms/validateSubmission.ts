@@ -671,7 +671,28 @@ export function validateFormPayload(input: {
     };
 
     for (const field of schema.fields) {
+        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
+
         if (field.type === "group") {
+            /*
+             * A COLLECTION THAT DOES NOT APPLY CANNOT BE INCOMPLETE — AND IS NOT A HIDING PLACE.
+             *
+             * This dispatched into `validateGroupInstances` BEFORE visibility was computed, so a
+             * conditional collection was validated as if it were always asked. Measured on a sibling
+             * gate with `repeat.min = 1`: a family answering "No" was refused with "Expected at least
+             * 1 group instance(s)" — blocked for answering honestly, with no way forward, because the
+             * question they answered was the one that hid the collection. The mirror case was just as
+             * wrong: a hidden collection carrying stray rows submitted as VALID.
+             *
+             * Every other field kind already asks this question first; only the group branch skipped
+             * it. Hidden means NOT ASKED, and not asked means neither required nor permitted.
+             */
+            if (!vis) {
+                if (mode === "submit" && (payload.groups?.[field.id]?.length ?? 0) > 0) {
+                    errors.push(err(["groups", field.id], "Group is hidden and must be empty on submit", "custom"));
+                }
+                continue;
+            }
             validateGroupInstances(
                 field,
                 payload.groups?.[field.id],
@@ -684,8 +705,6 @@ export function validateFormPayload(input: {
             );
             continue;
         }
-
-        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
 
         if (field.type === "signature") {
             const sig = payload.signatures?.[field.id];
