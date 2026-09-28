@@ -253,6 +253,11 @@ Endings are **observable changes on the record itself**:
 | Relationship | `status` changes |
 | Staff | `employment_status` becomes `ended` |
 
+That table is ordinary endings — a commitment that was real and then concluded.
+A record created in error, one replaced by a newer state, and a fact recorded
+wrongly end differently, through named governed operations rather than a date:
+§9a catalogs cancel, void, supersede, correct and reverse.
+
 Because these are ordinary changes, incremental synchronization delivers them
 like any other. If your model requires certainty that something has been removed
 rather than ended, do a periodic full read — that is the only mechanism that
