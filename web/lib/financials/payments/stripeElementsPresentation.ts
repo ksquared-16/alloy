@@ -214,7 +214,23 @@ export type OperatorBillingPrefill = {
  * surface that stopped collecting a field without also supplying it at confirm would fail at the
  * last step — the precise trap this option carries.
  */
-const SETUP_ADDRESS_OWNED_BY_ALLOY = { postalCode: "never" as const };
+/*
+ * ── WHY `if_required` AND NOT `{ postalCode: "never" }` ──
+ *
+ * The object form was tried first and mounted QA caught what it did: naming ONE subfield leaves the
+ * others on their default, so Stripe began rendering a COUNTRY selector — geo-defaulted to Austria
+ * on a US childcare account. An unnecessary consumer field, pre-filled wrongly, next to a card.
+ *
+ * `if_required` is measured to render no address fields at all for this account, which is the state
+ * this surface already shipped with. Nothing is collected, so nothing can override the postal code
+ * supplied at confirmation — the override concern that motivated `never` does not arise when the
+ * Element asks for no address in the first place.
+ *
+ * The residual risk is stated rather than hidden: if Stripe ever decides a postal code IS required
+ * for some account, it would render one beside Alloy's. That is a visible duplicate — findable and
+ * fixable — and strictly better than shipping a country field defaulted to the wrong country.
+ */
+const SETUP_ADDRESS_OWNED_BY_ALLOY = "if_required" as const;
 
 export function createAlloyOperatorPaymentElement(
     els: StripeElements,

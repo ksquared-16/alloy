@@ -71,7 +71,15 @@ describe("3. it is passed to Stripe at confirmation, through the supported contr
          * typed; `never` is the documented contract for supplying it yourself.
          */
         const src = code(PRESENTATION);
-        expect(src).toMatch(/postalCode:\s*"never"/);
+        /*
+         * `{ postalCode: "never" }` was tried and mounted QA caught the cost: naming one subfield
+         * left COUNTRY on its default and Stripe rendered a selector defaulted to Austria. The
+         * override concern it was meant to answer does not arise under `if_required`, which is
+         * measured to collect no address at all — nothing collected, nothing to override.
+         */
+        expect(src).toMatch(/SETUP_ADDRESS_OWNED_BY_ALLOY = "if_required"/);
+        expect(src, "no subfield object may reintroduce a country selector")
+            .not.toMatch(/postalCode:\s*"never"/);
         expect(src).toMatch(/alloyCollectsPostalCode/);
     });
 
