@@ -1,0 +1,100 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 6ms
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":182,"T6":182,"T7":182,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1378,"T6":1378,"T7":1378,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1983,"T6":1983,"T7":1983,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1378,"T6":1378,"T7":1378,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1491,"T6":1491,"T7":1491,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.8m)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":5290,"T6":5290,"T7":5290,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":992,"T6":992,"T7":992,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1158,"T6":1158,"T7":1158,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1732,"T6":1732,"T7":1732,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1251,"T6":1251,"T7":1251,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.8m)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":187,"T6":187,"T7":187,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1526,"T6":1526,"T7":1526,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1174,"T6":1174,"T7":1174,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":2126,"T6":2126,"T7":2126,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1369,"T6":1369,"T7":1369,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":174,"T6":174,"T7":174,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1003,"T6":1003,"T7":1003,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1146,"T6":1146,"T7":1146,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1483,"T6":1483,"T7":1483,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1247,"T6":1247,"T7":1247,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 4ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":193,"T6":193,"T7":193,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1003,"T6":1003,"T7":1003,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1242,"T6":1242,"T7":1242,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1491,"T6":1491,"T7":1491,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1364,"T6":1364,"T7":1364,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":193,"T6":193,"T7":193,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1145,"T6":1145,"T7":1145,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1372,"T6":1372,"T7":1372,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1368,"T6":1368,"T7":1368,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1497,"T6":1497,"T7":1497,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":192,"T6":192,"T7":192,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1033,"T6":1033,"T7":1033,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1044,"T6":1044,"T7":1044,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1364,"T6":1364,"T7":1364,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1489,"T6":1489,"T7":1489,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":180,"T6":180,"T7":180,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1142,"T6":1142,"T7":1142,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":2063,"T6":2063,"T7":2063,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":3472,"T6":3472,"T7":3472,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1513,"T6":1513,"T7":1513,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.8m)
+governed: null · workers default -> n/a · weight 0 · admitted in 4ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":174,"T6":174,"T7":174,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1167,"T6":1167,"T7":1167,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1043,"T6":1043,"T7":1043,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1488,"T6":1488,"T7":1488,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1368,"T6":1368,"T7":1368,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":183,"T6":183,"T7":183,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1376,"T6":1376,"T7":1376,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1769,"T6":1769,"T7":1769,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1362,"T6":1362,"T7":1362,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1634,"T6":1634,"T7":1634,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"76ed350ae","endSha":"76ed350ae","actions":25,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":187,"T6":187,"T7":187,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1016,"T6":1016,"T7":1016,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":1495,"T6":1495,"T7":1495,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":1612,"T6":1612,"T7":1612,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1248,"T6":1248,"T7":1248,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null}]}
+
+[1A[2K  1 passed (1.7m)
