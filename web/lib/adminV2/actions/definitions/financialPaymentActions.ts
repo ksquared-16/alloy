@@ -688,6 +688,17 @@ const collectCardPayment: RegisteredAction = {
                 actorUserId: ctx.userId ?? null,
                 payerPersonId: t(payload.payer_person_id) || null,
                 /*
+                 * A METHOD THE FAMILY ALREADY GAVE US, when the operator chose one. Omitted means
+                 * collect a new instrument through the provider's fields, which was the only thing
+                 * this action could do before — so an account with a stored card still made the
+                 * operator type it again.
+                 *
+                 * The service owns every rule about it: same org, same customer, rail agreement,
+                 * usability, and that the method's owner IS the named payer (`method_payer_mismatch`).
+                 * Passing it here does not widen what may be collected; it names an instrument.
+                 */
+                paymentMethodId: t(payload.payment_method_id) || null,
+                /*
                  * The rail the operator chose. Intent only — the server still resolves the merchant,
                  * its capability for THIS rail, and the collectible amount, and refuses an ACH
                  * request on a merchant the provider has not enabled for it.
@@ -721,6 +732,14 @@ const collectCardPayment: RegisteredAction = {
                         connected_account: created.connectedAccountRef,
                         provider_transaction_id: created.providerTransactionId,
                         reused: created.reused,
+                        /*
+                         * WHICH STORED METHOD WAS USED, or null for a newly entered one. The
+                         * surface needs this to know whether to open card entry at all: a stored
+                         * method is confirmed off-session by the service, so presenting Stripe's
+                         * fields afterwards would ask the operator to enter a card that has
+                         * already been charged.
+                         */
+                        payment_method_id: created.paymentMethodId,
                         // The honest state: a request, not a receipt.
                         recognized: false,
                     },

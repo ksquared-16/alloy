@@ -276,6 +276,27 @@ function summariseFamilyDiscount(
 /** A command that cannot be aimed yet. Rendered inert rather than omitted, so geometry holds. */
 const NO_COMMAND = () => undefined;
 
+/**
+ * A stored method as an operator says it: brand, last four, and the expiry when it is useful.
+ * Never a provider id, and never anything that is not already safe to print.
+ */
+function storedMethodLabel(m: {
+    brand: string | null;
+    last4: string | null;
+    rail: "card" | "ach";
+    expMonth: number | null;
+    expYear: number | null;
+    isDefault: boolean;
+}): string {
+    const name = m.brand?.trim() || (m.rail === "ach" ? "Bank account" : "Card");
+    const tail = m.last4 ? ` •••• ${m.last4}` : "";
+    const expiry =
+        m.rail === "card" && m.expMonth && m.expYear
+            ? ` · Expires ${String(m.expMonth).padStart(2, "0")}/${String(m.expYear).slice(-2)}`
+            : "";
+    return `${name}${tail}${expiry}${m.isDefault ? " · Default" : ""}`;
+}
+
 export default function FinancialsCard({
     model,
     context,
@@ -682,6 +703,51 @@ export default function FinancialsCard({
      * post with no name on it is better recorded as unattributed than as a guess.
      */
     const [payPayerPersonId, setPayPayerPersonId] = useState<string>("");
+    /*
+     * WHICH STORED METHOD, or none. "" means collect a NEW instrument through the provider's own
+     * fields — the only thing this surface could do before, which made an operator re-enter a card
+     * the account already had on file.
+     */
+    const [payStoredMethodId, setPayStoredMethodId] = useState<string>("");
+
+    /*
+     * THE METHODS THIS PAYMENT MAY ACTUALLY USE.
+     *
+     * Rail first: only card and bank collect through a provider. Then the payer, because a stored
+     * method belongs to one and the server refuses a mismatch. A method whose owner is unknown is
+     * included only when no payer has been named, so an un-owned legacy row never silently attaches
+     * itself to a named payer.
+     */
+    const eligibleStoredMethods = useMemo(() => {
+        if (payMethod !== "card" && payMethod !== "ach") return [];
+        const all = vm?.paymentCapabilities?.methodsOnFile ?? [];
+        return all.filter((m) => {
+            if (m.usabilityState !== "usable") return false;
+            if (m.rail !== payMethod) return false;
+            if (!payPayerPersonId) return true;
+            if (m.payerEntityType && m.payerEntityType !== "person") return false;
+            return !m.payerEntityId || m.payerEntityId === payPayerPersonId;
+        });
+    }, [vm?.paymentCapabilities?.methodsOnFile, payMethod, payPayerPersonId]);
+
+    /*
+     * ONE USABLE METHOD IS THE ANSWER, so select it. With several, the account's default for that
+     * rail is the canonical choice. The selection is re-derived when the rail or the payer changes,
+     * because a method that was eligible a moment ago may not belong to the payer now named — and a
+     * stale id here is exactly the mismatch the server would refuse.
+     */
+    useEffect(() => {
+        if (!eligibleStoredMethods.length) {
+            setPayStoredMethodId("");
+            return;
+        }
+        setPayStoredMethodId((current) => {
+            if (current && eligibleStoredMethods.some((m) => m.id === current)) return current;
+            const preferred =
+                eligibleStoredMethods.find((m) => m.isDefault) ?? eligibleStoredMethods[0];
+            return preferred?.id ?? "";
+        });
+    }, [eligibleStoredMethods]);
     /**
      * THE REFUND THE OPERATOR IS COMPOSING.
      *
@@ -3472,6 +3538,44 @@ export default function FinancialsCard({
                             onChange={(next) => setPayMethod(next)}
                         />
                         {/*
+                          * ── PAY WITH A CARD THIS FAMILY ALREADY GAVE US ────────────────────────
+                          *
+                          * Offered only for a provider rail, because only a provider rail can
+                          * collect from a stored instrument; cash and cheque record money that has
+                          * already arrived and have no method to choose.
+                          *
+                          * SCOPED TO THE NAMED PAYER, not merely to the account. A stored method
+                          * belongs to a payer, and `collectionAttempt` refuses `method_payer_mismatch`
+                          * when the two disagree — so offering Person B's card for Person A's
+                          * payment would offer a choice the server is going to reject. Changing the
+                          * payer therefore changes what is on this list, and an empty list sends the
+                          * operator to the secure Add path rather than to a refusal.
+                          *
+                          * Delegated use is a real thing the approved domain does not model yet.
+                          * It stays refused rather than silently permitted.
+                          */}
+                        {eligibleStoredMethods.length ? (
+                            <>
+                            <p className="alloy-os-financials__fieldlabel">Payment method</p>
+                            <AlloySelect
+                                value={payStoredMethodId}
+                                aria-label="Stored payment method"
+                                testId="financials-payment-stored-method"
+                                allowEmpty={false}
+                                options={[
+                                    ...eligibleStoredMethods.map((m) => ({
+                                        value: m.id,
+                                        /* Brand, last four and expiry. Never a provider id. */
+                                        label: storedMethodLabel(m),
+                                    })),
+                                    { value: "", label: payMethod === "ach" ? "Use another bank account" : "Use another card" },
+                                ]}
+                                onChange={(next) => setPayStoredMethodId(next)}
+                            />
+                            </>
+                        ) : null}
+
+                        {/*
                          * ── WHO ACTUALLY PAID — a different question from who owes it ───────────
                          *
                          * Candidates are household membership, not responsibility, and the list is
@@ -3570,6 +3674,14 @@ export default function FinancialsCard({
                                                 // Intent only. The server resolves the merchant, its
                                                 // capability for this rail, and what may be taken.
                                                 rail: payMethod,
+                                                /*
+                                                 * The chosen stored method, or omitted to collect a
+                                                 * new one. The payer travels with it because the
+                                                 * server checks that the method's owner IS the
+                                                 * named payer and refuses a mismatch.
+                                                 */
+                                                ...(payStoredMethodId ? { payment_method_id: payStoredMethodId } : {}),
+                                                ...(payPayerPersonId ? { payer_person_id: payPayerPersonId } : {}),
                                             },
                                             subject,
                                         );
@@ -3584,6 +3696,26 @@ export default function FinancialsCard({
                                             return;
                                         }
                                         const d = outcome.detail;
+                                        /*
+                                         * A STORED METHOD IS ALREADY CHARGED. The service confirms
+                                         * it off-session, so opening Stripe's fields here would ask
+                                         * the operator to enter a card that has just been used —
+                                         * and the ledger reload below is what actually reports the
+                                         * outcome. Only a NEW instrument needs the entry stage.
+                                         */
+                                        if (d.payment_method_id) {
+                                            /*
+                                             * Close and RE-READ rather than announce. The attempt
+                                             * is real but recognition is the server's to confirm,
+                                             * so the ledger reports what actually happened instead
+                                             * of this surface claiming a receipt it has not seen.
+                                             */
+                                            setCardCollection(null);
+                                            setCardStage("idle");
+                                            setPayTarget(null);
+                                            await load();
+                                            return;
+                                        }
                                         setCardCollection({
                                             clientSecret: String(d.client_secret ?? ""),
                                             connectedAccount: String(d.connected_account ?? ""),
