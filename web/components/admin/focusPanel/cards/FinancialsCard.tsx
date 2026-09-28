@@ -3278,7 +3278,8 @@ export default function FinancialsCard({
                                     {p.offersRefund && !composing ? (
                                         <button
                                             type="button"
-                                            className="alloy-os-financials__action"
+                                            /* Scoped to this receipt, so it is drawn as one. */
+                                            className="alloy-os-financials__action alloy-os-financials__action--onrow"
                                             data-financials-command="payment.refund"
                                             data-financials-refund-payment={p.paymentId}
                                             disabled={running}
