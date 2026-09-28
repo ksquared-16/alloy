@@ -391,11 +391,13 @@ This is the complete HTTP operation catalog.
 | --- | --- |
 | Record what happened, correct a detail, or reverse a fact | `POST /api/v1/attendance-events` |
 
-Attendance is one endpoint and three intents. A submission carries `entry_type`
-— `original`, `correction` or `reversal` — and a correction or reversal names the
-event it supersedes. It is an append-only ledger: nothing is ever edited or
-removed, and the effective truth is what remains after corrections and reversals
-are applied.
+Attendance is one endpoint and three intents. A first statement of a fact sets
+neither correction field. A correction or reversal sets `correction_mode` and names
+the fact it supersedes in `corrects_external_event_id`. On a read, every stored fact
+carries `entry_type` — `original`, `correction` or `reversal` — so you can tell
+which of the three you are looking at without reconstructing it. It is an
+append-only ledger: nothing is ever edited or removed, and the effective truth is
+what remains after corrections and reversals are applied.
 
 So the surface is **ten HTTP write operations** covering **twelve domain intents**,
 because Attendance carries three through one endpoint. Counting either way is
@@ -511,8 +513,15 @@ human-readable `message`, and the request id.
 | `400` | The request was malformed — a bad cursor, filter or window | Fix the request. Do not retry unchanged. |
 | `401` | Token missing, expired or invalid | Exchange your credential again. |
 | `403` | You do not hold the required scope | Ask the operator for it. Retrying will not help. |
+| `404` | The identifier is not available to this Installation. Nonexistent and outside-your-boundary are deliberately indistinguishable | Check the id came from a read you are authorized for. Never infer that something exists. |
+| `409` | The record's current lifecycle state conflicts with the intent you asked for | Re-read the record and choose the operation that is true of it. Do not retry blindly. |
+| `422` | Understood and authorized, but the values break a domain rule — `type` is `invalid_request` and the `code` is `validation_failed` | Correct the values. Retrying unchanged will fail again. |
 | `429` | Rate limit exceeded | Wait for `RateLimit-Reset`, then retry. |
 | `5xx` | Alloy failed | Retry with backoff. Submissions are safe to retry. |
+
+`404`, `409` and `422` are what the governed write operations in §9a answer with;
+`02` §12 is the detailed authority for every status, including which `code` values
+accompany each.
 
 Token exchange, authenticated reads and authenticated writes have **independent
 rate budgets**:
