@@ -1,0 +1,9 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-navkind.spec.ts:14:5 › gate R nav kind
+[1A[2K[chromium] › playwright/tests/zz-gateR-navkind.spec.ts:14:5 › gate R nav kind
+[NAVKIND] {"opened":"/workspace/work-unit/waitlist","inUnitUrl":"/workspace/work-unit/waitlist","workspaceAnchor":{"href":"/workspace","target":null,"rel":null,"dataset":[],"cls":"adminv2-nav-link adminv2-sidebar-rail-link"},"afterAnchorClick":{"tok":"pr2m8cledck","url":"/workspace","rows":0},"ANCHOR_CAUSED_FULL_NAV":false}
+
+[1A[2K  1 passed (30.3s)
