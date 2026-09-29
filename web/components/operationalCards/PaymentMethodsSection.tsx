@@ -38,6 +38,8 @@ export type StoredMethod = {
     verificationState: "unverified" | "pending" | "verified" | "failed";
     usabilityState: "usable" | "blocked" | "expired" | "revoked";
     isDefault: boolean;
+    payerEntityType?: string | null;
+    payerEntityId?: string | null;
     revokedAt: string | null;
 };
 
@@ -203,6 +205,8 @@ export default function PaymentMethodsSection({
     }, [pendingSetup, customerId, payerEntityId, run]);
 
     const live = (methods ?? []).filter((m) => m.usabilityState !== "revoked");
+    /* One usable method IS the effective default; a second one makes the choice real. */
+    const usableCount = (methods ?? []).filter((m) => m.usabilityState === "usable").length;
     const removed = (methods ?? []).filter((m) => m.usabilityState === "revoked");
 
     return (
@@ -343,8 +347,14 @@ export default function PaymentMethodsSection({
 
                                 {canManage ? (
                                     <div className="flex shrink-0 items-center gap-2">
-                                        {/* Offered only when it would do something: a default cannot be set twice. */}
-                                        {!m.isDefault && m.usabilityState === "usable" ? (
+                                        {/*
+                                          * Offered only when it would do something: a default cannot be set twice,
+                                          * and WITH ONE USABLE METHOD THERE IS NOTHING TO CHOOSE BETWEEN. That
+                                          * lone method is already the one every surface preselects, so asking the
+                                          * operator to press "Set as default" was asking them to confirm a fact
+                                          * rather than make a decision — and it read as a step Autopay required.
+                                          */}
+                                        {!m.isDefault && m.usabilityState === "usable" && usableCount > 1 ? (
                                             <button
                                                 type="button"
                                                 data-testid="payment-method-set-default"

@@ -4384,7 +4384,11 @@ export default function FinancialsCard({
                       */}
                     <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
                         <PaymentMethodsSection customerId={customerId} />
-                        <AutopaySection customerId={customerId} />
+                        <AutopaySection
+                            customerId={customerId}
+                            /* The canonical candidates this form never received — see AutopaySection. */
+                            payerCandidates={vm?.payerCandidates ?? null}
+                        />
                         {/*
                           * A VISIBLE WAY BACK. The card ended after the Autopay copy with nothing
                           * below it, so on an account with no methods it read as a surface that
