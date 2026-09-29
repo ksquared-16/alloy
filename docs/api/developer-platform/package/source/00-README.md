@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-29
+supersedes: []
+---
+
 # Alloy Developer Platform — Technical Package
 
 **Prepared for:** an integration partner's engineering team

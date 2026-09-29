@@ -13,6 +13,16 @@ This document defines the standard Alloy API response envelope, the helpers that
 produce it, the error-code and correlation-id conventions, and the current
 migration status. It is the source of truth for new and migrated routes.
 
+**Scope: Alloy's INTERNAL API only.** This envelope governs `/api/admin/**` and the
+other internal route classes in [`api-architecture.md`](./api-architecture.md) §2. It does
+**not** define the external Developer Platform contract. `/api/v1/**` is a separate,
+governed, externally certified surface with its own envelope — no `ok`/`data` wrapper, a
+lowercase `error.type` alongside `error.code`, and a `request_id` rather than a
+`correlation_id`. Its authority is
+[`developer-platform/external/alloy-developer-platform-specification.md`](developer-platform/external/alloy-developer-platform-specification.md)
+and the machine contract [`openapi/alloy-public-api.v1.json`](openapi/alloy-public-api.v1.json).
+The two envelopes share no fields; do not apply either one's codes to the other surface.
+
 Related: [`api-architecture.md`](./api-architecture.md) (governing doctrine — §3 response contract, §4 error doctrine) · [`api-data-access-performance.md`](./api-data-access-performance.md) (pagination/sync/freshness shapes that extend this envelope) · [`README.md`](./README.md) · [`api-documentation-audit.md`](./api-documentation-audit.md) · [`api-index.md`](./api-index.md)
 
 ---

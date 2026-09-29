@@ -35,7 +35,18 @@ const GOVERNED_GLOBS = [
   /^docs\/platform\//,
   /^docs\/system\//,
   /^docs\/product\//,
+  /^docs\/api\//,
 ];
+
+// The partner package's six shipped members are the one documentation output that must NOT
+// carry frontmatter. `web/scripts/buildPartnerPackage.mjs` strips it on the way in — "Internal
+// governance frontmatter is Alloy's bookkeeping, not the partner's" — and
+// web/tests/developerDocs/partnerPackage.test.ts fails the build if `owner:`/`status:` reaches a
+// shipped file. Requiring frontmatter here would ask the generator to ship Alloy's bookkeeping to
+// a partner. Their canonical SOURCES are governed: `package/source/` is deliberately NOT excluded,
+// and the hand-authored canonical documents the generator reads (guide/, external/, openapi/) are
+// governed where they live.
+const GOVERNED_EXCLUSIONS = [/^docs\/api\/developer-platform\/package\/(?!source\/)/];
 
 // `docs/platform/planning/` is a named, dated exception to placement rule 3.
 //
@@ -224,6 +235,7 @@ export function parseFrontmatter(text) {
 }
 
 export function isGovernedPath(relPath) {
+  if (GOVERNED_EXCLUSIONS.some((re) => re.test(relPath))) return false;
   return GOVERNED_GLOBS.some((re) => re.test(relPath));
 }
 
