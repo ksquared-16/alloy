@@ -49,6 +49,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Two registers, not one list:** Alloy names foundational **runtimes** (operator-plane subsystems — `platform/foundation/architecture.md`) and foundational **platforms** (`platform/trust/trust-platform.md`). Trust is a platform, not a runtime, which is why it does not appear in the runtime register. The **K1–K4 kernel** (`platform/runtime/alloy-runtime-kernel.md`) is a third thing again — the substrate beneath the runtimes, explicitly "not a new foundational runtime".
 
+**Developer Platform / Public API V1 (complete, promoted and hard-frozen, September 2026):** Alloy's external boundary is a supported platform surface, not an integration script. Authority runs **Developer Application → Installation → Credential → Application Principal → scopes + resource boundary → `/api/v1`**, and a token resolves to exactly one organization. Current external doctrine lives in **`api/developer-platform/external/alloy-developer-platform-specification.md`** (the contract) and **`api/developer-platform/guide/integrating.md`** (the integration read); the machine contract is **`api/openapi/alloy-public-api.v1.json`**. The partner package under `api/developer-platform/package/` is **generated** from those sources — a downstream output, never an alternate authority. The dated workstream records in `api/developer-platform/product/` are **history** (`status: historical`): they record earlier surface counts that were correct on their own date and are not current doctrine.
+
 **Trust Platform (publication in progress, August 2026):** Alloy’s cognitive platform for **trusted operational reasoning** — not an AI/prompt/model layer. Entry: **`platform/trust/trust-platform.md`**. Corpus index: **`platform/trust/README.md`**.
 
 ---
@@ -146,6 +148,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Trust Platform (cognitive / reasoning) | `platform/trust/trust-platform.md` — corpus index `platform/trust/README.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
+| Developer Platform / Public API (external boundary — frozen) | `api/developer-platform/external/alloy-developer-platform-specification.md` — integration read `api/developer-platform/guide/integrating.md` |
 
 ### 5. Governance & standards
 

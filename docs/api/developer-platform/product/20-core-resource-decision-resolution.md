@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: canonical
+status: historical
 classification: INTERNAL
 audience: Alloy product and engineering
 last_reviewed: 2026-09-22

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { lintDocumentation, parseFrontmatter, resolveLink } from "../../../scripts/docs-lint.mjs";
+import { isGovernedPath, lintDocumentation, parseFrontmatter, resolveLink } from "../../../scripts/docs-lint.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -102,5 +102,59 @@ last_reviewed: 2026-07-12
         expect(baseline.summary["canonical-in-planning"] ?? 0).toBeGreaterThan(0);
         expect(baseline.summary["sprint-artifact-in-platform"] ?? 0).toBeGreaterThan(0);
         expect(baseline.summary["canonical-planning-dependency"] ?? 0).toBeGreaterThan(0);
+    });
+});
+
+/**
+ * Developer Platform documentation authority.
+ *
+ * The September 2026 census found the frozen external contract in a bad position: 27 dated
+ * workstream records under `docs/api/developer-platform/product/` declared `status: canonical`
+ * while carrying surface counts the contract had retired — and their `last_reviewed` dates were
+ * NEWER than the current guide's, so any recency heuristic picked the stale document. The API
+ * corpus also sat outside `GOVERNED_GLOBS`, so docs-lint never checked it, and the canonical
+ * documentation map did not mention the public API at all.
+ *
+ * These assertions lock the repair, not the prose. They say nothing about the contract itself.
+ */
+describe("Developer Platform documentation authority", () => {
+    it("no dated workstream record claims canonical authority", () => {
+        const dir = path.join(repoRoot, "docs/api/developer-platform/product");
+        const dated = readdirSync(dir).filter((f) => /^\d+-.*\.md$/.test(f));
+        expect(dated.length, "the product history set disappeared").toBeGreaterThan(20);
+        for (const file of dated) {
+            const fm = readFileSync(path.join(dir, file), "utf8").split("\n").slice(0, 12).join("\n");
+            expect(fm, `${file} must declare a status`).toMatch(/^status:/m);
+            expect(
+                fm,
+                `${file} is a dated execution record; canonical status makes it outrank the frozen contract`,
+            ).not.toMatch(/^status:\s*canonical\s*$/m);
+        }
+    });
+
+    it("governs the API corpus but never the generated partner members", () => {
+        // The six shipped members must stay frontmatter-free: the generator strips it and
+        // partnerPackage.test.ts fails if `owner:`/`status:` reaches a partner.
+        expect(isGovernedPath("docs/api/developer-platform/external/alloy-developer-platform-specification.md")).toBe(true);
+        expect(isGovernedPath("docs/api/developer-platform/guide/integrating.md")).toBe(true);
+        expect(isGovernedPath("docs/api/openapi/README.md")).toBe(true);
+        expect(isGovernedPath("docs/api/developer-platform/product/15-thread-7-public-api-expansion-handoff.md")).toBe(true);
+        expect(isGovernedPath("docs/api/developer-platform/package/01-integrating-with-alloy.md")).toBe(false);
+        expect(isGovernedPath("docs/api/developer-platform/package/README.md")).toBe(false);
+        // …but their canonical sources are governed.
+        expect(isGovernedPath("docs/api/developer-platform/package/source/00-README.md")).toBe(true);
+        expect(isGovernedPath("docs/api/developer-platform/package/source/06-mapping-worksheet.md")).toBe(true);
+    });
+
+    it("the canonical documentation map reaches the current external contract", () => {
+        const readme = readFileSync(path.join(repoRoot, "docs/README.md"), "utf8");
+        expect(readme, "docs/README.md must route to the specification that owns the contract")
+            .toContain("api/developer-platform/external/alloy-developer-platform-specification.md");
+        expect(readme, "and to the integration read").toContain("api/developer-platform/guide/integrating.md");
+        expect(readme, "the generated package must not be presented as an authority")
+            .toMatch(/package\/[^\n]*\*\*generated\*\*|\*\*generated\*\*[^\n]*package/i);
+        const caps = readFileSync(path.join(repoRoot, "docs/platform/foundation/platform-capabilities.md"), "utf8");
+        expect(caps, "the capability inventory must carry the Developer Platform")
+            .toMatch(/Developer Platform \/ Public API/);
     });
 });
