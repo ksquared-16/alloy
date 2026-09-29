@@ -110,6 +110,14 @@ destination. Current cost: ~58 subject-related requests per session (from ~24). 
 Future work may **consume and extend** these. Redefining one requires explicit architectural
 justification, regression updates, and re-certification.
 
+**The fifteen Workspaces Operator Experience laws are NOT restated here.** They live once, in
+[`WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md`](WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md) §3, together
+with their seam map, guard matrix and the procedure for changing one — so the two documents cannot
+drift into two versions of the same law. Laws 5, 6, 25 and 26 below are the closest neighbours and
+are deliberately narrower: none of them says that hover may not navigate, that data reuse is not
+navigation authority, that visited is not current, or that a `/workspace` reload floor cannot survive
+a superseding Work Unit entry.
+
 1. **Intent acknowledgement** — operator intent commits immediately; never blocked on secondary network work.
 2. **Attention vs Settlement** — Record of Attention may change while Settlement stays stable. A child-to-child switch inside one family must not tear down the family Settlement runtime.
 3. **Subject identity** — if canonical identity is already known from Queue context, commit it immediately; do not wait for provisioning to rediscover it.
