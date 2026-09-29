@@ -1281,3 +1281,46 @@ The payer entity now joins the derived key. A payer-less payment keys exactly as
 that never named a payer changes; the same payer repeating the same request is still correctly a retry;
 and a later day remains a separate payment. Certified live: two distinct payments, two applications,
 outstanding reaching zero exactly once, and responsibility unchanged throughout.
+
+### An Enrollment fee is a charge definition Enrollment points at, never a price it holds (September 2026)
+
+Enrollment can now require a fee to leave a stage (`financial` requirement kind — see
+`docs/platform/runtime/enrollment-process-runtime.md`). The boundary is worth stating from this side,
+because it is the side that owns the money.
+
+**Enrollment sends three facts and no figures:** which charge definition (`charge_template_key`),
+which grain (`RequirementScope` — `record` for the household, `each_child` per enrolling child), and
+the date the requirement became due. It never sends an amount, and a caller-supplied `amount_cents` is
+ignored — certified: a request carrying `amount_cents: 1` against the $75 definition produced a charge
+of 7500.
+
+**Financials answers with everything else.** Creation, posting and idempotency are
+`writeTemplateDraftCharge`'s (dedupe scoped to the billable source, so a replay returns the same
+charge and a different due date is a different obligation). Position is `resolveFamilyCollectible`'s.
+Corrections are `createChildcareCorrection`'s, and the corrected-once rule is the database's.
+Enrollment keeps no ledger and composes no negative charge of its own.
+
+**Billable source follows grain**: `each_child` → one `enrollment_agreement` source per child;
+`record` → one `customer` source. The household case is the one that reveals a disagreement inside
+Financials: `writeTemplateDraftCharge` accepts a `customer` source on purpose — a family incurs
+registration and deposit fees before anyone is enrolled — while `resolveAllocatableNet` refuses to
+position anything not enrolment-backed. A household-grain fee can therefore post as real money and
+then be unpositionable. Enrollment resolves that in neither direction: the obligation is reported with
+`position: null` and a reason, and an operator is told. Do not "fix" this by having Enrollment invent a
+position.
+
+**A reversed fee still reports its charge.** The obligation is excluded from every aggregate figure
+but keeps its line and its `reversedByChargeId`, so a withdrawal is legible rather than absent.
+
+**Enrolment fees are not subsidy-claimable**: `buildSubsidyClaim` filters `charge_category = 'tuition'`.
+An expected subsidy alone does not suppress collectible either — `SUPPRESSING_CLAIM_STATES` is
+`["submitted","accepted"]`.
+
+One route mints these: `POST /api/admin/enrollment/fee-obligations`. It takes
+`requireFinancialsCapability(FINANCIALS_WRITE_PERMISSION_KEY)` alongside `requireAdminOrOps`, on the
+rule the charge-templates route already records — portal admission is not financial authority, and
+this route mints money. There is still **no route anywhere that records a payment against a childcare
+charge**; `recordAndApplyChildcarePayment` is called only from tests. That is the checkout gap, and it
+is why partial-payment behaviour is certified by
+`web/tests/enrollment/live/enrollmentFeeProjection.live.test.ts` against the certification stack
+rather than over HTTP.
