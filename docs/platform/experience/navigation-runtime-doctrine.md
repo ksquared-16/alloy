@@ -1,7 +1,7 @@
 ---
 owner: experience
-status: canonical
-last_reviewed: 2026-07-12
+status: proposal-unimplemented
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -12,6 +12,57 @@ supersedes: []
 **Realizes:** The Experience Layer's deferred keystone — Capability 2 (Continuity System) + Capability 6 (Navigation Continuity) of [`experience-layer-architecture.md`](./experience-layer-architecture.md), unified into one runtime.
 **Closes:** NAV-1 (full-reload navigation), NAV-2 (cold caches), WU-1 (outbound skeleton), WU-3 (dual navigation paradigm), DRW-4 (drawer stack lost on refresh) from the Experience Audit (historical: `../../sprints/archive/06_2026/premium-operational-experience/experience-audit.md`).
 **Companion law:** [`operational-experience-doctrine.md`](./operational-experience-doctrine.md) Law 2 (Continuity) and Law 3 (Memory). This doctrine is their navigation-level implementation.
+
+---
+
+## CORRECTION — 2026-09-29: this document is a PROPOSAL, and its reload floor is not the shipped one
+
+Its front matter said `status: canonical` while the header two lines above says *Architecture
+(proposed) — awaiting approval, no implementation until approved*. The front matter was wrong and is
+now corrected. The distinction matters because a search for "reload floor" landed here, in a file
+labelled canonical, and returned a confident answer about a mechanism this document does not describe.
+
+**None of the modules in §4 were built.** `navigationContext.ts`, `navigationRuntime.ts`,
+`navigationPersistence.ts`, `navigationHistory.ts`, `navigationRecovery.ts` and `navigationPreload.ts`
+do not exist anywhere in the tree — six of the seven implementation files this document names. §4 is
+labelled "New modules" with a "public surface (sketch)", so that was always the intent; the
+`status: canonical` line is what made it read otherwise.
+
+**What actually shipped is a different mechanism with different semantics.** The reload floor in
+production is a SOFT-NAVIGATION WATCHDOG, not §6's Tier 3 recovery escalation:
+
+| | §6 Tier 3 (proposed, unbuilt) | `adminV2SoftNavReloadFloor.ts` (shipped) |
+|---|---|---|
+| Owner | `navigationRecovery.ts` — does not exist | `web/lib/adminV2/navigation/adminV2SoftNavReloadFloor.ts` |
+| Trigger | client runtime judged inconsistent / unrecoverable | a soft nav that has not arrived within `DEFAULT_SOFT_NAV_RELOAD_FLOOR_MS = 15000` |
+| Armed by | `navigationRecovery.escalate(reason)` | `armSoftNavReloadFloor`, reached only from `commitAdminV2NavLinkNavigation` in `adminV2SoftNavLinkCommit.ts` — i.e. **sidebar link commits only** |
+| Decision | `withRecovery(transition)` | `shouldFireReloadFloor({ currentPathname, targetPathname, superseded, originPathname })` |
+| Disarmed by | reaching a consistent runtime | arrival at the target, supersession by a newer nav, **or the operator having left the origin** |
+
+**Why the difference was not academic.** Because the floor was armed only by sidebar navigation and
+Work Unit entry did not supersede it, a floor armed on a sidebar click stayed live while the operator
+opened a Work Unit by another route, and ~15 s later executed `window.location.assign("/workspace")`.
+Fired between opens it read as a random refresh; fired mid-open it read as a Work Unit that never
+became usable. One defect, both symptoms: 12 resets in 94 operator actions.
+
+**The canonical rule now, ORIGIN SCOPING.** `shouldFireReloadFloor` fires only when the operator is
+still at the pathname the navigation started from. Arrival at the target wins over everything;
+supersession by a newer navigation wins; and if the operator has moved on — which a valid Work Unit
+entry is — the stale floor has no authority over where they now are. A genuine hang, where the
+operator never left the origin, still reloads, so the recovery guarantee is intact. After the repair:
+0 resets in 60 actions on the same sequence, then 0 resets and 0 never-usable opens across 275
+operator actions and 55 Work Unit opens.
+
+**Therefore §7's "reload floor never removed" is true only of the PROPOSAL.** For the shipped floor
+the accurate statement is narrower and is the frozen contract: *the floor is never removed as a
+recovery path, and never fires against a superseding navigation.* Unconditional firing is not the
+safe reading — it is the defect.
+
+**Canonical authority.** The contract lives in
+[`../runtime/WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md`](../runtime/WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md)
+— law 13 and the seam map — not here. This document remains useful as the unapproved design study it
+is, and must not be read as establishing competing navigation doctrine. Guarded by
+`web/tests/adminV2/navigation/softNavReloadFloor.test.ts` (18 cases).
 
 ---
 
@@ -113,6 +164,10 @@ It explicitly does **not** own — it *coordinates* these (no overlapping owners
 
 ## New modules (`web/lib/experience/navigation/`)
 
+> **NOT BUILT (verified 2026-09-29).** None of the six modules below exist in the tree, and neither
+> does the `web/lib/experience/navigation/` directory. See the correction at the top of this document
+> for what shipped instead.
+
 | Module | Responsibility | Public surface (sketch) |
 |--------|----------------|--------------------------|
 | `navigationContext.ts` | The context model: a serializable description of the foreground context (surface id, work-view, record/drawer-stack, scroll/focus anchors). | `NavigationContext` type; `serializeToUrl()`, `hydrateFromUrl()` |
@@ -170,7 +225,12 @@ Every transition is fallible. Navigation Runtime treats recovery as first-class,
 
 Plus: **surface-level error boundaries** so a failed mount reveals a recoverable in-context error, never a white shell.
 
-**Instrumentation is the gate to flipping the default:** track `cancelled_nav_rate`, `fallback_to_reload_rate`, `transition_latency`. The reload floor is only ever demoted from default — never removed. If `fallback_to_reload_rate` is non-trivial, the resilience isn't ready; the floor carries the load until it is.
+**Instrumentation is the gate to flipping the default:** track `cancelled_nav_rate`, `fallback_to_reload_rate`, `transition_latency`. The reload floor is only ever demoted from default — never removed.
+
+> **CORRECTED for the shipped floor.** "Never removed" describes this proposal's Tier 3. The floor
+> that exists is origin-scoped and superseded by a newer navigation — including a valid Work Unit
+> entry — and firing it unconditionally is the Gate-R defect, not the safe default. See the
+> correction at the top. If `fallback_to_reload_rate` is non-trivial, the resilience isn't ready; the floor carries the load until it is.
 
 ---
 
@@ -178,7 +238,7 @@ Plus: **surface-level error boundaries** so a failed mount reveals a recoverable
 
 Build the runtime *alongside* the reload; prove resilience; flip the default per-surface; keep the floor.
 
-**Risk controls applied throughout:** flag-gated, per-surface rollout, reload floor never removed, hard metrics on cancelled-nav / fallback / latency, parity tests on URL ⇄ context / back-forward / deep-link / refresh.
+**Risk controls applied throughout:** flag-gated, per-surface rollout, reload floor never removed *as a recovery path — but never firing against a superseding navigation either; see the correction at the top*, hard metrics on cancelled-nav / fallback / latency, parity tests on URL ⇄ context / back-forward / deep-link / refresh.
 
 ---
 

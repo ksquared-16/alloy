@@ -156,17 +156,36 @@ All six suites are on `a7c521225` and green: **45 cases, 6 files.**
 | 8, 9, 10 canonical T6 | `tests/adminV2/runtime/reservedCellSettledReason.test.tsx` (7) — including "a settled surface that never readied the card is UNRESOLVED, not an answer" | MOUNTED (jsdom) |
 | 13 reload-floor origin scoping | `tests/adminV2/navigation/softNavReloadFloor.test.ts` (18) — "does NOT fire when the nav arrived and the operator then moved on" / "STILL fires when the operator never left the origin" | UNIT |
 | 13 supersession by a newer entry | same file — "supersession: an older watchdog never fires once a newer nav is armed", "navigating to a SECOND destination while the first is pending cancels the first's timer" | UNIT |
+| 7 no mixed-subject frame | `tests/adminV2/runtime/noATruthUnderB.test.tsx` (5) — renders the real grid, asserts one frame carries exactly one subject across both branches, and that a LATE A render leaves B byte-identical | MOUNTED (jsdom) |
 | 14 Financials scroll shrink rule | `tests/runtime/accountsDetailsScrollOwner.test.ts` (3) — reads the CSS and asserts both links of the chain may shrink | STATIC GUARD |
 | diagnostic boundedness | `tests/adminV2/drawer/truthPatchDiagIsBounded.test.ts` (4) | UNIT |
 | 15 `pdx1` placement | `tests/runtime/frozenRuntimePlacement.test.ts` | STATIC GUARD |
 | 2, no random reset in a long session | `web/playwright/tests/zz-gateR-reliability.spec.ts` — 275 actions, `MODE=control` must pass first | MOUNTED CERTIFICATION (not in CI; needs a deployed QA session) |
 
+### 6a. Mutation check on the subject-safety guard
+
+A guard nobody has seen fail is not known to work. Recorded 2026-09-29 against
+`OpportunityFocusPanelModeGrid.tsx`:
+
+**Mutation.** A module-level `__plantStaleSubject` holder was added to `ReservedFocusPanelCell`, so the
+reserved branch labelled its cell from the PREVIOUS subject once one existed — the stale-source bug
+shape, where a cell's label comes from separately-held state instead of the committed model.
+
+**RED (3 of 5 cases, exit 1):** "ONE frame carries exactly ONE subject", "selecting B leaves NO trace
+of A's subject identity anywhere in the frame", and "a LATE A result cannot reshape B". The two that
+stayed green are the observability case and the B-bound case, neither of which is the mixed-frame
+detector — the mutation did not remove the stamp, only corrupt its source.
+
+**Restored: GREEN (5 of 5, exit 0),** with the component byte-identical to HEAD (sha256 prefix
+`014f0b1b92718a5d`, `git diff` clean, 0 plant markers remaining).
+
 **Load-bearing items with weak or no durable guard — call-outs, not tasks:**
 
-- **Law 7 (NO A TRUTH UNDER B) has no unit guard.** It was certified by browser measurement across
-  Gates B and D (no wrong subject, no mixed-subject frames in 48 switches and n=30 populations) and
-  is structurally defended by latest-wins, but nothing fails fast in CI if a mixed frame returns.
-  This is the most valuable guard someone could add, and it needs a mounted test, not a unit one.
+- **Law 7 (NO A TRUTH UNDER B) — CLOSED 2026-09-29** by `noATruthUnderB.test.tsx`, a mounted guard
+  that renders the real grid and was mutation-checked (see §6a). It covers subject IDENTITY across a
+  frame. It does NOT cover contamination *inside* a card body: a synthetic operational context
+  surfaces no card-body truth, so that half stays browser-certified by Gates B and D. Anyone
+  strengthening this should start there, with a fixture built from a real drawer VM.
 - **Law 2's end-to-end shape is only browser-certified.** The unit plants cover the seam; the
   "no reset in a long session" claim is a probe result, which CI never runs.
 - `zz-gateR-navkind`, `zz-gateA-cert` and `zz-sliceB-continuous` carry no in-file positive control;
