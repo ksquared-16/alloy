@@ -55,6 +55,14 @@ export async function GET(request: Request) {
                 verificationState: m.verificationState,
                 usabilityState: m.usabilityState,
                 isDefault: m.isDefault,
+                /*
+                 * WHO OWNS IT. A stored method belongs to a payer, and Autopay must not offer
+                 * Payer A an instrument Payer B owns — `autopayArrangement` refuses that pairing,
+                 * so a surface without this field can only offer choices the server will reject.
+                 * Safe identity only; never a provider reference.
+                 */
+                payerEntityType: m.payerEntityType,
+                payerEntityId: m.payerEntityId,
                 revokedAt: m.revokedAt,
             })),
         });

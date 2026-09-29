@@ -33,7 +33,17 @@ type Arrangement = {
     lastFailureReason: string | null;
 };
 
-type StoredMethod = { id: string; brand: string | null; last4: string | null; rail: "card" | "ach"; usabilityState: string };
+type StoredMethod = {
+    id: string;
+    brand: string | null;
+    last4: string | null;
+    rail: "card" | "ach";
+    usabilityState: string;
+    /** One usable method IS the effective default; this is what makes several a real choice. */
+    isDefault?: boolean;
+    /** The canonical owner. Autopay may not pair a payer with somebody else's instrument. */
+    payerEntityId?: string | null;
+};
 type PayerOption = { personId: string; name: string };
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -61,12 +71,24 @@ export default function AutopaySection({
     customerId,
     payerEntityId,
     payerName,
+    payerCandidates,
     canManage = true,
 }: {
     customerId: string;
     /** Who the instrument belongs to. Ownership, not responsibility — the same distinction W2 draws. */
     payerEntityId?: string | null;
     payerName?: string | null;
+    /**
+     * EVERYONE WHOSE MONEY THIS ACCOUNT COULD LEGITIMATELY RECEIVE, from household membership.
+     *
+     * This surface used to build its payer list from `payerEntityId` alone — a prop its only
+     * mount site never passed — so the list was ALWAYS empty and the dropdown had nothing in it.
+     * The candidates existed the whole time; the Take Payment form beside it was already using
+     * them. Ordering is the model's, and it is not responsibility: a grandparent who owes nothing
+     * may pay, and defaulting the payer to whoever carries the obligation is the collapse the
+     * payment model forbids.
+     */
+    payerCandidates?: Array<{ personId: string; name: string }> | null;
     /** False hides the controls. The server refuses regardless; this only avoids offering them. */
     canManage?: boolean;
 }) {
@@ -85,9 +107,15 @@ export default function AutopaySection({
     const [setupOpen, setSetupOpen] = useState(false);
 
     const usable = methods.filter((m) => m.usabilityState === "usable");
-    const payers: PayerOption[] = payerEntityId
-        ? [{ personId: payerEntityId, name: payerName?.trim() || "Payer on file" }]
-        : [];
+    /*
+     * Canonical candidates first; the single-payer prop is kept only as a fallback for a caller
+     * that genuinely knows the one payer and nothing else.
+     */
+    const payers: PayerOption[] = (payerCandidates ?? []).length
+        ? (payerCandidates ?? []).map((c) => ({ personId: c.personId, name: c.name }))
+        : payerEntityId
+            ? [{ personId: payerEntityId, name: payerName?.trim() || "Payer on file" }]
+            : [];
 
     const load = useCallback(async () => {
         if (!customerId) return;
@@ -335,67 +363,242 @@ function AutopaySetupForm({
     onCancel: () => void;
     onSubmit: (values: Record<string, unknown>) => void | Promise<void>;
 }) {
+    /*
+     * FIVE QUESTIONS, NOT FIVE COLUMNS OF SCHEMA.
+     *
+     * Who authorized it, which instrument, what will be taken, when, and what protects the family
+     * if the amount is wrong. The canonical row still stores `timing_offset_days` and
+     * `max_amount_cents`; those are storage, and an operator should never have to think in them.
+     */
     const [payerEntityId, setPayer] = useState(payers[0]?.personId ?? "");
-    const [paymentMethodId, setMethod] = useState(methods[0]?.id ?? "");
-    const [effectiveFrom, setFrom] = useState(new Date().toISOString().slice(0, 10));
+
+    /* A method belongs to a payer. Changing the payer changes what may be authorized. */
+    const eligible = methods.filter(
+        (m) => !m.payerEntityId || !payerEntityId || m.payerEntityId === payerEntityId,
+    );
+    const preferred = eligible.find((m) => m.isDefault) ?? eligible[0];
+    const [paymentMethodId, setMethod] = useState(preferred?.id ?? "");
+    useEffect(() => {
+        setMethod((current) => {
+            if (current && eligible.some((m) => m.id === current)) return current;
+            return (eligible.find((m) => m.isDefault) ?? eligible[0])?.id ?? "";
+        });
+        /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }, [payerEntityId, methods.length]);
+
+    /* Timing in business language. The offset is derived, never typed. */
+    const [whenKind, setWhenKind] = useState<"on" | "before" | "after">("on");
+    const [whenDays, setWhenDays] = useState("2");
+    const offsetDays =
+        whenKind === "on" ? 0
+            : whenKind === "before" ? -Math.abs(Number(whenDays) || 0)
+                : Math.abs(Number(whenDays) || 0);
+
+    /* A limit is a decision before it is a number. */
+    const [limitKind, setLimitKind] = useState<"none" | "max">("none");
     const [maxAmount, setMax] = useState("");
-    const [offset, setOffset] = useState("0");
+
+    /*
+     * STARTS TODAY unless the operator says otherwise. Future-dating is real but rare, and a date
+     * picker in the common path asked every operator to answer a question almost none of them have.
+     * Enrollment never collects historical arrears: it applies to due events from here on.
+     */
+    const today = new Date().toISOString().slice(0, 10);
+    const [effectiveFrom, setFrom] = useState(today);
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
+
+    const selectedPayer = payers.find((p) => p.personId === payerEntityId);
+    const selectedMethod = eligible.find((m) => m.id === paymentMethodId);
+    const methodLine = selectedMethod
+        ? [selectedMethod.brand, selectedMethod.last4 ? `•••• ${selectedMethod.last4}` : null]
+            .filter(Boolean).join(" ") || (selectedMethod.rail === "ach" ? "Bank account" : "Card")
+        : "None available";
+    const whenLine =
+        whenKind === "on" ? "On each due date"
+            : `${Math.abs(Number(whenDays) || 0)} days ${whenKind === "before" ? "before" : "after"} each due date`;
+    const limitLine =
+        limitKind === "none" ? "No limit"
+            : maxAmount.trim() ? `Maximum $${Number(maxAmount).toFixed(2)}` : "Maximum not set";
 
     const field = "w-full rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight";
+    const label = "block text-xs font-medium text-alloy-midnight/80";
+    const limitIncomplete = limitKind === "max" && !maxAmount.trim();
 
     return (
         <form
             data-testid="autopay-setup-form"
-            className="space-y-2 rounded-lg border border-alloy-stone/30 px-3 py-2"
+            className="space-y-3 rounded-lg border border-alloy-stone/30 px-3 py-3"
             onSubmit={(e) => {
                 e.preventDefault();
                 void onSubmit({
                     payer_entity_id: payerEntityId,
                     payment_method_id: paymentMethodId,
                     effective_from: effectiveFrom,
-                    max_amount_cents: maxAmount.trim() ? Math.round(Number(maxAmount) * 100) : null,
-                    timing_offset_days: Number(offset) || 0,
+                    max_amount_cents:
+                        limitKind === "max" && maxAmount.trim() ? Math.round(Number(maxAmount) * 100) : null,
+                    timing_offset_days: offsetDays,
                 });
             }}
         >
-            <label className="block text-xs text-alloy-midnight/65">
-                Payer
-                <select className={field} value={payerEntityId} onChange={(e) => setPayer(e.target.value)} data-testid="autopay-payer">
-                    {payers.map((p) => <option key={p.personId} value={p.personId}>{p.name}</option>)}
+            {/* ── WHO ── */}
+            <div data-testid="autopay-payer-field">
+                <p className={label}>Payer</p>
+                {payers.length === 1 ? (
+                    /* A selector with one answer asks a question that has none. */
+                    <p className="text-xs text-alloy-midnight" data-testid="autopay-payer-readonly">
+                        {payers[0]!.name}
+                    </p>
+                ) : (
+                    <select
+                        className={field}
+                        value={payerEntityId}
+                        onChange={(e) => setPayer(e.target.value)}
+                        data-testid="autopay-payer"
+                    >
+                        {payers.map((p) => <option key={p.personId} value={p.personId}>{p.name}</option>)}
+                    </select>
+                )}
+            </div>
+
+            {/* ── WHICH METHOD ── */}
+            <div data-testid="autopay-method-field">
+                <p className={label}>Payment method</p>
+                {eligible.length === 1 ? (
+                    <p className="text-xs text-alloy-midnight" data-testid="autopay-method-readonly">
+                        {methodLine}
+                    </p>
+                ) : (
+                    <select
+                        className={field}
+                        value={paymentMethodId}
+                        onChange={(e) => setMethod(e.target.value)}
+                        data-testid="autopay-method"
+                    >
+                        {eligible.map((m) => (
+                            <option key={m.id} value={m.id}>
+                                {[m.brand, m.last4 ? `•••• ${m.last4}` : null].filter(Boolean).join(" ")
+                                    || (m.rail === "ach" ? "Bank account" : "Card")}
+                            </option>
+                        ))}
+                    </select>
+                )}
+            </div>
+
+            {/* ── WHAT ── V1 is amount due, and that is a statement rather than a choice. */}
+            <div data-testid="autopay-amount-field">
+                <p className={label}>Amount</p>
+                <p className="text-xs text-alloy-midnight" data-testid="autopay-amount-policy">Amount due</p>
+                <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                    Autopay collects the amount due when the scheduled collection runs.
+                </p>
+            </div>
+
+            {/* ── WHEN ── */}
+            <div data-testid="autopay-timing-field">
+                <p className={label}>When should Autopay collect?</p>
+                <select
+                    className={field}
+                    value={whenKind}
+                    onChange={(e) => setWhenKind(e.target.value as "on" | "before" | "after")}
+                    data-testid="autopay-when"
+                >
+                    <option value="on">On each due date</option>
+                    <option value="before">Before each due date</option>
+                    <option value="after">After each due date</option>
                 </select>
-            </label>
-            <label className="block text-xs text-alloy-midnight/65">
-                Payment method
-                <select className={field} value={paymentMethodId} onChange={(e) => setMethod(e.target.value)} data-testid="autopay-method">
-                    {methods.map((m) => (
-                        <option key={m.id} value={m.id}>
-                            {[m.brand, m.last4 ? `•••• ${m.last4}` : null].filter(Boolean).join(" ")
-                                || (m.rail === "ach" ? "Bank account" : "Card")}
-                        </option>
-                    ))}
+                {whenKind !== "on" ? (
+                    <div className="mt-1 flex items-center gap-2">
+                        <input
+                            type="number" min="1" max="30"
+                            className={`${field} w-20`}
+                            value={whenDays}
+                            onChange={(e) => setWhenDays(e.target.value)}
+                            data-testid="autopay-when-days"
+                            aria-label={`Days ${whenKind} each due date`}
+                        />
+                        <span className="text-xs text-alloy-midnight/65">
+                            days {whenKind === "before" ? "before" : "after"}
+                        </span>
+                    </div>
+                ) : null}
+            </div>
+
+            {/* ── WHAT PROTECTS THE FAMILY ── */}
+            <div data-testid="autopay-limit-field">
+                <p className={label}>Payment limit</p>
+                <select
+                    className={field}
+                    value={limitKind}
+                    onChange={(e) => setLimitKind(e.target.value as "none" | "max")}
+                    data-testid="autopay-limit"
+                >
+                    <option value="none">No limit</option>
+                    <option value="max">Set a maximum</option>
                 </select>
-            </label>
-            <label className="block text-xs text-alloy-midnight/65">
-                Starts
-                <input type="date" className={field} value={effectiveFrom} onChange={(e) => setFrom(e.target.value)} data-testid="autopay-from" />
-            </label>
-            <label className="block text-xs text-alloy-midnight/65">
-                Maximum per collection (optional)
-                <input
-                    type="number" min="0" step="0.01" placeholder="No maximum"
-                    className={field} value={maxAmount} onChange={(e) => setMax(e.target.value)} data-testid="autopay-max"
-                />
-            </label>
-            <label className="block text-xs text-alloy-midnight/65">
-                Days relative to the due date
-                <input type="number" min="-30" max="30" className={field} value={offset} onChange={(e) => setOffset(e.target.value)} data-testid="autopay-offset" />
-            </label>
-            <p className="text-[11px] leading-snug text-alloy-midnight/55">
-                Whatever is owed on the day is collected. Nothing is collected if the family has already paid.
-            </p>
+                {limitKind === "max" ? (
+                    <div className="mt-1">
+                        <p className={label}>Maximum payment</p>
+                        <div className="flex items-center gap-1">
+                            <span className="text-xs text-alloy-midnight/65">$</span>
+                            <input
+                                type="number" min="0" step="0.01"
+                                className={field}
+                                value={maxAmount}
+                                onChange={(e) => setMax(e.target.value)}
+                                data-testid="autopay-max"
+                                aria-label="Maximum payment"
+                            />
+                        </div>
+                        <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                            If the amount due is greater than this limit, Autopay will not collect it and the
+                            account will need attention.
+                        </p>
+                    </div>
+                ) : null}
+            </div>
+
+            {/* ── WHEN IT BEGINS — answered, not asked, unless the operator wants to change it. ── */}
+            <div data-testid="autopay-start-field">
+                <p className={label}>Starts</p>
+                {datePickerOpen ? (
+                    <input
+                        type="date" className={field} value={effectiveFrom}
+                        onChange={(e) => setFrom(e.target.value)} data-testid="autopay-from"
+                    />
+                ) : (
+                    <p className="text-xs text-alloy-midnight">
+                        Today, for collections due from now on{" "}
+                        <button
+                            type="button"
+                            className="underline underline-offset-2 text-alloy-midnight/65"
+                            onClick={() => setDatePickerOpen(true)}
+                            data-testid="autopay-start-change"
+                        >
+                            Choose a date
+                        </button>
+                    </p>
+                )}
+                <p className="text-[11px] leading-snug text-alloy-midnight/55">
+                    Charges already past due are not collected retroactively.
+                </p>
+            </div>
+
+            {/* ── REVIEW — the whole authorization, in one place, before consent ── */}
+            <dl
+                className="rounded-md border border-alloy-stone/30 bg-alloy-cloud/30 px-2.5 py-2 text-xs"
+                data-testid="autopay-review"
+            >
+                <div className="flex justify-between gap-3"><dt className="text-alloy-midnight/60">Payer</dt><dd>{selectedPayer?.name ?? "—"}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-alloy-midnight/60">Payment method</dt><dd>{methodLine}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-alloy-midnight/60">Amount</dt><dd>Amount due</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-alloy-midnight/60">When</dt><dd>{whenLine}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-alloy-midnight/60">Payment limit</dt><dd>{limitLine}</dd></div>
+            </dl>
+
             <div className="flex items-center gap-2 pt-1">
                 <button
-                    type="submit" disabled={busy || !payerEntityId || !paymentMethodId}
+                    type="submit"
+                    disabled={busy || !payerEntityId || !paymentMethodId || limitIncomplete}
                     data-testid="autopay-setup-submit"
                     className="inline-flex items-center gap-1 rounded-md bg-alloy-bend-pine px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
                 >
