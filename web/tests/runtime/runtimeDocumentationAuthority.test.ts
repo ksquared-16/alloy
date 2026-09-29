@@ -66,3 +66,62 @@ describe("Runtime Performance freeze documentation authority", () => {
         }
     });
 });
+
+/**
+ * The freeze depends on a document in an ungoverned tree, and that dependency must not break quietly.
+ *
+ * Law 9 names `docs/runtime/CARD-READINESS-LIFECYCLE.md` §8 as the canonical definition of
+ * `ALL_FIRST_ORDER_READY`. That file sits in `docs/runtime/`, which is deliberately NOT inside
+ * `GOVERNED_GLOBS`: all 52 of its files would fail governance today (33 declare a status outside the
+ * seven-value vocabulary, 19 carry no frontmatter), and prior-audit D9 records the real blocker —
+ * 18 `web/` source and test files cite that tree, including the live work-unit route, so relocating
+ * it without rewriting those citations breaks the doc-to-code binding silently.
+ *
+ * Until that scheduled refactor happens, the cross-tree dependency is held here instead of by lint.
+ * The document must exist, the section must still define the term, and the registry the definition
+ * names must still be there. This asserts the CITATION resolves — not what readiness means, which is
+ * the freeze's and §8's business.
+ *
+ * Note for whoever governs `docs/runtime/` later: the file carries two sections numbered 8. The one
+ * that owns the definition is the second (added 2026-09-25 from the OX J5 convergence run), not the
+ * "Open questions" section earlier in the file.
+ */
+describe("the freeze's cross-tree readiness dependency resolves", () => {
+    const READINESS = "docs/runtime/CARD-READINESS-LIFECYCLE.md";
+
+    it("the document Law 9 cites still exists", () => {
+        expect(existsSync(path.join(repoRoot, READINESS)), `${READINESS} is named by a frozen law`).toBe(true);
+    });
+
+    it("a section still defines ALL_FIRST_ORDER_READY, and the freeze still points at it", () => {
+        const doc = read(READINESS);
+        expect(doc, "the term must still be defined in the cited document").toMatch(
+            /^##\s*8\.\s*`?ALL_FIRST_ORDER_READY`?/m,
+        );
+        expect(doc, "the definition's terminal states must still be stated").toMatch(
+            /`ready`\s*or\s*`self_loading`/,
+        );
+        expect(read(FREEZE), "Law 9 must still cite the document").toContain("CARD-READINESS-LIFECYCLE.md");
+    });
+
+    it("the registry the definition names still exists", () => {
+        // "First-order means the commit-critical registry (`focusPanelCommitCriticalCards.ts`)".
+        expect(
+            existsSync(path.join(repoRoot, "web/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards.ts")),
+            "the definition of first-order depends on this registry",
+        ).toBe(true);
+    });
+
+    it("being governed is not the same as being a context owner", () => {
+        // docs/runtime/ is ungoverned by evidence, not by oversight; docs/platform/runtime/ is governed
+        // but holds proposed and historical files too. Neither glob membership decides authority — the
+        // freeze's chain does. This asserts the asymmetry is real so it is not "tidied" unexamined.
+        const lint = read("scripts/docs-lint.mjs");
+        expect(lint, "docs/platform IS governed").toMatch(/\/\^docs\\\/platform\\\//);
+        expect(
+            /\/\^docs\\\/runtime\\\//.test(lint),
+            "docs/runtime is intentionally ungoverned pending D9's citation refactor; governing it " +
+                "without rewriting the 18 code citations breaks the doc-to-code binding",
+        ).toBe(false);
+    });
+});
