@@ -36,6 +36,9 @@ const GOVERNED_GLOBS = [
   /^docs\/system\//,
   /^docs\/product\//,
   /^docs\/api\//,
+  // The benchmark context pack decides which documents an AI may treat as authoritative.
+  // A manifest about authority that is not itself governed can drift without anything failing.
+  /^docs\/context\//,
 ];
 
 // The partner package's six shipped members are the one documentation output that must NOT
@@ -78,6 +81,9 @@ const CANONICAL_LINK_SCOPES = [
   /^docs\/README\.md$/,
   /^docs\/platform\//,
   /^docs\/system\//,
+  // The context pack's entire job is pointing at documents, so a dead pointer in it is a
+  // blocking error rather than a cosmetic one.
+  /^docs\/context\//,
 ];
 
 // Directories whose every file is machine-produced. docs/api/ is deliberately NOT
