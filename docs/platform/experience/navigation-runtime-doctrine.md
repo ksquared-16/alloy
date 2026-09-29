@@ -1,6 +1,6 @@
 ---
 owner: experience
-status: proposal-unimplemented
+status: proposed
 last_reviewed: 2026-09-29
 supersedes: []
 ---
@@ -18,8 +18,8 @@ supersedes: []
 ## CORRECTION — 2026-09-29: this document is a PROPOSAL, and its reload floor is not the shipped one
 
 Its front matter said `status: canonical` while the header two lines above says *Architecture
-(proposed) — awaiting approval, no implementation until approved*. The front matter was wrong and is
-now corrected. The distinction matters because a search for "reload floor" landed here, in a file
+(proposed) — awaiting approval, no implementation until approved*. The front matter was wrong and is now
+corrected to `proposed`, the vocabulary value that matches this document's own header. The distinction matters because a search for "reload floor" landed here, in a file
 labelled canonical, and returned a confident answer about a mechanism this document does not describe.
 
 **None of the modules in §4 were built.** `navigationContext.ts`, `navigationRuntime.ts`,
