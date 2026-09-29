@@ -670,7 +670,7 @@ Use on every PR:
 - [Phase 2 audit](waitlist_orchestration_phase2_audit.md)  
 - [Phase 2 architecture](waitlist_orchestration_phase2_architecture.md)  
 - [Phase 2 pilot playbook](waitlist_orchestration_phase2_pilot_playbook.md)  
-- [Priority Placement V1](priority_placement_orchestration_may_2026.md)
+- [Priority Placement V1](../priority_placement_orchestration_may_2026.md)
 
 ---
 

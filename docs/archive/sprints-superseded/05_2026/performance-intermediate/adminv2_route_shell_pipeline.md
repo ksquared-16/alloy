@@ -4,7 +4,7 @@
 
 Apply drawer-pipeline doctrine to AdminV2 **routes**: one stable shell, then hydrate values inside fixed regions. Not a speed sprint — fixes double loading, shell reshaping, and duplicate loading ownership.
 
-Drawer pipeline: [`adminv2_drawer_pipeline.md`](./adminv2_drawer_pipeline.md).
+Drawer pipeline: [`adminv2_drawer_pipeline.md`](../../../../sprints/archive/05_2026/adminv2_drawer_pipeline.md).
 
 ## Doctrine
 

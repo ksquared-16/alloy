@@ -79,4 +79,4 @@ The card observes one Operational Context (subject id = `context.subject.id`, da
 
 ## Gate
 
-Per the sprint hard rule, **do not implement the production Household card until this mock/spec is reviewed and approved.** Freeze spec: [`../../../platform/operator/household-reference-card.md`](../../../platform/operator/household-reference-card.md).
+Per the sprint hard rule, **do not implement the production Household card until this mock/spec is reviewed and approved.** Freeze spec: [`../../../platform/operator/household-reference-card.md`](../../../../platform/operator/household-reference-card.md).

@@ -7,12 +7,12 @@
 
 **Canonical inputs (frozen unless major architectural issue):**
 
-- [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
-- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md)
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md)
-- [`completed/forms_lifecycle_requirement_coverage.md`](./completed/forms_lifecycle_requirement_coverage.md)
-- [`lifecycle_required_info_child_fields_audit.md`](./lifecycle_required_info_child_fields_audit.md)
+- [`completed/lifecycle_builder_hardening_closeout.md`](../../../../sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
+- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](../../../../sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md)
+- [`completed/forms_lifecycle_requirement_coverage.md`](../../../../sprints/archive/06_2026/completed/forms_lifecycle_requirement_coverage.md)
+- [`lifecycle_required_info_child_fields_audit.md`](../../../../sprints/archive/06_2026/lifecycle_required_info_child_fields_audit.md)
 
 **Authority:** This document is the canonical reference for Required Information V2 implementation planning. Product copy, APIs, and evaluators should align with §2–§9 unless an explicit exception is recorded in §12.
 
@@ -1301,7 +1301,7 @@ Progression
 
 ## Appendix B — Vocabulary alignment
 
-Per [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md):
+Per [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md):
 
 | Use | Avoid |
 |-----|-------|

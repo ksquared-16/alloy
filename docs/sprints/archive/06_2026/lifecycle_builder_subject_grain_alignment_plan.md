@@ -23,7 +23,7 @@
 |------|-----|
 | Child-grain conversion spine | [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md) |
 | Disposition matrix + `enrollment_stage_key` | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) |
-| `QueueRowContext` runtime | [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) |
+| `QueueRowContext` runtime | [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) |
 | Builder canonical model | [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) |
 | Phase C pause / Enrolled staging | [`completed/child_grain_phase_c_enrolled_staging_flip.md`](./completed/child_grain_phase_c_enrolled_staging_flip.md) |
 | Grain expansion | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) |

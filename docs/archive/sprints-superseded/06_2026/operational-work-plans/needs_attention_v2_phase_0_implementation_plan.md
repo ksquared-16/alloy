@@ -9,10 +9,10 @@
 
 - [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
-- [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
+- [`completed/readiness_phase_1_closeout.md`](../../../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md)
 - [`readiness_engine_architecture_and_runtime_contract.md`](./readiness_engine_architecture_and_runtime_contract.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md)
 
 **Authority:** Phase 1 coding must follow §3–§7 unless product records an exception in §10.
 

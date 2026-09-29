@@ -24,7 +24,7 @@
 **Remains unknown:** Field System spec, Communications module API, BOS Assist handoff, grid engine implementation detail, per-card warm-swap reveal, Runtime Spec tier amendment promotion.
 
 **Configuration Runtime thread:** card composition schema, mode layout variants, work launcher rules, field widget catalog, metric placements, comms embed contract, card visibility per stage/mission.
-**Expands:** [`docs/platform/operator/alloy-runtime-specification.md`](../../platform/operator/alloy-runtime-specification.md) Part 7 (Universal Card System), Part 8 (Card Blueprint Library), Part 11 (Runtime Hierarchy)
+**Expands:** [`docs/platform/operator/alloy-runtime-specification.md`](../../../platform/operator/alloy-runtime-specification.md) Part 7 (Universal Card System), Part 8 (Card Blueprint Library), Part 11 (Runtime Hierarchy)
 
 ---
 
@@ -531,12 +531,12 @@ Approve each before any implementation begins. Nothing in this artifact is imple
 
 | Concern | Doc |
 |---------|-----|
-| Runtime spine / card anatomy stub | [`../../platform/operator/alloy-runtime-specification.md`](../../platform/operator/alloy-runtime-specification.md) |
-| Visual feel (meaning-first, calm, premium) | [`../../platform/operator/alloy-visual-language.md`](../../platform/operator/alloy-visual-language.md) |
-| Card / section / field authoring | [`../../platform/operator/experience-builder-doctrine.md`](../../platform/operator/experience-builder-doctrine.md) |
-| Drawer / queue / record | [`../../platform/operator/drawer-system.md`](../../platform/operator/drawer-system.md), [`../../platform/operator/queue-system.md`](../../platform/operator/queue-system.md) |
-| Reveal / performance gates (must respect) | [`../../system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md) |
-| Perspective compatibility layer | [`../../platform/operator/runtime-perspective-compatibility-layer.md`](../../platform/operator/runtime-perspective-compatibility-layer.md) |
+| Runtime spine / card anatomy stub | [`../../platform/operator/alloy-runtime-specification.md`](../../../platform/operator/alloy-runtime-specification.md) |
+| Visual feel (meaning-first, calm, premium) | [`../../platform/operator/alloy-visual-language.md`](../../../platform/operator/alloy-visual-language.md) |
+| Card / section / field authoring | [`../../platform/operator/experience-builder-doctrine.md`](../../../platform/operator/experience-builder-doctrine.md) |
+| Drawer / queue / record | [`../../platform/operator/drawer-system.md`](../../../platform/operator/drawer-system.md), [`../../platform/operator/queue-system.md`](../../../platform/operator/queue-system.md) |
+| Reveal / performance gates (must respect) | [`../../system/adminv2-runtime-performance-doctrine.md`](../../../system/adminv2-runtime-performance-doctrine.md) |
+| Perspective compatibility layer | [`../../platform/operator/runtime-perspective-compatibility-layer.md`](../../../platform/operator/runtime-perspective-compatibility-layer.md) |
 
 ---
 

@@ -19,7 +19,7 @@ contains several generations of design history, and most of it is not current tr
 | **Certified** | 2026-09-29 |
 | **Base** | `eab6805b1` (staging) |
 | **Domains certified** | Developer Platform / API · Runtime |
-| **Domains pending** | Business Process (blocked, see §4) · Identity/Access · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains pending** | Business Process (§5) · Identity/Access (§6) · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -136,11 +136,15 @@ certified for DIRECT context in V0.
 **Blockers, as measured on `eab6805b1`:**
 
 - **D-BP1** — two operator surfaces still mutate opportunity `status_key` through the generic record
-  PATCH. This cannot converge onto the canonical operator route until a Director decides the
-  destination vocabulary: `destination_key` is a closed set of operator stages plus
-  `closed_withdrawn`, and it cannot express an arbitrary configured transition ref or
-  `needs_a_quote`. Tightening the generic route's authority instead is hard-coupled to the same
-  repair, because `enrollment.record.manage` and `enrollment.decide` do not imply each other.
+  PATCH. The **authorization half of this is now resolved** (2026-09-29): a lifecycle transition is a
+  decision, so `enrollment.decide` is the correct rule, and both seeded role packages (ADMIN and OPS)
+  grant it alongside `enrollment.record.manage` under an in-migration self-test that aborts if either
+  is missing — so converging does not lock out a default operator. What remains is the **resolution
+  layer**: the canonical route takes a typed `destination_key`, while these surfaces hold a configured
+  ref (`action.actionRef`) and `needs_a_quote`. `enrollmentStatusTransitionBpResolver.ts` already
+  resolves BP configuration to typed destinations and already carries `outcomeKey` on each option, so
+  the missing piece is the reverse lookup (configured ref → destination) plus a server boundary that
+  accepts a ref. That is a bounded build, not a decision.
 - **D-BP4** — outcome execution writes durable status without consulting the transition-policy gate
   the Action paths use.
 - **D-BP5** — whether a fresh child participation should carry `new_inquiry` (shipped) or a null
@@ -160,7 +164,43 @@ unexplained operator-facing lifecycle writers, this domain moves to CERTIFIED / 
 
 ---
 
-## 6. How downstream AI should use this pack
+## 6. Identity / Authentication / Roles / Access — PENDING CERTIFICATION
+
+**State:** `PENDING_CERTIFICATION`. Read-only authority discovery completed 2026-09-29; the domain is
+coherent in parts and genuinely contested in others, so it is not certified.
+
+**What is solid.** One permission registry (`permission_keys` / `permissions`), one additive grant
+model (`user_roles` → `role_permission_grants`), real scope tables for department, site and access
+profile, and seeded ADMIN/OPS packages guarded by in-migration self-tests. `user_person_links` joins
+`auth.users` to `persons` through an **explicit operator-created link with no email fallback** —
+identity is never inferred, deliberately.
+
+**Blockers, measured:**
+
+- **An open Director gate.** `platform/governance/rls-authority-model-director-gate.md` is
+  `status: canonical` while carrying `DIRECTOR_DECISION_READY`, and records that the database has
+  drifted from the RLS doctrine it states. A canonical document holding an unmade decision cannot be
+  DIRECT context.
+- **Admission is not authority on most routes.** Of 682 API route files, ~128 rely on
+  `requireAdminOrOps` (portal admission, no role, no capability) while only ~17 assert a capability.
+  The enrollment area already repaired exactly this and proves the pattern; it has not propagated.
+- **No canonical owner for the authentication/session layer.** Roles and permissions are well owned by
+  `platform/governance/roles-and-permissions.md`; sessions and account lifecycle are owned by nobody.
+- **Customer/parent authentication is absent**, stated as unsolved in code rather than documented.
+
+**What may be used on demand.** `platform/governance/roles-and-permissions.md` is the strongest
+document in the domain and is the DIRECT candidate once the domain certifies: it explicitly separates
+"the rule" from "what the code does today" and names each gap with a workstream id, on the stated
+principle that a canonical document asserting an unfollowed rule as as-built is itself a defect. Read
+the RLS gate as an **open decision**, never as settled. Treat `platform/planning/access-identity-v2/**`
+as PLANNED_ONLY — it is planning material, not authority.
+
+**Promotion trigger.** The RLS authority decision is made, capability assertion propagates past
+admission on the route population above, and the authentication/session layer gets an owner.
+
+---
+
+## 7. How downstream AI should use this pack
 
 **Default reasoning.** Treat DIRECT entries as current Alloy doctrine. That is the whole default
 context; nothing outside it is implied.
@@ -187,7 +227,7 @@ from whatever the tree happens to contain. The tree is not the corpus.
 
 ---
 
-## 7. Maintenance
+## 8. Maintenance
 
 This manifest is versioned, not eternal. The base SHA records what was true when V0 was certified;
 it is not a claim that the repository must stay there.

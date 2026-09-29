@@ -5,8 +5,8 @@
 **Sprint type:** Perceived performance + orchestration — **not** AdminV2 redesign, queue doctrine change, or schema work.
 
 **Authority (read order):**
-- [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md) — drawer audit + phase-0 closeout
-- [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) — Lane D drawer + global doctrine
+- [`adminv2_drawer_performance_hardening_phase0.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_performance_hardening_phase0.md) — drawer audit + phase-0 closeout
+- [`adminv2_performance_scope_lock.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_scope_lock.md) — Lane D drawer + global doctrine
 - [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) — `/dept` locked reference
 - [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) — WU bootstrap doctrine
 
@@ -496,7 +496,7 @@ Capture on staging with `[perf.drawer.open]`, `[perf.queue.rows]` (`client_cache
 
 | Step | Artifact |
 |------|----------|
-| Phase 0 audit | [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md) |
+| Phase 0 audit | [`adminv2_drawer_performance_hardening_phase0.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_performance_hardening_phase0.md) |
 | **This doc** | Design lock + Cards 0–5 implementation record + closeout |
 | Implementation | Cards 0–5 in `web/` (see per-card §3 tables) |
 

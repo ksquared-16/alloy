@@ -1,7 +1,7 @@
 # Workspace V3 — Sprint 3 — Evolution Reset
 
 **Status:** Design blueprint (evolution only) — June 2026  
-**Canonical doctrine:** [`workspace-v3-command-center-doctrine.md`](../../../platform/operator/workspace-v3-command-center-doctrine.md) (Rev 2.1)  
+**Canonical doctrine:** [`workspace-v3-command-center-doctrine.md`](../../../../platform/operator/workspace-v3-command-center-doctrine.md) (Rev 2.1)  
 **Baseline:** Today's shipped Workspace — **not** a blank canvas  
 **Scope:** Refine `/workspace` — **do not** replace shell, sidebar, rail, or runtime
 
@@ -363,8 +363,8 @@ For each domain, validate on **recognizable Alloy chrome**:
 
 ## Related
 
-- [`workspace-v3-command-center-doctrine.md`](../../../platform/operator/workspace-v3-command-center-doctrine.md)
-- [`workspace-v3-operational-surface-doctrine.md`](../../../platform/operator/workspace-v3-operational-surface-doctrine.md)
+- [`workspace-v3-command-center-doctrine.md`](../../../../platform/operator/workspace-v3-command-center-doctrine.md)
+- [`workspace-v3-operational-surface-doctrine.md`](../../../../platform/operator/workspace-v3-operational-surface-doctrine.md)
 - [`sprint-2-evolution.md`](./sprint-2-evolution.md) — architecture (mockups superseded by this sprint)
 - [`README.md`](./README.md) — Sprint 1 foundation
 

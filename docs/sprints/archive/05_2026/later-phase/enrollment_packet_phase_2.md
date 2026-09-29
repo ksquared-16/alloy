@@ -7,9 +7,9 @@
 
 | Step | Doc |
 |------|-----|
-| 0 — Audit | [`forms_documents_phase_2_step0_audit.md`](./forms_documents_phase_2_step0_audit.md) |
-| 1 — Design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
-| 2 — Sprint + cards | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
+| 0 — Audit | [`forms_documents_phase_2_step0_audit.md`](../forms_documents_phase_2_step0_audit.md) |
+| 1 — Design | [`forms_documents_phase_2_step1_design.md`](../forms_documents_phase_2_step1_design.md) |
+| 2 — Sprint + cards | [`forms_documents_phase_2_packet_review_mvp.md`](../forms_documents_phase_2_packet_review_mvp.md) |
 | 3+ — Build | Execute P2-1 … P2-5 from sprint doc |
 
 This document is **forward-looking only** for sections A–G. The **approved near-term slice** is design-bound in Step 1 (review rollup, non-PDF surfacing, provenance labels, read-only BOS, optional correction draft, thin branding). Unless a capability is explicitly called out as partially present today, treat items below as **not implemented**.

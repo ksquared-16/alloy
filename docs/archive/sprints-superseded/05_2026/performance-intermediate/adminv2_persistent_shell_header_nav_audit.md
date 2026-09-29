@@ -3,7 +3,7 @@
 **Path:** `docs/sprints/archive/05_2026/adminv2_persistent_shell_header_nav_audit.md`  
 **Status:** Cards 1–4 + safe Card 5 (href) **implemented** (2026-05-22). Header/sidebar **refinement pass** implemented (2026-05-21): larger header controls, avatar-only profile menu, department-first sidebar with collapsible work units. Card 5c deferred.  
 **Date:** 2026-05-22  
-**Related:** [`sticky_location_filter_hotfix.md`](./sticky_location_filter_hotfix.md), [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md), [`adminv2_platform_navigation_performance_sprint.md`](./adminv2_platform_navigation_performance_sprint.md)
+**Related:** [`sticky_location_filter_hotfix.md`](../../../../sprints/archive/05_2026/sticky_location_filter_hotfix.md), [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md), [`adminv2_platform_navigation_performance_sprint.md`](./adminv2_platform_navigation_performance_sprint.md)
 
 ---
 

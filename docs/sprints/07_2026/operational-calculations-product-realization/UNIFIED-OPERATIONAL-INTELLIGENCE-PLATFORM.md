@@ -3,7 +3,7 @@
 **Status:** Platform charter (accepted with OI Platform V1 freeze — 2026-07-28).  
 **Date:** 2026-07-28  
 **Slot context:** Slot 2 `operational-intelligence-expansion`  
-**V1 certified:** [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)  
+**V1 certified:** [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)  
 **Phase 2:** Consumers present **Answers** — [`../operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`](../operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md)  
 **Depends on (accepted, not redesign):**
 

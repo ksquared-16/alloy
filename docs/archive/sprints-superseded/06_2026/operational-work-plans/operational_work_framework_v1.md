@@ -7,12 +7,12 @@
 
 **Canonical inputs (frozen unless major architectural issue):**
 
-- [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
-- [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
+- [`completed/lifecycle_builder_hardening_closeout.md`](../../../../sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
+- [`completed/readiness_phase_1_closeout.md`](../../../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
 - [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
-- [`tasks_v2_operational_work_framework.md`](./tasks_v2_operational_work_framework.md) (Tasks V2 — input that surfaced this broader question)
+- [`tasks_v2_operational_work_framework.md`](../../../../sprints/archive/06_2026/tasks_v2_operational_work_framework.md) (Tasks V2 — input that surfaced this broader question)
 
 **Authority:** This document is the canonical reference for **what operational work means in Alloy** before any Tasks V2 implementation proceeds. If Tasks V2 and this framework disagree, **this framework wins** on abstraction; Tasks V2 remains valid as the **task-shaped work** implementation track.
 
@@ -290,7 +290,7 @@ Categories drive **icons, filters, and reporting** — not operator primary labe
 
 ### 4.2 Implications for Tasks V2
 
-[`tasks_v2_operational_work_framework.md`](./tasks_v2_operational_work_framework.md) remains valid for **near-term delivery** with these adjustments:
+[`tasks_v2_operational_work_framework.md`](../../../../sprints/archive/06_2026/tasks_v2_operational_work_framework.md) remains valid for **near-term delivery** with these adjustments:
 
 | Tasks V2 assumption | Framework V1 refinement |
 |-----------------------|-------------------------|
@@ -664,7 +664,7 @@ Optional on complete — required for `decision` category per org policy (future
 
 ## 12. Canonical vocabulary
 
-Per [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) — extensions:
+Per [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md) — extensions:
 
 | Use | Avoid |
 |-----|-------|
@@ -825,7 +825,7 @@ Per [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canoni
 
 ## Appendix A — Relationship to Tasks V2 document
 
-[`tasks_v2_operational_work_framework.md`](./tasks_v2_operational_work_framework.md) discovered task runtime truth and boundaries. This document **generalizes** that work:
+[`tasks_v2_operational_work_framework.md`](../../../../sprints/archive/06_2026/tasks_v2_operational_work_framework.md) discovered task runtime truth and boundaries. This document **generalizes** that work:
 
 | Tasks V2 | Operational Work V1 |
 |----------|---------------------|

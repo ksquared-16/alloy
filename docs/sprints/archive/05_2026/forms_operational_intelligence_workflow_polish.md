@@ -10,7 +10,7 @@
 |-----|------|
 | [`forms_operational_workspace_redesign.md`](./forms_operational_workspace_redesign.md) | OW shell, inbox, lifecycle, distribution |
 | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) | PX visual tokens + surfaces |
-| [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) | Case-file + BOS interaction doctrine |
+| [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md) | Case-file + BOS interaction doctrine |
 | [`../system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md) | Contextual prefill architecture (OI-5) |
 
 ---

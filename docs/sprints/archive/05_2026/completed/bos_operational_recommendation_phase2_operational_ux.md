@@ -8,11 +8,11 @@
 
 | Doc | Role |
 |-----|------|
-| [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) | Program audit, recommendation framework, phase map |
+| [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) | Program audit, recommendation framework, phase map |
 | [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) | Doctrine — assistive only, no autonomy |
 | [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) | Phase 1 closeout (§12) — **COMPLETE** |
-| [`forms_documents_operational_experience_hardening.md`](../forms_documents_operational_experience_hardening.md) | **Canonical** BOS operational interaction doctrine |
-| [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) | Shared visual restraint + AdminV2 kinship (sibling sprint) |
+| [`forms_documents_operational_experience_hardening.md`](../later-phase/forms_documents_operational_experience_hardening.md) | **Canonical** BOS operational interaction doctrine |
+| [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md) | Shared visual restraint + AdminV2 kinship (sibling sprint) |
 
 **Phase:** 2 — Operational cognition presentation (deterministic)  
 **Blocks:** Phase 3 workflow/comms wire, Phase 4 AI enrich (unchanged)
@@ -21,7 +21,7 @@
 
 ### Canonical interaction doctrine (binding)
 
-**Authority:** [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
+**Authority:** [`forms_documents_operational_experience_hardening.md`](../later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
 
 **Reference interaction model:** `IntakeCaseFileLayout` + `BosReviewSummaryPlaceholder` + `PacketReviewInsightV1` (Forms/Documents). AdminV2 drawer, queue, and handoff must **inherit** that model — not invent a parallel “recommendation product.”
 
@@ -29,7 +29,7 @@
 
 **BOS anti-role:** chatbot, assistant feed, recommendation spam, giant AI card system, autonomous operator, intelligence dashboard, hidden workflow engine.
 
-**Visual system (sibling):** [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — one intelligence band per surface; muted assist styling; shared readiness/urgency grammar with Forms.
+**Visual system (sibling):** [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md) — one intelligence band per surface; muted assist styling; shared readiness/urgency grammar with Forms.
 
 ---
 
@@ -773,7 +773,7 @@ From GATE 0 + Phase 1 closeout — unchanged:
 
 When Phase 2 cards land:
 
-- Update [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) §5.4 — mark cards done.
+- Update [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) §5.4 — mark cards done.
 - Add §13 Phase 2 closeout to [`bos_operational_recommendation_phase1_execution.md`](./bos_operational_recommendation_phase1_execution.md) or append Phase 2 closeout here.
 - Optional: `docs/product/crm-system.md` — one paragraph on recommendation surfaces (queue preview vs drawer authority).
 
@@ -830,8 +830,8 @@ When Phase 2 cards land:
 
 ### References added
 
-- [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine  
-- [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) § BOS surfaces + PX-0 kinship  
+- [`forms_documents_operational_experience_hardening.md`](../later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine  
+- [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md) § BOS surfaces + PX-0 kinship  
 
 ---
 

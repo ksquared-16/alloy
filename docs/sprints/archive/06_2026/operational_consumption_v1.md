@@ -2,7 +2,7 @@
 
 **Status:** Built (June 2026). Continues from Commercial Model Slice D (`a79ddaef6`) on `origin/staging`. Does **not** restart architecture; the Commercial Model (Services, Rate Plans, Rate Rules, Charge Templates, Financial Policies, Charge Resolution, Draft Charges, Accounting) is unchanged.
 
-Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../platform/modules/operational-consumption-platform.md).
+Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../../platform/modules/operational-consumption-platform.md).
 
 ## What this slice proves
 

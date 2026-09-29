@@ -8,13 +8,13 @@
 
 | Doc | Role |
 |-----|------|
-| [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) | Audit, framework, phase map |
+| [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) | Audit, framework, phase map |
 | [`bos_operational_recommendation_intelligence_gate0.md`](./bos_operational_recommendation_intelligence_gate0.md) | GATE 0 doctrine (**approved**) |
 
 **Phase:** 1 — Deterministic recommendation foundation  
 **GATE 1 blocks:** Phase 2 UX polish, Phase 4 AI enrich
 
-**Unified interaction doctrine (binding for Phase 2+):** [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 1 delivered **infrastructure**; Phase 2 must present it using the **Forms/Documents case-file + Review assist** interaction model — not a separate suggestion-feed UX.
+**Unified interaction doctrine (binding for Phase 2+):** [`forms_documents_operational_experience_hardening.md`](../later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 1 delivered **infrastructure**; Phase 2 must present it using the **Forms/Documents case-file + Review assist** interaction model — not a separate suggestion-feed UX.
 
 | Doctrine pillar | Phase 1 delivery | Phase 2 presentation obligation |
 |-----------------|------------------|--------------------------------|

@@ -3,7 +3,7 @@
 **Date:** May 2026  
 **Status:** Design only — no implementation, migrations, or implementation cards.  
 **Prerequisites:** [`forms_documents_phase_2_step0_audit.md`](./forms_documents_phase_2_step0_audit.md)  
-**Forward plan (not in scope here):** [`enrollment_packet_phase_2.md`](./enrollment_packet_phase_2.md) sections A–G (DCP, queues, full branding product)
+**Forward plan (not in scope here):** [`enrollment_packet_phase_2.md`](./later-phase/enrollment_packet_phase_2.md) sections A–G (DCP, queues, full branding product)
 
 ---
 

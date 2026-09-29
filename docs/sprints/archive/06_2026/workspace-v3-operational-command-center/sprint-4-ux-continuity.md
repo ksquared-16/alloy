@@ -1,7 +1,7 @@
 # Alloy UX Continuity Sprint — Workspace ↔ Work Unit (System 5 Reset)
 
 **Status:** Design blueprint — June 2026 (reset)  
-**Builds on:** [Workspace V3 doctrine](../../../platform/operator/workspace-v3-command-center-doctrine.md) · [Operational Surface doctrine](../../../platform/operator/workspace-v3-operational-surface-doctrine.md) · [Sprint 3 evolution reset](./sprint-3-evolution-reset.md)  
+**Builds on:** [Workspace V3 doctrine](../../../../platform/operator/workspace-v3-command-center-doctrine.md) · [Operational Surface doctrine](../../../../platform/operator/workspace-v3-operational-surface-doctrine.md) · [Sprint 3 evolution reset](./sprint-3-evolution-reset.md)  
 **Scope:** Visual and informational **continuity** between **today's** Workspace and **today's** Work Unit — not redesign of Queue, Focus Panel, BOS, Universal Cards, or System 5
 
 ---
@@ -364,9 +364,9 @@ cd web && npx playwright test workspace-work-unit-continuity-baseline.spec.ts --
 
 ## Related
 
-- [`workspace-v3-operational-surface-doctrine.md`](../../../platform/operator/workspace-v3-operational-surface-doctrine.md) §9 Cover-page continuity
-- [`operational-mode-default-state-doctrine.md`](../../../platform/operator/operational-mode-default-state-doctrine.md)
-- [`operational-surface-design-system.md`](../../../platform/operator/operational-surface-design-system.md)
-- [`alloy-runtime-specification.md`](../../../platform/operator/alloy-runtime-specification.md) §1.5 Operational surface boundary
+- [`workspace-v3-operational-surface-doctrine.md`](../../../../platform/operator/workspace-v3-operational-surface-doctrine.md) §9 Cover-page continuity
+- [`operational-mode-default-state-doctrine.md`](../../../../platform/operator/operational-mode-default-state-doctrine.md)
+- [`operational-surface-design-system.md`](../../../../platform/operator/operational-surface-design-system.md)
+- [`alloy-runtime-specification.md`](../../../../platform/operator/alloy-runtime-specification.md) §1.5 Operational surface boundary
 - `web/components/admin/workspace/layout/WorkUnitCommandSurface.tsx`
 - `web/app/adminV2/components/alloyOsRuntime.css`

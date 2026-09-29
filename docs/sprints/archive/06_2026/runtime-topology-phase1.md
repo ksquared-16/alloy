@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-29 · **Author:** Claude Code · **Type:** Analysis/blueprint only — **no code, no optimization, no deletion.**
 **Canonical map:** [`../../platform/runtime/operational-runtime-topology.md`](../../platform/runtime/operational-runtime-topology.md) (how Alloy works today, literally).
-**Governs against:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../platform/runtime/operational-runtime-doctrine.md).
+**Governs against:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../../platform/runtime/operational-runtime-doctrine.md).
 **Goal restatement:** the objective is **reduce runtime complexity until the platform behaves like one continuous OS** — not "make a page faster." Simpler, not just faster.
 
 **Measurement provenance.** All raw counts below are **measured** by `grep`/`wc` at `origin/staging fa83113a6` + Phase 2 Slice 1. Paint *sequences* are **modeled** from state-commit points + the reveal gate (flagged where so). Exact wall-clock paint/CLS counts require capturing existing perf marks (`perfWorkspaceLoad`, `[workspace-reveal-gate]`, `[wu-reveal-gate]`, `[drawer-primary-perf]`) in a browser — flagged `NEEDS_RUM`.

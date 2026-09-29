@@ -174,7 +174,7 @@ Future work **extends** Concept A — it does not redesign it.
 
 ## Related
 
-- [Configuration Runtime design alignment](../../system/configuration-runtime-design-alignment.md)
-- [Universal Card System](../platform/operator/universal-card-system.md)
-- [Alloy Visual Language](../platform/operator/alloy-visual-language.md)
-- [Configuration ownership doctrine](../../system/configuration-ownership-doctrine.md)
+- [Configuration Runtime design alignment](../../../system/configuration-runtime-design-alignment.md)
+- [Universal Card System](../../../platform/operator/universal-card-system.md)
+- [Alloy Visual Language](../../../platform/operator/alloy-visual-language.md)
+- [Configuration ownership doctrine](../../../system/configuration-ownership-doctrine.md)

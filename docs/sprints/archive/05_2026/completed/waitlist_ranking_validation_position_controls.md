@@ -1,7 +1,7 @@
 # Waitlist ranking validation + position controls
 
 **Status:** Cards 0–5 complete (2026-05-31)  
-**Depends on:** [Waitlist priority fact truth](waitlist_priority_fact_truth_child_scope.md), [Priority placement orchestration](priority_placement_orchestration_may_2026.md)
+**Depends on:** [Waitlist priority fact truth](waitlist_priority_fact_truth_child_scope.md), [Priority placement orchestration](../priority_placement_orchestration_may_2026.md)
 
 ---
 

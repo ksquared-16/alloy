@@ -6,13 +6,13 @@
 **Sprint type:** Platform doctrine (extends performance/runtime work; not an isolated perf patch)
 
 **Related (evidence, not superseded):**
-- [`adminv2_drawer_performance_hardening_phase0.md`](./adminv2_drawer_performance_hardening_phase0.md) — opportunity drawer waterfall, first-paint contract
-- [`adminv2_drawer_runtime_phase0_audit.md`](./adminv2_drawer_runtime_phase0_audit.md) — drawer bootstrap replication design
-- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md) — nav classes (frozen)
+- [`adminv2_drawer_performance_hardening_phase0.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_performance_hardening_phase0.md) — opportunity drawer waterfall, first-paint contract
+- [`adminv2_drawer_runtime_phase0_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_runtime_phase0_audit.md) — drawer bootstrap replication design
+- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_phase1_navigation_and_interaction_contracts.md) — nav classes (frozen)
 - [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md) — load-path map
-- [`adminv2_persistent_shell_header_nav_audit.md`](./adminv2_persistent_shell_header_nav_audit.md) — shell remount vs persistence
+- [`adminv2_persistent_shell_header_nav_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_persistent_shell_header_nav_audit.md) — shell remount vs persistence
 - [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) — dept/WU runtime contract V1
-- [`docs/system/configuration-system.md`](../../system/configuration-system.md) — config may select, not invent semantics
+- [`docs/system/configuration-system.md`](../../../system/configuration-system.md) — config may select, not invent semantics
 - [`docs/execution/operating-doctrine.md`](../../execution/operating-doctrine.md) — doc updates with behavior changes
 
 ---

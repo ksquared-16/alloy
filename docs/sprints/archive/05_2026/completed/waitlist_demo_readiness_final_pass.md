@@ -1,7 +1,7 @@
 # Waitlist Demo Readiness — Final Pass
 
 **Status:** Sprint closed (Cards 0–5 — 2026-05-28)  
-**Depends on:** [Waitlist priority fact truth](waitlist_priority_fact_truth_child_scope.md), [Phase 2 pilot playbook](waitlist_orchestration_phase2_pilot_playbook.md)
+**Depends on:** [Waitlist priority fact truth](waitlist_priority_fact_truth_child_scope.md), [Phase 2 pilot playbook](../later-phase/waitlist_orchestration_phase2_pilot_playbook.md)
 
 ---
 

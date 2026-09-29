@@ -4,7 +4,7 @@
 **Status:** Audit only (no optimization PR in this phase)  
 **Scope:** `/adminV2/workspace` hierarchy, shared shell, queue/drawer open flow  
 
-**Related:** Prior rebuild notes and Build Pass 1/2 history live in [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md). **Normative contracts (Phase 1):** [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md). **Load-path plan (Phase 2):** [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md). This document is the **formal Phase 0** map for the deep-dive sprint: evidence-based, navigation-safe, optimization-ready.
+**Related:** Prior rebuild notes and Build Pass 1/2 history live in [`adminv2_performance_rebuild_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_rebuild_audit.md). **Normative contracts (Phase 1):** [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_phase1_navigation_and_interaction_contracts.md). **Load-path plan (Phase 2):** [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md). This document is the **formal Phase 0** map for the deep-dive sprint: evidence-based, navigation-safe, optimization-ready.
 
 **Regression context:** A prior optimization pass broke first-click navigation (click interception, `preventDefault` misuse, shallow routing, `history.replaceState` churn, span-vs-Link patterns, competing route stores, overlay capture). Navigation has been **repaired**. All future work must preserve the contracts documented here and in enforcement tests.
 
@@ -460,4 +460,4 @@ cd web && npx vitest run \
 
 > Do not add shallow routing, `history.replaceState` queue sync, link→span nav rewrites, drawer backdrop click capture, or post-mount `useSearchParams` on the work-unit page without updating `adminV2NavigationContracts.test.ts` and manual checklist above.
 
-See also: [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md) for Build Pass 1/2 implementation history.
+See also: [`adminv2_performance_rebuild_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_rebuild_audit.md) for Build Pass 1/2 implementation history.
