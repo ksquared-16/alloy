@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: superseded-exploration
+status: historical
 last_reviewed: 2026-07-19
 supersedes: []
 ---
