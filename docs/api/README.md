@@ -9,8 +9,12 @@ supersedes: []
 **Status:** ✅ **Internal API Platform foundation complete** (Phase 3 closeout). Future API work is
 **expansion**, not foundation. OpenAPI v0 is internal and partial by design; the generated client is
 the preferred path for new normalized consumers; `cd web && npm run api:check` is the platform
-validation command. A **public** developer platform (`/api/v1`, SDK, portal) is future work, not
-current scope. See [`api-platform-completion.md`](api-platform-completion.md).
+validation command. The external **Developer Platform** (`/api/v1`) is no longer future work: V1 shipped,
+was promoted and is certified and frozen — see
+[`developer-platform/README.md`](developer-platform/README.md) for its doctrine and
+[`developer-platform/external/alloy-developer-platform-specification.md`](developer-platform/external/alloy-developer-platform-specification.md)
+for its contract. An SDK and a developer portal remain future work. For the internal platform
+closeout see [`api-platform-completion.md`](api-platform-completion.md).
 
 **Purpose:** Make Alloy's API surface visible, reviewable, and maintainable, and to provide a clean foundation for a future public / developer API. APIs are the platform contract: AI/config agents, future integrations, and humans should all speak through the same documented surface.
 
@@ -20,13 +24,13 @@ current scope. See [`api-platform-completion.md`](api-platform-completion.md).
 
 | File | Contents |
 |------|----------|
-| [`developer-platform/`](developer-platform/README.md) | **Thread 4 — the ratified V1 architecture for the external Developer Platform** (application principal, installation, credentials, scopes, public surface, command adapter, request contract). Specification only; nothing is built. |
+| [`developer-platform/`](developer-platform/README.md) | **Thread 4 — the ratified V1 architecture for the external Developer Platform** (application principal, installation, credentials, scopes, public surface, command adapter, request contract). **Built, promoted, certified and frozen** — this directory owns the doctrine; `external/` owns the external contract. |
 | [`api-platform-completion.md`](api-platform-completion.md) | **Closeout** — the record that the internal API Platform foundation is complete: what exists (doctrine/implementation/guardrails), the OpenAPI v0 families, what remains as expansion (not gaps), and why API foundation work pauses here. |
 | [`api-architecture.md`](api-architecture.md) | **Doctrine** — the governing API platform architecture: principles, surface taxonomy, response/error contract, auth & org-scoping rules, versioning, consumer doctrine, the OpenAPI gate, SDK direction, and governance. Read this first for any API work. |
 | [`api-platform-governance.md`](api-platform-governance.md) | **Doctrine** — the platform operating contract: Definition of Done, OpenAPI admission, contract/correlation/pagination/freshness/versioning requirements, legacy & public-API policy, the self-governing CI command (`npm run api:check`), the API lifecycle, and the maturity snapshot. |
 | [`internal-typescript-client.md`](internal-typescript-client.md) | **Generated client** — internal v0 TypeScript client (`web/lib/api/alloyApiClient.ts` + generated `alloyApiTypes.ts`), behavior contract, and the first migrated consumer. |
 | [`api-data-access-performance.md`](api-data-access-performance.md) | **Doctrine** — data access, freshness classes, pagination standard, bulk access, incremental sync, real-time/event model, exports, performance SLOs, caching, and anti-patterns. How data is read, synced, paged, and kept fresh. |
-| [`openapi/`](openapi/) | **Internal OpenAPI v0** — `openapi/alloy-api.v0.yaml` (spec for the normalized, gate-passing surface) + `openapi/README.md`. Internal contract artifact for humans/agents/tests/SDKs; not a public portal. Validate with `node scripts/validate-openapi.mjs`. |
+| [`openapi/`](openapi/) | **Two separate documents.** `openapi/alloy-api.v0.yaml` is the **internal** OpenAPI v0 for the normalized, gate-passing admin surface — an internal artifact for humans/agents/tests/SDKs, not a public portal. `openapi/alloy-public-api.v1.json` is the **external** machine contract for `/api/v1`, and is the published public authority. Do not read either as the other. Validate with `node scripts/validate-openapi.mjs`. |
 | [`api-index.md`](api-index.md) | **Generated** master table of all `web/app/api/**` route handlers (method, path, auth signal, validation signal, service-role, writes/events, stability, tables). Regenerate with `node scripts/generate-api-inventory.mjs`. |
 | [`api-response-contract.md`](api-response-contract.md) | **Phase 2** standard response envelope (`ApiSuccess`/`ApiFailure`), helpers, error-code + correlation-id conventions, and migration status. |
 | [`api-contract-migration-status.md`](api-contract-migration-status.md) | **Live migration tracker** — normalization priority order, migrated routes, active consumers, and legacy/sunset surfaces (OpenAPI deferred until internally consistent). |

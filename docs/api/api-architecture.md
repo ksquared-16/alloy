@@ -72,6 +72,7 @@ auth, docs, and OpenAPI eligibility.
 | **Experimental API** | agent/BOS commit routes, flag-gated previews | Feature-flagged internal callers only | Explicitly unstable | Capability gate (e.g. Config/Layout Assist generate permission) | Marked experimental; behavior may move | **No** until promoted out of experimental |
 | **Webhook API** | provider inbound (`/webhooks/**`, provider callbacks) | External providers (comms, payments, etc.) | Bound by the provider's contract | **Provider signature verification**, not Alloy session auth | Document the provider + verification + idempotency | **No** (inbound, not a callable Alloy contract) |
 | **Legacy / sunset API** | old `/admin` drawer flows, `agent/v0\|v1\|v2`, aliases | Whatever still imports them | Frozen; **sunset candidates** | Whatever they shipped with | Recorded as sunset in the tracker | **No** — never spec a sunset surface |
+| **External Developer Platform** | `/api/v1/**` | Partner/tenant applications holding an Installation credential | **Frozen external contract**; changes are versioned, never silent | Application Principal: Developer Application → Installation → Credential → scopes + resource boundary. No admin session, no caller-selected tenant | Owned externally by the Developer Platform specification and integration guide | **Yes — its own public document**, `openapi/alloy-public-api.v1.json` |
 
 Rules of the taxonomy:
 
@@ -107,6 +108,16 @@ Produced by the shared helpers in [`web/lib/api/`](../../web/lib/api):
 `NextResponse.json` bodies are permitted only on un-migrated legacy routes (and the one
 documented single-pass `full`-surface envelope string in `opportunityEntityRecord.ts`, which
 still emits the exact envelope shape).
+
+**This envelope is internal.** It governs the Admin, Internal-platform, Experimental and
+Public/tokenized classes above. It does **not** govern the **External Developer Platform**
+class: `/api/v1/**` emits its own certified envelope and error taxonomy, owned by
+[`developer-platform/external/alloy-developer-platform-specification.md`](developer-platform/external/alloy-developer-platform-specification.md).
+Routes there deliberately do not call `apiOk`/`apiError` from `web/lib/api/`, and the
+`SCREAMING_SNAKE_CASE` codes of §4 are not public API codes. Some implementation substrate is
+shared — the Organization → Integrations admin routes manage Installations and Credentials, and
+so import from `web/lib/platform/external/` — but **shared code is not a shared external
+contract**.
 
 ---
 
