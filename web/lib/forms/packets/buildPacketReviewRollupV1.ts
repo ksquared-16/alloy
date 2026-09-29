@@ -141,7 +141,7 @@ async function loadPdfDocumentRows(
     if (documentIds.length === 0) return map;
     const { data, error } = await supabase
         .from("documents")
-        .select("id, name, title, original_filename, created_at, metadata, template_key")
+        .select("id, title, original_filename, created_at, metadata, template_key")
         .eq("org_id", orgId)
         .in("id", documentIds);
     if (error || !data) return map;
@@ -149,7 +149,8 @@ async function loadPdfDocumentRows(
         const r = row as PdfDocumentRow & { metadata?: unknown };
         map.set(r.id, {
             id: r.id,
-            name: r.name ?? null,
+            // `documents` has no `name`; its display name is `title`.
+            name: r.title ?? null,
             title: r.title ?? null,
             original_filename: r.original_filename ?? null,
             created_at: r.created_at ?? null,

@@ -160,6 +160,17 @@ export type EnrollmentProgressLoaded = {
     readonly items: readonly SessionItemRow[];
     readonly formBySessionItem: ReadonlyMap<string, string>;
     readonly subjectId: string | null;
+    /**
+     * The stage's AUTHORED requirements, as this resolver already read them from the governing
+     * revision.
+     *
+     * Handed forward because the projected form deliberately drops what a caller may still need:
+     * `EnrollmentRequirementProgress` carries kind and artifact but not `scope`, and a financial
+     * requirement's scope is what decides whether one household obligation or one per child applies.
+     * The alternative was a second reader re-resolving the revision, which is how two callers start
+     * disagreeing about which requirements a stage has.
+     */
+    readonly requirements: readonly StageRequirementV1[];
 };
 
 export async function resolveEnrollmentParticipantProgress(
@@ -289,6 +300,7 @@ export async function resolveEnrollmentParticipantProgress(
         items: items as SessionItemRow[],
         formBySessionItem: new Map(realized.map((r) => [r.session_item_id, r.form_definition_id])),
         subjectId: String((instance as { subject_id?: string | null }).subject_id ?? "").trim() || null,
+        requirements,
     });
 
     return {

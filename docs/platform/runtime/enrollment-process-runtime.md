@@ -262,3 +262,80 @@ The shell holds no balance. Its financial slot consumes the Enrollment Financial
 it performs no gross, responsibility, expected-funding, collectible or balance calculation. The
 stored-method side will consume canonical `payment_methods` in a follow-up — see
 `docs/platform/modules/billing-financials-platform.md`.
+
+## The enrollment fee as a requirement (September 2026)
+
+A stage could require a field, a form, or its own work. It could not require money. The fee therefore
+lived wherever somebody had put a currency question on a form, which made it a typed ANSWER rather
+than an obligation: nothing was owed, nothing could be paid, and nothing could tell a family what was
+left. `financial` is the requirement kind that closes that, and the chain behind it runs
+configuration → applicability → charge-definition reference → canonical obligation → canonical
+Financials projection → what the family is shown.
+
+### The ownership line, stated once
+
+Enrollment owns exactly three decisions:
+
+1. whether a fee applies to this stage,
+2. which charge DEFINITION applies, by key, and
+3. whether it is owed once per family or once per enrolling child.
+
+Financials owns everything else: amount, discounts, responsibility, expected funding, what is
+collectible now, payments, applications, outstanding, corrections. Forms owns no fee at all, and
+Admissions v12 is fee-free by Director decision.
+
+The requirement therefore references `charge_template_key` and **structurally cannot carry a price**.
+`parseRef` builds a closed `{ kind, charge_template_key }` rather than spreading the stored row, so a
+configuration row carrying `amount_cents` parses to a ref with no amount to read and serializes back
+without it. That is asserted, not assumed: a stored `7500` is absent from the parsed result.
+
+### Grain is `scope`, not a second enum
+
+`record` is the family record; `each_child` is once per enrolling child. Every other requirement kind
+is already read through `RequirementScope`, and a parallel `per_family | per_child` would have been a
+second vocabulary for one truth — where the first disagreement between the two is a billing bug. A
+child with no enrollment agreement is SKIPPED rather than folded into the household, because charging
+the family instead loses the attribution per-child grain exists for, and does it silently.
+
+### Two things that must never read as good news
+
+- **A configured, due fee with no charge is not satisfied.** `worst([])` answers SATISFIED, which is
+  right for "every obligation is settled" and catastrophic for "there are none". It returns
+  `ATTENTION_REQUIRED` and says a charge has not been created yet.
+- **A missing or invalid charge definition is not a $0 fee.** It is `ATTENTION_REQUIRED` with the
+  configuration error named. A family is never told a fee is settled because pricing failed.
+
+A **cancelled** fee is also distinguished from a **free** one. A reversed obligation is excluded from
+every figure, which leaves gross at zero and makes the two arithmetically identical; they are not the
+same fact, and conflating them sends an operator to fix pricing that was never wrong.
+
+### Dueness, idempotency, and the read-only twin
+
+Dueness is resolved from canonical current state — every non-financial requirement outstanding — with
+the financial requirement excluded from its own prerequisites so it cannot block itself. It is not a
+browser event. Charge creation delegates to `writeTemplateDraftCharge`'s own idempotency and is not
+keyed to `today`, so tomorrow does not mint a second fee; corrections delegate to
+`createChildcareCorrection`, whose corrected-once rule the database enforces. Enrollment keeps no
+ledger of its own.
+
+`readEnrollmentFeeProjection` is the read-only twin the family surface uses: it creates, posts and
+corrects nothing, and its tests inject a Supabase fake whose `insert`/`update` throw. A family-scoped
+fee read once per child is deduped by `requirement_id`, or a two-child household would be shown
+double what it owes.
+
+**Reading an existing fee must narrow in the DATABASE.** The first implementation selected every
+charge on the billable source and filtered in JavaScript; PostgREST caps a response at 1000 rows, so
+a family with a longer history could return a page that did not contain the fee, and the projection
+would then claim no charge existed for one that did. The charge-definition key is matched in the
+query. Certification on the real database found this; unit tests could not.
+
+### Authoring
+
+A director configures this in the stage requirement surface beside forms and work
+(`StageFinancialRequirementsEditor`) — definition, once per family or once per enrolling child,
+required — with no raw ids and no JSON, and not in Forms Studio. The price beside each option is READ
+from Financials and never copied, and only the current version of a definition lineage is offered. A
+key with no active definition is called out rather than smoothed over.
+
+There is no Pay button. Participant checkout does not exist yet, and a button that does nothing is
+worse than its absence.

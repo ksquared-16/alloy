@@ -263,3 +263,48 @@ export const FAMILY_FACT_OWNERSHIP = Object.freeze([
         why: "One `enrollment_agreement`-sourced charge per child, each keeping its own attribution.",
     },
 ]);
+
+/**
+ * THE FINANCIAL PROJECTION, AS THE FAMILY SHELL PRESENTS IT.
+ *
+ * A translation of shape and nothing else. Every figure is carried across untouched — no re-summing,
+ * no gross-minus-expected, no rounding. The only thing added is the per-obligation LINE, which is
+ * presentation the family list needs and Financials has no opinion about: a household fee shows once,
+ * a per-child fee shows once per child with that child named.
+ *
+ * A reversed obligation keeps its line. It stops counting toward what is owed — the projection has
+ * already excluded it from the totals — but a parent who paid attention to a fee that later went away
+ * is owed the explanation, and a line that silently vanishes is not one.
+ */
+export function familyFinancialsFromProjection(projection: {
+    readonly state: string;
+    readonly amounts: {
+        readonly currencyCode: string | null;
+        readonly grossCents: number;
+        readonly expectedFundingCents: number;
+        readonly collectibleNowCents: number;
+        readonly appliedCents: number;
+        readonly outstandingCents: number;
+    };
+    readonly obligations: readonly {
+        readonly subjectCustomerMemberId: string | null;
+        readonly position: { readonly chargeId: string; readonly currentlyCollectibleCents: number } | null;
+        readonly state: string;
+    }[];
+}): FamilyEnrollmentFinancials {
+    return {
+        state: projection.state,
+        grossCents: projection.amounts.grossCents,
+        expectedFundingCents: projection.amounts.expectedFundingCents,
+        collectibleNowCents: projection.amounts.collectibleNowCents,
+        appliedCents: projection.amounts.appliedCents,
+        outstandingCents: projection.amounts.outstandingCents,
+        lines: projection.obligations.map((o) => ({
+            scope: o.subjectCustomerMemberId ? ("child" as const) : ("family" as const),
+            subjectCustomerMemberId: o.subjectCustomerMemberId,
+            chargeId: o.position?.chargeId ?? null,
+            state: o.state,
+            collectibleNowCents: o.position?.currentlyCollectibleCents ?? 0,
+        })),
+    };
+}

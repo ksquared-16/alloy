@@ -1919,6 +1919,24 @@
                 "note": "Generates the tuition quote snapshot. NOT enrollment.pricing.override, which is the narrow authority to beat the recommended price."
             }
         },
+        "app/api/admin/enrollment/fee-obligations/route.ts": {
+            "POST": {
+                "status": "declared",
+                "capability": "fin.write",
+                "helper": "requireFinancialsCapability",
+                "reason": "Creates and POSTS canonical Financials charges for a configured Enrollment fee, which is minting money — so it takes the Financials write key, not organization context. Declared with the same capability and helper as app/api/admin/financial/charge-templates POST, whose own review records the rule this follows: portal admission is not financial authority. `requireAdminOrOps` is kept alongside, matching that sibling, so admission and financial authority are both required. The route invents no amount: it resolves the requirement's charge-definition key through canonical Financials and delegates creation, posting and idempotency to the charge lifecycle."
+            }
+        },
+        "app/api/admin/enrollment/packet-launch/route.ts": {
+            "GET": {
+                "status": "none",
+                "reason": "Operator launch of the requirement-derived Enrollment packet for ONE child, reviewed before it runs. Gated on organization admission (requireAdminOrOps + organization context) because this is ordinary Enrollment operator work on the operator's own org, not a financial write and not a communications send: GET writes nothing, and POST delegates to startEnrollment, the same canonical service every other caller uses, which is idempotent by episode so a retry resumes rather than minting a second packet. The caller names only the child - the packet is DERIVED from the governing revision's requirements, so there is no packet id to accept and no way to send a family paperwork the process does not configure. GET is the read-only preview."
+            },
+            "POST": {
+                "status": "none",
+                "reason": "Operator launch of the requirement-derived Enrollment packet for ONE child, reviewed before it runs. Gated on organization admission (requireAdminOrOps + organization context) because this is ordinary Enrollment operator work on the operator's own org, not a financial write and not a communications send: GET writes nothing, and POST delegates to startEnrollment, the same canonical service every other caller uses, which is idempotent by episode so a retry resumes rather than minting a second packet. The caller names only the child - the packet is DERIVED from the governing revision's requirements, so there is no packet id to accept and no way to send a family paperwork the process does not configure."
+            }
+        },
         "app/api/admin/entity-labels/route.ts": {
             "DELETE": {
                 "status": "declared",
@@ -5242,6 +5260,16 @@
             "GET": {
                 "status": "none",
                 "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+            }
+        },
+        "app/api/public/forms/[token]/enrollment-payment/route.ts": {
+            "GET": {
+                "status": "none",
+                "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY - the same resolver named in the sibling reviews - refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the sibling public forms routes already reviewed. GET is read-only: it names no target the caller supplies and returns only the participant's own fee state, their own usable methods and a publishable key."
+            },
+            "POST": {
+                "status": "none",
+                "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY - the same resolver named in the sibling reviews - refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the sibling public forms routes already reviewed. This is the first route in that family that MOVES MONEY, so the authority it does NOT hold is the point: the payer is the link's mint-validated recipient rather than anything the request says, the payable obligation set is recomputed from this token's own fee projection so a substituted charge id is unreachable, the amount ceiling and currency are resolveFamilyCollectible's, a stored method is a canonical Alloy id whose ownership the engine's payer invariant enforces, and cash is recognised only from a provider intent read on the server - a browser reporting success is a prompt to look, never the finding. See the matching entry in serviceClientPrincipal.allowlist.json."
             }
         },
         "app/api/public/forms/[token]/enrollment-signature-asset/route.ts": {

@@ -188,10 +188,12 @@ describe("set_stage_requirements", () => {
         /*
          * `work` joined `field` and `form` because it met the same bar: the stage work runtime
          * already reports `completed` per template key for a subject, so satisfaction has a
-         * canonical owner and nothing had to be invented to prove it. The remaining four still have
-         * no owner that could answer, and the loop keeps them refused.
+         * canonical owner and nothing had to be invented to prove it. `financial` then joined on
+         * that same bar — canonical Financials owns the charge, the payment and what is still
+         * outstanding, so the requirement reads satisfaction rather than asserting it. The
+         * remaining four still have no owner that could answer, and the loop keeps them refused.
          */
-        const AUTHORABLE = ["form", "field", "work"] as const;
+        const AUTHORABLE = ["form", "field", "work", "financial"] as const;
         for (const kind of AUTHORABLE) {
             expect(isAuthorableRequirementKind(kind), kind).toBe(true);
         }
