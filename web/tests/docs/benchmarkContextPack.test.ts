@@ -139,6 +139,40 @@ describe("Business Process is listed at its true certification state", () => {
     });
 });
 
+describe("Identity/Access is pending, and its blockers are real", () => {
+    /** The RLS authority decision is open while that canonical doc still says DECISION_READY. */
+    const rlsGateOpen = () =>
+        /DIRECTOR_DECISION_READY/.test(read("docs/platform/governance/rls-authority-model-director-gate.md"));
+
+    it("is listed PENDING_CERTIFICATION while the RLS gate is open", () => {
+        if (!rlsGateOpen()) return; // decided later: the constraint lapses
+        const section = manifest().split("## 6.")[1] ?? "";
+        expect(section).toMatch(/PENDING_CERTIFICATION/);
+    });
+
+    it("does not offer any Identity/Access document as DIRECT while pending", () => {
+        if (!rlsGateOpen()) return;
+        const idDocs = [
+            "governance/roles-and-permissions.md",
+            "governance/rls-authority-model-director-gate.md",
+            "operator/access-product-ui.md",
+            "operator/identity-surface-composition-v2.md",
+        ];
+        for (const line of manifest().split("\n")) {
+            if (!idDocs.some((d) => line.includes(d))) continue;
+            expect(line, `Identity doc offered as DIRECT while pending: ${line.trim().slice(0, 90)}`).not.toMatch(
+                /\bDIRECT\b(?!_CANDIDATE)/,
+            );
+        }
+    });
+
+    it("treats the Access V2 planning tree as planning, never as authority", () => {
+        const section = manifest().split("## 6.")[1] ?? "";
+        expect(section).toMatch(/PLANNED_ONLY/);
+        expect(section).toMatch(/access-identity-v2/);
+    });
+});
+
 describe("the pack records what it was certified against", () => {
     it("carries a version, a certification date and a base SHA", () => {
         const m = manifest();
