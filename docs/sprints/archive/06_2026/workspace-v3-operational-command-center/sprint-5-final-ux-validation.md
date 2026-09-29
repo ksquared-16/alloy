@@ -203,7 +203,7 @@ Proceed directly to implementation:
 
 Parent references (already canonical — do not extend):
 
-- [`workspace-v3-operational-surface-doctrine.md`](../../../platform/operator/workspace-v3-operational-surface-doctrine.md)
+- [`workspace-v3-operational-surface-doctrine.md`](../../../../platform/operator/workspace-v3-operational-surface-doctrine.md)
 - [`sprint-4-ux-continuity.md`](./sprint-4-ux-continuity.md)
 
 ---

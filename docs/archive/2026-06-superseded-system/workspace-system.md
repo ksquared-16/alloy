@@ -1,7 +1,7 @@
 # Workspace system
 
-> **Canonical (June 2026 rebaseline):** Operator model → [`docs/platform/core/business-process-system.md`](../platform/core/business-process-system.md)  
-> Queues → [`docs/platform/operator/queue-system.md`](../platform/operator/queue-system.md)  
+> **Canonical (June 2026 rebaseline):** Operator model → [`docs/platform/core/business-process-system.md`](../../platform/core/business-process-system.md)  
+> Queues → [`docs/platform/operator/queue-system.md`](../../platform/operator/queue-system.md)  
 > This file retains expanded enrollment/runtime detail as transitional reference.
 
 ## Purpose

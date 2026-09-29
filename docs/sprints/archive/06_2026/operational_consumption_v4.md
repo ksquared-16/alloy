@@ -2,7 +2,7 @@
 
 **Status:** Built (June 2026). Builds on the merged Operational Consumption runtime (Slices 1–3, staging `13cbb80ca`). Does **not** redesign Consumption. Posting remains out of scope.
 
-Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../platform/modules/operational-consumption-platform.md) (Slice 4 section).
+Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../../platform/modules/operational-consumption-platform.md) (Slice 4 section).
 
 ## Objective
 

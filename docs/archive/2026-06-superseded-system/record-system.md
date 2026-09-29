@@ -1,6 +1,6 @@
 # Record system (RRS & entity API)
 
-> **Canonical summary:** [`docs/platform/core/record-system.md`](../platform/core/record-system.md)  
+> **Canonical summary:** [`docs/platform/core/record-system.md`](../../platform/core/record-system.md)  
 > This file retains expanded PATCH/layout enforcement detail as transitional reference.
 
 ## Purpose

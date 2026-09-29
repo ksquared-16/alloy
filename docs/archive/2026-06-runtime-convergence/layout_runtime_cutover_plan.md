@@ -19,9 +19,9 @@
 
 - [`layout_contract_v1.md`](./layout_contract_v1.md)
 - [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md)
-- [`docs/system/adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md)
-- [`docs/system/drawer-view-model-runtime-contract.md`](../system/drawer-view-model-runtime-contract.md)
-- [`docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7 — domain model for `QueueRowContext`, `active_subject`, placement, and layout block consumption
+- [`docs/system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md)
+- [`docs/system/drawer-view-model-runtime-contract.md`](../../system/drawer-view-model-runtime-contract.md)
+- [`docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7 — domain model for `QueueRowContext`, `active_subject`, placement, and layout block consumption
 
 ---
 
@@ -372,7 +372,7 @@ Each cutover phase requires:
 - [`runtime_convergence_execution_plan.md`](./runtime_convergence_execution_plan.md) — phase definitions
 - [`runtime_to_layout_mapping.md`](./runtime_to_layout_mapping.md) — legacy → layout mapping
 - [`child_namespace_decision.md`](./child_namespace_decision.md) — naming for cutover QA
-- [`docs/system/adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md) — non-negotiable reveal rules
+- [`docs/system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md) — non-negotiable reveal rules
 
 ---
 

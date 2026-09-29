@@ -2,7 +2,7 @@
 
 **Status:** Built (June 2026). Continues the **frozen** Slice 1–2 architecture; does **not** redesign it. Posting remains out of scope. This slice completes the Operational Consumption runtime.
 
-Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../platform/modules/operational-consumption-platform.md) (Slice 3 sections).
+Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../../platform/modules/operational-consumption-platform.md) (Slice 3 sections).
 
 ## The realization → the pipeline
 

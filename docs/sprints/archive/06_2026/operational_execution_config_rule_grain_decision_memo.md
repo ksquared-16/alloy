@@ -2,7 +2,7 @@
 
 **Status:** Decision memo (June 2026). Resolves Open Questions 1-3 from [`operational_execution_phase1_backend_building_blocks.md`](operational_execution_phase1_backend_building_blocks.md) before authorizing Prompt P1. **No code, migrations, schema, or implementation.**
 
-**Doctrine basis:** [`docs/platform/core/operational-truth-flow-doctrine.md`](../../platform/core/operational-truth-flow-doctrine.md) (L1 Configuration; config-as-first-class), [`docs/platform/core/placement-system.md`](../../platform/core/placement-system.md) (School → Program → Room cascade), [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md).
+**Doctrine basis:** [`docs/platform/core/operational-truth-flow-doctrine.md`](../../../platform/core/operational-truth-flow-doctrine.md) (L1 Configuration; config-as-first-class), [`docs/platform/core/placement-system.md`](../../../platform/core/placement-system.md) (School → Program → Room cascade), [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md).
 
 **Direction tested (from operator):** org defaults with location overrides; program/room specificity where operationally required; ratio rules as first-class compliance config; `schedule_patterns` remain child schedule intent; `schedule_rules` define operating constraints/windows/eligibility/policy; expectations stay derived/non-authoritative. **This memo confirms that direction** with grain specifics and guardrails.
 
@@ -14,8 +14,8 @@ A single repeated pattern keeps the three rule families consistent and prevents 
 
 ### Verified scoping facts (repo)
 - `locations` is a hierarchy: `location_type = 'site'` (campus) and `'unit'` (room) with `parent_location_id` (slice-1 migration triggers enforce room=`unit` under its site).
-- `location_program_categories` is **per-site** (`location_id` = site row), org-scoped, with stable `key`s that "align across sites" and deterministic FK ids ([`20260610140001_location_program_categories.sql`](../../../supabase/migrations/20260610140001_location_program_categories.sql)).
-- Age band vocabulary is the `classroom_age_group` option set; schedule vocabulary is `childcare_schedule_type` ([`20260430211000_childcare_mvp_control_plane_seed.sql`](../../../supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql)).
+- `location_program_categories` is **per-site** (`location_id` = site row), org-scoped, with stable `key`s that "align across sites" and deterministic FK ids ([`20260610140001_location_program_categories.sql`](../../../../supabase/migrations/20260610140001_location_program_categories.sql)).
+- Age band vocabulary is the `classroom_age_group` option set; schedule vocabulary is `childcare_schedule_type` ([`20260430211000_childcare_mvp_control_plane_seed.sql`](../../../../supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql)).
 - Config-posture RLS precedent: `has_org_role(org_id, [...])` (used by `schedule_patterns`, `location_program_categories`).
 
 ### The resolution rule (canonical for all three)

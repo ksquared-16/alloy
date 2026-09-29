@@ -604,16 +604,16 @@ Activity feed, OIP migration, BOS Level 3 routing when insights API exists.
 
 | Doc | Sprint 2 update |
 |-----|-----------------|
-| [`workspace-v3-command-center-doctrine.md`](../../../platform/operator/workspace-v3-command-center-doctrine.md) | Rev 2 — zones, storytelling, depth stack |
-| [`workspace-v3-operational-surface-doctrine.md`](../../../platform/operator/workspace-v3-operational-surface-doctrine.md) | **New** — surface launcher law |
-| [`navigation-and-workspace-doctrine.md`](../../../platform/core/navigation-and-workspace-doctrine.md) | Deep links + progressive depth |
+| [`workspace-v3-command-center-doctrine.md`](../../../../platform/operator/workspace-v3-command-center-doctrine.md) | Rev 2 — zones, storytelling, depth stack |
+| [`workspace-v3-operational-surface-doctrine.md`](../../../../platform/operator/workspace-v3-operational-surface-doctrine.md) | **New** — surface launcher law |
+| [`navigation-and-workspace-doctrine.md`](../../../../platform/core/navigation-and-workspace-doctrine.md) | Deep links + progressive depth |
 | [Sprint 1 README](./README.md) | Superseded surface anatomy — link to Sprint 2 |
 
 ---
 
 ## Related
 
-- [`operational-mode-default-state-doctrine.md`](../../../platform/operator/operational-mode-default-state-doctrine.md)
-- [`operational-surface-design-system.md`](../../../platform/operator/operational-surface-design-system.md) (System 5)
+- [`operational-mode-default-state-doctrine.md`](../../../../platform/operator/operational-mode-default-state-doctrine.md)
+- [`operational-surface-design-system.md`](../../../../platform/operator/operational-surface-design-system.md) (System 5)
 - `web/lib/adminV2/runtime/perspective/mergeOperationalViewMetadata.ts`
 - `web/lib/adminV2/workUnitQueueSelection.ts`

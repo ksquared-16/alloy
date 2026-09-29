@@ -22,10 +22,10 @@ The platform knows how to disappear. This sprint makes it do so everywhere.
 
 | # | Deliverable | Location |
 |---|-------------|----------|
-| 1 | **Operational Experience Doctrine** — the platform HIG; the Five Laws | [`../../../platform/experience/operational-experience-doctrine.md`](../../../platform/experience/operational-experience-doctrine.md) |
-| 2 | **Operational Motion Doctrine** — one motion language; tokens + five choreographies | [`../../../platform/experience/operational-motion-doctrine.md`](../../../platform/experience/operational-motion-doctrine.md) |
+| 1 | **Operational Experience Doctrine** — the platform HIG; the Five Laws | [`../../../platform/experience/operational-experience-doctrine.md`](../../../../../platform/experience/operational-experience-doctrine.md) |
+| 2 | **Operational Motion Doctrine** — one motion language; tokens + five choreographies | [`../../../platform/experience/operational-motion-doctrine.md`](../../../../../platform/experience/operational-motion-doctrine.md) |
 | 3 | **Experience Audit** — 16 issues, each with behavior / perception / owner / root cause / desired experience / choreography / plan | [`./experience-audit.md`](./experience-audit.md) |
-| 4 | **Premium Interaction Principles** — the practitioner field manual | [`../../../platform/experience/premium-interaction-principles.md`](../../../platform/experience/premium-interaction-principles.md) |
+| 4 | **Premium Interaction Principles** — the practitioner field manual | [`../../../platform/experience/premium-interaction-principles.md`](../../../../../platform/experience/premium-interaction-principles.md) |
 | 5 | **Sprint Roadmap** — four tracks, ranked by impact × foundation vs. effort × risk | [`./sprint-roadmap.md`](./sprint-roadmap.md) |
 | + | **Moments of Broken Illusion** — the scored punch list (severity / frequency / owner / complexity / ROI) | [`./moments-of-broken-illusion.md`](./moments-of-broken-illusion.md) |
 
@@ -55,9 +55,9 @@ The platform knows how to disappear. This sprint makes it do so everywhere.
 1. This README.
 2. [Moments of Broken Illusion](./moments-of-broken-illusion.md) — see the symptoms, scored.
 3. [Experience Audit](./experience-audit.md) — understand each one to the file:line.
-4. [Operational Experience Doctrine](../../../platform/experience/operational-experience-doctrine.md) — the law that prevents them.
-5. [Operational Motion Doctrine](../../../platform/experience/operational-motion-doctrine.md) — how the law moves.
-6. [Premium Interaction Principles](../../../platform/experience/premium-interaction-principles.md) — apply it at a desk.
+4. [Operational Experience Doctrine](../../../../../platform/experience/operational-experience-doctrine.md) — the law that prevents them.
+5. [Operational Motion Doctrine](../../../../../platform/experience/operational-motion-doctrine.md) — how the law moves.
+6. [Premium Interaction Principles](../../../../../platform/experience/premium-interaction-principles.md) — apply it at a desk.
 7. [Sprint Roadmap](./sprint-roadmap.md) — the order of operations.
 
 ---

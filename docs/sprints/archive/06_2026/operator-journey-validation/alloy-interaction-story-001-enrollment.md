@@ -3,7 +3,7 @@
 **Type:** Storyboard / interaction validation. **Not** implementation, **not** architecture.
 **Sprint:** Operator Journey Validation (June 2026).
 **Precondition (met):** Operational Grammar · Card Language · Card Archetypes · Operational Context cutover · Household reference implementation · Subject Change doctrine · remaining archetype mocks.
-**Doctrine under test:** [`operational-grammar.md`](../../../platform/operator/operational-grammar.md) · [`card-language.md`](../../../platform/operator/card-language.md) (§ Subject Change) · [`operational-context-boundary.md`](../../../platform/operator/operational-context-boundary.md).
+**Doctrine under test:** [`operational-grammar.md`](../../../../platform/operator/operational-grammar.md) · [`card-language.md`](../../../../platform/operator/card-language.md) (§ Subject Change) · [`operational-context-boundary.md`](../../../../platform/operator/operational-context-boundary.md).
 
 > This storyboard validates **choreography**, not cards. The operator never experiences the Household card, the Children card, or the Readiness card individually. They experience **one Focus Panel** whose **Operational Context** recomposes cards as the subject changes, perspective changes, and work completes. The purpose is to pressure-test whether that motion feels like one operating system.
 

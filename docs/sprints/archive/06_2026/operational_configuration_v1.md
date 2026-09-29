@@ -486,7 +486,7 @@ Wiring rates to attach to a Service (Services is a catalog today; rate rules sti
 
 ## Commercial Model — Slice A: Service first-class entity (IMPLEMENTED)
 
-Status: shipped. First vertical slice of the Commercial Model (per the frozen domain doctrine, [`../../platform/modules/financial-platform-domain.md`](../../platform/modules/financial-platform-domain.md), determination #1). Backend + configuration + seed + QA + docs, together.
+Status: shipped. First vertical slice of the Commercial Model (per the frozen domain doctrine, [`../../platform/modules/financial-platform-domain.md`](../../../platform/modules/financial-platform-domain.md), determination #1). Backend + configuration + seed + QA + docs, together.
 
 - **`financial_services` table** (migration `20260702120000_financial_services_commercial_model.sql`) — Service promoted from the interim `org_settings.metadata.financials.services` blob to a first-class, org-scoped entity (service_key unique per org, label, service_type, unit, description, is_active, sort_order, audit; RLS mirrors the rate-plan tables). A catalog (not effective-dated) per doctrine — rate *amounts* remain the versioned objects.
 - **Rate Plan → Service relationship** — `childcare_rate_plans` gains a nullable `service_id` (FK, `ON DELETE SET NULL`). Rate Resolution is unchanged (association/grouping dimension). A Service may have multiple plans (Standard / Corporate / Scholarship …).

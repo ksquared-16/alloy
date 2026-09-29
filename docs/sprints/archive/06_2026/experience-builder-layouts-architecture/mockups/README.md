@@ -1,7 +1,7 @@
 # Experience Builder / Layouts Architecture — Mockups
 
 **Status:** Design only — no implementation  
-**Parent:** [`../experience_builder_layouts_architecture.md`](../experience_builder_layouts_architecture.md)
+**Parent:** [`../experience_builder_layouts_architecture.md`](../../experience_builder_layouts_architecture.md)
 
 Open any `.html` file in a browser at **1440px** width. Styles: `_shared.css` (Bend Pine · Configuration Mode · white canvas).
 

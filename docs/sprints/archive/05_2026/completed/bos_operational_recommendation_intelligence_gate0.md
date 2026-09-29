@@ -6,7 +6,7 @@
 **Date:** 2026-05-21  
 **Role:** Binding implementation doctrine for all code in this sprint
 
-**Parent sprint:** [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) (audit + framework + phase map)
+**Parent sprint:** [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) (audit + framework + phase map)
 
 **Doctrine stack (unchanged):** `docs/execution/operating-doctrine.md`, `docs/product/bos-foundation.md` (§ Operational assist doctrine), `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/actions-and-workflows.md`, `docs/product/crm-system.md`, `docs/product/communications.md`, `docs/execution/roadmap-and-gaps.md`
 
@@ -600,7 +600,7 @@ The following are **explicitly prohibited** for this sprint (including “small�
 
 ## After GATE 0 approval
 
-1. Update [`bos_operational_recommendation_intelligence_sprint.md`](../bos_operational_recommendation_intelligence_sprint.md) §5.2 — mark GATE 0 complete with link to this doc. ✅
+1. Update [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) §5.2 — mark GATE 0 complete with link to this doc. ✅
 2. ~~Begin **Phase 1 Card 1.1** only (`types.ts` + validators).~~ **Phase 1 complete** — see execution pack §12.
 3. Any PR that violates §1–§8 must be blocked in review against this document.
 4. **Phase 2** may begin per sprint §5.4; GATE 0 constraints remain binding (no AI enrich, no autonomy, no persistence).

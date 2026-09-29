@@ -101,6 +101,6 @@ LLM assist (when enabled) may **propose** labels and section groupings; it must 
 
 ## Alignment
 
-- [forms-intake-prefill-doctrine.md](./forms-intake-prefill-doctrine.md) — mapped fields only when registry match exists
+- [forms-intake-prefill-doctrine.md](../completed/forms-intake-prefill-doctrine.md) — mapped fields only when registry match exists
 - [operating-doctrine.md](../execution/operating-doctrine.md) — no autonomous mutations
 - `web/lib/forms/documentComposition.ts` — composition block contract

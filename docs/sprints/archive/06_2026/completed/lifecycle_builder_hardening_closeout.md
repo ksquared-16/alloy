@@ -7,7 +7,7 @@
 
 **Planning docs (sprint inputs, not moved):**
 
-- [`../lifecycle_builder_hardening_execution_plan.md`](../lifecycle_builder_hardening_execution_plan.md)
+- [`../lifecycle_builder_hardening_execution_plan.md`](../../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_builder_hardening_execution_plan.md)
 - [`../lifecycle_builder_hardening_and_v2_canonical_model.md`](../lifecycle_builder_hardening_and_v2_canonical_model.md)
 - [`../lifecycle_v2_discovery_and_operating_model.md`](../lifecycle_v2_discovery_and_operating_model.md)
 

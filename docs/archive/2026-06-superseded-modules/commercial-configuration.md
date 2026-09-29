@@ -1,6 +1,6 @@
 # Commercial Configuration — Architecture
 
-> ⚠️ **SUPERSEDED (pre-primitive).** This early architecture predates the Commercial Product primitive and the unified Catalog. Retained for history only. **See the canonical [Commercial Platform V1](commercial-platform-v1.md)** and the detailed [ownership-model.md](ownership-model.md) for the shipped architecture.
+> ⚠️ **SUPERSEDED (pre-primitive).** This early architecture predates the Commercial Product primitive and the unified Catalog. Retained for history only. **See the canonical [Commercial Platform V1](../../platform/commercial/commercial-platform-v1.md)** and the detailed [ownership-model.md](../../platform/commercial/ownership-model.md) for the shipped architecture.
 
 ## Ownership boundaries
 

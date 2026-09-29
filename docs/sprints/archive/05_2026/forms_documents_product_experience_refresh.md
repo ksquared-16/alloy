@@ -9,12 +9,12 @@
 
 | Program | Document |
 |---------|----------|
-| Interaction doctrine (canonical) | [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine |
+| Interaction doctrine (canonical) | [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine |
 | Phase 2 MVP (architecture) | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
 | BOS presentation Phase 2 | [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) |
 | AdminV2 workspace | `web/app/adminV2/components/workspace/workspace.css`, workspace blocks |
 | Forms review primitives (seed) | `web/lib/forms/review/formsReviewClassTokens.ts`, `formsReviewBadgeStyles.ts` |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../platform/modules/documents-and-forms.md) |
 
 **Influences (target consumers):** Forms/Documents, BOS drawer/queue/handoff, work-unit review, operational cards, drawers, future workflow/review systems.
 
@@ -164,7 +164,7 @@ Evidence: code walkthrough May 2026 — `web/app/admin/forms/**`, `web/app/admin
 
 ## Operational Visual System Foundation
 
-**Authority:** This section is the **visual companion** to the Unified BOS Operational Interaction Doctrine in [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md). Interaction defines *what* to say; this defines *how it looks*.
+**Authority:** This section is the **visual companion** to the Unified BOS Operational Interaction Doctrine in [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md). Interaction defines *what* to say; this defines *how it looks*.
 
 **Implementation home (PX-1):** `web/lib/operational/ui/operationalVisualTokens.ts`, `operationalVisualSpacing.ts`. Forms `formsReviewClassTokens.ts` re-exports shared tokens — not a parallel hex system.
 
@@ -533,7 +533,7 @@ visual doctrine; implementation cards for product experience refresh.
 
 ## Cursor execution order
 
-1. Read interaction doctrine: [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md).  
+1. Read interaction doctrine: [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md).  
 2. Implement **PX-1** (tokens) — blocker.  
 3. **PX-3 + PX-2** in parallel.  
 4. **PX-4 + PX-7**.  

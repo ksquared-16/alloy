@@ -8,7 +8,7 @@
 **Canonical operating model (frozen — do not redesign):**
 
 - [`operational_work_framework_v1.md`](./operational_work_framework_v1.md)
-- [`tasks_v2_operational_work_framework.md`](./tasks_v2_operational_work_framework.md)
+- [`tasks_v2_operational_work_framework.md`](../../../../sprints/archive/06_2026/tasks_v2_operational_work_framework.md)
 - [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
 

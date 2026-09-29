@@ -7,13 +7,13 @@
 
 **Planning docs (sprint inputs, not moved):**
 
-- [`../operational_work_framework_v1.md`](../operational_work_framework_v1.md)
-- [`../operational_work_v1_implementation_plan.md`](../operational_work_v1_implementation_plan.md)
-- [`../operational_work_v1_phase_b_implementation_plan.md`](../operational_work_v1_phase_b_implementation_plan.md)
-- [`../operational_work_v1_phase_c_instantiate_work_plan.md`](../operational_work_v1_phase_c_instantiate_work_plan.md)
-- [`../operational_work_v1_ux_placement_audit.md`](../operational_work_v1_ux_placement_audit.md)
+- [`../operational_work_framework_v1.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_framework_v1.md)
+- [`../operational_work_v1_implementation_plan.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_v1_implementation_plan.md)
+- [`../operational_work_v1_phase_b_implementation_plan.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_v1_phase_b_implementation_plan.md)
+- [`../operational_work_v1_phase_c_instantiate_work_plan.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_v1_phase_c_instantiate_work_plan.md)
+- [`../operational_work_v1_ux_placement_audit.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_v1_ux_placement_audit.md)
 - [`../tasks_v2_operational_work_framework.md`](../tasks_v2_operational_work_framework.md)
-- [`../operational_work_creation_model_discovery.md`](../operational_work_creation_model_discovery.md)
+- [`../operational_work_creation_model_discovery.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/operational_work_creation_model_discovery.md)
 
 **Related closeouts:**
 

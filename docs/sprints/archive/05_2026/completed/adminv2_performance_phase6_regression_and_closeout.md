@@ -5,10 +5,10 @@
 **Authority:** Completes the AdminV2 performance deep-dive sprint (Phases 0–5)
 
 **Binding doctrine (frozen):**
-- [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md)
-- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
-- [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
-- [`adminv2_performance_phase5_visual_loading.md`](./adminv2_performance_phase5_visual_loading.md)
+- [`adminv2_performance_deep_dive_phase0_audit.md`](../adminv2_performance_deep_dive_phase0_audit.md)
+- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](../../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_phase1_navigation_and_interaction_contracts.md)
+- [`adminv2_performance_phase2_load_path_architecture.md`](../adminv2_performance_phase2_load_path_architecture.md)
+- [`adminv2_performance_phase5_visual_loading.md`](../../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_phase5_visual_loading.md)
 
 **Implementation references:**
 - Phase 3–4–5 code under `web/app/adminV2/`, `web/components/admin/`, `web/lib/perf/`, `web/lib/admin/`

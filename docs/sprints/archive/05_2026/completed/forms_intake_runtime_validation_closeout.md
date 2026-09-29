@@ -249,7 +249,7 @@ Prefilled fields, blank/manual fields, standard (no CRM) link, and packet run-th
 - [forms-intake-runtime-phase.md](./forms-intake-runtime-phase.md)
 - [../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md](../sprints/archive/05_2026/forms_runtime_test_1_external_intake_opportunity.md)
 - [../product/documents-and-forms.md](../product/documents-and-forms.md)
-- [../sprints/archive/05_2026/forms_intelligence_document_infrastructure.md](../sprints/archive/05_2026/forms_intelligence_document_infrastructure.md)
+- [../sprints/archive/05_2026/forms_intelligence_document_infrastructure.md](../forms_intelligence_document_infrastructure.md)
 
 ---
 

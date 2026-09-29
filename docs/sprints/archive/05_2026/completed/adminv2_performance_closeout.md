@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/05_2026/completed/adminv2_performance_closeout.md`  
 **Status:** Closed (May 2026). Broad speed sprint **paused**; follow-ups are scoped roadmap items only.  
-**Prerequisites:** [adminv2_reveal_doctrine.md](../adminv2_reveal_doctrine.md), [adminv2_speed_sprint.md](../adminv2_speed_sprint.md), [adminv2_route_shell_pipeline.md](../adminv2_route_shell_pipeline.md), [adminv2_drawer_pipeline.md](../adminv2_drawer_pipeline.md), [adminv2_drawer_performance_hardening_phase0.md](../adminv2_drawer_performance_hardening_phase0.md).
+**Prerequisites:** [adminv2_reveal_doctrine.md](../adminv2_reveal_doctrine.md), [adminv2_speed_sprint.md](../../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_speed_sprint.md), [adminv2_route_shell_pipeline.md](../../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_route_shell_pipeline.md), [adminv2_drawer_pipeline.md](../adminv2_drawer_pipeline.md), [adminv2_drawer_performance_hardening_phase0.md](../../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_performance_hardening_phase0.md).
 
 ---
 

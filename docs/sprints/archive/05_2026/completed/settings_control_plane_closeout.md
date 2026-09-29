@@ -4,7 +4,7 @@
 **Status:** **Closed (foundation checkpoint)**  
 **Scope:** Fast pass on **Layouts**, **Actions**, and **Workflow/Status ownership** — no new builder architecture.
 
-**Canonical system docs:** [`docs/system/configuration-system.md`](../../system/configuration-system.md) (four-plane model), [`docs/archive/2026-06-superseded-system/actions-and-workflows.md`](../../system/actions-and-workflows.md) (placement vs execution).
+**Canonical system docs:** [`docs/system/configuration-system.md`](../../../../system/configuration-system.md) (four-plane model), [`docs/archive/2026-06-superseded-system/actions-and-workflows.md`](../../system/actions-and-workflows.md) (placement vs execution).
 
 ---
 

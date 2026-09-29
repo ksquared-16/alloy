@@ -10,15 +10,15 @@
 
 | Doc | What it locks |
 |-----|----------------|
-| [`docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md`](../sprints/archive/05_2026/layout_field_behavior_semantics_v1.md) | **Structure vs surface:** `field_definitions` = registry; `field_placements_v1` = drawer behavior overlay; resolution order placement → definition → preset |
-| [`docs/system/configuration-system.md`](../system/configuration-system.md) | Four-plane control plane; mutation classes A/B/B2/C; Fields vs Layouts ownership |
-| [`docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md) §10 | Layout Configuration consumes runtime context; no grain hardcoding in layout JSON; field **refs** not enrollment branches |
+| [`docs/sprints/archive/05_2026/layout_field_behavior_semantics_v1.md`](../../sprints/archive/05_2026/layout_field_behavior_semantics_v1.md) | **Structure vs surface:** `field_definitions` = registry; `field_placements_v1` = drawer behavior overlay; resolution order placement → definition → preset |
+| [`docs/system/configuration-system.md`](../../system/configuration-system.md) | Four-plane control plane; mutation classes A/B/B2/C; Fields vs Layouts ownership |
+| [`docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../../sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md) §10 | Layout Configuration consumes runtime context; no grain hardcoding in layout JSON; field **refs** not enrollment branches |
 | [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/runtime_convergence_inventory.md`](./runtime_convergence_inventory.md) | Layout runtime north star (`entity_layouts` / `LayoutDoc`); field catalog feeds layout item refs |
 
 **Related (do not redesign):**
 
 - [`required_information_v2_operational_readiness_framework.md`](../sprints/archive/06_2026/required_information_v2_operational_readiness_framework.md) — readiness spine for lifecycle consumers
-- [`completed/readiness_phase_1_closeout.md`](../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md) — Phase 1 shipped; field-catalog convergence extends identity, not readiness architecture
+- [`completed/readiness_phase_1_closeout.md`](../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md) — Phase 1 shipped; field-catalog convergence extends identity, not readiness architecture
 - [`documents-and-forms.md`](../product/documents-and-forms.md) — forms schema boundary
 
 ---
@@ -191,7 +191,7 @@ Layout consumers **compose and behave** using registry keys; they must not maint
 | FC-1.5 | **Layout Contract V1 regression suite** — Extend layout integrity + field policy tests to include inquiry_child keys used in inquiry children grid | No required placement for keys absent from registry |
 | FC-2.* | Policy/storage (see §1) | Adapter registry-first |
 
-**Layout Configuration compatibility:** Layout blocks that display field values must receive **resolved values** from runtime/context payloads, not re-query ad hoc catalogs. Field catalog convergence supplies **ref keys** in layout JSON; grain/subject logic stays in `QueueRowContext` / drawer attach — not in catalog modules. System block → contract mapping: [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7.5; field `entity_scope` + `option_source` for dependent selects: §4.5, §7.5.
+**Layout Configuration compatibility:** Layout blocks that display field values must receive **resolved values** from runtime/context payloads, not re-query ad hoc catalogs. Field catalog convergence supplies **ref keys** in layout JSON; grain/subject logic stays in `QueueRowContext` / drawer attach — not in catalog modules. System block → contract mapping: [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../../sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7.5; field `entity_scope` + `option_source` for dependent selects: §4.5, §7.5.
 
 ### Risks
 

@@ -1,7 +1,7 @@
 # Operational Intelligence Platform V1 Complete
 
 **Status:** Product milestone — complete and frozen (2026-07-28)  
-**Platform freeze:** [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)  
+**Platform freeze:** [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)  
 **Next:** Phase 2 consumers present **Answers** — [`PHASE-2-CONSUMPTION-MODEL.md`](./PHASE-2-CONSUMPTION-MODEL.md)
 
 ---

@@ -27,7 +27,7 @@
 | Follow-on | Notes |
 |-----------|--------|
 | **Settings Config Management** | Rename/reorder/hide work-unit domains and Needs Attention buckets via admin UI — extend `work_units.queue_definition` + `metadata.opportunity_attention_rules` (Card 15 spec in § below). |
-| **Waitlist Orchestration continuation** | Phase 2 pilot → production hardening, capacity/forecast engines — see [waitlist_orchestration_phase2_architecture.md](../waitlist_orchestration_phase2_architecture.md). |
+| **Waitlist Orchestration continuation** | Phase 2 pilot → production hardening, capacity/forecast engines — see [waitlist_orchestration_phase2_architecture.md](../later-phase/waitlist_orchestration_phase2_architecture.md). |
 | **Strict-mode activation** | Flip org/runtime gates after backfill + QA sign-off. |
 | **Candidate / OCM cleanup** | Vocabulary aliases, backfill hardening, deprecate opportunity-only enrollment assumptions in seeds. |
 | **Server-side queue filtering / search** | Move record filters from client preview page to API when scale requires. |
@@ -45,11 +45,11 @@
 
 | Topic | Document / code |
 |-------|-----------------|
-| Waitlist Phase 2 | [waitlist_orchestration_phase2_architecture.md](../waitlist_orchestration_phase2_architecture.md), [pilot playbook](../waitlist_orchestration_phase2_pilot_playbook.md) |
+| Waitlist Phase 2 | [waitlist_orchestration_phase2_architecture.md](../later-phase/waitlist_orchestration_phase2_architecture.md), [pilot playbook](../later-phase/waitlist_orchestration_phase2_pilot_playbook.md) |
 | Work unit consolidation (May 2026) | [work_unit_runtime_consolidation_audit.md](../work_unit_runtime_consolidation_audit.md) |
 | Enrollment pipeline canonical | [canonical_enrollment_operating_model_seed.md](../canonical_enrollment_operating_model_seed.md), `web/lib/config/enrollmentPipelineQueueDefinitionV2.ts` |
 | CRM / workspace | `docs/product/crm-system.md`, `docs/archive/2026-06-superseded-system/workspace-system.md` |
-| Intake case doctrine | [forms_intake_case_operational_model.md](../forms_intake_case_operational_model.md) |
+| Intake case doctrine | [forms_intake_case_operational_model.md](./forms_intake_case_operational_model.md) |
 | Placement facts | `web/lib/orchestration/placement/adapters/opportunityPlacementFacts.ts`, `placementCandidateFacts.ts` |
 | Inquiry children | `supabase/migrations/20260430143000_opportunity_customer_members_outcome_status_key.sql`, `OpportunityInquiryChildrenSection.tsx` |
 
@@ -2650,7 +2650,7 @@ Implementation should extend existing `work_units.queue_definition` + department
 
 | Aspect | Detail |
 |--------|--------|
-| **Table** | `placement_candidates` (Phase 2 migration — see [waitlist architecture](../waitlist_orchestration_phase2_architecture.md) §11) |
+| **Table** | `placement_candidates` (Phase 2 migration — see [waitlist architecture](../later-phase/waitlist_orchestration_phase2_architecture.md) §11) |
 | **`status` values** | `active` \| `paused` \| `withdrawn` \| `placed` — **orchestration substate**, not enrollment marketing lifecycle |
 | **Grain** | One row per **child (OCM) × `program_room_cohort_key`** (synthetic fallback when no children) |
 | **Authority** | Waitlist **ordering** and manual pin overrides; **not** CRM lifecycle SoT |

@@ -1,6 +1,6 @@
 # Operational Mutation Platform
 
-**Status:** Superseded — see [`business-process-execution-platform.md`](business-process-execution-platform.md) (canonical doctrine, July 2026).
+**Status:** Superseded — see [`business-process-execution-platform.md`](../../platform/modules/business-process-execution-platform.md) (canonical doctrine, July 2026).
 
 This file is retained for historical reference. The Execution Runtime mechanics below remain accurate. The framing has been elevated: mutations are the engine underneath the Business Process Execution Platform, not the product name.
 

@@ -1,6 +1,6 @@
 # Actions, workflows, and events
 
-> **Canonical summary:** [`docs/platform/modules/actions-and-workflows.md`](../platform/modules/actions-and-workflows.md)
+> **Canonical summary:** [`docs/platform/modules/actions-and-workflows.md`](../../platform/modules/actions-and-workflows.md)
 
 ## Purpose
 

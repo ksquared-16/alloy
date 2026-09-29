@@ -1,6 +1,6 @@
 # Tour Scheduling Phase 2 — Band A Readiness (Implementation Lock)
 
-**Status:** **CLOSED** — Band A shipped (Batches 1–6, May 2026). See **[`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md)** for staging QA outcomes and operational learnings.  
+**Status:** **CLOSED** — Band A shipped (Batches 1–6, May 2026). See **[`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md)** for staging QA outcomes and operational learnings.  
 **Date:** 2026-05-27  
 **Parent:** [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md)  
 **Scope:** Band A only — Communications + Reminder Foundation (cards A1–A11).
@@ -727,7 +727,7 @@ void runTourCommsAfterBookingMutation(supabase, { booking, kind, previous }).cat
 
 ## Band A closeout (Batches 1–6 shipped)
 
-**Status:** **Complete** — see **[`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md)** for final QA outcomes, operational learnings, and Band B+ deferrals. Summary below retained for implementers.
+**Status:** **Complete** — see **[`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md)** for final QA outcomes, operational learnings, and Band B+ deferrals. Summary below retained for implementers.
 
 ### Shipped capabilities
 
@@ -854,8 +854,8 @@ Body/subject come from `body_snapshot` / `subject_snapshot` — **no template re
 | Doc / path | Role |
 |------------|------|
 | [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md) | Band A scope + doctrine |
-| [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md) | Band A closeout + QA learnings |
-| [`docs/product/communications.md`](../../archive/2026-06-product/communications.md) | Canonical comms |
+| [`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) | Band A closeout + QA learnings |
+| [`docs/product/communications.md`](../../../2026-06-product/communications.md) | Canonical comms |
 | `web/lib/communications/communicationScheduledSendsService.ts` | Scheduled send processor |
 | `web/lib/communications/communicationScheduledSendProcessMetadata.ts` | Process-due metadata augment |
 | `web/lib/tours/bookings/tourBookingService.ts` | Mutation hooks |

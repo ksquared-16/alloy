@@ -223,7 +223,7 @@ All durable builder config lives on **`departments.metadata`** unless noted.
 
 ### 2.5 Save / reload issues
 
-Documented fixes (June 2026 — [`lifecycle_builder_configuration_completion_fixes.md`](./lifecycle_builder_configuration_completion_fixes.md)):
+Documented fixes (June 2026 — [`lifecycle_builder_configuration_completion_fixes.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_builder_configuration_completion_fixes.md)):
 
 | Issue | Root cause | Current mitigation |
 |-------|------------|-------------------|

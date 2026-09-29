@@ -22,9 +22,9 @@
 | Runtime validation | [`docs/system/forms-intake-runtime-validation.md`](../../system/forms-intake-runtime-validation.md) |
 | Operating phase | [`docs/system/forms-intake-runtime-phase.md`](../../system/forms-intake-runtime-phase.md) |
 | Prefill / launch context | [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md) |
-| Inbox operationalization (OI-4) | [`forms_intake_inbox_operationalization.md`](./forms_intake_inbox_operationalization.md) |
-| Demo childcare test | [`forms_runtime_test_2d_demo_childcare_intake.md`](./forms_runtime_test_2d_demo_childcare_intake.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
+| Inbox operationalization (OI-4) | [`forms_intake_inbox_operationalization.md`](../forms_intake_inbox_operationalization.md) |
+| Demo childcare test | [`forms_runtime_test_2d_demo_childcare_intake.md`](../../../../archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2d_demo_childcare_intake.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../../platform/modules/documents-and-forms.md) |
 
 ---
 

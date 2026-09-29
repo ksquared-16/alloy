@@ -2,7 +2,7 @@
 
 **Branch:** `feat/configuration-runtime-phase-3`  
 **Status:** Shipped (June 2026)  
-**Canonical doctrine:** [`docs/system/configuration-mode-doctrine.md`](../../system/configuration-mode-doctrine.md)
+**Canonical doctrine:** [`docs/system/configuration-mode-doctrine.md`](../../../system/configuration-mode-doctrine.md)
 
 ---
 

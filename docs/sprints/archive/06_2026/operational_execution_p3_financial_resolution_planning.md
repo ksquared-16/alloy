@@ -221,7 +221,7 @@ Resolve these (decision-memo style, like the P1 grain memo) before authorizing P
 
 ## 11. Decision memo — P3 implementation gates
 
-> **Ratified (June 2026):** The five P3.1-gating decisions (Q5, Q6, Q7, Q9, Q11) are **locked into doctrine** at [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "Ratified P3.1 implementation gates." That doctrine is canonical; this memo retains the full rationale, alternatives, and migration/back-compat analysis. Deferred items (invoices, subsidy, deposits, responsibility parties, cadence/proration, statement grouping) remain open per the gating table below.
+> **Ratified (June 2026):** The five P3.1-gating decisions (Q5, Q6, Q7, Q9, Q11) are **locked into doctrine** at [`../../platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md) → "Ratified P3.1 implementation gates." That doctrine is canonical; this memo retains the full rationale, alternatives, and migration/back-compat analysis. Deferred items (invoices, subsidy, deposits, responsibility parties, cadence/proration, statement grouping) remain open per the gating table below.
 
 Resolves the §10 open questions into ratifiable decisions. Format per question: **Recommended decision · Alternatives · Doctrine fit · Migration impact · Backward-compat impact · Risks/tradeoffs · Decision language** (the last is drop-in text for the planning/doctrine doc). The three focus questions (#5, #6, #7) carry the preferred direction supplied with this prompt.
 
@@ -401,7 +401,7 @@ Resolves the §10 open questions into ratifiable decisions. Format per question:
 
 ## 12. P3.1 status — built (June 2026)
 
-The five gating decisions (§11 Q5/Q6/Q7/Q9/Q11) are **implemented** as additive substrate generalization. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.1 as-built". Summary:
+The five gating decisions (§11 Q5/Q6/Q7/Q9/Q11) are **implemented** as additive substrate generalization. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md) → "P3.1 as-built". Summary:
 
 - **Migration:** `supabase/migrations/20260630120000_financial_substrate_generalization_p3_1.sql` — applies cleanly + idempotently; functionally verified on a local DB (job compat, draft recalc, post, blocked mutation/void/delete, status advance, `source_charge_id` correction, `source_present`/`charge_category`/`billable_source_type` CHECKs).
 - **Tables generalized:** `charges`, `ledger_transactions`, `gl_journal_lines` (generic `billable_source_*`); `charges` also gains additive `charge_category`. **One ledger, one GL** — no new financial tables.
@@ -417,7 +417,7 @@ Deferred sub-phases unchanged: rate plans (P3.2), service agreements / responsib
 
 ## 13. P3.2 status — built (June 2026)
 
-Rate configuration + **Rate Resolution** (pure read model) are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.2 as-built". Summary:
+Rate configuration + **Rate Resolution** (pure read model) are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md) → "P3.2 as-built". Summary:
 
 - **Migration:** `supabase/migrations/20260701120000_childcare_rate_plans_p3_2.sql` — applies cleanly + idempotently; functionally verified on a local DB (scope inheritance, vocab CHECKs, scope-shape, rule/plan org consistency, effective-range, hook vocab).
 - **Tables:** `childcare_rate_plans` (scoped, effective-dated, explicit `currency_code`, `billing_basis`, `calculation_strategy`, nullable proration/cadence hooks) and `childcare_rate_rules` (priced lines keyed by `schedule_basis` × `rate_basis`, currency inherited from plan). Reuses the P1 scope model + `validate_childcare_config_scope`. Config-posture RLS.
@@ -432,7 +432,7 @@ Deferred sub-phases unchanged: **Charge Resolution** (emits draft childcare char
 
 ## 14. P3.3 status — built (June 2026)
 
-Draft **Charge Resolution** + a **minimum responsibility shape** are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md) → "P3.3 as-built". Summary:
+Draft **Charge Resolution** + a **minimum responsibility shape** are **implemented**. Authoritative as-built lives in [`../../platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md) → "P3.3 as-built". Summary:
 
 - **No migration.** P3.3 adds no schema. It composes existing substrate (`charges.metadata`, `charge_category='tuition'`, `billable_source_type='enrollment_agreement'`, `currency_code`, `service_date`) and committed-enrollment relationships. Responsibility is resolved from the agreement's canonical household/account (`customer_id`, falling back to `customer_member_id`) and stamped on `charge.metadata.responsibility`.
 - **Pure read model:** `web/lib/financials/chargeResolution/{scheduleBasis,billableQuantity,responsibility,resolveDraftCharges}.ts`. Maps `schedule_pattern → schedule_basis`, derives billable quantity per `rate_basis` × `calculation_strategy` (`scheduled` from schedule intent, `attendance_actual` from P2 facts, `hybrid` = scheduled fallback flagged, `fixed` = flat, `hourly` requires explicit hours), and composes a deterministic `DraftChargeIntent` with `resolution_key = tuition:{agreement}:{period}:{schedule_basis}:{rate_rule}`.

@@ -1,6 +1,6 @@
 # Operating doctrine
 
-> **Canonical (June 2026 rebaseline):** Documentation rules → [`docs/platform/governance/documentation-governance.md`](../platform/governance/documentation-governance.md). Operational doctrine → [`docs/platform/governance/design-and-operational-doctrine.md`](../platform/governance/design-and-operational-doctrine.md). This file retains expanded deployment/tenancy detail during transition.
+> **Canonical (June 2026 rebaseline):** Documentation rules → [`docs/platform/governance/documentation-governance.md`](../../platform/governance/documentation-governance.md). Operational doctrine → [`docs/platform/governance/design-and-operational-doctrine.md`](../../platform/governance/design-and-operational-doctrine.md). This file retains expanded deployment/tenancy detail during transition.
 
 ## Purpose
 

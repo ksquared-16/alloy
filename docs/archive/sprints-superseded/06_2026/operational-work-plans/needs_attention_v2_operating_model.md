@@ -7,11 +7,11 @@
 
 **Canonical inputs (frozen unless major architectural issue):**
 
-- [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
-- [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
+- [`completed/lifecycle_builder_hardening_closeout.md`](../../../../sprints/archive/06_2026/completed/lifecycle_builder_hardening_closeout.md)
+- [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md)
 - [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
-- [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) (§4 Needs Attention architecture — planning baseline)
+- [`completed/readiness_phase_1_closeout.md`](../../../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md) (§4 Needs Attention architecture — planning baseline)
 
 **Authority:** This document is the canonical reference for Needs Attention V2 implementation planning. Product copy, resolver extensions, and Lifecycle Builder attention profiles should align with **Human Awareness Doctrine**, **Canonical Responsibilities**, **Task Relationship Doctrine**, and §2–§10 unless an explicit exception is recorded in §11.
 
@@ -949,7 +949,7 @@ Use frozen vocabulary — not "violations," not "config only."
 
 ## Appendix B — Vocabulary alignment
 
-Per [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md):
+Per [`completed/lifecycle_canonical_vocabulary.md`](../../../../sprints/archive/06_2026/completed/lifecycle_canonical_vocabulary.md):
 
 | Use | Avoid |
 |-----|-------|

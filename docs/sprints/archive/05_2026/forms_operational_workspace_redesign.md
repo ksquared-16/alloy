@@ -10,9 +10,9 @@
 | Program | Document |
 |---------|----------|
 | Visual system PX-0–PX-2 | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) |
-| Interaction / case-file doctrine | [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) |
+| Interaction / case-file doctrine | [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md) |
 | Packet review MVP | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../platform/modules/documents-and-forms.md) |
 
 ---
 
