@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
 import { resolveParticipantDecisionScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
@@ -493,10 +494,28 @@ export default function CurrentWorkCard({
                 setHandoffNotice(null);
                 invokeHeaderDelegate(plan.action);
                 return;
-            case "command_surface":
+            case "command_surface": {
                 setHandoffNotice(null);
+                /*
+                 * A declared body means the command is REVIEWED before it runs. Without one the
+                 * command surface runs immediately, which is correct for a capability whose inputs
+                 * configuration bound and whose effect is local — so this changes nothing for
+                 * `stage_work.start` and everything for a command that sends a family paperwork.
+                 */
+                const declaredBody = canonicalActionDefinition(
+                    plan.action.handlerKey ?? plan.action.key,
+                )?.commandSurfaceBody;
+                if (declaredBody) {
+                    if (!isWorkspace) {
+                        openWorkspace({ kind: "action", actionKey: action.key });
+                        return;
+                    }
+                    setActivePanelAction(action);
+                    return;
+                }
                 void runCommandSurfaceAction(plan.action);
                 return;
+            }
             case "cancel_tour": {
                 setHandoffNotice(null);
                 if (!mutation?.tour?.cancelTour) {

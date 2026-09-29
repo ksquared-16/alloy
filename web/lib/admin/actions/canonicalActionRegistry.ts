@@ -9,7 +9,11 @@
  */
 
 import type { ActionRegistryEntry } from "@/lib/admin/actions/actionDefinitionRegistry";
-import { ACTION_BUTTON_LIBRARY, type CapabilityInteractionHost } from "@/lib/admin/actions/actionDefinitionRegistry";
+import {
+    ACTION_BUTTON_LIBRARY,
+    type CapabilityInteractionHost,
+    type CommandSurfaceBody,
+} from "@/lib/admin/actions/actionDefinitionRegistry";
 import type { RelationshipActionKey } from "@/lib/admin/relationship/relationshipActionContract";
 import {
     RELATIONSHIP_ACTION_REGISTRY,
@@ -70,6 +74,13 @@ export type CanonicalActionDefinition = {
     settingsConfigurable: boolean;
     /** Capability-declared interaction host; the runtime resolves the host from this, not the key. */
     interactionHost?: CapabilityInteractionHost;
+    /**
+     * The body the command surface reviews before running, carried from the library declaration.
+     *
+     * Mapped through rather than re-declared: the library is where a capability states how it is
+     * interacted with, and a second place to say it is a second answer.
+     */
+    commandSurfaceBody?: CommandSurfaceBody;
 };
 
 const LAYOUT_CONTEXT_ALL: readonly LayoutEditorActionPickerContext[] = [
@@ -189,6 +200,7 @@ function platformCanonicalEntry(entry: ActionRegistryEntry): CanonicalActionDefi
         runtimeWired: true,
         settingsConfigurable: entry.settingsConfigurable,
         interactionHost: entry.interactionHost,
+        commandSurfaceBody: entry.commandSurfaceBody,
     };
 }
 
