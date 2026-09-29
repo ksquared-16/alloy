@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-29
+supersedes: []
+---
+
 # Technical discovery questions
 
 These are the things Alloy cannot determine from its own side. Each one changes
