@@ -15,10 +15,19 @@ import { actionableOnOrAfter, resolveAutopayCollectible } from "@/lib/financials
 const ORG = "org-1";
 const CUSTOMER = "cust-1";
 
-vi.mock("@/lib/financials/childcarePaymentService", () => ({
-    /* Outstanding is canonical money arithmetic owned elsewhere; this suite is about WHICH charges. */
-    readChargeBalance: vi.fn(async (_s: unknown, _o: string, chargeId: string) => ({
-        outstandingCents: Number(chargeId.split("-").pop()) || 0,
+/*
+ * THE COLLECTIBLE CEILING IS CANONICAL MONEY ARITHMETIC OWNED ELSEWHERE, and this suite is about
+ * WHICH charges have come due — so it is mocked, exactly as `readChargeBalance` was before it.
+ *
+ * Autopay now asks `resolveFamilyCollectible` rather than for the raw outstanding, because the
+ * collection engine measures a request against the collectible ceiling and refuses anything above
+ * it. Real-clock certification caught a subsidised charge being refused on every wake for that
+ * reason. With no suppression the two numbers are equal, which is why every expectation in this
+ * file is unchanged.
+ */
+vi.mock("@/lib/financials/subsidy/resolveFamilyCollectible", () => ({
+    resolveFamilyCollectible: vi.fn(async (_s: unknown, args: { chargeId: string }) => ({
+        currentlyCollectibleCents: Number(args.chargeId.split("-").pop()) || 0,
     })),
 }));
 

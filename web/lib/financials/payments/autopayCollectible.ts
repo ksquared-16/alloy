@@ -7,7 +7,9 @@
  * collection, every time, and it reads the same authorities the operator's own screen reads:
  *
  *   · which sources bill this account ...... the customer itself and its enrolment agreements
- *   · what each charge still owes ............ `readChargeBalance` (canonical outstanding)
+ *   · what each charge may be collected for . `resolveFamilyCollectible` (collectible ceiling,
+ *     which is outstanding MINUS any submitted subsidy claim — asking for raw outstanding is
+ *     refused by the collection engine, so it is not what Autopay may request)
  *
  * No total is stored anywhere. There is no Autopay balance, because a second balance would be free
  * to disagree with the first.
@@ -21,7 +23,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
-import { readChargeBalance } from "@/lib/financials/childcarePaymentService";
+import { resolveFamilyCollectible } from "@/lib/financials/subsidy/resolveFamilyCollectible";
 
 export type AutopayDueCharge = {
     chargeId: string;
@@ -123,9 +125,27 @@ export async function resolveAutopayCollectible(
             continue;
         }
 
-        const balance = await readChargeBalance(supabase, orgId, chargeId);
-        if (balance.outstandingCents <= 0) continue;
-        due.push({ chargeId, dueDate, outstandingCents: balance.outstandingCents });
+        /*
+         * ── ASK FOR WHAT MAY BE COLLECTED, NOT WHAT IS OWED ────────────────────────────────
+         *
+         * These are different numbers whenever a subsidy claim has been submitted against the
+         * charge: `currentlyCollectibleCents = outstanding - submittedClaimSuppressionCents`.
+         *
+         * Autopay used to request the raw outstanding, and `createCardCollection` measures the
+         * request against the collectible ceiling and REFUSES anything above it — deliberately,
+         * because clamping would silently take a different amount than was authorized. So a
+         * subsidised charge was refused `amount_exceeds_collectible` on every single daily wake
+         * and could never be collected by Autopay at all. Certified on the real clock at
+         * 2026-09-29T21:00Z: two charges collected, one refused for exactly this reason.
+         *
+         * Collecting the collectible portion is what "amount due" already means here — the
+         * family owes their share now and the subsidy is expected from somebody else. This
+         * narrows what Autopay asks for; it can never broaden it.
+         */
+        const position = await resolveFamilyCollectible(supabase, { orgId, chargeId });
+        const collectibleCents = Math.max(0, position.currentlyCollectibleCents);
+        if (collectibleCents <= 0) continue;
+        due.push({ chargeId, dueDate, outstandingCents: collectibleCents });
     }
 
     due.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.chargeId.localeCompare(b.chargeId));
