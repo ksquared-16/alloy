@@ -230,8 +230,25 @@ export async function previewParticipantPacketLaunch(
     if (financial.length) {
         const keys = financial.map((r) => (r.ref as { charge_template_key: string }).charge_template_key);
         const labels = new Map<string, string>();
-        const { data: templates } = await supabase
-            .from("charge_templates").select("template_key, label, is_active").eq("org_id", orgId).in("template_key", keys);
+        /*
+         * `financial_charge_templates`, not `charge_templates`. The shorter name is what the
+         * requirement's field is called (`charge_template_key`) and it is NOT the table — naming the
+         * table after the field returned an error that this read then swallowed, so the operator was
+         * shown the raw key `registration_fee` where a name belongs. Swallowing it is what turned a
+         * wrong name into a silent downgrade instead of a failure, so the error is reported now.
+         */
+        const { data: templates, error: templateError } = await supabase
+            .from("financial_charge_templates")
+            .select("template_key, label, is_active")
+            .eq("org_id", orgId)
+            .in("template_key", keys);
+        if (templateError) {
+            return {
+                ok: false,
+                code: "read_failed",
+                detail: `The fee's name could not be read (${templateError.message.trim()}).`,
+            };
+        }
         for (const t of (templates ?? []) as { template_key: string; label: string | null; is_active: boolean }[]) {
             if (t.is_active !== false) labels.set(t.template_key, (t.label ?? "").trim() || t.template_key);
         }
