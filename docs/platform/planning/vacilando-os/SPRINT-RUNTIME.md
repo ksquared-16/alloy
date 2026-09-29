@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-25
+supersedes: []
+---
+
 # The Sprint Runtime
 
 *The single, continuously-maintained operational record for one long-running engineering initiative — the artifact a future session resumes from without rereading anything.*

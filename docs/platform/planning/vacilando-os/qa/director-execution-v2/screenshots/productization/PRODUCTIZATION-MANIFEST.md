@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Mission Dashboard V1 — screenshot manifest
 
 Mission: **Access & Identity V2** (`msn_b1c2aa7b4e0cc69da4`)

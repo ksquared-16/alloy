@@ -1,6 +1,6 @@
 ---
 title: Conversation Platform V1 — Implementation Planning Package
-status: proposal — awaiting Kelly's approval
+status: sprint
 stage: discovery
 sprint: conversation-platform-v1-discovery (slot 2)
 base: origin/staging @ 3fc2e0f4e

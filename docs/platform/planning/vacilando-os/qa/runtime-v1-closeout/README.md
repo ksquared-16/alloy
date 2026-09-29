@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Vacilando Runtime V1 Closeout — QA package
 
 Evidence and inventories produced when separating runtime validation history from active Alloy product work.

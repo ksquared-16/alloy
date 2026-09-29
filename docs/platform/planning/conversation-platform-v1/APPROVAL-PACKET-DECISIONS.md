@@ -1,6 +1,6 @@
 ---
 title: Conversation Platform V1 — Twelve-Decision Approval Packet
-status: D3 DECIDED · D1, D2, D4–D12 open
+status: sprint
 date: 2026-07-30
 ---
 

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Access & Roles V2 — Discovery & Specification
 
 **Mission** `msn_71e1e393abfebf08fe` · **Package** `pkg_4ee8a61376e1252904` (v2) · **Capability** `cap_access_roles`

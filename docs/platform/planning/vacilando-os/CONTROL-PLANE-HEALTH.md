@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-04
+supersedes: []
+---
+
 # Vacilando control-plane health (V2)
 
 Represents the Vacilando HTTP process itself (not a worker slot).

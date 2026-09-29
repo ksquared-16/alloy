@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Engineering Partnership Model
 
 *What it feels like to engineer beside Director — and how that relationship evolves from the first day to the thousandth.*

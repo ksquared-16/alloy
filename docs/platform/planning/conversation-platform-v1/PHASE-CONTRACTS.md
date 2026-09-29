@@ -1,6 +1,6 @@
 ---
 title: Conversation Platform V1 — Phase Contracts
-status: proposal — Phase 0 authorized, Phases 1–5 awaiting approval
+status: sprint
 date: 2026-07-30
 ---
 

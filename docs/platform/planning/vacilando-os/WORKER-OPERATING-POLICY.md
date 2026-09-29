@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Worker Operating Policy — Forward Progress & Command Budgets
 
 *How every worker in a Vacilando-managed slot operates when a command is long-running. The slot governs how the worker operates, not merely where.*

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # 02 — Canonical access & identity model
 
 > **Specification.** The authority model Alloy is to be measured against: principals, subjects, roles,

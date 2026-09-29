@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Engineering Operations Center
 
 *The foundational doctrine for how engineering execution is operated inside Vacilando.*

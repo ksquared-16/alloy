@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Counsel — Phase 1 live evidence (after)
 
 Captured from live :3020 (wt6, real seven conversations). Machinery invisible; signals reused (confidence, gap_report.findings, real mission store).

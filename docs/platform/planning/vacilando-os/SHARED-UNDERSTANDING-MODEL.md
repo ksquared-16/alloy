@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Shared Understanding Model
 
 *The living engineering state Director and the operator build together — what it is, what it contains, how it forms, changes, converges, and becomes strong enough to rely on.*

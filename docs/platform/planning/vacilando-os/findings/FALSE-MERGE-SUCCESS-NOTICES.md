@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: open
+status: sprint
 severity: trust
 last_reviewed: 2026-09-04
 ---

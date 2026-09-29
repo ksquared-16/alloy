@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Code Retirement Ledger — Phase 0 (interim)
 
 > **SUPERSEDED.** The permanent ledger is

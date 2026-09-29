@@ -1,6 +1,6 @@
 ---
 owner: operator
-status: draft
+status: proposed
 last_reviewed: 2026-08-25
 supersedes: []
 ---

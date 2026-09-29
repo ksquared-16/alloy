@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Decision Experience V2 — Before / After
 
 **Mission under test:** `msn_2d054741a54698fa4c`  

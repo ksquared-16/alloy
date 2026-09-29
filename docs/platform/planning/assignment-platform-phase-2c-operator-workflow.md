@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-26
+supersedes: []
+---
+
 # Assignment Platform — Operator workflow (canonical)
 
 **Owner:** platform · **Status:** active · **Last reviewed:** 2026-07-25

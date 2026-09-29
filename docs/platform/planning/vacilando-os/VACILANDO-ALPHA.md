@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Vacilando Alpha — Certification
 
 Tag: `vacilando-alpha` @ `468515926` on `staging`. Product Realization V1 complete.

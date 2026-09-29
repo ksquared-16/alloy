@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Operational Learning
 
 *How Vacilando becomes better through being operated — the capability that closes the last manual feedback loop and completes the Engineering Operating System.*

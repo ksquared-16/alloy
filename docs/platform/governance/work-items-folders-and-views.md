@@ -1,3 +1,10 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-09-11
+supersedes: []
+---
+
 # Work Items — folders, views, waiting, due state, assignment
 
 The product decisions this workspace has to settle, and what the runtime actually does today.

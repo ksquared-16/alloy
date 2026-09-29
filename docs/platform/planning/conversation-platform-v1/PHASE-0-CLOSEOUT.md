@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Phase 0 — closeout
 
 **Status:** complete, pending Kelly's acceptance.

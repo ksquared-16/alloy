@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Shared Understanding — Phase 2 live evidence (after)
 
 Captured from live :3020. Projected from durable state (Product Definition + Capability + Package + mission store); reuses Phase-1 selectFrontier/attemptCounsel (one source of truth). No transcript input.

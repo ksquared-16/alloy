@@ -1,6 +1,6 @@
 ---
 title: Phase 0 — Pre-existing Test Baseline
-status: recorded
+status: sprint
 date: 2026-07-31
 base: origin/staging @ 3fc2e0f4e (plus Phase 0 docs + harness; no production code changed)
 ---

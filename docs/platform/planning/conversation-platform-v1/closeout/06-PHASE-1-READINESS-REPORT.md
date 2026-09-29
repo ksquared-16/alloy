@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Phase 1 — Readiness Report
 
 **Date:** 2026-07-31

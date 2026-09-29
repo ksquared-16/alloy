@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Phase 1 — Implementation Plan (rewritten)
 
 **Supersedes** the Phase 1 section of `PHASE-CONTRACTS.md`.

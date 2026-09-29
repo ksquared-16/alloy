@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-01
+supersedes: []
+---
+
 # Lead Operating Model V1
 
 **Status: APPROVED and CERTIFIED (B1.7). 12/12, `rc=0`.**

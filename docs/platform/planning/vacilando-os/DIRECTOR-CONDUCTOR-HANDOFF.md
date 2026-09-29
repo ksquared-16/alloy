@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-29
+supersedes: []
+---
+
 # Vacilando — Director Conductor: Session Handoff (2026‑07‑28)
 
 **Read this top‑to‑bottom before touching anything.** It hands off a live, in‑progress

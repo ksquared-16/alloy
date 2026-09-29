@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Intelligence V1 — Upstream Preparation Layer
 
 **Status:** DESIGN / PROPOSAL — no runtime code written. Awaiting Kelly's approval before implementation.

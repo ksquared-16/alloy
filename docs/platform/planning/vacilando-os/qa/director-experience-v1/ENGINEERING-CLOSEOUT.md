@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Experience V1 — Engineering Closeout
 
 **Status:** BUILT · browser-certified end-to-end · nothing pushed/merged/promoted.
