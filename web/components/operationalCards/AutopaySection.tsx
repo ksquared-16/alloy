@@ -578,8 +578,21 @@ function AutopaySetupForm({
                         </button>
                     </p>
                 )}
-                <p className="text-[11px] leading-snug text-alloy-midnight/55">
-                    Charges already past due are not collected retroactively.
+                {/*
+                  * SAY WHAT THE FIRST RUN WILL ACTUALLY DO.
+                  *
+                  * This previously read "Charges already past due are not collected
+                  * retroactively." That was FALSE. `resolveAutopayCollectible` skips a charge only
+                  * when its actionable date is still in the FUTURE — anything already due has
+                  * passed that test, so the first scheduled run collects the existing balance too.
+                  *
+                  * On an account carrying arrears that is the difference between authorizing a
+                  * forward-looking arrangement and authorizing a collection of everything owed
+                  * today. The operator is told, and pointed at the control that caps it.
+                  */}
+                <p className="text-[11px] leading-snug text-alloy-midnight/55" data-testid="autopay-start-note">
+                    The first scheduled collection includes amounts already due, not only future
+                    charges. Set a payment limit above to cap what one collection may take.
                 </p>
             </div>
 

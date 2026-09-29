@@ -119,7 +119,15 @@ describe("business language, not schema", () => {
     it("answers the start date instead of asking it", () => {
         const src = read(AUTOPAY);
         expect(src).toMatch(/Today, for collections due from now on/);
-        expect(src).toMatch(/Charges already past due are not collected retroactively\./);
+        /*
+         * THE COPY MUST MATCH THE HANDLER. An earlier draft said past-due charges were "not
+         * collected retroactively"; `resolveAutopayCollectible` skips a charge only when its
+         * actionable date is still in the future, so anything already due IS collected on the
+         * first run. On an account carrying arrears that is a materially different authorization.
+         */
+        expect(src, "the false reassurance must not return")
+            .not.toMatch(/not collected retroactively/);
+        expect(src).toMatch(/first scheduled collection includes amounts already due/);
         /* Future-dating stays reachable — answered is not removed. */
         expect(src).toMatch(/autopay-start-change/);
     });
