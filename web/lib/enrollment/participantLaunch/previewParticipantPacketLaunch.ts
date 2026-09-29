@@ -94,7 +94,7 @@ export async function previewParticipantPacketLaunch(
 
     const { data: childRow, error: childErr } = await supabase
         .from("customer_members")
-        .select("id, display_name, first_name, last_name, customer_id, site_location_id")
+        .select("id, display_name, first_name, last_name, customer_id")
         .eq("org_id", orgId)
         .eq("id", customerMemberId)
         .maybeSingle();
@@ -102,7 +102,7 @@ export async function previewParticipantPacketLaunch(
     if (!childRow) return { ok: false, code: "child_not_found", detail: "That child is not in this organization." };
     const child = childRow as {
         id: string; display_name: string | null; first_name: string | null; last_name: string | null;
-        customer_id: string | null; site_location_id: string | null;
+        customer_id: string | null;
     };
     const childName =
         (child.display_name ?? "").trim()
@@ -116,12 +116,14 @@ export async function previewParticipantPacketLaunch(
             .from("customers").select("name").eq("org_id", orgId).eq("id", child.customer_id).maybeSingle();
         householdName = ((data as { name?: string | null } | null)?.name ?? "").trim() || null;
     }
-    let locationName: string | null = null;
-    if (child.site_location_id) {
-        const { data } = await supabase
-            .from("site_locations").select("name").eq("org_id", orgId).eq("id", child.site_location_id).maybeSingle();
-        locationName = ((data as { name?: string | null } | null)?.name ?? "").trim() || null;
-    }
+    /*
+     * No location line. `customer_members` carries no location column at all — the child's placement
+     * lives on the acquisition Opportunity and on the enrolment agreement, not on the member — so
+     * there is nothing here to read. Naming a column the table does not have is how the packet
+     * history read broke, and inventing a join for a field the preview does not need to be safe
+     * would be the same mistake with better manners.
+     */
+    const locationName: string | null = null;
 
     /*
      * The child's own OPEN journey. Read, never created: a preview that started a journey would have
@@ -129,14 +131,14 @@ export async function previewParticipantPacketLaunch(
      */
     const { data: instances, error: instErr } = await supabase
         .from("process_instances")
-        .select("id, process_key, stage_key, metadata, business_process_revision_id, subject_id, state, status")
+        .select("id, process_key, stage_key, metadata, business_process_revision_id, subject_id, state")
         .eq("org_id", orgId)
         .eq("subject_id", customerMemberId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .order("created_at", { ascending: false });
     if (instErr) return { ok: false, code: "read_failed", detail: instErr.message };
-    const open = ((instances ?? []) as (InstanceRow & { state?: string | null; status?: string | null })[])
-        .find((r) => !CONCLUDED.has(String(r.state ?? r.status ?? "").trim().toLowerCase()));
+    const open = ((instances ?? []) as (InstanceRow & { state?: string | null })[])
+        .find((r) => !CONCLUDED.has(String(r.state ?? "").trim().toLowerCase()));
 
     if (!open) {
         return {
