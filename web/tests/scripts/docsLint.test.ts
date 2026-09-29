@@ -158,3 +158,65 @@ describe("Developer Platform documentation authority", () => {
             .toMatch(/Developer Platform \/ Public API/);
     });
 });
+
+/**
+ * The internal/external API authority boundary.
+ *
+ * Packet 2 found three canonical documents that would mislead a reader — or a model — about
+ * which API contract governs what. `api-response-contract.md` called itself "the source of
+ * truth for new and migrated routes" with an `{ok, data}` / SCREAMING_SNAKE envelope and never
+ * mentioned `/api/v1`. `api-architecture.md` claimed to govern "all Alloy API work" while its
+ * surface taxonomy had no class for `/api/v1` at all. And `docs/api/README.md` still described
+ * the shipped, promoted, frozen Developer Platform as "future work" and "nothing is built".
+ *
+ * Measurement settled it: zero public response schemas carry `ok` or `correlation_id`, and the
+ * `ok: true` inside `/api/v1` routes is `perform()`'s internal discriminant, never an HTTP body.
+ * The envelopes are disjoint. These assertions keep that boundary stated rather than inferred.
+ */
+describe("internal /api/admin and external /api/v1 are bounded against each other", () => {
+    const read = (p: string) => readFileSync(path.join(repoRoot, p), "utf8");
+
+    it("the internal response contract says it is internal and points at the public authority", () => {
+        const doc = read("docs/api/api-response-contract.md");
+        expect(doc, "must scope itself to the internal surface").toMatch(/Scope:\s*Alloy's INTERNAL API only/i);
+        expect(doc, "must disclaim the external contract").toMatch(/does\s*\*\*not\*\*\s*define the external Developer Platform contract/i);
+        expect(doc, "must route to the public authority")
+            .toContain("developer-platform/external/alloy-developer-platform-specification.md");
+    });
+
+    it("the API doctrine owner classifies /api/v1 and excludes it from the internal envelope", () => {
+        const doc = read("docs/api/api-architecture.md");
+        expect(doc, "the surface taxonomy must have a class for the external platform")
+            .toMatch(/\*\*External Developer Platform\*\*\s*\|\s*`\/api\/v1\/\*\*`/);
+        expect(doc, "the internal envelope must disclaim /api/v1").toMatch(/This envelope is internal/);
+        expect(doc, "shared substrate must not be read as a shared contract")
+            .toMatch(/shared code is not a shared external[\s]*contract/i);
+    });
+
+    it("the canonical API index does not call the shipped platform future work", () => {
+        const doc = read("docs/api/README.md");
+        expect(doc, "the public platform is no longer future work")
+            .not.toMatch(/`\/api\/v1`[^.]*\) is future work/);
+        expect(doc, "and is no longer unbuilt").not.toMatch(/Specification only; nothing is built/);
+        expect(doc, "the two OpenAPI documents must be distinguished")
+            .toContain("alloy-public-api.v1.json");
+    });
+
+    it("the 01-07 design series keeps the canonical doctrine authority it declares", () => {
+        // Deliberately NOT relabelled: developer-platform/README.md states, dated 2026-09-14,
+        // that these documents remain the canonical owner of doctrine while the specification
+        // owns the external contract. They carry rejected alternatives and ratification
+        // provenance the contract does not restate, and assert no stale surface fact.
+        const index = read("docs/api/developer-platform/README.md");
+        expect(index, "the doctrine/contract split must stay stated")
+            .toMatch(/remain the canonical owner of[\s>]*doctrine/i);
+        for (const n of ["01", "02", "03", "04", "05", "06", "07"]) {
+            const file = readdirSync(path.join(repoRoot, "docs/api/developer-platform"))
+                .find((f) => f.startsWith(`${n}-`) && f.endsWith(".md"));
+            expect(file, `design-series document ${n} is missing`).toBeTruthy();
+            const fm = read(`docs/api/developer-platform/${file}`).split("\n").slice(0, 10).join("\n");
+            expect(fm, `${file} owns doctrine; demoting it removes the only declared owner`)
+                .toMatch(/^status:\s*canonical\s*$/m);
+        }
+    });
+});
