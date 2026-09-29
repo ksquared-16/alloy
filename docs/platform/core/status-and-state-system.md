@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -44,6 +44,44 @@ meaningful with its domain. Four domains:
 > Status has no seeded `status_definitions`; Person Status is not carried on opportunity/child Work View
 > rows. Exposing either before it is backed would create a dead condition (resolves null → excludes all).
 
+### Placement-candidate state is NOT a governed Status domain
+
+`placement_candidates.status` is **domain-owned placement state, deliberately outside this doctrine.**
+It is not a fifth domain, and it must not be added to the table above.
+
+| | Governed Status domain | `placement_candidates.status` |
+|---|---|---|
+| Vocabulary defined by | tenant-configurable `status_definitions` rows | a database CHECK constraint |
+| Values | configurable per org | fixed: `active` · `paused` · `withdrawn` · `placed` |
+| `status_definitions.entity_type` | discriminates the domain | **never** takes this table's name |
+| Transition policy | `status_transition_rules` where the Action path applies it | the CHECK constraint only |
+
+These are different kinds of thing: a closed, DB-enforced domain enum versus configurable relationship
+truth. The constraint is in fact *stricter* than `status_definitions` — which is why promoting the
+column into this architecture would weaken it, not strengthen it. Placement-candidate state is owned by
+[`placement-system.md`](placement-system.md).
+
+`subject_type: "candidate"` in stage membership refers to the candidate **grain**, which is a separate
+concept from this status column and is unaffected by the exclusion above.
+
+### The transition-policy gate does not yet cover every write path
+
+`status_transition_rules` is a **real, write-gating** mechanism — not advisory. Where it applies it can
+block a transition and require metadata or payload fields, and the canonical Action/Command runtime
+applies it through `validateStatusTransition`.
+
+It is **not yet universal**, and documentation must not claim that it is:
+
+- **Applies today:** the Action/Command runtime paths (registered-action execution, the mutation
+  runtime, entry lifecycle actions) and action eligibility.
+- **Bypasses today:** outcome execution, which writes durable status targets without consulting the
+  gate, and the direct opportunity status PATCH (see *Direct status PATCH* in
+  [`business-process-system.md`](business-process-system.md)).
+
+One canonical transition-policy gate for every governed durable-status mutation is the ratified
+direction (D-BP4). It is **convergence debt, not current behaviour.** New mutation paths must route
+through the existing gate and must not invent another one or another bypass.
+
 ---
 
 ## Two enrollment grains (frozen)
@@ -60,8 +98,13 @@ Status definitions live in org config (`status_definitions`) with `entity_type` 
 
 ### Stage membership declares grain — never status lists
 
-A stage's `membership_criteria_v1` (formerly `queue_membership_v1`) declares subject grain,
-count unit, and location scope. Membership itself is the persisted `stage_key`:
+A stage's **`queue_membership_v1`** declares subject grain, count unit, and location scope. Membership
+itself is the persisted `stage_key`:
+
+> **Naming note (measured 2026-09-29).** `queue_membership_v1` is the **implemented** configuration key.
+> `membership_criteria_v1` was the name proposed for it by the Enrollment Alignment sprint and has **no
+> TypeScript or migration presence** — the rename was documented but never carried out. Treat
+> `membership_criteria_v1` as a planned successor name, never as current runtime configuration.
 
 - `subject_type: "case"` → family-track stage; membership = `opportunities.stage_key`, count unit `cases`.
 - `subject_type: "child"` → child-track stage; membership = `OCM.stage_key`, count unit `enrollment_tracks`.
@@ -114,7 +157,7 @@ Direct PATCH of `status_key` / `outcome_status_key` / `stage_key` is rejected.
 | Topic | Behavior |
 |-------|----------|
 | **Create Lead** | Writes `opportunities.status_key = open` and `stage_key = lead`. `new_inquiry` no longer exists (migrated to `open` + stage backfill) |
-| **OCM at intake** | `outcome_status_key = null` — a brand-new lead has no enrollment disposition; the child badge is **suppressed** until a real enrollment outcome |
+| **OCM at intake** | `outcome_status_key = new_inquiry` — **this is current measured behaviour, not the intended end state.** The live Create Lead path resolves the child participation through `ensureOpportunityCustomerMemberParticipation`, which writes `new_inquiry`; the canonical E2E validator asserts that value. The *intent* is a null disposition with the child badge suppressed until a real enrollment outcome, and a remediation script (`web/scripts/suppressLegacyChildNewInquiryStatus.ts`) scrubs existing rows to null — but the writer has not been converged, so `new_inquiry` is what a fresh lead gets today. Tracked as D-BP5 implementation debt; do not document the null shape as current. |
 | **Status language** | No "Inquiry" anywhere — operator language, status keys, and entity types. The participation entity type is `enrollment_participation` |
 | **New Leads lane** | Membership = `stage_key = lead` — no status alias expansion needed |
 
@@ -146,7 +189,7 @@ Resolver output (`resolveOpportunityAttention`) — operational overlay with rea
 | Surface | Location |
 |---------|----------|
 | Status definitions | `/admin/settings/statuses` |
-| Stage membership + outcomes | Business process builder (`stage_operating_plan_v1`, `membership_criteria_v1`) |
+| Stage membership + outcomes | Business process builder (`stage_operating_plan_v1`, `queue_membership_v1`) |
 | Field requirements | Stage required information (`requirement_policy`) |
 
 ---

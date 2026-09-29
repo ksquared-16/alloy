@@ -102,6 +102,7 @@ Then: **`platform/foundation/system-overview.md`**
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
+11b. `platform/core/work-view-membership-and-navigation.md` — **Work View membership, evaluation and navigation** (membership is not stage position; one evaluator produces rows, counts and eligibility)
 
 ### 3. Operator experience
 
