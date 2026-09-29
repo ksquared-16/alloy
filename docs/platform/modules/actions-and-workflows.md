@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-28
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -425,8 +425,8 @@ Fresh **Create Lead** (June 2026, hardened in the Create Lead reliability thread
 
 | Artifact | Detail |
 |----------|--------|
-| `opportunity.status_key` | From lifecycle binding (legacy `new_inquiry` retained) — not legacy `open` default. The key stays `new_inquiry` for now (queue/lifecycle compatibility), but it **displays as "New Lead"** everywhere (see *Status language* below) |
-| OCM `outcome_status_key` | **`null` at intake** — a brand-new lead has no enrollment disposition, and the OCM status domain defines none for "lead". The child badge is **suppressed** until a real enrollment outcome (waitlisted/enrolling/…). Never `new_inquiry`. |
+| `opportunity.status_key` | The org's configured default lead status, falling back to `open` (`DEFAULT_LEAD_CASE_STATUS_KEY`) — see `entryLifecycleActions.ts`. **Corrected 2026-09-29:** this row previously said the case key "stays `new_inquiry`"; that is the *enrollment-pipeline/OCM* key, not the case container's. `new_inquiry` still appears in lead-stage queue membership and alias expansion, which is where the confusion came from |
+| OCM `outcome_status_key` | **`new_inquiry` at intake** (measured 2026-09-29). The live path writes it through `ensureOpportunityCustomerMemberParticipation`, and the canonical E2E validator asserts that value. The **intended** end state is a null disposition with the child badge suppressed until a real enrollment outcome (waitlisted/enrolling/…), and `web/scripts/suppressLegacyChildNewInquiryStatus.ts` scrubs existing rows toward it — but the writer has not been converged, so a fresh lead gets `new_inquiry` today. Tracked as D-BP5. |
 | Household | `customers`, `customer_persons`, `persons` — household status writes `customers.status_key` (canonical), **never** the dropped `customers.status` column (PGRST204) |
 | Members | `customer_members`, `opportunity_customer_members` |
 | Child-scoped contacts | When role data supplied at intake |

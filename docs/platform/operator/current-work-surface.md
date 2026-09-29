@@ -18,6 +18,15 @@ supersedes: []
 
 **Current Work** is a configurable Focus Panel surface (`current_work`) that projects stage operating-plan work to operators using the same **Summary → Focus** grammar as Household.
 
+> **Current Work owns no durable work truth (measured 2026-09-29).** It is a projection over stage/work
+> runtime — the projector performs no writes. Work templates come from the Business Process, work
+> instances live in stage runtime, and **completion returns to the authoritative outcome path**
+> (`mark_stage_work_complete`), never to this surface. Current Work is therefore a presentation owner:
+> for what the work *is* and when it completes, see
+> [`../core/business-process-system.md`](../core/business-process-system.md), and for cohort membership
+> and navigation see
+> [`../core/work-view-membership-and-navigation.md`](../core/work-view-membership-and-navigation.md).
+
 Operators open a record to **complete work**. Current Work answers:
 
 - **Summary:** What is happening? (title, purpose, progress, blockers)

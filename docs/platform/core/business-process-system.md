@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -39,7 +39,7 @@ Organization
 | Operator label **Business Process** (not Lifecycle) in settings and workspace | **Shipped** — `businessProcessUiLabels.ts` |
 | Enrollment Process — 8 stages (family: lead → tour → decision → closed; child: waitlist → enrolling → enrolled → closed_withdrawn) | **Shipped** — Enrollment Alignment sprint (qualification folded into lead: no distinct work lived there) |
 | One execution work unit per enrollment department (`enrollment_pipeline`) | **Frozen** — stages are queues inside WU, not separate WUs |
-| Case vs child lifecycle grain | **Frozen** — `opportunities.status_key` (case) vs `opportunity_customer_members.outcome_status_key` (child). Manual Create Lead opens a Processing Case at intake and creates no CRM records until operator approve + explicit commit; after commit, child `outcome_status_key` stays **null** until enrollment disposition is set (badge suppressed) — see `../modules/actions-and-workflows.md` § Create Lead fresh-data contract |
+| Case vs child lifecycle grain | **Frozen** — `opportunities.status_key` (case) vs `opportunity_customer_members.outcome_status_key` (child). Manual Create Lead opens a Processing Case at intake and creates no CRM records until operator approve + explicit commit; after commit the case container gets `status_key = open` and the child participation is written with `outcome_status_key = new_inquiry` (measured 2026-09-29 — the null-disposition shape is the *intended* end state, not current behaviour; see `status-and-state-system.md` § Create Lead and New Leads lane) — see `../modules/actions-and-workflows.md` § Create Lead fresh-data contract |
 | Queue rows are preview-only | **Frozen** — see `queue-system.md` |
 | Builder API paths remain `lifecycle-*` internally | **Accepted** — rename deferred |
 
@@ -57,7 +57,7 @@ A business process defines:
 - **Stages** — ordered steps in the operator journey
 - **Process Command selection (`command_set_v1`)** — sole target process-wide authority for which Commands the process selects (P6.S1). Stage catalogs recommend/evaluate selected Commands; they do not create process selection.
 - **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
-- **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution. Authoritative entry time is `stage_entered_at` on the stage owner (`opportunities` for family/case grain; `process_instances` for child/participant grain) — see queue operational awareness in `../operator/queue-system.md`
+- **Stage membership** — subject grain + scope (`queue_membership_v1`; `membership_criteria_v1` is a proposed successor name with no implementation — see `status-and-state-system.md`); membership itself is the persisted `stage_key`. Initial position is established at intake/Processing; subsequent movement is written by outcome execution. Queue and Work View membership are **not** an alternative source of process position. Authoritative entry time is `stage_entered_at` on the stage owner (`opportunities` for family/case grain; `process_instances` for child/participant grain) — see queue operational awareness in `../operator/queue-system.md`
 - **Outgoing transitions** — stage-owned, stable identities for destination, availability, and optional canonical status/close effects
 - **Outcome Definitions** — stage-owned completion choices; Work Templates select Available Outcomes and outcomes compose movement, follow-up work, and attention
 - **Required information & actions** — per-stage configuration
@@ -215,8 +215,34 @@ placements), not free-form buttons. **Status transitions are validated server-si
 **process required info informs eligibility/blockers**: the Action Runtime
 (`web/lib/adminV2/actions/`) resolves available transitions from `status_definitions`,
 enforces `status_transition_rules`, and returns required inputs/blockers before any
-mutation. Config controls which actions appear and their copy; code owns the executable
+mutation. **That enforcement is real but path-scoped:** it covers the Action/Command runtime,
+not every durable-status write. Outcome execution and the direct status PATCH bypass the gate
+today — see `status-and-state-system.md` § The transition-policy gate does not yet cover every
+write path. Config controls which actions appear and their copy; code owns the executable
 semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract.
+
+### Direct status PATCH — bounded compatibility debt, not architecture
+
+**Canonical forward authority for durable lifecycle state is: operational work / domain intent →
+process/outcome execution → lifecycle consequences.** Operators pick domain verbs; they never pick a raw
+"update status".
+
+Two operator-reachable surfaces still send `status_key` directly to the opportunity PATCH route
+(`web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx` and
+`web/components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx`). This is **active implementation
+debt** (D-BP1), documented here so the gap is visible rather than implied:
+
+- The PATCH route validates the status key and requires the `enrollment.record.manage` capability, and it
+  emits the status-changed event — so it is not unguarded.
+- It carries **none of the process consequences**: no stage movement, no work completion, no workflow
+  trigger, no attention effects, and no transition-policy gate.
+- It is **not precedent.** New implementation must route through process/outcome execution. Do not add
+  callers, and do not generalize this path.
+- Convergence is tracked as implementation follow-up. Until both senders are converted, documentation
+  must not claim that outcome execution is the *only* writer of durable status — because today it is not.
+
+Outcome execution remains the only path that carries full process semantics, which is a different and
+weaker claim than being the only writer.
 
 A stage **places** commands; it does not own them. Every operational mutation is an
 **Operational Command** (registered capability). The same command (e.g. `schedule_tour`,
@@ -314,6 +340,21 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 Stage work surfaced in **Current Work** is the authoritative Business Process execution path. The same work may appear in **Work Items** under the Business Process source for cross-record queue visibility — it is not duplicated as separate operational truth.
 
 - **Shared identity:** `work_id` ≡ `operational_tasks.id` across What’s Next and Workspace Work Items.
+
+**Source authority (measured 2026-09-29).** Work Items composes four sources, and only one of them
+persists new rows:
+
+| Source | Authority | Persists `operational_tasks`? |
+|---|---|---|
+| Manual | the task itself | **Yes** — manual items are the persisted case |
+| Business Process | stage work runtime + outcome execution | No |
+| Processing | the Processing case | No |
+| Communications | the communication thread | No |
+
+The three projected sources surface authoritative domain work where it already lives. They do **not**
+mint duplicate `operational_tasks` rows, and the operational projection writes nothing at all — so a
+Work Items row appearing for a projected source is never a second copy of that work. Completion for a
+projected source returns to its own authority (for Business Process work, the outcome path).
 - Current Work → Work Items: deep link with same underlying task/work identity.
 - Work Items → Current Work: focus event on the record-scoped work surface.
 - Outcome completion remains on the authoritative BP / Current Work path.
