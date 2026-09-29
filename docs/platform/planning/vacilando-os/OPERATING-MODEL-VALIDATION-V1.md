@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Operating Model Validation — end-to-end mission simulations
 
 > Status: validation, not design. **No implementation.** Assumes the current

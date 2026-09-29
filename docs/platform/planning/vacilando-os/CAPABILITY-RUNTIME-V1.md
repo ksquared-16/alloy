@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Capability Runtime V1 — architecture (completes the upstream half)
 
 > Status: architecture for approval. **Design only — do not implement.** Does not

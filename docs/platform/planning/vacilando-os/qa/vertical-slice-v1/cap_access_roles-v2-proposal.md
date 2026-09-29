@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Access & Roles V2 — Implementation Proposal
 
 - **Capability:** `cap_access_roles`

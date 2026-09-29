@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Platform Map
 
 **Glance at this and know where every capability is in its lifecycle.**

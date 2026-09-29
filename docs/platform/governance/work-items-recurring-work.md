@@ -1,3 +1,10 @@
+---
+owner: platform
+status: proposed
+last_reviewed: 2026-09-10
+supersedes: []
+---
+
 # Work Items — Recurring Work (Studio)
 
 Status: **specified, not shipped.** The product and authority model below are settled and the

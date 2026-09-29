@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Director V2 — The Engineering Leadership Doctrine
 
 **A foundational product document. Not an implementation plan.**

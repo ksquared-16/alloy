@@ -1,6 +1,6 @@
 ---
 title: Outbound Send-Path and Bypass Matrix
-status: complete — enumeration finished, classification applied
+status: sprint
 date: 2026-07-30
 ---
 

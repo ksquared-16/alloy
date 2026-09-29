@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Engineering Operations — Phase 3 pilot (Access & Roles, real runtime)
 
 Piloted on the live :3020 runtime with the **real Claude provider** (authenticated, oauth). The operator ran the complete operational lifecycle through Vacilando without touching a provider window, branch, or localhost.

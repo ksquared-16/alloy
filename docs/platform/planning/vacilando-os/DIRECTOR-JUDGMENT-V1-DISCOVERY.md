@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Judgment V1 — Discovery & Design
 
 **Status:** DISCOVERY / DESIGN — no implementation. Nothing pushed/merged/promoted.

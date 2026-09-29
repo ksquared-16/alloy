@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: design
+status: sprint
 last_reviewed: 2026-07-25
 ---
 

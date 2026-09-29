@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Product-source copies
 
 Accepted planning deliverables from this QA folder are also copied (not moved) to:

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Platform — Health Report
 
 **As of 2026-07-31, post-Phase-0.**

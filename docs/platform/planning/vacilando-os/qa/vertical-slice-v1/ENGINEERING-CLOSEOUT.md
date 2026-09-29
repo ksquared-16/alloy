@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Operational Trustworthiness V1 — Engineering Closeout
 
 - Date: 2026-07-24

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-01
+supersedes: []
+---
+
 # Stage Configuration Layout Rules
 
 The layout system every Business Process stage editor follows. Written after the Premium Process

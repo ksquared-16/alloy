@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Engineering Session Model
 
 *How one episode of engineering thought unfolds with Director — from the moment the operator brings work until the episode reaches an honest stopping point.*

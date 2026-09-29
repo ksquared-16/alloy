@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Validation broker certification — host-wide lease
 
 **Date:** 2026-07-29  

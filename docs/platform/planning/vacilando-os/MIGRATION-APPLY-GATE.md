@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Migration apply gate (Director / implement missions)
 
 **Status:** Active operating rule (2026-07-29). Learned from Access & Roles V2 Phase 0 first-run.

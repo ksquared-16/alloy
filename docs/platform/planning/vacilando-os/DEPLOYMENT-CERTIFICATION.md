@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-26
+supersedes: []
+---
+
 # Deployment Certification — Global Mission Rule
 
 *A staging promotion is not complete until every deployment layer is verified. Application code, database schema, migrations, and migration history are one deployable unit — and no layer certifies on the word of another.*

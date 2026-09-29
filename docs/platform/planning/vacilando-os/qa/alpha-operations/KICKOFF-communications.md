@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Next-session kickoff prompt — Vacilando Alpha Operations: Communications
 
 Paste the block below into a **fresh Claude session** to begin Day 1 of Alpha Operations. Do not run it in this session.

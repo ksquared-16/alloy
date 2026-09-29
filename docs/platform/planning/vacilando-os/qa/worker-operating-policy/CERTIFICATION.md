@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Worker Operating Policy — Direct-Worker Certification
 
 *Certifies that the policy changes real behavior in a genuinely fresh, directly-opened worker — not just that unit tests pass or `command-budget.mjs` behaves in isolation. The original defect happened in a directly opened Claude session inside a managed slot; this is the path that had to be proven.*

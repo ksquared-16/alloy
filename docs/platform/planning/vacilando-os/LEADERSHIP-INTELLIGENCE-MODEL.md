@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Leadership Intelligence Model
 
 *How Director actually thinks — the operational product model of counsel.*

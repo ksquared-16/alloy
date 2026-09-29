@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Access & Roles re-run — proof the operator's mission executed
 
 The real re-run, after the fix, on the live runtime with the real provider.

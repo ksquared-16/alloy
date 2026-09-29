@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Director Execution V2 — screenshot manifest
 
 Mission: `msn_d34d658b3d39c91781`

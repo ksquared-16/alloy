@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Vacilando Alpha — clean starting experience (evidence)
 
 Captured live on :3020 after the pre-Alpha Director reset.
