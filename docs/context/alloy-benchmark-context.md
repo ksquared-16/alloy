@@ -2,7 +2,7 @@
 title: Alloy benchmark context pack
 owner: platform
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -16,10 +16,10 @@ contains several generations of design history, and most of it is not current tr
 | | |
 |---|---|
 | **Version** | V0 |
-| **Certified** | 2026-09-29 |
-| **Base** | `b73482479` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime |
-| **Domains pending** | Business Process (§5) · Identity/Access (§6) · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Certified** | 2026-09-30 |
+| **Base** | `9cbe2915b` (staging) |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process |
+| **Domains pending** | Identity/Access (§6) · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -127,47 +127,53 @@ re-measured; the D1 contract ratified or withdrawn.
 
 ---
 
-## 5. Business Process — PENDING CERTIFICATION
+## 5. Business Process — CERTIFIED
 
-**State:** `PENDING_CERTIFICATION`. Authority discovery is complete and the documentation has been
-converged and promoted, but **implementation convergence is not done**, so this domain is not
-certified for DIRECT context in V0.
+Certification: `BUSINESS_PROCESS_DOCUMENTATION_CONTEXT_READY` (2026-09-30). Implementation and doctrine
+agree, and the final lifecycle writer census carries **zero unexplained writers**.
 
-**Blockers, as measured on `eab6805b1`:**
+| Document | Role | Authority owned | Treatment |
+|---|---|---|---|
+| `platform/core/business-process-system.md` | Operator model | Business Process → Stage → Record; stage membership; what the canonical lifecycle path owns | DIRECT |
+| `platform/core/stage-membership-and-outcomes.md` | Stage membership | Persisted `stage_key`, outcomes, subject grain | DIRECT |
+| `platform/core/status-and-state-system.md` | Durable status | The three governed status domains and the one transition-policy gate | DIRECT |
+| `platform/core/work-view-membership-and-navigation.md` | Work View | Membership evaluation, one evaluator, navigation | DIRECT |
+| `platform/modules/business-process-execution-platform.md` | Execution runtime | Command/action execution surface | REFERENCE_ON_DEMAND |
+| `platform/modules/actions-and-workflows.md` | Actions | Action runtime contract, Create Lead contract | REFERENCE_ON_DEMAND |
+| `platform/operator/current-work-surface.md` | Current Work | The projection surface (owns no durable truth) | REFERENCE_ON_DEMAND |
+| `platform/operator/queue-system.md` | Queue | Preview/materialization contract | REFERENCE_ON_DEMAND |
+| `platform/core/data/action-status-field-matrix.md` | Field authority | Which action writes which field | REFERENCE_ON_DEMAND |
+| `platform/runtime/stage-work-view-queue-canonical-model.md` | Fork diagnosis / plan | Why the queue fork exists; unexecuted convergence | PLANNED_ONLY |
+| BP sprint, audit and closeout records | History | How this came to be | EXCLUDE_HISTORY |
 
-- **D-BP1** — two operator surfaces still mutate opportunity `status_key` through the generic record
-  PATCH. The **authorization half of this is now resolved** (2026-09-29): a lifecycle transition is a
-  decision, so `enrollment.decide` is the correct rule, and both seeded role packages (ADMIN and OPS)
-  grant it alongside `enrollment.record.manage` under an in-migration self-test that aborts if either
-  is missing — so converging does not lock out a default operator. What remains is the **resolution
-  layer**: the canonical route takes a typed `destination_key`, while these surfaces hold a configured
-  ref (`action.actionRef`) and `needs_a_quote`. **The reverse resolver now exists** (2026-09-30,
-  `resolveConfiguredTransitionRef.ts`): a configured `transition_ref` resolves to a typed
-  `destinationKey`, scoped to the subject's current stage and failing closed on unknown, ambiguous,
-  unavailable or unmapped refs. What remains for Current Work is the server boundary that accepts a
-  ref plus the surface rewire.
-- **The two senders are not the same kind of thing.** Measured 2026-09-30: `needs_a_quote` is **not a
-  configured Business Process outcome or rule anywhere**. It belongs to the book-v2 quote pipeline
-  (`lib/book-v2/resolvePipelineStage.ts`) and the MVP status catalog. So Quote Intake is not an
-  enrollment decision at all, and routing it through the enrollment transition boundary would be
-  wrong. It needs its own disposition — a quote-pipeline authority, or acceptance as a record write —
-  which is a product question, not part of the enrollment convergence.
-- **D-BP4** — outcome execution writes durable status without consulting the transition-policy gate
-  the Action paths use.
-- **D-BP5** — whether a fresh child participation should carry `new_inquiry` (shipped) or a null
-  disposition (intended) is an open product decision.
+**Safe inferences.** Stage position is persisted in `stage_key`. Intake/Processing establishes the
+initial position; canonical process/outcome execution owns every subsequent movement. Governed status
+changes pass one transition-policy gate (`validateStatusTransition` over `status_transition_rules`),
+for case and child grain alike. Prior-stage reconciliation belongs to canonical lifecycle execution and
+carries the operator's per-item disposition. The generic record PATCH is not lifecycle authority and
+refuses governed lifecycle fields. Current Work is a projection and interaction surface that owns no
+durable truth. Work View membership is computed and does not define process position. Queue is
+preview/materialization. The Work Items Business Process source projects existing stage work rather
+than duplicating it. A fresh child participation stores `new_inquiry`; "New Lead" is display language.
 
-**What may still be used, carefully.** The Business Process documents are accurate about *current*
-behaviour, including their own open debt — that is what the convergence packet established. They may
-be loaded as `REFERENCE_ON_DEMAND` for Business Process tasks, provided the reader treats the three
-blockers above as open. They are not V0 DIRECT context.
+**Forbidden inferences.** Never infer that a raw status PATCH is a valid lifecycle pattern — it is
+refused. Never infer that status defines stage, or that Work View membership defines process position.
+Never treat the proposed stage-condition vocabulary (`membership_criteria_v1`, `entry_conditions`,
+`exit_conditions`) as implemented — only `queue_membership_v1` exists. Never treat
+`placement_candidates.status` as a governed Status domain; it is DB-CHECK-bound domain state. Never read
+a historical compatibility writer as forward architecture. Never infer an outcome may bypass the
+transition gate — no override exists.
 
-Interim owners, for on-demand use: `platform/core/business-process-system.md`,
-`platform/core/stage-membership-and-outcomes.md`, `platform/core/status-and-state-system.md`,
-`platform/core/work-view-membership-and-navigation.md`.
+**Implementation evidence that outranks these documents.**
+`web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts` (the canonical path, its gate and
+its reconciliation), `web/lib/lifecycle/stageOutcomeRuleTargetExecutor.ts` (outcome targets),
+`web/app/api/admin/opportunities/[id]/route.ts` (the refusal), and
+`web/lib/lifecycle/operationalProjection.ts` (the one membership/count evaluator).
 
-**Promotion trigger.** When D-BP1, D-BP4 and D-BP5 close and the writer census shows zero
-unexplained operator-facing lifecycle writers, this domain moves to CERTIFIED / DIRECT.
+**Staleness triggers.** A new writer of any governed lifecycle field; the record route accepting a
+lifecycle key again; reconciliation or the transition gate leaving canonical execution; a second
+transition validator; a change to the governed status-domain set; `placement_candidates.status` being
+brought into `status_definitions`.
 
 ---
 
