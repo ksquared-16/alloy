@@ -269,10 +269,10 @@ function journalEntry(id: string, paymentId: string): Row {
 }
 
 async function activityLabels(payments: Row[], entries: Row[]): Promise<string[]> {
-    const store = createOperationalEnrollmentMockStore({
-        customers: [{ id: HOUSEHOLD_ID, org_id: ORG_ID, name: "Certopp Family" }],
-    });
+    const store = createOperationalEnrollmentMockStore({});
+    /* Three tables the typed factory does not name. Seeded the way its siblings seed holds. */
     const extra = store as unknown as Record<string, Row[]>;
+    extra.customers = [{ id: HOUSEHOLD_ID, org_id: ORG_ID, name: "Certopp Family" }];
     extra.payments = payments;
     extra.financial_journal_entries = entries;
     const supabase = createOperationalEnrollmentMockSupabase(store);
