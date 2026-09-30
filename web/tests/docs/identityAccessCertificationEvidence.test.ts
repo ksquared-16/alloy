@@ -42,9 +42,24 @@ const read = (rel: string) => readFileSync(path.join(repoRoot, rel), "utf8");
 const MANIFEST = "docs/context/alloy-benchmark-context.md";
 const AUTHORITY_CENSUS = "certification/migrations/identity-access-model-a-authority-census.sql";
 const RPC_CENSUS = "certification/migrations/identity-access-rpc-and-tenancy-census.sql";
+const APPLY_CENSUS = "certification/migrations/identity-access-apply-verification.sql";
 
-/** The migration whose application is the gate. */
-const APPLY_GATE_VERSION = "20261104130000";
+/**
+ * The two migrations whose application is the gate — named individually, on purpose.
+ *
+ * The first version of this gate asked whether the hosted ledger's `max_version` had
+ * reached `20261104130000`. That was sound only by accident: these two were the newest
+ * migrations in the tree when it was written. PR 1345 then landed `20261105120000` and
+ * `20261106120000`, and on 2026-09-30 the ledger read `max_version = 20261106120000`
+ * while BOTH repair migrations were still unapplied — measured `false` apiece. The
+ * ledger leg of this gate was passing on another lane's work.
+ *
+ * The other two legs (ACLs, RLS) still refused, so no false certification could have
+ * occurred. But a gate with a leg that reports the wrong answer is one accident away
+ * from being a gate that agrees with the wrong conclusion, so the question is now asked
+ * per version rather than by high-water mark.
+ */
+const APPLY_GATE_VERSIONS = ["20261104120000", "20261104130000"] as const;
 
 type Census = { status?: string; query_hash?: string; results?: { questions?: Record<string, { rows?: string[] }> } };
 
@@ -81,7 +96,7 @@ const CLIENT_PRINCIPALS = ["authenticated", "anon", "PUBLIC"];
 
 describe("Identity/Access certification evidence gate", () => {
     it("is not vacuous: both census artifacts exist and are genuine outputs of their committed queries", () => {
-        for (const sql of [AUTHORITY_CENSUS, RPC_CENSUS]) {
+        for (const sql of [AUTHORITY_CENSUS, RPC_CENSUS, APPLY_CENSUS]) {
             expect(existsSync(path.join(repoRoot, sql)), `${sql} is missing`).toBe(true);
             const c = census(sql);
             expect(c.artifact.status, `${sql} did not execute`).toBe("executed");
@@ -99,20 +114,32 @@ describe("Identity/Access certification evidence gate", () => {
         expect(acl.length, "the census reports no mutating-RPC ACL rows at all").toBeGreaterThan(10);
     });
 
-    it("certification requires the ledger to show the repair applied", () => {
+    it("the apply census reports both repair versions by name", () => {
+        // Non-vacuity for the assertion below: an artifact that mentioned neither version
+        // would let "no unapplied version found" pass for the worst possible reason.
+        const rows = census(APPLY_CENSUS).rows("v_applied");
+        for (const v of APPLY_GATE_VERSIONS) {
+            expect(
+                rows.some((r) => r.startsWith(`migration ~ ${v} ~ `)),
+                `the apply census does not report migration ${v} at all`,
+            ).toBe(true);
+        }
+    });
+
+    it("certification requires each repair migration to be applied, by version", () => {
         if (!claimsCertified()) return; // PENDING: this gate is silent, by design
-        const ledger = census(AUTHORITY_CENSUS)
-            .rows("j_ledger")
-            .find((r) => r.startsWith("schema_migrations ~ max_version"));
-        expect(ledger, "the authority census carries no schema_migrations max_version row").toBeTruthy();
-        const applied = (ledger ?? "").split(" ~ ").pop()!.trim();
+        const rows = census(APPLY_CENSUS).rows("v_applied");
+        const unapplied = APPLY_GATE_VERSIONS.filter(
+            (v) => !rows.includes(`migration ~ ${v} ~ true`),
+        );
         expect(
-            applied >= APPLY_GATE_VERSION,
-            `the manifest certifies Identity/Access, but the hosted ledger's newest applied migration is `
-                + `${applied}, before ${APPLY_GATE_VERSION}. The repair is not applied on the deployed primary, so `
-                + "the exposure it closes is still open. Re-run the census after applying, or return the domain to "
-                + "PENDING.",
-        ).toBe(true);
+            unapplied,
+            "the manifest certifies Identity/Access, but the hosted ledger does not contain these repair "
+                + "migrations. A high-water mark is not proof: on 2026-09-30 the ledger read max_version "
+                + "20261106120000 — past both of these — purely because another lane's 20261105120000 and "
+                + "20261106120000 had applied, while both of these measured false. Apply them and re-run the "
+                + "census, or return the domain to PENDING.",
+        ).toEqual([]);
     });
 
     it("certification requires no mutating RPC to remain executable by a client principal", () => {
@@ -162,19 +189,18 @@ describe("Identity/Access certification evidence gate", () => {
         if (claimsCertified()) return;
         // The pending state is not an absence of evidence; it is evidence of an unfinished apply. Assert
         // the artifacts actually say so, rather than letting "pending" mean "nobody looked".
-        const ledger = census(AUTHORITY_CENSUS)
-            .rows("j_ledger")
-            .find((r) => r.startsWith("schema_migrations ~ max_version")) ?? "";
-        const applied = ledger.split(" ~ ").pop()!.trim();
+        const unapplied = APPLY_GATE_VERSIONS.filter(
+            (v) => !census(APPLY_CENSUS).rows("v_applied").includes(`migration ~ ${v} ~ true`),
+        );
         const openCount = census(RPC_CENSUS)
             .rows("k_rpc")
             .filter((r) => r.startsWith("rpc_acl"))
             .filter((r) => CLIENT_PRINCIPALS.some((p) => grantees(r).has(p))).length;
         expect(
-            applied < APPLY_GATE_VERSION || openCount > 0,
-            `Identity/Access is listed as PENDING, but the hosted evidence shows the ledger at ${applied} and `
-                + `${openCount} mutating functions open to clients. If the repair is in fact applied and closed, the `
-                + "domain should be certified rather than held back.",
+            unapplied.length > 0 || openCount > 0,
+            "Identity/Access is listed as PENDING, but the hosted evidence shows both repair migrations applied "
+                + `and ${openCount} mutating functions open to clients. If the repair is in fact applied and closed, `
+                + "the domain should be certified rather than held back.",
         ).toBe(true);
     });
 });

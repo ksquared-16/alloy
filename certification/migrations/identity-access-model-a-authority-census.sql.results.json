@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_541513f59f107c",
+  "trusted_host_action_id": "tha_9b5283939ea26a",
   "query_hash": "53a0e98bc367c68b4322ba27916aa6028e855e537921a1aaf4c2748962ec46d3",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T04:08:43.441Z",
+    "executed_at": "2026-09-30T11:18:28.467Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_541513f59f107c",
+    "trusted_host_action_id": "tha_9b5283939ea26a",
     "query_hash": "53a0e98bc367c68b4322ba27916aa6028e855e537921a1aaf4c2748962ec46d3",
-    "authorization_id": "grnt_a8fd51be09ad4785",
+    "authorization_id": "grnt_ff5310343fb443d4",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T04:08:50.965Z",
+    "census_run_at": "2026-09-30T11:18:35.300Z",
     "question_ids": [
       "a_rls",
       "b_grants",
@@ -32,8 +32,8 @@
         "question_id": "a_rls",
         "row_count": null,
         "rows": [
-          "public_base_tables ~ total ~ 322",
-          "public_base_tables ~ rls_enabled ~ 320",
+          "public_base_tables ~ total ~ 321",
+          "public_base_tables ~ rls_enabled ~ 319",
           "rls_disabled ~ table ~ commercial_policy_exceptions",
           "rls_disabled ~ table ~ payment_provider_disputes"
         ]
@@ -42,11 +42,11 @@
         "question_id": "b_grants",
         "row_count": null,
         "rows": [
-          "authenticated_write_grant ~ distinct_tables ~ 259",
-          "authenticated_write_grant ~ delete_tables ~ 258",
-          "authenticated_write_grant ~ insert_tables ~ 259",
-          "authenticated_write_grant ~ update_tables ~ 259",
-          "authenticated_select_grant ~ distinct_tables ~ 307",
+          "authenticated_write_grant ~ distinct_tables ~ 258",
+          "authenticated_write_grant ~ delete_tables ~ 257",
+          "authenticated_write_grant ~ insert_tables ~ 258",
+          "authenticated_write_grant ~ update_tables ~ 258",
+          "authenticated_select_grant ~ distinct_tables ~ 306",
           "authenticated_write ~ access_methods ~ delete,insert,update",
           "authenticated_write ~ action_definitions ~ delete,insert,update",
           "authenticated_write ~ action_links ~ delete,insert,update",
@@ -215,7 +215,6 @@
           "authenticated_write ~ organization_provider_credential_events ~ delete,insert,update",
           "authenticated_write ~ orgs ~ delete,insert,update",
           "authenticated_write ~ payment_allocations ~ delete,insert,update",
-          "authenticated_write ~ payment_statuses ~ delete,insert,update",
           "authenticated_write ~ payments ~ delete,insert,update",
           "authenticated_write ~ permission_definitions ~ delete,insert,update",
           "authenticated_write ~ person_child_relationship_roles ~ delete,insert,update",
@@ -320,7 +319,7 @@
           "write_policy_shape ~ service_role_only ~ 86",
           "write_policy_shape ~ user_roles_handrolled ~ 88",
           "untenanted_app_users_write_policy ~ total ~ 0",
-          "authenticated_write_grant_no_write_policy ~ tables ~ 56"
+          "authenticated_write_grant_no_write_policy ~ tables ~ 55"
         ]
       },
       "e_org": {
@@ -449,11 +448,11 @@
         "question_id": "j_ledger",
         "row_count": null,
         "rows": [
-          "schema_migrations ~ max_version ~ 20261103120000",
-          "schema_migrations ~ applied_total ~ 498"
+          "schema_migrations ~ max_version ~ 20261106120000",
+          "schema_migrations ~ applied_total ~ 500"
         ]
       }
     },
-    "row_count": 371
+    "row_count": 370
   }
 }

@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_978993334e0bf6",
+  "trusted_host_action_id": "tha_1f61a23e814c7c",
   "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T08:54:52.522Z",
+    "executed_at": "2026-09-30T11:25:58.494Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_978993334e0bf6",
+    "trusted_host_action_id": "tha_1f61a23e814c7c",
     "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
-    "authorization_id": "grnt_991989288c18463b",
+    "authorization_id": "grnt_fd046d6a65f24728",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T08:54:58.847Z",
+    "census_run_at": "2026-09-30T11:26:04.375Z",
     "question_ids": [
       "k_rpc",
       "l_appusers",

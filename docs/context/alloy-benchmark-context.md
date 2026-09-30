@@ -17,7 +17,7 @@ contains several generations of design history, and most of it is not current tr
 |---|---|
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
-| **Base** | `5a5771554` (staging) |
+| **Base** | `f3fd86b4b` (staging) |
 | **Domains certified** | Developer Platform / API · Runtime · Business Process |
 | **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
@@ -191,17 +191,28 @@ and it is not a documentation gate:
 > been performed.** Until it is, the exposures described below are **still open in production**, and
 > this section must not be read as saying otherwise.
 >
-> **Re-verified 2026-09-30 08:54 UTC** against the deployed primary, and unchanged: all 14 mutating
+> **Re-verified 2026-09-30 11:26 UTC** against the deployed primary, and unchanged: all 14 mutating
 > functions remain `EXECUTE`-granted to `authenticated` (4 of them also to PUBLIC), all 14 still carry
-> no caller-authority check, and both tables still have no RLS. The hosted ledger's newest applied
-> migration is `20261103120000` — before either repair.
+> no caller-authority check, and both tables still have no RLS. Measured per version, **neither
+> `20261104120000` nor `20261104130000` is in the hosted ledger.**
+>
+> **A high-water mark is not proof, and this is the run that demonstrated it.** The ledger's
+> `max_version` now reads `20261106120000` — *past* both repair migrations — because another lane's
+> `20261105120000` and `20261106120000` applied (PR 1345). The first version of the gate below asked
+> exactly that question, `max_version >= 20261104130000`, and it was sound only by the accident that
+> these two were the newest migrations in the tree when it was written. It would now answer *yes* while
+> both repairs sat unapplied. Its other two legs still refused, so no false certification could have
+> occurred — but a gate with a leg that reports the wrong answer is one accident away from agreeing
+> with the wrong conclusion, so the question is now asked **per version**
+> (`identity-access-apply-verification.sql`).
 >
 > This is not a claim you have to take on trust. `tests/docs/identityAccessCertificationEvidence.test.ts`
 > reads the committed hosted census artifacts and **fails if this section is ever moved to certified
-> while the ledger has not advanced past `20261104130000`, while any mutating function is still
-> executable by a client principal, or while any public table lacks RLS.** The artifacts are checked
-> against the SHA-256 of the queries that produced them, so one edited by hand to say the happy thing
-> is rejected rather than believed.
+> while either repair migration is absent from the ledger by name, while any mutating function is still
+> executable by `authenticated`/`anon`/PUBLIC, while any public table lacks RLS, or while any of those
+> functions has lost its `service_role` EXECUTE** — protected and broken are not the same outcome. Each
+> artifact is checked against the SHA-256 of the query that produced it, so one edited by hand to say
+> the happy thing is rejected rather than believed.
 
 **Why the distinction is stated this loudly.** The rest of this pack describes documentation that
 matches a shipped system. Here, two paragraphs describe a repair that exists in the tree and not yet
@@ -261,12 +272,12 @@ yet applied to the deployed primary; see the gate above.*
 | Debt | Size | Why it is not a certification blocker |
 |---|---|---|
 | `authenticated` INSERT/UPDATE/DELETE grants the architecture never needed | **259 tables**; **56** of them have no write policy at all | Latent by mechanism: RLS denies, and no supported path uses the authenticated principal to write. Phase 4 retires them per table family; the 56 are the risk-free start |
-| Route handlers with no declared capability | **321 of 874** (305 owned + 16 frozen), across **122 route families**; **58 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
+| Route handlers with no declared capability | **321 of 870** (305 owned + 16 frozen), across **122 route families**; **58 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
 | Write policies resting on `current_org_id()` | 41 | Returns NULL above one organization (measured: 3 orgs), so all 41 **deny**. Fails closed — but would silently become permissive in a single-org deployment |
 | Write policies matching none of the four known shapes | 142 | None are unconditionally permissive (measured: 0). Unclassified, not unsafe |
 | Read semantics for the two newly RLS-protected tables | 2 tables | Both are service-role-only reads today, which is what the product does. Choosing an org-scoped authenticated read predicate is a Financials decision, ledgered rather than guessed |
 
-**Route capability, stated correctly.** Of **874** handlers across 677 route files: **458 declare and
+**Route capability, stated correctly.** Of **870** handlers across 673 route files: **454 declare and
 bind a capability**, **95 are declared admission-sufficient**, **321 are pending**. An earlier version
 of this pack said "~17 assert a capability" — that was wrong by more than an order of magnitude and
 would have led a reader to believe the domain was essentially ungated. It is roughly half-gated, with
@@ -358,7 +369,7 @@ was certified; it is not a claim that the repository must stay there.
 
 | Version | Base | Change |
 |---|---|---|
-| **V1** | `5a5771554` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **458 of 874 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
+| **V1** | `f3fd86b4b` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **454 of 870 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
 | V0 | `9cbe2915b` | First certification: Developer Platform / API, Runtime, Business Process. |
 
 Re-certify a domain when any of these occur:
