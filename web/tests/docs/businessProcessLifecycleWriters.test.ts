@@ -62,6 +62,43 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
     });
 });
 
+describe("converging the last sender may not drop prior-stage reconciliation", () => {
+    const PANEL = "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx";
+    const CANONICAL_EFFECTS = "web/lib/admin/enrollmentStatus/applyEnrollmentStatusTransitionOutcomeEffects.ts";
+
+    /*
+     * The two paths are complementary, not nested. The generic PATCH is the ONLY path that lets an
+     * operator say what happens to the work they are leaving behind — completed, skipped or carried
+     * forward, per item, via preflightStageTransitionReconciliation. The canonical transition path
+     * spawns DESTINATION-stage entry work and reconciles nothing behind it.
+     *
+     * So a rewire of the last sender is only safe once the canonical boundary has acquired that
+     * reconciliation. This guard states the ordering as a test: the panel may stop using the
+     * reconciliation flow only when the canonical path has taken it over.
+     */
+    it("either the panel still reconciles, or the canonical path has acquired reconciliation", () => {
+        const panelReconciles = /stage_transition_reconciliation/.test(read(PANEL));
+        const canonicalReconciles = /applyStageTransitionReconciliation/.test(read(CANONICAL_EFFECTS));
+        expect(
+            panelReconciles || canonicalReconciles,
+            "The Current Work panel no longer reconciles prior-stage work and the canonical transition " +
+                "path has not taken it over. Converging in that order drops the operator's " +
+                "completed/skipped/carry_forward choice silently. Move reconciliation first.",
+        ).toBe(true);
+    });
+
+    it("prior-stage reconciliation has exactly the two known production callers", () => {
+        // If a third appears, the invariant above needs re-deriving rather than assuming.
+        const callers = [
+            "web/app/api/admin/opportunities/[id]/route.ts",
+            "web/app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts",
+        ];
+        for (const rel of callers) {
+            expect(read(rel), rel).toMatch(/StageTransitionReconciliation/);
+        }
+    });
+});
+
 describe("the OCM route's fork is the convention D-BP1 should follow", () => {
     const route = "web/app/api/admin/opportunity-customer-members/[id]/route.ts";
 
