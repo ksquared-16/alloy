@@ -1,0 +1,135 @@
+{
+  "trusted_host_action_id": "tha_caa874eb0a0140",
+  "query_hash": "658d8149ca00ee75aa5ad8e39b033e10e516f8a198c018f0dd8242f81a665b2e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T11:28:08.358Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_caa874eb0a0140",
+    "query_hash": "658d8149ca00ee75aa5ad8e39b033e10e516f8a198c018f0dd8242f81a665b2e",
+    "authorization_id": "grnt_94a4433c87814bd9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T11:28:13.461Z",
+    "question_ids": [
+      "a2_dropped_columns",
+      "a2_dropped_table",
+      "a2_surviving_columns",
+      "a2_canonical_columns",
+      "a2_canonical_tables",
+      "a2_permissions",
+      "a2_guards"
+    ],
+    "questions": {
+      "a2_dropped_columns": {
+        "question_id": "a2_dropped_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "remaining": 0,
+            "expected": 0,
+            "names": []
+          }
+        ]
+      },
+      "a2_dropped_table": {
+        "question_id": "a2_dropped_table",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_statuses_remaining": 0,
+            "expected": 0
+          }
+        ]
+      },
+      "a2_surviving_columns": {
+        "question_id": "a2_surviving_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 6,
+            "expected": 6,
+            "names": [
+              "customer_id",
+              "job_id",
+              "paid_at",
+              "posted_to_ledger_at",
+              "provider_payment_id",
+              "status_key"
+            ]
+          }
+        ]
+      },
+      "a2_canonical_columns": {
+        "question_id": "a2_canonical_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 12,
+            "expected": 12
+          }
+        ]
+      },
+      "a2_canonical_tables": {
+        "question_id": "a2_canonical_tables",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 8,
+            "expected": 8,
+            "names": [
+              "payment_allocations",
+              "payment_autopay_arrangements",
+              "payment_collection_attempts",
+              "payment_hold_dispositions",
+              "payment_holds",
+              "payment_methods",
+              "payment_provider_events",
+              "payment_provider_refunds"
+            ]
+          }
+        ]
+      },
+      "a2_permissions": {
+        "question_id": "a2_permissions",
+        "row_count": null,
+        "rows": [
+          {
+            "fin_post_present": 0,
+            "fin_post_expected": 0,
+            "fin_post_grants": 0,
+            "survivors": [
+              "fin.adjust",
+              "fin.provider",
+              "fin.read",
+              "fin.write",
+              "ops.jobs.write",
+              "scheduling.write"
+            ],
+            "survivors_expected": 6
+          }
+        ]
+      },
+      "a2_guards": {
+        "question_id": "a2_guards",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 2,
+            "expected": 2,
+            "names": [
+              "apply_held_funds_atomic",
+              "enforce_childcare_payment_immutability"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

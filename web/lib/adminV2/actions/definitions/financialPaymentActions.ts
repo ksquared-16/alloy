@@ -26,7 +26,7 @@
 
 import { randomUUID } from "crypto";
 
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { heldRefundEligibility, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 import {
@@ -45,6 +45,28 @@ import { resolveCollectionMerchant } from "@/lib/financials/payments/providerMer
 import { recognizeProviderRefund, requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ── THE GRAINS THIS FAMILY IS INVOKED AT ────────────────────────────────────────────────────
+ *
+ * `customer` is the one that was missing, and its absence made the whole held-money lifecycle
+ * unreachable in production. The Financials account card is customer-grain — a receipt, a held
+ * deposit and available prepaid belong to the household — so it dispatches `customer`, and
+ * `checkContext` refused it before the action ever ran. Nothing could create a hold, apply held
+ * money, release it, or deliberately apply available prepaid.
+ *
+ * The entity is ATTRIBUTION, not routing: `payment_id`, `hold_id` and `charge_id` in the payload
+ * decide what the money does, which is why the same receipt and payload previewed
+ * `eligible: true` under every already-declared grain on deployed staging and 400 under this one.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
+
 
 export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
@@ -164,7 +186,7 @@ const recordPayment: RegisteredAction = {
     actionKey: PAYMENT_RECORD_ACTION_KEY,
     defaultLabel: "Record payment",
     description: "Record money received against a posted charge and apply it to the balance.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     // Same as `charge.post`: the subject of a payment is the charge it settles, not a child.
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
@@ -397,7 +419,7 @@ const refundPayment: RegisteredAction = {
     actionKey: PAYMENT_REFUND_ACTION_KEY,
     defaultLabel: "Refund payment",
     description: "Refund a recorded payment, leaving the original receipt intact.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -685,7 +707,7 @@ const collectCardPayment: RegisteredAction = {
     actionKey: PAYMENT_COLLECT_CARD_ACTION_KEY,
     defaultLabel: "Collect by card",
     description: "Collect an amount that is owed by charging a card, through the provider's own merchant account.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -878,7 +900,7 @@ const reversePaymentApplicationAction: RegisteredAction = {
     defaultLabel: "Unapply payment",
     description:
         "Undo a payment application so the money becomes unapplied and the charge owes it again. The payment itself is unchanged.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -1024,7 +1046,7 @@ const applyPaymentToChargeAction: RegisteredAction = {
     actionKey: PAYMENT_APPLY_ACTION_KEY,
     defaultLabel: "Apply payment",
     description: "Apply received money that is not yet allocated to an outstanding charge.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
