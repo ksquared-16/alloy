@@ -81,6 +81,15 @@ export type PaymentPresentation = {
      */
     holdableCents: number;
     /**
+     * What of this receipt a hold restricts.
+     *
+     * Stated rather than left implicit inside `unappliedCents`, because a row that says only
+     * "unapplied" overstates what can answer an obligation by exactly this amount. The receipt is
+     * the only place an operator can see the difference between money that is merely unallocated
+     * and money that is deliberately restricted.
+     */
+    heldCents: number;
+    /**
      * Whether the card offers `deposit.hold` on this row.
      *
      * Posted inbound money with something left to restrict. Holding a refund is meaningless — the
@@ -157,6 +166,7 @@ export function presentPayment(
         refundedCents: isRefund ? 0 : refunded,
         refundableCents: refundable,
         holdableCents: holdable,
+        heldCents: held,
         offersHold: isPosted && !isRefund && !payment.refundsPaymentId && holdable > 0,
     };
 }

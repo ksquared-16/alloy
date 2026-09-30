@@ -384,6 +384,8 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                  * would be arguing with the invariant instead of declining to act.
                  */
                 holdableCents: Math.max(0, p.unappliedCents - (p.heldCents ?? 0)),
+                /* What of this receipt is restricted — the difference the row has to be able to state. */
+                heldCents: p.heldCents ?? 0,
                 /*
                  * THE SAME MONEY, NAMED FOR THE OTHER ACT. Unapplied money that no lot restricts is
                  * both what may be held and what may be APPLIED, and the apply control was quoting
@@ -447,6 +449,64 @@ export function adaptFinancialsVmToFinancialsCard(input: {
          */
         heldDeposits: (vm.heldDeposits ?? [])
             .filter((h) => h.open)
+            .map((h) => ({
+                holdId: h.id,
+                paymentId: h.paymentId,
+                remaining: money(h.remainingCents, currency),
+                remainingCents: h.remainingCents,
+                /*
+                 * Shown ONLY when part of the lot is gone, because that is the only time it explains
+                 * anything. On an untouched hold "held $500, $500 remaining" is the same fact twice.
+                 */
+                original:
+                    h.remainingCents !== h.originalAmountCents
+                        ? money(h.originalAmountCents, currency)
+                        : null,
+                disposedLines: [
+                    ...(h.releasedCents > 0 ? [{ label: "Released", value: money(h.releasedCents, currency) }] : []),
+                    ...(h.appliedCents > 0 ? [{ label: "Applied", value: money(h.appliedCents, currency) }] : []),
+                    ...(h.refundedCents > 0 ? [{ label: "Refunded", value: money(h.refundedCents, currency) }] : []),
+                ],
+                refundable: h.refundable,
+                /*
+                 * FROM THE SNAPSHOT, NOT FROM CURRENT POLICY. The terms a family was promised do not
+                 * change because the organisation's policy did, which is the entire reason the terms
+                 * are stored on the hold.
+                 */
+                refundableNote: h.refundable
+                    ? "Refundable on the terms it was taken under"
+                    : "Taken as non-refundable",
+                reason: h.reason,
+                /* Never a raw ISO date on an operator surface. */
+                heldOn: displayDate(h.heldAt),
+                /*
+                 * PROVENANCE ONLY, and named as provenance. It is not consulted to decide
+                 * refundability — `refundable` above is — and it is not offered as a link, because a
+                 * deposit policy has no operator surface to reach.
+                 */
+                policyReference: h.policyId,
+                open: h.open,
+            })),
+
+        /*
+         * ── A DEPOSIT'S LIFE DOES NOT END WHEN ITS MONEY DOES ───────────────────────────────────
+         *
+         * A lot whose remaining reaches zero left the held list entirely, and with it went the only
+         * surface that could say what was held, why, on what terms, and what became of it. The
+         * history was never lost — the dispositions are append-only and the reader already folds
+         * them — but nothing rendered it, so the questions the held row exists to answer stopped
+         * being answerable the moment the lifecycle completed.
+         *
+         * SEPARATE FROM THE POSITION, DELIBERATELY. These lots contribute to no figure: not Held
+         * deposit, not Available prepaid, not Current balance. `remainingCents` is zero and every
+         * total folds the same dispositions, so a completed lot cannot add to anything by being
+         * rendered. It is history, and it is shown as history.
+         *
+         * NO SECOND TABLE. Same rows, same fold, same provenance authority — only the filter
+         * differs.
+         */
+        heldDepositHistory: (vm.heldDeposits ?? [])
+            .filter((h) => !h.open && h.dispositions.length > 0)
             .map((h) => ({
                 holdId: h.id,
                 paymentId: h.paymentId,
@@ -836,5 +896,6 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         adjustments: [],
         /* The degraded payload claims no holds rather than inventing an empty position. */
         heldDeposits: [],
+        heldDepositHistory: [],
     };
 }

@@ -33,7 +33,7 @@
 
 import { randomUUID } from "crypto";
 
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import {
     previewTemplateCharge,
     writeTemplateDraftCharge,
@@ -49,6 +49,27 @@ import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
+ *
+ * `customer` is the account grain, and it is the one the Financials account card dispatches: a
+ * ledger, its charges and its adjustments belong to the HOUSEHOLD. It was missing here for the
+ * same reason it was missing from the payments and deposit families, and with the same
+ * consequence — `checkContext` refuses an undeclared grain before the action runs, so a click
+ * from the surface that offers the control reached a 400 instead of its authority.
+ *
+ * Only the acts this surface actually mounts are widened. An action that is not offered from an
+ * account is not given the grain just because its neighbours have it.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
+
 
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
 export const CHARGE_POST_ACTION_KEY = "charge.post";
@@ -488,7 +509,7 @@ const addCharge: RegisteredAction = {
     actionKey: CHARGE_ADD_ACTION_KEY,
     defaultLabel: "Add charge",
     description: "Create a charge for a child from a configured charge template.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -786,7 +807,7 @@ const postCharge: RegisteredAction = {
     actionKey: CHARGE_POST_ACTION_KEY,
     defaultLabel: "Post charge",
     description: "Post a draft charge so it becomes owed.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     /*
      * THE SUBJECT OF A POST IS THE CHARGE, not a child.
@@ -888,7 +909,7 @@ const reverseCharge: RegisteredAction = {
     actionKey: CHARGE_REVERSE_ACTION_KEY,
     defaultLabel: "Reverse charge",
     description: "Reverse or adjust a posted charge with a new corrective record.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     // Same as posting: the corrective record's subject is the charge it references.
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
