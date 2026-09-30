@@ -143,11 +143,34 @@ describe("the benchmark manifest's measured counts match the measurement", () =>
         expect(report.counts.bound).toBe(report.counts.declared);
     });
 
-    it("Identity/Access is listed among the certified domains, not the pending ones", () => {
+    it("Identity/Access appears in exactly one of the certified and pending rows", () => {
+        // It is currently PENDING on one gate — the migration apply. Whichever row it sits in, it
+        // must not sit in both: a domain listed as certified AND pending gives a reader licence to
+        // believe whichever they prefer, and that ambiguity is the failure this pack exists to stop.
         const manifest = read(MANIFEST);
         const certifiedRow = manifest.split("\n").find((l) => /\*\*Domains certified\*\*/.test(l)) ?? "";
         const pendingRow = manifest.split("\n").find((l) => /\*\*Domains pending\*\*/.test(l)) ?? "";
-        expect(certifiedRow, "Identity/Access is not in the certified row").toMatch(/Identity\/Access/);
-        expect(pendingRow, "Identity/Access is still listed as pending as well").not.toMatch(/Identity\/Access/);
+        const inCertified = /Identity\/Access/.test(certifiedRow);
+        const inPending = /Identity\/Access/.test(pendingRow);
+        expect(
+            [inCertified, inPending].filter(Boolean).length,
+            `Identity/Access is in certified=${inCertified} and pending=${inPending}; exactly one is required`,
+        ).toBe(1);
+    });
+
+    it("while pending, the section names the migration apply as the remaining gate", () => {
+        // The repair lives in the tree and not yet in the database. A reader who took "closed" to
+        // mean "closed in production" would draw the opposite conclusion about current risk, so the
+        // section must say which it is for as long as it is pending.
+        const manifest = read(MANIFEST);
+        const pendingRow = manifest.split("\n").find((l) => /\*\*Domains pending\*\*/.test(l)) ?? "";
+        if (!/Identity\/Access/.test(pendingRow)) return; // certified: this obligation is discharged
+        expect(manifest, "the pending section must name the unapplied migrations").toMatch(/20261104120000/);
+        expect(manifest, "the pending section must say the repair is not yet applied").toMatch(
+            /not yet applied/i,
+        );
+        expect(manifest, "the pending section must say the exposure is still open").toMatch(
+            /still open in production/i,
+        );
     });
 });

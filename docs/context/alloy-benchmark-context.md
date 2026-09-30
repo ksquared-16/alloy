@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `5a5771554` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access (§6)** |
-| **Domains pending** | Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process |
+| **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -177,17 +177,25 @@ brought into `status_definitions`.
 
 ---
 
-## 6. Identity / Authentication / Roles / Access — CERTIFIED
+## 6. Identity / Authentication / Roles / Access — PENDING CERTIFICATION (one gate)
 
-**State:** `IDENTITY_ACCESS_DOCUMENTATION_CONTEXT_READY`, certified 2026-09-30 after an
-implementation-convergence pass. Authority discovery completed 2026-09-29; RLS Model A was ratified
-2026-09-30; the convergence that followed closed the one class where the failure mode was cross-tenant
-mutation rather than a capability disagreement.
+**State:** `IDENTITY_ACCESS_RLS_CONVERGENCE_MEASURED_MIGRATION_PACKET_READY_HOSTED_VERIFICATION_REQUIRED`.
 
-**Why it certifies now and did not on 2026-09-29.** Three of the four blockers below were closed, and
-the fourth turned out to be measured rather than unknown. Certification here means *the documentation
-describes the system accurately, including its gaps* — not that the domain has no debt. It has a
-precisely sized amount, stated below.
+Authority discovery completed 2026-09-29; RLS Model A was ratified 2026-09-30; the convergence pass
+that followed measured the estate afresh, found a cross-tenant mutation class the first pass had no
+term for, and **authored the repair**. Everything on the documentation axis is done. One gate remains,
+and it is not a documentation gate:
+
+> **THE ONE REMAINING GATE.** Migrations `20261104120000` and `20261104130000` are authored,
+> validated, and merged into the corpus's base — but **applying them to the deployed primary is a
+> separate governed action that has not been performed.** Until it is, the exposures described below
+> are **still open in production**, and this section must not be read as saying otherwise.
+
+**Why the distinction is stated this loudly.** The rest of this pack describes documentation that
+matches a shipped system. Here, two paragraphs describe a repair that exists in the tree and not yet
+in the database. A reader — human or model — who took "closed" to mean "closed in production" would
+draw exactly the wrong conclusion about the current risk. Certification of this domain resumes the
+moment the apply is confirmed by census; nothing else is outstanding.
 
 **What is solid.** One permission registry (`permission_keys` / `permissions`), one additive grant
 model (`user_roles` → `role_permission_grants`), real scope tables for department, site and access
@@ -201,7 +209,7 @@ in the tree resolves a *submitted or inbound* address, never the session's own.
 Each answers a question the others do not, and the most common wrong belief about this system is that
 the first implies the rest.
 
-### Blockers closed
+### Blockers closed on the documentation axis
 
 - **The Director gate.** RATIFIED 2026-09-30 (Model A): route capabilities authorize, RLS isolates
   tenants, supported mutation is server-side under `service_role`, UI visibility is presentation only.
@@ -212,9 +220,10 @@ the first implies the rest.
   policy's text, not by a negative pattern test. Repaired by `20260916040000`; held by
   `tests/access/rlsTenancyLock.test.ts`.
 - **Cross-tenant read exposure.** Two tables had no RLS at all (`payment_provider_disputes`,
-  `commercial_policy_exceptions`), both with `org_id` and a standing `authenticated` SELECT grant.
-  Repaired by `20261104130000`; the estate invariant is held going forward by
-  `tests/access/rlsEstateCoverage.test.ts`.
+  `commercial_policy_exceptions`), both with `org_id` and a standing `authenticated` SELECT grant, so
+  any authenticated principal read every organization's rows. **Repair authored** in
+  `20261104130000` — *not yet applied; see the gate above.* The estate invariant is held going forward
+  by `tests/access/rlsEstateCoverage.test.ts`.
 - **The authentication/session layer has an owner.**
   `platform/governance/authentication-and-session-model.md` — new, canonical, and explicit about which
   facts are Alloy's, which are Supabase's, which are **UNKNOWN_EXTERNAL** provider configuration, and
@@ -231,9 +240,9 @@ Measured: **14 mutating functions EXECUTE-granted to `authenticated`, 9 SECURITY
 containing any caller-authority check.** Every one took `p_org_id` as a parameter. The live subset is
 `execute_lead_status_mutation` / `execute_enrollment_status_mutation`, which write governed lifecycle
 state for whatever org the caller names — bypassing the route, the capability check, and
-`validateStatusTransition` together. Closed by `20261104120000`, which also **widens
-`access_rpc_boundary_report`** so the existing live lock guards the *shape* rather than the
-*spellings* that let this family through.
+`validateStatusTransition` together. **Repair authored** in `20261104120000`, which also **widens `access_rpc_boundary_report`** so the
+existing live lock guards the *shape* rather than the *spellings* that let this family through. *Not
+yet applied to the deployed primary; see the gate above.*
 
 ### Debt that remains, with exact sizes
 
@@ -337,7 +346,7 @@ was certified; it is not a claim that the repository must stay there.
 
 | Version | Base | Change |
 |---|---|---|
-| **V1** | `5a5771554` | Identity/Access certified (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **458 of 874 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
+| **V1** | `5a5771554` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **458 of 874 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
 | V0 | `9cbe2915b` | First certification: Developer Platform / API, Runtime, Business Process. |
 
 Re-certify a domain when any of these occur:

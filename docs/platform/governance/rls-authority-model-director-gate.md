@@ -13,7 +13,10 @@ been made and now lives in its durable owner,
 capabilities authorize; RLS isolates tenants; mutation is server-side*. **Read that for the
 decision; read this for the measurement and the staged plan.**
 
-**Implementation status (2026-09-30).** Phases 1–3 of the staged plan are **DONE**, and the
+**Implementation status (2026-09-30).** Phase 1 is **DONE**; Phases 2b–3b are **AUTHORED, APPLY
+PENDING** — the migrations are in the tree and have not been applied to the deployed primary, so the
+exposures they close are **still open in production**. Phase 2's original tenancy class was already
+closed by `20260916040000`. The
 remeasurement that preceded them found a class the first pass had no term for — SECURITY DEFINER
 functions taking their organization as a parameter. See *Remeasured 2026-09-30* below, which
 supersedes every count in *The database, measured*. Phase 4 (retiring 259 tables' worth of
@@ -174,7 +177,11 @@ capability check and the transition gate together — which is the precise sense
 *this capability governs this operation* is true of the product and not true of the database", stated
 one layer lower than September stated it.
 
-### Repaired here
+### Repaired here — authored, not yet applied
+
+> Both migrations below are committed and validated. **Neither has been applied to the deployed
+> primary.** `database.apply_migration` is a separate governed action and is the single remaining step;
+> until it runs, everything described as closed here is closed in the tree only.
 
 - **`20261104120000`** revokes EXECUTE from PUBLIC/anon/authenticated on the org- and
   actor-parameterized mutating family, keeps `service_role`, and **widens
@@ -404,16 +411,18 @@ write policies contain a self-comparison. Confirmed by reading every write polic
 by a `not like` probe, because a zero has two readings. Held by
 `tests/access/rlsTenancyLock.test.ts`.
 
-**Phase 3 — decide `payment_provider_disputes`. ✅ DONE 2026-09-30 — and it was two tables, not
-one.** `commercial_policy_exceptions` had acquired the identical defect since September. Both
+**Phase 3 — decide `payment_provider_disputes`. ⚠️ AUTHORED 2026-09-30, APPLY PENDING — and it was two
+tables, not one.** `commercial_policy_exceptions` had acquired the identical defect since September. Both
 repaired by `20261104130000`: RLS enabled, service-role policy, `authenticated` SELECT grant left
 alone (revoking SELECT is a broader decision than closing a leak, and with RLS on the grant already
 yields nothing). The sibling read predicate was deliberately **not** copied — see the remeasurement
 above. `tests/access/rlsEstateCoverage.test.ts` holds the estate invariant going forward, because a
 migration's embedded guard is one-shot.
 
-**Phase 3b — the SECURITY DEFINER family. ✅ DONE 2026-09-30.** Not in the original plan because the
-original measurement had no term for it. `20261104120000`; see the remeasurement above.
+**Phase 3b — the SECURITY DEFINER family. ⚠️ AUTHORED 2026-09-30, APPLY PENDING.** Not in the original
+plan because the original measurement had no term for it. `20261104120000`; see the remeasurement
+above. **Until `database.apply_migration` runs against the deployed primary, all 14 functions remain
+EXECUTE-granted to `authenticated` there.**
 
 **Phase 4 — retire unnecessary write grants, table family by table family. OPEN — the largest
 remaining item.** Proving product compatibility per family, starting with families already fully
