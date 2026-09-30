@@ -486,6 +486,35 @@ describe("the link's refusals stay four different answers", () => {
         expect(source, "no short_code lookup").not.toMatch(/eq\(\s*"short_code"/);
     });
 
+    it("never hands the provider's own sentence to a payer", () => {
+        /*
+         * Measured on deployed staging: a tampered setup reference answered
+         * `No such setupintent: 'seti_…'`. That is the provider's noun, the provider's identifier
+         * and a hint about what else exists, on a page read by a parent.
+         */
+        const route = code("app/api/public/bank-setup/[token]/route.ts");
+        expect(route).toMatch(/done\.reason === "provider_error" \|\| done\.reason === "write_failed"/);
+        expect(route).toMatch(/Nothing has been saved, and you can try again/);
+        /* And the route names no provider noun of its own in anything it sends. */
+        for (const noun of ["setupintent", "SetupIntent", "us_bank_account", "seti_", "pm_", "cus_"]) {
+            const sent = route.split("\n").filter((l) => /publicOk\(|publicErr\(|message[:=]/.test(l)).join("\n");
+            expect(sent, noun).not.toContain(noun);
+        }
+    });
+
+    it("names the payer from `persons`, which is the table that exists", () => {
+        /*
+         * Measured on deployed staging: the route read `people`, PostgREST errored, and a parent
+         * was shown a bank-authorization page addressed to nobody. The whole platform names a
+         * person through `persons` — `resolvePayerCandidates` selects `persons(first_name,
+         * last_name)` — so this is the one spelling, asserted in both places.
+         */
+        const route = code("app/api/public/bank-setup/[token]/route.ts");
+        expect(route).toMatch(/from\("persons"\)/);
+        expect(route, "the table that does not exist").not.toMatch(/from\("people"\)/);
+        expect(code("lib/financials/payments/paymentSubjectModel.ts")).toMatch(/persons\(first_name, last_name\)/);
+    });
+
     it("the entry page sends this action type to the payer's own surface", () => {
         const page = code("app/a/[token]/page.tsx");
         expect(page).toMatch(/payment_method_setup/);

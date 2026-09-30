@@ -54,14 +54,24 @@ import { stripePublishableKey } from "@/lib/financials/payments/stripePublishabl
 
 export const dynamic = "force-dynamic";
 
-/** The payer's own name, for the provider's fields and for the page's own heading. */
+/**
+ * The payer's own name, for the provider's fields and for the page's own heading.
+ *
+ * The table is `persons`. An earlier draft read `people`, which does not exist — PostgREST answered
+ * with an error, the name came back empty, and deployed staging showed a bank-authorization page
+ * addressed to nobody. A payer about to authorize a standing debit is entitled to see whose
+ * authorization this is, so an empty name is a defect rather than a cosmetic gap.
+ *
+ * It stays non-fatal: the name is a PREFILL and a courtesy, never the identity. The identity is the
+ * link's `entity_id`, and it is resolved without reading this at all.
+ */
 async function payerName(
     supabase: ReturnType<typeof createServiceRoleClient>,
     orgId: string,
     personId: string,
 ): Promise<string> {
     const { data } = await supabase
-        .from("people")
+        .from("persons")
         .select("first_name, last_name")
         .eq("org_id", orgId)
         .eq("id", personId)
@@ -235,7 +245,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                           : done.reason === "invalid_input"
                             ? 400
                             : 502;
-                return publicOk({ saved: false, reason: done.reason, message: done.message }, status);
+                /*
+                 * ── THE PROVIDER'S SENTENCE IS NOT THE PAYER'S ──
+                 *
+                 * Measured on deployed staging: a tampered setup reference came back as
+                 * `No such setupintent: 'seti_…'`. Every word of that is the provider's — a noun
+                 * this codebase deliberately confines to one adapter file, an identifier that means
+                 * nothing to a parent, and a hint about what else might exist. The domain's own
+                 * refusals say what happened and what to do; a provider or storage failure gets
+                 * Alloy's sentence instead of Stripe's.
+                 */
+                const message =
+                    done.reason === "provider_error" || done.reason === "write_failed"
+                        ? "That could not be completed just now. Nothing has been saved, and you can try again."
+                        : done.message;
+                return publicOk({ saved: false, reason: done.reason, message }, status);
             }
 
             /*
