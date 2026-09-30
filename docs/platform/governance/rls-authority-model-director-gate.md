@@ -1,14 +1,19 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-16
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
 # RLS_AUTHORITY_MODEL_DIRECTOR_GATE
 
-**Status:** DIRECTOR_DECISION_READY — one architecture recommended, no implementation performed.
-**Classification:** `RLS_AUTHORITY_MODEL_DIRECTOR_GATE`
+**Status:** **RATIFIED 2026-09-30 — Model A.** The decision this document was written to enable has
+been made and now lives in its durable owner,
+[`../foundation/platform-decisions.md`](../foundation/platform-decisions.md) § *2026-09 — Route
+capabilities authorize; RLS isolates tenants; mutation is server-side*. **Read that for the
+decision; read this for the measurement and the staged plan.** No implementation has been performed
+here — Phases 1–3 below are model-independent and may proceed.
+**Classification:** `RLS_AUTHORITY_MODEL_RATIFIED` (was `RLS_AUTHORITY_MODEL_DIRECTOR_GATE`)
 **Raised:** AI Residual Authority V1, 2026-09-16. **Investigated:** RLS Authority Model V1, same day.
 **Not AI-specific. Not caused by any Access & Identity slice.**
 

@@ -184,7 +184,13 @@ identity is never inferred, deliberately.
 
 **Blockers, measured:**
 
-- **An open Director gate — narrower than it looks (analysed 2026-09-30).**
+- **~~An open Director gate~~ — RATIFIED 2026-09-30 (Model A).** The decision now lives in
+  `platform/foundation/platform-decisions.md` § *2026-09 — Route capabilities authorize; RLS isolates
+  tenants; mutation is server-side*, and the measurement document points at it rather than holding an
+  unmade decision. What remains is **convergence, not choice**: retire the excess authenticated write
+  grants and repair the tenancy class. Original analysis retained below because the measurement is
+  what the ratification rests on.
+- **(analysis, retained)**
   `platform/governance/rls-authority-model-director-gate.md` is `status: canonical` while carrying
   `DIRECTOR_DECISION_READY`. On reading it fully, it is not an architectural fork: the recommended
   model (routes authorize, RLS tenants, mutation server-only) is **already the written doctrine** in
