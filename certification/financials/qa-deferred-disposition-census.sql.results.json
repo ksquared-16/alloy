@@ -1,0 +1,82 @@
+{
+  "trusted_host_action_id": "tha_d4254ccecde4a9",
+  "query_hash": "b6d0c938b68c65d220d22d0f8166ad884191794c8ece7797340c518324d9edec",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T20:48:21.319Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d4254ccecde4a9",
+    "query_hash": "b6d0c938b68c65d220d22d0f8166ad884191794c8ece7797340c518324d9edec",
+    "authorization_id": "grnt_a4487c3818564914",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T20:48:27.215Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "check_clause": "CHECK ((result = ANY (ARRAY['pass'::text, 'fail'::text, 'blocked'::text, 'not_run'::text, 'deferred'::text])))"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "present": true,
+            "check_clause": "CHECK (((result <> 'deferred'::text) OR ((observation IS NOT NULL) AND (btrim(observation) <> ''::text))))"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "check_clause": "CHECK (((result <> ALL (ARRAY['fail'::text, 'blocked'::text])) OR ((observation IS NOT NULL) AND (btrim(observation) <> ''::text) AND (classification IS NOT NULL))))"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 4,
+            "pass": 1,
+            "fail": 0,
+            "blocked": 1,
+            "not_run": 2,
+            "deferred": 0,
+            "suites": "core_financials_director_qa,staffing_v1_human_qa"
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "version_present": true
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}
