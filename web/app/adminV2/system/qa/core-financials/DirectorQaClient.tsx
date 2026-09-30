@@ -345,8 +345,17 @@ export default function DirectorQaClient() {
                         {tally.pass} / {walkthrough.length} scenarios accepted
                     </p>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
+                        {/*
+                          * ONE WORD, ONE MEANING. This line used to end "Deferred 0 · Not run 70 ·
+                          * Deferred 1": the first is how many scenarios the Director has ANSWERED
+                          * deferred, the second was how many the catalog holds outside the walk.
+                          * Two different facts wearing one label is exactly the confusion this
+                          * packet exists to refuse everywhere else.
+                          */}
                         Passed {tally.pass} · Failed {tally.fail} · Blocked {tally.blocked} · Deferred {tally.deferred} · Not run {tally.not_run}
-                        {" · "}Deferred {(data.scenarios.length - walkthrough.length)}
+                        {data.scenarios.length - walkthrough.length > 0
+                            ? ` · ${data.scenarios.length - walkthrough.length} not in this walk`
+                            : ""}
                     </p>
                 </Panel>
 
