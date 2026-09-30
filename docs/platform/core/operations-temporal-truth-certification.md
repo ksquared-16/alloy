@@ -69,7 +69,7 @@ estimate of "25+ routes" for Enrollment/Placement was low by more than threefold
 | Domain | API route files | Handlers | Writes | Reads | UI pages |
 |---|---|---|---|---|---|
 | Enrollment / Placement | 89 | 109 | 59 | 50 | 8 |
-| Staff / Scheduling | 62 | 85 | 40 | 45 | — |
+| Staff / Scheduling | 63 | 85 | 40 | 45 | 7 |
 
 ### Authority is what the server enforces
 
@@ -338,13 +338,13 @@ as doctrine; `certification/**` artifacts are EXCLUDE_HISTORY.
 
 ### `ENROLLMENT_PLACEMENT_DOCUMENTATION_CONTEXT_READY`
 
-Surface measured exactly (89/109/8). Every mutating write surface has real authority, and the one
+Surface measured exactly (89 route files, 109 handlers, 8 UI pages). Every mutating write surface has real authority, and the one
 session-only handler provably mutates nothing. Canonical owners named. The contradictions found were
 corrected rather than described. Placement product model answered from measurement (§4a).
 
 ### `STAFF_SCHEDULING_DOCUMENTATION_CONTEXT_READY`
 
-Surface measured exactly (62/85). Both portal-admission-only mutations are closed with existing
+Surface measured exactly (63 route files, 85 handlers, 7 UI pages). Both portal-admission-only mutations are closed with existing
 capabilities and locked by test. Organizational model measured, including two absences that names
 suggested otherwise (§10). Scheduling concepts measured from the catalog and the command registry, not
 from intent. The one canonical doc that denied staff assignment exists is corrected.
