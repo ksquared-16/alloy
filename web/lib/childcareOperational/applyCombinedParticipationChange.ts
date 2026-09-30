@@ -50,6 +50,14 @@ export type CombinedParticipationChangeInput = {
     actorUserId?: string | null;
     sourceKey?: string | null;
     idempotencyKey?: string;
+    /**
+     * Optimistic preconditions. Supplying the rows the caller believes are current turns a concurrent
+     * edit into a conflict instead of a branch, and is the only failure mode that reaches the database
+     * with one half already written - which is what proves the rollback is real rather than a
+     * consequence of validating early.
+     */
+    expectedPlacementId?: string | null;
+    expectedAssignmentId?: string | null;
     /** Omit to leave placement truth alone. */
     placement?: {
         startDate: string;
@@ -142,8 +150,14 @@ export async function applyCombinedParticipationChange(
             idempotencyKey,
             todayYmd: input.todayYmd,
             actorUserId: trimOrNull(input.actorUserId),
-            expectedPlacementId: resolvedPlacement?.prior.id ?? null,
-            expectedAssignmentId: resolvedAssignment?.prior.id ?? null,
+            expectedPlacementId:
+                input.expectedPlacementId !== undefined
+                    ? input.expectedPlacementId
+                    : (resolvedPlacement?.prior.id ?? null),
+            expectedAssignmentId:
+                input.expectedAssignmentId !== undefined
+                    ? input.expectedAssignmentId
+                    : (resolvedAssignment?.prior.id ?? null),
             placement:
                 placementInput && resolvedPlacement
                     ? placementChangePayload(placementInput, resolvedPlacement)

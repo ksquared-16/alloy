@@ -33,17 +33,40 @@ export type DailyHoursRange = { arrive: string; depart: string };
  * EFFECTIVE-DATED TRUTH, where `docs/platform/core/effective-dated-assignment-doctrine.md` requires a
  * successor record rather than an in-place edit.
  *
- * | Field | Draft meaning | Post-materialisation meaning | Operational change? |
- * |---|---|---|---|
- * | `program_category_id` | desired program | placement program | YES — supersede |
- * | `program_room_cohort_key` | desired room | placement `room_location_id` | YES — supersede |
- * | `location_id` | desired site | agreement + placement site | YES — supersede |
- * | `schedule_type` | desired pattern | assignment `schedule_pattern_id` | YES — supersede |
- * | `start_date` | family-requested start | **operational truth-interval start** | YES — supersede |
- * | `notes` | draft note | agreement metadata note | no — non-temporal |
- * | `requested_days_per_week` | requested days | requested days (not an interval) | no — non-temporal |
- * | `tuition_plan_id`, `quote_accepted` | commercial intent | commercial intent | no — not assignment truth |
- * | `end_date`, `weekdays`, `scheduleTimes` | schedule-draft extensions | **draft only** — not written durably | n/a |
+ * Columns: DRAFT MEANING / OPERATIONAL MEANING / TEMPORAL TRUTH / IN-PLACE EDIT OK PRE-MATERIALISATION /
+ * SUPERSESSION REQUIRED POST-MATERIALISATION.
+ *
+ * | Field | Draft meaning | Operational meaning | Temporal truth? | In-place pre-mat? | Supersede post-mat? |
+ * |---|---|---|---|---|---|
+ * | `program_category_id` | desired program | placement `program_category_id` | YES | yes | YES — routed |
+ * | `program_room_cohort_key` | desired room | placement `room_location_id` | YES | yes | YES — routed |
+ * | `start_date` | family-requested start | **placement truth-interval start** | YES | yes | YES — routed |
+ * | `schedule_type` | desired pattern | assignment `schedule_pattern_id` | YES | yes | YES — routed |
+ * | `location_id` | desired site | agreement site (**see gap below**) | YES, on placement | yes | NOT ROUTED |
+ * | `notes` | draft note | agreement metadata note | no | yes | no — non-temporal |
+ * | `requested_days_per_week` | requested days | requested days, not an interval | no | yes | no — non-temporal |
+ * | `tuition_plan_id` | commercial intent | commercial intent | no | yes | no — not assignment truth |
+ * | `quote_accepted` | commercial intent | commercial intent | no | yes | no — not assignment truth |
+ * | `end_date` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ * | `weekdays` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ * | `scheduleTimes` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ *
+ * ── THE ONE GAP, STATED RATHER THAN IMPLIED ──
+ *
+ * `location_id` post-materialisation updates `child_enrollment_agreements.site_location_id` and does NOT
+ * supersede the placement, so the placement keeps its original site. This predates the temporal
+ * convergence - the previous in-place block did not carry site either - and it is left as it is on
+ * purpose rather than quietly routed, for two reasons.
+ *
+ * First, the primitive cannot express it: a supersession carries the prior row's site forward, because
+ * `validate_child_placements_consistency` derives and pins placement site to the agreement and a
+ * cross-site move is not a room change with a different argument.
+ *
+ * Second, moving a child between SITES is a different operator intent from moving them between rooms -
+ * different capacity, different staffing, plausibly a different agreement - and inventing a
+ * representation for it here would be guessing at a product decision. It is recorded as product work,
+ * not smuggled in under a field that currently means something narrower. Until then a site change is
+ * recorded on the agreement header only, which is what it has always done.
  *
  * `start_date` is the one that most needs saying, because its old comment read "Requested Start
  * (family preferred) — not operational Start Date" without qualification. That is true of the draft

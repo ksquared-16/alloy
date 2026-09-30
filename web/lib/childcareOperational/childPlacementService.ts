@@ -18,6 +18,7 @@ import {
 import {
     applyParticipationOperationalChange,
     deriveParticipationIdempotencyKey,
+    findCompletedAttempt,
 } from "@/lib/childcareOperational/participationOperationalChange";
 import {
     validateProgramCategoryForSite,
@@ -399,6 +400,29 @@ export async function supersedeChildPlacement(
     supabase: SupabaseClient,
     input: SupersedeChildPlacementInput
 ): Promise<ChildPlacementRow> {
+    // A retry is answered with the original outcome, BEFORE validation - which would otherwise refuse
+    // it, having read this call's own successor as the current row. The key is derived from the raw
+    // request, so it matches the key the first call used.
+    const retryKey =
+        input.idempotencyKey
+        ?? deriveParticipationIdempotencyKey({
+            scope: "placement",
+            enrollmentAgreementId: input.enrollmentAgreementId,
+            values: [
+                trimOrNull(input.startDate),
+                trimOrNull(input.programCategoryId),
+                trimOrNull(input.roomLocationId),
+            ],
+        });
+    const replay = await findCompletedAttempt(supabase, {
+        orgId: input.orgId,
+        enrollmentAgreementId: input.enrollmentAgreementId,
+        idempotencyKey: retryKey,
+    });
+    if (replay?.placement) {
+        return await readPlacementById(supabase, input.orgId, replay.placement.successorId);
+    }
+
     const resolved = await resolvePlacementSupersession(supabase, input);
 
     // PERSISTENCE IS ONE TRANSACTION, OWNED BY THE DATABASE.
@@ -437,13 +461,21 @@ export async function supersedeChildPlacement(
     return placement;
 }
 
-/** Guard: operational placement rows must not be patched in place for business changes. */
-export function assertNoOperationalPlacementPatch(): void {
-    throw new OperationalEnrollmentServiceError(
-        "invalid_input",
-        "Operational placement changes must use supersedeChildPlacement, not update-in-place"
-    );
-}
+/*
+ * `assertNoOperationalPlacementPatch()` used to live here: a function that always threw, exported, and
+ * called by nothing. It was removed because it was the third layer of protection and the only one that
+ * did not work, while the public contract cited it as the reason in-place mutation "is refused for every
+ * caller" - a sentence that was not true of the implementation for as long as the bypass existed.
+ *
+ * The invariant now has exactly one owner and one enforcer:
+ *   - no in-place path EXISTS. Supersession delegates persistence to one SQL transaction, and there is
+ *     no code here that patches a live row's defining facts;
+ *   - `tests/access/participationTemporalWriterCensus.test.ts` fails if a new writer appears anywhere in
+ *     lib, app or scripts, mounted routes included.
+ *
+ * A guard nobody calls is worse than no guard: it reads as protection in review and in documentation,
+ * and it makes the absence of real enforcement harder to notice.
+ */
 
 export function isOperationalPlacementRow(row: ChildPlacementRow): boolean {
     return isPlacementOperationalStatus(row.status);
@@ -470,9 +502,9 @@ export function isOperationalPlacementRow(row: ChildPlacementRow): boolean {
  * ── WHAT THIS IS NOT ──
  *
  * Not a delete: the row is retained, so a consumer that already read it can still resolve the id
- * and see what happened to it. Not a change: no business value is rewritten, which is why the
- * `assertNoOperationalPlacementPatch` doctrine is untouched — that guard forbids patching a row's
- * terms in place, and a terminal lifecycle transition is not a term.
+ * and see what happened to it. Not a change: no business value is rewritten, so the no-patching
+ * invariant is untouched — it forbids rewriting a row's terms in place, and a terminal lifecycle
+ * transition is not a term.
  *
  * Retry converges rather than conflicting: a caller that could not confirm the first attempt is
  * told the same thing the first attempt would have told it.

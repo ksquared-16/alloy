@@ -152,6 +152,36 @@ function translate(message: string): OperationalEnrollmentServiceError {
     return new OperationalEnrollmentServiceError("db_error", m);
 }
 
+/**
+ * Looks up an already-completed attempt for this key.
+ *
+ * WHY THE SERVICES NEED THIS BEFORE THEY VALIDATE. The primitive replays a repeated key, but a service
+ * validates before it calls: it re-reads the current operational row, finds the successor its own first
+ * call created, and refuses because the requested start is no longer AFTER the current start. Safe - it
+ * chains nothing - but wrong as an answer, because the operator's change did succeed and a client
+ * retrying a timed-out request would be told its change was invalid.
+ *
+ * So a retry is recognised before validation and answered with the original outcome.
+ */
+export async function findCompletedAttempt(
+    supabase: SupabaseClient,
+    input: { orgId: string; enrollmentAgreementId: string; idempotencyKey: string }
+): Promise<ParticipationOperationalChangeResult | null> {
+    const { data, error } = await supabase
+        .from("participation_change_attempts")
+        .select("result")
+        .eq("org_id", input.orgId)
+        .eq("enrollment_agreement_id", input.enrollmentAgreementId)
+        .eq("idempotency_key", input.idempotencyKey.trim())
+        .maybeSingle();
+    if (error || !data) return null;
+    const result = ((data as { result?: unknown }).result ?? {}) as Record<string, unknown>;
+    const placement = parseRow(result.placement);
+    const assignment = parseRow(result.assignment);
+    if (!placement && !assignment) return null;
+    return { replayed: true, placement, assignment };
+}
+
 export async function applyParticipationOperationalChange(
     supabase: SupabaseClient,
     input: ParticipationOperationalChangeInput

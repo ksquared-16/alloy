@@ -18,6 +18,7 @@ import {
 import {
     applyParticipationOperationalChange,
     deriveParticipationIdempotencyKey,
+    findCompletedAttempt,
 } from "@/lib/childcareOperational/participationOperationalChange";
 import { validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
 import {
@@ -437,6 +438,23 @@ export async function supersedeScheduleAssignment(
     supabase: SupabaseClient,
     input: SupersedeScheduleAssignmentInput
 ): Promise<ScheduleAssignmentRow> {
+    // A retry is answered with the original outcome before validation, for the same reason as Placement.
+    const retryKey =
+        input.idempotencyKey
+        ?? deriveParticipationIdempotencyKey({
+            scope: "assignment",
+            enrollmentAgreementId: input.enrollmentAgreementId,
+            values: [trimOrNull(input.startDate), trimOrNull(input.schedulePatternId)],
+        });
+    const replay = await findCompletedAttempt(supabase, {
+        orgId: input.orgId,
+        enrollmentAgreementId: input.enrollmentAgreementId,
+        idempotencyKey: retryKey,
+    });
+    if (replay?.assignment) {
+        return await readAssignmentById(supabase, input.orgId, replay.assignment.successorId);
+    }
+
     const resolved = await resolveAssignmentSupersession(supabase, input);
 
     // PERSISTENCE IS ONE TRANSACTION, OWNED BY THE DATABASE.
@@ -489,12 +507,12 @@ export async function supersedeScheduleAssignment(
     return assignment;
 }
 
-export function assertNoOperationalScheduleAssignmentPatch(): void {
-    throw new OperationalEnrollmentServiceError(
-        "invalid_input",
-        "Operational schedule changes must use supersedeScheduleAssignment, not update-in-place"
-    );
-}
+/*
+ * `assertNoOperationalScheduleAssignmentPatch()` used to live here, with the same problem as its
+ * placement twin: a function that always threw and that nothing called. Removed for the same reason.
+ * The invariant is owned by the absence of an in-place path and enforced by
+ * `tests/access/participationTemporalWriterCensus.test.ts`.
+ */
 
 /**
  * Cancel a schedule assignment that should never have applied.
