@@ -111,6 +111,23 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      /*
+       * RETIRED — the legacy public home-cleaning product.
+       *
+       * `ea3eaf377` (2026-07-31) retired the cleaning product and deleted its API, including
+       * `/api/book-v2/quote-start` and `/api/book-v2/specialty-quote-start`. It did not remove the
+       * public pages that post to them, so those forms have been submitting to endpoints that do not
+       * exist. Redirecting is what stops a visitor reaching a form that cannot succeed; the dead
+       * components are removed in a follow-up scoped to the marketing site, because the quote modal
+       * they share still serves the live gutters vertical.
+       *
+       * `/quote` chose between cleaning and gutters. Only gutters remains, so it goes there.
+       */
+      { source: "/services/cleaning", destination: "/services", permanent: false },
+      { source: "/services/cleaning/:path*", destination: "/services", permanent: false },
+      { source: "/quote", destination: "/gutters", permanent: false },
+      { source: "/offers/firstfree4x120", destination: "/", permanent: false },
+      { source: "/offers/firstfree4x60", destination: "/", permanent: false },
       /** Phase H1: transitional public routes → canonical `/admin`. */
       { source: "/adminV2", destination: "/organization", permanent: false },
       { source: "/adminV2/:path*", destination: "/admin/:path*", permanent: false },
