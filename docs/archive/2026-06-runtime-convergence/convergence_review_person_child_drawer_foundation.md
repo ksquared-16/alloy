@@ -3,7 +3,7 @@
 **Verdict: APPROVED**
 **Reviewed:** `origin/cursor/person-child-drawer-runtime-foundation` @ `b367cb0a` ("Add Person and Child drawer layout runtime proof foundation"), single commit on merge-base `36af8691`. Net: 18 files, **+1,361/−6. 0 migrations. 0 production drawer/VM/queue/nav/seed files modified.**
 **Scope:** Proof-only Person + Child drawer LayoutDocs, relation registries, and proof fixtures, behind the preview flag.
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · doctrine [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md) · naming [`child_namespace_decision.md`](./child_namespace_decision.md).
+**Reviewer:** Convergence Review Authority · rubric `./convergence_review_rubric.md` · doctrine [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md) · naming [`child_namespace_decision.md`](./child_namespace_decision.md).
 
 ---
 

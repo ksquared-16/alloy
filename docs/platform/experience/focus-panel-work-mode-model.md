@@ -1,7 +1,8 @@
 ---
 owner: platform
-status: active
+status: canonical
 last_reviewed: 2026-07-19
+status_note: Vocabulary repair 2026-09-30: status read `active`, which is not in the lint vocabulary. The document calls itself "the canonical composition contract (A)" and is indexed as a canonical owner.
 ---
 
 # Focus Panel Work-mode Model — the canonical composition contract (A)

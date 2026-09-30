@@ -9,10 +9,10 @@
 | Doc | Role |
 |-----|------|
 | [`forms_operational_intelligence_workflow_polish.md`](./forms_operational_intelligence_workflow_polish.md) | OI command center + intelligence cards |
-| [`../system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md) | Prefill precedence |
-| [`../system/forms-intake-embed-doctrine.md`](../system/forms-intake-embed-doctrine.md) | Embed / iframe boundaries (FD-6) |
-| [`../system/forms-intake-runtime-validation.md`](../system/forms-intake-runtime-validation.md) | Runtime validation plan + outcome doctrine (FD-14) |
-| [`../system/forms-ai-document-recreation.md`](../system/forms-ai-document-recreation.md) | PDF → draft architecture (FD-7) |
+| [`../system/forms-intake-prefill-doctrine.md`](completed/forms-intake-prefill-doctrine.md) | Prefill precedence |
+| [`../system/forms-intake-embed-doctrine.md`](completed/forms-intake-embed-doctrine.md) | Embed / iframe boundaries (FD-6) |
+| `../system/forms-intake-runtime-validation.md` | Runtime validation plan + outcome doctrine (FD-14) |
+| [`../system/forms-ai-document-recreation.md`](later-phase/forms-ai-document-recreation.md) | PDF → draft architecture (FD-7) |
 
 ---
 

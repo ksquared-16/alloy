@@ -8,7 +8,7 @@ supersedes: []
 # Alloy Configuration Integrity Laws
 
 Sprint: `bp-config-integrity` (slot 6), Phase C. **Design only — no implementation.**
-Companion: [`configuration-overwriter-root-cause.md`](./configuration-overwriter-root-cause.md) (Phase A).
+Companion: `docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md` (`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md`) (Phase A).
 
 ## Purpose
 

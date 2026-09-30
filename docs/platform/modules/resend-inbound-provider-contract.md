@@ -3,9 +3,17 @@ owner: platform
 status: canonical
 last_reviewed: 2026-08-11
 source: official Resend documentation
+supersedes: []
 ---
 
 # Resend inbound (Receiving) — the provider contract
+
+> **Moved into the canonical tree 2026-09-30**, from
+> `platform/planning/conversation-platform-v1/RESEND-INBOUND-CONTRACT.md`. This is an **external
+> provider contract** read from Resend's own documentation, and two runtime modules cite it as their
+> authority — so it is reference truth, not planning material. Content unchanged; read it on demand
+> rather than as default context. Owner of the surrounding doctrine:
+> [`communications-platform.md`](./communications-platform.md).
 
 Established from official Resend documentation, not from examples, so it stops
 being tribal knowledge. Verified 2026-08-11.

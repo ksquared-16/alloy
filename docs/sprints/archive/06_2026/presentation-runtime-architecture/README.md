@@ -96,7 +96,7 @@ The brief's "Perspective" (role-based: Director/Teacher/Parent) is the **Audienc
 
 | # | Deliverable | Document |
 |---|---|---|
-| 1, 6, 9 | Presentation Runtime doctrine + complete primitive architecture | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
+| 1, 6, 9 | Presentation Runtime doctrine + complete primitive architecture | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | 2 | Experience Builder doctrine | [`02-experience-builder-doctrine.md`](./02-experience-builder-doctrine.md) |
 | 3 | Information Architecture | [`03-information-architecture.md`](./03-information-architecture.md) |
 | 4 | Interaction Model (navigation, config flow, publishing, preview, assignments, versioning) | [`04-interaction-model.md`](./04-interaction-model.md) |

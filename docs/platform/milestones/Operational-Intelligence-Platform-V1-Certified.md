@@ -13,10 +13,10 @@ This milestone certifies **Operational Intelligence Platform V1** as complete an
 
 **Companion artifacts:**
 
-- Product closeout — [`../../sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`](../../sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md)
-- Consumption roadmap — [`../../sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`](../../sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md)
+- Product closeout — `../../sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`
+- Consumption roadmap — `../../sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`
 - Module doctrine — [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md)
-- Unified charter — [`../../sprints/07_2026/operational-calculations-product-realization/UNIFIED-OPERATIONAL-INTELLIGENCE-PLATFORM.md`](../../sprints/07_2026/operational-calculations-product-realization/UNIFIED-OPERATIONAL-INTELLIGENCE-PLATFORM.md)
+- Unified charter — `../../sprints/07_2026/operational-calculations-product-realization/UNIFIED-OPERATIONAL-INTELLIGENCE-PLATFORM.md`
 
 ---
 

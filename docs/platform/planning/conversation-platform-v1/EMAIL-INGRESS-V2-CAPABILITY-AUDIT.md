@@ -3,11 +3,19 @@ owner: platform
 status: proposed
 status_note: A decision packet: the audit and the architecture it argues for, not a built thing.
 last_reviewed: 2026-08-18
-supersedes_candidate: INBOUND-EMAIL-PRIVACY-POSTURE.md (see §0 — requires Director decision)
+decision_record_for: docs/platform/modules/inbound-email-privacy-posture.md
+decision_record_note: Not a supersession candidate - see the note under the H1.
 sources: official Google Workspace / Gmail API, Microsoft Graph, and Resend documentation, fetched 2026-08-18
 ---
 
 # Email Ingress V2 — operational inboxes, purpose intake and acquisition
+
+> **This is a decision record, not a supersession.** The frontmatter field here previously read
+> `supersedes_candidate: … (requires Director decision)`, which overstated this document's own effect.
+> §0 states plainly that it "does not itself change the posture", that its §9 recommendation "stays
+> inside the existing posture", and that "nothing in this document authorizes building" a connector.
+> There is therefore **no open Director supersession question** here, and the field should not have
+> implied one. Corrected 2026-09-30.
 
 The question this document exists to answer, precisely:
 
@@ -33,7 +41,7 @@ evidence.
 
 ## §0 — Governance: this sprint collides with a canonical posture, deliberately
 
-`INBOUND-EMAIL-PRIVACY-POSTURE.md` (canonical, Director-recorded 2026-08-11) states:
+`docs/platform/modules/inbound-email-privacy-posture.md` (canonical, Director-recorded 2026-08-11) states:
 
 > **No Gmail or Outlook OAuth.** Not as a connector, not as an "optional convenience",
 > not behind a flag. […] If a future capability needs any part of it, it is a **separate
@@ -730,4 +738,4 @@ Microsoft: [message resource](https://learn.microsoft.com/en-us/graph/api/resour
 [mail flow rules](https://learn.microsoft.com/en-us/exchange/security-and-compliance/mail-flow-rules/mail-flow-rules)
 
 Resend: [pricing](https://resend.com/pricing) · and the repo's own
-`RESEND-INBOUND-CONTRACT.md`, established from official Resend documentation 2026-08-11.
+`docs/platform/modules/resend-inbound-provider-contract.md`, established from official Resend documentation 2026-08-11.

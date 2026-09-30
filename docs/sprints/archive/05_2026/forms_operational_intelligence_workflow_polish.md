@@ -11,7 +11,7 @@
 | [`forms_operational_workspace_redesign.md`](./forms_operational_workspace_redesign.md) | OW shell, inbox, lifecycle, distribution |
 | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) | PX visual tokens + surfaces |
 | [`forms_documents_operational_experience_hardening.md`](./later-phase/forms_documents_operational_experience_hardening.md) | Case-file + BOS interaction doctrine |
-| [`../system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md) | Contextual prefill architecture (OI-5) |
+| [`../system/forms-intake-prefill-doctrine.md`](completed/forms-intake-prefill-doctrine.md) | Contextual prefill architecture (OI-5) |
 
 ---
 
@@ -136,7 +136,7 @@ This document. Sequencing OI-1 → OI-6.
 
 **Goal:** Document deterministic prefill architecture aligned with BOS.
 
-**Shipped:** [`docs/system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md)
+**Shipped:** [`docs/system/forms-intake-prefill-doctrine.md`](completed/forms-intake-prefill-doctrine.md)
 
 **Acceptance:**
 

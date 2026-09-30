@@ -1,6 +1,6 @@
 # V2 workspace — slice 1 (cleaning org, proving chain)
 
-**Status:** Implementation spec (staging-first). **Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Foundation already shipped:** Track A Batch 1 — RRS v0, `record_overview_layouts`, cleaning job overview config (org `7803388d-cdee-4afb-89cf-23a137f39423`), `queue_definition` v1 types/parser, [`web/lib/rrs/`](../../../../web/lib/rrs).
+**Status:** Implementation spec (staging-first). **Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Foundation already shipped:** Track A Batch 1 — RRS v0, `record_overview_layouts`, cleaning job overview config (org `7803388d-cdee-4afb-89cf-23a137f39423`), `queue_definition` v1 types/parser, `web/lib/rrs/` (`../../../../web/lib/rrs`).
 
 **Purpose:** Define the **first end-to-end workspace chain** — **department → work unit → queue → record** — for the **current Alloy cleaning (staging) org**, without building the full multi-level platform, bespoke industry pages, or mature KPI/signal engines.
 
@@ -160,9 +160,9 @@
 - **Hierarchy APIs:** [`GET /api/admin/departments`](../../../../web/app/api/admin/departments/route.ts), [`GET /api/admin/work-units`](../../../../web/app/api/admin/work-units/route.ts) (optional `department_id`).
 - **Jobs list:** [`GET /api/admin/jobs`](../../../../web/app/api/admin/jobs/route.ts) with **`unassigned_work_unit`**, **`work_unit_id`**, **`department_id`**.
 - **Job record:** [`GET /api/admin/entity/jobs/:id`](../../../../web/app/api/admin/entity/[type]/[id]/route.ts) with **`?surface=`** and **`_rrs`**.
-- **RRS + overview:** [`web/lib/rrs/`](../../../../web/lib/rrs), cleaning **`record_overview_layouts`** seed.
-- **Work unit admin:** [`web/app/admin/system/work-units/`](../../web/app/admin/system/work-units/WorkUnitsClient.tsx) for `queue_definition` JSON editing (validate with existing `parseQueueDefinition` on PATCH).
-- **Drawer shell:** [`AdminEntityDrawer`](../../web/components/admin/AdminEntityDrawer.tsx) (incremental wiring to `_rrs` / surfaces).
+- **RRS + overview:** `web/lib/rrs/` (`../../../../web/lib/rrs`), cleaning **`record_overview_layouts`** seed.
+- **Work unit admin:** `web/app/admin/system/work-units/` (`../../web/app/admin/system/work-units/WorkUnitsClient.tsx`) for `queue_definition` JSON editing (validate with existing `parseQueueDefinition` on PATCH).
+- **Drawer shell:** `AdminEntityDrawer` (`../../web/components/admin/AdminEntityDrawer.tsx`) (incremental wiring to `_rrs` / surfaces).
 
 ### 6.2 New backend work (likely)
 

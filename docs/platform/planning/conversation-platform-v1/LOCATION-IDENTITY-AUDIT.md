@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: canonical
+status: historical
 last_reviewed: 2026-08-11
 slot: 3
 branch: agent/claude/3-communications-inbound-sms
@@ -247,4 +247,4 @@ identity a conversation resolves to.
 
 Communications identities belong to the organization/location. Users receive
 permission to use them. No user-owned provider credentials, no Gmail/Outlook
-OAuth, no mailbox ingestion — see `INBOUND-EMAIL-PRIVACY-POSTURE.md`.
+OAuth, no mailbox ingestion — see `docs/platform/modules/inbound-email-privacy-posture.md`.

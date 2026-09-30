@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: canonical
+status: proposed
 last_reviewed: 2026-07-30
 supersedes: []
 related:

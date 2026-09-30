@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`  
 **Status:** **CLOSED** (May 2026) — Band A shipped + staging QA complete. Band B+ deferred.  
-**Canonical supplements:** [`tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md), [`tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md), [`tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md), [`docs/execution/roadmap-and-gaps.md`](../../execution/roadmap-and-gaps.md).
+**Canonical supplements:** [`tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md), [`tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md), [`tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md), [`docs/execution/roadmap-and-gaps.md`](../../../../archive/2026-06-execution/roadmap-and-gaps.md).
 
 ---
 

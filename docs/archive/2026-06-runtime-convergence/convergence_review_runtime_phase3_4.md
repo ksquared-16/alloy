@@ -2,7 +2,7 @@
 
 **Verdict: APPROVED**
 **Reviewed:** `origin/cursor/runtime-convergence-phase-3-4` @ `a3fbb0e2` ("Add Phase 3–4 opportunity drawer shadow parity and real-record validation"), on merge-base `8dd0f2f1`. The new Phase 3/4 work is the single commit `a3fbb0e2` (Phase 2 `83be04b7`+`b039bbdc` carry forward, already reviewed → APPROVED). New work: **+~1,100** across `web/lib/layout/runtime/shadow/**`, a shadow API route, `featureFlag.ts` (+14, additive), and shadow tests. **0 migrations. 0 production drawer/VM/queue/nav/seed files modified.**
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md).
+**Reviewer:** Convergence Review Authority · rubric `./convergence_review_rubric.md`.
 
 ---
 

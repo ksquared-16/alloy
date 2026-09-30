@@ -5,7 +5,7 @@
 
 **Depends on:** [Runtime Test 1](./forms_runtime_test_1_external_intake_opportunity.md) (Test 1C/1D fixtures on Alloy Bend staging).
 
-**Related:** [forms-intake-runtime-phase.md](../system/forms-intake-runtime-phase.md) · [forms-intake-runtime-validation.md](../system/forms-intake-runtime-validation.md)
+**Related:** [forms-intake-runtime-phase.md](../../../../sprints/archive/05_2026/completed/forms-intake-runtime-phase.md) · `../system/forms-intake-runtime-validation.md`
 
 ---
 
@@ -245,4 +245,4 @@ ORDER BY created_at;
 ## Related
 
 - [forms_runtime_test_1_external_intake_opportunity.md](./forms_runtime_test_1_external_intake_opportunity.md)
-- [forms-intake-runtime-phase.md](../system/forms-intake-runtime-phase.md) — Test 2 plan §
+- [forms-intake-runtime-phase.md](../../../../sprints/archive/05_2026/completed/forms-intake-runtime-phase.md) — Test 2 plan §

@@ -96,7 +96,7 @@ Added **`work_views_v1`** on `lifecycle_builder_v1.processes[]` — no database 
 
 ## Screenshots
 
-Directory: [configuration-runtime-process-work-views/](./configuration-runtime-process-work-views/)
+Directory: configuration-runtime-process-work-views/ (`./configuration-runtime-process-work-views/`)
 
 | File | Shows |
 |------|-------|

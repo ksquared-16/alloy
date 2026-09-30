@@ -64,7 +64,7 @@ is precisely the "no unapproved…" guarantee the package makes, inverted.
 
 The server serves org `93667019-bd28-49b5-a688-acc9bb1e0a19` on hosted project
 `ikaxilmwmrmbagoidedu`. This repository's own
-[`configuration-overwriter-root-cause.md`](../../../platform/governance/configuration-overwriter-root-cause.md)
+`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md` (`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md`)
 records that **58 of 59 managed worktrees share that tenant**, and documents a defect in which one
 worktree's save wholesale overwrote configuration authored from another.
 

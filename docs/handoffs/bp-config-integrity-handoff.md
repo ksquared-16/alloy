@@ -44,7 +44,7 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 - `docs/platform/governance/configuration-publication-model.md` — the publication model
 - `docs/platform/governance/business-process-writer-inventory.md` — **25 writers classified A–F**;
   the migration worklist
-- `docs/platform/governance/configuration-overwriter-root-cause.md` — why any of this exists
+- `docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md` — why any of this exists
 - `docs/platform/governance/programs-publication-stale-draft-gap.md` — Programs defect, documented
   not changed
 - `certification/bp-config-integrity/` — real-Postgres harness + recorded runs

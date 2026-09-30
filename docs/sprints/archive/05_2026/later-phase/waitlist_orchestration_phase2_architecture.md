@@ -3,7 +3,7 @@
 **Status:** **Phase 2 complete (Cards 0–7)** — candidate-row waitlist shipped; pilot with `shadow_mode: true`.  
 **Pilot playbook:** [waitlist_orchestration_phase2_pilot_playbook.md](waitlist_orchestration_phase2_pilot_playbook.md)  
 **Date:** 2026-05-27  
-**Depends on:** [Phase 2 audit](waitlist_orchestration_phase2_audit.md)  
+**Depends on:** Phase 2 audit (`waitlist_orchestration_phase2_audit.md`)  
 **Implementation plan:** [Phase 2 cards](waitlist_orchestration_phase2_cards.md)
 
 ---
@@ -486,7 +486,7 @@ Capacity/openings engine · classroom transition forecasting · sibling coordina
 
 ## References
 
-- [Phase 2 audit](waitlist_orchestration_phase2_audit.md)  
+- Phase 2 audit (`waitlist_orchestration_phase2_audit.md`)  
 - [Implementation cards](waitlist_orchestration_phase2_cards.md)  
 - [Pilot playbook](waitlist_orchestration_phase2_pilot_playbook.md)  
 - [Priority Placement V1](../priority_placement_orchestration_may_2026.md)  

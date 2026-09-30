@@ -1,8 +1,9 @@
 ---
 owner: platform
-status: canonical
+status: proposed
 last_reviewed: 2026-08-21
 supersedes: []
+status_note: Reclassified 2026-09-30 from canonical. Its own status line reads "open" with an owning lane — an unresolved handoff, not doctrine.
 ---
 
 # Communications workspace — duplicate loader ownership (HANDOFF)

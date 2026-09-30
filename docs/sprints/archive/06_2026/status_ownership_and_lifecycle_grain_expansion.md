@@ -16,7 +16,7 @@
 **Parallel work (must not block):**
 
 - **Layout Configuration** — may proceed using contracts in §4–§6 and §10; must not hardcode enrollment-specific subject logic.
-- **Program interest configurable model** — audit + location-scoped settings design complete; programs under Settings → Locations (not standalone); see [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md), [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md).
+- **Program interest configurable model** — audit + location-scoped settings design complete; programs under Settings → Locations (not standalone); see `./program_interest_configurable_model_audit.md`, `./location_scoped_programs_configuration_design.md`.
 - **Entity status + lifecycle stage + location scope** — extends this contract with status vocabulary, placement ownership, cascade, access redaction, and **integration with Lifecycle Builder, work-unit queues, `QueueRowContext`, drawer, and Layout Configuration** (§7 of that doc); see [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md).
 - **Enrollment lifecycle + status matrix** — configurable labels vs fixed layers, disposition mapping metadata, default seed matrix, display naming; see [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md).
 

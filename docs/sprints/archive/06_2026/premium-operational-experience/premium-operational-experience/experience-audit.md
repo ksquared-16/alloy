@@ -309,7 +309,7 @@ Back / close with dirty state (ANY drawer)
 
 ## CARD-1 — Editable cards run two competing interaction models with no save-acknowledgement standard
 
-**Current behavior.** Cards themselves are clean: stateless, parent-fed renderers; no self-fetch; parent-owned fixed-geometry skeletons; height-locked refresh prevents layout jump ([QueueBlock.tsx:1787](web/app/adminV2/components/workspace/blocks/QueueBlock.tsx)). **Editing**, however, has two patterns colliding:
+**Current behavior.** Cards themselves are clean: stateless, parent-fed renderers; no self-fetch; parent-owned fixed-geometry skeletons; height-locked refresh prevents layout jump (QueueBlock.tsx:1787 (`web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`)). **Editing**, however, has two patterns colliding:
 
 - **Pattern A (preferred):** `LayoutRuntimeDrawerEditProvider` — inline edit, **optimistic** patch dispatch, coordinated multi-section save via `registerDrawerOperatingEditSection()`, queue refresh on save ([web/components/layout/LayoutRuntimeDrawerEditProvider.tsx](../../../../../../web/components/layout/LayoutRuntimeDrawerEditProvider.tsx)).
 - **Pattern B (legacy):** `EditablePersonContactCard` — self-managed state, **pessimistic** blur-save, own error handling, `savedFlash` feedback, no coordination ([web/components/admin/opportunity/EditablePersonContactCard.tsx:67](../../../../../../web/components/admin/opportunity/EditablePersonContactCard.tsx)).

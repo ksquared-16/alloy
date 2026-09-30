@@ -2,7 +2,7 @@
 
 **Status:** Implementation-oriented bridge spec (staging). **Purpose:** Define how the **production workspace block system** (`/admin/workspace`, `WorkspaceRenderer`, `web/lib/workspace/*`) should **map into** the **visual and interaction hierarchy** already established under **`/adminV2`**—without replacing the block model, without a net-new redesign, and **without** turning staging into a static mock.
 
-**Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Block system:** [`web/lib/workspace/types.ts`](../../../../web/lib/workspace/types.ts), [`web/lib/workspace/registry.ts`](../../../../web/lib/workspace/registry.ts). **Admin V2 reference implementation:** [`web/app/adminV2/components/workspace/shells/DepartmentWorkspace.tsx`](../../web/app/adminV2/components/workspace/shells/DepartmentWorkspace.tsx), [`web/app/adminV2/components/workspace/workspace.css`](../../../../web/app/adminV2/components/workspace/workspace.css).
+**Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Block system:** [`web/lib/workspace/types.ts`](../../../../web/lib/workspace/types.ts), [`web/lib/workspace/registry.ts`](../../../../web/lib/workspace/registry.ts). **Admin V2 reference implementation:** `web/app/adminV2/components/workspace/shells/DepartmentWorkspace.tsx` (`../../web/app/adminV2/components/workspace/shells/DepartmentWorkspace.tsx`), [`web/app/adminV2/components/workspace/workspace.css`](../../../../web/app/adminV2/components/workspace/workspace.css).
 
 ---
 

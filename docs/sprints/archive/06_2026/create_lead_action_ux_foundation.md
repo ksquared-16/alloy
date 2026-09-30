@@ -96,7 +96,7 @@ sequenceDiagram
 ## 4. Follow-ups
 
 - Persist child_* fields on execute (inquiry child insert pattern)
-- **Program / schedule / room selects (not textboxes)** — see [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md) + [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md): shared select convergence, location-first cascade, Settings → Locations tabs (Programs under Locations, not standalone)
+- **Program / schedule / room selects (not textboxes)** — see `./program_interest_configurable_model_audit.md` + `./location_scoped_programs_configuration_design.md`: shared select convergence, location-first cascade, Settings → Locations tabs (Programs under Locations, not standalone)
 - AI-backed parser behind same `ActionIntakePasteParser` interface
 - Server-side execute validation against intake spec
 - Success toast inline before drawer open (optional polish)
