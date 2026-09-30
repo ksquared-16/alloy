@@ -57,11 +57,31 @@ type Subject = {
     postedCount: number; draftCount: number; reductionCount: number; paymentCount: number;
     billableChildren: Array<{ customerMemberId: string; displayName: string }>;
 };
+type WalkScenario = Scenario & { evidence?: readonly string[] };
 type Payload = {
     suiteKey?: string;
     catalogVersion: string; environment: string; deployedRevision: string;
-    subject: Subject; navigation: Navigation; scenarios: Scenario[]; readiness: Readiness[]; results: ResultRow[];
+    subject: Subject; navigation: Navigation; readiness: Readiness[]; results: ResultRow[];
+    /* Each scenario carries the evidence classes the route resolved for it. */
+    scenarios: WalkScenario[];
+    /** The rule most easily forgotten while walking, so it is restated on the surface. */
+    noAutomaticPass?: string;
+    /** Where engineering stopped deliberately, keyed to the scenario that meets each one. */
+    evidenceBoundaries?: { key: string; scenarioKey: string; statement: string }[];
+    /** Which account may be spent and which may only be read. Stated before the walk starts. */
+    fixtureDoctrine?: { fixture: string; rule: string; why: string }[];
     baselineChanged: boolean; priorRevisions: string[];
+};
+
+/** The evidence vocabulary in the words a Director reads, not the enum's. */
+const EVIDENCE_LABELS: Readonly<Record<string, string>> = {
+    HUMAN_WALKTHROUGH: "you drive this",
+    AUTOMATED_CERTIFIED: "suite-certified · supporting",
+    MOUNTED_CERTIFIED: "mounted on deployed · supporting",
+    REAL_STRIPE_TEST_ACT: "real Stripe TEST act",
+    CONTROLLED_FIXTURE: "spends a controlled fixture",
+    READ_ONLY_EVIDENCE: "read only — changes nothing",
+    DEFERRED_PROVIDER_DEPENDENT: "deferred · provider-dependent",
 };
 
 const money = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -77,7 +97,7 @@ export default function CoreFinancialsQaReader() {
      * no money. It lets a reload draw the walkthrough at once instead of showing a blank
      * "Reading the environment…" for as long as the readiness read takes.
      */
-    const [shell, setShell] = useState<ShellCache<Scenario> | null>(null);
+    const [shell, setShell] = useState<ShellCache<WalkScenario> | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [index, setIndex] = useState(0);
     const [started, setStarted] = useState(false);
@@ -116,21 +136,34 @@ export default function CoreFinancialsQaReader() {
      * read and renders the same defaults it always did.
      */
     useLayoutEffect(() => {
-        setShell(readShellCache<Scenario>(SUITE_KEY, "staging") ?? readShellCache<Scenario>(SUITE_KEY, "local"));
+        setShell(readShellCache<WalkScenario>(SUITE_KEY, "staging") ?? readShellCache<WalkScenario>(SUITE_KEY, "local"));
     }, []);
     useEffect(() => { void load(); }, [load]);
     useEffect(() => {
         if (!data) return;
-        writeShellCache<Scenario>(data.suiteKey ?? SUITE_KEY, data.environment, {
+        writeShellCache<WalkScenario>(data.suiteKey ?? SUITE_KEY, data.environment, {
             scenarios: data.scenarios,
             catalogVersion: data.catalogVersion,
             environment: data.environment,
         });
     }, [data]);
 
+    /*
+     * WHAT THE DIRECTOR IS ACTUALLY ASKED TO DRIVE.
+     *
+     * `AUTOMATED_CERTIFIED_HUMAN_PENDING` belongs in this list and used to be filtered out of it.
+     * That filter was the "no automatic pass" rule inverted: a scenario with a deterministic suite
+     * behind it was silently removed from the walkthrough instead of being offered with its
+     * evidence stated. Nine Autopay scenarios were certified and unreachable here because of it.
+     *
+     * `EXPLICITLY_DEFERRED` is included too, so the Director can see what the environment cannot
+     * reach and record `deferred` against it deliberately, rather than finding a gap in the numbering.
+     */
     const walkthrough = useMemo(
         () => (data?.scenarios ?? shell?.scenarios ?? [])
-            .filter((s) => s.disposition === "HUMAN_WALKTHROUGH")
+            .filter((s) => s.disposition === "HUMAN_WALKTHROUGH"
+                || s.disposition === "AUTOMATED_CERTIFIED_HUMAN_PENDING"
+                || s.disposition === "EXPLICITLY_DEFERRED")
             .sort((a, b) => a.order - b.order),
         [data, shell],
     );
@@ -139,13 +172,25 @@ export default function CoreFinancialsQaReader() {
         [data],
     );
     const tally = useMemo(() => {
-        const t = { pass: 0, fail: 0, blocked: 0, not_run: 0 };
+        const t = { pass: 0, fail: 0, blocked: 0, deferred: 0, not_run: 0 };
         for (const s of walkthrough) { const r = resultOf(s.key) as keyof typeof t; t[r in t ? r : "not_run"] += 1; }
         return t;
     }, [walkthrough, resultOf]);
 
     const current = walkthrough[index];
     const readiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
+    const currentBoundary = (data?.evidenceBoundaries ?? []).find((b) => b.scenarioKey === current?.key);
+    /*
+     * WHAT WAS ALREADY SAID ABOUT THIS SCENARIO, not just how it was scored. The route has always
+     * served `observation` on a result row and this surface never showed it: a note was written to
+     * the record and then disappeared from the only place anyone would look for it, which makes
+     * "the notes persist" true of the database and false of the Director's experience.
+     *
+     * KEYED ON THE NOTE, NOT ON THE VERDICT. NOT RUN is the state a Director records while walking
+     * — it exercises the whole write path and accepts nothing — so excluding it would hide the
+     * testimony in exactly the case where testimony is all there is.
+     */
+    const recorded = data?.results.find((r) => r.scenario_key === current?.key);
 
     /*
      * ── THE DIRECTOR'S PLACE, AND THEIR UNSUBMITTED WORDS ──────────────────────────────────────
@@ -414,10 +459,44 @@ export default function CoreFinancialsQaReader() {
                                 : `NOT REACHABLE — ${data.navigation.unreachableReason ?? "the account is not listed"}`],
                         ]} />
 
+                        {/*
+                          * TWO DENOMINATORS, NEVER ONE NUMBER. The first is how much of the walk is
+                          * decided; the second is how much of the catalog this walk does not reach.
+                          * Printed adjacent, they used to read as a single fraction.
+                          */}
                         <p className="text-[13px] text-alloy-midnight/70" data-qa-progress="true">
                             <strong className="font-semibold text-alloy-midnight">{tally.pass} / {walkthrough.length}</strong>{" "}
-                            accepted · {tally.fail} failed · {tally.blocked} blocked · {tally.not_run} not run
+                            accepted · {tally.fail} failed · {tally.blocked} blocked · {tally.deferred} deferred · {tally.not_run} not run
+                            {data ? ` · ${data.scenarios.length - walkthrough.length} not in this walk` : ""}
                         </p>
+
+                        {/*
+                          * THE RULE, BEFORE THE FIRST SCENARIO. A suite behind a scenario is
+                          * evidence offered to the Director, never a result recorded on their behalf.
+                          */}
+                        {data?.noAutomaticPass ? (
+                            <p className="rounded-lg border-l-[3px] border-alloy-midnight/25 bg-alloy-midnight/[0.03] px-3 py-2 text-[13px] text-alloy-midnight/75"
+                                data-qa-no-automatic-pass="true">
+                                {data.noAutomaticPass}
+                            </p>
+                        ) : null}
+
+                        {/*
+                          * WHICH ACCOUNT MAY BE SPENT. Stated before the walk rather than inside the
+                          * scenario that would spend one, because by then the fixture is already gone.
+                          */}
+                        {data?.fixtureDoctrine?.length ? (
+                            <Section label="Which accounts this walkthrough may spend">
+                                <dl className="space-y-2" data-qa-fixture-doctrine="true">
+                                    {data.fixtureDoctrine.map((f) => (
+                                        <div key={f.fixture} data-qa-fixture={f.fixture}>
+                                            <dt className="text-[13px] font-medium text-alloy-midnight">{f.fixture} — {f.rule}</dt>
+                                            <dd className="text-[12px] leading-relaxed text-alloy-midnight/60">{f.why}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </Section>
+                        ) : null}
 
                         {/*
                           * ONE RULE FOR WHERE THIS OPENS, shared with the reload path: the place you
@@ -451,7 +530,35 @@ export default function CoreFinancialsQaReader() {
                             <h1 className="mt-1 text-[20px] font-semibold tracking-tight text-alloy-midnight">{current.title}</h1>
                             <p className="mt-2 text-[14px] text-alloy-midnight/75">{current.purpose}</p>
                             <p className="mt-2 text-[13px] leading-relaxed text-alloy-midnight/60">{current.whyItMatters}</p>
+                            {/*
+                              * WHAT ALREADY STANDS BEHIND THIS ONE, and at what cost to drive it.
+                              * A Director who cannot see that a scenario spends a fixture or touches
+                              * a real provider act is being asked to decide without the price.
+                              */}
+                            {current.evidence?.length ? (
+                                <ul className="mt-3 flex flex-wrap gap-1.5" data-qa-evidence="true">
+                                    {current.evidence.map((e: string) => (
+                                        <li key={e} data-qa-evidence-class={e}
+                                            className="rounded-full border border-alloy-midnight/15 px-2 py-0.5 text-[11px] text-alloy-midnight/65">
+                                            {EVIDENCE_LABELS[e] ?? e}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : null}
                         </div>
+
+                        {/*
+                          * WHERE ENGINEERING STOPPED, ON THE SCENARIO THAT MEETS IT. A deferral read
+                          * in a packet is a footnote; read here it is the answer to "why can I not
+                          * do this?" at the moment the Director asks it.
+                          */}
+                        {currentBoundary ? (
+                            <div className="rounded-lg border-l-[3px] border-alloy-midnight/30 bg-alloy-midnight/[0.03] px-3 py-2 text-[13px] text-alloy-midnight/75"
+                                data-qa-evidence-boundary={currentBoundary.key}>
+                                <strong className="font-semibold text-alloy-midnight">Deliberate boundary.</strong>{" "}
+                                {currentBoundary.statement}
+                            </div>
+                        ) : null}
 
                         {data && readiness && !readiness.ready ? (
                             <div className="rounded-lg border-l-[3px] border-alloy-ember bg-alloy-ember/5 px-3 py-2 text-[13px]"
@@ -506,9 +613,28 @@ export default function CoreFinancialsQaReader() {
                                     still apply, or clear the fields.
                                 </p>
                             ) : null}
+                            {recorded?.observation ? (
+                                /*
+                                 * TESTIMONY, READ BACK — deliberately outside the form. Pre-filling
+                                 * the textarea with it would make an old note look like an unsent
+                                 * draft, and re-submitting would restate it as if it were new.
+                                 */
+                                <div className="mb-3 rounded-lg border border-alloy-midnight/15 bg-alloy-midnight/[0.02] px-3 py-2"
+                                    data-qa-recorded-note="true" data-qa-recorded-result={recorded.result}>
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                                        Recorded {recorded.result.replace("_", " ")} — what you wrote
+                                    </p>
+                                    <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-alloy-midnight/80">
+                                        {recorded.observation}
+                                    </p>
+                                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">
+                                        Recording a result again replaces this.
+                                    </p>
+                                </div>
+                            ) : null}
                             <textarea id="qa-observation" data-qa-observation="true" rows={3} value={observation}
                                 onChange={(e) => setObservation(e.target.value)}
-                                placeholder="What did you actually observe?"
+                                placeholder="What did you actually observe? (required for fail, blocked and deferred)"
                                 className="w-full rounded-lg border border-alloy-midnight/15 p-2 text-[13px]" />
                             <textarea id="qa-expected" rows={2} value={expected}
                                 onChange={(e) => setExpected(e.target.value)}
@@ -525,6 +651,12 @@ export default function CoreFinancialsQaReader() {
                                 <Btn primary onClick={() => void record("pass")} disabled={saving} id="record-pass">PASS</Btn>
                                 <Btn onClick={() => void record("fail")} disabled={saving} id="record-fail">FAIL</Btn>
                                 <Btn onClick={() => void record("blocked")} disabled={saving} id="record-blocked">BLOCKED</Btn>
+                                {/*
+                                  * BLOCKED AND DEFERRED ARE DIFFERENT TESTIMONY. Blocked is "something
+                                  * stopped me and it should not have"; deferred is "this environment
+                                  * cannot reach it, by a decision already made" — see the boundary above.
+                                  */}
+                                <Btn onClick={() => void record("deferred")} disabled={saving} id="record-deferred">DEFERRED</Btn>
                                 <Btn onClick={() => void record("not_run")} disabled={saving} id="record-not-run">NOT RUN</Btn>
                             </div>
                             <p className="mt-2 text-[11px] text-alloy-midnight/45" data-qa-draft-notice="true">
@@ -605,9 +737,9 @@ function Btn({ children, onClick, disabled, primary, id }: {
     children: React.ReactNode; onClick: () => void; disabled?: boolean; primary?: boolean; id?: string;
 }) {
     return (
-        <button type="button" onClick={onClick} disabled={disabled} data-qa-action={id}
+        <button type="button" onClick={onClick} disabled={disabled} data-qa-action={id} data-testid={id}
             className={primary
-                ? "rounded-lg bg-alloy-midnight px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+                ? "rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
                 : "rounded-lg border border-alloy-midnight/20 px-3 py-1.5 text-[13px] text-alloy-midnight disabled:opacity-40"}>
             {children}
         </button>

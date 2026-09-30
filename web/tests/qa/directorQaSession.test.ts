@@ -266,9 +266,12 @@ describe("no render may record the Director's position", () => {
         return bodies;
     }
 
+    /*
+     * ONE SURFACE. The adminV2 operator-shell harness that used to share this contract is deleted;
+     * Financials human QA is walked beside the product. The contract itself is unchanged.
+     */
     const SURFACES = [
         "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
-        "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
     ];
 
     it.each(SURFACES)("%s writes a position only from an explicit move", (path) => {
