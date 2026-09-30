@@ -2493,6 +2493,48 @@
   flex: none;
 }
 
+/*
+ * ── THE THREE ACTS ON A DEPOSIT ARE NOT PEERS ──────────────────────────────────────────────────
+ *
+ * Apply, Release and Refund rendered at identical weight — same size, same 55% midnight, same
+ * everything — so the row offered three equally-likely-looking choices, one of which sends money
+ * out of the building. Measured on deployed staging.
+ *
+ * Applying a deposit to what the family owes is the ordinary, expected end of a deposit's life, so
+ * it takes the product's active accent. Releasing lifts a restriction and changes no balance, so it
+ * stays as it was. Refunding is the exception and the only one that is not reversible by another
+ * click, so it carries the same danger colour this stylesheet already gives an irreversible act —
+ * quiet until the operator is on it, then unmistakable.
+ *
+ * NO NEW PRIMITIVE. `RowAction` already marks itself with the act it raises; this is emphasis on
+ * the control that exists, scoped to the held row so the ledger's own action column is untouched.
+ */
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Release keeps the row's ordinary weight: it ends a restriction and settles nothing. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="release"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+
+/* Refund is the way money leaves. Subordinate at rest, and named as danger the moment it is hovered. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 42%, transparent);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 40%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 7%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-danger, #b3261e);
+}
+
 
 /* The draft note under the preview — quiet, and never competing with the amount above it. */
 .alloy-os-addcharge__draftnote {

@@ -21,7 +21,7 @@
 
 import { randomUUID } from "crypto";
 
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { configureResponsibilityArrangement } from "@/lib/financials/responsibility/arrangementService";
 import { configureExpectedFunding } from "@/lib/financials/responsibility/expectedFundingService";
@@ -29,6 +29,27 @@ import { attributePaymentToResponsibility } from "@/lib/financials/responsibilit
 import { resolveAllocatableNet } from "@/lib/financials/responsibility/resolveAllocatableNet";
 import { ResponsibilityError, resolveChargeResponsibility } from "@/lib/financials/responsibility/responsibilityService";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
+ *
+ * `customer` is the account grain, and it is the one the Financials account card dispatches: a
+ * ledger, its charges and its adjustments belong to the HOUSEHOLD. It was missing here for the
+ * same reason it was missing from the payments and deposit families, and with the same
+ * consequence — `checkContext` refuses an undeclared grain before the action runs, so a click
+ * from the surface that offers the control reached a 400 instead of its authority.
+ *
+ * Only the acts this surface actually mounts are widened. An action that is not offered from an
+ * account is not given the grain just because its neighbours have it.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
+
 
 export const BILLING_CONFIGURE_RESPONSIBILITY_ACTION_KEY = "billing.configure_responsibility";
 export const BILLING_RESOLVE_RESPONSIBILITY_ACTION_KEY = "billing.resolve_responsibility";
@@ -203,7 +224,7 @@ function resolveAction(key: string, allowReallocation: boolean): RegisteredActio
         description: allowReallocation
             ? "Move a posted charge's responsibility onto the arrangement now in force, with lineage."
             : "Divide a charge's net between the parties the arrangement in force names.",
-        supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+        supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
         supportedProcessKeys: [],
         requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
         audit: { eventType: "action_executed", category: "record", mutates: true },

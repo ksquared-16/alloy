@@ -21,7 +21,7 @@
  * is still only one definition.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
+import { chargeDisplayLabel } from "@/lib/financials/chargeCategories";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
@@ -403,12 +403,14 @@ export async function resolveHouseholdPaymentViews(
                          * tidier would be the surface editing the record. A description that reads
                          * like a key is a fact about what was written, not about this code.
                          */
-                        chargeLabel:
-                            charge?.description?.trim()
-                            || (charge?.charge_category?.trim()
-                                ? chargeCategoryLabel(charge.charge_category.trim())
-                                : "")
-                            || "Charge",
+                        /*
+                         * `chargeDisplayLabel` owns the rule now, because the description that was
+                         * winning here was not a person's words: `charge.add` stores the template
+                         * key, so this read "materials_fee" and "late_pickup_fee" on a surface an
+                         * operator uses to explain money to a parent. A genuine description still
+                         * wins; a key yields to the catalog.
+                         */
+                        chargeLabel: chargeDisplayLabel(charge?.description, charge?.charge_category),
                         chargeServiceDate: charge?.service_date ?? null,
                         appliedCents: Number(a.allocated_amount_cents) || 0,
                         status: a.status,

@@ -53,6 +53,7 @@ export default function FinancialsDetailCard({
     evidence,
     periods,
     onPayment,
+    paymentUnavailableReason,
     onAddCharge,
     onManagePayment,
     onMovePayment,
@@ -110,6 +111,8 @@ export default function FinancialsDetailCard({
      * changes what is owed and stays its peer. Absent in the lab, where the controls are inert.
      */
     onPayment?: () => void;
+    /** Why Payment cannot be taken, when it cannot. Rendered on the disabled control. */
+    paymentUnavailableReason?: string | null;
     /**
      * THE PAYMENT BAND, RENDERED INSIDE THIS CARD.
      *
@@ -717,7 +720,17 @@ export default function FinancialsDetailCard({
                 */}
                     </div>
                     <div className="alloy-os-fdetail__actions">
-                        <Action primary onClick={onPayment}>
+                        {/*
+                          * DISABLED AND EXPLAINED, never live-but-dead. Without an opener this
+                          * rendered as a primary button with no handler: clicking it did nothing
+                          * and said nothing, which is the one thing a mounted command may not do.
+                          */}
+                        <Action
+                            primary
+                            onClick={onPayment}
+                            disabled={!onPayment}
+                            title={onPayment ? undefined : (paymentUnavailableReason ?? undefined)}
+                        >
                             Payment
                         </Action>
                         {/* One entry for charge and adjustment alike — the command carries the mode. */}
@@ -1164,6 +1177,62 @@ export default function FinancialsDetailCard({
                                                 })}
                                             />
                                         ) : null}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+
+                {/*
+                  * ── DEPOSIT HISTORY — WHAT BECAME OF THE LOTS THAT ARE GONE ──────────────────
+                  *
+                  * A lot whose money is entirely disposed of leaves the position above, and used to
+                  * leave the surface with it: once the lifecycle completed, nothing could say what
+                  * was held, why, on what terms, or what became of it. The dispositions were always
+                  * there; nothing rendered them.
+                  *
+                  * It contributes to NOTHING. These lots have no remaining money, so Held deposit,
+                  * Available prepaid and Current balance are unchanged by their presence — the
+                  * totals fold the same dispositions either way. It carries no controls for the
+                  * same reason: there is nothing left to apply, release or refund.
+                  */}
+                {!ledgerPending && evidence.heldDepositHistory?.length ? (
+                    <div className="alloy-os-fdetail__held" data-financials-held-history="true">
+                        <SectionHead>Deposit history</SectionHead>
+                        <p className="alloy-os-fdetail__heldnote">
+                            Deposits that are fully accounted for. They hold no money and change no
+                            figure above.
+                        </p>
+                        <div className="alloy-os-fdetail__heldlist">
+                            {evidence.heldDepositHistory.map((h) => (
+                                <div
+                                    key={h.holdId}
+                                    className="alloy-os-fdetail__heldrow"
+                                    data-financials-held-history-row={h.holdId}
+                                >
+                                    <span className="alloy-os-fdetail__heldfacts">
+                                        {/*
+                                          * THE ORIGINAL AMOUNT is the fact here. `remaining` is zero
+                                          * on every one of these rows, so printing it would give the
+                                          * row's most prominent slot to the one number that says
+                                          * nothing.
+                                          */}
+                                        <span className="alloy-os-fdetail__heldamount">
+                                            {h.original ?? h.remaining}
+                                        </span>
+                                        <span className="alloy-os-fdetail__heldreason">
+                                            {h.reason ?? "No reason recorded"}
+                                        </span>
+                                        <span className="alloy-os-fdetail__heldmeta">
+                                            <span data-financials-held-refundable={h.refundable ? "yes" : "no"}>
+                                                {h.refundableNote}
+                                            </span>
+                                            {h.heldOn ? <span>Held {h.heldOn}</span> : null}
+                                            {h.disposedLines.map((d) => (
+                                                <span key={d.label}>{d.label} {d.value}</span>
+                                            ))}
+                                        </span>
                                     </span>
                                 </div>
                             ))}

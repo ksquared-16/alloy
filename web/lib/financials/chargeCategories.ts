@@ -83,6 +83,56 @@ export function chargeCategoryLabel(category: string): string {
     return words ? words.charAt(0).toUpperCase() + words.slice(1) : category;
 }
 
+/**
+ * ── THE OPERATOR'S NAME FOR A CHARGE ────────────────────────────────────────────────────────────
+ *
+ * A description is what a PERSON typed about this charge, and it wins — rewriting somebody's own
+ * words to look tidier would be the surface editing the record.
+ *
+ * But template-created charges are not written by a person. `charge.add` stores the template's own
+ * key as the description, so the deployed certification tenant carries rows reading
+ *
+ *     categoryKey "late_pickup"   categoryLabel "Late pickup"   description "late_pickup_fee"
+ *
+ * and a payment row said "Move $25.00 from late_pickup_fee". That description is the key wearing a
+ * description's clothes; treating it as a person's words puts a stored identifier in front of an
+ * operator explaining money to a parent.
+ *
+ * So a description that IS a machine key — the category's own key, or that key with a trailing
+ * `_fee`, or any underscore token the catalog can read aloud — yields to the catalog. Anything a
+ * person could have typed still wins, including a description that merely happens to be one word.
+ *
+ * Internal identity is untouched: nothing here rewrites a stored key or description.
+ */
+export function chargeDisplayLabel(
+    description: string | null | undefined,
+    category: string | null | undefined,
+    fallback = "Charge",
+): string {
+    const desc = (description ?? "").trim();
+    const cat = (category ?? "").trim();
+    const catLabel = cat ? chargeCategoryLabel(cat) : "";
+
+    if (desc && !isMachineKeyDescription(desc, cat)) return desc;
+    return catLabel || desc || fallback;
+}
+
+/** A description no person typed: the category key itself, or a bare underscore token. */
+export function isMachineKeyDescription(
+    description: string | null | undefined,
+    category?: string | null | undefined,
+): boolean {
+    const desc = (description ?? "").trim();
+    if (!desc) return false;
+    const cat = (category ?? "").trim();
+    if (cat && (desc === cat || desc === `${cat}_fee`)) return true;
+    /*
+     * An underscore-joined lowercase token is a key. A sentence, a name, a number and anything with
+     * a space are not — a person writing "field trip" writes it with the space.
+     */
+    return /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(desc);
+}
+
 /** Whether the declared vocabulary knows this key, as distinct from whether it can be read aloud. */
 export function isDeclaredChargeCategory(category: string): boolean {
     return Boolean((CHARGE_CATEGORY_LABEL as Record<string, string>)[category]);

@@ -21,6 +21,8 @@ import {
     type FinancialCommandRequest,
 } from "@/components/financials/FinancialCommandChannel";
 import { executeFinancialCommand } from "@/lib/financials/commands/financialTransactionCommands";
+import { operatorRefusal } from "@/lib/financials/commands/operatorRefusal";
+import { chargeDisplayLabel } from "@/lib/financials/chargeCategories";
 import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsResponsibilityPanel from "@/app/adminV2/financials/FinancialsResponsibilityPanel";
 import FinancialsDiscountPanel, { type FamilyPosition } from "@/app/adminV2/financials/FinancialsDiscountPanel";
@@ -1028,6 +1030,12 @@ export default function FinancialsCard({
     const [movePreview, setMovePreview] = useState<{ summary: string; changes: string[] } | null>(null);
     const [moveError, setMoveError] = useState<string | null>(null);
     const [moveNotice, setMoveNotice] = useState<string | null>(null);
+    /*
+     * A TRUE OUTCOME THAT IS NOT A FAILURE. `commandError` is for refusals; this is for a command
+     * that ran, was correct, and did nothing — the idempotent duplicate charge. Reporting that as
+     * an error would be as untrue as reporting it as a new write.
+     */
+    const [commandNotice, setCommandNotice] = useState<string | null>(null);
 
     const closeMovePanels = useCallback(() => {
         setMovePending(null);
@@ -2063,6 +2071,19 @@ export default function FinancialsCard({
         [selectedChildIds, vm],
     );
 
+    /*
+     * ── A MOUNTED CONTROL IS NEVER SILENTLY INERT ───────────────────────────────────────────────
+     *
+     * This returned `undefined` with nothing to settle, and the Details header rendered
+     * `<Action primary onClick={undefined}>Payment</Action>` — a fully styled primary button that
+     * did nothing and said nothing when clicked. Measured on deployed staging against an account
+     * with no obligation: the click changed no pixel and produced no request.
+     *
+     * `Action` was built for exactly this and the caller simply never used it: "A configured
+     * command is never removed for being unavailable — an operator who cannot see a command cannot
+     * learn why it is unavailable." So the control stays, disabled, carrying the reason — the same
+     * grammar `chargeUnavailableReason` already uses for its neighbour.
+     */
     const makeSettleOpener = useCallback(
         (rows: readonly FinancialsLedgerRow[]) => {
             if (!rows.length) return undefined;
@@ -2071,7 +2092,8 @@ export default function FinancialsCard({
                 setCommandError(null);
                 setPayTarget({
                     chargeId: row.chargeId,
-                    label: row.description ?? row.categoryLabel,
+                    /* The operator's name for it — a stored template key is not one. */
+                    label: chargeDisplayLabel(row.description, row.categoryKey, row.categoryLabel),
                     outstandingCents: row.outstandingCents,
                     subjectMemberId: row.subjectMemberId,
                 });
@@ -2109,6 +2131,12 @@ export default function FinancialsCard({
         () => makeSettleOpener(compactPayableRows),
         [makeSettleOpener, compactPayableRows],
     );
+
+    /** Why Payment cannot be offered, when it cannot. Stated on the control, never silent. */
+    const paymentUnavailableReason =
+        payableRows.length
+            ? null
+            : "Nothing is currently owed on this account, so there is no payment to take or record.";
 
     /** Why Add charge cannot be offered, when it cannot. Stated, never silent. */
     const chargeUnavailableReason =
@@ -2449,6 +2477,7 @@ export default function FinancialsCard({
         }
         setRunning(true);
         setCommandError(null);
+        setCommandNotice(null);
         try {
             const res = await fetch("/api/admin/actions/execute", {
                 method: "POST",
@@ -2493,15 +2522,26 @@ export default function FinancialsCard({
                 result?: {
                     affectedId?: string | null;
                     detail?: {
-                        per_child?: Array<{ charge_id?: string | null; error?: string | null }>;
+                        /*
+                         * `write_status` is the difference between a charge that now exists because
+                         * of this click and one that already existed. Reading only `charge_id` made
+                         * an idempotent duplicate indistinguishable from a new write — the card
+                         * closed and reported success for a `skipped_posted` that created nothing.
+                         */
+                        per_child?: Array<{ charge_id?: string | null; error?: string | null; write_status?: string | null }>;
                         charges_failed?: number;
                     } | null;
                 } | null;
             };
             if (!json?.ok) {
                 const err = typeof json?.error === "string" ? json.error : json?.error?.message;
-                // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
-                setCommandError(err || "The charge was refused.");
+                /*
+                 * A refusal is the domain speaking — surfaced, never swallowed into a silent no-op,
+                 * and never in the domain's own shorthand. `resolveChargeFromTemplate` answers with
+                 * machine tokens, so "missing_service_period" reached operators verbatim; the
+                 * domain's real sentences pass through `operatorRefusal` untouched.
+                 */
+                setCommandError(operatorRefusal(err, "The charge was refused."));
                 return;
             }
 
@@ -2517,6 +2557,38 @@ export default function FinancialsCard({
             const createdChargeIds = detail?.per_child
                 ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
                 : [String(json.result?.affectedId ?? "").trim()].filter(Boolean);
+
+            /*
+             * ── A NO-OP IS NOT A WRITE ───────────────────────────────────────────────────────
+             *
+             * `charge.add` is idempotent: asking twice for the same charge on the same day answers
+             * `skipped_posted` with the EXISTING charge's id, which is correct and must stay that
+             * way. What was wrong was the telling. The card read `charge_id`, found one, and closed
+             * reporting success — so an operator who clicked twice believed they had created two
+             * charges and the ledger disagreed with them.
+             *
+             * Measured on deployed staging: four consecutive Add charge clicks answered HTTP 200
+             * with `write_status: "skipped_posted"` and the same `affected_id`, and the surface
+             * reported success every time.
+             */
+            const wroteSomething = detail?.per_child
+                ? detail.per_child.some((r) => r.write_status === "created" || r.write_status === "recalculated")
+                : createdChargeIds.length > 0;
+            if (detail?.per_child?.length && !wroteSomething) {
+                setPending(null);
+                resetChargeDecisions();
+                resetStack();
+                setChargeAmount("");
+                setChargeNote("");
+                setChargeEventDate("");
+                setCommandNotice(
+                    createdChargeIds.length === 1
+                        ? "That charge already exists on this account. Nothing new was created."
+                        : "Those charges already exist on this account. Nothing new was created.",
+                );
+                return;
+            }
+
             const followUpFailures = await applyChargeDecisions(createdChargeIds);
 
             /*
@@ -3467,11 +3539,32 @@ export default function FinancialsCard({
                                             data-financials-payment-applied={p.appliedCents}
                                         >
                                             {money(p.appliedCents, p.currencyCode)} applied
+                                            {/*
+                                              * ── TWO SCOPES MUST NOT SHARE ONE WORD ──────────────
+                                              *
+                                              * `unappliedCents` is measured against what was
+                                              * RECEIVED, so on a partly refunded receipt it counts
+                                              * money that has already left the organisation.
+                                              * Measured on deployed staging: a $700 receipt with
+                                              * $140 refunded and $113 applied read "$587.00
+                                              * unapplied" beside an Available prepaid of $332.00.
+                                              * Both figures are true and they answer different
+                                              * questions, and the word "unapplied" was carrying
+                                              * whichever one the reader assumed.
+                                              *
+                                              * So the word is used only where nothing has gone
+                                              * back. Once some of it has, the row says what is left
+                                              * of what was KEPT, which is the quantity anything can
+                                              * still be done with — and the line below states the
+                                              * refunded and retained figures it derives from.
+                                              */}
                                             {p.unappliedCents > 0 ? (
                                                 <>
                                                     {" · "}
                                                     <span data-financials-payment-unapplied={p.unappliedCents}>
-                                                        {money(p.unappliedCents, p.currencyCode)} unapplied
+                                                        {p.refundedCents > 0
+                                                            ? `${money(Math.max(0, p.receivedCents - p.refundedCents - p.appliedCents), p.currencyCode)} of what was kept is unapplied`
+                                                            : `${money(p.unappliedCents, p.currencyCode)} unapplied`}
                                                     </span>
                                                 </>
                                             ) : null}
@@ -3491,6 +3584,25 @@ export default function FinancialsCard({
                                             {money(p.refundedCents, p.currencyCode)} returned or refunded ·{" "}
                                             <span data-financials-payment-retained={p.receivedCents - p.refundedCents}>
                                                 {money(p.receivedCents - p.refundedCents, p.currencyCode)} net retained
+                                            </span>
+                                        </span>
+                                    ) : null}
+                                    {/*
+                                        WHAT OF THIS RECEIPT IS RESTRICTED. Held money is inside the
+                                        unapplied figure and cannot answer an obligation, so a
+                                        receipt that says only "unapplied" overstates what is
+                                        available by exactly the held amount. `holdableCents` is
+                                        that difference from the other side, and the account's own
+                                        Available prepaid is what remains once it is taken out.
+                                    */}
+                                    {p.kind === "receipt" && p.isMoney && (p.heldCents ?? 0) > 0 ? (
+                                        <span
+                                            className="alloy-os-financials__note"
+                                            data-financials-payment-held={p.heldCents ?? 0}
+                                        >
+                                            {money(p.heldCents ?? 0, p.currencyCode)} held ·{" "}
+                                            <span data-financials-payment-applicable={p.holdableCents}>
+                                                {money(p.holdableCents, p.currencyCode)} available to apply
                                             </span>
                                         </span>
                                     ) : null}
@@ -3823,7 +3935,8 @@ export default function FinancialsCard({
                                         setCommandError(null);
                                         setPayTarget({
                                             chargeId: r.chargeId,
-                                            label: r.description ?? r.categoryLabel,
+                                            /* The operator's name for it — a stored template key is not one. */
+                                            label: chargeDisplayLabel(r.description, r.categoryKey, r.categoryLabel),
                                             outstandingCents: r.outstandingCents,
                                             subjectMemberId: r.subjectMemberId,
                                         });
@@ -5656,6 +5769,7 @@ export default function FinancialsCard({
                      * describe.
                      */
                     onPayment={openSettle}
+                    paymentUnavailableReason={paymentUnavailableReason}
                     onAddCharge={() => push({ kind: "add_charge" })}
                     /*
                      * ── THE BAND IS THE CARD'S, NOT THE WRAPPER'S ────────────────────────────
@@ -6144,6 +6258,11 @@ export default function FinancialsCard({
                         {commandError ? (
                             <span className="alloy-os-financials__error" data-financials-command-error="true">
                                 {commandError}
+                            </span>
+                        ) : null}
+                        {commandNotice ? (
+                            <span className="alloy-os-financials__note" data-financials-command-notice="true">
+                                {commandNotice}
                             </span>
                         ) : null}
                         </div>
