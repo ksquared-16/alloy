@@ -34,6 +34,45 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 
 ---
 
+## 2026-09 — Route capabilities authorize; RLS isolates tenants; mutation is server-side
+
+**Decision:** Product authorization is owned by **server route capability assertion**. **RLS** owns
+tenant and data isolation, and on the write side its job is to say *no*, not to decide *who*.
+Supported mutation happens on the **server path under the service role**, after capability, tenancy
+and scope have been resolved. **UI visibility is presentation, never authority.** RLS does not
+replace capability authorization, and role titles appearing inside policies are admission-and-tenancy
+heuristics rather than a second authorization model.
+
+**Why:** this was already the written architecture in two places —
+[`../governance/implementation-patterns.md`](../governance/implementation-patterns.md) § *Supabase
+access* and the configuration publication model — and it is what the runtime does: **604 of 682 API
+route files** resolve through `createAdminClient` (service role, which bypasses RLS by definition),
+**zero** use a request-scoped RLS-bound client, and no client component writes through Supabase at
+all. A layer the product never executes cannot be its authorization model, whatever its policies
+say. The alternatives were not merely more expensive — RLS-primary and dual-authority would each
+require either rewriting the data plane onto the authenticated principal or maintaining an
+authorization layer that never runs.
+
+**Consequences:**
+- Authenticated direct-PostgREST write grants and policies beyond this model are **implementation
+  drift to converge**, not a competing authority to honour. They are reachable only by a principal
+  calling PostgREST directly, which no product code does and the browser client cannot — it
+  authenticates only.
+- Convergence is staged and reversible: lock the supported data path, repair the tenancy class
+  (`app_users` policies lacking an org predicate, `work_units` self-comparisons), decide the one
+  RLS-disabled table, then retire unnecessary write grants family by family. A capability primitive
+  in SQL is built only if browser→table writes are ever adopted.
+- Until grants are retired, statements about authority should say **"on the supported path"** — that
+  phrasing is true of the product and of the database at the same time.
+- This does **not** block Access & Identity V2. Route capabilities remain the canonical business
+  authority and every promoted slice is enforced on the path the product actually takes.
+
+**Canonical owners:** [`../governance/roles-and-permissions.md`](../governance/roles-and-permissions.md)
+(capability vs visibility) · [`../governance/implementation-patterns.md`](../governance/implementation-patterns.md)
+§ *Supabase access* (the data-path rule) ·
+[`../governance/rls-authority-model-director-gate.md`](../governance/rls-authority-model-director-gate.md)
+(the measurement this ratifies, and the staged plan)
+
 ## 2026-09 — Domain capability gating moves from feature flags to RBAC capabilities
 
 **Decision:**

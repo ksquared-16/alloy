@@ -44,10 +44,15 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
         return senders.sort();
     }
 
-    it("is exactly the two known senders — a third one fails this test on purpose", () => {
+    it("is exactly the ONE known sender — a second one fails this test on purpose", () => {
+        /*
+         * Was two. The Quote Intake section was removed in erun_79bed0c987eef455 after a necessity
+         * census found it had ZERO importers: it could not be rendered, so it was never a live
+         * bypass. Its `needs_a_quote` write also belonged to the cleaning quote pipeline rather than
+         * the Enrollment process, so it was never convergeable onto the enrollment boundary either.
+         */
         expect(lifecyclePatchSenders()).toEqual([
             "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx",
-            "web/components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx",
         ]);
     });
 
