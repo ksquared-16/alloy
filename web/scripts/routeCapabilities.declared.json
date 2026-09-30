@@ -5163,6 +5163,16 @@
         "reason": "Public inbound demo request, same class and same residual risk as leads/gutters."
       }
     },
+    "app/api/public/bank-setup/[token]/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a payer acting on a link sent to them, and a route behind an operator session would put an OPERATOR in front of the debit mandate, which is the one thing this slice exists to prevent. Resolution goes through resolveBankSetupLink, which matches by token_hash rather than by the plaintext presented - a short code is refused for this action type, because after S-3 it cannot yield the plaintext and eight characters is the wrong credential for a standing bank authorization - and refuses an expired, consumed, revoked or wrong-action link BEFORE any side effect. Classified with the sibling public capability-token routes already reviewed. Org, account and payer are read off the action_links row rather than from anything the request names. See the matching entry in serviceClientPrincipal.allowlist.json. GET is read-only: it names no target the caller supplies and returns only the payer's own bank accounts, said in four safe display fields, plus a publishable key."
+      },
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a payer acting on a link sent to them, and a route behind an operator session would put an OPERATOR in front of the debit mandate, which is the one thing this slice exists to prevent. Resolution goes through resolveBankSetupLink, which matches by token_hash rather than by the plaintext presented - a short code is refused for this action type, because after S-3 it cannot yield the plaintext and eight characters is the wrong credential for a standing bank authorization - and refuses an expired, consumed, revoked or wrong-action link BEFORE any side effect. Classified with the sibling public capability-token routes already reviewed. Org, account and payer are read off the action_links row rather than from anything the request names. See the matching entry in serviceClientPrincipal.allowlist.json. POST writes a stored payment method, so the authority it does NOT hold is the point: the only body field is a setup reference, which is re-read from the provider with Alloy's own key and refused unless the org and payer stamped on it at creation match the ones the link resolved, the platform customer is re-derived from the payer's own rows rather than taken from the payload, usability comes from the provider's status through lifecycleFromSetup, and the canonical payment_methods row is written by the same writer the operator card flow uses. No routing number, account number or deposit amount is a parameter of this route."
+      }
+    },
     "app/api/public/booking-config/route.ts": {
       "GET": {
         "status": "none",
