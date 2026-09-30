@@ -14,6 +14,8 @@
  *   and the scenarios a human must drive are reachable from the surface they are rendered on.
  */
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 
 import {
     CATALOG_VERSION,
@@ -179,6 +181,37 @@ describe("the evidence boundaries are carried, not buried", () => {
         const s = key("bank_setup_visual_review");
         expect(s.disposition).toBe("HUMAN_WALKTHROUGH");
         expect(s.dispositionReason).toMatch(/NOT repaired|human decides/i);
+    });
+});
+
+/* ── THE SURFACE LOOKS LIKE THE PRODUCT IT IS JUDGING ────────────────────────────────────── */
+
+describe("the QA surface's own chrome", () => {
+    const client = fs.readFileSync(
+        path.join(process.cwd(), "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx"), "utf8",
+    );
+
+    it("records acceptance on a Bend Pine primary, not a midnight one", () => {
+        /*
+         * Measured on the deployed surface before this: PASS rendered rgb(24, 39, 58). Every other
+         * primary a Director meets while walking Financials is Bend Pine, so the one button that
+         * records their acceptance was the odd one out.
+         */
+        const primary = client.slice(client.indexOf("function Primary"), client.indexOf("function Secondary"));
+        expect(primary).toMatch(/bg-alloy-bend-pine/);
+        expect(primary, "no navy primary").not.toMatch(/bg-alloy-midnight/);
+    });
+
+    it("gives the controls the test id they were always passed", () => {
+        /* `data-qa-action` meant every selector written against data-testid matched nothing. */
+        const tail = client.slice(client.indexOf("function Primary"));
+        expect(tail).toMatch(/data-testid=\{testId\}/);
+    });
+
+    it("offers all five answers", () => {
+        for (const label of [">PASS<", ">FAIL<", ">BLOCKED<", ">DEFERRED<", ">NOT RUN<"]) {
+            expect(client, label).toContain(label);
+        }
     });
 });
 
