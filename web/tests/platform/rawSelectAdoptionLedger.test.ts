@@ -223,9 +223,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor.tsx": 5,
     "components/childcareOperational/ChangeOperationalPlacementModal.tsx": 2,
     "components/childcareOperational/ChangeOperationalScheduleModal.tsx": 1,
-    "components/cleaning/CleaningQuickQuoteForm.tsx": 6,
-    "components/cleaning/CleaningQuoteForm.tsx": 5,
-    "components/cleaning/SpecialtyCleaningQuoteForm.tsx": 4,
     "components/forms/admin/FormIntakeRuntimeOrchestrationPanel.tsx": 1,
     "components/forms/admin/FormLifecycleUsagePanel.tsx": 2,
     "components/forms/admin/FormOutcomeConfigPanel.tsx": 4,
@@ -309,6 +306,6 @@ describe("raw <select> adoption ledger", () => {
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
         // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
-        expect(ledgerTotal).toBe(418);
+        expect(ledgerTotal).toBe(401);
     });
 });
