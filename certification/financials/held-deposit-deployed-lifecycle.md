@@ -70,4 +70,25 @@ answered.
    unapplied total, which counts held lots, so $68 of a restricted deposit settled tuition with no
    disposition and no refusal.
 
-The third repair is not on this deployed build. See the run report for its state.
+All three repairs are on deployed staging: 3741a80ba (#1347), e9694c5c8 (#1348) and
+8b1b7f61f (#1349).
+
+## What the third repair changed, measured on 8b1b7f61f
+
+The receipt carried $447.00 unapplied of which $115.00 was held, and the account read
+`AVAILABLE PREPAID $332.00` beside `HELD DEPOSIT $115.00`.
+
+| asked of the authority | answer |
+| --- | --- |
+| the mounted Apply offer | *"Apply $332.00 to an obligation"* — the unrestricted money, not the receipt total |
+| apply $572.00 | refused: *"44700 cents are unapplied but 11500 of them are held, leaving 33200 available to apply"* |
+| apply $100.00 to a $25.00 charge | refused by the CHARGE ceiling, not the held one — the guard is specific |
+| apply $25.00 of a held lot, explicitly | **allowed**: allocation `9d43c497`, `hold_id 3ba43827`, balance −$25.00, held −$25.00, **available prepaid unchanged** |
+
+The last two rows are the whole distinction. Ordinary application cannot reach a deposit.
+Explicit held application can reach the lot it names, atomically, and the money never becomes
+available prepaid on the way.
+
+Preview and execution now agree about the terms as well: refunding the non-refundable lot answers
+`hold_not_refundable` with the same sentence in both modes. Before, the preview said
+`eligible: true` for a refund the next call would refuse.
