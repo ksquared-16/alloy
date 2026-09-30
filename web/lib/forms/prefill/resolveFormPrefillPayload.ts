@@ -10,6 +10,7 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { resolveFormPrefillValues, shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
 import { resolveFormsCollectionPrefillGroups, type FormsCollectionGroupPrefillState } from "@/lib/forms/prefill/formsCollectionPrefillResolver";
+import { resolveAddressBindingPrefill, type AddressBindingPlanEntry } from "@/lib/forms/prefill/addressBindingPrefill";
 import { mergeFormPrefillPayload } from "@/lib/forms/prefill/mergeFormPrefillPayload";
 import { payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 
@@ -17,6 +18,8 @@ export type FormPrefillPayloadResult = {
     payload: FormPayload;
     scalarPrefill: Record<string, string | number | boolean>;
     collectionStates: Record<string, FormsCollectionGroupPrefillState>;
+    /** What each `address_binding` group resolved to, and why. Read by tests and diagnostics. */
+    addressBindingPlan: readonly AddressBindingPlanEntry[];
     prefillApplied: boolean;
 };
 
@@ -38,6 +41,7 @@ export async function resolveFormPrefillPayload(args: {
             payload: base,
             scalarPrefill: {},
             collectionStates: {},
+            addressBindingPlan: [],
             prefillApplied: false,
         };
     }
@@ -58,17 +62,36 @@ export async function resolveFormPrefillPayload(args: {
         args.launchFks,
     );
 
+    /*
+     * Address binding is resolved AFTER the generic scalar pass and wins over it. A bound group's
+     * children carry `person.address_line1`, which the scalar map can only take literally — and
+     * `persons` has no address column, so that path resolves to nothing at all. The binding is the
+     * more specific statement of whose address it is, so it is the one that answers.
+     */
+    const addressResult = await resolveAddressBindingPrefill(
+        args.supabase,
+        args.orgId,
+        schema,
+        args.launchFks,
+    );
+    const mergedScalarPrefill: Record<string, string | number | boolean> = {
+        ...scalarPrefill,
+        ...addressResult.values,
+    };
+
     const payload = mergeFormPrefillPayload({
         schema,
         saved: savedPayload,
-        scalarPrefill,
+        scalarPrefill: mergedScalarPrefill,
         collectionPrefill: collectionResult.groups,
     });
 
     return {
         payload,
-        scalarPrefill,
+        scalarPrefill: mergedScalarPrefill,
         collectionStates: collectionResult.states,
-        prefillApplied: Object.keys(scalarPrefill).length > 0 || Object.keys(collectionResult.groups).length > 0,
+        addressBindingPlan: addressResult.plan,
+        prefillApplied:
+            Object.keys(mergedScalarPrefill).length > 0 || Object.keys(collectionResult.groups).length > 0,
     };
 }
