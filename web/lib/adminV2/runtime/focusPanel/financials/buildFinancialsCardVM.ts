@@ -153,8 +153,14 @@ export type FinancialsPaymentRow = {
      * front of them. `unappliedCents - heldCents` is what remains holdable, and the database's own
      * INVARIANT 2 enforces that bound — this figure exists so the surface agrees with it rather than
      * offering an act the trigger will refuse.
+     *
+     * OPTIONAL, because it is resolved by a LATER read than the rest of the row. The holds read can
+     * fail on its own — the VM catches that and reports the account as unable to answer rather than
+     * as unrestricted — and a row composed before that read has no honest value to carry. Every
+     * consumer defaults it to zero, which is also the right reading for the callers that never ask
+     * for holds at all.
      */
-    heldCents: number;
+    heldCents?: number;
     /**
      * The household the receipt was taken against, named. Null when canonical data cannot name it —
      * an absent label is never replaced with a guess, because the wrong family on a payment is worse
