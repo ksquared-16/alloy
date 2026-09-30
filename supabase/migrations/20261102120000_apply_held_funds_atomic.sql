@@ -143,8 +143,25 @@ BEGIN
         RAISE EXCEPTION 'apply_held_funds_atomic was not created';
     END IF;
 
-    IF v_args <> 'uuid, uuid, uuid, bigint, uuid, text' THEN
-        RAISE EXCEPTION 'apply_held_funds_atomic has the wrong signature: %', v_args;
+    /*
+     * ASSERTED ON THE THING THAT MATTERS, not on a formatted string.
+     *
+     * This first compared the whole argument list against 'uuid, uuid, uuid, bigint, uuid, text'.
+     * `pg_get_function_identity_arguments` includes PARAMETER NAMES, so it can never equal that and
+     * the migration failed on a function it had just created correctly — the raise even printed the
+     * intended signature. A failed apply does not roll back DDL, so the function was installed and
+     * the migration reported otherwise.
+     *
+     * What this migration actually needs to guarantee is that the money parameter is bigint: both
+     * `amount_cents` columns are bigint, and an integer parameter would silently narrow them.
+     */
+    IF v_args NOT LIKE '%p_amount_cents bigint%' THEN
+        RAISE EXCEPTION 'apply_held_funds_atomic must take bigint cents, not: %', v_args;
+    END IF;
+
+    IF (SELECT pronargs FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+         WHERE n.nspname = 'public' AND p.proname = 'apply_held_funds_atomic') <> 6 THEN
+        RAISE EXCEPTION 'apply_held_funds_atomic has the wrong arity: %', v_args;
     END IF;
 
     -- The two writes it must make, against the columns that actually exist. A rename on either

@@ -224,6 +224,22 @@ describe("the allocation the database writes is an ORDINARY allocation", () => {
     it("re-runnable, because a failed apply does not roll back DDL", () => {
         expect(read(MIGRATION)).toMatch(/CREATE OR REPLACE FUNCTION public\.apply_held_funds_atomic/);
     });
+
+    /**
+     * THE SELF-TEST MUST NOT FAIL A FUNCTION IT JUST CREATED CORRECTLY.
+     *
+     * It first compared `pg_get_function_identity_arguments` against 'uuid, uuid, uuid, bigint,
+     * uuid, text'. That function includes PARAMETER NAMES, so the comparison could never be true:
+     * the apply failed, printing the very signature it wanted, and because a failed apply does not
+     * roll back DDL the function was installed while the migration reported otherwise.
+     */
+    it("the self-test does not compare the signature against a bare type list", () => {
+        const sql = read(MIGRATION);
+        expect(sql, "identity arguments carry names, so this can never match")
+            .not.toMatch(/<>\s*'uuid, uuid, uuid, bigint, uuid, text'/);
+        /* It asserts the one property that matters: money is bigint, not integer. */
+        expect(sql).toMatch(/p_amount_cents bigint%/);
+    });
 });
 
 describe("held money is applied through the canonical authority, not beside it", () => {
@@ -350,20 +366,23 @@ describe("the lifecycle is reachable by an operator", () => {
     });
 
     /**
-     * REFUND IS DELIBERATELY ABSENT, and that must not be quietly "fixed" by wiring the receipt's
-     * refund to a held lot.
+     * ALL THREE ACTS ARE REACHABLE, AND EACH IS GUARDED BY WHAT IT DEPENDS ON.
      *
-     * `payment_hold_dispositions_refunded_names_payment_chk` requires the disposition to name the
-     * refund payment it became. A card refund returns before a canonical refund row exists — the
-     * webhook writes it — so the act cannot dispose the hold, and a control here would refund the
-     * money while leaving it counted as held. That is the double-count this sprint just repaired,
-     * re-authored on the refund path.
+     * Refund was withheld at first, on the grounds that `..._refunded_names_payment_chk` requires
+     * the disposition to name a canonical refund payment that does not exist when a card refund
+     * returns. That constraint is real; omitting the act was the wrong answer to it. The hold is now
+     * carried on the provider refund record and discharged at RECOGNITION, and the terms are what
+     * gate the control — `heldFundsRefund.test.ts` owns that path in full.
      */
-    it("offers no refund control on a held lot while the disposition cannot be written", () => {
-        const detail = code(DETAIL);
-        expect(detail).not.toMatch(/onRefundHeldFunds/);
-        expect(detail).not.toMatch(/kind="refund"/);
-        /* But the TERMS are still shown, because refundability is a fact the operator needs. */
+    it("apply, release and refund are each offered, and refund only where honourable", () => {
+        const detail = read(DETAIL);
+        expect(detail).toMatch(/command="payment\.apply_to_charge"/);
+        expect(detail).toMatch(/command="deposit\.release"/);
+        expect(detail).toMatch(/command="payment\.refund"/);
+        /* Refund is guarded by the lot's own snapshot terms, not by a flag or a permission. */
+        const at = detail.indexOf('kind="refund"');
+        expect(detail.slice(Math.max(0, at - 400), at)).toMatch(/h\.refundable/);
+        /* And the terms are stated on every lot, refundable or not. */
         expect(detail).toMatch(/data-financials-held-refundable/);
     });
 });

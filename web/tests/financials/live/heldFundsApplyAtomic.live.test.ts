@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { applyPaymentToCharge, recordChildcarePayment } from "@/lib/financials/childcarePaymentService";
 import { applyHeldFunds, createPaymentHold, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
@@ -60,15 +60,38 @@ const AGREEMENT = "fc500000-0000-4000-8000-0000000a0001";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const TODAY = new Date().toISOString().slice(0, 10);
 
+/**
+ * A CONTROLLED HOUSEHOLD FOR THE ACCOUNT-LEVEL CERTIFICATION.
+ *
+ * The shared certification household carries 4,750 accumulated receipts on one agreement from
+ * months of live runs, and `readAccountPrepaidPosition` reads a household's receipts unpaged: it
+ * stops at PostgREST's 1000-row cap and the allocations read that follows — `.in()` over a thousand
+ * payment ids — then fails outright, so the account answers `unavailable`. Reported as a finding,
+ * not worked around: the reader degrading honestly is correct, and W6-B does not rebuild it.
+ *
+ * What the position needs is an account whose receipts are only the ones the case created. A
+ * `customer`-grain source IS its own household — `resolveBillableSourceHouseholdId` returns the id
+ * with nothing to traverse and no row to exist — so a fresh uuid is a complete, isolated account
+ * with no seeding, and charges raised at the same grain satisfy household parity against it.
+ *
+ * Unique per run, so one run's receipts are never another's.
+ */
+const CONTROLLED_HOUSEHOLD = `fc6b0000-0000-4000-8000-${String(Date.now()).slice(-12)}`;
+
 const writtenCharges: string[] = [];
 const writtenPayments: string[] = [];
 
-async function postCharge(supabase: SupabaseClient, amountCents: number): Promise<string> {
+async function postCharge(
+    supabase: SupabaseClient,
+    amountCents: number,
+    /* Defaults to the shared agreement; the controlled cases pass their own household grain. */
+    source: { type: "enrollment_agreement" | "customer"; id: string } = { type: "enrollment_agreement", id: AGREEMENT },
+): Promise<string> {
     const { data: draft, error } = await supabase
         .from("charges")
         .insert({
             org_id: ORG, job_id: null,
-            billable_source_type: "enrollment_agreement", billable_source_id: AGREEMENT,
+            billable_source_type: source.type, billable_source_id: source.id,
             charge_type: "fee", charge_category: "fee", status: "draft",
             currency_code: "USD", amount_cents: amountCents,
             service_date: TODAY, occurs_on: TODAY, billable_on: TODAY,
@@ -87,12 +110,12 @@ async function postCharge(supabase: SupabaseClient, amountCents: number): Promis
     return id;
 }
 
-async function receipt(supabase: SupabaseClient, amountCents: number): Promise<string> {
+async function receipt(supabase: SupabaseClient, amountCents: number, householdId: string = HOUSEHOLD): Promise<string> {
     const out = await recordChildcarePayment(supabase, {
         orgId: ORG,
         billableSourceType: "customer",
-        billableSourceId: HOUSEHOLD,
-        customerId: HOUSEHOLD,
+        billableSourceId: householdId,
+        customerId: householdId,
         amountCents,
         paymentMethod: "check",
         status: "posted",
@@ -122,6 +145,19 @@ async function rows(supabase: SupabaseClient, holdId: string, paymentId: string)
 describe.skipIf(!env)("applying held money — live, one transaction or none", () => {
     const supabase = env ? createClient(env.url, env.serviceKey, { auth: { persistSession: false } }) : null;
 
+    /*
+     * `payments.customer_id` carries a real foreign key, so the controlled account needs a row even
+     * though its billable source resolves to itself with nothing to traverse.
+     */
+    beforeAll(async () => {
+        if (!supabase) return;
+        const { error } = await supabase.from("customers").upsert(
+            { id: CONTROLLED_HOUSEHOLD, org_id: ORG, name: "W6-B held deposit certification" },
+            { onConflict: "id" },
+        );
+        if (error) throw new Error(`could not seed the controlled account: ${error.message}`);
+    });
+
     afterAll(async () => {
         if (!supabase) return;
         /* Dispositions first: they RESTRICT their hold and their allocation. */
@@ -141,6 +177,9 @@ describe.skipIf(!env)("applying held money — live, one transaction or none", (
             await supabase.from("charges").update({ status: "void" }).eq("id", id);
             await supabase.from("charges").delete().eq("id", id);
         }
+        /* Last, once nothing references it. Left behind if something does — a stranded fixture row
+         * is preferable to a delete that fails and masks the reason. */
+        await supabase.from("customers").delete().eq("id", CONTROLLED_HOUSEHOLD);
     });
 
     it("the function is installed with the signature the caller uses", async () => {
@@ -321,8 +360,10 @@ describe.skipIf(!env)("applying held money — live, one transaction or none", (
      * becoming spendable is `release`; applying it was never supposed to pass through available.
      */
     it("applying held money never passes through available prepaid", async () => {
-        const chargeId = await postCharge(supabase!, 60_000);
-        const paymentId = await receipt(supabase!, 40_000);
+        /* Both sides at household grain on the controlled account, so parity holds and the
+         * position reads only what this case created. */
+        const chargeId = await postCharge(supabase!, 60_000, { type: "customer", id: CONTROLLED_HOUSEHOLD });
+        const paymentId = await receipt(supabase!, 40_000, CONTROLLED_HOUSEHOLD);
         const held = await createPaymentHold(supabase!, {
             orgId: ORG, paymentId, amountCents: 40_000, refundable: true, actorUserId: ACTOR,
         });
@@ -330,7 +371,7 @@ describe.skipIf(!env)("applying held money — live, one transaction or none", (
 
         const positionFor = async () => {
             const { outcome } = await readAccountPrepaidPosition(supabase!, {
-                orgId: ORG, householdId: HOUSEHOLD, authorized: true,
+                orgId: ORG, householdId: CONTROLLED_HOUSEHOLD, authorized: true,
             });
             /*
              * `unavailable` and `forbidden` are NOT zero positions, and reading them as one is the
