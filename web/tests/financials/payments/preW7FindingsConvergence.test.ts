@@ -206,6 +206,23 @@ describe("finding 8 — receipt money terminology", () => {
         const adapter = read(ADAPTER);
         expect(adapter).toContain("heldCents: p.heldCents ?? 0,");
     });
+
+    /*
+     * THE SAME QUANTITY, ONE NUMBER. Measured on deployed 2d69541ed after the first half of this
+     * repair shipped: the receipt row offered "$472.00 available to apply" — its unapplied figure
+     * is gross of refunds — beside an account Available prepaid of $332.00 and an Apply control
+     * quoting $332.00. Two answers to one question, one line below the repair that exists to stop
+     * exactly that.
+     */
+    it("the apply ceiling on the row nets refunds, as the canonical one does", () => {
+        const presentation = read("lib/adminV2/runtime/focusPanel/financials/paymentPresentation.ts");
+        expect(presentation).toContain("const applicable = isRefund ? 0 : Math.max(0, received - refunded - applied - held);");
+        /* And the hold ceiling is deliberately NOT the same number. */
+        expect(presentation).toContain("const holdable = isRefund ? 0 : Math.max(0, Math.max(0, received - applied) - held);");
+        const host = read(HOST);
+        expect(host).toContain("{money(p.applicableCents, p.currencyCode)} available to apply");
+        expect(host).not.toContain("{money(p.holdableCents, p.currencyCode)} available to apply");
+    });
 });
 
 /* ── VISUAL — the three acts on a deposit are not peers ──────────────────────────────────────── */

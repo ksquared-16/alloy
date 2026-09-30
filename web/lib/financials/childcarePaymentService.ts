@@ -1309,9 +1309,13 @@ export type RefundChildcarePaymentResult = {
  *
  *   1. A NEW outbound payment row is written pointing at the receipt through `refunds_payment_id`.
  *      The receipt keeps reading exactly as it was received; the database refuses to change it.
- *   2. The APPLICATIONS are reversed by the refunded amount, which is what puts the balance back —
- *      UNLESS the refund was raised from a held lot, whose money was never applied and whose
- *      return therefore changes no obligation. See `heldLotId`.
+ *   2. The APPLICATIONS are reversed by the part of the refund that nothing else can fund, which is
+ *      what puts the balance back. An operator's refund is funded from eligible ordinary unapplied
+ *      retained money FIRST — `received − already refunded − applied − held` — and only the
+ *      shortfall reverses anything, so returning a credit balance no longer re-opens obligations
+ *      the family had already settled. A held-lot refund is funded by the lot and reverses
+ *      nothing; a provider return reverses in full, because the bank removed recognised money and
+ *      nobody chose how to fund it. See the funding block below.
  *      A reversal sets `status = 'reversed'` with `reversed_at` and a reason — the correction shape
  *      the table was designed with — and never deletes the row, so "this money was applied and then
  *      given back" stays legible. For a partial refund the remainder is RE-APPLIED as a new active
@@ -1366,6 +1370,56 @@ export async function refundChildcarePayment(
             "invalid_state",
             `refunding ${amountCents} cents exceeds the ${original.amount_cents} cents received`,
         );
+    }
+
+    /*
+     * ── WHAT FUNDS AN OPERATOR'S REFUND ─────────────────────────────────────────────────────────
+     *
+     * DIRECTOR DECISION. An operator-initiated refund is funded from eligible ordinary unapplied
+     * RETAINED money first, and only the portion that money cannot cover reverses applications:
+     *
+     *     unapplied-funded  = min(X, U)
+     *     must reverse      = max(0, X − U)
+     *
+     * where U is what this receipt still holds that nothing has a claim on —
+     * `received − already refunded − actively applied − held`. `readPaymentUnappliedCents` is the
+     * canonical reader for the first three of those (it nets refunds itself, which is why they are
+     * not subtracted again here); the held total is the only thing it does not know about.
+     * Before this, every refund reversed
+     * applications for its whole amount, so returning a credit balance silently re-opened
+     * obligations the family had already settled: an $80 refund against $400 of unapplied money
+     * added $80 to what they owed.
+     *
+     * HELD MONEY IS NOT ELIGIBLE. A deposit is unapplied by construction, and an ordinary refund
+     * that quietly consumed one would be the very thing `heldLotId` exists to prevent. It is
+     * subtracted out of U, and a refund that NAMES a lot is funded by that lot and reverses
+     * nothing — the W6-B / #1348 authority, untouched.
+     *
+     * A PROVIDER RETURN IS NOT THIS. Nobody chose how to fund a chargeback; the bank removed money
+     * that had already been recognised, and the obligations it settled genuinely come back. It is
+     * excluded by `reversalOrigin`, which `providerDispute` has always set and which is recorded on
+     * the row, so the distinction is in the data and not only in this branch.
+     *
+     * COMPUTED BEFORE THE REFUND ROW EXISTS. `readPaymentUnappliedCents` nets the outbound rows
+     * pointing at this receipt, and the row written below is one of them — asking afterwards would
+     * count this refund as already made and under-fund it by its own amount.
+     *
+     * NO NEW ARITHMETIC: the three readers are the canonical ones every other surface uses.
+     */
+    const fundedFromHeldLot = Boolean(trimOrNull(input.heldLotId ?? null));
+    const isProviderReturn = (input.reversalOrigin ?? "operator") === "provider";
+
+    let unappliedFundedCents = 0;
+    if (!fundedFromHeldLot && !isProviderReturn) {
+        const unappliedRetained = await readPaymentUnappliedCents(
+            supabase, orgId, original.id, original.amount_cents,
+        );
+        const heldCents = heldCentsFor(
+            original.id,
+            await readHoldsForPayments(supabase, { orgId, paymentIds: [original.id] }),
+        );
+        const eligible = Math.max(0, unappliedRetained - heldCents);
+        unappliedFundedCents = Math.min(amountCents, eligible);
     }
 
     const now = nowIso();
@@ -1428,16 +1482,20 @@ export async function refundChildcarePayment(
     const active = (allocData ?? []) as unknown as PaymentAllocationRow[];
     const reversedAllocationIds: string[] = [];
     let reappliedAllocation: PaymentAllocationRow | null = null;
-    let remaining = amountCents;
 
     /*
-     * A REFUND RAISED FROM A HELD LOT REVERSES NOTHING. Its money was never applied — see
-     * `heldLotId` — so there is no application to give back, and reversing one would un-settle an
-     * obligation the family had already paid in order to fund a deposit going the other way.
+     * ONLY THE SHORTFALL. `unappliedFundedCents` has already left money nothing had a claim on, so
+     * what remains is the part of the refund that must come out of settled obligations. It is
+     * zero whenever the receipt could fund the refund by itself, zero for a held-lot refund, and
+     * the whole amount for a provider return.
+     *
+     * The ORDER is unchanged: oldest-first, straddling allocation reversed in full with its kept
+     * remainder re-applied. This decision changes WHEN a reversal is required, not which
+     * allocation goes first.
      */
-    const fundedFromHeldLot = Boolean(trimOrNull(input.heldLotId ?? null));
+    let remaining = fundedFromHeldLot ? 0 : Math.max(0, amountCents - unappliedFundedCents);
 
-    for (const alloc of fundedFromHeldLot ? [] : active) {
+    for (const alloc of remaining > 0 ? active : []) {
         if (remaining <= 0) break;
         const allocAmount = Number(alloc.allocated_amount_cents) || 0;
 

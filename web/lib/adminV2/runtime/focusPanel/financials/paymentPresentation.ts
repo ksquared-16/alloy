@@ -90,6 +90,12 @@ export type PaymentPresentation = {
      */
     heldCents: number;
     /**
+     * What of this receipt can still answer an obligation: received, less what went back, less what
+     * is applied, less what is held. The APPLY ceiling — `holdableCents` is the hold ceiling, and
+     * the two differ by the refunds.
+     */
+    applicableCents: number;
+    /**
      * Whether the card offers `deposit.hold` on this row.
      *
      * Posted inbound money with something left to restrict. Holding a refund is meaningless — the
@@ -145,6 +151,22 @@ export function presentPayment(
      */
     const held = Math.max(0, Math.abs(Number(heldCents) || 0));
     const holdable = isRefund ? 0 : Math.max(0, Math.max(0, received - applied) - held);
+    /*
+     * ── WHAT CAN STILL ANSWER AN OBLIGATION ─────────────────────────────────────────────────────
+     *
+     * NOT `holdable`, and the difference is the refunds. `unappliedCents` here is measured against
+     * what was RECEIVED, so on a partly refunded receipt it counts money that has already left; the
+     * canonical apply ceiling nets refunds as well as holds.
+     *
+     * Measured on deployed staging with the terminology repair in place: the row offered
+     * "$472.00 available to apply" — 562 unapplied minus 90 held — beside an account Available
+     * prepaid of $332.00 and an Apply control quoting $332.00. Two figures for one quantity, which
+     * is the very thing the repair exists to stop, reintroduced one line lower.
+     *
+     * `holdable` is left alone on purpose: it is the HOLD ceiling, and the database's own invariant
+     * is the authority on that. This is the APPLY ceiling and it is stated separately.
+     */
+    const applicable = isRefund ? 0 : Math.max(0, received - refunded - applied - held);
     return {
         paymentId: payment.paymentId,
         kind: isRefund ? (payment.reversalOrigin === "provider" ? "return" : "refund") : "receipt",
@@ -167,6 +189,7 @@ export function presentPayment(
         refundableCents: refundable,
         holdableCents: holdable,
         heldCents: held,
+        applicableCents: applicable,
         offersHold: isPosted && !isRefund && !payment.refundsPaymentId && holdable > 0,
     };
 }

@@ -121,9 +121,18 @@ describe("a refund raised from a held lot", () => {
  * deleted. An ordinary refund — no lot — must still give the obligation back.
  */
 describe("an ordinary refund, with no lot behind it", () => {
-    it("still reverses the application and restores the balance", async () => {
+    /*
+     * THE CONTROL. Without it, "reverses nothing" would also pass if the reversal had been
+     * deleted. The receipt here is FULLY applied, so there is no unapplied money to fund the
+     * refund and an application must come back — which is the Director decision's own case D.
+     */
+    it("still reverses the application when nothing else can fund it", async () => {
         const { store, supabase } = setup();
-        const paid = await paidWithChangeLeft(supabase);
+        const paid = await recordAndApplyChildcarePayment(supabase, {
+            orgId: ORG_ID, chargeId: "charge-1", amountCents: CHARGE_CENTS,
+            paymentMethod: "cash", idempotencyKey: "pay-full",
+        });
+        expect((await readChargeBalance(supabase, ORG_ID, "charge-1")).outstandingCents).toBe(0);
 
         const refunded = await refundChildcarePayment(supabase, {
             orgId: ORG_ID,
