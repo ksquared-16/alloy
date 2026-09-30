@@ -81,7 +81,7 @@ export default function QaNotesPad() {
     return (
         <div
             data-qa-notes-panel="true"
-            className="fixed inset-x-2 bottom-2 z-40 max-h-[80vh] overflow-y-auto rounded-2xl border border-alloy-midnight/15 bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[380px]"
+            className="fixed inset-x-2 bottom-2 z-40 max-h-[40vh] overflow-y-auto rounded-2xl border border-alloy-midnight/15 bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-4 sm:bottom-4 sm:max-h-[80vh] sm:w-[380px]"
         >
             <div className="flex items-center justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-alloy-midnight">What you found</h2>
@@ -117,7 +117,7 @@ export default function QaNotesPad() {
             <textarea
                 value={notes}
                 onChange={(e) => update(e.target.value)}
-                rows={8}
+                rows={5}
                 placeholder="BLOCKER: the fee appeared before the Handbook was acknowledged"
                 data-qa-notes="true"
                 className="mt-3 w-full rounded-xl border border-alloy-midnight/15 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-alloy-midnight outline-none focus:border-alloy-bend-pine/40"
