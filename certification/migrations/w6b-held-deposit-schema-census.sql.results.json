@@ -1,0 +1,76 @@
+{
+  "trusted_host_action_id": "tha_415b644c50f6b4",
+  "query_hash": "711a8fb53a92b81779015a3cade308811b2ab6a7ff3cb3d72f6ab6b6028f426a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T02:51:00.615Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_415b644c50f6b4",
+    "query_hash": "711a8fb53a92b81779015a3cade308811b2ab6a7ff3cb3d72f6ab6b6028f426a",
+    "authorization_id": "grnt_5318decee6984ff1",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T02:51:06.070Z",
+    "question_ids": [
+      "m120000_apply_fn",
+      "m120000_hold_column",
+      "m120000_indexes",
+      "m120000_index_count"
+    ],
+    "questions": {
+      "m120000_apply_fn": {
+        "question_id": "m120000_apply_fn",
+        "row_count": null,
+        "rows": [
+          {
+            "present": 1,
+            "arity": 6,
+            "takes_bigint_cents": true,
+            "identity_arguments": "p_org_id uuid, p_hold_id uuid, p_charge_id uuid, p_amount_cents bigint, p_actor uuid, p_notes text"
+          }
+        ]
+      },
+      "m120000_hold_column": {
+        "question_id": "m120000_hold_column",
+        "row_count": null,
+        "rows": [
+          {
+            "present": 1,
+            "data_type": "uuid",
+            "is_nullable": "YES"
+          }
+        ]
+      },
+      "m120000_indexes": {
+        "question_id": "m120000_indexes",
+        "row_count": null,
+        "rows": [
+          {
+            "indexdef": "CREATE INDEX idx_payment_provider_refunds_hold ON public.payment_provider_refunds USING btree (hold_id) WHERE (hold_id IS NOT NULL)",
+            "indexname": "idx_payment_provider_refunds_hold"
+          },
+          {
+            "indexdef": "CREATE UNIQUE INDEX uq_payment_hold_dispositions_one_per_refund ON public.payment_hold_dispositions USING btree (hold_id, refund_payment_id) WHERE ((kind = 'refunded'::text) AND (refund_payment_id IS NOT NULL))",
+            "indexname": "uq_payment_hold_dispositions_one_per_refund"
+          }
+        ]
+      },
+      "m120000_index_count": {
+        "question_id": "m120000_index_count",
+        "row_count": null,
+        "rows": [
+          {
+            "found": 2,
+            "expected": 2
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}
