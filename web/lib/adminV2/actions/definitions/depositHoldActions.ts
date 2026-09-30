@@ -26,12 +26,33 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import {
     createPaymentHold,
     disposeHold,
     readHoldsForPayments,
 } from "@/lib/financials/prepaid/heldDeposits";
+
+/**
+ * ── THE GRAINS THIS FAMILY IS INVOKED AT ────────────────────────────────────────────────────
+ *
+ * `customer` is the one that was missing, and its absence made the whole held-money lifecycle
+ * unreachable in production. The Financials account card is customer-grain — a receipt, a held
+ * deposit and available prepaid belong to the household — so it dispatches `customer`, and
+ * `checkContext` refused it before the action ever ran. Nothing could create a hold, apply held
+ * money, release it, or deliberately apply available prepaid.
+ *
+ * The entity is ATTRIBUTION, not routing: `payment_id`, `hold_id` and `charge_id` in the payload
+ * decide what the money does, which is why the same receipt and payload previewed
+ * `eligible: true` under every already-declared grain on deployed staging and 400 under this one.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
 
 export const DEPOSIT_HOLD_ACTION_KEY = "deposit.hold";
 export const DEPOSIT_RELEASE_ACTION_KEY = "deposit.release";
@@ -72,7 +93,7 @@ const holdFunds: RegisteredAction = {
     actionKey: DEPOSIT_HOLD_ACTION_KEY,
     defaultLabel: "Hold funds",
     description: "Restrict part of a received payment so it is not spent against ordinary obligations.",
-    supportedEntityTypes: ["opportunity", "person", "child", "opportunity_customer_member"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -173,7 +194,7 @@ const releaseFunds: RegisteredAction = {
     actionKey: DEPOSIT_RELEASE_ACTION_KEY,
     defaultLabel: "Release funds",
     description: "Stop restricting held funds so they become ordinary available prepaid money.",
-    supportedEntityTypes: ["opportunity", "person", "child", "opportunity_customer_member"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },

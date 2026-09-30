@@ -17,13 +17,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 
-export type ActionEntityType =
-    | "opportunity"
-    | "person"
-    | "child"
-    | "job"
-    | "schedule"
-    | "opportunity_customer_member";
+/**
+ * THE GRAINS AN ACTION MAY BE INVOKED AGAINST.
+ *
+ * `customer` is here because the Financials account surface is customer-grain and always has
+ * been: an account's receipts, its held deposits and its available prepaid belong to the
+ * HOUSEHOLD, not to any one child. The card dispatched that grain from the day it existed, the
+ * vocabulary never contained it, and `checkContext` refuses an unknown type before the action
+ * runs — so every held-money act reached a 400 instead of its authority. Measured on deployed
+ * staging: `deposit.hold` returned `unsupported_entity_type` for `customer` and
+ * `eligible: true` for the same receipt and payload under a declared grain.
+ *
+ * The list is the single source: the union derives from it, so a grain cannot be accepted by
+ * one and unknown to the other.
+ */
+export const ACTION_ENTITY_TYPES = [
+    "opportunity",
+    "person",
+    "child",
+    "customer",
+    "job",
+    "schedule",
+    "opportunity_customer_member",
+] as const;
+
+export type ActionEntityType = (typeof ACTION_ENTITY_TYPES)[number];
 
 /** Where the action runtime was invoked from. The executor path is identical for all. */
 export type ActionInvocationOrigin = "manual" | "bos" | "workflow";
@@ -194,7 +212,16 @@ export function normalizeActionEntityType(entityType: string): string {
     if (raw === "jobs") return "job";
     if (raw === "children") return "child";
     if (raw === "opportunity_customer_members") return "opportunity_customer_member";
+    if (raw === "customers") return "customer";
     return raw;
+}
+
+/**
+ * Is this a grain the action runtime knows? A surface that dispatches an unknown one is refused
+ * by `checkContext` with a machine code, which is how the held-money lifecycle failed silently.
+ */
+export function isActionEntityType(entityType: string): entityType is ActionEntityType {
+    return (ACTION_ENTITY_TYPES as readonly string[]).includes(normalizeActionEntityType(entityType));
 }
 
 /** Narrow the invocation context to the shape existing executor helpers accept. */
