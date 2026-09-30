@@ -18,8 +18,31 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process |
-| **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** (all three Operations domains: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md)) |
+| **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Attendance · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+
+### Enrollment / Placement and Staff / Scheduling — context treatment
+
+**DIRECT** (load these): `../platform/core/effective-dated-assignment-doctrine.md`,
+`../platform/core/operations-temporal-truth-certification.md`,
+`../platform/core/placement-system.md`, and for Staff/Scheduling the four governance owners —
+`staff-coverage-authority.md`, `time-aware-staffing-projection.md`, `assignment-time-authority.md`,
+`assignments-authority-model-debt.md`.
+
+**REFERENCE_ON_DEMAND**: `../platform/core/status-and-state-system.md` and
+`business-process-system.md`, for the boundaries these domains are explicitly *outside*.
+
+**PLANNED_ONLY** (never doctrine): the 32 files under `../platform/planning/**` with scheduling or
+roster names. They describe intent, and several describe concepts that do not exist.
+
+**EXCLUDE_HISTORY**: `certification/**` census SQL, results JSON and playwright evidence (92 artifacts);
+`docs/sprints/**`, `docs/archive/**`, `docs/audits/**` (~50). Retained for provenance, excluded from
+context. A PASS in one of them is not current evidence.
+
+**Safe/forbidden inference for both domains is §5 of the certification record.** The two that cause the
+most damage if got wrong: "latest row = active row" (resolve currency by the operational-state
+predicate, never by recency) and "a declared capability is an enforced one" (319 declarations are a
+`pending` backlog).
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -272,13 +295,13 @@ yet applied to the deployed primary; see the gate above.*
 | Debt | Size | Why it is not a certification blocker |
 |---|---|---|
 | `authenticated` INSERT/UPDATE/DELETE grants the architecture never needed | **259 tables**; **56** of them have no write policy at all | Latent by mechanism: RLS denies, and no supported path uses the authenticated principal to write. Phase 4 retires them per table family; the 56 are the risk-free start |
-| Route handlers with no declared capability | **321 of 870** (305 owned + 16 frozen), across **122 route families**; **58 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
+| Route handlers with no declared capability | **319 of 870** (303 owned + 16 frozen), across **122 route families**; **56 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
 | Write policies resting on `current_org_id()` | 41 | Returns NULL above one organization (measured: 3 orgs), so all 41 **deny**. Fails closed — but would silently become permissive in a single-org deployment |
 | Write policies matching none of the four known shapes | 142 | None are unconditionally permissive (measured: 0). Unclassified, not unsafe |
 | Read semantics for the two newly RLS-protected tables | 2 tables | Both are service-role-only reads today, which is what the product does. Choosing an org-scoped authenticated read predicate is a Financials decision, ledgered rather than guessed |
 
-**Route capability, stated correctly.** Of **870** handlers across 673 route files: **454 declare and
-bind a capability**, **95 are declared admission-sufficient**, **321 are pending**. An earlier version
+**Route capability, stated correctly.** Of **870** handlers across 673 route files: **456 declare and
+bind a capability**, **95 are declared admission-sufficient**, **319 are pending**. An earlier version
 of this pack said "~17 assert a capability" — that was wrong by more than an order of magnitude and
 would have led a reader to believe the domain was essentially ungated. It is roughly half-gated, with
 the remainder enumerated.

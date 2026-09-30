@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_1f61a23e814c7c",
+  "trusted_host_action_id": "tha_32dac756f52183",
   "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T11:25:58.494Z",
+    "executed_at": "2026-09-30T14:12:18.145Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_1f61a23e814c7c",
+    "trusted_host_action_id": "tha_32dac756f52183",
     "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
-    "authorization_id": "grnt_fd046d6a65f24728",
+    "authorization_id": "grnt_a2e8dfe02cce426f",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T11:26:04.375Z",
+    "census_run_at": "2026-09-30T14:12:24.111Z",
     "question_ids": [
       "k_rpc",
       "l_appusers",
@@ -29,36 +29,10 @@
         "question_id": "k_rpc",
         "row_count": null,
         "rows": [
-          "rpc ~ apply_held_funds_atomic ~ secdef=false :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=unset",
-          "rpc ~ execute_enrollment_status_mutation ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=unset",
-          "rpc ~ execute_lead_status_mutation ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "rpc ~ execute_processing_identity_group ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "rpc ~ grant_operational_authority_assignment ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "rpc ~ insert_enrollment_participation_and_maintain_facts ~ secdef=false :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
           "rpc ~ post_ledger_transaction ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public, pg_temp",
-          "rpc ~ record_child_attendance_event ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "rpc ~ revoke_operational_authority_assignment ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "rpc ~ seed_default_role_definitions ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public, pg_temp",
-          "rpc ~ set_assignment_weekday_intervals ~ secdef=false :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=unset",
-          "rpc ~ staff_coverage_plan ~ secdef=false :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=unset",
-          "rpc ~ staff_coverage_supersede ~ secdef=false :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=unset",
-          "rpc ~ upsert_operational_authority ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public",
-          "mutating_rpc_excluding_triggers ~ authenticated_executable ~ 14",
-          "mutating_rpc ~ no_caller_authority_check ~ 14",
-          "rpc_acl ~ apply_held_funds_atomic ~ =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ execute_enrollment_status_mutation ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ execute_lead_status_mutation ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ execute_processing_identity_group ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ grant_operational_authority_assignment ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ insert_enrollment_participation_and_maintain_facts ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ post_ledger_transaction ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ record_child_attendance_event ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ revoke_operational_authority_assignment ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ seed_default_role_definitions ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ set_assignment_weekday_intervals ~ =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ staff_coverage_plan ~ =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ staff_coverage_supersede ~ =X/postgres | postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres",
-          "rpc_acl ~ upsert_operational_authority ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres"
+          "mutating_rpc_excluding_triggers ~ authenticated_executable ~ 1",
+          "mutating_rpc ~ no_caller_authority_check ~ 1",
+          "rpc_acl ~ post_ledger_transaction ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres"
         ]
       },
       "l_appusers": {
@@ -93,7 +67,7 @@
           "commercial_policy_exceptions ~ postgres ~ delete,insert,references,select,trigger,truncate,update",
           "commercial_policy_exceptions ~ service_role ~ delete,insert,references,select,trigger,truncate,update",
           "commercial_policy_exceptions ~ has_org_id_column ~ true",
-          "commercial_policy_exceptions ~ policies ~ 0"
+          "commercial_policy_exceptions ~ policies ~ 1"
         ]
       },
       "o_other": {
@@ -253,6 +227,6 @@
         ]
       }
     },
-    "row_count": 191
+    "row_count": 165
   }
 }

@@ -58,8 +58,16 @@ const APPLY_CENSUS = "certification/migrations/identity-access-apply-verificatio
  * occurred. But a gate with a leg that reports the wrong answer is one accident away
  * from being a gate that agrees with the wrong conclusion, so the question is now asked
  * per version rather than by high-water mark.
+ *
+ * THE LIST ITSELF IS THE GATE, SO IT MUST NOT LAG THE REQUIREMENTS. 20261107120000 joined
+ * on 2026-09-30. It closes post_ledger_transaction, which 20261104120000 missed because it
+ * matched on parameter names. Until the version was added here, this gate would have
+ * certified Identity/Access with that follow-up migration entirely absent — the ACL leg
+ * would have caught the open function, but the apply leg would have reported a complete
+ * repair. Found by working the adversarial checklist rather than the happy path, which is
+ * the only reason it was found at all.
  */
-const APPLY_GATE_VERSIONS = ["20261104120000", "20261104130000"] as const;
+const APPLY_GATE_VERSIONS = ["20261104120000", "20261104130000", "20261107120000"] as const;
 
 type Census = { status?: string; query_hash?: string; results?: { questions?: Record<string, { rows?: string[] }> } };
 
@@ -108,10 +116,32 @@ describe("Identity/Access certification evidence gate", () => {
         }
     });
 
-    it("the RPC census still reports the ACL rows this gate reads", () => {
-        // A gate that read an empty list would pass its closure assertion for the worst reason.
-        const acl = census(RPC_CENSUS).rows("k_rpc").filter((r) => r.startsWith("rpc_acl"));
-        expect(acl.length, "the census reports no mutating-RPC ACL rows at all").toBeGreaterThan(10);
+    it("the RPC census is internally consistent, so the ACL rows are not a partial read", () => {
+        /*
+         * WHY THIS IS RELATIONAL AND NOT A FLOOR.
+         *
+         * This asserted `acl.length > 10`, to stop the closure assertion below passing against an
+         * empty list. That floor was calibrated to the pre-repair world and inverted the moment the
+         * repair worked: the census lists only functions that are STILL authenticated-executable, so
+         * closing 13 of 14 shrank its own subject to 1 and the guard failed on success. It is the same
+         * mistake as the `broken-link > 100` baseline assertion — a hand-written number describing a
+         * population that the work is meant to change.
+         *
+         * The durable form compares the census against itself: the enumerated ACL rows must match the
+         * count the same census reports. That proves it actually measured and returned a whole answer,
+         * and it holds at 14, at 1, and at 0 — which is where a finished repair lands.
+         */
+        const rows = census(RPC_CENSUS).rows("k_rpc");
+        const acl = rows.filter((r) => r.startsWith("rpc_acl"));
+        const countRow = rows.find((r) => r.startsWith("mutating_rpc_excluding_triggers ~ authenticated_executable ~"));
+        expect(countRow, "the census reports no authenticated-executable count row, so it may be a partial read").toBeTruthy();
+        const reported = Number((countRow ?? "").split(" ~ ").pop());
+        expect(Number.isFinite(reported), `count row is unparseable: ${countRow}`).toBe(true);
+        expect(
+            acl.length,
+            `the census enumerates ${acl.length} mutating-RPC ACL rows but reports a count of ${reported}. `
+                + "A mismatch means the artifact is a partial read, and neither number can be trusted.",
+        ).toBe(reported);
     });
 
     it("the apply census reports both repair versions by name", () => {

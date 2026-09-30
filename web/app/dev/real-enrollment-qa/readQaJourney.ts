@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { launchFkStampFromCrmSnapshotRecord } from "@/lib/forms/packets/formPacketService";
+import { readHouseholdSharedAddress } from "@/lib/location/canonicalAddressReads";
 
 /**
  * The live journey the human QA pass is run against, read in the operator's language.
@@ -48,6 +49,12 @@ export type QaJourney = {
     /** Needed only so the page can read the participant's OWN financial view. Never displayed. */
     readonly participantToken: string | null;
     readonly linkActive: boolean;
+    /**
+     * The canonical household address the Admissions Home-address group is answered from, or null
+     * when the household has none. Shown because "does it ask me for what Alloy already knows?" is
+     * a question the Director cannot judge without seeing what Alloy holds.
+     */
+    readonly householdAddress: string | null;
 };
 
 export type QaJourneyResult =
@@ -197,6 +204,20 @@ export async function readRealEnrollmentQaJourney(): Promise<QaJourneyResult> {
         }
     }
 
+    const address = fks.customer_id
+        ? await readHouseholdSharedAddress(supabase, {
+              orgId: session.org_id,
+              customerId: fks.customer_id,
+              role: "home",
+              acceptUnstatedRole: true,
+          })
+        : null;
+    const householdAddress = address
+        ? [address.address_line1, address.address_line2, address.city, address.state, address.postal_code]
+              .filter(Boolean)
+              .join(", ") || null
+        : null;
+
     const currentIndex = typeof session.current_sequence_index === "number" ? session.current_sequence_index : 0;
     const steps: QaJourneyStep[] = items.map((it) => ({
         sequenceIndex: it.sequence_index,
@@ -219,6 +240,7 @@ export async function readRealEnrollmentQaJourney(): Promise<QaJourneyResult> {
             participantPath,
             participantToken: tokenFromEmbedPath(participantPath),
             linkActive,
+            householdAddress,
         },
     };
 }

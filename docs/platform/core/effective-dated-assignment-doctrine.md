@@ -55,8 +55,34 @@ Measured 2026-09-30, three tables carry exactly that shape:
 | Table | Domain | Invariant owner |
 |---|---|---|
 | `child_placements` | Placement | `lib/childcareOperational/childPlacementService.ts` |
-| `schedule_assignments` | Scheduling (child **and** staff) | `lib/operationalAssignments/operationalAssignmentService.ts` |
+| `schedule_assignments` (child, agreement-scoped) | Scheduling | `lib/childcareOperational/scheduleAssignmentService.ts` |
+| `schedule_assignments` (primary switch, child **and** staff) | Scheduling | `lib/operationalAssignments/setPrimaryOperationalAssignment.ts` |
 | `employments` | Employment | `employment` domain services |
+
+> **Corrected 2026-09-30.** This table previously named
+> `lib/operationalAssignments/operationalAssignmentService.ts` as the `schedule_assignments` invariant
+> owner. Measured, that service creates, promotes and deletes **proposed** assignments — rows that are
+> not operational truth and are therefore outside this doctrine until promotion. The agreement-scoped
+> child supersession lives in `scheduleAssignmentService.ts`, and the primary switch that spans child
+> and staff subjects lives in `setPrimaryOperationalAssignment.ts`. Naming the wrong owner is not a
+> cosmetic error in a doctrine whose whole purpose is that one law has one home.
+
+## Who owns the transaction
+
+Since 2026-09-30 the durable half of supersession is **one SQL function**,
+`apply_participation_operational_change`, reached through a single TypeScript gateway
+(`lib/childcareOperational/participationOperationalChange.ts`).
+
+This is not a second temporal engine; it is the only one. It exists because the invariant needs a
+property TypeScript cannot provide: a single operator edit can change placement **and** schedule truth
+together, the canonical services are separate functions, and the Supabase client cannot open a shared
+transaction. Two statements that must both happen or neither cannot be issued from the client.
+
+It owns exactly four things and nothing else: atomic persistence, supersession linkage, truth-interval
+integrity, and concurrency/retry protection. It decides no eligibility, performs no authorization,
+chooses no room or pattern, and **emits no events**. The canonical services keep all of that, and emit
+their domain event *after* the commit returns — never before, because a rolled-back transaction must
+produce no event.
 
 > **A date is not the primitive.** Many tables have dates. This doctrine applies only to records whose
 > *identity* is a bounded interval of asserted truth. Do not force a record into this model because it
@@ -160,43 +186,63 @@ which Alloy surface initiated the change.
 
 ---
 
-## Known implementation debt — this doctrine is not yet enforced everywhere
+## Enforcement — measured, and where it stops
 
-**Measured on staging `f2e538751`, 2026-09-30.** Recorded here rather than in a planning document,
-because a canonical law with a known live exception must say so where the law is read.
+**Measured 2026-09-30 after the Operations temporal convergence.** A canonical law must say where it is
+and is not enforced, in the place the law is read.
+
+### Closed
 
 `lib/childcareOperational/applyChildParticipationEdit.ts`, reached by the mounted operator routes
-`/api/admin/child-participation` and `/api/admin/scheduling`, writes durable operational truth **in
-place** once a participation has materialised:
+`/api/admin/child-participation` and `/api/admin/scheduling`, used to write durable operational truth
+**in place** once a participation had materialised — `child_placements` (program, room, start date) and
+`schedule_assignments` (terms) — and emitted **no** change event. That bypass is gone. Both halves now
+route through the canonical services, whose persistence is one
+`apply_participation_operational_change` transaction, and whose events fire after the commit. When a
+single edit touches both, it is one transaction rather than two calls that can half-succeed.
 
-- `child_placements` — `program_category_id`, `room_location_id`, `start_date`
-- `schedule_assignments` — assignment terms
-- and it emits **no** change event, where supersession does
+Its pre-materialisation branch is unchanged and correct: before an operational agreement exists the
+same edit merges into `process_instances.metadata`, which is draft desire rather than asserted truth.
 
-Its pre-materialisation branch is not affected: before an operational agreement exists the same edit
-merges into `process_instances.metadata`, which is draft desire rather than asserted truth, and is
-correctly editable in place.
+`assertNoOperationalPlacementPatch()` and `assertNoOperationalScheduleAssignmentPatch()` are **deleted**.
+Both always threw and neither had a single call site, while the public contract at
+`app/api/v1/placements/move/route.ts` cited the placement one as the reason in-place mutation "is
+refused for every caller, Alloy's own surfaces included" — a sentence that was not true of the
+implementation for as long as the bypass existed. A guard nobody calls is worse than no guard: it reads
+as protection in review, and it makes the absence of real enforcement harder to notice.
 
-Two further facts about the gap:
+The invariant now has one owner and one enforcer:
 
-- `assertNoOperationalPlacementPatch()` in `childPlacementService.ts` is a **no-op with zero call
-  sites**. The public contract at `app/api/v1/placements/move/route.ts` states that in-place mutation
-  "is refused for every caller, Alloy's own surfaces included" — that sentence is currently **not true
-  of the implementation**.
-- Converging the bypass requires resolving an atomicity question first, and it is a real one. A single
-  operator edit can change placement *and* schedule truth together; the canonical commands are separate
-  TypeScript services with no shared transaction; Supabase's client cannot open one; and
-  `supersedeChildPlacement` is **not retry-idempotent** — a retry would find its own successor and
-  supersede that, chaining spurious rows. So all-or-nothing needs one server-side transaction, which
-  means the temporal engine has to exist in SQL — and duplicating it there would create the second
-  engine this doctrine exists to prevent.
+- **owner:** no in-place path exists. Every change to a defining fact resolves to one transaction that
+  closes the prior interval and inserts a successor.
+- **enforcer:** `web/tests/access/participationTemporalWriterCensus.test.ts` classifies every production
+  writer of the two tables and fails on an unclassified one, mounted routes included. Routes may read
+  those tables; they may not write them.
 
-**That decision is open**: either the durable temporal engine moves into SQL with the TypeScript
-services becoming thin callers, or a combined edit is split into two explicitly separate operator
-intents so atomicity is unnecessary by construction. Until it is taken, the bypass stands and is
-documented here.
+Proven behaviourally, not by inspection: `participationOperationalChange.live.test.ts` (11 scenarios,
+the database primitive) and `participationWiringApplication.live.test.ts` (10 scenarios, the wiring —
+rollback of a half-written combined change, retry replay, stale-row conflict, and events read back from
+`workflow_events` rather than spied on).
 
----
+### Open, and deliberately not closed here
+
+**A cross-site move is not represented.** Post-materialisation, `location_id` updates
+`child_enrollment_agreements.site_location_id` and does **not** supersede the placement, so the
+placement keeps its original site. This predates the convergence; the previous in-place block did not
+carry site either.
+
+It was left open rather than quietly routed. The primitive cannot express it — a supersession carries
+the prior row's site forward, because `validate_child_placements_consistency` pins placement site to the
+agreement — and moving a child between **sites** is a different operator intent from moving them
+between rooms: different capacity, different staffing, plausibly a different agreement. Inventing a
+representation for it inside a room-change field would be guessing at a product decision. It is
+recorded as product work.
+
+**No correction path exists, still deliberately.** As of 2026-09-30 no current operator behaviour means
+*"the stored historical fact was entered incorrectly"*. Ordinary edits are operational changes and
+supersede. A correction path must be intentional, separately authorised, audited, reason-bearing and
+synchronisation-aware, and must be impossible to reach merely because an edit form exists. Do not build
+one speculatively, and do not use "it might be a correction" as an escape hatch from supersession.
 
 ## Related
 

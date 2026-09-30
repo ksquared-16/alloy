@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuthCached } from "@/lib/adminAuth";
+import { SCHEDULING_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -14,6 +15,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    // Rescheduling creates a schedule. Its sibling `schedules/[id]/cancel` has always required
+    // `scheduling.write`; this handler enforced only an authenticated session with org membership, so
+    // any portal member could move a visit. Same authority, same capability, no new key invented.
+    const denied = requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE);
+    if (denied) return denied;
     const { id: oldScheduleId } = await context.params;
     if (!oldScheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
 

@@ -50,25 +50,45 @@ And one gate that is not an item on that list, because it cuts across all of the
 Item 10 cannot close while that gate is open. An Enrollment product that only works when an engineer
 configured it has not been validated, however well the family's half behaves.
 
-## Before you start — a known gap in addresses
+## Before you start — how the two address questions behave
 
 The Admissions form asks for a **Home address** and a **Mailing address**, and it says who each one
-belongs to: the home address to a guardian, the mailing address to the billing contact. Alloy can now
-read that instruction, but **nothing acts on it yet**.
+belongs to: the home address to a guardian, the mailing address to the billing contact. **Alloy now
+acts on both.** This was an open blocker at the last pass and it is closed: addresses can belong to a
+particular person, they carry a purpose, and each question reads the right one.
 
-> In plain terms: the address questions may ask you for something Alloy already knows, or may attach
-> what you type to the wrong person. **Treat whatever you see as a real QA finding.** Write it down
-> the same way you would write down anything else that felt wrong. Do not skip past it because an
-> engineer has told you the cause is understood — how bad it feels is the part that is not known, and
-> that is the part you are here to judge.
+What the runtime does now, in order:
 
-This is named here so it cannot be quietly accepted. It is not signed off.
+- **Home address** — takes the guardian this link was sent to, offers an address recorded as
+  *theirs*, and otherwise the household's shared address, including the single address a family
+  recorded before purposes existed. That last fallback is deliberate: it is the one address Alloy has
+  always treated as the family's.
+- **Mailing address** — takes the **billing contact**, resolved from who is financially responsible
+  for this family, and offers an address recorded as *their* mailing address. It does **not** fall
+  back to the household's. The billing contact can be a grandparent living elsewhere, and the
+  family's own address is not evidence about where they want post. If two people share
+  responsibility equally, Alloy says it cannot tell rather than picking one.
+
+> **This QA family still has no address on file.** The card at the top of this page says so. So both
+> questions will arrive **empty and answerable**, which is the right behaviour for a fact Alloy does
+> not hold. **Blank is not the defect** — being asked to retype an address Alloy already holds would
+> be, and so would seeing one person's address offered for another.
+
+> **Worth knowing while you judge it.** The canonical model exists and is read, but there is not yet
+> an operator screen for putting a person's own address, or an address purpose, on file — today only
+> the field-service quote flow writes a person-to-address link at all. So you cannot set up the
+> interesting cases from the product yet. That is named as the next capability, not hidden.
+
+**What to judge anyway.** Should a family be asked for a mailing address at all when Alloy has
+nothing to offer? Is "Home" and "Mailing" the right pair of questions? If an address does appear,
+does it feel like the right person's? Those are product questions and they are yours.
 
 ## How to record what you find
 
-Use the notes box at the top of this page — it stays with you as you scroll and you can copy the
-whole lot out at the end. Tag each note with one of these, so the difference between taste and
-breakage does not get lost:
+There is a **Notes** button in the bottom corner of this page. It is fixed to the screen, so it is
+there on every part of the walkthrough — tap it, write, close it, carry on; the text is still there
+when you come back, and **Copy notes** hands you the lot at the end. Tag each note with one of these,
+so the difference between taste and breakage does not get lost:
 
 - **BLOCKER** — a family could not get through this.
 - **PRODUCT / UX** — it works, but it is not good enough.
@@ -137,8 +157,9 @@ not offered to you as their own sibling.
 **A7. EXPECT** — You can add more than one. Nothing about the shape of this section repeats the
 guardians section you have already done.
 
-**A8. DO** — Reach the **address** questions. This is the known gap named above. Note exactly what it
-asked and what it did with your answer.
+**A8. DO** — Reach the **address** questions. Read the section above first: Home and Mailing are both
+blank for different reasons. Note exactly what each one asked, whether it should have asked at all, and
+what happened to what you typed.
 
 **A9. DO** — Find a question you have nothing to say to — no allergies, no dietary needs, no
 concerns.
