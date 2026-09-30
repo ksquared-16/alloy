@@ -14,6 +14,7 @@ import type {
 import { evaluateEnrollmentStatusTransitionPreflight } from "@/lib/admin/enrollmentStatus/evaluateEnrollmentStatusTransitionPreflight";
 import { applyEnrollmentStatusTransitionOutcomeEffects } from "@/lib/admin/enrollmentStatus/applyEnrollmentStatusTransitionOutcomeEffects";
 import { resolveEnrollmentStatusTargetKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionDestinations";
+import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { preflightStageTransitionReconciliation } from "@/lib/lifecycle/preflightStageTransitionReconciliation";
 import { applyStageTransitionReconciliation } from "@/lib/lifecycle/applyStageTransitionReconciliation";
 import { validateStageTransitionReconciliationPayload } from "@/lib/lifecycle/validateStageTransitionReconciliationPayload";
@@ -112,6 +113,48 @@ export async function executeEnrollmentStatusTransition(
         ...(request.bypassReason?.trim() ? { bypass_reason: request.bypassReason.trim() } : {}),
         ...(request.note?.trim() ? { note: request.note.trim() } : {}),
     };
+
+    /*
+     * The current status in the grain being moved, taken from the preflight that already computed it —
+     * the case's `status_key`, or the OCM's `outcome_status_key` when a child scope is present. Reading
+     * it again here would add a query and would make every existing test fake responsible for a table
+     * it has no reason to know about.
+     */
+    const currentStatusKeyForGrain = preflight.currentStatusKey ?? null;
+
+    /*
+     * ── ONE TRANSITION-POLICY GATE (D-BP4) ──
+     *
+     * `validateStatusTransition` owns the `status_transition_rules` invariant, and this reuses it
+     * rather than restating it — there is deliberately no second validator.
+     *
+     * It runs BEFORE reconciliation on purpose: asking an operator to decide what happens to the work
+     * they are leaving, and only then refusing the transition, wastes a decision and leaves the dialog
+     * looking like it did nothing. Validate that the move is permitted first.
+     *
+     * It runs for BOTH grains, before the case/child branch: a child transition moves the OCM's own
+     * `outcome_status_key` and is governed by that domain's rules, so it is read and validated in its
+     * own terms rather than against the case status.
+     *
+     * This also replaces a gate that used to exist on the generic record PATCH. That route reached
+     * `validateStatusTransition` through its completion check; closing it to lifecycle keys in this
+     * same change would have removed the policy gate from the only path that had one, so the gate
+     * moves here with the behaviour rather than being dropped.
+     */
+    const policy = await validateStatusTransition({
+        supabase,
+        orgId,
+        entityType: scope.grain === "case" ? "opportunities" : "opportunity_customer_members",
+        entityId: scope.grain === "case" ? scope.opportunityId : (ocmId ?? scope.opportunityId),
+        fromStatusKey: currentStatusKeyForGrain,
+        toStatusKey: targetStatusKey,
+        departmentId: input.departmentId,
+        workUnitId: input.workUnitId,
+        actionKey: request.actionKey,
+    });
+    if (!policy.ok) {
+        return { ok: false, error: policy.message || "This status transition is not permitted." };
+    }
 
     if (ocmId && scope.grain !== "case") {
         const result = await updateOpportunityCustomerMemberLifecycleStatus({
@@ -221,19 +264,11 @@ export async function executeEnrollmentStatusTransition(
      * must not do is make it worse, and it does not: the two operations stay adjacent and in the same
      * order they had. The ordering test pins that.
      */
-    const { data: caseRow } = await supabase
-        .from("opportunities")
-        .select("status_key")
-        .eq("id", scope.opportunityId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    const currentCaseStatusKey = (caseRow as { status_key?: string | null } | null)?.status_key ?? null;
-
     const reconciliationPreflight = await preflightStageTransitionReconciliation({
         supabase,
         orgId,
         opportunityId: scope.opportunityId,
-        previousStatusKey: currentCaseStatusKey,
+        previousStatusKey: currentStatusKeyForGrain,
         nextStatusKey: targetStatusKey,
     });
 
