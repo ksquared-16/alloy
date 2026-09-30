@@ -4,12 +4,12 @@ FastAPI application setup and route registration.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import stripe, messages_sender, sms_inbound
+from .routes import messages_sender, sms_inbound
 
 # Create FastAPI app
 app = FastAPI(
     title="Alloy Dispatcher API",
-    description="Alloy platform API: communications dispatch, inbound SMS, and payment execution",
+    description="Alloy platform API: communications dispatch and inbound SMS",
     version="1.0.0",
 )
 
@@ -22,8 +22,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(stripe.router)
+# Register routers.
+#
+# The payment executor router is GONE (Payments V1 · W6-A2). `POST /admin/payments/run` was a
+# second money writer beside canonical Payments, and its only caller was the Next.js proxy that
+# W6-A1 deleted. Money is written through the registered action registry, never through this API.
 app.include_router(messages_sender.router, prefix="/internal")
 app.include_router(sms_inbound.router, prefix="/sms")
 

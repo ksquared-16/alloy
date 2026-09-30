@@ -23,7 +23,7 @@
   "enforced_count": 27,
   "deletion_candidate_count": 30,
   "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 — one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
-  "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement — the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one.",
+  "financials_restatement": "2026-09-10. Enforced was 22 and the deletion list 35 until `fin.read` and `fin.write` were recovered from it. Both had in fact been enforced for some time and nothing re-derived the measurement — the same staleness, in the same direction, that `web/lib/admin/unenforcedPermissionKeys.json` carried, where it had the sharper consequence of making Financials ungrantable from the role editor. Catalog width is unchanged by this movement, and as with W-13 the movement is OUT of the deletion list, which is the direction that means the product grew a real gate rather than lost one. Payments V1 W6-A2: fin.post enters the deletion list — the SECOND entry ever recorded IN, after settings.users_roles.read. Its four enforcement sites (schedules/[id]/post-customer-payment, post-vendor-payout, post-completion and jobs/[id]/charges) are deleted: three had no caller anywhere and the fourth was reached only by JobManualChargeForm, which had no importer and was never rendered. Canonical Payments owns money writes through the registered action registry, so no route posts money at all. The delta is exactly one key: fin.post was an approved post-artifact addition and is now a catalog key no product source names, which is the precise definition of this list.",
   "addition_candidate_count": 1,
   "discovery": {
     "finding": "The catalog is 57 keys. Every static instrument in this workstream measured 35, because the parser they shared was pinned to one INSERT column order.",
@@ -327,6 +327,7 @@
     "billing.write",
     "crm.opportunities.read",
     "crm.opportunities.write",
+    "fin.post",
     "operational_expectations.authority.assign",
     "operational_expectations.authority.manage",
     "ops.contacts.read",

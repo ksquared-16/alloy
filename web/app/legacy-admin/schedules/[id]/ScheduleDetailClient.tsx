@@ -10,7 +10,6 @@ import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
-import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
 import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 
 type ScheduleRecord = Record<string, unknown> & {
