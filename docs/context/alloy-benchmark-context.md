@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments (blocked mid-mutation — §Money below names the exact reason)** · **Commercial (doc corrected, claim matrix outstanding)** · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | **Financials / Payments (stability gate CLOSED — latest semantic change today)** · Communications · Configuration · **Operational Intelligence (surface measured; one authority repair landed, claim matrix outstanding)** · AI/BOS · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -107,6 +107,46 @@ collection suppression) · an authorization or a draft claim suppresses collecti
 does) · a shortfall raises what the family owes · a negative row can be ignored without accounting
 semantics · an old certification artifact defines current architecture · Commercial owns the obligation
 its pricing produces (it owns intent only).
+
+### Commercial — CERTIFIED, and the four slots held beside it
+
+**COMMERCIAL — CERTIFIED.** DIRECT:
+[`../platform/modules/commercial-configuration.md`](../platform/modules/commercial-configuration.md),
+which now carries its certification record. 53 route files · 88 handlers (60 write, 28 read) · 12 UI
+pages, and **zero portal-only or session-only mutations** — all 7 writes without a declared capability
+carry a real role gate. The five "pending DELETE" declarations are **implemented**, eligibility-checked
+and FK-guarded; what makes them unusual is that they administer the retired **Jobs/Booking** pricing
+vertical (`pricing_*`, zero rows, including `pricing_first_clean_prices` and
+`pricing_square_footage_tiers`), not childcare tuition, which lives in `commercial_tuition_rates`.
+
+**FINANCIALS / PAYMENTS — STABILITY GATE CLOSED.** Latest substantive Payments semantic commit is
+`75c1a016c`, **2026-09-30**, changing bank-account authorization (who may authorize a payer bank
+account), with `e9694c5c8` changing refund-versus-paid accounting the same day. The gate requires seven
+consecutive quiet days; there were zero. Not certified, and not attempted.
+
+**OPERATIONAL INTELLIGENCE — one authority hole found and repaired; certification still outstanding.**
+`admin/operational-questions/answer` POST answered a question and, by default, appended the observation
+to `org_settings.metadata` and saved it, behind an authenticated session with org membership only — and a
+caller could force it with a request flag. Analysis had become hidden authority. The repair gates the
+**write** on `reports.write` via `canManageAnalytics` and leaves the **answer** open, because
+`canReadAnalytics` states the position as "ops keeps `reports.read`, so Operational Intelligence stays
+readable and only authoring narrows". Recorded as conditional side-effect authority in
+`ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT` and locked by test. What remains is the claim matrix, the data
+source/refresh model per output, and the V1 evidence review.
+
+**COMMUNICATIONS · CONFIGURATION · AI/BOS — surfaces measured, not certified.** Exact counts:
+Communications 48 files / 62 handlers / 38 writes / 6 pages; Configuration 80 / 109 / 56 / 65 pages;
+AI-BOS 64 / 75 / 43 / 12 pages (AI overlaps Configuration and OI on shared handlers, so its counts are
+not disjoint). Every flagged write surface resolved to a real gate on inspection — the Twilio SMS-status
+webhook verifies `X-Twilio-Signature` per binding inside its handler library, `communications/unsubscribe`
+is token-admitted, and `field-definitions/ensure-platform-field` and `org-settings` PATCH carry role
+gates. **No authority holes were found in these three.** They are uncertified because their claim
+matrices, owner sets and provider/lifecycle models are not done, not because anything measured is wrong.
+
+**A pattern worth carrying:** in Attendance, Communications and OI alike, capability enforcement lives in
+the domain service or handler library rather than at the route. A route-level scan under-reports it every
+time, which is why the `helper` field in the declaration table exists. Never read "no capability call in
+the route file" as "no capability".
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".

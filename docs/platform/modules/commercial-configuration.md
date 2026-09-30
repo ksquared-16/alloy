@@ -11,6 +11,86 @@ supersedes: []
 
 ---
 
+## Certification record — measured 2026-09-30
+
+**State:** `COMMERCIAL_DOCUMENTATION_CONTEXT_READY`. Measured against staging `64cdee20a`. Row counts are
+from the **certification stack** and say what is exercised there, not what exists in production.
+
+### The boundary that must not collapse
+
+**Commercial intent ≠ Financial obligation ≠ Payment.** Commercial owns what something costs and under
+what policy. It does not own the obligation that intent produces, the payment that settles it, or the
+subsidy that suppresses collection of it.
+
+| Concept | Owner | Source of truth | State |
+|---|---|---|---|
+| tuition rates | Commercial | `commercial_tuition_rates` (**8 rows**) | CURRENT |
+| commercial policy | Commercial | `commercial_policies` (**1 row**), `commercial_policy_exceptions` | CURRENT |
+| discount programs | Commercial | `discount_programs` (**5 rows**) + benefits/qualifiers/commitment rules | CURRENT |
+| discount codes and redemptions | Commercial | `discount_codes`, `discount_redemptions`, `discount_applications` (0 rows here) | IMPLEMENTED, unexercised |
+| fees and add-ons | Commercial | `commercial_fees`, `commercial_addons` (0 rows) | IMPLEMENTED, unexercised |
+| accepted pricing term | **Financials** | `enrollment_pricing_terms` via `enrollment.pricing.accept` | CURRENT — the hand-off point |
+| reductions → net obligation | **Financials** | `financial_reduction_applications` | CURRENT, not Commercial |
+| accounting | **Financials** | `financial_journal_entries` (13,136), `financial_accounting_periods` (102) | CURRENT, not Commercial |
+| subsidy | **Subsidy** | `financial_subsidy_*`, capability `fin.subsidy` | CURRENT, not Commercial |
+| payment | **Payments** | `payments`, `payment_allocations` | CURRENT, not Commercial |
+| vouchers | — | nothing | **ABSENT** — not deferred, not present |
+| quotes / estimates | — | no quote or estimate table for childcare commercial | **ABSENT** for this product |
+
+### Surface census — exact
+
+53 route files · **88 handlers** (60 write, 28 read) · 12 mounted UI pages.
+
+**Authority: zero portal-only or session-only Commercial mutations.** 53 of 60 writes declare a
+capability; the remaining 7 all carry a real gate, and every one is a ROLE gate rather than a missing one:
+
+| Handler | Gate | Classification |
+|---|---|---|
+| `addons/[id]` DELETE | role `admin` + deletion-eligibility check | IMPLEMENTED · legacy vertical |
+| `pricing-dimensions/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `pricing-dimension-values/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `pricing-modes/[id]` DELETE | role `admin` | IMPLEMENTED · legacy vertical |
+| `service-offerings/[id]` DELETE | role `admin` **and** `requireFinancialsCapability` | IMPLEMENTED · declaration understates enforcement |
+| `subscriptions/[id]` PATCH | `requireAdminOrOps` | IMPLEMENTED · `customer_subscriptions` (0 rows) |
+| `subscriptions/[id]/generate-next` POST | `requireAdminOrOps` | IMPLEMENTED · same |
+
+Converting those role gates to capabilities is W-15's burndown, not a Commercial gap.
+
+### The DELETE question, answered
+
+The five pending DELETEs are **IMPLEMENTED, not declared-and-missing**: each resolves an eligibility
+check that refuses with 409 and a `recommended_action`, then performs a real delete with the foreign-key
+violation mapped to "in use". What makes them unusual is *what they administer*.
+
+**They operate on the retired Jobs/Booking pricing vertical.** `pricing_addons`, `pricing_dimensions`,
+`pricing_dimension_values`, `pricing_modes`, `pricing_matrix`, `pricing_first_clean_prices` and
+`pricing_square_footage_tiers` all hold **zero rows**, and the last two name a cleaning-service concept
+this product does not sell. The schema and the routes are retained and supported; they are not the
+childcare commercial model. Do not read `pricing_*` as the pricing engine for tuition — that is
+`commercial_tuition_rates`.
+
+### What is exercised versus what merely exists
+
+The Commercial surface is large and its exercised core is narrow: tuition rates, commercial policies and
+discount programs carry data on the certification stack; subscriptions, service offerings, discount codes,
+fees, add-ons and the whole `pricing_*` family do not. **Zero rows here is not proof of disuse in
+production** — it is proof that this pass did not exercise them, and a benchmark consumer should treat
+those as implemented-but-unverified rather than as active behaviour.
+
+### Benchmark inference contract
+
+**SAFE, because measured:** Commercial defines pricing and policy INTENT; commercial configuration is not
+payment truth; discounts and fees are Commercial and are distinct from subsidy, which is Subsidy;
+discount programs, policies and tuition rates are implemented and carry data; accounting and obligations
+belong to Financials.
+
+**FORBIDDEN:** quote = obligation (there is no childcare quote entity at all) · offer = payment · subsidy
+= discount (different owners, different tables, different reversal semantics) · Commercial owns
+ledger/accounting truth · a `pending` DELETE declaration means DELETE is unimplemented (all five are
+implemented) · vouchers exist (nothing implements them) · `pricing_*` is the tuition pricing engine (it
+is the retired Jobs/Booking vertical) · zero rows on the certification stack proves a feature is unused in
+production.
+
 ## Purpose
 
 Commercial Configuration is the first production consumer of the Configuration Runtime. It prices and financially interprets what the organization-owned Programs catalog defines; it does not own Program identity.
