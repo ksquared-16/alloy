@@ -7,8 +7,8 @@
 
 **Related:**
 
-- [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md)
-- [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md)
+- `./program_interest_configurable_model_audit.md`
+- `./location_scoped_programs_configuration_design.md`
 
 ---
 

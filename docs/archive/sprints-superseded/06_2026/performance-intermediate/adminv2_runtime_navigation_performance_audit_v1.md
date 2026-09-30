@@ -20,7 +20,7 @@ These are the reasons Alloy feels *slow, heavy, jittery, and over-rendered*. Non
 
 **Verified positives (templates to reuse):**
 - The admin shell does **not** re-mount on navigation — Next.js layouts persist providers; only `children` swaps.
-- [`app/admin/opportunities/page.tsx`](../../../web/app/admin/opportunities/page.tsx) already **server-renders** its list — the pattern the other list pages should copy.
+- `app/admin/opportunities/page.tsx` (`../../../web/app/admin/opportunities/page.tsx`) already **server-renders** its list — the pattern the other list pages should copy.
 - The AdminV2 reactflow `SystemCanvas` is well-memoized (and currently unreachable — see L4).
 
 **Measurement caveat:** there is no performance instrumentation in the codebase today. Every estimate below is a static-analysis projection, **not a profiled number**. Phase 0 of the execution plan exists precisely to replace these projections with measured before/after numbers so we optimize the felt path, not a synthetic metric.

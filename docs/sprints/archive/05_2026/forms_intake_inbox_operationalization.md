@@ -86,4 +86,4 @@ Entry points:
 ## Related
 
 - [forms_runtime_test_2_submission_review_finalize.md](../../../archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2_submission_review_finalize.md)
-- [forms-intake-runtime-phase.md](../system/forms-intake-runtime-phase.md)
+- [forms-intake-runtime-phase.md](completed/forms-intake-runtime-phase.md)

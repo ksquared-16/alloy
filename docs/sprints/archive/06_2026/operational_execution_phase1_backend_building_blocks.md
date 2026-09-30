@@ -8,7 +8,7 @@
 - [`docs/platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md)
 - [`docs/platform/core/operational-ux-doctrine.md`](../../../platform/core/operational-ux-doctrine.md)
 - [`docs/platform/core/placement-system.md`](../../../platform/core/placement-system.md)
-- [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6
+- [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../../archive/2026-06-runtime-convergence/child_namespace_decision.md) §6
 
 ---
 

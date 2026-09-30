@@ -3,7 +3,7 @@
 **Sprint:** June 2026  
 **Status:** Design / architecture — **no implementation until spec + mockups approved**  
 **Route target:** `/settings/layouts`  
-**Depends on:** Configuration Mode shell (Context → Queue → Workspace → BOS), [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../platform/operator/archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`experience-builder-doctrine.md`](../../../platform/operator/experience-builder-doctrine.md), [`universal-card-system.md`](../../../platform/operator/universal-card-system.md)
+**Depends on:** Configuration Mode shell (Context → Queue → Workspace → BOS), [`archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`experience-builder-doctrine.md`](../../../platform/operator/experience-builder-doctrine.md), [`universal-card-system.md`](../../../platform/operator/universal-card-system.md)
 
 ---
 
@@ -496,7 +496,7 @@ No change — row-level on `entity_layouts`.
 
 ## Mockups
 
-High-fidelity HTML mockups: [`mockups/`](./mockups/README.md)
+High-fidelity HTML mockups: `mockups/` (`./mockups/README.md`)
 
 | # | File | Shows |
 |---|------|-------|
@@ -535,8 +535,8 @@ Open mockups in browser at 1440px width. Visual law: Bend Pine, white canvas, Co
 ## Related docs
 
 - [`configuration_runtime_settings_pattern_rollout.md`](./configuration_runtime_settings_pattern_rollout.md) — Configuration Mode shell  
-- [`experience-builder-v2-runtime-editing/`](../experience-builder-v2-runtime-editing/) — Runtime editing interaction model  
-- [`presentation-runtime-architecture/`](../presentation-runtime-architecture/) — Design Surface primitives  
+- [`experience-builder-v2-runtime-editing/`](./experience-builder-v2-runtime-editing/01-runtime-editing-interaction-model.md) — Runtime editing interaction model  
+- [`presentation-runtime-architecture/`](./presentation-runtime-architecture/01-presentation-runtime-doctrine.md) — Design Surface primitives  
 - [`platform/operator/business-process-layout-assignments.md`](../../../platform/operator/business-process-layout-assignments.md) — Assignment routing  
 
 ---

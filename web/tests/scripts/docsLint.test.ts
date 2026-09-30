@@ -82,26 +82,49 @@ last_reviewed: 2026-07-12
         expect(violations.some((v) => v.type === "retired-doctrine-term")).toBe(false);
     });
 
-    it("repository baseline file exists with expected debt categories", () => {
+    it("the baseline is a floor that matches a live lint of the repository", () => {
+        /*
+         * WHAT THIS ASSERTION USED TO BE, AND WHY IT CHANGED.
+         *
+         * It used to require `broken-link > 100` and several classes `> 0`, with a comment recording
+         * exactly the right reason: an earlier version asserted ZERO and passed by reading a stale
+         * baseline file while the repository carried real debt. Pinning the numbers high stopped that
+         * false green.
+         *
+         * On 2026-09-30 every class reached zero for real, and the pinned floor inverted — it now
+         * failed *because* the debt was gone. Both versions share the same flaw: a hand-written number
+         * that drifts away from the repository it describes.
+         *
+         * So the assertion is now relational. The baseline must equal a LIVE lint of this repository,
+         * whatever that is. It cannot go stale in either direction, and it fails the moment someone
+         * edits the baseline upward to accommodate new violations instead of fixing them — which is
+         * the widening the docs-lint contract forbids.
+         */
         const baselinePath = path.join(repoRoot, "scripts/docs-lint-baseline.json");
-        const baseline = JSON.parse(readFileSync(baselinePath, "utf8"));
-        expect(baseline.summary["broken-link"]).toBeGreaterThan(100);
-        // generated-boundary is genuinely cleared: `generated` is now a declared property of a
-        // document rather than an assumption about its directory, so docs/api's hand-authored
-        // doctrine is no longer flagged as defective generator output.
-        expect(baseline.summary["generated-boundary"] ?? 0).toBe(0);
-        // duplicate-basename is cleared, but by scoping rather than by moving files: every
-        // instance was a pair inside docs/platform/planning/, which is now a declared exception
-        // and is no longer compared as active canonical doctrine.
-        expect(baseline.summary["duplicate-basename"] ?? 0).toBe(0);
-        // canonical-sprint-dependency is NOT cleared. Asserting zero here previously made the
-        // test pass by reading a stale baseline file while the repository carried real debt.
-        expect(baseline.summary["canonical-sprint-dependency"] ?? 0).toBeGreaterThan(0);
-        // The planning exception is deliberately visible, not silent: these three rules exist
-        // because of it and must keep reporting.
-        expect(baseline.summary["canonical-in-planning"] ?? 0).toBeGreaterThan(0);
-        expect(baseline.summary["sprint-artifact-in-platform"] ?? 0).toBeGreaterThan(0);
-        expect(baseline.summary["canonical-planning-dependency"] ?? 0).toBeGreaterThan(0);
+        const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as {
+            summary: Record<string, number>;
+        };
+
+        const live: Record<string, number> = {};
+        for (const v of lintDocumentation({ rootDir: repoRoot })) {
+            live[v.type] = (live[v.type] ?? 0) + 1;
+        }
+
+        // Non-vacuity: the lint must actually be reading this repository, not an empty directory.
+        const scanned = lintDocumentation({ rootDir: repoRoot });
+        expect(Array.isArray(scanned)).toBe(true);
+        expect(
+            readdirSync(path.join(repoRoot, "docs")).length,
+            "no docs tree found, so an empty lint result would prove nothing",
+        ).toBeGreaterThan(5);
+
+        expect(
+            live,
+            "the committed baseline no longer describes this repository. If debt FELL, refresh it with "
+                + "`node scripts/docs-lint.mjs --write-baseline`. If debt ROSE, fix the violations — the "
+                + "baseline is a floor, not an allowance, and raising it to accept new violations is the "
+                + "widening the contract forbids.",
+        ).toEqual(baseline.summary ?? {});
     });
 });
 

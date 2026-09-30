@@ -7,10 +7,10 @@
 **Consolidated Phase 2 planning:** [`./bos_operational_assist_phase2.md`](./bos_operational_assist_phase2.md)  
 **May 2026 closeout (shipped):** [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md)
 
-**Program parent:** [`../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../05_2026/bos_operational_recommendation_intelligence_sprint.md)  
+**Program parent:** [`../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md)  
 **Phase 1 closeout:** [`../05_2026/completed/bos_operational_recommendation_phase1_execution.md`](../05_2026/completed/bos_operational_recommendation_phase1_execution.md)  
 **Phase 2 closeout:** [`../05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md`](../05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md)  
-**Interaction doctrine:** [`../05_2026/forms_documents_operational_experience_hardening.md`](../05_2026/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine
+**Interaction doctrine:** [`../05_2026/forms_documents_operational_experience_hardening.md`](../05_2026/later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine
 
 **Phase:** 3 — Workflow-native operational intelligence  
 **Blocks:** Phase 4 bounded AI enrich (unchanged)

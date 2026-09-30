@@ -144,7 +144,7 @@ See also: [`../05_2026/completed/adminv2_performance_closeout.md`](../05_2026/co
 
 | Priority | Track | Rationale |
 |----------|-------|-----------|
-| 1 | Operational completion (forms, waitlist, tours) | Per [`../../execution/roadmap-and-gaps.md`](../../execution/roadmap-and-gaps.md) |
+| 1 | Operational completion (forms, waitlist, tours) | Per [`../../execution/roadmap-and-gaps.md`](../../../archive/2026-06-execution/roadmap-and-gaps.md) |
 | 2 | Messaging infrastructure (§ B) | Unlocks history, templates, signatures for better drafts |
 | 3 | Identity + personalization (§ E) | Quick operator trust win |
 | 4 | Communication intelligence provider (§ A, bounded) | After messaging + identity |

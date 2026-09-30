@@ -304,4 +304,4 @@ cd web && npx tsc --noEmit
 ## Related
 
 - [`person_location_ux_reset.md`](./person_location_ux_reset.md) — inquiry child identity sync
-- [`docs/archive/2026-06-superseded-system/entity-model.md`](../../system/entity-model.md) — persons, customer_persons, customer_members
+- [`docs/archive/2026-06-superseded-system/entity-model.md`](../../../archive/2026-06-superseded-system/entity-model.md) — persons, customer_persons, customer_members

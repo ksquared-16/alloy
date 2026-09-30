@@ -13,7 +13,7 @@
 - [`adminv2_persistent_shell_header_nav_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_persistent_shell_header_nav_audit.md) — shell remount vs persistence
 - [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) — dept/WU runtime contract V1
 - [`docs/system/configuration-system.md`](../../../system/configuration-system.md) — config may select, not invent semantics
-- [`docs/execution/operating-doctrine.md`](../../execution/operating-doctrine.md) — doc updates with behavior changes
+- [`docs/execution/operating-doctrine.md`](../../../archive/2026-06-execution/operating-doctrine.md) — doc updates with behavior changes
 
 ---
 

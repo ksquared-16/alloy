@@ -92,4 +92,4 @@ future.
 
 The live Email round trip. That is Communications Operationalization, it is owed, and it
 uses temporary Gmail forwarding as **test infrastructure only** — never as the production
-mixed-inbox architecture. See `live-email-routing-test.md`.
+mixed-inbox architecture. See `docs/sprints/active/live-email-routing-test.md`.

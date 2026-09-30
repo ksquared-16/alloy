@@ -347,7 +347,7 @@ BOS does **not** auto-modify Design Surface config. Propose → human approve �
 | Concern | Doc |
 |---|---|
 | IA + routes | [`03-information-architecture.md`](./03-information-architecture.md) |
-| Publishing lifecycle detail | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) §9 |
-| Inheritance cascade | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) §8 |
+| Publishing lifecycle detail | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) §9 |
+| Inheritance cascade | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) §8 |
 | Configuration Mode doctrine | `docs/system/configuration-mode-doctrine.md` |
 | Mockups | [`mockups/README.md`](./mockups/README.md) |

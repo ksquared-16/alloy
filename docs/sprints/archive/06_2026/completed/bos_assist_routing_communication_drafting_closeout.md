@@ -4,7 +4,7 @@
 **Status:** **COMPLETE** (functionally closed 2026-05-26)  
 **Wall-clock span:** 2026-05-21 → 2026-05-26 (fix passes through channel-aware drafting)
 
-**Program parent:** [`../../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../../05_2026/bos_operational_recommendation_intelligence_sprint.md)  
+**Program parent:** [`../../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md)  
 **GATE 0 doctrine:** [`../../05_2026/completed/bos_operational_recommendation_intelligence_gate0.md`](../../05_2026/completed/bos_operational_recommendation_intelligence_gate0.md)
 
 ---

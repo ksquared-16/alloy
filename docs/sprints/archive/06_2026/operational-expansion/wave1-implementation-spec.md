@@ -1,6 +1,6 @@
 # Implementation Specification — Operational Expansion, Implementation Wave 1
 
-**Status:** Canonical engineering contract for Wave 1. **Architecture is frozen** (see [`operational-expansion-phase1-architecture-rfc.md`](operational-expansion-phase1-architecture-rfc.md)). This document eliminates architectural decision-making during implementation; Cursor executes it exactly.
+**Status:** Canonical engineering contract for Wave 1. **Architecture is frozen** (see `operational-expansion-phase1-architecture-rfc.md`). This document eliminates architectural decision-making during implementation; Cursor executes it exactly.
 **Base verified:** `origin/staging` @ `eb189503209d6d14920a71d16d7e451db2d1af1f` (2026-07-10). Every file, table, column, trigger, and idempotency key below was read on this commit — not from memory.
 **Scope:** **D2 (Operational Fact Contract)** + **D12a (Correction-Aware Consumption Contract)** ONLY. No D12b, no reactor, no Scheduling, no Attendance UI, no Posting, no Forecasting.
 

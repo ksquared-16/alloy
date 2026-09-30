@@ -2,7 +2,7 @@
 
 **Status:** **CLOSED** — Current Work Phase 1 shipped to staging (PR #95, July 2026)  
 **Sprint type:** Integrated workspace design + Current Work implementation  
-**Builds on:** [objective-focus-integration](../objective-focus-integration/)  
+**Builds on:** objective-focus-integration (`../objective-focus-integration/`)  
 **Closeout:** [implementation-closeout.md](./implementation-closeout.md)
 
 ---

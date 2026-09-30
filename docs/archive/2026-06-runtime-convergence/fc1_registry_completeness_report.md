@@ -5,7 +5,7 @@
 **Sprint:** FC-1 — Layout Field Catalog Convergence  
 **Status:** Post-implementation snapshot (static + code paths)
 
-**Reference:** [`field_catalog_phase0_report.md`](./field_catalog_phase0_report.md), [`fc1_preflight.md`](./fc1_preflight.md), [`child_namespace_decision.md`](./child_namespace_decision.md)
+**Reference:** `./field_catalog_phase0_report.md`, `./fc1_preflight.md`, [`child_namespace_decision.md`](./child_namespace_decision.md)
 
 ---
 

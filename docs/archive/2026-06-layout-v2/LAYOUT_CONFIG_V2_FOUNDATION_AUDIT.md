@@ -73,7 +73,7 @@ So today the "builder" is a **form-based table editor**, not a visual layout des
 
 ### 1.4 Drawer rendering architecture
 
-Single orchestrator: [`web/components/admin/AdminEntityDrawer.tsx`](../web/components/admin/AdminEntityDrawer.tsx) (~2,000 lines, ~17 entity types). Flow:
+Single orchestrator: `web/components/admin/AdminEntityDrawer.tsx` (`../web/components/admin/AdminEntityDrawer.tsx`) (~2,000 lines, ~17 entity types). Flow:
 
 1. Open with `{ type, id }`. Fetch entity via `/api/admin/{entity}/{id}`; the API attaches `_field_definitions` and `_field_sections` (see [`web/lib/admin/entityFieldRegistryAttach.ts`](../../../web/lib/admin/entityFieldRegistryAttach.ts)).
 2. Look up `ENTITY_PRESENTATION_REGISTRY[type].drawer` for tabs, sections, related modules, quick actions.

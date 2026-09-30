@@ -1790,9 +1790,9 @@ Each is named in the read model's `unavailable` list and rendered as absence.
 Two ratified artifacts govern this work, and both were reconciled against staging before anything
 was written:
 
-* [`health-foundation-h1-h4-contract.md`](./health-foundation-h1-h4-contract.md) — H1–H4, the
+* [`health-foundation-h1-h4-contract.md`](../../../platform/operator/health-foundation-h1-h4-contract.md) — H1–H4, the
   Director-requested contract the Enrollment lane builds against.
-* [`health-ownership-cross-sprint-contract.md`](./health-ownership-cross-sprint-contract.md) —
+* [`health-ownership-cross-sprint-contract.md`](../../../platform/operator/health-ownership-cross-sprint-contract.md) —
   ownership, the READY NOW list, and the migrations M1–M3.
 
 Both carry `status: draft`, and the ownership contract's §9 still lists **M1 as a decision

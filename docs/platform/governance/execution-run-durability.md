@@ -11,7 +11,7 @@ supersedes: []
 > itself the "canonical contract for the Execution Run state machine" and names the modules that
 > implement it, so it is current doctrine rather than a plan. Content unchanged.
 >
-> Distinct from [`run-identity-and-store-durability.md`](./run-identity-and-store-durability.md),
+> Distinct from [`incidents/2026-09-04-run-identity-and-store-durability.md`](./incidents/2026-09-04-run-identity-and-store-durability.md),
 > which is an incident record about two stores being emptied — that one owns what happened, this one
 > owns the contract.
 

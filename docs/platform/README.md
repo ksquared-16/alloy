@@ -163,7 +163,7 @@ it was written. Read the canonical owner for current truth.
 - [`governance/incidents/2026-09-10-production-migration-executed-without-approval.md`](./governance/incidents/2026-09-10-production-migration-executed-without-approval.md) — **[historical]** Incident — Thread 5 migrations executed against the deployed primary without an approved production mutation
 - [`governance/operator-qa-host-identity-defect-2026-09-02.md`](./governance/operator-qa-host-identity-defect-2026-09-02.md) — **[proposed]** Operator QA host-identity defect — `localhost` is not an address, it is a question
 - [`governance/programs-publication-stale-draft-gap.md`](./governance/programs-publication-stale-draft-gap.md) — **[historical]** Programs publication — `base_revision_id` is provenance, not a guard
-- [`governance/run-identity-and-store-durability.md`](./governance/run-identity-and-store-durability.md) — **[sprint]** Run identity and store durability
+- [`governance/incidents/2026-09-04-run-identity-and-store-durability.md`](./governance/incidents/2026-09-04-run-identity-and-store-durability.md) — **[historical]** Run identity and store durability — incident record
 - [`governance/stabilization-closeout-2026-08.md`](./governance/stabilization-closeout-2026-08.md) — **[historical]** Development Platform Stabilization — Closeout
 - [`governance/work-items-folders-and-views.md`](./governance/work-items-folders-and-views.md) — **[proposed]** Work Items — folders, views, waiting, due state, assignment
 - [`governance/work-items-recurring-work.md`](./governance/work-items-recurring-work.md) — **[proposed]** Work Items — Recurring Work (Studio)
@@ -178,7 +178,6 @@ it was written. Read the canonical owner for current truth.
 - [`operator/health-foundation-h1-h4-contract.md`](./operator/health-foundation-h1-h4-contract.md) — **[proposed]** Health foundation — the H1–H4 contract
 - [`operator/health-ownership-cross-sprint-contract.md`](./operator/health-ownership-cross-sprint-contract.md) — **[proposed]** Child health — cross-sprint canonical ownership contract
 - [`operator/operational-card-convergence-plan.md`](./operator/operational-card-convergence-plan.md) — **[proposed]** Operational cards — backend / runtime convergence plan
-- [`operator/operational-card-production-ledger.md`](./operator/operational-card-production-ledger.md) — **[sprint]** Operational Cards — Production Implementation Ledger
 - [`operator/operational-card-system-expansion.md`](./operator/operational-card-system-expansion.md) — **[proposed]** Operational Card System Expansion — Specification & Local Design Lab
 - [`operator/operational-card-visual-audit.md`](./operator/operational-card-visual-audit.md) — **[proposed]** Existing Card Visual Audit — reset basis for the five operational cards
 
@@ -194,6 +193,5 @@ it was written. Read the canonical owner for current truth.
 
 ### `communications/`
 
-- [`communications/live-email-routing-test.md`](./communications/live-email-routing-test.md) — **[sprint]** Live Email routing — Director setup and controlled test
 
 Locked implementation contracts also live under [`../system/`](../system/). Execution history lives under `docs/sprints/` (history only — not current doctrine).
