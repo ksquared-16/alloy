@@ -107,8 +107,8 @@ describe("Business Process is listed at its true certification state", () => {
     /** D-BP1 is open while either operator surface still sends a lifecycle status key. */
     const bypassOpen = () =>
         [
+            // Quote Intake was removed as unreachable; Current Work is the remaining sender.
             "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx",
-            "web/components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx",
         ].some((rel) => existsSync(path.join(repoRoot, rel)) && /(?<!next_)status_key\s*:/.test(read(rel)));
 
     it("is PENDING_CERTIFICATION while the bypass is open", () => {

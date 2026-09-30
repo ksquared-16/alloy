@@ -119,7 +119,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/admin/opportunity/OpportunityRecordCreateWorkModal.tsx": 1,
     "components/admin/opportunity/SendFormToOpportunityModal.tsx": 1,
     "components/admin/OptionSetKeyPicker.tsx": 1,
-    "components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx": 1,
     "components/admin/RelatedRecordsTabs.tsx": 1,
     "components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx": 2,
     "components/admin/vmDrawer/VmOpportunityStatusControl.tsx": 1,
