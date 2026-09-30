@@ -64,23 +64,26 @@ column into this architecture would weaken it, not strengthen it. Placement-cand
 `subject_type: "candidate"` in stage membership refers to the candidate **grain**, which is a separate
 concept from this status column and is unaffected by the exclusion above.
 
-### The transition-policy gate does not yet cover every write path
+### One transition-policy gate
 
-`status_transition_rules` is a **real, write-gating** mechanism — not advisory. Where it applies it can
-block a transition and require metadata or payload fields, and the canonical Action/Command runtime
-applies it through `validateStatusTransition`.
+`status_transition_rules` is a **real, write-gating** mechanism — not advisory. It can block a
+transition and require metadata or payload fields, and `validateStatusTransition` owns that invariant.
 
-It is **not yet universal**, and documentation must not claim that it is:
+**Every governed durable-status change passes through it, and there is exactly one implementation.**
+The canonical Action/Command runtime applies it, and so does canonical lifecycle transition execution —
+for both grains, reading the subject's current status in the grain being moved: a case transition
+against `opportunities.status_key`, a child transition against the OCM's own `outcome_status_key`.
 
-- **Applies today:** the Action/Command runtime paths (registered-action execution, the mutation
-  runtime, entry lifecycle actions) and action eligibility.
-- **Bypasses today:** outcome execution, which writes durable status targets without consulting the
-  gate, and the direct opportunity status PATCH (see *Direct status PATCH* in
-  [`business-process-system.md`](business-process-system.md)).
+The gate runs **before** prior-stage reconciliation. Asking an operator to decide what happens to the
+work they are leaving and only then refusing the move would waste the decision and make the dialog look
+as though it did nothing.
 
-One canonical transition-policy gate for every governed durable-status mutation is the ratified
-direction (D-BP4). It is **convergence debt, not current behaviour.** New mutation paths must route
-through the existing gate and must not invent another one or another bypass.
+A second validator is the failure mode to guard against, not a missing feature: two implementations
+drift, and whichever one a given path happens to call silently becomes the real policy. New mutation
+paths reuse `validateStatusTransition`.
+
+No outcome may bypass the gate, and no override exists — every currently supported outcome passes
+ordinary policy, so none was needed.
 
 ---
 

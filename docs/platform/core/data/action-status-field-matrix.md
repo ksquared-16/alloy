@@ -86,7 +86,7 @@ Full catalog: `action_definitions` seeds + `docs/platform/core/status-and-state-
 | Pattern | Enforcement |
 |---------|-------------|
 | Legacy text `status` in PATCH | `rejectLegacyTextStatusPatch` |
-| Direct `status_key`/`outcome_status_key`/`stage_key` PATCH | Outcome execution is the only writer that carries full process semantics. It is **not** the only writer today: two operator surfaces still PATCH `status_key` directly (D-BP1 debt — see `../business-process-system.md` § Direct status PATCH) |
+| Direct `status_key`/`outcome_status_key`/`stage_key` PATCH | **Refused.** The record route does not accept governed lifecycle fields; a request carrying one is rejected with an error naming the canonical transition. Canonical process/outcome execution is the only writer — see `../business-process-system.md` § Governed lifecycle state is not writable through the record route |
 | Profile fields on OCM | `findCustomerMemberProfileKeysInPatch` |
 | Wrong entity_type in field_definitions POST | `validateFieldDefinitionOwnership` |
 | Non-canonical status values | `assertAllowedStatusKey` (API) |

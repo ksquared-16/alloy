@@ -221,28 +221,39 @@ today — see `status-and-state-system.md` § The transition-policy gate does no
 write path. Config controls which actions appear and their copy; code owns the executable
 semantics. See `../modules/actions-and-workflows.md` § Action Runtime contract.
 
-### Direct status PATCH — bounded compatibility debt, not architecture
+### Governed lifecycle state is not writable through the record route
 
-**Canonical forward authority for durable lifecycle state is: operational work / domain intent →
+**Durable lifecycle state changes through one path: operational work / domain intent →
 process/outcome execution → lifecycle consequences.** Operators pick domain verbs; they never pick a raw
-"update status".
+"update status", and no surface sends a lifecycle field to a record endpoint.
 
-Two operator-reachable surfaces still send `status_key` directly to the opportunity PATCH route
-(`web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx` and
-`web/components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx`). This is **active implementation
-debt** (D-BP1), documented here so the gap is visible rather than implied:
+`PATCH /api/admin/opportunities/[id]` edits the enrollment **record**. `status_key`,
+`close_reason_key` and `stage_key` are not in its writable set, and a request carrying any of them is
+refused with an error naming the canonical path instead. Ordinary field editing is unaffected.
 
-- The PATCH route validates the status key and requires the `enrollment.record.manage` capability, and it
-  emits the status-changed event — so it is not unguarded.
-- It carries **none of the process consequences**: no stage movement, no work completion, no workflow
-  trigger, no attention effects, and no transition-policy gate.
-- It is **not precedent.** New implementation must route through process/outcome execution. Do not add
-  callers, and do not generalize this path.
-- Convergence is tracked as implementation follow-up. Until both senders are converted, documentation
-  must not claim that outcome execution is the *only* writer of durable status — because today it is not.
+The canonical transition is
+`POST /api/admin/enrollment-status-transition/execute`, which takes a **configured transition
+reference** and resolves it server-side against the transitions the subject's current stage actually
+offers — configuration expresses intent, code owns executable semantics, and a configured string is
+never authority by itself. Closing a family case as lost is `executeGovernedFamilyClose`.
 
-Outcome execution remains the only path that carries full process semantics, which is a different and
-weaker claim than being the only writer.
+That path owns the whole transition, which is what made closing the record route possible:
+
+- typed destination resolution from the configured reference, scoped to the current stage;
+- `enrollment.decide` authorization — a lifecycle decision, distinct from `enrollment.record.manage`
+  for record edits;
+- transition-policy validation (see `status-and-state-system.md` § *One transition-policy gate*);
+- **prior-stage reconciliation** — the operator's per-item answer for the work being left behind
+  (`completed` · `skipped` · `carry_forward`, and `cleared` · `carry_forward` for attention);
+- stage movement, status and close-reason consequences, outcome semantics;
+- destination-stage entry work, attention effects, events and audit, projection refresh.
+
+Historical note, because the sequence matters more than the conclusion: this was three separate
+bypasses, and each closed for a different reason. Quote Intake and the record-action executor both
+turned out to have **zero callers** — unreachable code rather than live paths. Current Work was live,
+and could not be rewired until the canonical path acquired prior-stage reconciliation, because that
+was the one capability only the record route had. Reconciliation moved first; the rewire followed; the
+route closed last.
 
 A stage **places** commands; it does not own them. Every operational mutation is an
 **Operational Command** (registered capability). The same command (e.g. `schedule_tour`,
