@@ -45,20 +45,40 @@ async function financialState(request: APIRequestContext) {
     };
 }
 
-/** Open the landing view and wait for the live readiness read, not merely for HTML. */
+/**
+ * Open the surface and wait for the live readiness read, not merely for HTML.
+ *
+ * IT DOES NOT ALWAYS LAND ON THE LANDING. Once this browser remembers a place, the resume
+ * contract returns straight to the scenario that was left open — which is the behaviour the
+ * resume test asserts, and which made an earlier version of this helper hang on the landing's
+ * progress line after every reload.
+ */
 async function openQa(page: Page) {
     await page.goto(ROUTE);
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator('[data-qa-reader="core-financials"]'), "the reader mounts on the hosted route")
         .toBeVisible({ timeout: 90_000 });
-    await expect(page.locator('[data-qa-progress="true"]'), "and resolves the environment")
-        .toBeVisible({ timeout: 90_000 });
+    await expect(
+        page.locator('[data-qa-progress="true"], [data-qa-scenario]').first(),
+        "and resolves the environment, on the landing or the remembered scenario",
+    ).toBeVisible({ timeout: 90_000 });
 }
 
 /** Into the walkthrough, at whichever scenario the resume contract chooses. */
 async function startWalk(page: Page) {
+    /* Already restored into the walk: entering it again would be a second, different click. */
+    if (await page.locator("[data-qa-scenario]").count() > 0) return;
     await page.locator('[data-qa-start="true"]').click();
     await expect(page.locator("[data-qa-scenario]"), "a scenario opens").toBeVisible({ timeout: 60_000 });
+}
+
+/** Back to the landing from wherever the walk is, for the assertions that live there. */
+async function backToLanding(page: Page) {
+    await openQa(page);
+    if (await page.locator("[data-qa-scenario]").count() > 0) {
+        await page.getByText("← All scenarios").click();
+    }
+    await expect(page.locator('[data-qa-progress="true"]')).toBeVisible({ timeout: 60_000 });
 }
 
 // ── SHELL-LESS DOES NOT MEAN OPEN ───────────────────────────────────────────────────────────────
@@ -128,7 +148,7 @@ test.describe("the canonical Director QA", () => {
     test.use({ storageState: STORAGE });
 
     test("opens without the operator shell, and states the build it describes", async ({ page, request }) => {
-        await openQa(page);
+        await backToLanding(page);
         await expect(page.getByRole("heading", { name: /Core Financials — Director QA/ })).toBeVisible();
 
         /* NO WORKSPACE NAVIGATION. That absence is the whole point of the surface. */
@@ -146,7 +166,7 @@ test.describe("the canonical Director QA", () => {
     });
 
     test("offers the integrated catalog, with the rule and the doctrine before the walk", async ({ page }) => {
-        await openQa(page);
+        await backToLanding(page);
         /* The rule that the suites behind scenarios are evidence and never an acceptance. */
         await expect(page.locator('[data-qa-no-automatic-pass="true"]')).toBeVisible();
         /* Which account may be spent, stated before the scenario that would spend one. */
@@ -166,7 +186,7 @@ test.describe("the canonical Director QA", () => {
     });
 
     test("resolves the subject live and renders evidence on the scenario", async ({ page, request }) => {
-        await openQa(page);
+        await backToLanding(page);
         const landing = (await page.locator('[data-qa-view="landing"]').innerText()).replace(/\s+/g, " ");
         expect(landing, "the QA household is resolved").toMatch(/Alvarez|Certhouse/);
 
@@ -289,7 +309,7 @@ test.describe("the canonical Director QA", () => {
 
         /* LEAVE the surface entirely, not merely the scenario view. */
         await page.goto("/api/build-info");
-        await openQa(page);
+        await backToLanding(page);
 
         /*
          * THE RESUME CONTRACT IS REPORTED, NOT INFERRED. The landing states which scenario it will
@@ -326,7 +346,7 @@ test.describe("the canonical Director QA", () => {
 
     test("it is usable at phone width", async ({ page }) => {
         await page.setViewportSize({ width: 390, height: 844 });
-        await openQa(page);
+        await backToLanding(page);
         await expect(page.locator('[data-qa-start="true"]'), "the primary control is reachable").toBeVisible();
         const overflow = await page.evaluate(() => ({
             scroll: document.documentElement.scrollWidth,

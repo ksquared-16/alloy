@@ -132,3 +132,85 @@ https://staging.workwithalloy.com/dev/core-financials-qa
 ```
 
 Shell-less. Authenticated on the data. Scenario by scenario. With notes.
+
+---
+
+## 7. Deployed certification — measured on `ea596e615`
+
+Merged `ea596e6152358d1d2be80f676955f2f8a3ae39be` (PR #1371, squash). `/api/build-info` reports the
+same sha, so the deployed build contains the merge rather than a superseding one.
+
+### Shell-less, and the boundary holding
+
+Anonymous, no cookies, against `https://staging.workwithalloy.com`:
+
+| Request | Result |
+|---|---|
+| `GET /dev/core-financials-qa` | **200** — 11,535 bytes of frame |
+| `GET /api/admin/qa/financials-director` | **401** `{"error":"Unauthorized"}` |
+| `POST /api/admin/qa/financials-director` | **401** `{"error":"Unauthorized"}` |
+| `GET /workspace/qa/core-financials` | **308** → `/dev/core-financials-qa` |
+
+What an anonymous browser receives, counted in the served HTML:
+
+| String | Occurrences |
+|---|---|
+| `Core Financials Director QA` | 1 |
+| `Reading the environment…` | 1 |
+| `Start walkthrough` · `Certhouse` · `Certopp` · `Alvarez` · `READ ONLY` · `data-qa-scenario` | **0 each** |
+
+### The catalog, as the route serves it on this build
+
+| | |
+|---|---|
+| Catalog version | `2026-09-30.1` |
+| Scenarios | **71** |
+| In the walk | **70** — 59 `HUMAN_WALKTHROUGH` + 9 `AUTOMATED_CERTIFIED_HUMAN_PENDING` + 2 `EXPLICITLY_DEFERRED` |
+| Not in the walk | 1 (`OUT_OF_SCOPE_THREAD_11A`) |
+| Evidence boundaries | 5 |
+| Fixture doctrine entries | 3 |
+| **Results on this build** | **1** — one `not_run`, from the persistence probe |
+| **Passes** | **0** |
+
+The nine suite-certified Autopay scenarios are in the walk. Before this they were in the catalog,
+served by the route, named in the component, and unreachable.
+
+### Prior testimony preserved
+
+`baselineChanged: true`, `priorRevisions: ["020d45fbe…", "8c57bc1b6…"]`. Results recorded against
+earlier builds are still stored and still readable; they do not count toward this build, and the
+landing says so in those words. Nothing was deleted by the surface change — both surfaces always
+wrote the same table through the same route.
+
+### Behaviour, certified on the deployed route
+
+`playwright/tests/director-qa-harness.cert.spec.ts` — **11 passed**, against staging:
+
+- an anonymous visitor gets the frame, no money, and 401 on both verbs
+- the retired route redirects, and the old harness is not behind it
+- no operator sidebar, no primary nav; the displayed build is the deployed build
+- the rule and the fixture doctrine render before the walk; the progress line carries both denominators
+- the subject resolves live and matches the canonical reader's figure; evidence classes render
+- all five dispositions are offered, and an unexplained FAIL is refused
+- **notes**: an unsent draft survives a reload; recording reads it back and clears the form; it
+  survives another reload; Next then Previous returns to it; an amendment replaces it and persists
+- a result persists in the store and **moves no money** — reconciliation, collectibility, ledger
+  rows, payments and reductions all identical before and after
+- leaving the surface entirely and returning restores the scenario that was left, reported as
+  `resume-source="stored"` rather than inferred
+- a deferral is reachable **by walking** and carries the boundary that explains it
+- no sideways scroll at 390px
+
+### Visual
+
+`external-qa-deployed-start.png`, `-scenario.png`, `-notes.png`, `-deferral.png`.
+
+Measured on the deployed page: the acceptance control renders `rgb(0, 162, 131)` — Bend Pine, the
+colour of every other primary a Director meets while walking Financials, where it used to be
+`rgb(24, 39, 58)`. Operator sidebar: 0. Primary nav: 0. The link back to the product: 1.
+
+### Canonical URL
+
+```
+https://staging.workwithalloy.com/dev/core-financials-qa
+```
