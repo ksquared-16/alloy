@@ -180,6 +180,17 @@ export default function CoreFinancialsQaReader() {
     const current = walkthrough[index];
     const readiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
     const currentBoundary = (data?.evidenceBoundaries ?? []).find((b) => b.scenarioKey === current?.key);
+    /*
+     * WHAT WAS ALREADY SAID ABOUT THIS SCENARIO, not just how it was scored. The route has always
+     * served `observation` on a result row and this surface never showed it: a note was written to
+     * the record and then disappeared from the only place anyone would look for it, which makes
+     * "the notes persist" true of the database and false of the Director's experience.
+     *
+     * KEYED ON THE NOTE, NOT ON THE VERDICT. NOT RUN is the state a Director records while walking
+     * — it exercises the whole write path and accepts nothing — so excluding it would hide the
+     * testimony in exactly the case where testimony is all there is.
+     */
+    const recorded = data?.results.find((r) => r.scenario_key === current?.key);
 
     /*
      * ── THE DIRECTOR'S PLACE, AND THEIR UNSUBMITTED WORDS ──────────────────────────────────────
@@ -601,6 +612,25 @@ export default function CoreFinancialsQaReader() {
                                     {" "}(definitions {carriedFrom.catalogVersion}), not this one. Keep them if they
                                     still apply, or clear the fields.
                                 </p>
+                            ) : null}
+                            {recorded?.observation ? (
+                                /*
+                                 * TESTIMONY, READ BACK — deliberately outside the form. Pre-filling
+                                 * the textarea with it would make an old note look like an unsent
+                                 * draft, and re-submitting would restate it as if it were new.
+                                 */
+                                <div className="mb-3 rounded-lg border border-alloy-midnight/15 bg-alloy-midnight/[0.02] px-3 py-2"
+                                    data-qa-recorded-note="true" data-qa-recorded-result={recorded.result}>
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45">
+                                        Recorded {recorded.result.replace("_", " ")} — what you wrote
+                                    </p>
+                                    <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-alloy-midnight/80">
+                                        {recorded.observation}
+                                    </p>
+                                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">
+                                        Recording a result again replaces this.
+                                    </p>
+                                </div>
                             ) : null}
                             <textarea id="qa-observation" data-qa-observation="true" rows={3} value={observation}
                                 onChange={(e) => setObservation(e.target.value)}

@@ -1,7 +1,3 @@
-import { notFound } from "next/navigation";
-
-import { classifyPublicRuntime, isHostedRuntime } from "@/lib/publicAppUrl";
-
 import CoreFinancialsQaReader from "./CoreFinancialsQaReader";
 
 /**
@@ -13,8 +9,8 @@ import CoreFinancialsQaReader from "./CoreFinancialsQaReader";
  * sidebar and BOS. That is the wrong room for human acceptance: the person doing QA needs the
  * script in one tab and the product in the other, and a QA page wearing the product's own chrome is
  * neither. Enrollment had already solved this at `/dev/real-enrollment-qa`, and this follows that
- * model rather than inventing a second one — a `/dev` route outside the operator shell, gated on
- * where it is RUNNING, with the product opened deliberately in its own tab.
+ * model rather than inventing a second one — a route outside the operator shell, with the product
+ * opened deliberately in its own tab.
  *
  * ── WHAT IS SHARED, AND WHAT IS NOT ────────────────────────────────────────────────────────────
  *
@@ -24,20 +20,30 @@ import CoreFinancialsQaReader from "./CoreFinancialsQaReader";
  * only its own table. There is one scenario catalog and one financial read authority; this route is
  * a different window onto them, never a second opinion.
  *
- * ── LOCAL BY CONSTRUCTION ──────────────────────────────────────────────────────────────────────
+ * ── SHELL-LESS, NOT UNAUTHENTICATED ────────────────────────────────────────────────────────────
  *
- * Gated on the RUNTIME rather than on `NODE_ENV`, for the reason Enrollment already discovered: a
- * QA server is deliberately a production BUILD, so a `NODE_ENV` check would 404 the page on the one
- * server it is meant to be read beside. `classifyPublicRuntime` draws the line that actually
- * matters — a Vercel production or preview deployment is hosted; a developer machine is not.
+ * This page used to call `notFound()` on any hosted runtime, which made the Director's own QA
+ * surface a 404 on the only deployment they were being asked to accept. The gate was written as
+ * "local by construction", and the word doing the work in that phrase was never *local* — it was
+ * *shell-less*. What the experience is for is reading the script beside the product without
+ * navigating the operator workspace to reach it. Nothing about that requires the page to be absent
+ * from staging.
+ *
+ * So the route resolves wherever it is deployed, and the AUTHORIZATION IS UNCHANGED AND LIVES
+ * WHERE IT ALWAYS DID — on the data, not on the route. `/api/admin/qa/financials-director` calls
+ * `requireAdminOrOps()` on both GET and POST and `assertFinancialsReadAllowed` on GET, under its
+ * own stated reason: being an internal QA tool is not a licence to read money more cheaply than
+ * the product does.
+ *
+ * The consequence is deliberate and is the point. Without a session this page renders its frame
+ * and heading and then reports that it cannot read the environment; no scenario, no fixture, no
+ * balance and no household name reaches the browser, and no note or acceptance can be written.
+ * Shell-less is a statement about CHROME. It is not a statement about authority.
  */
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Core Financials Director QA" };
 
 export default function CoreFinancialsQaPage() {
-    if (isHostedRuntime(classifyPublicRuntime())) {
-        notFound();
-    }
     return <CoreFinancialsQaReader />;
 }

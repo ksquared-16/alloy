@@ -150,6 +150,34 @@ describe("what a scenario costs, and where engineering stopped", () => {
         }
     });
 
+    it("reads a recorded note back, outside the form", async () => {
+        /*
+         * THE ROUTE HAS ALWAYS SERVED `observation` ON A RESULT ROW and this surface never showed
+         * it. A note went into the record and vanished from the only place anyone would look for
+         * it, which makes "the notes persist" true of the database and false of the experience.
+         */
+        PAYLOAD.results = [
+            { scenario_key: "human_one", result: "not_run", observation: "What I saw the first time." },
+        ] as never;
+        try {
+            await mount();
+            await click('[data-qa-start="true"]');
+            const note = container.querySelector('[data-qa-recorded-note="true"]');
+            expect(note, "the recorded note renders").not.toBeNull();
+            expect(note!.textContent).toContain("What I saw the first time.");
+            /* Pre-filling the textarea would make old testimony look like an unsent draft. */
+            expect(container.querySelector<HTMLTextAreaElement>("#qa-observation")!.value).toBe("");
+        } finally {
+            PAYLOAD.results = [] as never;
+        }
+    });
+
+    it("shows no read-back where nothing was recorded", async () => {
+        await mount();
+        await click('[data-qa-start="true"]');
+        expect(container.querySelector('[data-qa-recorded-note="true"]')).toBeNull();
+    });
+
     it("keeps the notes that make this a human QA surface", async () => {
         await mount();
         await click('[data-qa-start="true"]');

@@ -111,6 +111,21 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      /**
+       * CORE FINANCIALS DIRECTOR QA — one room, and this is not it.
+       *
+       * Two Director QA surfaces were built for Financials on 2026-09-14. The authenticated one
+       * inside the operator shell (`cd5e8ca54`) was superseded the same day by the walkthrough
+       * beside the product (`333e11b09`), because a QA script wearing the product's own chrome is
+       * neither the script nor the product. The integration of the Payments scenarios then landed
+       * on the abandoned one, which is how it came to look canonical: it was deployed, it rendered,
+       * and it was the one under `/workspace`.
+       *
+       * A redirect rather than a 404, because this path was a working URL that people and a
+       * certification spec have both pointed at, and there is exactly one place it can mean. It is
+       * permanent: there is no plan under which an operator-shell Financials QA comes back.
+       */
+      { source: "/workspace/qa/core-financials", destination: "/dev/core-financials-qa", permanent: true },
       /*
        * RETIRED — the legacy public home-cleaning product.
        *
@@ -373,7 +388,7 @@ const nextConfig: NextConfig = {
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
        */
       /**
-       * Core Financials Director QA — an internal operator surface.
+       * Staffing V1 Director QA — an internal operator surface.
        *
        * It lives under `/workspace` because that is `CANONICAL_OPERATOR_BASE`: the middleware's
        * operator gate protects everything beneath it, and nothing redirects it away. The obvious
@@ -383,9 +398,11 @@ const nextConfig: NextConfig = {
        * guessed: `/admin/system` answered with `/organization` and `/admin/roster` with
        * `/workspace`.
        *
+       * Core Financials had a surface here too, and it is gone — see the redirect above. Financials
+       * human QA is walked beside the product, not inside it.
+       *
        * The implementation stays under `/adminV2/*`, like every other operator surface here.
        */
-      { source: "/workspace/qa/core-financials", destination: "/adminV2/system/qa/core-financials" },
       { source: "/workspace/qa/staffing-v1", destination: "/adminV2/system/qa/staffing-v1" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },

@@ -17,8 +17,16 @@
  *
  * WHAT THIS REFUSES, precisely: a JSX expression whose visibility depends on NODE_ENV and on nothing
  * else. That is the audience decision. It is not interested in NODE_ENV appearing in logging, in
- * server-only behaviour, in a safety refusal, in a test, or under `app/dev/**`, which already 404s
- * in production and is the sanctioned home for developer surfaces.
+ * server-only behaviour, in a safety refusal, in a test, or under `app/dev/**`, the sanctioned home
+ * for surfaces read beside the product rather than inside it.
+ *
+ * `app/dev/**` IS NOT UNIFORMLY ABSENT FROM PRODUCTION, and this comment used to say it was. The
+ * Financials Director QA walkthrough at `app/dev/core-financials-qa` resolves on staging
+ * deliberately: it is SHELL-LESS, not unauthenticated, and every fact it displays comes from
+ * `/api/admin/qa/financials-director`, which gates both verbs on `requireAdminOrOps()` and the read
+ * on `assertFinancialsReadAllowed`. Without a session that page renders its own frame and nothing
+ * else. The family is excluded here because these surfaces hold no tenant data of their own, which
+ * is the property that actually matters — not because a 404 was doing the work.
  *
  * WHY AN AST AND NOT A GREP. The distinction this guard exists to make — rendered audience gating
  * versus a console.info — is structural. A regex can see `process.env.NODE_ENV` and cannot see
@@ -38,7 +46,11 @@ import ts from "typescript";
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOTS = ["app", "components"];
-/** Already a developer surface: it refuses to exist in production. */
+/**
+ * Already a developer surface. Excluded because nothing under here renders tenant data on its own
+ * authority — not because the family is absent from production, which is no longer true of all of
+ * it. @see the header note on `app/dev/core-financials-qa`.
+ */
 const EXCLUDED_PREFIXES = ["app/dev/"];
 const EXCLUDED_FILE = /\.(test|spec)\.(ts|tsx)$/;
 
@@ -179,6 +191,7 @@ process.stdout.write(
     "\n  Runtime mode is not audience. A certification or Human-QA host runs a development\n"
     + "  server while real operators look at it, so NODE_ENV alone shows developer UI to them.\n"
     + "  Add an explicit opt-in — NODE_ENV === \"development\" && NEXT_PUBLIC_<AREA>_DEBUG === \"1\" —\n"
-    + "  or move the surface under app/dev/, which refuses to exist in production.\n",
+    + "  or move the surface under app/dev/, which is the sanctioned home for a surface read\n"
+    + "  beside the product — provided its data is gated on its own authority, not on the route.\n",
 );
 process.exit(1);

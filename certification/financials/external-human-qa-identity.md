@@ -21,46 +21,75 @@ All three identity criteria hold, and they hold only for this surface:
 
 The surface extended in the two preceding runs — `/workspace/qa/core-financials`, i.e. `app/adminV2/system/qa/core-financials/DirectorQaClient.tsx` — is the **superseded** one. The integration was built in the room that was abandoned on 2026-09-14.
 
-## 2. "Accessible without logging into Alloy": half true, and the half matters
+## 2. Shell-less, not unauthenticated — the terminology that matters
 
-Measured just now against this lane's own server (`http://localhost:3017`), with **no cookies sent at all**:
+The canonical Director QA is **shell-less but authenticated**. It is **not** "public QA", not
+"anonymous Financials QA", and not "no-auth Financials QA". Those phrasings were used in the first
+draft of this document and are wrong; they describe a product nobody asked for.
+
+What "without logging into Alloy" names is the **absence of the operator shell**: no sidebar, no
+BOS, no navigating the workspace or passing through Financials to reach the script. The page
+resolves on its own URL, in its own tab, beside the product. That is a statement about **chrome**.
+
+The **authority is unchanged and lives where it always did — on the data, not the route.**
+`/api/admin/qa/financials-director` calls `requireAdminOrOps()` on both GET and POST, and
+`assertFinancialsReadAllowed` on GET, under its own stated reason: *"Being an internal QA tool is
+not a reason to read money more cheaply than the product does."* None of that was touched.
+
+Measured, before the change, against this lane's own server with no cookies sent:
 
 | Request | Result |
 |---|---|
-| `GET /dev/core-financials-qa` | **200** |
-| `GET /api/admin/qa/financials-director` | **401** |
+| `GET /dev/core-financials-qa` | **200** — the frame |
+| `GET /api/admin/qa/financials-director` | **401** — no money |
 
-And what the cookie-less response actually contains:
-
-| String | Occurrences in the served HTML |
+| String in the cookie-less response | Occurrences |
 |---|---|
-| `Core Financials` | 1 |
-| `Director QA` | 1 |
+| `Core Financials Director QA` | 1 |
 | `Reading the environment…` | 1 |
 | `Start walkthrough` | **0** |
 | `Certhouse` | **0** |
 
-**The route has always been anonymous. The data never was.** There is no middleware gate on `/dev/*`, so a clean browser opens the page and sees the heading — then the walkthrough read 401s and it can walk nothing. Both `GET` and `POST` on `/api/admin/qa/financials-director` call `requireAdminOrOps()`, and `GET` additionally calls `assertFinancialsReadAllowed`, under a stated reason: *"Being an internal QA tool is not a reason to read money more cheaply than the product does."*
+So the route was never gated and the data was never open. A visitor without a session gets the
+frame and a heading, and no scenario, fixture, household or balance reaches their browser. **No
+token or share-link model has ever existed here** — a pickaxe across the full history for
+`qa_share_token`, `qaShareToken` and token-shaped parameters on QA APIs returns nothing.
 
-So the Director's memory is accurate about the experience and not about the mechanism. What was absent was **Alloy** — the shell, the sidebar, the navigation into an operator surface. What was present, invisibly, was an ordinary admin session in that browser, because the Director was already signed in on that machine.
+## 3. The decision, and what it changed
 
-**No historical token or share-link model ever existed.** A pickaxe search across the full history for `qa_share_token`, `qaShareToken`, `public QA`, and token-shaped parameters on QA APIs returns nothing. There is no old solution to restore.
+**Option A, chosen by the Director.** Deploy the historical interaction model. Option B — signed QA
+share tokens, public tenant-money access, a new QA authorization system — was explicitly refused
+and was not built.
 
-## 3. Why it is not on staging today
+One line of product code changed:
 
-`page.tsx` is three lines of gate:
-
-```tsx
-if (isHostedRuntime(classifyPublicRuntime())) {
-    notFound();
-}
+```diff
+-    if (isHostedRuntime(classifyPublicRuntime())) {
+-        notFound();
+-    }
+     return <CoreFinancialsQaReader />;
 ```
 
-`isHostedRuntime` is true for `production` and `hosted_preview`. Both `/dev/core-financials-qa` and `/dev/real-enrollment-qa` return **404 on staging** — verified by request, not by reading the source. The file states the intent plainly: *"LOCAL BY CONSTRUCTION — gated on the RUNTIME rather than on `NODE_ENV`."*
+The gate called itself "local by construction", and the word doing the work in that phrase was
+never *local* — it was *shell-less*. Nothing about reading a script beside the product requires the
+page to be absent from the only deployment anyone is being asked to accept.
 
-This is the conflict. The success condition asks for a **deployed URL a clean browser can open without normal Alloy login**. The historical architecture delivers neither half of that: it is not deployed, and it does not authorize a clean browser.
+`requireAdminOrOps()`, `assertFinancialsReadAllowed` and the result-write authorization are
+untouched. The route becoming hosted does not change the data authority, and the anonymous
+behaviour above is now asserted on the deployed route rather than described here.
 
-## 4. What was done anyway, because it is unambiguous
+### A defect found while proving the notes
+
+`ResultRow.observation` was typed and served by the route and **never rendered by either surface**.
+A recorded note went into the store and disappeared from the only place anyone would look for it —
+"the notes persist" was true of the database and false of the Director's experience. The scenario
+now reads its recorded testimony back, deliberately outside the form so an old note cannot be
+mistaken for an unsent draft.
+
+The first version of that fix excluded `not_run` rows, which would have hidden the read-back in
+exactly the case the Director's own notes proof uses. A render test caught it.
+
+## 4. The integrated catalog, on the correct surface
 
 The integrated catalog now lives on this surface. `1e05df7b5`, `ecb859857`.
 
@@ -74,25 +103,32 @@ The integrated catalog now lives on this surface. `1e05df7b5`, `ecb859857`.
 
 Proven by rendering, not by grep: `tests/qa/coreFinancialsQaReaderRender.test.tsx` mounts the component against a stubbed route response and asks the DOM. Narrowing the filter back and suppressing the evidence chips turns exactly two of its six red and leaves the other four green.
 
-## 5. What was deliberately NOT done
+## 5. One room. The other one is gone
 
-**`/workspace/qa/core-financials` has not been deleted.**
+`app/adminV2/system/qa/core-financials/` is **deleted** — both `page.tsx` and `DirectorQaClient.tsx`
+— and its rewrite under `/workspace` is replaced by a **permanent redirect** to
+`/dev/core-financials-qa`.
 
-Deleting it now would leave the Director with **no hosted QA surface of any kind**, because the correct surface 404s on staging. The order in the instruction is delete *after* the correct surface is restored and proven; the proof cannot be produced until §6 is answered. The deletion is ready and is one commit once the access model is settled.
+A redirect rather than a 404, because that path was a working URL which people and this
+repository's own certification spec both pointed at, and there is exactly one place it can mean.
+There is no plan under which an operator-shell Financials QA returns.
 
-No QA record was touched. The four existing results (1 pass, 1 blocked, 2 not run, across `core_financials_director_qa` and `staffing_v1_human_qa`) are intact; both surfaces read and write the same table through the same route, so a surface change does not reach them.
+Shared authority was preserved, because it was never the problem: the scenario catalog, readiness,
+the QA API, the result vocabulary, persistence, the notes authority and the DEFERRED semantics are
+all untouched and all still shared. What was deleted is the **room**, not the authority. The two
+things that were genuinely surface-specific to the wrong room — its demo-path view and its
+`data-adminv2-director-qa` chrome — went with it.
 
-## 6. The decision that cannot be made here
+No QA record was touched. Both surfaces always read and wrote the same table through the same
+route, so removing one reaches no result. The four pre-existing results (1 pass, 1 blocked, 2 not
+run, across `core_financials_director_qa` and `staffing_v1_human_qa`) are intact.
 
-A deployed, walkable external QA surface requires choosing one of these. They are not equivalent and the difference is an access-control decision about tenant financial data.
+## 6. Canonical
 
-**A — Lift the runtime gate only.** Delete the `notFound()` so `/dev/core-financials-qa` resolves on staging. Everything else unchanged: the API still requires admin/ops, the page still has no shell. A Director already signed in on that browser opens the URL in a second tab and walks. A clean browser sees the heading and an error.
-*No new auth surface. Exactly the historical model, reachable where it is needed. Does not satisfy "without normal Alloy login" literally.*
+One Director QA URL:
 
-**B — A scoped, expiring QA read grant.** A signed walkthrough link that authorizes the QA route alone, for one catalog version, for a bounded window, read plus its own result writes, no other Financials API.
-*Satisfies the success condition literally. It is new architecture and a new authorization path onto money — the thing the instruction warns against building casually. It should not be invented inside a run whose brief was to recover something that already existed.*
+```
+https://staging.workwithalloy.com/dev/core-financials-qa
+```
 
-**C — Local only, as built.** The Director runs it beside the product on a machine with a lane server.
-*Truest to the historical architecture. No deployed URL, so the final operator handoff is not a link.*
-
-**Recommendation: A**, now, with B as a separate piece of work if the literal no-login requirement is real. A restores the actual historical experience — beside the product, no operator shell, notes, one scenario at a time — and the only thing it asks of the Director is the session their browser already has. B is the only option that meets the words of the success condition, and it deserves its own brief rather than being smuggled into this one.
+Shell-less. Authenticated on the data. Scenario by scenario. With notes.

@@ -28,9 +28,10 @@ const HARNESS_SOURCES = [
     "lib/qa/financialsDirectorQa/readiness.ts",
     "lib/qa/financialsDirectorQa/scenarioCatalog.ts",
     "app/api/admin/qa/financials-director/route.ts",
-    "app/adminV2/system/qa/core-financials/page.tsx",
-    "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
-    /* The local, beside-the-product reader is held to exactly the same boundary. */
+    /*
+     * ONE READER. The operator-shell harness under adminV2 is deleted — Financials human QA is
+     * walked beside the product, and two QA surfaces meant two places for this boundary to drift.
+     */
     "app/dev/core-financials-qa/page.tsx",
     "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
 ];
@@ -95,10 +96,7 @@ describe("the harness never writes Financials", () => {
     });
 
     it("never marks a scenario passed on the Director's behalf", () => {
-        for (const rel of [
-            "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx",
-            "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx",
-        ]) assertNoRecordFromEffect(read(rel));
+        assertNoRecordFromEffect(read("app/dev/core-financials-qa/CoreFinancialsQaReader.tsx"));
     });
 
     function assertNoRecordFromEffect(client: string) {
