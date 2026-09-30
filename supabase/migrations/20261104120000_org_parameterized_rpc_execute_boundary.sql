@@ -48,12 +48,13 @@
 --     function will ship exposed by default."
 --
 -- WHY REVOKING IS SAFE. `service_role` keeps EXECUTE. Every supported caller is a
--- server module that receives an injected client from an API route, and 604 of 682
--- route files build that client with `createAdminClient` (service role). The only
--- browser Supabase clients in the tree are 10 files; every one calls `supabase.auth.*`
--- only, except `lib/pricing/supabasePricing.ts`, which calls the unrelated read-only
--- `get_quote_pricing` and has zero callers. No supported path executes any of these
--- 14 as `authenticated`, so removing that privilege cannot break one. Internal
+-- server module that receives an injected client from an API route, and 599 of 677
+-- route files build that client with `createAdminClient` (service role). Only 9
+-- non-test files construct or import a browser Supabase client; eight call
+-- `supabase.auth.*` exclusively, and the ninth — `lib/pricing/supabasePricing.ts` —
+-- calls the unrelated read-only `get_quote_pricing` and has zero callers. No
+-- supported path executes any of these 14 as `authenticated`, so removing that
+-- privilege cannot break one. Internal
 -- function-to-function calls are unaffected: they run with the calling function's
 -- privileges, not the client's.
 --
