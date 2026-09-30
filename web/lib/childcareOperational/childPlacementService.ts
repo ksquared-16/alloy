@@ -16,6 +16,10 @@ import {
     trimOrNull,
 } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import {
+    applyParticipationOperationalChange,
+    deriveParticipationIdempotencyKey,
+} from "@/lib/childcareOperational/participationOperationalChange";
+import {
     validateProgramCategoryForSite,
     validateRoomLocationUnderSite,
 } from "@/lib/childcareOperational/validateChildcareLocationRefs";
@@ -67,6 +71,16 @@ export type SupersedeChildPlacementInput = Omit<
     "enrollmentAgreementId"
 > & {
     enrollmentAgreementId: string;
+    /**
+     * Retry protection. Omitted, it is derived from the requested end state, so an operator
+     * double-submit replays rather than superseding the first successor and chaining a spurious row.
+     */
+    idempotencyKey?: string;
+    /**
+     * The placement the caller believes is current. Omitted, the row this call just read is used, so
+     * a concurrent edit surfaces as a conflict instead of silently branching the supersession chain.
+     */
+    expectedPlacementId?: string | null;
 };
 
 export async function getOperationalPlacementForAgreement(
@@ -245,10 +259,24 @@ export async function createInitialChildPlacement(
     return placement;
 }
 
-export async function supersedeChildPlacement(
+/**
+ * The domain decision half of a placement supersession, without the writing.
+ *
+ * Extracted so a COMBINED placement+assignment edit can reuse exactly this validation before making a
+ * single transactional call, instead of a parallel copy that drifts. The temporal engine is not
+ * duplicated by this — there is still one gateway and one SQL transaction owner.
+ */
+export type ResolvedPlacementSupersession = {
+    prior: ChildPlacementRow;
+    newStartDate: string;
+    programCategoryId: string | null;
+    roomLocationId: string | null;
+};
+
+export async function resolvePlacementSupersession(
     supabase: SupabaseClient,
     input: SupersedeChildPlacementInput
-): Promise<ChildPlacementRow> {
+): Promise<ResolvedPlacementSupersession> {
     const { agreement } = await assertAgreementAllowsPlacement(
         supabase,
         input.orgId,
@@ -302,53 +330,109 @@ export async function supersedeChildPlacement(
         throw new OperationalEnrollmentServiceError("validation_failed", rangeError.message);
     }
 
-    const { error: closeError } = await supabase
-        .from("child_placements")
-        .update({
-            status: "superseded",
-            end_date: closeDate,
-            updated_by: trimOrNull(input.actorUserId),
-        })
-        .eq("org_id", input.orgId)
-        .eq("id", prior.id);
+    return { prior, newStartDate, programCategoryId, roomLocationId };
+}
 
-    if (closeError) {
-        throw new OperationalEnrollmentServiceError("db_error", closeError.message);
-    }
-
-    const status = derivePlacementStatusFromStartDate(newStartDate, input.todayYmd);
-
-    const row = {
-        org_id: input.orgId,
-        enrollment_agreement_id: input.enrollmentAgreementId,
-        customer_member_id: agreement!.customer_member_id,
-        site_location_id: agreement!.site_location_id,
-        program_category_id: programCategoryId,
-        room_location_id: roomLocationId,
-        start_date: newStartDate,
-        end_date: null,
-        status,
-        reason_key: trimOrNull(input.reasonKey) ?? "operator_change",
-        source_key: trimOrNull(input.sourceKey) ?? "operator",
-        supersedes_placement_id: prior.id,
+/** The placement payload this service sends to the one transactional persistence primitive. */
+export function placementChangePayload(
+    input: SupersedeChildPlacementInput,
+    resolved: ResolvedPlacementSupersession
+) {
+    return {
+        // Named explicitly, nulls included: these callers treat an absent body field as "clear this",
+        // and the primitive distinguishes a named null from an absent key on purpose.
+        startDate: resolved.newStartDate,
+        programCategoryId: resolved.programCategoryId,
+        roomLocationId: resolved.roomLocationId,
+        reasonKey: trimOrNull(input.reasonKey) ?? "operator_change",
+        sourceKey: trimOrNull(input.sourceKey) ?? "operator",
         metadata: input.metadata ?? {},
-        created_by: trimOrNull(input.actorUserId),
-        updated_by: trimOrNull(input.actorUserId),
     };
+}
 
+/** The retry key this service uses when the caller does not supply one. */
+export function placementIdempotencyKey(
+    input: SupersedeChildPlacementInput,
+    resolved: ResolvedPlacementSupersession
+): string {
+    return (
+        input.idempotencyKey
+        ?? deriveParticipationIdempotencyKey({
+            scope: "placement",
+            enrollmentAgreementId: input.enrollmentAgreementId,
+            values: [resolved.newStartDate, resolved.programCategoryId, resolved.roomLocationId],
+        })
+    );
+}
+
+/** Reads back a committed successor row. */
+export async function readPlacementById(
+    supabase: SupabaseClient,
+    orgId: string,
+    placementId: string
+): Promise<ChildPlacementRow> {
     const { data, error } = await supabase
         .from("child_placements")
-        .insert(row)
         .select("*")
+        .eq("org_id", orgId)
+        .eq("id", placementId)
         .single();
-
     if (error || !data) {
-        throw new OperationalEnrollmentServiceError("db_error", error?.message ?? "insert failed");
+        throw new OperationalEnrollmentServiceError(
+            "db_error",
+            error?.message ?? "placement successor not readable"
+        );
     }
-    const placement = data as ChildPlacementRow;
-    await emitOperatorPlacementChangedIfNeeded(input, placement, {
-        id: prior.id,
-        closeDate: closeDate,
+    return data as ChildPlacementRow;
+}
+
+/** Emits the canonical placement change event. Call only AFTER a successful commit. */
+export async function emitPlacementSupersededEvent(
+    input: SupersedeChildPlacementInput,
+    placement: ChildPlacementRow,
+    prior: { id: string; closeDate: string | null }
+): Promise<void> {
+    await emitOperatorPlacementChangedIfNeeded(input, placement, prior);
+}
+
+export async function supersedeChildPlacement(
+    supabase: SupabaseClient,
+    input: SupersedeChildPlacementInput
+): Promise<ChildPlacementRow> {
+    const resolved = await resolvePlacementSupersession(supabase, input);
+
+    // PERSISTENCE IS ONE TRANSACTION, OWNED BY THE DATABASE.
+    //
+    // This used to be an UPDATE closing the prior row followed by an INSERT of the successor, issued
+    // from here with no shared transaction. Two statements from a Supabase client cannot be atomic, so
+    // a failure between them left the prior row closed with no successor - the child in no room at all.
+    // It was also not retry-idempotent: a retry read its own successor as "prior" and superseded THAT,
+    // chaining rows that never described anything real.
+    //
+    // The domain decision above is still ours, and the event below is still ours. Only the writes moved.
+    const change = await applyParticipationOperationalChange(supabase, {
+        orgId: input.orgId,
+        enrollmentAgreementId: input.enrollmentAgreementId,
+        idempotencyKey: placementIdempotencyKey(input, resolved),
+        todayYmd: input.todayYmd,
+        actorUserId: trimOrNull(input.actorUserId),
+        // Passing the row we just read turns a concurrent edit into a conflict rather than a branch.
+        expectedPlacementId: input.expectedPlacementId ?? resolved.prior.id,
+        placement: placementChangePayload(input, resolved),
+    });
+
+    if (!change.placement) {
+        throw new OperationalEnrollmentServiceError(
+            "db_error",
+            "persistence reported no placement successor"
+        );
+    }
+
+    const placement = await readPlacementById(supabase, input.orgId, change.placement.successorId);
+    // AFTER a successful commit, never before: a rolled-back transaction must produce no event.
+    await emitPlacementSupersededEvent(input, placement, {
+        id: change.placement.priorId,
+        closeDate: change.placement.priorEndDate,
     });
     return placement;
 }
