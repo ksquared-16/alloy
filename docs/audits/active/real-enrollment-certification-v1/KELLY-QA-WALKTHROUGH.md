@@ -50,19 +50,34 @@ And one gate that is not an item on that list, because it cuts across all of the
 Item 10 cannot close while that gate is open. An Enrollment product that only works when an engineer
 configured it has not been validated, however well the family's half behaves.
 
-## Before you start — a known gap in addresses
+## Before you start — how the two address questions behave
 
 The Admissions form asks for a **Home address** and a **Mailing address**, and it says who each one
-belongs to: the home address to a guardian, the mailing address to the billing contact. Alloy can now
-read that instruction, but **nothing acts on it yet**.
+belongs to: the home address to a guardian, the mailing address to the billing contact. Alloy now acts
+on the first of those and deliberately refuses the second. Both will look blank to you, for two
+different reasons, and the difference is the thing to record.
 
-> In plain terms: the address questions may ask you for something Alloy already knows, or may attach
-> what you type to the wrong person. **Treat whatever you see as a real QA finding.** Write it down
-> the same way you would write down anything else that felt wrong. Do not skip past it because an
-> engineer has told you the cause is understood — how bad it feels is the part that is not known, and
-> that is the part you are here to judge.
+**Home address — working, but this household has no address on file.** A guardian is a person the
+relationship model holds inside the household, and a household's address is the one address Alloy
+owns, so the binding resolves and the question would be answered from what Alloy already knows. The
+QA family simply has no address recorded — the card at the top of this page says so in as many words.
+So the question arrives empty and answerable, which is the correct behaviour for a fact Alloy does not
+hold.
 
-This is named here so it cannot be quietly accepted. It is not signed off.
+> If you want to see the prefill actually happen, put an address on the household first, through the
+> product, and then reopen the link. **Blank here is not the defect** — asking you to type an address
+> Alloy already holds would be, and that is what to watch for once one is on file.
+
+**Mailing address — deliberately not answered, and reported as a blocker.** There is no canonical
+authority that can say what a billing contact's mailing address is. Billing responsibility itself is
+canonical, in the financial model, but an address in Alloy belongs to a **household** — the field
+catalog calls it the "shared household mailing address" and says in as many words that it is not an
+individual contact's address. So there is nothing to fill it from, and filling it with the home
+address would tell you Alloy knows a separate mailing address when it does not.
+
+> **Judge it anyway.** Does a family being asked for a mailing address, with nothing offered, feel
+> right? Should the form be asking at all? That is a product question and it is yours, not a technical
+> one that has been settled. It is written up as an open blocker, not as an accepted limitation.
 
 ## How to record what you find
 
@@ -138,8 +153,9 @@ not offered to you as their own sibling.
 **A7. EXPECT** — You can add more than one. Nothing about the shape of this section repeats the
 guardians section you have already done.
 
-**A8. DO** — Reach the **address** questions. This is the known gap named above. Note exactly what it
-asked and what it did with your answer.
+**A8. DO** — Reach the **address** questions. Read the section above first: Home and Mailing are both
+blank for different reasons. Note exactly what each one asked, whether it should have asked at all, and
+what happened to what you typed.
 
 **A9. DO** — Find a question you have nothing to say to — no allergies, no dietary needs, no
 concerns.

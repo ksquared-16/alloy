@@ -101,6 +101,14 @@ export default function ParticipantJourneyCard({ journey }: { journey: QaJourney
                     </dd>
                 </div>
                 <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        Address Alloy holds
+                    </dt>
+                    <dd className="mt-0.5 text-[13px] text-alloy-midnight">
+                        {journey.householdAddress ?? "None on file for this household"}
+                    </dd>
+                </div>
+                <div>
                     <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Enrollment fee</dt>
                     <dd className="mt-0.5 text-[13px] text-alloy-midnight">
                         {fee.kind === "loading" ? "Reading…" : fee.kind === "ready" ? feeSentence(fee.view) : fee.message}
