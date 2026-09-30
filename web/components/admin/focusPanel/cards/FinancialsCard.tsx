@@ -4383,7 +4383,25 @@ export default function FinancialsCard({
                       * one.
                       */}
                     <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
-                        <PaymentMethodsSection customerId={customerId} />
+                        <PaymentMethodsSection
+                            customerId={customerId}
+                            /*
+                             * THE CANONICAL PAYER, WIRED. This mount passed `customerId` alone, so
+                             * `payerName` never arrived and the Stripe billing-name prefill this
+                             * section already implements was dead in production — working code that
+                             * nothing ever invoked. Third time this sprint that a production mount
+                             * omitted canonical truth a component was ready to use.
+                             *
+                             * Ownership was never at risk: the server derives the method's payer.
+                             * What was lost was the prefill, silently.
+                             *
+                             * Household membership, never responsibility — a grandparent may pay and
+                             * owe nothing, and the payer list is ordered by primary contact for
+                             * exactly that reason.
+                             */
+                            payerEntityId={vm?.payerCandidates?.[0]?.personId ?? null}
+                            payerName={vm?.payerCandidates?.[0]?.name ?? null}
+                        />
                         <AutopaySection
                             customerId={customerId}
                             /* The canonical candidates this form never received — see AutopaySection. */

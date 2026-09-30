@@ -462,6 +462,19 @@ export type ApplyPaymentToChargeInput = {
     actorUserId?: string | null;
     notes?: string | null;
     metadata?: Record<string, unknown>;
+    /**
+     * A held deposit this application discharges.
+     *
+     * Supplying it does not change what is applied, who may apply it, or how it is journalled — every
+     * guard below runs identically. It changes only HOW the allocation row is written: through
+     * `apply_held_funds_atomic`, so the allocation and the hold's `applied` disposition commit in one
+     * transaction instead of two round trips with an unrecoverable window between them.
+     *
+     * It lives here rather than in a second apply path because held money becoming an allocation is
+     * the SAME act as any other application. A parallel writer would be a second application path,
+     * with its own household guard to forget and its own journal to omit.
+     */
+    disposeHoldId?: string | null;
 };
 
 export type ApplyPaymentToChargeResult = {
@@ -796,6 +809,58 @@ export async function applyPaymentToCharge(
     }
 
     const now = nowIso();
+
+    /*
+     * HELD MONEY COMMITS BOTH ROWS OR NEITHER.
+     *
+     * When this application discharges a hold, the allocation is written by
+     * `apply_held_funds_atomic`, which inserts the allocation and the `applied` disposition in one
+     * transaction. Written as two client round trips, a failure after the allocation left the money
+     * applied to the charge AND still counted as restricted — the balance fell, available prepaid
+     * under-reported by the same cents, and no surface explained why.
+     *
+     * Everything above this line has already run, so the RPC inherits the household guard, both
+     * ceilings and the childcare-source rule rather than restating them. It returns the allocation's
+     * id; the row is then re-read through the same columns the ordinary path selects, so the shape
+     * the caller receives does not depend on which writer produced it.
+     */
+    const disposeHoldId = trimOrNull(input.disposeHoldId ?? null);
+    if (disposeHoldId) {
+        const { data: applied, error: appliedError } = await supabase.rpc("apply_held_funds_atomic", {
+            p_org_id: orgId,
+            p_hold_id: disposeHoldId,
+            p_charge_id: chargeId,
+            p_amount_cents: requested,
+            p_actor: input.actorUserId ?? null,
+            p_notes: trimOrNull(input.notes),
+        });
+        if (appliedError) translateDbError(appliedError, "apply held deposit");
+        /* RETURNS TABLE, so PostgREST hands back an array of one row. */
+        const row = (Array.isArray(applied) ? applied[0] : applied) as
+            | { allocation_id?: string | null }
+            | null;
+        const allocationId = trimOrNull(row?.allocation_id ?? null);
+        if (!allocationId) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_state",
+                "applying the held deposit reported no allocation",
+            );
+        }
+        const { data: heldAllocation, error: reReadError } = await supabase
+            .from("payment_allocations")
+            .select(ALLOCATION_COLUMNS)
+            .eq("org_id", orgId)
+            .eq("id", allocationId)
+            .single();
+        if (reReadError) translateDbError(reReadError, "re-read the held-deposit application");
+        const allocation = heldAllocation as unknown as PaymentAllocationRow;
+        return {
+            allocation,
+            alreadyApplied: false,
+            journal: await recordPaymentAppliedEntry(supabase, payment, allocation, input.actorUserId ?? null),
+        };
+    }
+
     const { data, error } = await supabase
         .from("payment_allocations")
         .insert({
