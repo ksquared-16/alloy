@@ -15,6 +15,93 @@ supersedes: []
 
 ---
 
+## Certification record — measured 2026-09-30
+
+**State:** `ATTENDANCE_DOCUMENTATION_CONTEXT_READY`. Measured against staging `092c6acf`, with the
+deployed primary read through the governed census channel where deployed truth was required.
+
+### Subject identity — what Attendance actually stores
+
+| Subject | Stored identity | Person reference |
+|---|---|---|
+| child | `customer_member_id` + `enrollment_agreement_id` | **indirect** — the durable family member and the committed agreement, not `persons` |
+| staff | `person_id` + `employment_id` | **direct** — canonical Person |
+
+The authenticated caller is resolved to a Person only for **actor scope**, never to identify the
+subject: `resolveLinkedPersonId` reads `user_person_links` (org-scoped, `status = 'active'`) and is used
+in `attendancePermissions.ts` to decide which rooms a capture actor may touch when their
+`attendanceCaptureScope` is `assigned` rather than `site`.
+
+**Email is never an identity path, and that is explicit in two places.** `lib/access/linkedPersonIdentity.ts`:
+"There is no email fallback here and there must never be one … email is mutable". And the attendance
+permission path: "Explicitly not an email fallback. An account nobody has linked is an account whose
+assignments cannot be known, and guessing is how one teacher inherits another's rooms." An unlinked
+account is **denied**, not guessed at.
+
+### Shape — event-based, not state-based
+
+Four tables. `child_attendance_events` and `staff_presence_events` are append-only event logs;
+`attendance_kiosk_devices` is a credential registry; `attendance_integration_events` is external-provider
+ingestion bookkeeping with `disposition`, `failure_code` and a link to the attendance event it produced.
+
+There is no attendance *state* table and no `current_room` column. Whereabouts are **folded from events**
+at read time (`attendanceWhereabouts.ts`), which is why rule 9 forbids storing them.
+
+### Time model
+
+`event_at` is a `timestamptz` — the UTC instant. `service_date` is a stored `date`: the **site-local
+calendar day**, derived at WRITE time from the organization's configured IANA zone
+(`fetchOrgTimeZoneIana` → `serviceDateForInstant` via `date-fns-tz`), never from the browser and never
+re-derived on read. All attendance grouping and diffing keys on `service_date`, so an 11pm and a 1am
+check-in fall on the days the centre actually operates by rather than on UTC dates.
+
+### Write authority — 9 write handlers, 5 authority classes, zero portal-only
+
+| Class | Handlers | Detail |
+|---|---|---|
+| capability `attendance.record` | 2 | `admin/childcare-attendance` POST and `…/service-day-exception` POST — enforced in the DOMAIN SERVICE via `assertAttendanceCaptureAllowed`, plus site scope |
+| capability `attendance.devices.manage` | 3 | kiosk device registration, rotation, revocation |
+| device credential | 2 | `public/kiosk/attendance`, `public/kiosk/identify` — `resolveKioskRequestDevice(request, supabase, "capture")` against `attendance_kiosk_devices`, denying generically without enumerating |
+| external scope | 1 | `v1/attendance-events` — bearer principal, installation-resolved |
+| form token | 1 | `public/tour-booking/[token]/confirm-attendance` — `guardTourActionRoute` with required actions |
+
+**Capability enforcement lives one layer down, in the domain service, not at the route.** A route-level
+scan therefore under-reports it: `service-day-exception` looks unguarded at the handler and is in fact
+bound through `authorServiceDayException` → `assertAttendanceCaptureAllowed`, which is exactly what the
+`helper` field in `scripts/routeCapabilities.declared.json` records. Do not read "no capability call in
+the route file" as "no capability".
+
+### Route/surface census — exact
+
+13 route files · **17 handlers** (9 write, 8 read) · 3 mounted UI pages
+(`adminV2/settings/attendance-devices`, `adminV2/settings/attendance-expectations`, `kiosk`).
+
+Production writers of the attendance tables, all classified, **zero unexplained**:
+`staffPresenceService.ts` (1 insert, canonical), `ingestExternalAttendance.ts` (integration bookkeeping),
+`kioskCredentialRotation.ts` (device registry). **Child attendance has no table writer at all** — every
+child fact goes through the `record_child_attendance_event` RPC so idempotency is decided once, inside
+the database, atomically.
+
+### The relationship to Scheduling and Placement — expectation versus observation
+
+Attendance references the **committed** foundation (`child_enrollment_agreements`, and the effective
+`child_placements` / `schedule_assignments` where relevant), never the enrollment proposal. The
+distinction that matters:
+
+**Schedule is expectation. Attendance is observation.** They are compared, not merged — `expectedVsActual.ts`
+and `actualCompliance.ts` exist precisely to diff them. A schedule assignment does not create an
+attendance fact, and the absence of an attendance fact is not an absence: `absence` is an explicitly
+authored `event_kind` with 328 rows, so "no record" means *nothing was observed*, not *the child was away*.
+
+### One authority note carried from Identity/Access
+
+`record_child_attendance_event` is `SECURITY DEFINER` and takes `p_org_id` **from the caller** with no
+internal authority check. Until 2026-09-30 it also granted EXECUTE to `authenticated`, which made it a
+cross-tenant attendance write for any signed-in principal. Migration `20261107120000` closed it by shape,
+and the deployed census now reads `mutating_rpc ~ no_caller_authority_check ~ 0`. It is safe because every
+mounted caller uses the service-role client — but the function still trusts its `p_org_id` argument, so
+**the route and service gates above are the tenancy control for this path**, not the function.
+
 ## Why Attendance is the keystone
 
 Attendance is the operational fact stream that the rest of the platform's financial and compliance truth derives from:
@@ -33,10 +120,10 @@ Because so much derives from it, attendance must be modeled as immutable, effect
 
 Fact kinds in scope:
 
-- **Presence facts** — present / absent / excused for a service day or session.
+- **Presence facts** — the `event_kind` vocabulary is `check_in`, `check_out`, `absence`, `present`, `room_transfer`, `schedule_override` (CHECK-constrained). Measured on the certification stack 2026-09-30, only four are ever written: `check_in` 2046, `absence` 328, `check_out` 113, `room_transfer` 92. `present` is admitted and **unused**. **There is no `excused` anywhere** — not in the CHECK, not in the vocabulary module, not in code; an earlier version of this list named it and it was never implemented. `reason_key` exists as a column and is NULL on all 2,579 rows, so an absence currently carries no recorded reason.
 - **Check-in / check-out events** — timestamped arrival/departure.
 - **Room transfers** — intraday movement between rooms (distinct from a placement supersede, which is a committed change to the child's standing room).
-- ~~**Schedule overrides** — a one-off deviation from the committed schedule pattern for a specific date.~~ **Dead vocabulary.** A one-off deviation is an authored **Operational Expectation**, not an attendance fact — see [Absence, vacation and closures](#absence-vacation-and-closures-v1-2026-09-09). Nothing implements `schedule_override`; carried as convergence debt so the words stop being reached for.
+- ~~**Schedule overrides** — a one-off deviation from the committed schedule pattern for a specific date.~~ **Dead vocabulary, precisely.** A one-off deviation is an authored **Operational Expectation**, not an attendance fact — see [Absence, vacation and closures](#absence-vacation-and-closures-v1-2026-09-09). Measured 2026-09-30: **no writer authors it and zero rows carry it**, but it is still admitted by the `event_kind` CHECK and handled DEFENSIVELY on the read side in three modules — `attendanceWhereabouts.ts` returns null for it ("carries no whereabouts meaning; it changes expectation, not position") and `attendanceVocabulary.ts` still lists it. So it is dead by convention rather than by construction; carried as convergence debt so the words stop being reached for.
 - **Corrections** — restatements of any of the above.
 
 ---
@@ -45,7 +132,9 @@ Fact kinds in scope:
 
 1. **Reference the committed foundation.** Attendance facts reference `child_enrollment_agreements` (and, where relevant, the effective `child_placements` / `schedule_assignments` row), the durable child (`customer_member`), and the site/room `locations`. They do **not** reference the OCM enrollment proposal, `opportunities.location_id`, or any job-vertical table.
 2. **Own participation entity + attendance-child context.** Per [`../../archive/2026-06-runtime-convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/child_namespace_decision.md) §6, attendance gets its **own** participation/record entity, surfaced via an **attendance-child context** (relationship_section / repeater / widget) with `{attendance_entity_type}.*` refKeys. Operators always see "Child." Do **not** reuse `inquiry_child.*`, and do **not** flatten attendance onto the child.
-3. **Immutable + effective-dated.** Attendance facts are never edited in place. A correction is a **new effective-dated fact** that supersedes the prior one (prior row closed the day before, successor links via a `supersedes_*` reference), following the supersede pattern in `web/lib/childcareOperational/effectiveDating.ts`. The original fact remains in history.
+3. **Immutable + append-only — and NOT effective-dated.** Attendance facts are never edited in place, and the mechanism is a correction *link*, not a truth interval. Measured 2026-09-30: `child_attendance_events` and `staff_presence_events` carry `entry_type` in `original | correction | reversal` with `corrects_event_id`, constrained so an `original` has no link and a `correction`/`reversal` must have one (`*_entry_link_shape`), plus `*_no_self_reference`. Immutability is enforced **in the database** by the `prevent_child_attendance_events_mutation` and `prevent_staff_presence_events_mutation` triggers, not by convention. The original event is retained and a correction never rewrites it.
+
+   > **An earlier version of this rule described the effective-dated supersede pattern** — "prior row closed the day before, successor links via `supersedes_*`, following `effectiveDating.ts`". That was the wrong model, imported from a neighbouring domain. Measured: these tables have **no `supersedes_*` column and no `end_date` column**, because an attendance fact is a point-in-time observation rather than a bounded interval of asserted truth. The shared doctrine says as much itself — "a date is not the primitive" — and Placement/Scheduling supersession must not be read onto Attendance. See [`../core/effective-dated-assignment-doctrine.md`](../core/effective-dated-assignment-doctrine.md) for the model that does use intervals, and which this is not.
 4. **Event-emitting.** Every recorded or corrected attendance fact emits an event on `workflow_events` (`emitEvent` → `workflow_events` → `workflowRun`), with a versioned payload. Downstream consequences (billing, compliance, forecasting) react to events; they do not poll mutable state.
 5. **Authored by Actions, not queues or projections.** Attendance is created/corrected through the canonical action/workflow path (see [`./actions-and-workflows.md`](./actions-and-workflows.md)). Queue rows and Projection read models are previews/derivations only; they never write attendance.
 6. **Room transfer ≠ placement supersede.** An intraday room transfer is an attendance fact about where the child *was*; a placement change is a committed-intent change about where the child *belongs*. Keep them distinct models.

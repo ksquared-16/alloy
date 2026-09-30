@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** (the three Operations domains: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md)) |
-| **Domains pending** | Attendance · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -43,6 +43,33 @@ context. A PASS in one of them is not current evidence.
 most damage if got wrong: "latest row = active row" (resolve currency by the operational-state
 predicate, never by recency) and "a declared capability is an enforced one" (319 declarations are a
 `pending` backlog).
+
+### Attendance — context treatment
+
+**DIRECT**: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md) — the
+single canonical owner, carrying its certification record.
+
+**REFERENCE_ON_DEMAND**: `../platform/core/effective-dated-assignment-doctrine.md` — for the interval
+model Attendance deliberately does **not** use, and `placement-system.md` for the committed foundation it
+references.
+
+**EXCLUDE_HISTORY**: `certification/attendance/**`, `certification/kiosk/**`,
+`certification/playwright/**` attendance evidence, and the attendance QA guides and audits. These are
+point-in-time evidence; a PASS in one is not current doctrine.
+
+**Safe, because measured:** Attendance records observed presence, not schedule intent; schedule is
+expectation and is compared against attendance rather than becoming it; the child subject is
+`customer_member` + committed agreement while staff is canonical Person; corrections are append-only
+links (`entry_type` + `corrects_event_id`) enforced by database triggers; and the service day is the
+org's configured IANA-zone local day, derived at write time.
+
+**Forbidden:** scheduled = attended · enrolled = present · absence inferred from a missing record (an
+absence is an authored event with 328 rows) · a UI-hidden write means unauthorized (capability
+enforcement is in the domain service, not the route) · the auth email identifies the subject (explicitly
+refused in two places) · an old QA artifact is current doctrine · day boundaries follow the browser
+timezone · attendance uses effective-dated supersession (it has no `supersedes_*` and no `end_date`
+column) · `excused` exists (it does not, anywhere) · `present` and `schedule_override` are in use (both
+are admitted by the CHECK and never written).
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
