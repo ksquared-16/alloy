@@ -80,7 +80,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "app/adminV2/settings/attention-sla-rules/page.tsx": 1,
     "app/adminV2/settings/kpis/KpiPlacementsSettingsClient.tsx": 4,
     "app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx": 3,
-    "components/admin/AdminCollectPaymentModal.tsx": 1,
     "components/admin/agentLab/AgentConfigLabClient.tsx": 3,
     "components/admin/agentLab/AgentLabAssistantPanel.tsx": 1,
     "components/admin/AssociatedDocumentUploadModal.tsx": 2,
@@ -309,6 +308,9 @@ describe("raw <select> adoption ledger", () => {
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
         // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
-        expect(ledgerTotal).toBe(418);
+        // Payments V1 · W6-A: AdminCollectPaymentModal deleted (0 mounted callers), 1 -> 0. The
+        // ledger had already drifted to 416 before that, so this lowers it to the measured sum
+        // rather than to 417 — the ledger is one-way and the number is what the files now hold.
+        expect(ledgerTotal).toBe(415);
     });
 });

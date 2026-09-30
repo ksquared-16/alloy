@@ -117,8 +117,12 @@ describe("no component reads the variables directly any more", () => {
         for (const rel of [
             "components/operationalCards/PaymentMethodSetupField.tsx",
             "components/admin/focusPanel/cards/CardCollectionField.tsx",
-            "components/admin/AdminCollectPaymentModal.tsx",
-            "app/debug/stripe/page.tsx",
+            /*
+             * `AdminCollectPaymentModal` and `app/debug/stripe` were on this list and are gone
+             * (Payments V1 · W6-A): the modal had zero mounted callers and the debug page was
+             * unmounted provider residue. The RULE is unchanged and still gated on the surfaces
+             * that survive — one resolver, no component reading the variable directly.
+             */
         ]) {
             const text = code(rel);
             expect(text, `${rel} uses the resolver`).toContain("stripePublishableKey()");
