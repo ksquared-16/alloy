@@ -559,6 +559,8 @@ export type FinancialsEvidencePayment = {
      * card asks whether this is above zero and offers the act; it never computes it.
      */
     holdableCents: number;
+    /** Unapplied money no lot restricts — what may be applied. Same quantity as `holdableCents`. */
+    applicableLabel: string;
     applications: FinancialsEvidenceApplication[];
 };
 

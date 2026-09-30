@@ -953,11 +953,18 @@ export default function FinancialsDetailCard({
                                      */
                                     actions: (
                                         <>
-                                            {p.unappliedCents > 0 && onApplyPayment ? (
+                                            {/*
+                                              * THE OFFER AND THE FIGURE ARE BOTH THE UNRESTRICTED
+                                              * MONEY. `unappliedCents` counts the whole receipt
+                                              * including its held lots, so quoting it here told the
+                                              * operator a deposit was theirs to spend — and until
+                                              * `applyPaymentToCharge` was bounded, it was.
+                                              */}
+                                            {p.holdableCents > 0 && onApplyPayment ? (
                                                 <RowAction
                                                     kind="apply"
                                                     command="payment.apply_to_charge"
-                                                    title={`Apply ${p.unappliedLabel} to an obligation`}
+                                                    title={`Apply ${p.applicableLabel} to an obligation`}
                                                     onClick={() => onApplyPayment({ paymentId: p.paymentId })}
                                                 />
                                             ) : null}

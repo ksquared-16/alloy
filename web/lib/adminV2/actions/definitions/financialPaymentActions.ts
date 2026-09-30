@@ -455,13 +455,44 @@ const refundPayment: RegisteredAction = {
     async resolveEligibility({ supabase, ctx, payload }) {
         const paymentId = t(payload?.payment_id);
         const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_REFUND_PERMISSION);
+
+        /*
+         * ── THE TERMS ARE PART OF ELIGIBILITY, NOT ONLY OF EXECUTION ─────────────────────────────
+         *
+         * `execute` refuses a non-refundable lot before any provider call, and always did. This hook
+         * did not look at the lot at all, so it answered `eligible: true` with no blockers for a
+         * deposit the very next call would refuse. Measured on deployed staging: a preview of
+         * `payment.refund` against a lot marked "Taken as non-refundable" was indistinguishable from
+         * one against a refundable lot.
+         *
+         * It matters because this hook is the ANSWER other surfaces read — previews, and BOS
+         * proposals, which never reach `execute` before telling an operator what is possible. The
+         * terms consulted are the snapshot the money was taken under, never current policy.
+         */
+        const holdId = t(payload?.hold_id);
+        let holdBlockers: { code: string; message: string }[] = [];
+        if (paymentId && holdId) {
+            const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentIds: [paymentId],
+            })).find((h) => h.id === holdId);
+            if (!hold) {
+                holdBlockers = [{ code: "hold_not_found", message: "That held deposit is not on this payment." }];
+            } else {
+                const requested = payload?.amount_cents == null ? hold.remainingCents : Number(payload.amount_cents);
+                const eligible = heldRefundEligibility(hold, requested);
+                if (!eligible.ok) holdBlockers = [{ code: "hold_not_refundable", message: eligible.message }];
+            }
+        }
+
         return {
-            eligible: Boolean(paymentId) && allowed,
+            eligible: Boolean(paymentId) && allowed && holdBlockers.length === 0,
             blockers: [
                 ...(paymentId ? [] : [{ code: "missing_payment", message: "A payment is required." }]),
                 ...(allowed
                     ? []
                     : [{ code: "refund_permission_required", message: `Refunding a payment requires ${PAYMENT_REFUND_PERMISSION}.` }]),
+                ...holdBlockers,
             ],
             availableTransitions: [],
             requiredInputs: [],
