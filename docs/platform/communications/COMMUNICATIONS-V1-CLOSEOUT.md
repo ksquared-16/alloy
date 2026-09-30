@@ -11,9 +11,9 @@ Communications V1 is **COMPLETE**, accepted on hosted evidence on 2026-08-20.
 This is the durable record: what is live and certified, what was deliberately not built,
 what debt left this workstream and where it went. The hosted census evidence behind the
 acceptance is in
-[`communications-v1-sprint-close-2026-08-20.md`](communications-v1-sprint-close-2026-08-20.md);
+`docs/sprints/archive/08_2026/communications-v1-sprint-close-2026-08-20.md` (`docs/sprints/archive/08_2026/communications-v1-sprint-close-2026-08-20.md`);
 the live Email round trip is in
-[`live-email-certification-2026-08-19.md`](live-email-certification-2026-08-19.md).
+`docs/sprints/archive/08_2026/live-email-certification-2026-08-19.md` (`docs/sprints/archive/08_2026/live-email-certification-2026-08-19.md`).
 
 ---
 

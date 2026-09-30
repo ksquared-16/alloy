@@ -29,7 +29,7 @@ readiness sentence.
 
 **Two-way SMS: complete and certified.** **Two-way Email: locally certified 32/32.**
 Do not reopen either runtime. Do not re-audit them. The evidence lives in
-`SMS-REAL-SCHEMA-CERTIFICATION.md` and `RESEND-INBOUND-CONTRACT.md`.
+`SMS-REAL-SCHEMA-CERTIFICATION.md` and `docs/platform/modules/resend-inbound-provider-contract.md`.
 
 Branch is 33 ahead of `origin/staging`, pushed, tree clean. No PR opened.
 Cert migrations: **325 files / 325 unique / 325 applied / 0 pending**, verified

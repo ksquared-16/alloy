@@ -10,7 +10,7 @@
  * is built is that ownership is also, today, ADMISSION: an address matched a binding,
  * therefore the message is ingested, retrieved, stored and attributed. That is exactly
  * right while the only mail reaching Alloy is mail somebody deliberately addressed to an
- * Alloy identity — which is the posture recorded in `INBOUND-EMAIL-PRIVACY-POSTURE.md`.
+ * Alloy identity — which is the posture recorded in `docs/platform/modules/inbound-email-privacy-posture.md`.
  *
  * It stops being right the moment a real operational mailbox is pointed at Alloy. A
  * Director's `kelly@school.com` receives parents, banks, payroll, licensing, newsletters

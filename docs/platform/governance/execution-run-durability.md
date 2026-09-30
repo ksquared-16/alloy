@@ -2,9 +2,18 @@
 owner: platform
 status: canonical
 last_reviewed: 2026-08-21
+supersedes: []
 ---
 
 # Vacilando — Execution Run durability, abandonment, liveness, and recovery
+
+> **Moved into the canonical tree 2026-09-30**, from `platform/planning/vacilando-os/`. It declares
+> itself the "canonical contract for the Execution Run state machine" and names the modules that
+> implement it, so it is current doctrine rather than a plan. Content unchanged.
+>
+> Distinct from [`run-identity-and-store-durability.md`](./run-identity-and-store-durability.md),
+> which is an incident record about two stores being emptied — that one owns what happened, this one
+> owns the contract.
 
 Canonical contract for the Execution Run state machine. Implemented in
 `scripts/local-dev/lib/vacilando/execution-run.mjs` (state machine, recovery)

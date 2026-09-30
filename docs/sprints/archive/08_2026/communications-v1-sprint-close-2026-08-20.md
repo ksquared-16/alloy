@@ -43,7 +43,7 @@ artifact is physically present on hosted.
 > byte-identical renames. The collision is resolved, duplicate versions across the tree are
 > **0**, and `20260818200000` now belongs uniquely to the Communications file — which is what
 > the hosted ledger already recorded. See
-> [`COMMUNICATIONS-V1-CLOSEOUT.md`](COMMUNICATIONS-V1-CLOSEOUT.md) §3 for the current state.
+> [`COMMUNICATIONS-V1-CLOSEOUT.md`](../../../platform/communications/COMMUNICATIONS-V1-CLOSEOUT.md) §3 for the current state.
 > The text below is preserved as the record of what was true when the census ran.
 
 ### To Access & Identity V2 — immediate

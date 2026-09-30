@@ -94,7 +94,7 @@ await test("B — the handoff projection carries what a new provider needs, boun
     const rec = record({
         progress: { completed: Array.from({ length: 20 }, (_, i) => `step ${i}`), decisions: ["one"], finding_refs: ["f1"] },
         blockers: [{ description: "waiting on CI", wait_reason: "dependency" }],
-        documentation: ["docs/platform/governance/autonomous-operations.md"],
+        documentation: ["docs/sprints/archive/09_2026/autonomous-operations.md"],
     });
     const p = M.laneContextProjection(rec, { limit: 8 });
     assert.equal(p.objective, "Phase 6");
@@ -102,7 +102,7 @@ await test("B — the handoff projection carries what a new provider needs, boun
     assert.equal(p.next_step.action_class, "run_tests");
     assert.deepEqual(p.constraints.items, ["begin_phase_7"]);
     assert.equal(p.blockers.items.length, 1);
-    assert.equal(p.documentation.items[0], "docs/platform/governance/autonomous-operations.md");
+    assert.equal(p.documentation.items[0], "docs/sprints/archive/09_2026/autonomous-operations.md");
     // Bounded, and honest about it — a projection that dumps everything is the
     // transcript problem with extra steps.
     assert.equal(p.completed.items.length, 8);

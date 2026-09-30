@@ -68,7 +68,7 @@ messages — the claim is policy backed by audit logs, never a permission bounda
 that, `gmail.metadata` is itself a restricted scope carrying an annual CASA assessment that
 would switch off inbound for every Google customer at once if missed, and an OAuth refresh
 token inverts the deployment-provisioned credential rule in `providerCredentialCatalog.ts`.
-`INBOUND-EMAIL-PRIVACY-POSTURE.md` still stands: no Gmail or Outlook OAuth without its own
+`docs/platform/modules/inbound-email-privacy-posture.md` still stands: no Gmail or Outlook OAuth without its own
 decision record.
 
 **The engagement signal is dead — do not re-propose it.** "Endpoint provenance + prior

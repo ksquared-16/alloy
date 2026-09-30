@@ -798,7 +798,7 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
  * MEASURED: three of thirteen lanes sat at `problem` indefinitely for exactly
  * these two conditions, while every one of them was dispatchable. A health check
  * that contradicts promoted doctrine trains its reader to ignore it, which is
- * the failure `autonomous-operations.md` names — and it did it while real work
+ * the failure `docs/sprints/archive/09_2026/autonomous-operations.md` names — and it did it while real work
  * was running.
  *
  * They stay VISIBLE, named by what they are. They stop being blocking.
