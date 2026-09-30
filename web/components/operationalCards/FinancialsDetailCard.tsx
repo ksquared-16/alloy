@@ -60,6 +60,7 @@ export default function FinancialsDetailCard({
     onReverseAdjustment,
     onApplyHeldFunds,
     onReleaseHeldFunds,
+    onRefundHeldFunds,
     onPostCharge,
     onReverseCharge,
     onAdjustCharge,
@@ -222,24 +223,24 @@ export default function FinancialsDetailCard({
      */
     onApplyHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
     onReleaseHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
-    /*
-     * ── WHY THERE IS NO onRefundHeldFunds ────────────────────────────────────────────────────────
+    onRefundHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
+    /**
+     * REFUND A HELD LOT — held straight to a canonical refund.
      *
-     * Refunding held money needs TWO facts recorded together: the outbound refund, and a `refunded`
-     * disposition discharging the hold. `payment_hold_dispositions_refunded_names_payment_chk`
-     * requires the disposition to name the refund payment it became — so it cannot be written until
-     * a canonical refund row exists.
+     * NO AVAILABLE-PREPAID INTERMEDIATE. The host does not release and then refund: releasing would
+     * make the money ordinary spendable prepaid for the interval before the refund lands, and
+     * another operation could apply it to an obligation while it was already going back to the payer.
      *
-     * For a card refund, one does not exist when the operator's click returns. `payment.refund`
-     * asks Stripe and comes back with a provider refund that has not settled; the canonical row is
-     * written later, by the webhook recogniser. So the disposition cannot be written by the act, and
-     * a control here could only refund the money while leaving it counted as held — the precise
-     * double-count this sprint just repaired on the apply path, re-authored on the refund path.
+     * The act is the receipt's own `payment.refund`, told which lot it discharges. It cannot write
+     * the `refunded` disposition itself on a card rail — the constraint requires it to name a
+     * canonical refund payment, and none exists until the provider refund is RECOGNISED — so the
+     * hold is carried on the provider refund record and discharged there. The manual rail discharges
+     * it immediately, because cash handed back has no executor to wait for.
      *
-     * The hold has to be carried on the provider refund record and discharged when the refund is
-     * RECOGNISED. That is a seam in the provider layer, not a control on this card, so the control
-     * is absent rather than present and wrong. The terms are still shown on every lot, because
-     * whether a deposit is refundable is a fact the operator needs even where the act is not offered.
+     * OFFERED ONLY ON A REFUNDABLE LOT. The terms are known here, so a control that could only be
+     * refused would ask the operator to discover a promise the record already carries. The
+     * eligibility rule still lives server-side and runs BEFORE any provider call — a filter is not
+     * a boundary.
      */
     /** A draft the operator may post. The row says whether it qualifies; this decides nothing. */
     onPostCharge?: (args: { chargeId: string; label: string }) => void;
@@ -1125,6 +1126,24 @@ export default function FinancialsDetailCard({
                                                 command="deposit.release"
                                                 title={`Release ${h.remaining} — the restriction ends and it becomes available prepaid. No money moves.`}
                                                 onClick={() => onReleaseHeldFunds({
+                                                    holdId: h.holdId,
+                                                    paymentId: h.paymentId,
+                                                    remainingCents: h.remainingCents,
+                                                })}
+                                            />
+                                        ) : null}
+                                        {/*
+                                          * ABSENT ON A NON-REFUNDABLE LOT, not present and refused.
+                                          * A deposit taken as non-refundable is a promise the record
+                                          * already carries; offering a control that can only fail
+                                          * asks the operator to discover it by being told no.
+                                          */}
+                                        {onRefundHeldFunds && h.refundable ? (
+                                            <RowAction
+                                                kind="refund"
+                                                command="payment.refund"
+                                                title={`Refund ${h.remaining} to the payer — it leaves the organisation and does not pass through available prepaid`}
+                                                onClick={() => onRefundHeldFunds({
                                                     holdId: h.holdId,
                                                     paymentId: h.paymentId,
                                                     remainingCents: h.remainingCents,

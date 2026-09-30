@@ -28,7 +28,7 @@ import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
-import { readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
+import { heldRefundEligibility, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 import {
     applyPaymentToCharge,
     CHILDCARE_PAYMENT_METHODS,
@@ -464,6 +464,50 @@ const refundPayment: RegisteredAction = {
         }
         try {
             const paymentId = t(payload.payment_id);
+            const refundHoldId = t(payload.hold_id);
+
+            /*
+             * ── A NON-REFUNDABLE DEPOSIT IS REFUSED BEFORE ANYTHING IS EXECUTED ──────────────────
+             *
+             * Placed above every branch below, and deliberately so. `heldRefundEligibility` was
+             * separated from the refund itself for exactly this: a non-refundable deposit that
+             * reached Stripe and failed there would already have told the family a refund was under
+             * way. The terms consulted are the SNAPSHOT the money was taken under, never the
+             * organisation's current deposit policy — a later policy change must not retroactively
+             * alter what the family was promised.
+             *
+             * The amount is bounded here too, because the hold is a lot WITHIN the receipt: the
+             * refundable ceiling below is the receipt's, and a $500 refundable receipt holding a
+             * $175 lot may not refund $500 of that lot.
+             */
+            if (refundHoldId) {
+                const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    paymentIds: [paymentId],
+                })).find((h) => h.id === refundHoldId);
+                if (!hold) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 404,
+                        error: "That held deposit is not on this payment.",
+                        blockers: [{ code: "hold_not_found", message: "That held deposit is not on this payment." }],
+                    };
+                }
+                const requested = payload.amount_cents == null
+                    ? hold.remainingCents
+                    : Number(payload.amount_cents);
+                const eligible = heldRefundEligibility(hold, requested);
+                if (!eligible.ok) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 409,
+                        error: eligible.message,
+                        blockers: [{ code: "hold_not_refundable", message: eligible.message }],
+                    };
+                }
+            }
 
             /*
              * ── MONEY EXECUTED BY A PROCESSOR MUST BE GIVEN BACK BY THAT PROCESSOR ───────────────
@@ -494,6 +538,12 @@ const refundPayment: RegisteredAction = {
                     intentDiscriminator: t(payload.refund_intent) || undefined,
                     reason: t(payload.reason) || null,
                     actorUserId: ctx.userId ?? null,
+                    /*
+                     * Carried onto the provider refund record so RECOGNITION can discharge the lot.
+                     * It cannot be discharged here: no canonical refund row exists yet, and the
+                     * disposition's constraint requires one to name.
+                     */
+                    holdId: refundHoldId || null,
                 });
                 if (!requested.ok) {
                     return { ok: false, correlationId, status: 409, error: requested.message };
@@ -538,6 +588,62 @@ const refundPayment: RegisteredAction = {
                 idempotencyKey: idempotencyKeyFor(payload, "payment.refund"),
                 actorUserId: ctx.userId ?? null,
             });
+
+            /*
+             * ── THE MANUAL RAIL DISCHARGES THE LOT IMMEDIATELY ───────────────────────────────────
+             *
+             * Cash handed back across a desk has no executor to wait for, so the canonical refund
+             * exists by the time this line runs and the disposition's constraint can be satisfied
+             * here. The card rail cannot do this — see `recognizeProviderRefund`, which does it when
+             * the provider refund is recognised.
+             *
+             * HELD GOES STRAIGHT TO REFUNDED, with no release in between: releasing first would make
+             * the money ordinary available prepaid for an interval in which it could be spent
+             * against an obligation while already on its way back to the payer.
+             *
+             * The unique index makes a retried refund a no-op rather than a second disposal, and a
+             * failure here does not fail the refund — the money has gone back, and reporting failure
+             * would invite a retry of a refund that already happened.
+             */
+            if (refundHoldId) {
+                const { error: disposeError } = await (supabase as SupabaseClient)
+                    .from("payment_hold_dispositions")
+                    .insert({
+                        org_id: ctx.orgId,
+                        hold_id: refundHoldId,
+                        kind: "refunded",
+                        amount_cents: Number(result.refund.amount_cents),
+                        refund_payment_id: result.refund.id,
+                        reason: t(payload.reason) || null,
+                        disposed_by: ctx.userId ?? null,
+                    });
+                if (disposeError && !/uq_payment_hold_dispositions_one_per_refund/.test(String(disposeError.message))) {
+                    /*
+                     * Reported as a SUCCESS WITH A NAMED DEFECT rather than a failure. The refund is
+                     * canonical; what did not happen is the discharge, and the operator needs to be
+                     * told that specific thing rather than that the refund failed.
+                     */
+                    return {
+                        ok: true,
+                        correlationId,
+                        result: {
+                            actionKey: PAYMENT_REFUND_ACTION_KEY,
+                            entityType: invocation.entityType,
+                            entityId: t(invocation.entityId),
+                            affectedId: result.refund.id,
+                            detail: {
+                                refund_payment_id: result.refund.id,
+                                refunds_payment_id: result.original.id,
+                                amount_cents: result.refund.amount_cents,
+                                hold_id: refundHoldId,
+                                hold_discharged: false,
+                                hold_discharge_error: disposeError.message,
+                            },
+                        },
+                    };
+                }
+            }
+
             return {
                 ok: true,
                 correlationId,
@@ -553,6 +659,7 @@ const refundPayment: RegisteredAction = {
                         reversed_allocation_ids: result.reversedAllocationIds,
                         reapplied_allocation_id: result.reappliedAllocation?.id ?? null,
                         already_refunded: result.alreadyRefunded,
+                        ...(refundHoldId ? { hold_id: refundHoldId, hold_discharged: true } : {}),
                     },
                 },
             };

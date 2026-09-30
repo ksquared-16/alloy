@@ -762,6 +762,15 @@ export default function FinancialsCard({
         refundedCents: number;
         refundableCents: number;
         currencyCode: string;
+        /*
+         * The held lot being refunded, when the refund was raised from one.
+         *
+         * It narrows the CEILING as well as naming the lot: the refundable figure above is the
+         * receipt's, and a $500 refundable receipt holding a $175 lot may not refund $500 of that
+         * lot. The action re-derives both bounds and refuses a non-refundable lot before any
+         * provider call; this only avoids asking for something that cannot be granted.
+         */
+        hold?: { holdId: string; remainingCents: number };
     } | null>(null);
     const [refundAmount, setRefundAmount] = useState<string>("");
     const [refundError, setRefundError] = useState<string | null>(null);
@@ -1438,6 +1447,37 @@ export default function FinancialsCard({
             await load();
         }
     }, [closeMovePanels, holdAmount, holdPending, holdReason, holdRefundable, load, runAction, running]);
+
+    /*
+     * REFUND BELONGS TO THE RECEIPT, so this opens the receipt's own composer rather than a second
+     * refund form on the held row. One refund surface, told which lot it is discharging.
+     */
+    const openRefundHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setCommandError(null);
+        setRefundError(null);
+        const receipt = presentPayments(
+            vm?.payments ?? [],
+            Object.fromEntries((vm?.payments ?? []).map((r) => [r.paymentId, r.heldCents ?? 0])),
+        ).find((p) => p.paymentId === args.paymentId);
+        if (!receipt) {
+            setCommandError("That deposit's receipt could not be read, so it cannot be refunded yet.");
+            return;
+        }
+        /* The smaller of the two ceilings: what the lot holds, and what the receipt can still give back. */
+        const ceiling = Math.min(args.remainingCents, receipt.refundableCents);
+        setRefundTarget({
+            paymentId: receipt.paymentId,
+            label: `${money(receipt.receivedCents, receipt.currencyCode)} ${receipt.methodLabel}`,
+            receivedCents: receipt.receivedCents,
+            refundedCents: receipt.refundedCents,
+            refundableCents: ceiling,
+            currencyCode: receipt.currencyCode,
+            hold: { holdId: args.holdId, remainingCents: args.remainingCents },
+        });
+        setRefundAmount((ceiling / 100).toFixed(2));
+    }, [closeAdjustPanels, closeMovePanels, vm?.payments]);
 
     const confirmRelease = useCallback(async () => {
         if (!releasePending || running) return;
@@ -3681,9 +3721,20 @@ export default function FinancialsCard({
                                                             setRefundError("Enter a refund amount greater than zero.");
                                                             return;
                                                         }
-                                                        if (cents > p.refundableCents) {
+                                                        /*
+                                                         * The CEILING IS THE COMPOSER'S, not the
+                                                         * row's. A refund raised from a held lot is
+                                                         * bounded by that lot, which is smaller than
+                                                         * what the receipt could give back — reading
+                                                         * the row here would let a $175 lot refund
+                                                         * the receipt's full $500.
+                                                         */
+                                                        const ceiling = refundTarget?.refundableCents ?? p.refundableCents;
+                                                        if (cents > ceiling) {
                                                             setRefundError(
-                                                                `Refund amount exceeds the remaining refundable balance of ${money(p.refundableCents, p.currencyCode)}.`,
+                                                                refundTarget?.hold
+                                                                    ? `Only ${money(ceiling, p.currencyCode)} of this held deposit can be refunded.`
+                                                                    : `Refund amount exceeds the remaining refundable balance of ${money(ceiling, p.currencyCode)}.`,
                                                             );
                                                             return;
                                                         }
@@ -3694,6 +3745,7 @@ export default function FinancialsCard({
                                                                 payment_id: p.paymentId,
                                                                 amount_cents: cents,
                                                                 payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                                ...(refundTarget?.hold ? { hold_id: refundTarget.hold.holdId } : {}),
                                                             },
                                                             paymentEntityFor(chargeTarget),
                                                         ).then((outcome) => {
@@ -5533,6 +5585,7 @@ export default function FinancialsCard({
                     /* The held-money acts. Unsupplied, the section renders the position with no controls. */
                     onApplyHeldFunds={openApplyHeldFunds}
                     onReleaseHeldFunds={openReleaseHeldFunds}
+                    onRefundHeldFunds={openRefundHeldFunds}
                     onPostCharge={({ chargeId }) => void runRowAction("post", rowForCharge(chargeId))}
                     onReverseCharge={openReverseCharge}
                     /*
