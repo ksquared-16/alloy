@@ -68,12 +68,12 @@ export async function resolveFormPrefillPayload(args: {
      * `persons` has no address column, so that path resolves to nothing at all. The binding is the
      * more specific statement of whose address it is, so it is the one that answers.
      */
-    const addressResult = await resolveAddressBindingPrefill(
-        args.supabase,
-        args.orgId,
-        schema,
-        args.launchFks,
-    );
+    const addressResult = await resolveAddressBindingPrefill(args.supabase, schema, {
+        orgId: args.orgId,
+        customerId: args.launchFks.customer_id,
+        customerMemberId: args.launchFks.customer_member_id,
+        participantPersonId: args.launchFks.person_id,
+    });
     const mergedScalarPrefill: Record<string, string | number | boolean> = {
         ...scalarPrefill,
         ...addressResult.values,

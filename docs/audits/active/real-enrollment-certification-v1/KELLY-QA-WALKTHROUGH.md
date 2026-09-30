@@ -53,31 +53,35 @@ configured it has not been validated, however well the family's half behaves.
 ## Before you start — how the two address questions behave
 
 The Admissions form asks for a **Home address** and a **Mailing address**, and it says who each one
-belongs to: the home address to a guardian, the mailing address to the billing contact. Alloy now acts
-on the first of those and deliberately refuses the second. Both will look blank to you, for two
-different reasons, and the difference is the thing to record.
+belongs to: the home address to a guardian, the mailing address to the billing contact. **Alloy now
+acts on both.** This was an open blocker at the last pass and it is closed: addresses can belong to a
+particular person, they carry a purpose, and each question reads the right one.
 
-**Home address — working, but this household has no address on file.** A guardian is a person the
-relationship model holds inside the household, and a household's address is the one address Alloy
-owns, so the binding resolves and the question would be answered from what Alloy already knows. The
-QA family simply has no address recorded — the card at the top of this page says so in as many words.
-So the question arrives empty and answerable, which is the correct behaviour for a fact Alloy does not
-hold.
+What the runtime does now, in order:
 
-> If you want to see the prefill actually happen, put an address on the household first, through the
-> product, and then reopen the link. **Blank here is not the defect** — asking you to type an address
-> Alloy already holds would be, and that is what to watch for once one is on file.
+- **Home address** — takes the guardian this link was sent to, offers an address recorded as
+  *theirs*, and otherwise the household's shared address, including the single address a family
+  recorded before purposes existed. That last fallback is deliberate: it is the one address Alloy has
+  always treated as the family's.
+- **Mailing address** — takes the **billing contact**, resolved from who is financially responsible
+  for this family, and offers an address recorded as *their* mailing address. It does **not** fall
+  back to the household's. The billing contact can be a grandparent living elsewhere, and the
+  family's own address is not evidence about where they want post. If two people share
+  responsibility equally, Alloy says it cannot tell rather than picking one.
 
-**Mailing address — deliberately not answered, and reported as a blocker.** There is no canonical
-authority that can say what a billing contact's mailing address is. Billing responsibility itself is
-canonical, in the financial model, but an address in Alloy belongs to a **household** — the field
-catalog calls it the "shared household mailing address" and says in as many words that it is not an
-individual contact's address. So there is nothing to fill it from, and filling it with the home
-address would tell you Alloy knows a separate mailing address when it does not.
+> **This QA family still has no address on file.** The card at the top of this page says so. So both
+> questions will arrive **empty and answerable**, which is the right behaviour for a fact Alloy does
+> not hold. **Blank is not the defect** — being asked to retype an address Alloy already holds would
+> be, and so would seeing one person's address offered for another.
 
-> **Judge it anyway.** Does a family being asked for a mailing address, with nothing offered, feel
-> right? Should the form be asking at all? That is a product question and it is yours, not a technical
-> one that has been settled. It is written up as an open blocker, not as an accepted limitation.
+> **Worth knowing while you judge it.** The canonical model exists and is read, but there is not yet
+> an operator screen for putting a person's own address, or an address purpose, on file — today only
+> the field-service quote flow writes a person-to-address link at all. So you cannot set up the
+> interesting cases from the product yet. That is named as the next capability, not hidden.
+
+**What to judge anyway.** Should a family be asked for a mailing address at all when Alloy has
+nothing to offer? Is "Home" and "Mailing" the right pair of questions? If an address does appear,
+does it feel like the right person's? Those are product questions and they are yours.
 
 ## How to record what you find
 

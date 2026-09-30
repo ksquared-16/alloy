@@ -8,67 +8,103 @@
  * bound to `guardian` and a Mailing address bound to `billing_contact` — and without the binding
  * both resolve `entity_type: "person"` and would fill from whichever person the launch stamped.
  *
- * ## What the platform actually owns
+ * ## What the platform owns
  *
  * Measured, not assumed:
  *
- *   - An address is a `locations` row with `location_type = "address"`, keyed by `customer_id`,
- *     ordered by `is_primary`. The canonical field catalog names it "Shared household mailing
- *     address" (`location.household_address`), and the context picker says in as many words that it
- *     is "Shared household identity and optional shared mailing address — NOT individual contact
- *     addresses".
- *   - `persons` carries no address column, and `locations` carries no `person_id`. There is no
- *     person-grain address anywhere.
+ *   * The address is a `locations` row, `location_type = 'address'`, keyed by `customer_id`.
+ *   * WHOSE it is comes from `person_locations`, the live org-scoped person↔location junction. A row
+ *     with no person link is the household's shared address.
+ *   * WHAT IT IS FOR is `locations.address_role` ('home' | 'mailing'). NULL means not stated.
  *
- * So the address-owning entity is the HOUSEHOLD. A role does not select an address; it selects a
- * person, and that person's household owns the only address there is.
+ * All three reads live in `@/lib/location/canonicalAddressReads`. Forms consumes that; it does not
+ * own an address model and does not query `locations` itself.
  *
- * ## The contract
+ * ## The binding names a PERSON, and the purpose is policy
  *
- * A role earns the household's address when the relationship model says the role is held INSIDE the
- * household — `source_entity_type: "customer"` on its relationship definition. That is read from
- * `RELATIONSHIP_DEFINITIONS`, so a role added to the relationship model later works here without
- * this file changing, and a role the relationship model does not know earns nothing. No form id, no
- * label matching, no "first adult in the household".
+ * `{subject: "person", role: "guardian"}` says whose address it is. It does NOT say whether that is
+ * a home or a mailing address — the artifact never states a purpose, and the only place the purpose
+ * appears is the group's label, which is operator prose this runtime refuses to pattern-match.
  *
- * And the household's one address is claimed ONCE, in authored order. Two address groups that both
- * resolve to the same household would otherwise show the same address twice, which tells a family
- * Alloy knows a separate mailing address when it does not. The later group is left empty and
- * answerable, with the reason recorded.
+ * So the pairing is declared here, once, as platform policy rather than inferred per form: a
+ * guardian's address is where they live, and a billing contact's is where post goes. A role this
+ * table does not name resolves to nothing, so an unknown role fails closed instead of borrowing
+ * somebody else's address.
  *
- * Read-only. Prefill offers a value; it never writes one back. Address groups carry
- * `address_binding` rather than `collection_binding`, and only `collection_binding` groups produce
- * canonical proposals, so an address a family types stays form evidence and no canonical record is
- * mutated from here.
+ * ## Who the person is
+ *
+ *   * `guardian` — the participant this link was sent to. The link's `recipient_person_id` is the
+ *     adult in the conversation, validated at mint; it is the same identity the payment view treats
+ *     as the payer. "Some guardian in the household" is not a person, and picking the first adult
+ *     would be the fallback this file exists to avoid.
+ *   * `billing_contact` — `resolveBillingContactPerson`, the Financials projection over
+ *     `financial_responsibility_shares`. Forms never reads a responsibility table itself, and an
+ *     arrangement that splits equally between two parties comes back ambiguous rather than guessed.
+ *
+ * ## Household fallback is per role, and never for billing
+ *
+ * A guardian may fall back to the household's shared address, including a legacy row whose purpose
+ * was never stated: that is the one address a family recorded and the platform has always offered it
+ * as theirs. A billing contact may not. The billing contact can be someone outside the household —
+ * a grandparent paying the fees — and the family's own address is not evidence about where they
+ * want post. Blank is the honest answer.
+ *
+ * Read-only. Address groups carry `address_binding`, not `collection_binding`, and only
+ * collection-bound groups produce canonical proposals, so an address a family types stays form
+ * evidence and no canonical record is mutated from here.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
+import {
+    readHouseholdSharedAddress,
+    readPersonOwnedAddress,
+    type AddressRole,
+    type CanonicalAddress,
+} from "@/lib/location/canonicalAddressReads";
+import { resolveBillingContactPerson } from "@/lib/financials/responsibility/resolveBillingContactPerson";
 
 /** The address leaves the canonical household address can answer. */
+
 export const ADDRESS_LEAF_KEYS = ["address_line1", "address_line2", "city", "state", "postal_code"] as const;
 export type AddressLeafKey = (typeof ADDRESS_LEAF_KEYS)[number];
 
-/** The canonical household address, in the leaf vocabulary the form's children use. */
-export type CanonicalHouseholdAddress = Partial<Record<AddressLeafKey, string>> & { readonly locationId: string };
+/**
+ * Role policy: whose address, which purpose, and whether the household may answer for them.
+ *
+ * Declared rather than inferred. The pairing of a person role with an address purpose is a product
+ * decision — a guardian's address is where they live, a billing contact's is where post goes — and
+ * an authored form states only the person role. A role absent from this table resolves to nothing.
+ */
+const ROLE_POLICY: Readonly<Record<string, {
+    readonly addressRole: AddressRole;
+    readonly subject: "participant_person" | "billing_contact";
+    readonly householdFallback: boolean;
+}>> = {
+    guardian: { addressRole: "home", subject: "participant_person", householdFallback: true },
+    billing_contact: { addressRole: "mailing", subject: "billing_contact", householdFallback: false },
+};
 
 export type AddressBindingOutcome =
-    /** The household owns the address and this group is the one that claims it. */
-    | "household_address"
-    /** The household's single shared address is already answered by an earlier group. */
-    | "household_address_already_claimed"
-    /**
-     * No canonical authority can answer this role with an address: either the relationship model
-     * does not know the role at all, or it holds the role's own address on the relationship, or the
-     * role is a third party the household merely names.
-     */
-    | "no_canonical_address_authority"
+    /** Answered from an address the resolved person owns. */
+    | "person_owned_address"
+    /** Answered from the household's shared address, which policy permits for this role. */
+    | "household_shared_address"
+    /** Authority resolved, but no address is on file for it. An empty answerable control. */
+    | "no_address_on_file"
+    /** The responsibility model splits equally; the model does not say who receives post. */
+    | "billing_contact_ambiguous"
+    /** No canonical authority names a person for this role. */
+    | "no_canonical_subject"
+    /** No policy pairs this role with an address purpose. */
+    | "role_not_in_policy"
     /** The binding names a subject the platform does not resolve addresses for. */
     | "unsupported_subject"
     /** The group carries a binding but no child claims an address leaf. */
-    | "no_address_leaves";
+    | "no_address_leaves"
+    /** The canonical model could not be read. Never reported as "nothing on file". */
+    | "unavailable";
 
 export type AddressBindingPlanEntry = {
     readonly groupId: string;
@@ -77,6 +113,8 @@ export type AddressBindingPlanEntry = {
     /** Address leaf key → the form field id that holds it. */
     readonly leaves: Readonly<Partial<Record<AddressLeafKey, string>>>;
     readonly outcome: AddressBindingOutcome;
+    /** The person the binding resolved to, when one was found. Never rendered to a participant. */
+    readonly resolvedPersonId?: string | null;
 };
 
 function trimmed(value: unknown): string | null {
@@ -88,110 +126,76 @@ function addressLeafKeyFor(child: FormField): AddressLeafKey | null {
     return key && (ADDRESS_LEAF_KEYS as readonly string[]).includes(key) ? (key as AddressLeafKey) : null;
 }
 
-/**
- * May this role be answered with the HOUSEHOLD's shared address?
- *
- * Three statements the relationship model already makes, and none of them is a spelling this file
- * invents. `source_entity_type: "customer"` alone is not enough — it is true of all five definitions,
- * including the Physician — so on its own it would offer a family's address as their doctor's.
- *
- *   1. The role is anchored on the household (`source_entity_type: "customer"`).
- *   2. The model gives the role NO address of its own. `emergency_contacts` carries `"address"` in
- *      `nested_field_keys`: an emergency contact's address is theirs, held on the relationship, and
- *      the household's would be the wrong one.
- *   3. The role IS the household's responsible adults rather than a third party the household names.
- *      `responsibility_default: "all_guardians"` is that marker — every other definition says
- *      `"either_guardian"`, meaning a guardian is responsible FOR those people, not that they are
- *      the household.
- *
- * A Physician and a Dentist fail (3); an emergency contact fails (2) and (3); a guardian passes all
- * three, which is the only case the shared household address can honestly answer.
- */
-function householdAddressAnswersRole(role: string): boolean {
-    const def = relationshipDefinitionForRole(role);
-    if (!def) return false;
-    if (def.source_entity_type !== "customer") return false;
-    if (def.nested_field_keys.some((k) => k.trim().toLowerCase() === "address")) return false;
-    return def.responsibility_default === "all_guardians";
-}
+/** One `address_binding` group, as authored: whose address, and which fields hold it. */
+export type AddressBindingSite = {
+    readonly groupId: string;
+    readonly subject: string;
+    readonly role: string;
+    readonly leaves: Readonly<Partial<Record<AddressLeafKey, string>>>;
+};
 
-/** Pure: what each `address_binding` group resolves to, in authored order. No I/O. */
-export function planAddressBindingPrefill(schema: Pick<FormSchemaV1, "fields">): AddressBindingPlanEntry[] {
-    const plan: AddressBindingPlanEntry[] = [];
-    let householdAddressClaimed = false;
-
+/** Pure: every `address_binding` group in authored order, with its address leaves. No I/O. */
+export function planAddressBindingSites(schema: Pick<FormSchemaV1, "fields">): AddressBindingSite[] {
+    const sites: AddressBindingSite[] = [];
     for (const field of schema.fields) {
         if (field.type !== "group") continue;
         const binding = field.address_binding;
         if (!binding) continue;
-
         const leaves: Partial<Record<AddressLeafKey, string>> = {};
         for (const child of field.fields ?? []) {
             const leaf = addressLeafKeyFor(child);
-            // First child wins a leaf: a duplicated leaf inside one group is the author's ambiguity,
-            // not something to resolve by guessing which copy they meant.
+            // First child wins a leaf: a duplicated leaf inside one group is the author's ambiguity.
             if (leaf && !leaves[leaf]) leaves[leaf] = child.id;
         }
-
-        const subject = binding.subject.trim().toLowerCase();
-        const role = binding.role.trim().toLowerCase();
-
-        let outcome: AddressBindingOutcome;
-        if (!Object.keys(leaves).length) outcome = "no_address_leaves";
-        else if (subject !== "person") outcome = "unsupported_subject";
-        else if (!householdAddressAnswersRole(role)) outcome = "no_canonical_address_authority";
-        else if (householdAddressClaimed) outcome = "household_address_already_claimed";
-        else {
-            outcome = "household_address";
-            householdAddressClaimed = true;
-        }
-
-        plan.push({ groupId: field.id, subject, role, leaves, outcome });
+        sites.push({
+            groupId: field.id,
+            subject: binding.subject.trim().toLowerCase(),
+            role: binding.role.trim().toLowerCase(),
+            leaves,
+        });
     }
-
-    return plan;
+    return sites;
 }
 
 /**
- * The household's canonical address.
+ * Pure: what each group can resolve BEFORE any data is read.
  *
- * Same read the person drawer and the opportunity context enrichment do — `location_type`
- * `"address"`, active, primary first — so Forms cannot disagree with the rest of the product about
- * which address a household has.
+ * Separated from the read so the static half — is this subject supported, is this role in policy, does
+ * the group even hold an address — is testable without a database and cannot differ from what the
+ * resolver then does.
  */
-export async function readHouseholdCanonicalAddress(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerId: string,
-): Promise<CanonicalHouseholdAddress | null> {
-    const { data, error } = await supabase
-        .from("locations")
-        .select("id, address1, address2, city, state, postal_code, is_primary")
-        .eq("org_id", orgId)
-        .eq("customer_id", customerId)
-        .eq("location_type", "address")
-        .eq("is_active", true)
-        .order("is_primary", { ascending: false })
-        .limit(1);
-    if (error) return null;
-    const row = (data ?? [])[0] as
-        | { id: string; address1?: string | null; address2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null }
-        | undefined;
-    if (!row) return null;
-
-    const out: CanonicalHouseholdAddress = { locationId: String(row.id) };
-    const assign = (leaf: AddressLeafKey, value: unknown) => {
-        const v = trimmed(value);
-        if (v) (out as Record<string, unknown>)[leaf] = v;
-    };
-    assign("address_line1", row.address1);
-    assign("address_line2", row.address2);
-    assign("city", row.city);
-    assign("state", row.state);
-    assign("postal_code", row.postal_code);
-    // An address row with no line, city or postcode is not an address anyone can be shown.
-    return Object.keys(out).length > 1 ? out : null;
+export function planAddressBindingPrefill(
+    schema: Pick<FormSchemaV1, "fields">,
+): AddressBindingPlanEntry[] {
+    return planAddressBindingSites(schema).map((site) => {
+        let outcome: AddressBindingOutcome;
+        if (!Object.keys(site.leaves).length) outcome = "no_address_leaves";
+        else if (site.subject !== "person") outcome = "unsupported_subject";
+        else if (!ROLE_POLICY[site.role]) outcome = "role_not_in_policy";
+        // Everything beyond this point needs canonical data; the resolver decides it.
+        else outcome = "no_address_on_file";
+        return { ...site, outcome };
+    });
 }
+
+/**
+ * Is this role one the relationship model even knows?
+ *
+ * Kept as a guard on the `participant_person` path: the participant is the person the link was sent
+ * to, and offering their address for a role the relationship model does not define would be asserting
+ * a relationship nobody recorded.
+ */
+function relationshipModelKnowsRole(role: string): boolean {
+    return Boolean(relationshipDefinitionForRole(role));
+}
+
+export type AddressBindingContext = {
+    readonly orgId: string;
+    readonly customerId: string | null;
+    readonly customerMemberId?: string | null;
+    /** The adult this link was sent to — `form_public_links.metadata.recipient_person_id`. */
+    readonly participantPersonId?: string | null;
+};
 
 export type AddressBindingPrefillResult = {
     /** form field id → canonical value, ready to merge with the other prefill resolvers. */
@@ -202,24 +206,103 @@ export type AddressBindingPrefillResult = {
 /** Resolve every `address_binding` group against canonical data. */
 export async function resolveAddressBindingPrefill(
     supabase: SupabaseClient,
-    orgId: string,
     schema: Pick<FormSchemaV1, "fields">,
-    launchFks: Pick<LaunchFkStamp, "customer_id">,
+    context: AddressBindingContext,
 ): Promise<AddressBindingPrefillResult> {
-    const plan = planAddressBindingPrefill(schema);
-    const claiming = plan.filter((p) => p.outcome === "household_address");
-    if (!claiming.length || !launchFks.customer_id) return { values: {}, plan };
-
-    const address = await readHouseholdCanonicalAddress(supabase, orgId, launchFks.customer_id);
-    if (!address) return { values: {}, plan };
-
+    const sites = planAddressBindingSites(schema);
+    const plan: AddressBindingPlanEntry[] = [];
     const values: Record<string, string> = {};
-    for (const entry of claiming) {
-        for (const leaf of ADDRESS_LEAF_KEYS) {
-            const fieldId = entry.leaves[leaf];
-            const value = address[leaf];
-            if (fieldId && value) values[fieldId] = value;
+
+    // One resolution per role, however many groups reference it.
+    const billingOnce = new Map<string, Awaited<ReturnType<typeof resolveBillingContactPerson>>>();
+
+    for (const site of sites) {
+        const fill = (address: CanonicalAddress, outcome: AddressBindingOutcome, personId: string | null) => {
+            for (const leaf of ADDRESS_LEAF_KEYS) {
+                const fieldId = site.leaves[leaf];
+                const value = address[leaf];
+                if (fieldId && value) values[fieldId] = value;
+            }
+            plan.push({ ...site, outcome, resolvedPersonId: personId });
+        };
+        const stop = (outcome: AddressBindingOutcome, personId: string | null = null) =>
+            plan.push({ ...site, outcome, resolvedPersonId: personId });
+
+        if (!Object.keys(site.leaves).length) {
+            stop("no_address_leaves");
+            continue;
         }
+        if (site.subject !== "person") {
+            stop("unsupported_subject");
+            continue;
+        }
+        const policy = ROLE_POLICY[site.role];
+        if (!policy) {
+            stop("role_not_in_policy");
+            continue;
+        }
+        if (!context.customerId) {
+            // Without a household there is no account to scope a read to, and an unscoped address
+            // read is exactly the cross-account leak this module must not have.
+            stop("no_canonical_subject");
+            continue;
+        }
+
+        let personId: string | null = null;
+        if (policy.subject === "participant_person") {
+            personId = relationshipModelKnowsRole(site.role) ? trimmed(context.participantPersonId) : null;
+        } else {
+            let resolution = billingOnce.get(site.role);
+            if (!resolution) {
+                resolution = await resolveBillingContactPerson(supabase, {
+                    orgId: context.orgId,
+                    customerId: context.customerId,
+                    customerMemberId: context.customerMemberId ?? null,
+                });
+                billingOnce.set(site.role, resolution);
+            }
+            if (resolution.kind === "ambiguous") {
+                stop("billing_contact_ambiguous");
+                continue;
+            }
+            if (resolution.kind === "unavailable") {
+                stop("unavailable");
+                continue;
+            }
+            personId = resolution.kind === "resolved" ? resolution.personId : null;
+        }
+
+        if (personId) {
+            const owned = await readPersonOwnedAddress(supabase, {
+                orgId: context.orgId,
+                customerId: context.customerId,
+                personId,
+                role: policy.addressRole,
+            });
+            if (owned) {
+                fill(owned, "person_owned_address", personId);
+                continue;
+            }
+        }
+
+        if (!policy.householdFallback) {
+            stop(personId ? "no_address_on_file" : "no_canonical_subject", personId);
+            continue;
+        }
+
+        const shared = await readHouseholdSharedAddress(supabase, {
+            orgId: context.orgId,
+            customerId: context.customerId,
+            role: policy.addressRole,
+            // The legacy row with no stated purpose is the family's one address.
+            acceptUnstatedRole: true,
+        });
+        if (shared) {
+            fill(shared, "household_shared_address", personId);
+            continue;
+        }
+        stop("no_address_on_file", personId);
     }
+
     return { values, plan };
 }
