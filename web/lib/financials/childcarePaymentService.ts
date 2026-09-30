@@ -95,6 +95,8 @@ export type PaymentRow = {
     billable_source_type: string | null;
     billable_source_id: string | null;
     refunds_payment_id: string | null;
+    /** Who caused this reversal: an operator's refund, or a provider/bank return. Null on receipts. */
+    reversal_origin: string | null;
     idempotency_key: string | null;
     amount_cents: number;
     currency: string;
@@ -134,11 +136,23 @@ export type PaymentAllocationRow = {
     updated_by: string | null;
 };
 
+/*
+ * ── WHY `reversal_origin` IS IN THIS LIST ───────────────────────────────────────────────────────
+ *
+ * It is WRITTEN on every outbound row and was never SELECTED back, so `PaymentRow` could not carry
+ * the one fact that distinguishes an operator's refund from a provider's return. The Financials
+ * card was unaffected — `buildFinancialsCardVM` selects the column in its own list — but every
+ * service-layer consumer of a `PaymentRow` was blind to it, and a test asserting on it was
+ * measuring a mock's fidelity rather than the product.
+ *
+ * The domain draws this distinction deliberately: an operator chose to give money back; a bank took
+ * it. Reading it back is what lets anything downstream say so.
+ */
 const PAYMENT_COLUMNS =
     "id, org_id, job_id, customer_id, billable_source_type, billable_source_id, refunds_payment_id, "
     + "idempotency_key, amount_cents, currency, status, direction, payment_method, processor, "
     + "processor_transaction_id, reference_number, received_at, posted_at, failed_at, voided_at, notes, "
-    + "metadata, created_at, updated_at, created_by, updated_by";
+    + "reversal_origin, metadata, created_at, updated_at, created_by, updated_by";
 
 const ALLOCATION_COLUMNS =
     "id, org_id, payment_id, charge_id, target_entity_type, target_entity_id, allocated_amount_cents, "
