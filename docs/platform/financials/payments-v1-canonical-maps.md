@@ -2,6 +2,7 @@
 owner: payments
 status: canonical
 last_reviewed: 2026-09-30
+supersedes_note: rewritten for W6-A2
 supersedes: none
 ---
 
@@ -91,21 +92,46 @@ Payments label that is not a registered action, and found `payment.move` on its 
 **ADJACENT FINANCIALS** — `financial_responsibility_*`, `subsidy_claims`, discount and GL mapping
 tables.
 
-**W6-A2 LEGACY RESIDUE — still present, and named rather than claimed gone:**
+**SURVIVING CURRENT FIELDS on `payments`** — kept on evidence of CURRENT authority, not called
+legacy because their origin predates canonical Payments:
 
-* `payment_statuses` — **NOT dropped.** Its web readers are gone, but
-  `backend/app/supabase_client.py` reads *and writes* it
-  (`get_payment_status_key_by_id`, `get_payment_status_id_by_key`), and the latter is imported by
-  `backend/app/routes/stripe.py`. Dropping it would break the legacy Python Stripe path, whose
-  teardown is W6-A2's.
-* `payments.payment_status_id` and `payments.status_key` — same blocker, same owner. Column safety
-  is not inferred from table safety, and here neither is safe yet.
-* The other seven candidate columns — `job_id`, `customer_id`, `provider`, `provider_payment_id`,
-  `paid_at`, `posted_to_ledger_at`, `deposit_batch_id` — deliberately unanalysed here. The shared
-  `payments` table crosses TypeScript, Python, SQL, views, reports, tests and historical schema;
-  W6-A2 owns that proof.
+| Column | Why it is current |
+| --- | --- |
+| `job_id` | read by `accessScope` (workspace layout, its providers, the customers route) and by `jobPaymentBalances`, which canonical `childcarePaymentService` and `financialJournalService` both import. Canonical childcare payments write it NULL deliberately — a childcare payment is not a job payment |
+| `customer_id` | WRITTEN by canonical `recordChildcarePayment` so job-era readers of "whose payment is this" keep working; read by the related-records API |
+| `paid_at` | named by the childcare immutability trigger, SELECTed by `/api/admin/related/[entity]/[id]`, and an editable entity-drawer field |
+| `status_key` | named by the same trigger; job rows still edit it through their PATCH route by design. NOT the platform `status_key` vocabulary on assignments, opportunities, tour_bookings and case statuses, which is untouched |
+| `provider_payment_id` | read by `/api/admin/entity` and `/api/admin/related` as the legacy provider reference |
+| `posted_to_ledger_at` | a rendered entity-drawer field |
 
-`LEGACY PAYMENTS SCHEMA = NONE` is **not** claimed. That is W6-A2's target.
+**DELETED LEGACY AUTHORITY (W6-A2):** `payment_statuses`, `payments.payment_status_id`,
+`payments.deposit_batch_id`, `payments.provider` (superseded by `processor`, which the migration
+that introduced it backfilled from this column), the Python payment executor and its 41-function
+closure, `service_auth`, the four `fin.post` handlers, `JobManualChargeForm`, `jobPaymentSummary`,
+`JobDrawerV2`, and the `fin.post` permission with its grants.
+
+`LEGACY PAYMENTS SCHEMA = NONE` is **still not claimed**, and that is the correct end state rather
+than a shortfall: six columns survive because something reads or writes them today. W6-A2 succeeded
+by deleting the second payment system and its dead authority, not by deleting every old-looking
+column.
+
+## Canonical writer proof
+
+One write architecture. No route writes money; every money write is a registered action.
+
+| Act | Path |
+| --- | --- |
+| Manual receipt | `payment.record` → `recordChildcarePayment` |
+| Provider collection | `payment.collect_card` → `payment_collection_attempts` → provider adapter → canonical posting |
+| Application | `payment.apply_to_charge` → `applyPaymentToCharge` |
+| Application reversal | `payment.reverse_application` |
+| Refund | `payment.refund` → `requestProviderRefund` / `refundChildcarePayment` |
+| Provider return | provider dispute recognition (`payments.reversal_origin = 'provider'`) |
+| Autopay | the ordinary collection engine, via Scheduled Work |
+| Held application | `payment.apply_to_charge` with the hold named → `apply_held_funds_atomic` |
+
+There is **no Python payment writer**, **no job-era direct Payment writer**, **no direct Payment
+status mutation route** and **no second provider execution engine**.
 
 ## Debt recorded, not repaired
 

@@ -21,6 +21,14 @@
 --   payments.payment_status_id    the FK twin. No reader outside the drawer type it fed.
 --   payments.deposit_batch_id     zero references ANYWHERE: no TypeScript, no Python, and its only
 --                                 SQL occurrence is its own ADD COLUMN. Never read, never written.
+--   payments.provider             SUPERSEDED BY `processor`, which is its canonical replacement and
+--                                 is written by `recordChildcarePayment`. 20260329210000 backfilled
+--                                 `processor = COALESCE(processor, provider)` — the migration that
+--                                 introduced the canonical column copied this one into it. No
+--                                 TypeScript reader (the `provider` fields in the related-records
+--                                 route carry `journal_entry_id`, so they are ledger_transactions,
+--                                 not payments), no Python reader now the executor is gone, and no
+--                                 view, function, trigger or policy names it.
 --
 -- ── WHAT IS DELIBERATELY NOT DROPPED ──
 --
@@ -33,8 +41,13 @@
 --                        opportunities, tour_bookings and case statuses, which is untouched
 --   provider_payment_id  read by /api/admin/entity and /api/admin/related as the legacy provider ref
 --   posted_to_ledger_at  a rendered entity-drawer field
---   job_id, customer_id  the job vertical's own billing grain, and customer_id carries a real FK
---                        used by the related-records reader
+--   job_id               read by `accessScope` (imported by the workspace layout, its providers and
+--                        the customers route) and by `jobPaymentBalances`, which canonical
+--                        `childcarePaymentService` and `financialJournalService` both import.
+--                        Canonical childcare payments write it NULL deliberately — a childcare
+--                        payment is not a job payment — which is a current semantic, not residue
+--   customer_id          WRITTEN by canonical `recordChildcarePayment` so job-era readers of "whose
+--                        payment is this" keep working, and read by the related-records API
 --
 -- Origin is not authority. Each of those is read by something today.
 --
@@ -109,6 +122,7 @@ DROP INDEX IF EXISTS public.idx_payments_status;
 
 ALTER TABLE public.payments DROP COLUMN IF EXISTS payment_status_id;
 ALTER TABLE public.payments DROP COLUMN IF EXISTS deposit_batch_id;
+ALTER TABLE public.payments DROP COLUMN IF EXISTS provider;
 
 -- Last, once nothing references it.
 DROP TABLE IF EXISTS public.payment_statuses;
@@ -131,7 +145,7 @@ BEGIN
 
     FOR v IN SELECT 1 FROM information_schema.columns
               WHERE table_schema = 'public' AND table_name = 'payments'
-                AND column_name IN ('payment_status_id', 'deposit_batch_id')
+                AND column_name IN ('payment_status_id', 'deposit_batch_id', 'provider')
     LOOP
         RAISE EXCEPTION 'a dropped payments column still exists';
     END LOOP;
@@ -151,9 +165,9 @@ BEGIN
     SELECT count(*) INTO v FROM information_schema.columns
      WHERE table_schema = 'public' AND table_name = 'payments'
        AND column_name IN ('paid_at', 'status_key', 'provider_payment_id',
-                           'posted_to_ledger_at', 'job_id', 'customer_id', 'provider');
-    IF v <> 7 THEN
-        RAISE EXCEPTION 'a column with current authority was dropped: expected 7, found %', v;
+                           'posted_to_ledger_at', 'job_id', 'customer_id');
+    IF v <> 6 THEN
+        RAISE EXCEPTION 'a column with current authority was dropped: expected 6, found %', v;
     END IF;
 
     -- The canonical provider tier, W2 methods, W4 holds and W5 Autopay are untouched.
