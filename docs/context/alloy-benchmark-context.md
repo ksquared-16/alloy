@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | **Financials / Payments (blocked mid-mutation — §Money below names the exact reason)** · **Commercial (doc corrected, claim matrix outstanding)** · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -70,6 +70,43 @@ refused in two places) · an old QA artifact is current doctrine · day boundari
 timezone · attendance uses effective-dated supersession (it has no `supersedes_*` and no `end_date`
 column) · `excused` exists (it does not, anywhere) · `present` and `schedule_override` are in use (both
 are admitted by the CHECK and never written).
+
+### Money domains — Subsidy certified, Financials and Commercial held
+
+**SUBSIDY — CERTIFIED.** DIRECT: §0.1 of
+[`../platform/modules/financials-canonical-authorities.md`](../platform/modules/financials-canonical-authorities.md).
+Safe, because measured: subsidy suppresses **collection**, derived and never stored, and changes neither
+obligation, reduction, responsibility nor payment; only a SUBMITTED claim suppresses, bounded by the
+smallest of claimed / expected / outstanding; a shortfall becomes an unresolved variance and does not
+raise what the family owes; ten production commands share the single capability `fin.subsidy`; there is
+**no mounted HTTP write surface** — subsidy is command-dispatched, with exactly three durable writer
+services and zero unexplained writers.
+
+**FINANCIALS / PAYMENTS — NOT CERTIFIED, and deliberately so.** Payments V1 is mid-mutation: **nine
+Payments V1 pull requests** in the last twenty staging commits, the most recent landing the same day as
+this pass, and their subjects are corrections to core money semantics rather than polish — refund
+ordering ("an operator's refund spends the money nobody has a claim on first"), held/deposit
+availability ("held money was available to spend after all"), payer authorization, and the
+return-versus-refund distinction. Freezing a domain mid-mutation is how a benchmark corpus starts
+describing behaviour that has already changed. `web/lib/financials/payments` last changed 2026-09-30.
+
+**COMMERCIAL — NOT CERTIFIED; one active misinformation corrected.**
+`../platform/modules/commercial-configuration.md` listed discount programs, subsidies, fees/add-ons,
+accounting and the simulator as "Future domains (deferred)". Measured: `discount_programs` holds 5 rows,
+`financial_journal_entries` **13,136**, `financial_accounting_periods` 102, and subsidy is ten production
+commands. That list is corrected. What remains before certification is a claim matrix across the wider
+commercial surface — 54 route files, 89 handlers, 60 writes, nine discount tables — and the six `pending`
+DELETE declarations on pricing, addons and service offerings.
+
+**EXCLUDE_HISTORY** for all three: `certification/financials/**` (the 11a-* evidence trees) and
+`certification/kiosk/**`. These prove releases, not doctrine.
+
+**Forbidden across the money domains:** provider state = Alloy financial truth · quote = obligation ·
+payment = revenue recognition · credit and reversal are interchangeable · **subsidy = payment** (it is
+collection suppression) · an authorization or a draft claim suppresses collection (only a SUBMITTED claim
+does) · a shortfall raises what the family owes · a negative row can be ignored without accounting
+semantics · an old certification artifact defines current architecture · Commercial owns the obligation
+its pricing produces (it owns intent only).
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".

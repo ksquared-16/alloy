@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-09-20
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -58,6 +58,71 @@ not:
 | Payment | how it was settled | who owes it |
 
 ---
+
+## 0.1 Subsidy — a fifth act, and the only one that changes nothing it touches
+
+**Certified 2026-09-30.** Subsidy is implemented, in production, and absent from the four-layer diagram
+above — which is the omission this section closes. It is not a fifth owner of the obligation; it is a
+separate act that alters **what may be collected right now** while leaving obligation, reduction,
+responsibility and payment exactly as they were.
+
+```
+SUBSIDY                     →  WHAT MAY BE COLLECTED FROM THE FAMILY RIGHT NOW
+        owner: financial_subsidy_* (7 tables) via 10 registered commands under `fin.subsidy`
+        effect: SUPPRESSION of collection, derived and never stored
+```
+
+### The rule, measured
+
+```
+authoritative outstanding  −  governed submitted-claim suppression  =  currently collectible
+```
+
+**An authorization does not suppress collection. A draft claim does not either.** Only a **SUBMITTED**
+claim suppresses, and only for the amount its lines explicitly attribute — because submitting is the
+point at which the provider has done the thing that makes the money genuinely receivable from the
+agency.
+
+Suppression is bounded by the **smallest** of three quantities, and each bound exists because dropping
+it tells a specific lie:
+
+| Bound | The lie it prevents |
+|---|---|
+| what was actually claimed on submitted lines | claiming more than was expected |
+| the expected subsidy attributable to the obligation | expecting more than was claimed |
+| what is still outstanding | suppressing money the family no longer owes because someone already paid |
+
+**It is derived, never materialised.** `resolveFamilyCollectible` recomputes it from claim state, line
+amounts and the authoritative outstanding every time it is asked, so it cannot drift, cannot be edited
+into something else, and disappears by itself the moment a claim is voided or denied. A stored copy
+would be a second balance wearing a different hat.
+
+**A shortfall does nothing on its own.** When $900 was claimed and $825 arrived, the $75 becomes an
+**unresolved variance** reported beside the figure — the family's collectible amount does **not** quietly
+rise to cover it.
+
+### The lifecycle, and its authority
+
+Ten registered commands, all `executable` / `production`, every one gated on the single capability
+**`fin.subsidy`** with one shared refusal (`subsidy_permission_required`) and one shared audit shape:
+
+`configure_agency` → `configure_program` → `record_authorization` → `build_claim` → `submit_claim` →
+`record_remittance` → `settle_remittance` → `reconcile_remittance` → `resolve_variance`, plus
+`billing.configure_expected_funding`.
+
+**There is no mounted HTTP route surface for subsidy** — 1 route file and zero write handlers. Subsidy
+mutations are operator **commands** dispatched through the action registry, which is why a route census
+finds nothing and why a reader who looked only at routes would conclude it is unimplemented. Durable
+writers are exactly three services: `subsidyService.ts`, `remittanceService.ts` and
+`expectedFundingService.ts` (17 mutation sites across the nine subsidy/funding tables). **Zero
+unexplained writers.**
+
+### Subsidy is not a payment
+
+A payment settles an obligation and moves money into Alloy's financial truth. A subsidy claim asserts
+that an agency owes money for care already delivered, and **suppresses collection from the family**
+while that claim stands. They are different acts with different owners, different tables and different
+reversal semantics: a denied claim restores collectibility, whereas a reversed payment is a ledger event.
 
 ## 1. The five identities that must never collapse
 
