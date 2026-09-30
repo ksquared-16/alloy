@@ -3601,8 +3601,8 @@ export default function FinancialsCard({
                                             data-financials-payment-held={p.heldCents ?? 0}
                                         >
                                             {money(p.heldCents ?? 0, p.currencyCode)} held ·{" "}
-                                            <span data-financials-payment-applicable={p.holdableCents}>
-                                                {money(p.holdableCents, p.currencyCode)} available to apply
+                                            <span data-financials-payment-applicable={p.applicableCents}>
+                                                {money(p.applicableCents, p.currencyCode)} available to apply
                                             </span>
                                         </span>
                                     ) : null}
