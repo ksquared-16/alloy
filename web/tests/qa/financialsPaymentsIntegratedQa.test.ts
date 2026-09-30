@@ -187,8 +187,16 @@ describe("the evidence boundaries are carried, not buried", () => {
 /* ── THE SURFACE LOOKS LIKE THE PRODUCT IT IS JUDGING ────────────────────────────────────── */
 
 describe("the QA surface's own chrome", () => {
+    /*
+     * THE SURFACE THIS ASSERTS AGAINST IS THE EXTERNAL ONE.
+     *
+     * `/dev/core-financials-qa` is the Financials human QA the Director has always used: beside
+     * the product rather than inside the operator shell. The authenticated harness under
+     * `adminV2/system/qa` was a second surface that grew the integrated catalog first; it is not
+     * the destination, so these assertions follow the catalog to where it is actually walked.
+     */
     const client = fs.readFileSync(
-        path.join(process.cwd(), "app/adminV2/system/qa/core-financials/DirectorQaClient.tsx"), "utf8",
+        path.join(process.cwd(), "app/dev/core-financials-qa/CoreFinancialsQaReader.tsx"), "utf8",
     );
 
     it("records acceptance on a Bend Pine primary, not a midnight one", () => {
@@ -197,21 +205,55 @@ describe("the QA surface's own chrome", () => {
          * primary a Director meets while walking Financials is Bend Pine, so the one button that
          * records their acceptance was the odd one out.
          */
-        const primary = client.slice(client.indexOf("function Primary"), client.indexOf("function Secondary"));
-        expect(primary).toMatch(/bg-alloy-bend-pine/);
-        expect(primary, "no navy primary").not.toMatch(/bg-alloy-midnight/);
+        const btn = client.slice(client.indexOf("function Btn"));
+        expect(btn).toMatch(/bg-alloy-bend-pine/);
+        expect(btn, "no navy primary").not.toMatch(/bg-alloy-midnight px/);
     });
 
     it("gives the controls the test id they were always passed", () => {
-        /* `data-qa-action` meant every selector written against data-testid matched nothing. */
-        const tail = client.slice(client.indexOf("function Primary"));
-        expect(tail).toMatch(/data-testid=\{testId\}/);
+        /* `data-qa-action` alone meant every selector written against data-testid matched nothing. */
+        const btn = client.slice(client.indexOf("function Btn"));
+        expect(btn).toMatch(/data-testid=\{id\}/);
     });
 
     it("offers all five answers", () => {
         for (const label of [">PASS<", ">FAIL<", ">BLOCKED<", ">DEFERRED<", ">NOT RUN<"]) {
             expect(client, label).toContain(label);
         }
+    });
+
+    it("walks the certified and the deferred, not only the human-driven", () => {
+        /*
+         * THE DEFECT THIS SURFACE CARRIED TOO. Filtering to HUMAN_WALKTHROUGH removed nine
+         * suite-certified Autopay scenarios from the walk — the "no automatic pass" rule
+         * inverted into an automatic absence.
+         */
+        const walk = client.slice(client.indexOf("const walkthrough"), client.indexOf("const resultOf"));
+        expect(walk).toContain("AUTOMATED_CERTIFIED_HUMAN_PENDING");
+        expect(walk).toContain("EXPLICITLY_DEFERRED");
+    });
+
+    it("shows a scenario what it will cost before it is driven", () => {
+        expect(client).toContain("EVIDENCE_LABELS");
+        expect(client).toMatch(/data-qa-evidence-class/);
+    });
+
+    it("meets a deferral with the boundary that explains it", () => {
+        expect(client).toContain("evidenceBoundaries");
+        expect(client).toMatch(/data-qa-evidence-boundary/);
+    });
+
+    it("states which accounts may be spent before the walk begins", () => {
+        expect(client).toContain("fixtureDoctrine");
+        expect(client).toMatch(/data-qa-fixture-doctrine/);
+    });
+
+    it("keeps the notes that make it a human QA surface", () => {
+        /* Observation, expectation and classification — the testimony, not just the verdict. */
+        expect(client).toMatch(/data-qa-observation/);
+        expect(client).toContain("qa-expected");
+        expect(client).toMatch(/data-qa-classification/);
+        expect(client).toMatch(/survive a reload/);
     });
 });
 
