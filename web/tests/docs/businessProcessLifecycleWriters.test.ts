@@ -64,7 +64,7 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
 
 describe("converging the last sender may not drop prior-stage reconciliation", () => {
     const PANEL = "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx";
-    const CANONICAL_EFFECTS = "web/lib/admin/enrollmentStatus/applyEnrollmentStatusTransitionOutcomeEffects.ts";
+    const CANONICAL_EXECUTION = "web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts";
 
     /*
      * The two paths are complementary, not nested. The generic PATCH is the ONLY path that lets an
@@ -78,7 +78,7 @@ describe("converging the last sender may not drop prior-stage reconciliation", (
      */
     it("either the panel still reconciles, or the canonical path has acquired reconciliation", () => {
         const panelReconciles = /stage_transition_reconciliation/.test(read(PANEL));
-        const canonicalReconciles = /applyStageTransitionReconciliation/.test(read(CANONICAL_EFFECTS));
+        const canonicalReconciles = /applyStageTransitionReconciliation/.test(read(CANONICAL_EXECUTION));
         expect(
             panelReconciles || canonicalReconciles,
             "The Current Work panel no longer reconciles prior-stage work and the canonical transition " +
@@ -87,8 +87,20 @@ describe("converging the last sender may not drop prior-stage reconciliation", (
         ).toBe(true);
     });
 
-    it("prior-stage reconciliation has exactly the two known production callers", () => {
-        // If a third appears, the invariant above needs re-deriving rather than assuming.
+    it("the canonical execution path has acquired reconciliation, so the rewire is now unblocked", () => {
+        /*
+         * erun_3c3e4601ce8ab9fb moved it. The panel may now be rewired; until it is, BOTH paths
+         * reconcile, which is safe. This case asserts the acquisition directly rather than leaving it
+         * implied by the disjunction above, so losing it again fails loudly.
+         */
+        const canonical = read(CANONICAL_EXECUTION);
+        expect(canonical).toMatch(/preflightStageTransitionReconciliation/);
+        expect(canonical).toMatch(/applyStageTransitionReconciliation/);
+        expect(canonical).toMatch(/validateStageTransitionReconciliationPayload/);
+    });
+
+    it("prior-stage reconciliation callers are the known set", () => {
+        // If an unexpected one appears, the invariant above needs re-deriving rather than assuming.
         const callers = [
             "web/app/api/admin/opportunities/[id]/route.ts",
             "web/app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts",

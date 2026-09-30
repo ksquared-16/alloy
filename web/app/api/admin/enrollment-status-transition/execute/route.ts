@@ -10,6 +10,7 @@ import { UPDATE_ENROLLMENT_STATUS_ACTION_KEY } from "@/lib/admin/enrollmentStatu
 import { executeEnrollmentStatusTransition } from "@/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition";
 import { resolveEnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/resolveEnrollmentStatusTransitionScope";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
+import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 
 type Body = {
     opportunity_id?: string;
@@ -19,6 +20,8 @@ type Body = {
     note?: string | null;
     bypass_reason?: string | null;
     source_surface?: string | null;
+    /** The operator's answers to a prior-stage reconciliation preflight, when one was required. */
+    stage_transition_reconciliation?: unknown;
     scope?: {
         grain?: "case" | "child" | "candidate";
         opportunity_customer_member_id?: string | null;
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
         userId: ctx.userId,
         departmentId: body.context?.department_id,
         workUnitId: body.context?.work_unit_id,
+        reconciliation: body.stage_transition_reconciliation,
         request: {
             actionKey: UPDATE_ENROLLMENT_STATUS_ACTION_KEY,
             scope,
@@ -91,6 +95,22 @@ export async function POST(request: NextRequest) {
                     : "opportunity_drawer",
         },
     });
+
+    /*
+     * 409 with the preflight, matching the shape the drawer/Current Work dialog already consumes from
+     * the generic PATCH route. Keeping the contract identical is what lets the operator surface move
+     * to this endpoint without redesigning its reconciliation UI.
+     */
+    if (!result.ok && "reconciliationRequired" in result) {
+        return NextResponse.json(
+            {
+                ok: false,
+                error: STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR,
+                stage_transition_reconciliation_preflight: result.reconciliationPreflight,
+            },
+            { status: 409 },
+        );
+    }
 
     if (!result.ok) {
         return NextResponse.json(
