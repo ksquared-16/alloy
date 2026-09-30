@@ -7,8 +7,12 @@
  *     Part 2.3 Preparation Contract  U-P1…U-P7   (lines 137–148)
  *     Part 8   ratified budgets — server composition ≤ 400 ms p75
  *   docs/platform/runtime/runtime-realization-engineering-specification.md  C-22 (default subject)
- *   docs/platform/runtime/stage-work-view-queue-canonical-model.md
- *     §1.4 one evaluator · §0.5.1 Row Grain is Stage-owned · §0.5.2 G9 · §6 D1 invariant
+ *   docs/platform/core/work-view-membership-and-navigation.md   ← CANONICAL for the claims below
+ *     §3 one evaluator · §6 Row Grain is Stage-owned and distinct from Record of Attention ·
+ *     §6 broader Record of Truth under the ten conditions · §4 destination operability
+ *   docs/platform/runtime/stage-work-view-queue-canonical-model.md — planning/diagnosis only;
+ *     the implemented doctrine above was extracted to the canonical owner (2026-09-29). Cite it,
+ *     not that file. Its §0-§8 fork analysis remains an unexecuted convergence plan.
  *
  * ONE server answer. The dependent chain is in-process:
  *

@@ -12,13 +12,13 @@
 
 | Choice | Artifact | Why this row |
 |--------|-----------|----------------|
-| **Selected** | **`record_overview_layouts`** — one logical row per org for **`entity_type = 'job'`** and **`surface = 'overview'`** | **Org-scoped** (tenant-safe), **RLS already defined**, consumed by RRS overview via [`loadRecordOverviewLayoutRow`](../../web/lib/rrs/overview/overviewLayoutV0.ts). Aligns with gap audit “overview config v0” ([implementation-gap-audit.md](../architecture/implementation-gap-audit.md) §4). |
+| **Selected** | **`record_overview_layouts`** — one logical row per org for **`entity_type = 'job'`** and **`surface = 'overview'`** | **Org-scoped** (tenant-safe), **RLS already defined**, consumed by RRS overview via [`loadRecordOverviewLayoutRow`](../../../../web/lib/rrs/overview/overviewLayoutV0.ts). Aligns with gap audit “overview config v0” ([implementation-gap-audit.md](../architecture/implementation-gap-audit.md) §4). |
 | **Not in v1** | Global **`record_layouts`** (`overview_section_order`, schedule `overview_rows` / `layout_blocks`) | **No `org_id`** — a write affects **all tenants** unless governance is platform-admin-only ([config-model-spec.md](../architecture/config-model-spec.md), [ai-agent-foundation.md](../architecture/ai-agent-foundation.md) §C.3). Defer API writes until org-scoped templates or explicit policy exists. |
-| **Not in v1** | **`record_overview_layouts`** for **`schedule`** or non-`overview` surfaces | Schedule chrome still leans on **`record_layouts`** + different `config_json` shape ([recordChrome/types.ts](../../web/lib/recordChrome/types.ts)) — second phase. |
+| **Not in v1** | **`record_overview_layouts`** for **`schedule`** or non-`overview` surfaces | Schedule chrome still leans on **`record_layouts`** + different `config_json` shape ([recordChrome/types.ts](../../../../web/lib/recordChrome/types.ts)) — second phase. |
 
 ### 1.2 Allowed mutations (first slice)
 
-Only operations that fit **fixed templates** ([overview-layout-doctrine.md](../architecture/overview-layout-doctrine.md)) and the existing **v0 overview config** shape ([overviewLayoutV0.ts](../../web/lib/rrs/overview/overviewLayoutV0.ts)):
+Only operations that fit **fixed templates** ([overview-layout-doctrine.md](../architecture/overview-layout-doctrine.md)) and the existing **v0 overview config** shape ([overviewLayoutV0.ts](../../../../web/lib/rrs/overview/overviewLayoutV0.ts)):
 
 | Operation | Example |
 |-----------|---------|
@@ -44,18 +44,18 @@ Only operations that fit **fixed templates** ([overview-layout-doctrine.md](../a
 
 | Aspect | State |
 |--------|--------|
-| **Table** | `entity_type`, `key`, `config_json`, `is_active` — **no org** ([migration](../../supabase/migrations/20260409140000_record_layouts_and_record_actions.sql)). |
-| **API** | **`GET /api/admin/record-layouts`** only ([route](../../web/app/api/admin/record-layouts/route.ts)) — **no POST/PATCH** in app routes. |
+| **Table** | `entity_type`, `key`, `config_json`, `is_active` — **no org** ([migration](../../../../supabase/migrations/20260409140000_record_layouts_and_record_actions.sql)). |
+| **API** | **`GET /api/admin/record-layouts`** only ([route](../../../../web/app/api/admin/record-layouts/route.ts)) — **no POST/PATCH** in app routes. |
 | **Writes** | Seeds / migrations only ([config-api-contract.md](../architecture/config-api-contract.md) §2). |
-| **Types** | [`RecordLayoutConfigJson`](../../web/lib/recordChrome/types.ts) — `overview_section_order`, schedule `overview_rows`, `layout_blocks`. |
+| **Types** | [`RecordLayoutConfigJson`](../../../../web/lib/recordChrome/types.ts) — `overview_section_order`, schedule `overview_rows`, `layout_blocks`. |
 
 ### 2.2 `record_overview_layouts` (org-scoped)
 
 | Aspect | State |
 |--------|--------|
-| **Table** | `org_id`, `entity_type`, `surface`, `template_key`, `config` jsonb, `is_active` ([migration](../../supabase/migrations/20260408140100_record_overview_layouts.sql)). |
+| **Table** | `org_id`, `entity_type`, `surface`, `template_key`, `config` jsonb, `is_active` ([migration](../../../../supabase/migrations/20260408140100_record_overview_layouts.sql)). |
 | **API** | **No** dedicated admin HTTP route in `web/app/api` (grep empty). |
-| **Consumption** | Server-side **`loadRecordOverviewLayoutRow`** / **`loadEffectiveOverviewLayoutConfig`** ([overviewLayoutV0.ts](../../web/lib/rrs/overview/overviewLayoutV0.ts)). |
+| **Consumption** | Server-side **`loadRecordOverviewLayoutRow`** / **`loadEffectiveOverviewLayoutConfig`** ([overviewLayoutV0.ts](../../../../web/lib/rrs/overview/overviewLayoutV0.ts)). |
 | **RLS** | Org + role policies (owner/admin/ops) — consistent with tenant settings. |
 | **Parse** | **`parseOverviewLayoutConfig`** is **lenient** (fills defaults) — v1 **writes** need a **strict** sibling (`parseOverviewLayoutConfigStrict` or Zod). |
 
@@ -177,7 +177,7 @@ Mirror v0 proposal semantics ([ai-agent-system-contract.md](../architecture/ai-a
 
 ## 10. Build order (practical)
 
-1. **Strict validator** — `overviewLayoutConfigStrictSchema` (or Zod) colocated with [`overviewLayoutV0.ts`](../../web/lib/rrs/overview/overviewLayoutV0.ts) types; unit tests.
+1. **Strict validator** — `overviewLayoutConfigStrictSchema` (or Zod) colocated with [`overviewLayoutV0.ts`](../../../../web/lib/rrs/overview/overviewLayoutV0.ts) types; unit tests.
 2. **Admin GET** — `GET /api/admin/record-overview-layouts` for grounding.
 3. **Admin PUT/PATCH** — single write path with `expected_config_version`.
 4. **Migration** — ensure `config` documents carry `version`; add audit tables + RPC `agent_v1_commit_record_overview_layout_apply` (naming TBD).

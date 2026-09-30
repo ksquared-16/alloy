@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Runtime Architecture
 
 **Canonical runtime reference. Describes what exists on 2026-07-31, not what is planned.**

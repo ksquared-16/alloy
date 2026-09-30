@@ -4,18 +4,18 @@
 **Date:** May 2026  
 **Status:** UX implementation cards **UX-G through UX-H + P2-5** shipped — operational architecture ahead of visual layer.  
 **Position in program:** Inserted **after** Forms/Documents Phase 2 **P2-1 → P2-4**; established the **canonical BOS operational interaction reference** for AdminV2.  
-**Successor (visual layer):** [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — **PX-0 complete** (operational visual audit, visual doctrine, PX-1–PX-7 plan); implementation not started.
+**Successor (visual layer):** [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md) — **PX-0 complete** (operational visual audit, visual doctrine, PX-1–PX-7 plan); implementation not started.
 
 **Binding inputs (do not diverge):**
 
 | Phase | Document |
 |-------|----------|
-| Phase 2 foundation | [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) |
-| Phase 2 audit | [`forms_documents_phase_2_step0_audit.md`](./forms_documents_phase_2_step0_audit.md) |
-| Phase 2 design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
-| BOS placement (read-only) | [`docs/product/bos-foundation.md`](../../product/bos-foundation.md), [`bos_ux_coherence_sprint.md`](./bos_ux_coherence_sprint.md) |
-| BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md), [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) |
+| Phase 2 foundation | [`forms_documents_phase_2_packet_review_mvp.md`](../forms_documents_phase_2_packet_review_mvp.md) |
+| Phase 2 audit | [`forms_documents_phase_2_step0_audit.md`](../forms_documents_phase_2_step0_audit.md) |
+| Phase 2 design | [`forms_documents_phase_2_step1_design.md`](../forms_documents_phase_2_step1_design.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../../platform/modules/documents-and-forms.md) |
+| BOS placement (read-only) | [`docs/product/bos-foundation.md`](../../../../product/bos-foundation.md), [`bos_ux_coherence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_ux_coherence_sprint.md) |
+| BOS recommendation program | [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md), [`completed/bos_operational_recommendation_phase1_execution.md`](../completed/bos_operational_recommendation_phase1_execution.md) |
 
 **Product docs to update when cards ship:** `docs/product/documents-and-forms.md` (operator UX sections only).
 
@@ -119,7 +119,7 @@ Every intake/review surface separates three layers:
 
 **Canonical status:** This section is the **shared interaction contract** for Forms/Documents and BOS Operational Recommendation programs. The Forms/Documents case-file + Review assist pattern (`IntakeCaseFileLayout`, `BosReviewSummaryPlaceholder`, `PacketReviewInsightV1`) is the **reference interaction model** for AdminV2 operational intelligence surfaces.
 
-**Mirrored in:** [`bos_operational_recommendation_intelligence_sprint.md`](./bos_operational_recommendation_intelligence_sprint.md) § Unified BOS Operational Interaction Doctrine; binding for Phase 2+ presentation work in [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) (includes **§0.4 doctrine alignment audit** — AdminV2 drawer/queue/handoff convergence checklist).
+**Mirrored in:** [`bos_operational_recommendation_intelligence_sprint.md`](../../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md) § Unified BOS Operational Interaction Doctrine; binding for Phase 2+ presentation work in [`completed/bos_operational_recommendation_phase2_operational_ux.md`](../completed/bos_operational_recommendation_phase2_operational_ux.md) (includes **§0.4 doctrine alignment audit** — AdminV2 drawer/queue/handoff convergence checklist).
 
 ### BOS role
 
@@ -226,7 +226,7 @@ Operational **logic and hierarchy** from this sprint are largely complete. The r
 
 Do **not** reopen review PATCH semantics, rollup contracts, or BOS insight builder logic in the visual refresh sprint unless a presentation-only extension is required.
 
-See: [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md).
+See: [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md).
 
 ---
 
@@ -821,10 +821,10 @@ cd web && npm run test -- tests/forms/bosReviewAssistPresentation.test.ts tests/
 |--------------|--------------|
 | P2-1 – P2-5 | **Complete** — operational architecture + deterministic insight |
 | **This sprint (UX-G–H, D, F, E)** | Shipped — hierarchy, assist, documents, disclosure |
-| **Product refresh** | [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md) — visual layer next |
+| **Product refresh** | [`forms_documents_product_experience_refresh.md`](../forms_documents_product_experience_refresh.md) — visual layer next |
 | P2-6+ enrich | Optional; non-authoritative |
 
-Update [`forms_documents_phase_2_packet_review_mvp.md`](./forms_documents_phase_2_packet_review_mvp.md) implementation table when starting UX work: insert row “UX hardening sprint” before P2-5.
+Update [`forms_documents_phase_2_packet_review_mvp.md`](../forms_documents_phase_2_packet_review_mvp.md) implementation table when starting UX work: insert row “UX hardening sprint” before P2-5.
 
 ---
 

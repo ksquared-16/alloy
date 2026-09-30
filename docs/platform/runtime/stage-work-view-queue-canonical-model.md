@@ -1,9 +1,35 @@
 ---
-title: Stage · Work View · Queue — the canonical operational model
+title: Stage · Work View · Queue — fork diagnosis and convergence plan
 owner: runtime
 status: proposed
-last_reviewed: 2026-07-16
+last_reviewed: 2026-09-29
 supersedes: []
+---
+
+# 0.1 — What this document is, and is not (2026-09-29)
+
+**This file is a diagnosis and convergence plan. It is NOT the canonical runtime authority, and it
+never was — its former title said "canonical" before any of it had been ratified.**
+
+A claim-by-claim ratification of all 36 sections was completed on 2026-09-29. The result: the file
+holds two generations of material, so it cannot become canonical as a whole.
+
+- **The implemented current doctrine was EXTRACTED** to its canonical owner,
+  [`../core/work-view-membership-and-navigation.md`](../core/work-view-membership-and-navigation.md).
+  That document now owns Work View membership, membership evaluation, the one-evaluator principle,
+  participant-position navigation, Row Grain vs Record of Attention, row identity, the page-cap rule,
+  and the queue compatibility boundary. **Cite it, not this file, for any of those.** The material it
+  came from — §0.5.1, §0.5.2 and §9–§11 — is retained below for provenance only.
+- **§0–§8 remain planning and design material.** Their diagnosis of the two-predicate-system fork is
+  still accurate, and the fork is **still live**: the opportunity field allowlist is still three
+  columns, the positional `compat_queue_key` fallback is still bound, and the third hand-written
+  membership predicate still exists. §1.3 and §7 describe work that has **not** been done.
+- **§1.5 is self-superseded** by §0.5.1 and is not current doctrine. It is retained for provenance and
+  must not be implemented as written.
+
+Read this file for *why* the fork exists and *what sequence* would resolve it. Do not read it as a
+statement of how the platform behaves today.
+
 ---
 
 # 0.5 — Reconciliation with the Product Office findings (2026-07-16)

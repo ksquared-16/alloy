@@ -1,9 +1,9 @@
 # Focus Panel Live Editing — Plan & V1 Record
 
 **Status:** Household V1 implemented (June 2026); Children V2 planned.
-**Doctrine:** [`operational-depth-doctrine.md`](../../platform/operator/operational-depth-doctrine.md) (Edit is a capability of Focus) ·
-[`operational-context-boundary.md`](../../platform/operator/operational-context-boundary.md) (truth is read-only) ·
-[`focus-panel-edit-information-doctrine.md`](../../platform/operator/focus-panel-edit-information-doctrine.md).
+**Doctrine:** [`operational-depth-doctrine.md`](../../../platform/operator/operational-depth-doctrine.md) (Edit is a capability of Focus) ·
+[`operational-context-boundary.md`](../../../platform/operator/operational-context-boundary.md) (truth is read-only) ·
+[`focus-panel-edit-information-doctrine.md`](../../../platform/operator/focus-panel-edit-information-doctrine.md).
 
 > **No new mutation path, no write on `OperationalContext`.** Editing reuses the
 > existing person/customer-member PATCH helpers + routes (which own permissions and

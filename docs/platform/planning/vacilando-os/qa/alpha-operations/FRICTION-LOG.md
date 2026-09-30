@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-25
+supersedes: []
+---
+
 # Vacilando Alpha Operations — Friction Log
 
 The lightweight, durable place to record **Operational Learning observations** during real Alpha use, until the Operational Learning runtime is realized. This is the *smallest existing evidence pathway* — a markdown file, appended by hand — **not** a telemetry system, surveillance layer, analytics dashboard, or nightly runner. Its only job is to collect trustworthy operational evidence.

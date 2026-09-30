@@ -1,9 +1,9 @@
 # Tour Scheduling Phase 2 — Foundation (Audit, Doctrine & Implementation Plan)
 
-**Status:** **Band A complete** (May 2026). Planning audit + Band A implementation (Batches 1–6). **Closeout:** [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md).  
+**Status:** **Band A complete** (May 2026). Planning audit + Band A implementation (Batches 1–6). **Closeout:** [`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md).  
 **Date:** 2026-05-27 (Band A closeout: 2026-05-27)  
-**Supersedes for implementation planning:** [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md) (roadmap sketch retained as sibling; Band B+ tracks remain there).  
-**V1 reference:** [`tour_scheduling_v1.md`](./tour_scheduling_v1.md) (shipped, manual QA May 2026).
+**Supersedes for implementation planning:** [`tour_scheduling_phase_2.md`](../../../../sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md) (roadmap sketch retained as sibling; Band B+ tracks remain there).  
+**V1 reference:** [`tour_scheduling_v1.md`](../../../../sprints/archive/05_2026/tour_scheduling_v1.md) (shipped, manual QA May 2026).
 
 ---
 
@@ -484,7 +484,7 @@ Cards are **dependency-ordered**; each card should ship with tests + doc updates
 
 **Band A exit:** Confirm tour → parent receives confirmation email with add-to-calendar links; reminder fires once per offset via `communication_scheduled_sends`; reschedule cancels old reminders. **Default off** until org enables `metadata.tour_comms.enabled`.
 
-**Band A shipped (Batches 1–6):** Config/types, template rendering, ICS/add-to-calendar helpers, reminder scheduling + quiet hours, orchestrator + booking hooks, process-due tour metadata passthrough. See [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md) (canonical closeout) and [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout (implementation detail).
+**Band A shipped (Batches 1–6):** Config/types, template rendering, ICS/add-to-calendar helpers, reminder scheduling + quiet hours, orchestrator + booking hooks, process-due tour metadata passthrough. See [`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) (canonical closeout) and [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout (implementation detail).
 
 **Not shipped in Band A:** External calendar OAuth, two-way sync, public booking redesign, host/internal notifications, ICS download API routes, settings UI for templates/config.
 
@@ -591,7 +591,7 @@ Cards are **dependency-ordered**; each card should ship with tests + doc updates
 
 ### Manual — Band A (priority)
 
-**Staging QA checklist** (full steps in [`tour_scheduling_phase2_band_a_closeout.md`](./tour_scheduling_phase2_band_a_closeout.md) and [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout):
+**Staging QA checklist** (full steps in [`tour_scheduling_phase2_band_a_closeout.md`](../../../../sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) and [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) § Band A closeout):
 
 1. Apply migration `20260527150000_tour_scheduling_comm_scheduled_sends_source.sql`.
 2. Enable `org_settings.metadata.tour_comms.enabled = true` for test org; keep SMS disabled initially.
@@ -635,13 +635,13 @@ Cards are **dependency-ordered**; each card should ship with tests + doc updates
 
 | Doc | Use |
 |-----|-----|
-| [`tour_scheduling_v1.md`](./tour_scheduling_v1.md) | Shipped V1 contract |
-| [`tour_scheduling_phase_2.md`](./tour_scheduling_phase_2.md) | Original roadmap sketch |
+| [`tour_scheduling_v1.md`](../../../../sprints/archive/05_2026/tour_scheduling_v1.md) | Shipped V1 contract |
+| [`tour_scheduling_phase_2.md`](../../../../sprints/archive/05_2026/later-phase/tour_scheduling_phase_2.md) | Original roadmap sketch |
 | [`docs/archive/2026-06-superseded-system/entity-model.md`](../../system/entity-model.md) | Tour vs schedules |
 | [`docs/archive/2026-06-superseded-system/record-system.md`](../../system/record-system.md) | Queue vs entity GET |
 | [`docs/archive/2026-06-superseded-system/workspace-system.md`](../../system/workspace-system.md) | Queue preview doctrine |
 | [`docs/archive/2026-06-superseded-system/actions-and-workflows.md`](../../system/actions-and-workflows.md) | Events + workflows |
-| [`docs/product/communications.md`](../../archive/2026-06-product/communications.md) | Canonical comms path |
+| [`docs/product/communications.md`](../../../2026-06-product/communications.md) | Canonical comms path |
 | [`docs/execution/roadmap-and-gaps.md`](../../execution/roadmap-and-gaps.md) | Program priority |
 
 **Primary code map:** `web/lib/tours/**`, `web/app/api/admin/tours/**`, `web/app/api/public/tour-booking/**`, `web/components/admin/opportunity/tours/**`.

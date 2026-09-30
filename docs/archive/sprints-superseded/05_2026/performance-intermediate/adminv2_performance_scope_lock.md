@@ -2,11 +2,11 @@
 
 **Date:** 2026-05-19 (dept runtime **closed** 2026-05-20)  
 **Status:** Locked for execution — **Lane B `/dept` runtime is the canonical reference implementation** (work-unit replication next; drawer deferred)  
-**Prior step:** Step 0 operational audit (conversation + [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md), [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md))
+**Prior step:** Step 0 operational audit (conversation + [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md), [`adminv2_performance_deep_dive_phase0_audit.md`](../../../../sprints/archive/05_2026/adminv2_performance_deep_dive_phase0_audit.md))
 
 **Binding governance (must not regress):**
 - [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
-- [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
+- [`adminv2_performance_phase2_load_path_architecture.md`](../../../../sprints/archive/05_2026/adminv2_performance_phase2_load_path_architecture.md)
 - Queue / record doctrine in active `docs/archive/2026-06-superseded-system/workspace-system.md`, `docs/archive/2026-06-superseded-system/record-system.md`
 
 **Contract tests (required green before merge of any lane):**  

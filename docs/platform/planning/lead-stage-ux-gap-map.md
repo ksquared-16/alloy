@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-01
+supersedes: []
+---
+
 # Lead Stage Configuration UX — Gap Map
 
 Audit of the stage editor as it stands against the certified Lead operating model.

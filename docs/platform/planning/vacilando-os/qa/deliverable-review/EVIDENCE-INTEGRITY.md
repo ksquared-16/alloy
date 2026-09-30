@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-04
+supersedes: []
+---
+
 # Deliverable Review Evidence Integrity V1
 
 ## Root cause (W-4 “Automated enforcement tests” = failed)

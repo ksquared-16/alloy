@@ -7,8 +7,8 @@
 
 **Inputs:**
 
-- [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md)
-- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md)
+- [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md)
+- [`lifecycle_builder_hardening_and_v2_canonical_model.md`](../../../../sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md)
 - [`lifecycle_builder_configuration_completion_fixes.md`](./lifecycle_builder_configuration_completion_fixes.md)
 
 **North star:** Lifecycle Builder feels like a **polished production product** — operators configure **Stages**, trust saves, and never see implementation vocabulary.
@@ -658,8 +658,8 @@ flowchart TB
 
 ## Appendix C — Related docs (do not duplicate)
 
-- V2 feature scope: [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) §3–6
-- Work unit doctrine: [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) §3
+- V2 feature scope: [`lifecycle_v2_discovery_and_operating_model.md`](../../../../sprints/archive/06_2026/lifecycle_v2_discovery_and_operating_model.md) §3–6
+- Work unit doctrine: [`lifecycle_builder_hardening_and_v2_canonical_model.md`](../../../../sprints/archive/06_2026/lifecycle_builder_hardening_and_v2_canonical_model.md) §3
 - Prior bugfixes: [`lifecycle_builder_configuration_completion_fixes.md`](./lifecycle_builder_configuration_completion_fixes.md)
 
 ---

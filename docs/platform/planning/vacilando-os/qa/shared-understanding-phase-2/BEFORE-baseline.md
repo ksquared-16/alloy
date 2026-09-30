@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Phase 2A — Evidence baseline (Shared Understanding visibility)
 
 Durable sources traced: Product Definition (`accepted_decisions`{statement,rationale,provenance,supersedes}, `constraints`{hard}, `rejected_patterns`{revisit_if}, `patterns`, `goals`, `known_tradeoffs`, `operator_notes`), Capability (`known_issues`, `current_implementation`, `roadmap`, `maturity`), Package (`gap_report.findings`, `suggested_acceptance_criteria`, `risks`, `readiness_verdict`), Mission store (real attempts). All durable (JSONL, survive restart/provider/session).

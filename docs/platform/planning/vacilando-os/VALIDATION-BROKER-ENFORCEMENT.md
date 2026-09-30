@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Validation broker enforcement (Vacilando)
 
 **Status:** Active (2026-07-29). Learned from Access & Roles Phase 1: a Claude implement worker ran `npx tsc` under a broad Bash allowlist, bypassed the host lease, spiked load, and burned tokens without finishing.

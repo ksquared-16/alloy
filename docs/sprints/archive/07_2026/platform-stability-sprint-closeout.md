@@ -108,7 +108,7 @@ cd web && npm run test -- \
 | Inline drawer-only record on WU host | `FocusPanelSurface` + Presentation Runtime V2 |
 | `workUnitRevealRowsReady` export | `workUnitQueueLaneRevealSettled` + page reveal policy |
 
-Canonical reference: [`docs/platform/governance/runtime-ownership-migration-map.md`](../../platform/governance/runtime-ownership-migration-map.md).
+Canonical reference: [`docs/platform/governance/runtime-ownership-migration-map.md`](../../../platform/governance/runtime-ownership-migration-map.md).
 
 Supplemental hold tests (not in protected list): `queueRegionHold.test.ts`, `workUnitSurfaceHold.test.ts`.
 

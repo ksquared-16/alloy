@@ -1,6 +1,6 @@
 ---
 owner: operator
-status: draft — specification, not approved for production integration
+status: proposed
 last_reviewed: 2026-08-22
 supersedes: []
 ---

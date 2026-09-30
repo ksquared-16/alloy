@@ -50,7 +50,7 @@ Current Perspectives card (Lead stage capture):
 | Display order | Rail ordering | OK but feels like DB column |
 | Assign in Layouts (link only) | Layout slot assignment | No visual connection to runtime |
 
-This violates [Alloy Visual Language](../platform/operator/alloy-visual-language.md) §1: *business meaning before fields*.
+This violates [Alloy Visual Language](../../../platform/operator/alloy-visual-language.md) §1: *business meaning before fields*.
 
 ## 1.3 Perspectives feel like metadata, not operational lenses
 
@@ -456,7 +456,7 @@ Product / design sign-off required before implementation:
 ## Related
 
 - [Phase 2B visual gate](./configuration_runtime_phase_2b_design_review.md)  
-- [Configuration Runtime design alignment](../../system/configuration-runtime-design-alignment.md)  
-- [Universal Card System](../platform/operator/universal-card-system.md)  
-- [Alloy Visual Language](../platform/operator/alloy-visual-language.md)  
-- [Configuration ownership doctrine](../../system/configuration-ownership-doctrine.md)
+- [Configuration Runtime design alignment](../../../system/configuration-runtime-design-alignment.md)  
+- [Universal Card System](../../../platform/operator/universal-card-system.md)  
+- [Alloy Visual Language](../../../platform/operator/alloy-visual-language.md)  
+- [Configuration ownership doctrine](../../../system/configuration-ownership-doctrine.md)

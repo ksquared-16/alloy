@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Authority Path Inventory
 
 **Mission** `msn_7782d3e37dfeebd871` v1 · phase *Authority Path Inventory* · assignment `asg_5af4b86b31f14c`

@@ -15,7 +15,7 @@
 | Enrollment disposition matrix | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) |
 | Lifecycle Builder subject-grain bridge | [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) |
 | Stage, location, access | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) |
-| Developer contract | [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) |
+| Developer contract | [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) |
 | Queue row context (partial) | [`completed/queue_row_context_consumption_closeout.md`](./completed/queue_row_context_consumption_closeout.md) |
 | Drawer subject pipe + display | [`completed/drawer_active_subject_context_closeout.md`](./completed/drawer_active_subject_context_closeout.md), [`completed/drawer_subject_display_closeout.md`](./completed/drawer_subject_display_closeout.md) |
 | Prior child/candidate runtime | [`05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](../05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) · `childGrainEnrollmentQueue.ts` · `candidateGrainWaitlistQueue.ts` |
@@ -571,7 +571,7 @@ These phases are **implementation** — none ship in the design sprint.
 - Drawer open + navigator for ocmrow/pcrow ids
 - Determinism tests for row id + context attach
 
-**AdminV2 runtime:** Follow [`adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md) — no partial above-fold reveal; stale-response guards on row id changes.
+**AdminV2 runtime:** Follow [`adminv2-runtime-performance-doctrine.md`](../../../system/adminv2-runtime-performance-doctrine.md) — no partial above-fold reveal; stale-response guards on row id changes.
 
 ---
 
@@ -636,7 +636,7 @@ These phases are **implementation** — none ship in the design sprint.
 | Grain expansion § Phase 6 | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) §12 |
 | Entity status § child-grain queues | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) §7.6 |
 | Enrollment matrix Phase 5–6 | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §7 |
-| Developer contract | [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) |
+| Developer contract | [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) |
 | Queue consumption closeout | [`completed/queue_row_context_consumption_closeout.md`](./completed/queue_row_context_consumption_closeout.md) |
 | Drawer closeouts | [`completed/drawer_active_subject_context_closeout.md`](./completed/drawer_active_subject_context_closeout.md), [`completed/drawer_subject_display_closeout.md`](./completed/drawer_subject_display_closeout.md) |
 

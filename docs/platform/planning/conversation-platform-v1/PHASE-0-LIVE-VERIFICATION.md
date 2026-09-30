@@ -1,6 +1,6 @@
 ---
 title: Phase 0 — Live Verification Evidence
-status: verified
+status: sprint
 date: 2026-07-30
 environment: Supabase project `ikaxilmwmrmbagoidedu` (the tenant every managed worktree writes)
 method: read-only psql via DATABASE_URL, `SET default_transaction_read_only = on`

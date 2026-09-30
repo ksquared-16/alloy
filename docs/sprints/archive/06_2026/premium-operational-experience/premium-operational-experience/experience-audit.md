@@ -44,13 +44,13 @@ These two issues are the root of most surface-level symptoms. Fixing them upgrad
 
 ## NAV-1 — Work-unit navigation is a full page reload
 
-**Current behavior.** Operator navigation between surfaces commits through `adminV2CommitNavigation()`, which calls `window.location.assign()` — a complete document reload — rather than Next.js soft routing. ([web/lib/adminV2/shellNavigation.ts:28](web/lib/adminV2/shellNavigation.ts), `AdminV2NavLink` click handler [web/app/adminV2/components/navigation/AdminV2NavLink.tsx:59](web/app/adminV2/components/navigation/AdminV2NavLink.tsx).) The layout re-renders, the bootstrap re-fetches, the DOM churns, and all in-memory session caches (slug route cache, bootstrap cache, drawer VM cache) are wiped.
+**Current behavior.** Operator navigation between surfaces commits through `adminV2CommitNavigation()`, which calls `window.location.assign()` — a complete document reload — rather than Next.js soft routing. ([web/lib/adminV2/shellNavigation.ts:28](../../../../../../web/lib/adminV2/shellNavigation.ts), `AdminV2NavLink` click handler [web/app/adminV2/components/navigation/AdminV2NavLink.tsx:59](../../../../../../web/app/adminV2/components/navigation/AdminV2NavLink.tsx).) The layout re-renders, the bootstrap re-fetches, the DOM churns, and all in-memory session caches (slug route cache, bootstrap cache, drawer VM cache) are wiped.
 
 **Operator perception.** "I clicked a queue and the screen reloaded." Scroll position resets, focus is lost, any in-flight motion snaps to its end state, and the sidebar visibly re-mounts. The shell *appears* persistent only because Next.js re-mounts the layout layer fast — it is not actually surviving the navigation. This is the single loudest "I am using a website" signal in the product.
 
 **Owner.** Navigation.
 
-**Root cause.** Intentional. The comment at [AdminV2NavLink.tsx:30](web/app/adminV2/components/navigation/AdminV2NavLink.tsx) is explicit: full reload "avoids dead UI from cancelled `router.push` / soft `<Link>` transitions during heavy RSC work." The work-unit page is a heavy `"use client"` surface whose data is fetched client-side after mount; under load, the App Router can cancel a soft navigation and leave a dead frame. Full reload is a *correctness shield* against that failure mode. It trades the OS illusion for reliability.
+**Root cause.** Intentional. The comment at [AdminV2NavLink.tsx:30](../../../../../../web/app/adminV2/components/navigation/AdminV2NavLink.tsx) is explicit: full reload "avoids dead UI from cancelled `router.push` / soft `<Link>` transitions during heavy RSC work." The work-unit page is a heavy `"use client"` surface whose data is fetched client-side after mount; under load, the App Router can cancel a soft navigation and leave a dead frame. Full reload is a *correctness shield* against that failure mode. It trades the OS illusion for reliability.
 
 **Desired experience.** The operator never leaves. Clicking a work unit changes the operational context the way switching apps on a well-built OS changes the foreground — the frame stays, the content swaps, prior state is held until the new state is ready, and nothing reloads. Confidence is continuous because the world never blinks.
 
@@ -77,7 +77,7 @@ See the roadmap: this is **Track 1 (Persistent Runtime)** and must not be attemp
 
 ## NAV-2 — Caches are in-memory and die on every hard load
 
-**Current behavior.** Slug route cache, bootstrap session cache, and drawer VM session cache are in-memory `Map`s with session TTLs. ([web/lib/admin/workUnitSlugRouteCache.ts](web/lib/admin/workUnitSlugRouteCache.ts), `drawerViewModelSessionCache`.) They survive *soft* navigation but are cleared by the NAV-1 reload and by any hard refresh.
+**Current behavior.** Slug route cache, bootstrap session cache, and drawer VM session cache are in-memory `Map`s with session TTLs. ([web/lib/admin/workUnitSlugRouteCache.ts](../../../../../../web/lib/admin/workUnitSlugRouteCache.ts), `drawerViewModelSessionCache`.) They survive *soft* navigation but are cleared by the NAV-1 reload and by any hard refresh.
 
 **Operator perception.** "I was just here ten seconds ago — why is it loading again?" Re-entering a work unit, or reopening a record just closed, pays a cold fetch as if it were never seen. The product has no memory of the immediate past.
 
@@ -97,7 +97,7 @@ See the roadmap: this is **Track 1 (Persistent Runtime)** and must not be attemp
 
 ## WS-1 — KPI strip reveals after the rest of the surface
 
-**Current behavior.** The workspace reveal gate has a `kpi_region_ready` phase — but `workspaceRevealKpiRegionReady()` returns `true` unconditionally ([web/lib/adminV2/workspaceRevealGate.ts:129](web/lib/adminV2/workspaceRevealGate.ts)), so the gate never waits for KPI data. KPI placements are fetched as deferred background work (`scheduleAdminV2BackgroundWork(..., { idleTimeoutMs: 2500 })`) *after* the page has already revealed ([web/app/adminV2/workspace/page.tsx:371](web/app/adminV2/workspace/page.tsx)). On the work-unit surface the parallel gate `workUnitRevealKpiReady()` is correctly *defined* but **never included** in `computeWorkUnitRevealGate()`.
+**Current behavior.** The workspace reveal gate has a `kpi_region_ready` phase — but `workspaceRevealKpiRegionReady()` returns `true` unconditionally ([web/lib/adminV2/workspaceRevealGate.ts:129](../../../../../../web/lib/adminV2/workspaceRevealGate.ts)), so the gate never waits for KPI data. KPI placements are fetched as deferred background work (`scheduleAdminV2BackgroundWork(..., { idleTimeoutMs: 2500 })`) *after* the page has already revealed ([web/app/adminV2/workspace/page.tsx:371](../../../../../../web/app/adminV2/workspace/page.tsx)). On the work-unit surface the parallel gate `workUnitRevealKpiReady()` is correctly *defined* but **never included** in `computeWorkUnitRevealGate()`.
 
 **Operator perception.** The header and tiles appear, the operator's eye settles — and then numbers fade into the KPI strip a beat later. The surface looks like it is still finishing assembling itself. Even when the geometry is reserved ("quiet reserve"), the *value appearing* draws the eye and reads as load.
 
@@ -124,7 +124,7 @@ Navigate
 
 ## WS-2 — Health metrics and sections have independent fetch owners
 
-**Current behavior.** Queue summaries are owned by the page component; the operational/health region is hydrated by the department bootstrap separately; KPI is its own deferred fetch (WS-1). There is no single "operational bootstrap" that bundles summaries + metrics + KPI into one readiness signal. ([web/app/adminV2/workspace/page.tsx:272](web/app/adminV2/workspace/page.tsx) — dept and work-unit GETs run in parallel but are not bundled with KPI/metrics.)
+**Current behavior.** Queue summaries are owned by the page component; the operational/health region is hydrated by the department bootstrap separately; KPI is its own deferred fetch (WS-1). There is no single "operational bootstrap" that bundles summaries + metrics + KPI into one readiness signal. ([web/app/adminV2/workspace/page.tsx:272](../../../../../../web/app/adminV2/workspace/page.tsx) — dept and work-unit GETs run in parallel but are not bundled with KPI/metrics.)
 
 **Operator perception.** The workspace "appears to assemble itself" — different regions resolve on their own clocks. Even sub-second, the staggering registers as construction.
 
@@ -144,7 +144,7 @@ Navigate
 
 ## WU-1 — A skeleton appears while *leaving* a work unit
 
-**Current behavior.** Exiting a work unit unmounts `WorkUnitSlugRouteHost`, which renders `WorkUnitWorkspaceColdShell` (lifecycle-style card + lane loader skeleton) during the re-warm. ([web/components/admin/workspace/WorkUnitSlugRouteHost.tsx:106](web/components/admin/workspace/WorkUnitSlugRouteHost.tsx).) Because exit is a full route change (NAV-1), the host genuinely remounts.
+**Current behavior.** Exiting a work unit unmounts `WorkUnitSlugRouteHost`, which renders `WorkUnitWorkspaceColdShell` (lifecycle-style card + lane loader skeleton) during the re-warm. ([web/components/admin/workspace/WorkUnitSlugRouteHost.tsx:106](../../../../../../web/components/admin/workspace/WorkUnitSlugRouteHost.tsx).) Because exit is a full route change (NAV-1), the host genuinely remounts.
 
 **Operator perception.** "Why am I seeing a loading skeleton on my way *out*?" Loading states belong to arrival, not departure. A skeleton on exit tells the operator the software is doing bookkeeping they should never witness.
 
@@ -167,7 +167,7 @@ Never a skeleton on the *outbound* path.
 
 ## WU-2 — Back-navigation briefly exposes a stale queue
 
-**Current behavior.** On a pathname change, `AdminDrawerContext` detects the change and calls `closeDrawer()` ([web/contexts/AdminDrawerContext.tsx:1307](web/contexts/AdminDrawerContext.tsx)). The queue behind it is rendered from a client cache (`peekCachedQueueItemsForPill`) that was last touched before the drawer opened and was never invalidated while the drawer was up. So the first frame after back shows rows from a previous session state. ([web/lib/workspace/workUnitQueueLaneDisplay.ts:49](web/lib/workspace/workUnitQueueLaneDisplay.ts).)
+**Current behavior.** On a pathname change, `AdminDrawerContext` detects the change and calls `closeDrawer()` ([web/contexts/AdminDrawerContext.tsx:1307](../../../../../../web/contexts/AdminDrawerContext.tsx)). The queue behind it is rendered from a client cache (`peekCachedQueueItemsForPill`) that was last touched before the drawer opened and was never invalidated while the drawer was up. So the first frame after back shows rows from a previous session state. ([web/lib/workspace/workUnitQueueLaneDisplay.ts:49](../../../../../../web/lib/workspace/workUnitQueueLaneDisplay.ts).)
 
 **Operator perception.** "Did my action not save? That row still shows the old status." A flash of stale truth undermines confidence in the most load-bearing way possible — it makes the operator doubt whether their work took effect.
 
@@ -211,7 +211,7 @@ The drawer subsystem is the most mature surface — model-swap phase machine, ho
 
 ## DRW-1 — Drawers have no close animation
 
-**Current behavior.** Open has motion (modal: `animate-in fade-in zoom-in-[0.99] duration-300` [web/components/admin/Drawer.tsx:576](web/components/admin/Drawer.tsx)). Close has none — the portal unmounts instantly; only the backdrop fades (200ms). Sidebar-presentation drawers have **no entry animation either**.
+**Current behavior.** Open has motion (modal: `animate-in fade-in zoom-in-[0.99] duration-300` [web/components/admin/Drawer.tsx:576](../../../../../../web/components/admin/Drawer.tsx)). Close has none — the portal unmounts instantly; only the backdrop fades (200ms). Sidebar-presentation drawers have **no entry animation either**.
 
 **Operator perception.** The record vanishes. Focus snaps back to the queue with a jolt. Asymmetric motion (smooth in, hard out) feels broken in a way operators feel but can't name.
 
@@ -233,7 +233,7 @@ Close
 
 ## DRW-2 — Drawer→drawer swaps jump (no crossfade, stale flash)
 
-**Current behavior.** Linked navigation uses a phase machine (`swap_preparing → applying_vm`) that *holds prior content* while the target VM fetches — good. But when the target applies, the body content switches with **no visual transition** ([drawerRuntimePhase.ts](web/lib/adminV2/viewModel/drawer/drawerRuntimePhase.ts)); on a slow fetch the operator sees the *old* record's data, then it hard-cuts to the new one.
+**Current behavior.** Linked navigation uses a phase machine (`swap_preparing → applying_vm`) that *holds prior content* while the target VM fetches — good. But when the target applies, the body content switches with **no visual transition** ([drawerRuntimePhase.ts](../../../../../../web/lib/adminV2/viewModel/drawer/drawerRuntimePhase.ts)); on a slow fetch the operator sees the *old* record's data, then it hard-cuts to the new one.
 
 **Operator perception.** "Wait — was that the right record? Did it reload?" The hard cut from stale to fresh is ambiguous: the operator can't tell if data updated or the drawer reloaded. Worse, briefly seeing the *previous* person's name under the *new* person's header is a trust hazard.
 
@@ -256,7 +256,7 @@ Critically: identity (name/avatar) and body must swap *together* so the operator
 
 ## DRW-3 — Opportunity drawer silently discards unsaved edits
 
-**Current behavior.** The unsaved-changes guard (`PersonDrawerUnsavedChangesModal`, `drawerOperatingIsDirty()`) is wired **only** for the Person drawer ([web/contexts/AdminDrawerContext.tsx:88](web/contexts/AdminDrawerContext.tsx)). The Opportunity drawer ignores dirty state on back/close — edits are silently dropped.
+**Current behavior.** The unsaved-changes guard (`PersonDrawerUnsavedChangesModal`, `drawerOperatingIsDirty()`) is wired **only** for the Person drawer ([web/contexts/AdminDrawerContext.tsx:88](../../../../../../web/contexts/AdminDrawerContext.tsx)). The Opportunity drawer ignores dirty state on back/close — edits are silently dropped.
 
 **Operator perception.** Catastrophic when it bites: "I typed all that and it's gone." This is not a polish issue; it is a **trust-and-data-integrity** failure. One occurrence permanently lowers the operator's willingness to trust inline editing.
 
@@ -277,7 +277,7 @@ Back / close with dirty state (ANY drawer)
 
 ## DRW-4 — The drawer stack is lost on refresh
 
-**Current behavior.** The navigation stack (Opportunity → Person → Location → back → back) lives in React state only. A refresh restores the *current* drawer from the URL `:recordId` segment but discards the stack ([web/contexts/AdminDrawerContext.tsx](web/contexts/AdminDrawerContext.tsx)), so "back" is gone.
+**Current behavior.** The navigation stack (Opportunity → Person → Location → back → back) lives in React state only. A refresh restores the *current* drawer from the URL `:recordId` segment but discards the stack ([web/contexts/AdminDrawerContext.tsx](../../../../../../web/contexts/AdminDrawerContext.tsx)), so "back" is gone.
 
 **Operator perception.** "I can't get back to where I was." After a refresh, the breadcrumb trail evaporates. Minor in frequency, but it contradicts the OS promise that context is durable.
 
@@ -291,7 +291,7 @@ Back / close with dirty state (ANY drawer)
 
 ## DRW-5 — Cold drawer open shows a "Preparing record…" overlay
 
-**Current behavior.** Opportunity drawer cold-open waits for bootstrap + `drawer_primary` + header actions behind an `OpportunityDrawerOpeningOverlay` ("Preparing record…", ~500–1500ms cold) before the drawer mounts ([OpportunityDrawerOpeningOverlay.tsx](web/components/admin/OpportunityDrawerOpeningOverlay.tsx)). Warm (prefetched) opens skip it.
+**Current behavior.** Opportunity drawer cold-open waits for bootstrap + `drawer_primary` + header actions behind an `OpportunityDrawerOpeningOverlay` ("Preparing record…", ~500–1500ms cold) before the drawer mounts ([OpportunityDrawerOpeningOverlay.tsx](../../../../../../web/components/admin/OpportunityDrawerOpeningOverlay.tsx)). Warm (prefetched) opens skip it.
 
 **Operator perception.** On the warm path: instant, excellent. On the cold path: a branded wait that, while honest, is still a *wait the operator is asked to watch*. The overlay is the polite version of a spinner.
 
@@ -311,8 +311,8 @@ Back / close with dirty state (ANY drawer)
 
 **Current behavior.** Cards themselves are clean: stateless, parent-fed renderers; no self-fetch; parent-owned fixed-geometry skeletons; height-locked refresh prevents layout jump ([QueueBlock.tsx:1787](web/app/adminV2/components/workspace/blocks/QueueBlock.tsx)). **Editing**, however, has two patterns colliding:
 
-- **Pattern A (preferred):** `LayoutRuntimeDrawerEditProvider` — inline edit, **optimistic** patch dispatch, coordinated multi-section save via `registerDrawerOperatingEditSection()`, queue refresh on save ([web/components/layout/LayoutRuntimeDrawerEditProvider.tsx](web/components/layout/LayoutRuntimeDrawerEditProvider.tsx)).
-- **Pattern B (legacy):** `EditablePersonContactCard` — self-managed state, **pessimistic** blur-save, own error handling, `savedFlash` feedback, no coordination ([web/components/admin/opportunity/EditablePersonContactCard.tsx:67](web/components/admin/opportunity/EditablePersonContactCard.tsx)).
+- **Pattern A (preferred):** `LayoutRuntimeDrawerEditProvider` — inline edit, **optimistic** patch dispatch, coordinated multi-section save via `registerDrawerOperatingEditSection()`, queue refresh on save ([web/components/layout/LayoutRuntimeDrawerEditProvider.tsx](../../../../../../web/components/layout/LayoutRuntimeDrawerEditProvider.tsx)).
+- **Pattern B (legacy):** `EditablePersonContactCard` — self-managed state, **pessimistic** blur-save, own error handling, `savedFlash` feedback, no coordination ([web/components/admin/opportunity/EditablePersonContactCard.tsx:67](../../../../../../web/components/admin/opportunity/EditablePersonContactCard.tsx)).
 
 There is **no shared save-acknowledgement**: Pattern A fires an `onSaved` callback with no required visual; Pattern B sets a local flash. Optimism is per-pattern. Inline-vs-toggle is per-pattern. Dirty-guarding is per-drawer (DRW-3).
 
@@ -338,7 +338,7 @@ Edit a field (any card, anywhere)
 
 ## CARD-2 — Optimistic patches don't carry through to the queue on close
 
-**Current behavior.** The save coordinator applies optimistic patches to the drawer VM and confirms server-side per section, with per-section rollback ([drawerOperatingSaveCoordinator.ts](web/lib/admin/drawer/drawerOperatingSaveCoordinator.ts)) — excellent within the drawer. But those patches are not propagated to the queue cache, which is why WU-2 shows stale rows on return.
+**Current behavior.** The save coordinator applies optimistic patches to the drawer VM and confirms server-side per section, with per-section rollback ([drawerOperatingSaveCoordinator.ts](../../../../../../web/lib/admin/drawer/drawerOperatingSaveCoordinator.ts)) — excellent within the drawer. But those patches are not propagated to the queue cache, which is why WU-2 shows stale rows on return.
 
 **Operator perception.** See WU-2 — the edit "didn't take" on the queue even though it took in the drawer.
 

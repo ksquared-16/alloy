@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-10
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -70,8 +70,9 @@ Two consequences worth stating, because getting either wrong looks like success:
 - **A child with no track has no child stage.** Their effective stage is their context's, per the
   inherit-context rule below — not the work unit they were opened from, and not their family's
   status.
-- `membership_criteria_v1` on a stage declares subject grain (case / child / candidate),
-  count unit, and location scope. It contains **no status lists** — the old
+- `queue_membership_v1` on a stage declares subject grain (case / child / candidate),
+  count unit, and location scope. (`membership_criteria_v1` is the proposed successor name for this
+  key and has no TypeScript or migration presence — it is not current runtime configuration.) It contains **no status lists** — the old
   `included_status_keys` / `included_disposition_keys` pattern re-derived membership from
   durable state and drifted (three divergent copies existed at audit time).
 - Queue lanes and Work View scoping are *derived* from stage membership **and** Effective
@@ -277,7 +278,7 @@ org scope, permissions, audit, and the requested / proposed / committed distinct
 | Status explosion encoding work (`tour_scheduled`, `registration_pending`) | Stage + work templates |
 | Stage membership derived from status lists | Persisted `stage_key` |
 | Queue membership as separate authored config | Derived from stage membership |
-| Status filters as membership criteria | `membership_criteria_v1` (grain + scope only) |
+| Status filters as membership criteria | `queue_membership_v1` (grain + scope only) |
 | Generic `update_status` operator action | Domain verbs → outcome execution |
 | Stages that own surfaces/layout | Surface refs assigned by Work Views |
 | Stages with no work ("Qualification") | Fold the work into the stage that owns it |

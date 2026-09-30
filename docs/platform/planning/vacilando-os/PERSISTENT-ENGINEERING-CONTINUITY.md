@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Persistent Engineering Continuity
 
 *The constitutional definition of how engineering work persists indefinitely, independent of any provider conversation.*

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Vertical Slice V1 — Certification Results
 
 Live end-to-end certification of the Vacilando operating model:

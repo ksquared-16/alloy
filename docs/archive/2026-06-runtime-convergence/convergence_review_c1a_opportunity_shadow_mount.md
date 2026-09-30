@@ -9,7 +9,7 @@
 
 **Original verdict (723386e0): REJECTED**
 **Reason:** A production-breaking regression bundled in the commit — an accidental deletion of a still-used import in `OpportunityDrawerVmRuntime.tsx` — causes an **unconditional compile error** in the production opportunity drawer. It is **not flag-gated** and **not rollback-by-flags**. This is a hard FAIL on Gates 1, 4, and 8.
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · contracts [`adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md), [`drawer-view-model-runtime-contract.md`](../system/drawer-view-model-runtime-contract.md).
+**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · contracts [`adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md), [`drawer-view-model-runtime-contract.md`](../../system/drawer-view-model-runtime-contract.md).
 
 ---
 

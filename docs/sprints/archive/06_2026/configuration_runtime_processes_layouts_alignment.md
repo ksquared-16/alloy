@@ -4,7 +4,7 @@
 **Date:** June 2026  
 **Supersedes for planning:** partial UI passes on old Business Processes page; [process work views realignment](./configuration_runtime_process_work_views_realignment.md) (exploratory — folded here)
 
-**Canonical UX references:** [Concept A freeze](./configuration_runtime_concept_a_freeze.md) · [green/pine mockups](./configuration-runtime-bp-ux-redesign/) · [Universal Card System](../../platform/operator/universal-card-system.md) · [Configuration Mode doctrine](../../system/configuration-mode-doctrine.md) — **do not use blue/gray legacy admin styling**
+**Canonical UX references:** [Concept A freeze](./configuration_runtime_concept_a_freeze.md) · [green/pine mockups](./configuration-runtime-bp-ux-redesign/) · [Universal Card System](../../../platform/operator/universal-card-system.md) · [Configuration Mode doctrine](../../../system/configuration-mode-doctrine.md) — **do not use blue/gray legacy admin styling**
 
 ---
 
@@ -375,5 +375,5 @@ Before coding Phase 1–2, confirm:
 
 - [configuration_runtime_concept_a_freeze.md](./configuration_runtime_concept_a_freeze.md) — mockup targets  
 - [configuration_runtime_process_work_views_realignment.md](./configuration_runtime_process_work_views_realignment.md) — exploratory notes (superseded by this doc for planning)  
-- [universal-card-system.md](../../platform/operator/universal-card-system.md) — card primitives  
-- [configuration-ownership-doctrine](../../system/configuration-ownership-doctrine.md) — ownership boundaries  
+- [universal-card-system.md](../../../platform/operator/universal-card-system.md) — card primitives  
+- [configuration-ownership-doctrine](../../../system/configuration-ownership-doctrine.md) — ownership boundaries  

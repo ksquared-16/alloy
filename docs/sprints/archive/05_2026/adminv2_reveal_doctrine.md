@@ -1,6 +1,6 @@
 # AdminV2 reveal doctrine — routes and drawers
 
-Prerequisites: [adminv2_speed_sprint.md](./adminv2_speed_sprint.md), [adminv2_route_shell_pipeline.md](./adminv2_route_shell_pipeline.md), [adminv2_drawer_pipeline.md](./adminv2_drawer_pipeline.md).
+Prerequisites: [adminv2_speed_sprint.md](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_speed_sprint.md), [adminv2_route_shell_pipeline.md](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_route_shell_pipeline.md), [adminv2_drawer_pipeline.md](./adminv2_drawer_pipeline.md).
 
 ## Template-level scope (platform, not Enrollment-only)
 

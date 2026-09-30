@@ -5,8 +5,8 @@
 **Authority:** Guides Phase 3 (shell/workspace/dept/work-unit), Phase 4 (drawer), Phase 5 (visual loading)
 
 **Binding doctrine (unchanged):**
-- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
-- Evidence: [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md), [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md)
+- [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_phase1_navigation_and_interaction_contracts.md)
+- Evidence: [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md), [`adminv2_performance_rebuild_audit.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_performance_rebuild_audit.md)
 
 **Contract tests (must pass after every implementation phase):**  
 `web/tests/admin/adminV2NavigationContracts.test.ts`, `adminV2QueueRowClick.test.ts`, `adminV2WorkUnitLaneLocalState.test.ts`, `adminV2DrawerLoadingCoherence.test.ts`, `opportunityDrawerQueuePreviewSeed.test.ts`

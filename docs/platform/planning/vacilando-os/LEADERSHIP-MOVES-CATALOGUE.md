@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Leadership Moves Catalogue
 
 *The finite, learnable repertoire of counsel acts through which Director improves engineering thinking.*

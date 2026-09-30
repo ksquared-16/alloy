@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Convergence Matrix
 
 **One place to understand duplication.** For every communications capability:

@@ -10,7 +10,7 @@
 ## 0. Summary
 
 This sprint moves presentation configuration from hardcoded TypeScript
-([`web/lib/entityPresentation.ts`](../web/lib/entityPresentation.ts), "Layer 0")
+([`web/lib/entityPresentation.ts`](../../../web/lib/entityPresentation.ts), "Layer 0")
 into a configurable, versioned, database-backed layer — **without touching the
 live runtime**. It delivers the schema, persistence, resolver, migration
 utility, a preview renderer, and a config UI, all behind a flag and isolated
@@ -51,7 +51,7 @@ Layout (LayoutDoc)
          └─ Item  (field | field_group | related_list | widget_placeholder)
 ```
 
-Defined in [`layoutV2.ts`](../web/lib/layout/layoutV2.ts). Key decisions:
+Defined in [`layoutV2.ts`](../../../web/lib/layout/layoutV2.ts). Key decisions:
 
 - **Surfaces (Sprint 1):** `drawer | queue` only. Workspace / dashboard /
   record-workspace are out of scope and rejected by the validator and the DB
@@ -75,7 +75,7 @@ Defined in [`layoutV2.ts`](../web/lib/layout/layoutV2.ts). Key decisions:
 
 ### Validation & parsing
 
-[`layoutV2Schema.ts`](../web/lib/layout/layoutV2Schema.ts) hand-rolls validation
+[`layoutV2Schema.ts`](../../../web/lib/layout/layoutV2Schema.ts) hand-rolls validation
 (no new dependency — `zod` is not a direct dep of `web`). `parseLayoutDoc(input)`
 returns `{ ok, doc, errors, warnings }` and enforces:
 
@@ -93,7 +93,7 @@ already-validated docs (see §6).
 
 ## 2. Resolver (fallback chain)
 
-[`layoutResolver.ts`](../web/lib/layout/layoutResolver.ts) is a **pure function**.
+[`layoutResolver.ts`](../../../web/lib/layout/layoutResolver.ts) is a **pure function**.
 Resolution order:
 
 ```
@@ -118,7 +118,7 @@ resolver from a render path.
 
 ## 3. Storage
 
-[`20260603120000_entity_layouts_v2.sql`](../supabase/migrations/20260603120000_entity_layouts_v2.sql)
+[`20260603120000_entity_layouts_v2.sql`](../../../supabase/migrations/20260603120000_entity_layouts_v2.sql)
 creates one table, `entity_layouts`, following the existing config-table
 conventions (`field_section_definitions` as the template): org-scoped, RLS,
 service-role grants, idempotent DDL.
@@ -178,7 +178,7 @@ resolver always picks the max. Rollback = publish an earlier/new draft version.
 
 ## 4. Migration utility (registry → Layout V2)
 
-[`migrateFromRegistry.ts`](../web/lib/layout/migrateFromRegistry.ts) converts the
+[`migrateFromRegistry.ts`](../../../web/lib/layout/migrateFromRegistry.ts) converts the
 Layer-0 registry into Layout V2 documents so an org can be bootstrapped with
 faithful starting layouts. It is the **only** coupling to the legacy registry
 and is strictly read-only.
@@ -205,7 +205,7 @@ current built-in layout into an editable draft.
 
 ## 5. Preview architecture
 
-[`LayoutPreviewRenderer.tsx`](../web/components/layout/LayoutPreviewRenderer.tsx)
+[`LayoutPreviewRenderer.tsx`](../../../web/components/layout/LayoutPreviewRenderer.tsx)
 renders a `LayoutDoc`'s structure with **placeholder values** — it is a preview,
 not a production renderer:
 

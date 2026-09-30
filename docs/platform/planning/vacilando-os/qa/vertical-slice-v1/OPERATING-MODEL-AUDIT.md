@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Operating Model Validation + Interaction QA — audit findings
 
 Product certification audit, 2026-07-23. No implementation. Not a defence of the

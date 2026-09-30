@@ -176,8 +176,9 @@ gating record open on the row appearing in a (possibly stale) queue list.
 
 ## Status keys are internal; operators see labels
 
-Raw status keys (`new_inquiry`, `new_lead`) are runtime identifiers — operators must never see them
-or deprecated product language (e.g. "Inquiry").
+Raw status keys are runtime identifiers — operators must never see them or deprecated product
+language (e.g. "Inquiry"). The stored fresh-lead key is `new_inquiry`; `new_lead` is a legacy alias
+and an operator-facing label, never a persisted key.
 
 - **Resolve display labels through `status_definitions`** (org-scoped, `entity_type`-grained), then a
   canonical transition label (`canonicalNewLeadStatusLabel` → "New Lead" for `new_inquiry`/`new_lead`),

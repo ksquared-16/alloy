@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Intelligence V1 — Engineering Closeout
 
 **Status:** BUILT (steps 1–8) · design approved by Kelly · nothing pushed/merged/promoted.

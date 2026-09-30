@@ -39,6 +39,20 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Runtime Realization — the governing Runtime corpus (July 2026):** The Runtime's constitutional authority. **`platform/runtime/runtime-realization-architecture.md`** is the **Alloy Operating System Constitution** (canonical) — read it first. The **Kernel** (`platform/runtime/alloy-runtime-kernel.md`) defines the four runtime authorities **K1 Attention · K2 Provisioning · K3 Focus · K4 Instrumentation**; the **Engineering Specification** (`platform/runtime/runtime-realization-engineering-specification.md`) expresses K1–K4 as buildable structure; the **Implementation Authorization Package** (`platform/runtime/runtime-implementation-authorization.md`) carries the **ratified Work Unit contracts** — Operational (U-O1…U-O7), Preparation (U-P1…U-P7), Retention (U-R1…U-R8), Settlement (U-S1…U-S9) — the operator budgets, and the D1–D7 sequence. Provenance for the Constitution's ratification is **`platform/runtime/runtime-constitution-ratification-review.md`**. Product semantics are **not** owned here: the Runtime expresses **Record of Truth / Record of Attention / Context Frame** as defined in **`platform/operator/canonical-interaction-model.md`**.
 
+**Workspaces Operator Experience — reliability freeze (frozen, September 2026):** The completed
+runtime/performance programme. **`platform/runtime/WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md`** owns the
+frozen contract: fifteen canonical laws (§3) — hover may warm but may not navigate; data reuse is not
+navigation authority; visited is not current; no mixed-subject frame; unknown is not zero;
+`ALL_FIRST_ORDER_READY` is the operator readiness contract — plus the load-bearing seam map (§5), the
+regression guards (§6), the accepted debt (§9) and the procedure a future change to a law must follow
+(§10). The laws are stated **once, there**;
+**`platform/runtime/operator-runtime-performance-certification.md`** is the certification record and
+points at them rather than restating them, so the two cannot drift. The canonical definition of
+`ALL_FIRST_ORDER_READY` is **`runtime/CARD-READINESS-LIFECYCLE.md`** §8. Extending Workspaces needs
+nothing from the freeze; changing one of its laws requires all five conditions in §10. Remaining
+performance debt is named and deliberately open (§9) — it is **not** evidence that runtime
+architecture is unfinished.
+
 **Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/core/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification), and **`platform/milestones/operational-expectations-p1-certification.md`** (P1 / M1 certification — the append-only ledger, the one authoring intake, Authority→Standing, revision/correction effectivity). **P0 and P1 are complete.** The generic authoring intake is server-side and flag-gated `oe.ledger.author` **OFF** by default, but an **activated-purpose seam** authors production ledger rows without that flag for one named purpose today — `attendance.service_day_exception`, which has an operator surface. Judgment/Gap (P3) onward are not started, so the capability is **not yet generally operational** (that is M7). See `platform/foundation/platform-capabilities.md` for the seam's code references.
 
 **Organization Configuration product realization (July 2026):** Programs, Locations, Financials, Access (UI), Business Processes, Surfaces, and Data Model share Collection → Selected → Focused workspace under `/organization/*`. Closeout: **`platform/milestones/organization-configuration-product-realization-closeout.md`**.
@@ -88,6 +102,9 @@ Then: **`platform/foundation/system-overview.md`**
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
+11b. `platform/core/work-view-membership-and-navigation.md` — **Work View membership, evaluation and navigation** (membership is not stage position; one evaluator produces rows, counts and eligibility)
+11c. `context/alloy-benchmark-context.md` — **benchmark context pack** (which documents may be loaded as authoritative AI context, and what may be inferred from each)
+11d. [`platform/README.md`](platform/README.md) — **platform domain index** (the folder map, and the canonical owner inside each area)
 
 ### 3. Operator experience
 

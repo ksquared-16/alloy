@@ -4,7 +4,7 @@
 **Status:** Audit (May 2026) — no implementation  
 **Scope:** AdminV2 operational tasks (`operational_tasks`), Task Assist V1.1, BOS handoffs, registry `create_task`, and adjacent scheduled communications.
 
-**Related:** [`task_assist_v1_1.md`](./task_assist_v1_1.md), [`adminv2_action_runtime_audit_and_plan_v1.md`](./adminv2_action_runtime_audit_and_plan_v1.md), [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](./lifecycle_sprint_final_coverage_closeout_audit_v1.md)
+**Related:** [`task_assist_v1_1.md`](./task_assist_v1_1.md), [`adminv2_action_runtime_audit_and_plan_v1.md`](./adminv2_action_runtime_audit_and_plan_v1.md), [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](../../../archive/sprints-superseded/05_2026/completed-intermediate/lifecycle_sprint_final_coverage_closeout_audit_v1.md)
 
 ---
 
@@ -238,4 +238,4 @@ Tasks are **operator-owned follow-ups** on opportunities that may appear in any 
 
 ## Sprint closeout linkage
 
-This audit supplements **Part 2 (Action Inventory)** in [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](./lifecycle_sprint_final_coverage_closeout_audit_v1.md): **`create_task` = Partial** is now expanded with task-system truth. Recommended **P0** for next sprint: **create_task modal convergence** (same pattern as Add Child / Add Person).
+This audit supplements **Part 2 (Action Inventory)** in [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](../../../archive/sprints-superseded/05_2026/completed-intermediate/lifecycle_sprint_final_coverage_closeout_audit_v1.md): **`create_task` = Partial** is now expanded with task-system truth. Recommended **P0** for next sprint: **create_task modal convergence** (same pattern as Add Child / Add Person).

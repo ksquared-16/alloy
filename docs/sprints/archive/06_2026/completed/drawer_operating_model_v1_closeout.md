@@ -4,7 +4,7 @@
 **Date:** 2026-06-08  
 **Status:** **Closed**  
 **Branch:** `staging`  
-**Doctrine:** [`docs/system/drawer-operating-model-v1.md`](../../system/drawer-operating-model-v1.md)
+**Doctrine:** [`docs/system/drawer-operating-model-v1.md`](../../../../system/drawer-operating-model-v1.md)
 
 ---
 
@@ -82,7 +82,7 @@ Goals:
 
 ## 5. Queue row preview doctrine
 
-**Doctrine:** [`docs/system/queue-record-doctrine.md`](../../system/queue-record-doctrine.md)
+**Doctrine:** [`docs/system/queue-record-doctrine.md`](../../../../system/queue-record-doctrine.md)
 
 - Queue row = **compressed operational preview** — not authoritative record truth
 - Row click opens primary drawer; linked fields use `dispatchLinkedDrawerOpen` + click isolation
@@ -256,7 +256,7 @@ Allowed: faster fetch, better cache hit rate, prefetch tuning, render cost reduc
 
 Forbidden: partial above-fold reveal, weakening `committedVisible` / `holdPriorPayload`, moving overview content back into platform hardcoded sections, or bypassing layout runtime for entity drawers.
 
-Reference: [`docs/system/adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md)
+Reference: [`docs/system/adminv2-runtime-performance-doctrine.md`](../../../../system/adminv2-runtime-performance-doctrine.md)
 
 ---
 

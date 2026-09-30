@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -103,8 +103,8 @@ A Stage defines:
 | `key` | Machine identifier |
 | `label` | Operator-facing name (e.g. "Waitlist") |
 | `grain` | `family \| child \| household \| case` |
-| `entry_conditions` | Conditions that place a subject in this stage |
-| `exit_conditions` | Conditions that move a subject out |
+| `entry_conditions` | **Proposed, not implemented** — no TypeScript or migration presence (measured 2026-09-29). Membership is the persisted `stage_key`; initial position comes from intake/Processing. |
+| `exit_conditions` | **Proposed, not implemented** — no TypeScript or migration presence (measured 2026-09-29). Subjects leave a stage through outcome execution. |
 | `candidate_actions` | Ordered list of actions with recommendation levels (**recommendation/evaluation only** once `command_set_v1` is present — cannot create process selection) |
 
 **Runtime (P6.S2):** Operators and BOS process-aware discovery consume Commands via

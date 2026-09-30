@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: certified
+status: sprint
 last_reviewed: 2026-07-30
 ---
 

@@ -39,7 +39,7 @@ Read-only inspection of the operator surface, fanned across five focus areas wit
 | Runtime / providers | `contexts/*`, provider composition, bootstrap path |
 | AdminV2 canvas | `app/adminV2/**`, `lib/ui-v2/**` |
 
-**Directly verified in source:** the Jobs N+1 ([`jobs/route.ts:242`](../../../web/app/api/admin/jobs/route.ts)) and the entity-route serial waterfall ([`entity/[type]/[id]/route.ts:141`](../../../web/app/api/admin/entity/[type]/[id]/route.ts)).
+**Directly verified in source:** the Jobs N+1 ([`jobs/route.ts:242`](../../../../../web/app/api/admin/jobs/route.ts)) and the entity-route serial waterfall ([`entity/[type]/[id]/route.ts:141`](../../../web/app/api/admin/entity/[type]/[id]/route.ts)).
 
 ---
 

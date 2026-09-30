@@ -2,8 +2,8 @@
 
 **Path:** `docs/sprints/archive/05_2026/completed/global_search_v1_closeout.md`  
 **Status:** **CLOSED** (May 2026)  
-**Canonical doc:** [global_search_foundation.md](../global_search_foundation.md)  
-**Phase 2 ideas:** [global_search_phase2_candidates.md](../global_search_phase2_candidates.md)
+**Canonical doc:** [global_search_foundation.md](../../../../archive/sprints-superseded/05_2026/completed-intermediate/global_search_foundation.md)  
+**Phase 2 ideas:** [global_search_phase2_candidates.md](../later-phase/global_search_phase2_candidates.md)
 
 ---
 
@@ -30,4 +30,4 @@ cd web && npm run test -- tests/admin/globalSearch/globalRecordSearch.test.ts
 
 ## Deferred
 
-All Phase 2 items (fuzzy matching, additional entities, productivity features, BOS integration) are documented in [global_search_phase2_candidates.md](../global_search_phase2_candidates.md). V1 does not depend on them.
+All Phase 2 items (fuzzy matching, additional entities, productivity features, BOS integration) are documented in [global_search_phase2_candidates.md](../later-phase/global_search_phase2_candidates.md). V1 does not depend on them.

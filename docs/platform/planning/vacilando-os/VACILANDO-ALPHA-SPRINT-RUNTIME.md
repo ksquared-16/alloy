@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-25
+supersedes: []
+---
+
 # Sprint Runtime — Vacilando Alpha
 
 *The live operational record for the Vacilando initiative. The one page to read before continuing this work. Governed by [SPRINT-RUNTIME.md](SPRINT-RUNTIME.md); populated only from durable evidence.*

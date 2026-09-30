@@ -7,7 +7,7 @@ superseded_by: ../experience/presentation-runtime-v2.md
 
 # Presentation Runtime Doctrine
 
-> **Superseded (July 2026).** Shipped Presentation Runtime V2 is canonical at [`../experience/presentation-runtime-v2.md`](../experience/presentation-runtime-v2.md). This operator-folder copy records the June 2026 design-stage umbrella only. See also [`platform/milestones/freeze-july-2026.md`](../foundation/milestones/freeze-july-2026.md).
+> **Superseded (July 2026).** Shipped Presentation Runtime V2 is canonical at [`../experience/presentation-runtime-v2.md`](../../platform/experience/presentation-runtime-v2.md). This operator-folder copy records the June 2026 design-stage umbrella only. See also [`platform/milestones/freeze-july-2026.md`](../foundation/milestones/freeze-july-2026.md).
 
 **Status:** Superseded architecture doctrine (June 2026 design stage).
 **Scope:** The unifying doctrine for how Alloy presents record truth to operators across every surface, and how administrators author that presentation.
@@ -193,10 +193,10 @@ Schema for a generalized Design Surface document, grid-engine internals, Viewpoi
 | Concern | Doc |
 |---|---|
 | Full sprint (rationale, mockups, inventory, phasing) | [`../../sprints/archive/06_2026/presentation-runtime-architecture/`](../../sprints/archive/06_2026/presentation-runtime-architecture/) |
-| Interaction spine | [`canonical-interaction-model.md`](./canonical-interaction-model.md) |
-| Card primitive / archetypes / interaction / templates | [`universal-card-system.md`](./universal-card-system.md), [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md), [`card-interaction-expansion-doctrine.md`](./card-interaction-expansion-doctrine.md), [`card-content-template-field-inclusion-doctrine.md`](./card-content-template-field-inclusion-doctrine.md) |
-| LayoutDoc authoring (reference implementation; **drawer authoring is transitional legacy**) | [`experience-builder-doctrine.md`](./experience-builder-doctrine.md) |
-| Drawer sunset / Focus Panel convergence (sunset matrix + freeze rule + editing gap) | [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md) |
-| Analytics / metrics | [`../modules/operational-intelligence-platform.md`](../modules/operational-intelligence-platform.md) |
+| Interaction spine | [`canonical-interaction-model.md`](../../platform/operator/canonical-interaction-model.md) |
+| Card primitive / archetypes / interaction / templates | [`universal-card-system.md`](../../platform/operator/universal-card-system.md), [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md), [`card-interaction-expansion-doctrine.md`](../../platform/operator/card-interaction-expansion-doctrine.md), [`card-content-template-field-inclusion-doctrine.md`](../../platform/operator/card-content-template-field-inclusion-doctrine.md) |
+| LayoutDoc authoring (reference implementation; **drawer authoring is transitional legacy**) | [`experience-builder-doctrine.md`](../../platform/operator/experience-builder-doctrine.md) |
+| Drawer sunset / Focus Panel convergence (sunset matrix + freeze rule + editing gap) | [`drawer-sunset-roadmap.md`](../../platform/operator/drawer-sunset-roadmap.md) |
+| Analytics / metrics | [`../modules/operational-intelligence-platform.md`](../../platform/modules/operational-intelligence-platform.md) |
 | Configuration ownership / mode | [`../../system/configuration-ownership-doctrine.md`](../../system/configuration-ownership-doctrine.md), [`../../system/configuration-mode-doctrine.md`](../../system/configuration-mode-doctrine.md) |
-| Visual language / typography | [`alloy-visual-language.md`](./alloy-visual-language.md), [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) |
+| Visual language / typography | [`alloy-visual-language.md`](../../platform/operator/alloy-visual-language.md), [`../../system/typography-and-presentation-doctrine.md`](../../system/typography-and-presentation-doctrine.md) |

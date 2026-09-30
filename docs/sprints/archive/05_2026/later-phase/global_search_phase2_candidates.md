@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/05_2026/global_search_phase2_candidates.md`  
 **Status:** **Future** — ideas only; not scheduled.  
-**Prerequisite:** [global_search_foundation.md](./global_search_foundation.md) — **Global Search V1 is COMPLETE and operational** without any item below.
+**Prerequisite:** [global_search_foundation.md](../../../../archive/sprints-superseded/05_2026/completed-intermediate/global_search_foundation.md) — **Global Search V1 is COMPLETE and operational** without any item below.
 
 ---
 
@@ -61,7 +61,7 @@ V1 prioritizes **completeness and correctness** over advanced ranking.
 | **Suggested actions** | Propose next steps from search context | Not in V1 — belongs to BOS |
 | **Cross-record insights** | Aggregate patterns across matched records | Not in V1 — belongs to BOS |
 
-**Doctrine:** Global Search finds and opens records. BOS provides operational guidance, semantic retrieval, and AI-assisted action. See [global_search_foundation.md](./global_search_foundation.md#architecture-search-is-not-bos).
+**Doctrine:** Global Search finds and opens records. BOS provides operational guidance, semantic retrieval, and AI-assisted action. See [global_search_foundation.md](../../../../archive/sprints-superseded/05_2026/completed-intermediate/global_search_foundation.md#architecture-search-is-not-bos).
 
 ---
 

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Platform — Phase 0 Closeout Package
 
 **Frozen 2026-07-31.** The canonical implementation baseline for the Conversation

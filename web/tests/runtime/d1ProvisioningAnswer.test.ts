@@ -1,9 +1,14 @@
 /**
  * D1 — the bounded Provisioning Answer: the Preparation Contract, proven.
  *
- * Governing (landed, in-branch): docs/platform/runtime/runtime-implementation-authorization.md
- *   U-O1…U-O7 (120–126) · U-P1…U-P7 (137–148) · Part 8 budgets
- * and docs/platform/runtime/stage-work-view-queue-canonical-model.md §0.5.1 · §0.5.2 · §1.4 · §6.
+ * Governing (canonical): docs/platform/core/work-view-membership-and-navigation.md
+ *   §3 one evaluator · §4 destination operability · §6 Row Grain vs Record of Attention
+ *   (the doctrine these cases pin was extracted there from the proposed model on 2026-09-29).
+ *
+ * Explanatory reference, NOT governing — both remain `status: proposed`:
+ *   docs/platform/runtime/runtime-implementation-authorization.md
+ *     U-O1…U-O7 (120–126) · U-P1…U-P7 (137–148) · Part 8 budgets — the D1 contract as proposed
+ *   docs/platform/runtime/stage-work-view-queue-canonical-model.md — fork diagnosis / plan
  *
  * The Supabase client is stubbed so these proofs are deterministic and CI-safe; the row data and the
  * authored configuration are the REAL representative seed, captured in fixtures/new-leads-entry.json

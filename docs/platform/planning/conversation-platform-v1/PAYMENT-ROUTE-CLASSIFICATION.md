@@ -1,6 +1,6 @@
 ---
 title: "/admin/payments/run — Security Classification (pre-remediation)"
-status: classified — remediation is Phase 0 commit 8
+status: sprint
 date: 2026-07-31
 ---
 

@@ -9,7 +9,7 @@
 
 - [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md)
 - [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) — configurable labels ↔ fixed layers; default disposition matrix; mapping metadata
-- [`docs/system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md)
+- [`docs/system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md)
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
 - [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md)
 - [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md)
@@ -372,7 +372,7 @@ Lifecycle Builder Stage (operator mental model)
 | Drawer | Supports single `active_subject` and multi `active_subject_group` |
 | Layout `focused_subject` | One child: “Child A — Tour”; multiple: “2 children — Tour” |
 
-See [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §4.1 and [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) § grouped rows.
+See [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §4.1 and [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) § grouped rows.
 
 ### 3.5 Drawer (single-subject focus — §3.1 Child B Tour)
 
@@ -649,7 +649,7 @@ See `web/lib/workUnits/lifecycleSubjectContracts.ts` — optional fields documen
 > **This contract is not separate from lifecycle or layout work.** Status ownership, location scope, and cascade rules are the **domain inputs** that Lifecycle Builder configures, work-unit queues resolve into membership, runtime normalizes into `QueueRowContext`, the drawer focuses via `active_subject`, and Layout Configuration blocks render without recomputing grain logic.
 
 **Upstream config:** Lifecycle Builder (`departments.metadata` lifecycle activation board) — see [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md).  
-**Runtime contract:** [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md), `web/lib/workUnits/lifecycleSubjectContracts.ts`.  
+**Runtime contract:** [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md), `web/lib/workUnits/lifecycleSubjectContracts.ts`.  
 **Layout cutover:** [`layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) (C4 queue rows require `QueueRowContext`).
 
 ### 7.1 Lifecycle Builder integration
@@ -995,7 +995,7 @@ Freeze vocabulary, stage vs status, location ownership, access redaction, layout
 | [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md) | Current program field audit |
 | [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) | Layout runtime parallel work |
 | [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) | Builder stage / queue view config plane |
-| [`../system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) | `QueueRowContext` developer contract |
+| [`../system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) | `QueueRowContext` developer contract |
 | [`../system/entity-model.md`](../system/entity-model.md) | Entity location semantics |
 
 ---

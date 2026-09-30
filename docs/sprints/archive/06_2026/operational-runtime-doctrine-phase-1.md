@@ -4,7 +4,7 @@
 **Author:** Claude Code
 **Branch:** `claude/operational-runtime-doctrine-phase1` (from `origin/staging` @ `fa83113a6`)
 **Type:** **Doctrine + evidence map only. No code changes, no deletions, no optimization.**
-**Doctrine:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../platform/runtime/operational-runtime-doctrine.md)
+**Doctrine:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../../platform/runtime/operational-runtime-doctrine.md)
 **Validation:** `git status -sb` clean (docs only); `cd web && npm run typecheck:build` → **clean** at write time.
 
 **Evidence confidence:** **[verified]** = confirmed by direct read/grep this session; **[traced]** = from a read-only sub-agent trace of the canonical files; **[candidate]** = a possible future fix listed for planning, **not** a decision.

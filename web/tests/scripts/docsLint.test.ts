@@ -220,3 +220,32 @@ describe("internal /api/admin and external /api/v1 are bounded against each othe
         }
     });
 });
+
+describe("orphan-canonical follows the documented discoverability chain", () => {
+    /*
+     * root index -> domain index -> canonical child. Two hops, deliberately not transitive:
+     * a document cited only by another deep document is still an orphan.
+     */
+    it("treats a child cited by a root-cited domain index as discoverable", () => {
+        const violations = lintDocumentation({
+            rootDir: fixtureRoot("two-hop-discoverable"),
+        });
+        expect(violations.filter((v: { type: string }) => v.type === "orphan-canonical")).toEqual([]);
+    });
+
+    it("still flags a canonical doc that no index reaches", () => {
+        const violations = lintDocumentation({
+            rootDir: fixtureRoot("two-hop-orphan"),
+        });
+        const orphans = violations.filter((v: { type: string }) => v.type === "orphan-canonical");
+        expect(orphans.map((v: { file: string }) => v.file)).toContain("docs/platform/core/unreachable.md");
+    });
+
+    it("does not follow a third hop — deep-only citation is still an orphan", () => {
+        const violations = lintDocumentation({
+            rootDir: fixtureRoot("two-hop-third-hop"),
+        });
+        const orphans = violations.filter((v: { type: string }) => v.type === "orphan-canonical");
+        expect(orphans.map((v: { file: string }) => v.file)).toContain("docs/platform/core/third-hop.md");
+    });
+});

@@ -2,7 +2,7 @@
 
 **Status:** Built (June 2026). Continues from Operational Consumption Slice 1 (registration fee) — the architecture is frozen, not redesigned. Posting remains out of scope.
 
-Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../platform/modules/operational-consumption-platform.md) (Slice 2 sections).
+Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../../platform/modules/operational-consumption-platform.md) (Slice 2 sections).
 
 ## Milestone
 

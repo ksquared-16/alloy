@@ -107,7 +107,7 @@ Wider preview column, document-canvas styling, sticky scroll containment — edi
 | Operational narratives | Intake-case row language — family name, created/matched summary |
 | Operator diagnostic | Collapsed org/session mismatch notes |
 
-**Intentionally deferred** — see [Next Phase: Intake Case Operational Model](#next-phase-intake-case-operational-model) below and [`forms_intake_case_operational_model.md`](./forms_intake_case_operational_model.md).
+**Intentionally deferred** — see [Next Phase: Intake Case Operational Model](#next-phase-intake-case-operational-model) below and [`forms_intake_case_operational_model.md`](./completed/forms_intake_case_operational_model.md).
 
 ---
 

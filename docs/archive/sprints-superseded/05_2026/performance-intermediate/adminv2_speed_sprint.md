@@ -1,7 +1,7 @@
 # AdminV2 speed sprint — measure first, optimize second
 
-Prerequisites: [drawer shell pipeline](./adminv2_drawer_pipeline.md), [route shell pipeline](./adminv2_route_shell_pipeline.md), [reveal doctrine](./adminv2_reveal_doctrine.md).  
-**Phase closeout (May 2026):** [completed/adminv2_performance_closeout.md](./completed/adminv2_performance_closeout.md) — UX fixes, production-grade summary, next-phase roadmap (broad sprint paused).
+Prerequisites: [drawer shell pipeline](../../../../sprints/archive/05_2026/adminv2_drawer_pipeline.md), [route shell pipeline](./adminv2_route_shell_pipeline.md), [reveal doctrine](../../../../sprints/archive/05_2026/adminv2_reveal_doctrine.md).  
+**Phase closeout (May 2026):** [completed/adminv2_performance_closeout.md](../../../../sprints/archive/05_2026/completed/adminv2_performance_closeout.md) — UX fixes, production-grade summary, next-phase roadmap (broad sprint paused).
 
 ## Critical rule
 
@@ -253,7 +253,7 @@ Capture: `reportWorkUnitCriticalPathLanes()` after hard refresh.
 
 **Dept:** `deptRevealGate.ts` + `DeptPageLoadingGate` — gate includes KPI strip + oper region + enrollment rail. Filter `[dept-reveal-gate]`.
 
-**Canonical doctrine:** [adminv2_reveal_doctrine.md](./adminv2_reveal_doctrine.md).
+**Canonical doctrine:** [adminv2_reveal_doctrine.md](../../../../sprints/archive/05_2026/adminv2_reveal_doctrine.md).
 
 ### Workspace reveal gate + preload (this pass)
 

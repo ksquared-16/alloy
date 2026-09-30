@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Phase 1A — Baseline (live :3020, before change)
 
 Root: wt6-vacilando-os-product-def @ cef5827c6 (clean, 0/0 origin/staging)

@@ -10,10 +10,10 @@
 | Topic | Document |
 |-------|----------|
 | Intake case + outcome model | [`forms_intake_case_operational_model.md`](./forms_intake_case_operational_model.md) |
-| Enrollment lifecycle coherence | [`enrollment_intake_lifecycle_coherence.md`](./enrollment_intake_lifecycle_coherence.md) |
+| Enrollment lifecycle coherence | [`enrollment_intake_lifecycle_coherence.md`](../enrollment_intake_lifecycle_coherence.md) |
 | Prefill doctrine | [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md) |
-| Operational workspace (OW) | [`forms_operational_workspace_redesign.md`](./forms_operational_workspace_redesign.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
+| Operational workspace (OW) | [`forms_operational_workspace_redesign.md`](../forms_operational_workspace_redesign.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../../platform/modules/documents-and-forms.md) |
 
 ---
 

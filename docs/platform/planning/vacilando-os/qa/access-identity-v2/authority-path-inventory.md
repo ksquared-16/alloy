@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Authority Path Inventory — person → user → role → scope
 
 > **Authoritative accepted artifact** for Access & Identity V2 inventory.

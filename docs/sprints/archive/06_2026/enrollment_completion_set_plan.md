@@ -5,9 +5,9 @@ reference operating experience, **after** Experience Builder proves the Core Fou
 
 **Builds on:** Composition Engine V1 + the Core Four (Household, Children, Readiness,
 Current Work), all shipped on `staging`.
-**Doctrine:** [`card-composition-system.md`](../../platform/operator/card-composition-system.md) ·
-[`operational-depth-doctrine.md`](../../platform/operator/operational-depth-doctrine.md) ·
-[`card-interaction-expansion-doctrine.md`](../../platform/operator/card-interaction-expansion-doctrine.md).
+**Doctrine:** [`card-composition-system.md`](../../../platform/operator/card-composition-system.md) ·
+[`operational-depth-doctrine.md`](../../../platform/operator/operational-depth-doctrine.md) ·
+[`card-interaction-expansion-doctrine.md`](../../../platform/operator/card-interaction-expansion-doctrine.md).
 
 > **No new primitives, no new architecture.** Every card here is a Universal Card
 > answering one operational question, composed by the existing engine, descending
@@ -37,7 +37,7 @@ billing preview), that is a **backend/context dependency**, called out per card 
 ## 2. The completion set
 
 Status legend: ✅ exists · 🟡 partial (model or key only) · ❌ to build.
-Depth ceiling per [`operational-depth-doctrine.md`](../../platform/operator/operational-depth-doctrine.md).
+Depth ceiling per [`operational-depth-doctrine.md`](../../../platform/operator/operational-depth-doctrine.md).
 
 | Card | Question | Card key | Truth / Diagnostic | Depth ceiling | Weight | Today | Largest gap |
 |------|----------|----------|--------------------|---------------|--------|-------|-------------|

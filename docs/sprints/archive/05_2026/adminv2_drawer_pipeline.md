@@ -6,7 +6,7 @@ One reusable drawer pipeline for AdminV2 entity drawers. Entity adapters supply 
 
 Opportunity is the first adapter. **Job (Admin V2)** is the second. Work-unit, department, and BOS are out of scope.
 
-Sprint expansion audit: [`adminv2_drawer_pipeline_expansion.md`](./adminv2_drawer_pipeline_expansion.md).
+Sprint expansion audit: [`adminv2_drawer_pipeline_expansion.md`](../../../archive/sprints-superseded/05_2026/performance-intermediate/adminv2_drawer_pipeline_expansion.md).
 
 ## Doctrine
 

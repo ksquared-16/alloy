@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-23
+supersedes: []
+---
+
 # Worker Runtime V1 — Mission Package Contract (design)
 
 > Status: design for approval. Returned **before coding** per the slice brief.
