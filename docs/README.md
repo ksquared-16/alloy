@@ -104,6 +104,7 @@ Then: **`platform/foundation/system-overview.md`**
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
 11b. `platform/core/work-view-membership-and-navigation.md` — **Work View membership, evaluation and navigation** (membership is not stage position; one evaluator produces rows, counts and eligibility)
 11c. `context/alloy-benchmark-context.md` — **benchmark context pack** (which documents may be loaded as authoritative AI context, and what may be inferred from each)
+11d. [`platform/README.md`](platform/README.md) — **platform domain index** (the folder map, and the canonical owner inside each area)
 
 ### 3. Operator experience
 
