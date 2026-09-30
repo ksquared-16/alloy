@@ -17,7 +17,7 @@ contains several generations of design history, and most of it is not current tr
 |---|---|
 | **Version** | V0 |
 | **Certified** | 2026-09-29 |
-| **Base** | `eab6805b1` (staging) |
+| **Base** | `b73482479` (staging) |
 | **Domains certified** | Developer Platform / API · Runtime |
 | **Domains pending** | Business Process (§5) · Identity/Access (§6) · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
@@ -141,10 +141,17 @@ certified for DIRECT context in V0.
   grant it alongside `enrollment.record.manage` under an in-migration self-test that aborts if either
   is missing — so converging does not lock out a default operator. What remains is the **resolution
   layer**: the canonical route takes a typed `destination_key`, while these surfaces hold a configured
-  ref (`action.actionRef`) and `needs_a_quote`. `enrollmentStatusTransitionBpResolver.ts` already
-  resolves BP configuration to typed destinations and already carries `outcomeKey` on each option, so
-  the missing piece is the reverse lookup (configured ref → destination) plus a server boundary that
-  accepts a ref. That is a bounded build, not a decision.
+  ref (`action.actionRef`) and `needs_a_quote`. **The reverse resolver now exists** (2026-09-30,
+  `resolveConfiguredTransitionRef.ts`): a configured `transition_ref` resolves to a typed
+  `destinationKey`, scoped to the subject's current stage and failing closed on unknown, ambiguous,
+  unavailable or unmapped refs. What remains for Current Work is the server boundary that accepts a
+  ref plus the surface rewire.
+- **The two senders are not the same kind of thing.** Measured 2026-09-30: `needs_a_quote` is **not a
+  configured Business Process outcome or rule anywhere**. It belongs to the book-v2 quote pipeline
+  (`lib/book-v2/resolvePipelineStage.ts`) and the MVP status catalog. So Quote Intake is not an
+  enrollment decision at all, and routing it through the enrollment transition boundary would be
+  wrong. It needs its own disposition — a quote-pipeline authority, or acceptance as a record write —
+  which is a product question, not part of the enrollment convergence.
 - **D-BP4** — outcome execution writes durable status without consulting the transition-policy gate
   the Action paths use.
 - **D-BP5** — whether a fresh child participation should carry `new_inquiry` (shipped) or a null
@@ -177,10 +184,18 @@ identity is never inferred, deliberately.
 
 **Blockers, measured:**
 
-- **An open Director gate.** `platform/governance/rls-authority-model-director-gate.md` is
-  `status: canonical` while carrying `DIRECTOR_DECISION_READY`, and records that the database has
-  drifted from the RLS doctrine it states. A canonical document holding an unmade decision cannot be
-  DIRECT context.
+- **An open Director gate — narrower than it looks (analysed 2026-09-30).**
+  `platform/governance/rls-authority-model-director-gate.md` is `status: canonical` while carrying
+  `DIRECTOR_DECISION_READY`. On reading it fully, it is not an architectural fork: the recommended
+  model (routes authorize, RLS tenants, mutation server-only) is **already the written doctrine** in
+  `implementation-patterns.md` § Supabase access and `configuration-publication-model.md`, and 604 of
+  682 route files arrive as `service_role`, which bypasses RLS by definition — so a layer the product
+  never executes cannot be the authorization model. The drift is **latent unused grants, not a live
+  dual-authority conflict**, reachable only by calling PostgREST directly, which no product code does
+  and the browser client cannot (it is auth-only; the 6 server components touching `supabase.from()`
+  are `select`-only). So the blocker is a **ratification plus a precision requirement** — authority
+  claims should read "on the supported path" until grants are retired — rather than an unknown. The
+  document's own verdict on whether this blocks Access & Identity V2 is NO.
 - **Admission is not authority on most routes.** Of 682 API route files, ~128 rely on
   `requireAdminOrOps` (portal admission, no role, no capability) while only ~17 assert a capability.
   The enrollment area already repaired exactly this and proves the pattern; it has not propagated.
