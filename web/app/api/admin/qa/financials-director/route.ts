@@ -7,6 +7,7 @@ import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissi
 import {
     CATALOG_VERSION,
     EVIDENCE_BOUNDARIES,
+    FIXTURE_DOCTRINE,
     NO_AUTOMATIC_PASS,
     SCENARIOS,
     SUITE_KEY,
@@ -143,6 +144,7 @@ export async function GET() {
         scenarios: SCENARIOS.map((s) => ({ ...s, evidence: scenarioEvidence(s.key) })),
         noAutomaticPass: NO_AUTOMATIC_PASS,
         evidenceBoundaries: EVIDENCE_BOUNDARIES,
+        fixtureDoctrine: FIXTURE_DOCTRINE,
         readiness: resolveReadiness(subject, extras, accepted, navigation),
         results: results ?? [],
         baselineChanged: priorRevisions.length > 0,

@@ -19,6 +19,7 @@ import {
     CATALOG_VERSION,
     CORE_DEFERRALS,
     EVIDENCE_BOUNDARIES,
+    FIXTURE_DOCTRINE,
     NO_AUTOMATIC_PASS,
     SCENARIOS,
     SCENARIO_EVIDENCE,
@@ -178,6 +179,34 @@ describe("the evidence boundaries are carried, not buried", () => {
         const s = key("bank_setup_visual_review");
         expect(s.disposition).toBe("HUMAN_WALKTHROUGH");
         expect(s.dispositionReason).toMatch(/NOT repaired|human decides/i);
+    });
+});
+
+/* ── WHICH ACCOUNT MAY BE SPENT ───────────────────────────────────────────────────────────── */
+
+describe("the fixture doctrine is on the surface, not only in a document", () => {
+    it("names all three", () => {
+        expect(FIXTURE_DOCTRINE.map((f) => f.fixture)).toEqual([
+            "Certhouse", "Certopp", "A disposable household you create",
+        ]);
+    });
+
+    it("says Certhouse is read-only, and why that is not pedantry", () => {
+        const f = FIXTURE_DOCTRINE.find((x) => x.fixture === "Certhouse")!;
+        expect(f.rule).toMatch(/READ ONLY/);
+        /* The reason has to survive somebody being helpful. */
+        expect(f.why).toMatch(/IS the certification|destroy what it is evidence of/i);
+    });
+
+    it("protects the bank method a real payer authorized", () => {
+        const f = FIXTURE_DOCTRINE.find((x) => x.fixture === "Certopp")!;
+        expect(f.rule).toMatch(/bank method is READ ONLY/i);
+        expect(f.why).toMatch(/real payer|real mandate/i);
+    });
+
+    it("gives destructive work somewhere to go", () => {
+        const f = FIXTURE_DOCTRINE.find((x) => x.fixture.startsWith("A disposable"))!;
+        expect(f.rule).toMatch(/destructive|repeatable/i);
     });
 });
 

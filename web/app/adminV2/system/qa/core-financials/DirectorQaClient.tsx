@@ -83,6 +83,8 @@ type Payload = {
     noAutomaticPass?: string;
     /** Where engineering stopped deliberately, keyed to the scenario that meets each one. */
     evidenceBoundaries?: { key: string; scenarioKey: string; statement: string }[];
+    /** Which account may be spent and which may only be read. Stated before the walk starts. */
+    fixtureDoctrine?: { fixture: string; rule: string; why: string }[];
     navigation: Navigation;
     readiness: Readiness[];
     results: ResultRow[];
@@ -474,6 +476,27 @@ export default function DirectorQaClient() {
                         confused tester and a worthless record, not a finding.
                     </p>
                 </Callout>
+            ) : null}
+
+            {/*
+              * WHICH ACCOUNT YOU MAY SPEND, before you touch one.
+              *
+              * This used to live only in a markdown packet — somewhere the person walking the
+              * product was not looking. One of these fixtures IS a certification, and the cost of
+              * learning that late is destroying evidence that cannot be re-created.
+              */}
+            {(data?.fixtureDoctrine ?? []).length ? (
+                <Panel title="Which account you may spend" testId="fixture-doctrine">
+                    <ul className="space-y-2" data-qa-fixture-doctrine>
+                        {(data?.fixtureDoctrine ?? []).map((f) => (
+                            <li key={f.fixture} data-qa-fixture={f.fixture}>
+                                <p className="text-sm font-medium text-alloy-midnight">{f.fixture}</p>
+                                <p className="text-sm text-alloy-midnight/80">{f.rule}</p>
+                                <p className="mt-0.5 text-[11px] leading-relaxed text-alloy-midnight/55">{f.why}</p>
+                            </li>
+                        ))}
+                    </ul>
+                </Panel>
             ) : null}
 
             <Panel title="Verified starting state" testId="starting-state">
