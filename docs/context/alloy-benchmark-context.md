@@ -186,10 +186,22 @@ that followed measured the estate afresh, found a cross-tenant mutation class th
 term for, and **authored the repair**. Everything on the documentation axis is done. One gate remains,
 and it is not a documentation gate:
 
-> **THE ONE REMAINING GATE.** Migrations `20261104120000` and `20261104130000` are authored,
-> validated, and merged into the corpus's base — but **applying them to the deployed primary is a
-> separate governed action that has not been performed.** Until it is, the exposures described below
-> are **still open in production**, and this section must not be read as saying otherwise.
+> **THE ONE REMAINING GATE.** Migrations `20261104120000` and `20261104130000` are authored and
+> validated — but **applying them to the deployed primary is a separate governed action that has not
+> been performed.** Until it is, the exposures described below are **still open in production**, and
+> this section must not be read as saying otherwise.
+>
+> **Re-verified 2026-09-30 08:54 UTC** against the deployed primary, and unchanged: all 14 mutating
+> functions remain `EXECUTE`-granted to `authenticated` (4 of them also to PUBLIC), all 14 still carry
+> no caller-authority check, and both tables still have no RLS. The hosted ledger's newest applied
+> migration is `20261103120000` — before either repair.
+>
+> This is not a claim you have to take on trust. `tests/docs/identityAccessCertificationEvidence.test.ts`
+> reads the committed hosted census artifacts and **fails if this section is ever moved to certified
+> while the ledger has not advanced past `20261104130000`, while any mutating function is still
+> executable by a client principal, or while any public table lacks RLS.** The artifacts are checked
+> against the SHA-256 of the queries that produced them, so one edited by hand to say the happy thing
+> is rejected rather than believed.
 
 **Why the distinction is stated this loudly.** The rest of this pack describes documentation that
 matches a shipped system. Here, two paragraphs describe a repair that exists in the tree and not yet
