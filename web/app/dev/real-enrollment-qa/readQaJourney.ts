@@ -1,6 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { launchFkStampFromCrmSnapshotRecord } from "@/lib/forms/packets/formPacketService";
-import { readHouseholdCanonicalAddress } from "@/lib/forms/prefill/addressBindingPrefill";
+import { readHouseholdSharedAddress } from "@/lib/location/canonicalAddressReads";
 
 /**
  * The live journey the human QA pass is run against, read in the operator's language.
@@ -205,7 +205,12 @@ export async function readRealEnrollmentQaJourney(): Promise<QaJourneyResult> {
     }
 
     const address = fks.customer_id
-        ? await readHouseholdCanonicalAddress(supabase, session.org_id, fks.customer_id)
+        ? await readHouseholdSharedAddress(supabase, {
+              orgId: session.org_id,
+              customerId: fks.customer_id,
+              role: "home",
+              acceptUnstatedRole: true,
+          })
         : null;
     const householdAddress = address
         ? [address.address_line1, address.address_line2, address.city, address.state, address.postal_code]

@@ -267,9 +267,18 @@ export async function resolvePublicFormEmbedContext(
                     );
                     const addressValues = await resolveAddressBindingPrefill(
                         supabase,
-                        v.orgId,
                         envelope.schemaJson as never,
-                        { customer_id: sessionFks.customer_id },
+                        {
+                            orgId: v.orgId,
+                            customerId: sessionFks.customer_id,
+                            customerMemberId: sessionFks.customer_member_id,
+                            /*
+                             * The adult this link was sent to. Validated at mint and never
+                             * client-asserted; the payment view treats the same identity as the payer.
+                             */
+                            participantPersonId:
+                                typeof meta.recipient_person_id === "string" ? meta.recipient_person_id : sessionFks.person_id,
+                        },
                     );
                     return {
                         ...sharedValuesToFieldIds(envelope.schemaJson as never, values),
