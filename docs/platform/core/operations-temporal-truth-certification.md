@@ -349,6 +349,15 @@ capabilities and locked by test. Organizational model measured, including two ab
 suggested otherwise (§10). Scheduling concepts measured from the catalog and the command registry, not
 from intent. The one canonical doc that denied staff assignment exists is corrected.
 
+### What the claim matrix covers, precisely
+
+§3 audits the claims of the **canonical owners** in §17 plus this record's own earlier statements — not
+every document that mentions these domains. That is deliberate and it is the corpus rule, not a
+shortcut: `docs/platform/planning/**` is PLANNED_ONLY and `certification/**`, `docs/sprints/**`,
+`docs/archive/**` and `docs/audits/**` are EXCLUDE_HISTORY, so their claims are out of scope for
+doctrine by construction. A reader should not infer that 38 markdown artifacts were each audited; four
+canonical documents were, and one of them was wrong.
+
 ### What remains open, and is not a certification blocker
 
 - **319 `pending` capability declarations platform-wide** (303 program-owned, ceiling 305) are W-15's
