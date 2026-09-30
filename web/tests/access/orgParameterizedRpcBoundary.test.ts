@@ -57,6 +57,17 @@ const MIGRATIONS = resolve(__dirname, "..", "..", "..", "supabase", "migrations"
 
 /** The migration that widened the boundary to the org/actor-parameterized family. */
 const BOUNDARY = "20261104120000";
+/**
+ * The follow-up that closed what BOUNDARY missed, and fixed the reason it was missed.
+ *
+ * BOUNDARY matched on PARAMETER NAMES, so `post_ledger_transaction(p_ledger_tx_id uuid)` was
+ * never revoked — and because `access_rpc_boundary_report` shared that predicate, BOUNDARY's
+ * own self-test could not see the survivor either. A detector and a remediator sharing one
+ * predicate cannot catch that predicate being wrong. Measured after BOUNDARY applied:
+ * 13 of 14 closed, `post_ledger_transaction` still `authenticated=X`, SECURITY DEFINER, with
+ * no caller-authority check.
+ */
+const SHAPE_BOUNDARY = "20261107120000";
 
 const executable = (sql: string) =>
     sql
@@ -73,11 +84,13 @@ const migrations = readdirSync(MIGRATIONS)
     });
 
 const boundary = migrations.find((m) => m.version === BOUNDARY);
+const shapeBoundary = migrations.find((m) => m.version === SHAPE_BOUNDARY);
 
 describe("org-parameterized mutating RPC execute boundary", () => {
     it("is not vacuous: the migration set parses and the boundary migration is present", () => {
         expect(migrations.length).toBeGreaterThan(400);
         expect(boundary, `migration ${BOUNDARY} is missing`).toBeTruthy();
+        expect(shapeBoundary, `migration ${SHAPE_BOUNDARY} is missing`).toBeTruthy();
     });
 
     it("the report's predicate covers the tenancy dimension, not just actor spellings", () => {
@@ -109,14 +122,67 @@ describe("org-parameterized mutating RPC execute boundary", () => {
         ).toBe(true);
     });
 
-    it("refuses to apply if its predicate stops matching the family it was written for", () => {
-        // A discovery loop that matches nothing revokes nothing and reports success.
-        // The census measured 14; the migration must fail rather than pass vacuously.
+    it("the original boundary kept its own vacuity floor", () => {
+        // Historical: BOUNDARY asserted `v_n < 14`. That floor was satisfiable without closing the
+        // right functions, because its loop had no privilege filter and counted statements rather
+        // than real closures — which is precisely how it passed while leaving one open. Kept as a
+        // record of what the file says, not as a claim that the floor was sufficient.
         expect(
             /RAISE\s+EXCEPTION[\s\S]{0,200}?matched only/i.test(boundary!.code),
-            "the boundary loop has no floor, so a predicate that stops matching would apply cleanly and close nothing",
+            "the original boundary loop lost its floor",
         ).toBe(true);
-        expect(boundary!.code).toMatch(/v_n\s*<\s*14/);
+    });
+
+    it("the follow-up defines the family by SHAPE, with no parameter name in the predicate", () => {
+        const code = shapeBoundary!.code;
+        // The whole correction: a function is in scope because it mutates without checking its
+        // caller, not because its arguments are spelled a particular way.
+        expect(code, "the follow-up does not test for the absence of a caller-identity check").toMatch(/auth\.uid\(\)/);
+        expect(code, "the follow-up does not test for the absence of a role check").toMatch(/has_org_role/);
+        expect(code, "the follow-up does not test for the absence of a capability check").toMatch(
+            /effective_capability_keys/,
+        );
+        // The original terms must survive the CREATE OR REPLACE, or this rewrite silently
+        // narrows the 2026-09 scope it inherited.
+        for (const term of ["p_actor_user_id", "role_permission_grants", "user_roles", "operational_authorit"]) {
+            expect(code, `the follow-up dropped the inherited term ${term}`).toContain(term);
+        }
+    });
+
+    it("the follow-up self-test reads the catalog, not its own report", () => {
+        /*
+         * This is the assertion that would have caught the original miss. BOUNDARY's self-test
+         * asked `access_rpc_boundary_report()` whether anything was still open; the report shared
+         * the blind spot, so it answered no about a function it could not see. The follow-up must
+         * query pg_proc directly for the real question, so a wrong predicate in the report cannot
+         * hide a failure.
+         */
+        const selftest = shapeBoundary!.code.slice(shapeBoundary!.code.indexOf("$selftest$"));
+        expect(
+            /FROM\s+pg_proc/i.test(selftest),
+            "the follow-up self-test does not read pg_proc directly, so it can only see what its own report sees — "
+                + "the exact failure mode that let post_ledger_transaction through",
+        ).toBe(true);
+        expect(
+            /has_function_privilege\s*\(\s*'authenticated'/i.test(selftest),
+            "the self-test does not check actual EXECUTE privilege, so it cannot tell open from closed",
+        ).toBe(true);
+    });
+
+    it("the follow-up does not fold grant state into the watched family", () => {
+        /*
+         * The report describes the family to WATCH; open_to_clients is the verdict. If the
+         * predicate itself required a client grant, the report would empty the moment the repair
+         * succeeded and the live lock's non-vacuity floor would invert — which has already
+         * happened twice in this estate, most recently to the certification evidence gate.
+         */
+        const code = shapeBoundary!.code;
+        const fnBody = code.slice(code.indexOf("AS $fn$"), code.indexOf("$fn$;"));
+        expect(
+            /has_function_privilege/i.test(fnBody),
+            "the report's own predicate tests EXECUTE privilege, so its population shrinks to nothing on success and "
+                + "any count-based non-vacuity check will invert",
+        ).toBe(false);
     });
 
     it("excludes trigger functions, which are not reachable through PostgREST", () => {
@@ -129,7 +195,7 @@ describe("org-parameterized mutating RPC execute boundary", () => {
     it("no later migration grants a client EXECUTE on a mutating function", () => {
         const offenders: string[] = [];
         for (const m of migrations) {
-            if (m.version <= BOUNDARY) continue;
+            if (m.version <= SHAPE_BOUNDARY) continue;
             const grants = m.code.match(/GRANT\s+(?:ALL|EXECUTE)[\s\S]{0,300}?;/gi) ?? [];
             for (const g of grants) {
                 if (!/ON\s+FUNCTION/i.test(g)) continue;
