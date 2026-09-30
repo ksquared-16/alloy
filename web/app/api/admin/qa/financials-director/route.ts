@@ -4,7 +4,14 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
-import { CATALOG_VERSION, SCENARIOS, SUITE_KEY } from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
+import {
+    CATALOG_VERSION,
+    EVIDENCE_BOUNDARIES,
+    NO_AUTOMATIC_PASS,
+    SCENARIOS,
+    SUITE_KEY,
+    scenarioEvidence,
+} from "@/lib/qa/financialsDirectorQa/scenarioCatalog";
 import {
     QA_SUBJECT,
     deployedRevision,
@@ -125,7 +132,17 @@ export async function GET() {
         subjectReference: QA_SUBJECT,
         subject,
         navigation,
-        scenarios: SCENARIOS,
+        /*
+         * EVIDENCE TRAVELS WITH THE SCENARIO, not beside it.
+         *
+         * A Director decides whether to start a scenario from what it will cost them — a fixture
+         * they may spend, a real Stripe act, or just a screen to read. Shipping the classes on the
+         * scenario means that answer arrives with the question instead of living in a second list
+         * the surface would have to join.
+         */
+        scenarios: SCENARIOS.map((s) => ({ ...s, evidence: scenarioEvidence(s.key) })),
+        noAutomaticPass: NO_AUTOMATIC_PASS,
+        evidenceBoundaries: EVIDENCE_BOUNDARIES,
         readiness: resolveReadiness(subject, extras, accepted, navigation),
         results: results ?? [],
         baselineChanged: priorRevisions.length > 0,
@@ -134,7 +151,16 @@ export async function GET() {
     });
 }
 
-const RESULT_VALUES = new Set(["pass", "fail", "blocked", "not_run"]);
+/*
+ * `deferred` IS NOT A FAILURE, and it is not a skip either.
+ *
+ * It is the honest answer for a scenario this environment cannot reach safely — a provider-origin
+ * return would mean manufacturing a chargeback; a card-rail held-deposit refund needs a fixture
+ * that does not exist. Without it a Director had to record `blocked` ("something stopped me") or
+ * `fail` ("the product is wrong"), and a QA store that forces a false answer is worse than one
+ * that refuses the question: afterwards the falsehood looks exactly like a real defect.
+ */
+const RESULT_VALUES = new Set(["pass", "fail", "blocked", "not_run", "deferred"]);
 const CLASSIFICATIONS = new Set([
     "PRODUCT_DEFECT", "CONFUSING_UX", "GUIDE_MISMATCH",
     "FIXTURE_DRIFT", "ENVIRONMENT_RUNTIME", "UNKNOWN_NEEDS_TRIAGE",
@@ -156,7 +182,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Unknown scenario: ${scenarioKey || "(none)"}` }, { status: 400 });
     }
     if (!RESULT_VALUES.has(result)) {
-        return NextResponse.json({ error: "result must be pass, fail, blocked or not_run" }, { status: 400 });
+        return NextResponse.json({ error: "result must be pass, fail, blocked, deferred or not_run" }, { status: 400 });
     }
 
     const observation = String(body.observation ?? "").trim() || null;
@@ -181,6 +207,20 @@ export async function POST(request: NextRequest) {
                 { status: 400 },
             );
         }
+    }
+
+    /*
+     * A DEFERRAL MUST SAY WHY, and it takes no classification.
+     *
+     * The classification vocabulary is a failure taxonomy — PRODUCT_DEFECT, CONFUSING_UX and the
+     * rest — and a deferral is none of those. What it does need is the reason, because "I could not
+     * safely reach this" without one is indistinguishable from a scenario somebody skipped.
+     */
+    if (result === "deferred" && !observation) {
+        return NextResponse.json(
+            { error: "Say why this could not be reached. A deferral nobody explained is a skip." },
+            { status: 400 },
+        );
     }
 
     const supabase = createAdminClient();

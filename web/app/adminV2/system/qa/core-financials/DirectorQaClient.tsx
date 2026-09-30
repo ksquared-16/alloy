@@ -77,7 +77,12 @@ type Payload = {
     deployedRevision: string;
     subject: Subject;
     subjectReference: { customerId: string; householdLabel: string; site: string; fixturePath: string };
-    scenarios: Scenario[];
+    /** The catalog's scenarios, each carrying the evidence classes the route resolved for it. */
+    scenarios: (Scenario & { evidence?: readonly string[] })[];
+    /** Restated on the surface because it is the rule most easily forgotten while walking. */
+    noAutomaticPass?: string;
+    /** Where engineering stopped deliberately, keyed to the scenario that meets each one. */
+    evidenceBoundaries?: { key: string; scenarioKey: string; statement: string }[];
     navigation: Navigation;
     readiness: Readiness[];
     results: ResultRow[];
@@ -119,8 +124,23 @@ export default function DirectorQaClient() {
 
     useEffect(() => { void load(); }, [load]);
 
+    /*
+     * WHAT THE DIRECTOR IS ACTUALLY ASKED TO DRIVE.
+     *
+     * `AUTOMATED_CERTIFIED_HUMAN_PENDING` belongs in this list and used to be filtered out of it.
+     * That filter was the "no automatic pass" rule inverted: a scenario with a deterministic suite
+     * behind it was silently removed from the walkthrough instead of being offered with its
+     * evidence stated. Nine Autopay scenarios were certified and unreachable here because of it.
+     *
+     * `EXPLICITLY_DEFERRED` is included too, so the Director can see what the environment cannot
+     * reach and record `deferred` against it deliberately, rather than finding a gap in the numbering.
+     */
     const walkthrough = useMemo(
-        () => (data?.scenarios ?? []).filter((s) => s.disposition === "HUMAN_WALKTHROUGH").sort((a, b) => a.order - b.order),
+        () => (data?.scenarios ?? [])
+            .filter((s) => s.disposition === "HUMAN_WALKTHROUGH"
+                || s.disposition === "AUTOMATED_CERTIFIED_HUMAN_PENDING"
+                || s.disposition === "EXPLICITLY_DEFERRED")
+            .sort((a, b) => a.order - b.order),
         [data],
     );
     const resultOf = useCallback(
@@ -128,7 +148,7 @@ export default function DirectorQaClient() {
         [data],
     );
     const tally = useMemo(() => {
-        const t = { pass: 0, fail: 0, blocked: 0, not_run: 0 };
+        const t = { pass: 0, fail: 0, blocked: 0, deferred: 0, not_run: 0 };
         for (const s of walkthrough) {
             const r = resultOf(s.key) as keyof typeof t;
             t[r in t ? r : "not_run"] += 1;
@@ -136,7 +156,19 @@ export default function DirectorQaClient() {
         return t;
     }, [walkthrough, resultOf]);
 
+    /** The evidence vocabulary in the words a Director reads, not the enum's. */
+    const EVIDENCE_LABELS: Readonly<Record<string, string>> = {
+        HUMAN_WALKTHROUGH: "you drive this",
+        AUTOMATED_CERTIFIED: "suite-certified · supporting",
+        MOUNTED_CERTIFIED: "mounted on deployed · supporting",
+        REAL_STRIPE_TEST_ACT: "real Stripe TEST act",
+        CONTROLLED_FIXTURE: "spends a controlled fixture",
+        READ_ONLY_EVIDENCE: "read only — changes nothing",
+        DEFERRED_PROVIDER_DEPENDENT: "deferred · provider-dependent",
+    };
+
     const current = walkthrough[view.index];
+    const currentBoundary = (data?.evidenceBoundaries ?? []).find((b) => b.scenarioKey === current?.key);
     const currentReadiness = data?.readiness.find((r) => r.scenarioKey === current?.key);
 
     /*
@@ -311,7 +343,7 @@ export default function DirectorQaClient() {
                         {tally.pass} / {walkthrough.length} scenarios accepted
                     </p>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
-                        Passed {tally.pass} · Failed {tally.fail} · Blocked {tally.blocked} · Not run {tally.not_run}
+                        Passed {tally.pass} · Failed {tally.fail} · Blocked {tally.blocked} · Deferred {tally.deferred} · Not run {tally.not_run}
                         {" · "}Deferred {(data.scenarios.length - walkthrough.length)}
                     </p>
                 </Panel>
@@ -387,6 +419,49 @@ export default function DirectorQaClient() {
             </header>
 
             <Panel title="Why this matters"><p className="text-sm text-alloy-midnight/75">{current.whyItMatters}</p></Panel>
+
+            {/*
+              * WHAT THIS SCENARIO WILL COST YOU, before you start it.
+              *
+              * "Real Stripe act on a controlled fixture" is the sentence that decides whether now is
+              * the right moment. It belongs above the steps, not discovered halfway down them.
+              *
+              * The certified classes sit here too, as SUPPORTING evidence. They are what to expect,
+              * never an answer — the line beneath says so, in the catalog's own words.
+              */}
+            <Panel title="What this proof is made of" testId="scenario-evidence">
+                <ul className="flex flex-wrap gap-1.5" data-qa-evidence>
+                    {(current.evidence ?? ["HUMAN_WALKTHROUGH"]).map((e) => (
+                        <li
+                            key={e}
+                            data-qa-evidence-class={e}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                e === "HUMAN_WALKTHROUGH"
+                                    ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
+                                    : e === "DEFERRED_PROVIDER_DEPENDENT"
+                                        ? "bg-amber-100 text-amber-900"
+                                        : "bg-alloy-cloud/70 text-alloy-midnight/70"
+                            }`}
+                        >
+                            {EVIDENCE_LABELS[e] ?? e.replaceAll("_", " ").toLowerCase()}
+                        </li>
+                    ))}
+                </ul>
+                {data?.noAutomaticPass ? (
+                    <p className="mt-2 text-[11px] leading-relaxed text-alloy-midnight/55">{data.noAutomaticPass}</p>
+                ) : null}
+            </Panel>
+
+            {currentBoundary ? (
+                <Callout tone="warn" testId="scenario-evidence-boundary">
+                    <strong>KNOWN EVIDENCE BOUNDARY.</strong>
+                    <p className="mt-1">{currentBoundary.statement}</p>
+                    <p className="mt-1">
+                        This was decided before the walkthrough, not discovered during it. DEFERRED is the truthful
+                        answer here — it is not a failure.
+                    </p>
+                </Callout>
+            ) : null}
 
             {blockedByPreconditions ? (
                 <Callout tone="warn" testId="scenario-not-ready">
@@ -482,6 +557,13 @@ export default function DirectorQaClient() {
                     <Primary onClick={() => void record("pass")} disabled={saving} testId="record-pass">PASS</Primary>
                     <Secondary onClick={() => void record("fail")} disabled={saving} testId="record-fail">FAIL</Secondary>
                     <Secondary onClick={() => void record("blocked")} disabled={saving} testId="record-blocked">BLOCKED</Secondary>
+                    {/*
+                      * DEFERRED, beside BLOCKED and meaning something different. Blocked is
+                      * "something stopped me"; deferred is "this environment cannot reach it
+                      * safely, and that was decided before I started". Two of these scenarios are
+                      * deferred by design — see the evidence boundaries.
+                      */}
+                    <Secondary onClick={() => void record("deferred")} disabled={saving} testId="record-deferred">DEFERRED</Secondary>
                     <Secondary onClick={() => void record("not_run")} disabled={saving} testId="record-not-run">NOT RUN</Secondary>
                 </div>
                 <p className="mt-2 text-[11px] text-alloy-midnight/50">
