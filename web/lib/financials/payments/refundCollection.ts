@@ -381,6 +381,12 @@ export async function recognizeProviderRefund(
             // Anchored on the refund INTENT, so a replayed event and a retried recognition converge.
             idempotencyKey: `stripe-refund:${record.id}`,
             actorUserId: null,
+            /*
+             * Carried from the provider refund record, which has held it since the operator raised
+             * the refund. The card rail reaches this line long after the click, and without the lot
+             * the recognition would reverse applications to fund money that was never applied.
+             */
+            heldLotId: record.hold_id,
         });
     } catch (e) {
         const detail = e instanceof Error ? e.message : "canonical refund failed";

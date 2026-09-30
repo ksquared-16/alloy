@@ -609,6 +609,11 @@ const refundPayment: RegisteredAction = {
                 reason: t(payload.reason) || null,
                 idempotencyKey: idempotencyKeyFor(payload, "payment.refund"),
                 actorUserId: ctx.userId ?? null,
+                /*
+                 * The lot funds the refund, so no application is reversed to pay for it. Without
+                 * this the deposit's return came out of obligations the family had already settled.
+                 */
+                heldLotId: refundHoldId || null,
             });
 
             /*

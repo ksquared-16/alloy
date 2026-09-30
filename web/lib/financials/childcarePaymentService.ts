@@ -1245,6 +1245,22 @@ export type RefundChildcarePaymentInput = {
      * `processor`, a Stripe refund and a Stripe dispute look identical.
      */
     reversalOrigin?: "operator" | "provider";
+
+    /**
+     * THE HELD LOT THIS REFUND DISCHARGES, when it was raised from one.
+     *
+     * A lot's money is restricted and UNAPPLIED BY CONSTRUCTION —
+     * `enforce_payment_hold_within_unapplied` refuses a hold larger than the receipt's unapplied
+     * balance — so giving it back settles nothing and must un-settle nothing. Reversing
+     * applications to fund it takes the money out of obligations the family had already paid.
+     *
+     * Measured on deployed staging before this existed: an $80 deposit refunded against a $700
+     * receipt holding $582 unapplied reversed all three of its applications and re-applied $38.
+     * The balance rose $75 -> $137, PAID fell $100 -> $38, and Available prepaid rose by exactly
+     * the $80 refunded — the lot became spendable prepaid while the refund came out of settled
+     * obligations, which is the release-then-refund shape the held-money design exists to refuse.
+     */
+    heldLotId?: string | null;
 };
 
 export type RefundChildcarePaymentResult = {
@@ -1264,7 +1280,9 @@ export type RefundChildcarePaymentResult = {
  *
  *   1. A NEW outbound payment row is written pointing at the receipt through `refunds_payment_id`.
  *      The receipt keeps reading exactly as it was received; the database refuses to change it.
- *   2. The APPLICATIONS are reversed by the refunded amount, which is what puts the balance back.
+ *   2. The APPLICATIONS are reversed by the refunded amount, which is what puts the balance back —
+ *      UNLESS the refund was raised from a held lot, whose money was never applied and whose
+ *      return therefore changes no obligation. See `heldLotId`.
  *      A reversal sets `status = 'reversed'` with `reversed_at` and a reason — the correction shape
  *      the table was designed with — and never deletes the row, so "this money was applied and then
  *      given back" stays legible. For a partial refund the remainder is RE-APPLIED as a new active
@@ -1383,7 +1401,14 @@ export async function refundChildcarePayment(
     let reappliedAllocation: PaymentAllocationRow | null = null;
     let remaining = amountCents;
 
-    for (const alloc of active) {
+    /*
+     * A REFUND RAISED FROM A HELD LOT REVERSES NOTHING. Its money was never applied — see
+     * `heldLotId` — so there is no application to give back, and reversing one would un-settle an
+     * obligation the family had already paid in order to fund a deposit going the other way.
+     */
+    const fundedFromHeldLot = Boolean(trimOrNull(input.heldLotId ?? null));
+
+    for (const alloc of fundedFromHeldLot ? [] : active) {
         if (remaining <= 0) break;
         const allocAmount = Number(alloc.allocated_amount_cents) || 0;
 
