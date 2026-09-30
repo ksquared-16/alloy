@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments (stability gate CLOSED — latest semantic change today)** · Communications · Configuration · **Operational Intelligence (surface measured; one authority repair landed, claim matrix outstanding)** · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | **Financials / Payments (stability gate CLOSED — 0 days quiet)** · Configuration · AI/BOS · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -147,6 +147,46 @@ matrices, owner sets and provider/lifecycle models are not done, not because any
 the domain service or handler library rather than at the route. A route-level scan under-reports it every
 time, which is why the `helper` field in the declaration table exists. Never read "no capability call in
 the route file" as "no capability".
+
+### Operational Intelligence and Communications — context treatment
+
+**OPERATIONAL INTELLIGENCE — CERTIFIED.** DIRECT: §0 of
+[`../platform/core/operational-calculations.md`](../platform/core/operational-calculations.md), plus
+`../platform/analytics/metric-platform-doctrine.md` and `metric-data-model.md` for the metric platform.
+REFERENCE_ON_DEMAND: `operational-expectations-system-design.md` (frozen). PLANNED_ONLY:
+`analytics-v2-roadmap.md`.
+
+Four output families, and they differ in the property that matters: **Operational Expectations are
+AUTHORED** (1,243 rows, 258 ratifications) while Questions, Metrics and Observations are **derived**.
+Metric snapshots are append-only with `computed_at`, refreshed by an `x-cron-token` machine credential or
+an operator holding `reports.write`. 44 route files / 62 handlers / 33 writes, 31 capability-declared;
+`reports.read` and `reports.write` are separately granted, and ops deliberately holds only the read.
+**Nothing in OI mutates domain state.**
+
+**COMMUNICATIONS — CERTIFIED.** DIRECT:
+[`../platform/modules/communications-platform.md`](../platform/modules/communications-platform.md) and
+`communications-identity-platform.md`. REFERENCE_ON_DEMAND: `communications-runtime-contract.md`.
+EXCLUDE_HISTORY: the V1 closeout and the public-link defect record.
+
+**Resend** (email) and **Twilio** (SMS), both over raw HTTP with no SDK in `package.json`. Both webhooks
+are signature-verified — Resend via Svix against `RESEND_WEBHOOK_SECRET`, Twilio via `X-Twilio-Signature`
+per binding — and both verifications live in the **handler library**, so a route-level scan reports them as
+ungated and is wrong. 43 route files / 54 handlers / 32 writes, every one resolving to real authority:
+28 capability, 3 provider-signature, 1 token. A message cannot exist without a thread (`thread_id` NOT
+NULL + FK, zero orphans).
+
+**The correction each certification carried.** OI's owner said nothing about `org_settings` persistence,
+refresh or read-versus-author authority — gaps now closed. Communications listed **inbound email** as
+out-of-scope/next-sprint while `communication_inbound_ingress` holds 32 rows and has a full ingestion
+writer. That is the third July-dated doc this programme has found calling a shipped feature future work,
+after Commercial's "deferred" list and the claim that staff assignment did not exist.
+
+**Forbidden across both:** a metric is the canonical source fact · a projection is durable future truth ·
+a recommendation is an authorized action · a stale observation is current state (read `computed_at`) · an
+OI write capability confers domain mutation permission · an email address is a Person · provider
+*accepted* means delivered · contact information implies consent · an unmatched inbound message must
+belong to a Person · a provider webhook is trusted without verification · a template is sent-message
+truth · SMS or announcements are unused because this stack has no rows for them.
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
