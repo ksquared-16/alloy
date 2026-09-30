@@ -58,6 +58,9 @@ export default function FinancialsDetailCard({
     onMovePayment,
     onAddAdjustment,
     onReverseAdjustment,
+    onApplyHeldFunds,
+    onReleaseHeldFunds,
+    onRefundHeldFunds,
     onPostCharge,
     onReverseCharge,
     onAdjustCharge,
@@ -207,6 +210,38 @@ export default function FinancialsDetailCard({
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
     onAddAdjustment?: () => void;
     onReverseAdjustment?: (args: { applicationId: string }) => void;
+    /*
+     * THE THREE THINGS THAT MAY BECOME OF HELD MONEY.
+     *
+     * Three callbacks and not one with a `kind`, because they are three different authorisations the
+     * host resolves separately: applying raises the canonical apply command with the hold named,
+     * releasing raises `deposit.release`, and refunding raises the receipt's own refund. A single
+     * handler would invite one confirmation copy for three different consequences.
+     *
+     * Each is OPTIONAL and the control is absent when the callback is: in the lab the section renders
+     * its position with no acts, which is what a specimen should show.
+     */
+    onApplyHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
+    onReleaseHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
+    onRefundHeldFunds?: (args: { holdId: string; paymentId: string; remainingCents: number }) => void;
+    /**
+     * REFUND A HELD LOT — held straight to a canonical refund.
+     *
+     * NO AVAILABLE-PREPAID INTERMEDIATE. The host does not release and then refund: releasing would
+     * make the money ordinary spendable prepaid for the interval before the refund lands, and
+     * another operation could apply it to an obligation while it was already going back to the payer.
+     *
+     * The act is the receipt's own `payment.refund`, told which lot it discharges. It cannot write
+     * the `refunded` disposition itself on a card rail — the constraint requires it to name a
+     * canonical refund payment, and none exists until the provider refund is RECOGNISED — so the
+     * hold is carried on the provider refund record and discharged there. The manual rail discharges
+     * it immediately, because cash handed back has no executor to wait for.
+     *
+     * OFFERED ONLY ON A REFUNDABLE LOT. The terms are known here, so a control that could only be
+     * refused would ask the operator to discover a promise the record already carries. The
+     * eligibility rule still lives server-side and runs BEFORE any provider call — a filter is not
+     * a boundary.
+     */
     /** A draft the operator may post. The row says whether it qualifies; this decides nothing. */
     onPostCharge?: (args: { chargeId: string; label: string }) => void;
     /** A posted charge the operator may correct. Eligibility is the read model's answer. */
@@ -990,6 +1025,135 @@ export default function FinancialsDetailCard({
                                 }}
                             />
                         ))}
+                    </div>
+                ) : null}
+
+                {/*
+                  * ── HELD DEPOSITS — A POSITION, WITH THE ACTS THAT DISCHARGE IT ───────────────
+                  *
+                  * The strip above carries a TOTAL, which answers "how much is restricted" and
+                  * nothing else. It cannot be acted on: releasing "some of $675" requires knowing it
+                  * is a refundable $500 security deposit and a non-refundable $175 registration fee,
+                  * and an operator who cannot see that distinction cannot honour it.
+                  *
+                  * NOT A LEDGER. These are not transactions; they are standing restrictions over
+                  * money whose receipt is already in the ledger above. Rendering them through
+                  * `FinancialsLedgerRow` would need a date, a GL account and a status this has none
+                  * of, and would state a held lot as an eighth kind of ledger row — which is the
+                  * three-presentation-systems mistake that module exists to have ended.
+                  *
+                  * THE COMMANDS BELONG TO THE LOT. Same rule as the adjustments block: no footer
+                  * link farm, because "Release →" three times under a list says nothing about which
+                  * deposit it releases. Each lot carries its own three.
+                  *
+                  * CLOSED LOTS ARE ABSENT — the adapter drops them. A fully disposed hold offers no
+                  * act, and what became of the money is readable from the receipt above.
+                  */}
+                {!ledgerPending && evidence.heldDeposits.length ? (
+                    <div className="alloy-os-fdetail__held" data-financials-held-deposits="true">
+                        <SectionHead>Held deposits</SectionHead>
+                        {/*
+                          * WHY THIS SENTENCE IS HERE. Held money is the one figure on this surface
+                          * that an operator reliably misreads as available: it is money the family
+                          * has already given. Saying what it is NOT is the difference between a
+                          * deposit sitting untouched and a deposit quietly spent on tuition.
+                          */}
+                        <p className="alloy-os-fdetail__heldnote" data-financials-held-note="true">
+                            Money received and restricted. It is not available prepaid and it does not
+                            reduce what the family owes until it is applied.
+                        </p>
+                        <div className="alloy-os-fdetail__heldlist">
+                            {evidence.heldDeposits.map((h) => (
+                                <div
+                                    key={h.holdId}
+                                    className="alloy-os-fdetail__heldrow"
+                                    data-financials-held-row={h.holdId}
+                                >
+                                    <span className="alloy-os-fdetail__heldfacts">
+                                        <span className="alloy-os-fdetail__heldamount" data-financials-held-remaining="true">
+                                            {h.remaining}
+                                        </span>
+                                        {/*
+                                          * The reason is the lot's NAME to an operator — "Security
+                                          * deposit" is how they think of it, not "hold 4f2a…". When
+                                          * none was recorded the row says so rather than inventing a
+                                          * label, because a deposit with no stated reason is a real
+                                          * and reportable state.
+                                          */}
+                                        <span className="alloy-os-fdetail__heldreason">
+                                            {h.reason ?? "No reason recorded"}
+                                        </span>
+                                        <span className="alloy-os-fdetail__heldmeta">
+                                            {/*
+                                              * THE TERMS THE MONEY WAS TAKEN UNDER, not the
+                                              * organisation's current policy. A deposit keeps what
+                                              * the family was promised even after the policy changes,
+                                              * which is why the terms are stored on the hold.
+                                              */}
+                                            <span
+                                                data-financials-held-refundable={h.refundable ? "yes" : "no"}
+                                            >
+                                                {h.refundableNote}
+                                            </span>
+                                            {h.heldOn ? <span>Held {h.heldOn}</span> : null}
+                                            {/*
+                                              * `original` is present only when part of the lot is
+                                              * gone, so this line always explains a gap rather than
+                                              * repeating the amount beside it.
+                                              */}
+                                            {h.original ? <span>{h.original} originally held</span> : null}
+                                            {h.disposedLines.map((d) => (
+                                                <span key={d.label}>{d.label} {d.value}</span>
+                                            ))}
+                                        </span>
+                                    </span>
+                                    <span className="alloy-os-fdetail__heldactions">
+                                        {onApplyHeldFunds ? (
+                                            <RowAction
+                                                kind="apply"
+                                                command="payment.apply_to_charge"
+                                                title={`Apply ${h.remaining} of this held deposit to a charge — it stops being held and the balance falls`}
+                                                onClick={() => onApplyHeldFunds({
+                                                    holdId: h.holdId,
+                                                    paymentId: h.paymentId,
+                                                    remainingCents: h.remainingCents,
+                                                })}
+                                            />
+                                        ) : null}
+                                        {onReleaseHeldFunds ? (
+                                            <RowAction
+                                                kind="release"
+                                                command="deposit.release"
+                                                title={`Release ${h.remaining} — the restriction ends and it becomes available prepaid. No money moves.`}
+                                                onClick={() => onReleaseHeldFunds({
+                                                    holdId: h.holdId,
+                                                    paymentId: h.paymentId,
+                                                    remainingCents: h.remainingCents,
+                                                })}
+                                            />
+                                        ) : null}
+                                        {/*
+                                          * ABSENT ON A NON-REFUNDABLE LOT, not present and refused.
+                                          * A deposit taken as non-refundable is a promise the record
+                                          * already carries; offering a control that can only fail
+                                          * asks the operator to discover it by being told no.
+                                          */}
+                                        {onRefundHeldFunds && h.refundable ? (
+                                            <RowAction
+                                                kind="refund"
+                                                command="payment.refund"
+                                                title={`Refund ${h.remaining} to the payer — it leaves the organisation and does not pass through available prepaid`}
+                                                onClick={() => onRefundHeldFunds({
+                                                    holdId: h.holdId,
+                                                    paymentId: h.paymentId,
+                                                    remainingCents: h.remainingCents,
+                                                })}
+                                            />
+                                        ) : null}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ) : null}
 

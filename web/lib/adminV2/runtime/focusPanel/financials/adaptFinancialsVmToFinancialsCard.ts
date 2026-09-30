@@ -377,6 +377,13 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 appliedLabel: money(p.appliedCents, p.currencyCode || currency),
                 unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
                 unappliedCents: p.unappliedCents,
+                /*
+                 * WHAT IS LEFT TO RESTRICT. Clamped at zero rather than allowed negative: the two
+                 * figures come from one read of the same lots, but a receipt whose holds somehow
+                 * exceeded its unapplied money must not render as a negative offer — the surface
+                 * would be arguing with the invariant instead of declining to act.
+                 */
+                holdableCents: Math.max(0, p.unappliedCents - (p.heldCents ?? 0)),
                 applications: p.applications.map((a) => ({
                     allocationId: a.allocationId,
                     chargeId: a.chargeId,
@@ -417,6 +424,58 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 applied: r.chargeStatus === "posted",
                 reversed: r.reversedByApplicationId !== null,
                 isReversal: r.reversesApplicationId !== null,
+            })),
+        /*
+         * THE HELD LOTS BEHIND THE TOTAL.
+         *
+         * CLOSED LOTS ARE DROPPED. A hold with nothing remaining is history: it offers no act, and
+         * listing it beside open ones would put rows an operator cannot do anything with in a
+         * section that exists to be acted on. What became of the money is still recoverable from the
+         * receipt's own applications and refunds, which is where it belongs.
+         *
+         * Nothing here is computed. `remainingCents` is the reader's fold over the dispositions, the
+         * same fold the invariant trigger enforces, and the adapter only formats it — a subtraction
+         * done here could disagree with the boundary that refuses an over-disposal.
+         */
+        heldDeposits: (vm.heldDeposits ?? [])
+            .filter((h) => h.open)
+            .map((h) => ({
+                holdId: h.id,
+                paymentId: h.paymentId,
+                remaining: money(h.remainingCents, currency),
+                remainingCents: h.remainingCents,
+                /*
+                 * Shown ONLY when part of the lot is gone, because that is the only time it explains
+                 * anything. On an untouched hold "held $500, $500 remaining" is the same fact twice.
+                 */
+                original:
+                    h.remainingCents !== h.originalAmountCents
+                        ? money(h.originalAmountCents, currency)
+                        : null,
+                disposedLines: [
+                    ...(h.releasedCents > 0 ? [{ label: "Released", value: money(h.releasedCents, currency) }] : []),
+                    ...(h.appliedCents > 0 ? [{ label: "Applied", value: money(h.appliedCents, currency) }] : []),
+                    ...(h.refundedCents > 0 ? [{ label: "Refunded", value: money(h.refundedCents, currency) }] : []),
+                ],
+                refundable: h.refundable,
+                /*
+                 * FROM THE SNAPSHOT, NOT FROM CURRENT POLICY. The terms a family was promised do not
+                 * change because the organisation's policy did, which is the entire reason the terms
+                 * are stored on the hold.
+                 */
+                refundableNote: h.refundable
+                    ? "Refundable on the terms it was taken under"
+                    : "Taken as non-refundable",
+                reason: h.reason,
+                /* Never a raw ISO date on an operator surface. */
+                heldOn: displayDate(h.heldAt),
+                /*
+                 * PROVENANCE ONLY, and named as provenance. It is not consulted to decide
+                 * refundability — `refundable` above is — and it is not offered as a link, because a
+                 * deposit policy has no operator surface to reach.
+                 */
+                policyReference: h.policyId,
+                open: h.open,
             })),
     };
 }
@@ -767,5 +826,7 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         upcoming: [],
         payments: [],
         adjustments: [],
+        /* The degraded payload claims no holds rather than inventing an empty position. */
+        heldDeposits: [],
     };
 }

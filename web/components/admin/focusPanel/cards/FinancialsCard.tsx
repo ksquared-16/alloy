@@ -762,6 +762,15 @@ export default function FinancialsCard({
         refundedCents: number;
         refundableCents: number;
         currencyCode: string;
+        /*
+         * The held lot being refunded, when the refund was raised from one.
+         *
+         * It narrows the CEILING as well as naming the lot: the refundable figure above is the
+         * receipt's, and a $500 refundable receipt holding a $175 lot may not refund $500 of that
+         * lot. The action re-derives both bounds and refuses a non-refundable lot before any
+         * provider call; this only avoids asking for something that cannot be granted.
+         */
+        hold?: { holdId: string; remainingCents: number };
     } | null>(null);
     const [refundAmount, setRefundAmount] = useState<string>("");
     const [refundError, setRefundError] = useState<string | null>(null);
@@ -927,7 +936,58 @@ export default function FinancialsCard({
      */
     type MoveTarget = { chargeId: string; label: string; serviceDate: string | null; outstandingCents: number };
     const [movePending, setMovePending] = useState<{ paymentId: string; allocationId: string } | null>(null);
-    const [applyPending, setApplyPending] = useState<{ paymentId: string } | null>(null);
+    /*
+     * APPLYING HELD MONEY REUSES THIS PANEL, because it is the same act.
+     *
+     * `deposit.apply` was never minted, on the stated grounds that applying held money is an
+     * ORDINARY allocation and a second authority over money that already has one would have to be
+     * kept in agreement forever. So the hold is carried as an INPUT to applying: same chooser, same
+     * preview, same confirm, and the panel only changes what it calls the act.
+     */
+    const [applyPending, setApplyPending] = useState<
+        { paymentId: string; hold?: { holdId: string; remainingCents: number } } | null
+    >(null);
+    /*
+     * RELEASING IS ITS OWN PANEL AND NOT A MODE OF THE ONE ABOVE. It names no charge — there is
+     * nothing to choose — and its consequence is the opposite: the money becomes spendable rather
+     * than spent. One panel doing both would need the chooser hidden and the copy swapped, which is
+     * how "Apply" and "Move" already share a panel and why that one needs a comment to be read.
+     */
+    const [releasePending, setReleasePending] = useState<
+        { holdId: string; paymentId: string; remainingCents: number } | null
+    >(null);
+    const [releaseReason, setReleaseReason] = useState("");
+    const [releaseError, setReleaseError] = useState<string | null>(null);
+    /*
+     * ── HOLDING IS AN ACT ON A RECEIPT, so it is composed from the receipt ───────────────────────
+     *
+     * `deposit.hold` had been registered and executable since W4 with NO mounted caller, which made
+     * the whole held-money lifecycle unreachable in production: nothing could create a hold, so the
+     * position, its provenance and its two acts could never appear on a real account.
+     *
+     * It belongs on the receipt and not on the account: holding restricts part of ONE payment, the
+     * invariant is bounded by THAT payment's unapplied remainder, and the operator's question is
+     * "how much of this money is a deposit" — which is a question about the receipt in front of them.
+     *
+     * The terms are chosen at creation and never again. That is the whole reason the hold stores a
+     * snapshot rather than a policy pointer, so the panel asks plainly and does not default silently.
+     */
+    const [holdPending, setHoldPending] = useState<
+        { paymentId: string; label: string; holdableCents: number; currencyCode: string } | null
+    >(null);
+    const [holdAmount, setHoldAmount] = useState("");
+    const [holdReason, setHoldReason] = useState("");
+    /*
+     * NO DEFAULT, DELIBERATELY.
+     *
+     * A checkbox stood here and the operator-vocabulary suite refused it: a native control must not
+     * express a financial decision on this surface. It was right for a second reason. "Refundable"
+     * is a promise about a family's money, snapshot at creation and never revisited — so an
+     * unchecked box quietly deciding it, or a pre-selected value the operator never read, is the one
+     * outcome this field must not allow. Empty until chosen, and Hold funds stays disabled.
+     */
+    const [holdRefundable, setHoldRefundable] = useState<"" | "yes" | "no">("");
+    const [holdError, setHoldError] = useState<string | null>(null);
     const [moveTargets, setMoveTargets] = useState<MoveTarget[]>([]);
     const [moveTargetId, setMoveTargetId] = useState("");
     const [moveReason, setMoveReason] = useState("");
@@ -977,6 +1037,14 @@ export default function FinancialsCard({
         setMoveReason("");
         setMovePreview(null);
         setMoveError(null);
+        setReleasePending(null);
+        setReleaseReason("");
+        setReleaseError(null);
+        setHoldPending(null);
+        setHoldAmount("");
+        setHoldReason("");
+        setHoldRefundable("");
+        setHoldError(null);
     }, []);
 
     /** Targets come from the server resolver; the panel never assembles charges itself. */
@@ -1138,11 +1206,32 @@ export default function FinancialsCard({
         setMoveNotice(null);
         const target = moveTargets.find((t) => t.chargeId === moveTargetId);
         try {
+            /*
+             * A HELD LOT IS BOUNDED BY TWO THINGS, and the smaller wins.
+             *
+             * The action REQUIRES an amount when a hold is named, because its own default is drawn
+             * from the whole receipt — which would apply more of the payment than the hold covers.
+             * The charge's outstanding is the second bound: without it, applying a $500 deposit to a
+             * $200 charge would ask for an over-payment the engine refuses, and the operator would
+             * read a refusal instead of a $200 application.
+             *
+             * Both figures are re-derived server-side; this only avoids asking for the impossible.
+             */
+            const heldAmountCents = applyPending.hold
+                ? Math.min(applyPending.hold.remainingCents, target?.outstandingCents ?? applyPending.hold.remainingCents)
+                : null;
             await runAction("payment.apply_to_charge", {
                 payment_id: applyPending.paymentId,
                 charge_id: moveTargetId,
+                ...(applyPending.hold
+                    ? { hold_id: applyPending.hold.holdId, amount_cents: heldAmountCents }
+                    : {}),
             });
-            setMoveNotice(`Applied to ${target?.label ?? "the selected charge"}.`);
+            setMoveNotice(
+                applyPending.hold
+                    ? `Applied the held deposit to ${target?.label ?? "the selected charge"}. It is no longer held.`
+                    : `Applied to ${target?.label ?? "the selected charge"}.`,
+            );
             closeMovePanels();
         } catch (e) {
             setMoveError(e instanceof Error ? e.message : String(e));
@@ -1286,6 +1375,129 @@ export default function FinancialsCard({
         setAdjustNotice(null);
         setReversePending(args);
     }, [closeAdjustPanels, closeMovePanels]);
+
+    /*
+     * ── THE THREE ACTS ON HELD MONEY ─────────────────────────────────────────────────────────────
+     *
+     * Each opens the surface that OWNS the act rather than a panel of its own invention:
+     *
+     *   apply    the existing apply panel, with the hold carried — it is an ordinary allocation
+     *   release  its own panel, because there is nothing to choose and the consequence is inverse
+     *   refund   the receipt's refund composer, because a refund belongs to the receipt it reverses
+     *
+     * Applying loads the charge chooser exactly as applying unapplied money does; nothing about the
+     * target list changes because the money is held.
+     */
+    const openApplyHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setApplyPending({ paymentId: args.paymentId, hold: { holdId: args.holdId, remainingCents: args.remainingCents } });
+        void loadMoveTargets(args.paymentId);
+    }, [closeAdjustPanels, closeMovePanels, loadMoveTargets]);
+
+    const openReleaseHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setReleasePending(args);
+    }, [closeAdjustPanels, closeMovePanels]);
+
+    const confirmHold = useCallback(async () => {
+        if (!holdPending || running) return;
+        const cents = Math.round(Number(holdAmount.replace(/[$,\s]/g, "")) * 100);
+        if (!Number.isFinite(cents) || cents <= 0) {
+            setHoldError("Enter an amount greater than zero.");
+            return;
+        }
+        /*
+         * For the operator's sake, not the ledger's: the hold invariant re-derives this bound with
+         * the payment row locked and its refusal is what decides. This only avoids asking for
+         * something that cannot be granted.
+         */
+        /*
+         * The action reads `refundable !== false`, so an unanswered field would arrive as
+         * REFUNDABLE without anybody having said so. Refused here rather than defaulted.
+         */
+        if (holdRefundable !== "yes" && holdRefundable !== "no") {
+            setHoldError("Say whether this deposit is refundable before holding it.");
+            return;
+        }
+        if (cents > holdPending.holdableCents) {
+            setHoldError(
+                `Only ${money(holdPending.holdableCents, holdPending.currencyCode)} of this payment is available to hold.`,
+            );
+            return;
+        }
+        setRunning(true);
+        setHoldError(null);
+        try {
+            await runAction("deposit.hold", {
+                payment_id: holdPending.paymentId,
+                amount_cents: cents,
+                refundable: holdRefundable === "yes",
+                reason: holdReason.trim() || null,
+            });
+            setMoveNotice(
+                `Held ${money(cents, holdPending.currencyCode)}. It is no longer available prepaid and what the family owes is unchanged.`,
+            );
+            closeMovePanels();
+        } catch (e) {
+            setHoldError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, holdAmount, holdPending, holdReason, holdRefundable, load, runAction, running]);
+
+    /*
+     * REFUND BELONGS TO THE RECEIPT, so this opens the receipt's own composer rather than a second
+     * refund form on the held row. One refund surface, told which lot it is discharging.
+     */
+    const openRefundHeldFunds = useCallback((args: { holdId: string; paymentId: string; remainingCents: number }) => {
+        closeMovePanels();
+        closeAdjustPanels();
+        setCommandError(null);
+        setRefundError(null);
+        const receipt = presentPayments(
+            vm?.payments ?? [],
+            Object.fromEntries((vm?.payments ?? []).map((r) => [r.paymentId, r.heldCents ?? 0])),
+        ).find((p) => p.paymentId === args.paymentId);
+        if (!receipt) {
+            setCommandError("That deposit's receipt could not be read, so it cannot be refunded yet.");
+            return;
+        }
+        /* The smaller of the two ceilings: what the lot holds, and what the receipt can still give back. */
+        const ceiling = Math.min(args.remainingCents, receipt.refundableCents);
+        setRefundTarget({
+            paymentId: receipt.paymentId,
+            label: `${money(receipt.receivedCents, receipt.currencyCode)} ${receipt.methodLabel}`,
+            receivedCents: receipt.receivedCents,
+            refundedCents: receipt.refundedCents,
+            refundableCents: ceiling,
+            currencyCode: receipt.currencyCode,
+            hold: { holdId: args.holdId, remainingCents: args.remainingCents },
+        });
+        setRefundAmount((ceiling / 100).toFixed(2));
+    }, [closeAdjustPanels, closeMovePanels, vm?.payments]);
+
+    const confirmRelease = useCallback(async () => {
+        if (!releasePending || running) return;
+        setRunning(true);
+        setReleaseError(null);
+        try {
+            await runAction("deposit.release", {
+                hold_id: releasePending.holdId,
+                amount_cents: releasePending.remainingCents,
+                reason: releaseReason.trim() || null,
+            });
+            setMoveNotice("Released. The money is now available prepaid and still belongs to the family.");
+            closeMovePanels();
+        } catch (e) {
+            setReleaseError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setRunning(false);
+            await load();
+        }
+    }, [closeMovePanels, load, releasePending, releaseReason, runAction, running]);
 
     /** The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
     const previewAdjustment = useCallback(async () => {
@@ -3220,7 +3432,14 @@ export default function FinancialsCard({
                         className="alloy-os-financials__payments"
                         data-financials-payments="true"
                     >
-                        {presentPayments(vm.payments).map((p) => {
+                        {/*
+                          * The held figures come from the VM's own read of the lots, so a receipt's
+                          * "holdable" and the account's "Held deposit" total cannot disagree.
+                          */}
+                        {presentPayments(
+                            vm.payments,
+                            Object.fromEntries(vm.payments.map((r) => [r.paymentId, r.heldCents ?? 0])),
+                        ).map((p) => {
                             const composing = refundTarget?.paymentId === p.paymentId;
                             return (
                                 <li
@@ -3274,6 +3493,141 @@ export default function FinancialsCard({
                                                 {money(p.receivedCents - p.refundedCents, p.currencyCode)} net retained
                                             </span>
                                         </span>
+                                    ) : null}
+                                    {/*
+                                      * HOLD — the act that CREATES a restriction, on the receipt it
+                                      * restricts. Beside Refund because both are acts on this
+                                      * receipt; ahead of it because holding is the ordinary deposit
+                                      * flow and refunding is the exception.
+                                      *
+                                      * Absent once nothing is left to hold, rather than present and
+                                      * refused: `holdableCents` is unapplied minus already held,
+                                      * which is the bound the invariant enforces.
+                                      */}
+                                    {p.offersHold && !composing && holdPending?.paymentId !== p.paymentId ? (
+                                        <button
+                                            type="button"
+                                            className="alloy-os-financials__action alloy-os-financials__action--onrow"
+                                            data-financials-command="deposit.hold"
+                                            data-financials-hold-payment={p.paymentId}
+                                            data-financials-holdable={p.holdableCents}
+                                            disabled={running}
+                                            onClick={() => {
+                                                setCommandError(null);
+                                                setHoldError(null);
+                                                setHoldPending({
+                                                    paymentId: p.paymentId,
+                                                    label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                    holdableCents: p.holdableCents,
+                                                    currencyCode: p.currencyCode,
+                                                });
+                                                /*
+                                                 * Opens at everything available, because a deposit is
+                                                 * usually the whole of a receipt taken for one — and
+                                                 * the operator may reduce it.
+                                                 */
+                                                setHoldAmount((p.holdableCents / 100).toFixed(2));
+                                                setHoldReason("");
+                                                setHoldRefundable("");
+                                            }}
+                                        >
+                                            Hold
+                                        </button>
+                                    ) : null}
+                                    {holdPending?.paymentId === p.paymentId ? (
+                                        <div
+                                            className="alloy-os-financials__preview"
+                                            data-financials-hold-form="true"
+                                            data-financials-hold-for={p.paymentId}
+                                        >
+                                            <p className="alloy-os-financials__preview-summary">
+                                                Hold part of this receipt so it is not spent against what
+                                                the family owes. No money moves and the balance does not change.
+                                            </p>
+                                            <label className="alloy-os-fdetail__movefield">
+                                                <span>Amount</span>
+                                                <input
+                                                    data-testid="deposit-hold-amount"
+                                                    inputMode="decimal"
+                                                    value={holdAmount}
+                                                    onChange={(e) => setHoldAmount(e.target.value)}
+                                                />
+                                            </label>
+                                            <label className="alloy-os-fdetail__movefield">
+                                                <span>Reason</span>
+                                                <input
+                                                    data-testid="deposit-hold-reason"
+                                                    value={holdReason}
+                                                    onChange={(e) => setHoldReason(e.target.value)}
+                                                    placeholder="Security deposit"
+                                                />
+                                            </label>
+                                            {/*
+                                              * THE TERMS, ASKED ONCE AND NEVER AGAIN.
+                                              *
+                                              * Snapshot at creation: a later policy change must not
+                                              * retroactively alter what the family was promised. So
+                                              * this is a deliberate choice on the way in, not a
+                                              * default the operator can discover later — and the
+                                              * consequence is stated beside it, because
+                                              * "non-refundable" is a promise about someone's money.
+                                              */}
+                                            <div
+                                                className="alloy-os-fdetail__movefield"
+                                                data-financials-hold-refundable={holdRefundable || "unanswered"}
+                                            >
+                                                <span>Refundable</span>
+                                                <AlloySelect
+                                                    testId="deposit-hold-refundable"
+                                                    aria-label="Refundable"
+                                                    placeholder="Choose…"
+                                                    value={holdRefundable}
+                                                    options={[
+                                                        { value: "yes", label: "Refundable" },
+                                                        { value: "no", label: "Non-refundable" },
+                                                    ]}
+                                                    onChange={(next) => setHoldRefundable(next === "no" ? "no" : next === "yes" ? "yes" : "")}
+                                                />
+                                            </div>
+                                            {holdRefundable ? (
+                                                <p className="alloy-os-fdetail__heldnote">
+                                                    {holdRefundable === "yes"
+                                                        ? "Recorded as refundable on the terms in force today. A later policy change will not alter them."
+                                                        : "Recorded as NON-REFUNDABLE. This cannot be refunded later, whatever the policy becomes."}
+                                                </p>
+                                            ) : null}
+                                            {holdError ? (
+                                                <div
+                                                    className="alloy-os-fdetail__moveerror"
+                                                    data-testid="deposit-hold-error"
+                                                >
+                                                    {holdError}
+                                                </div>
+                                            ) : null}
+                                            <span className="alloy-os-financials__preview-actions">
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-testid="deposit-hold-confirm"
+                                                    disabled={running || !holdRefundable}
+                                                    onClick={() => void confirmHold()}
+                                                >
+                                                    Hold funds
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-financials__action"
+                                                    data-testid="deposit-hold-cancel"
+                                                    disabled={running}
+                                                    onClick={() => {
+                                                        setHoldPending(null);
+                                                        setHoldError(null);
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </span>
+                                        </div>
                                     ) : null}
                                     {p.offersRefund && !composing ? (
                                         <button
@@ -3367,9 +3721,20 @@ export default function FinancialsCard({
                                                             setRefundError("Enter a refund amount greater than zero.");
                                                             return;
                                                         }
-                                                        if (cents > p.refundableCents) {
+                                                        /*
+                                                         * The CEILING IS THE COMPOSER'S, not the
+                                                         * row's. A refund raised from a held lot is
+                                                         * bounded by that lot, which is smaller than
+                                                         * what the receipt could give back — reading
+                                                         * the row here would let a $175 lot refund
+                                                         * the receipt's full $500.
+                                                         */
+                                                        const ceiling = refundTarget?.refundableCents ?? p.refundableCents;
+                                                        if (cents > ceiling) {
                                                             setRefundError(
-                                                                `Refund amount exceeds the remaining refundable balance of ${money(p.refundableCents, p.currencyCode)}.`,
+                                                                refundTarget?.hold
+                                                                    ? `Only ${money(ceiling, p.currencyCode)} of this held deposit can be refunded.`
+                                                                    : `Refund amount exceeds the remaining refundable balance of ${money(ceiling, p.currencyCode)}.`,
                                                             );
                                                             return;
                                                         }
@@ -3380,6 +3745,7 @@ export default function FinancialsCard({
                                                                 payment_id: p.paymentId,
                                                                 amount_cents: cents,
                                                                 payment_label: `${money(p.receivedCents, p.currencyCode)} ${p.methodLabel}`,
+                                                                ...(refundTarget?.hold ? { hold_id: refundTarget.hold.holdId } : {}),
                                                             },
                                                             paymentEntityFor(chargeTarget),
                                                         ).then((outcome) => {
@@ -4383,7 +4749,25 @@ export default function FinancialsCard({
                       * one.
                       */}
                     <div className="alloy-os-financials__entrybody" data-financials-entry="payments_admin">
-                        <PaymentMethodsSection customerId={customerId} />
+                        <PaymentMethodsSection
+                            customerId={customerId}
+                            /*
+                             * THE CANONICAL PAYER, WIRED. This mount passed `customerId` alone, so
+                             * `payerName` never arrived and the Stripe billing-name prefill this
+                             * section already implements was dead in production — working code that
+                             * nothing ever invoked. Third time this sprint that a production mount
+                             * omitted canonical truth a component was ready to use.
+                             *
+                             * Ownership was never at risk: the server derives the method's payer.
+                             * What was lost was the prefill, silently.
+                             *
+                             * Household membership, never responsibility — a grandparent may pay and
+                             * owe nothing, and the payer list is ordered by primary contact for
+                             * exactly that reason.
+                             */
+                            payerEntityId={vm?.payerCandidates?.[0]?.personId ?? null}
+                            payerName={vm?.payerCandidates?.[0]?.name ?? null}
+                        />
                         <AutopaySection
                             customerId={customerId}
                             /* The canonical candidates this form never received — see AutopaySection. */
@@ -4900,7 +5284,16 @@ export default function FinancialsCard({
                 {movePending || applyPending ? (
                     <div className="alloy-os-fdetail__movepanel" data-testid="payment-move-panel">
                         <div className="alloy-os-fdetail__moveheader">
-                            {movePending ? "Move payment" : "Apply payment"}
+                            {/*
+                              * "Apply payment" would be true and useless here: the operator arrived
+                              * from a held lot and needs to see that THIS is the deposit they chose,
+                              * not the receipt it sits inside.
+                              */}
+                            {movePending
+                                ? "Move payment"
+                                : applyPending?.hold
+                                    ? "Apply held deposit"
+                                    : "Apply payment"}
                         </div>
                         <div className="alloy-os-fdetail__movefield">
                             <span>{movePending ? "Move to" : "Apply to"}</span>
@@ -4983,6 +5376,49 @@ export default function FinancialsCard({
                                 Confirm
                             </button>
                             <button type="button" data-testid="payment-move-cancel" onClick={closeMovePanels}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
+
+                {releasePending ? (
+                    <div className="alloy-os-fdetail__movepanel" data-testid="deposit-release-panel">
+                        <div className="alloy-os-fdetail__moveheader">Release held deposit</div>
+                        {/*
+                          * WHAT RELEASING ACTUALLY DOES, said plainly. Operators read "release" as
+                          * "give it back", which is a refund. Releasing moves no money at all: the
+                          * restriction ends and the same money becomes spendable against what the
+                          * family owes. Saying so here is cheaper than a reversal later.
+                          */}
+                        <p className="alloy-os-fdetail__heldnote">
+                            {money(releasePending.remainingCents, currency)} stops being held and becomes
+                            available prepaid. No money moves and the family is not refunded.
+                        </p>
+                        <label className="alloy-os-fdetail__movefield">
+                            <span>Reason</span>
+                            <input
+                                data-testid="deposit-release-reason"
+                                value={releaseReason}
+                                onChange={(e) => setReleaseReason(e.target.value)}
+                                placeholder="Agreement ended with no damages"
+                            />
+                        </label>
+                        {releaseError ? (
+                            <div className="alloy-os-fdetail__moveerror" data-testid="deposit-release-error">
+                                {releaseError}
+                            </div>
+                        ) : null}
+                        <div className="alloy-os-fdetail__moveactions">
+                            <button
+                                type="button"
+                                data-testid="deposit-release-confirm"
+                                disabled={running}
+                                onClick={() => void confirmRelease()}
+                            >
+                                Release {money(releasePending.remainingCents, currency)}
+                            </button>
+                            <button type="button" data-testid="deposit-release-cancel" onClick={closeMovePanels}>
                                 Cancel
                             </button>
                         </div>
@@ -5146,6 +5582,10 @@ export default function FinancialsCard({
                     /* Only offered where an enrolment exists: the action is scoped to an agreement. */
                     onAddAdjustment={adjustableSubjects.length > 0 ? openAddAdjustment : undefined}
                     onReverseAdjustment={openReverseAdjustment}
+                    /* The held-money acts. Unsupplied, the section renders the position with no controls. */
+                    onApplyHeldFunds={openApplyHeldFunds}
+                    onReleaseHeldFunds={openReleaseHeldFunds}
+                    onRefundHeldFunds={openRefundHeldFunds}
                     onPostCharge={({ chargeId }) => void runRowAction("post", rowForCharge(chargeId))}
                     onReverseCharge={openReverseCharge}
                     /*

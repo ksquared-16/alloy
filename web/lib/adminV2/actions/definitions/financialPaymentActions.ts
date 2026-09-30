@@ -28,6 +28,7 @@ import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { heldRefundEligibility, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 import {
     applyPaymentToCharge,
     CHILDCARE_PAYMENT_METHODS,
@@ -463,6 +464,50 @@ const refundPayment: RegisteredAction = {
         }
         try {
             const paymentId = t(payload.payment_id);
+            const refundHoldId = t(payload.hold_id);
+
+            /*
+             * ── A NON-REFUNDABLE DEPOSIT IS REFUSED BEFORE ANYTHING IS EXECUTED ──────────────────
+             *
+             * Placed above every branch below, and deliberately so. `heldRefundEligibility` was
+             * separated from the refund itself for exactly this: a non-refundable deposit that
+             * reached Stripe and failed there would already have told the family a refund was under
+             * way. The terms consulted are the SNAPSHOT the money was taken under, never the
+             * organisation's current deposit policy — a later policy change must not retroactively
+             * alter what the family was promised.
+             *
+             * The amount is bounded here too, because the hold is a lot WITHIN the receipt: the
+             * refundable ceiling below is the receipt's, and a $500 refundable receipt holding a
+             * $175 lot may not refund $500 of that lot.
+             */
+            if (refundHoldId) {
+                const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    paymentIds: [paymentId],
+                })).find((h) => h.id === refundHoldId);
+                if (!hold) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 404,
+                        error: "That held deposit is not on this payment.",
+                        blockers: [{ code: "hold_not_found", message: "That held deposit is not on this payment." }],
+                    };
+                }
+                const requested = payload.amount_cents == null
+                    ? hold.remainingCents
+                    : Number(payload.amount_cents);
+                const eligible = heldRefundEligibility(hold, requested);
+                if (!eligible.ok) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 409,
+                        error: eligible.message,
+                        blockers: [{ code: "hold_not_refundable", message: eligible.message }],
+                    };
+                }
+            }
 
             /*
              * ── MONEY EXECUTED BY A PROCESSOR MUST BE GIVEN BACK BY THAT PROCESSOR ───────────────
@@ -493,6 +538,12 @@ const refundPayment: RegisteredAction = {
                     intentDiscriminator: t(payload.refund_intent) || undefined,
                     reason: t(payload.reason) || null,
                     actorUserId: ctx.userId ?? null,
+                    /*
+                     * Carried onto the provider refund record so RECOGNITION can discharge the lot.
+                     * It cannot be discharged here: no canonical refund row exists yet, and the
+                     * disposition's constraint requires one to name.
+                     */
+                    holdId: refundHoldId || null,
                 });
                 if (!requested.ok) {
                     return { ok: false, correlationId, status: 409, error: requested.message };
@@ -537,6 +588,62 @@ const refundPayment: RegisteredAction = {
                 idempotencyKey: idempotencyKeyFor(payload, "payment.refund"),
                 actorUserId: ctx.userId ?? null,
             });
+
+            /*
+             * ── THE MANUAL RAIL DISCHARGES THE LOT IMMEDIATELY ───────────────────────────────────
+             *
+             * Cash handed back across a desk has no executor to wait for, so the canonical refund
+             * exists by the time this line runs and the disposition's constraint can be satisfied
+             * here. The card rail cannot do this — see `recognizeProviderRefund`, which does it when
+             * the provider refund is recognised.
+             *
+             * HELD GOES STRAIGHT TO REFUNDED, with no release in between: releasing first would make
+             * the money ordinary available prepaid for an interval in which it could be spent
+             * against an obligation while already on its way back to the payer.
+             *
+             * The unique index makes a retried refund a no-op rather than a second disposal, and a
+             * failure here does not fail the refund — the money has gone back, and reporting failure
+             * would invite a retry of a refund that already happened.
+             */
+            if (refundHoldId) {
+                const { error: disposeError } = await (supabase as SupabaseClient)
+                    .from("payment_hold_dispositions")
+                    .insert({
+                        org_id: ctx.orgId,
+                        hold_id: refundHoldId,
+                        kind: "refunded",
+                        amount_cents: Number(result.refund.amount_cents),
+                        refund_payment_id: result.refund.id,
+                        reason: t(payload.reason) || null,
+                        disposed_by: ctx.userId ?? null,
+                    });
+                if (disposeError && !/uq_payment_hold_dispositions_one_per_refund/.test(String(disposeError.message))) {
+                    /*
+                     * Reported as a SUCCESS WITH A NAMED DEFECT rather than a failure. The refund is
+                     * canonical; what did not happen is the discharge, and the operator needs to be
+                     * told that specific thing rather than that the refund failed.
+                     */
+                    return {
+                        ok: true,
+                        correlationId,
+                        result: {
+                            actionKey: PAYMENT_REFUND_ACTION_KEY,
+                            entityType: invocation.entityType,
+                            entityId: t(invocation.entityId),
+                            affectedId: result.refund.id,
+                            detail: {
+                                refund_payment_id: result.refund.id,
+                                refunds_payment_id: result.original.id,
+                                amount_cents: result.refund.amount_cents,
+                                hold_id: refundHoldId,
+                                hold_discharged: false,
+                                hold_discharge_error: disposeError.message,
+                            },
+                        },
+                    };
+                }
+            }
+
             return {
                 ok: true,
                 correlationId,
@@ -552,6 +659,7 @@ const refundPayment: RegisteredAction = {
                         reversed_allocation_ids: result.reversedAllocationIds,
                         reapplied_allocation_id: result.reappliedAllocation?.id ?? null,
                         already_refunded: result.alreadyRefunded,
+                        ...(refundHoldId ? { hold_id: refundHoldId, hold_discharged: true } : {}),
                     },
                 },
             };
@@ -940,6 +1048,28 @@ const applyPaymentToChargeAction: RegisteredAction = {
                 };
             }
         }
+        /*
+         * APPLYING A HELD DEPOSIT IS THIS ACT, NOT A SECOND ONE.
+         *
+         * `deposit.hold` and `deposit.release` were minted as the only two deposit authorities on the
+         * stated grounds that "applying held money is an ORDINARY allocation … `deposit.apply` would
+         * be a second authority over money that already has one". This is that ordinary allocation,
+         * so the hold is named HERE — an input to applying money, not a different way to apply it.
+         *
+         * An amount is required alongside it: a hold is a lot within a receipt, and the default
+         * "smaller of unapplied and outstanding" is computed over the whole receipt, which would
+         * silently apply more of the payment than the hold covers.
+         */
+        if (t(src.hold_id) && src.amount_cents == null) {
+            return {
+                ok: false,
+                blockers: [{
+                    code: "missing_amount",
+                    message: "Applying a held deposit needs an amount; the default is drawn from the whole payment.",
+                    field: "amount_cents",
+                }],
+            };
+        }
         return { ok: true, value: src };
     },
 
@@ -979,6 +1109,34 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return { summary: "This charge could not be found.", changes: [] };
         }
         const requested = payload?.amount_cents == null ? Math.min(unapplied, outstanding) : Number(payload.amount_cents);
+        /*
+         * HELD MONEY READS DIFFERENTLY TO THE OPERATOR.
+         *
+         * `unapplied` counts the whole receipt and held money is a restriction WITHIN it, so quoting
+         * "$500 is currently unapplied" beside a $200 hold invites applying the other $300 — which
+         * this act will not do. When a hold is named the preview speaks about the hold, and says
+         * plainly that the restriction ends, because that is the consequence an operator is
+         * authorising and it is not reversible by re-holding.
+         */
+        const holdId = t(payload?.hold_id);
+        if (holdId) {
+            const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentIds: [paymentId],
+            })).find((h) => h.id === holdId);
+            if (!hold) return { summary: "This held deposit could not be found.", changes: [] };
+            return {
+                summary: `Apply ${money(requested)} of this held deposit to the charge`,
+                changes: [
+                    `${money(hold.remainingCents)} of this deposit is still held.`,
+                    `This charge has ${money(outstanding)} outstanding.`,
+                    `${money(requested)} stops being held and is applied, reducing what the family owes by that amount.`,
+                    hold.refundable
+                        ? "The deposit was taken as refundable; applied money is no longer refundable as a deposit."
+                        : "The deposit was taken as non-refundable.",
+                ],
+            };
+        }
         return {
             summary: `Apply ${money(requested)} to this charge`,
             changes: [
@@ -995,11 +1153,20 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return denied(correlationId, "Applying a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
         }
         try {
+            const holdId = t(payload.hold_id);
             const result = await applyPaymentToCharge(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 paymentId: t(payload.payment_id),
                 chargeId: t(payload.charge_id),
                 amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
+                /*
+                 * WHO APPLIED THE MONEY. Previously omitted, so `created_by` was null on every
+                 * allocation this action wrote — the allocation recorded that money moved and not who
+                 * moved it, while the same column is populated on the hold and its disposition.
+                 */
+                actorUserId: ctx.userId ?? null,
+                /* Present only for held money; the allocation and the disposition then commit together. */
+                disposeHoldId: holdId || null,
             });
             return {
                 ok: true,
@@ -1015,6 +1182,7 @@ const applyPaymentToChargeAction: RegisteredAction = {
                         charge_id: t(payload.charge_id),
                         applied_amount_cents: result.allocation.allocated_amount_cents,
                         already_applied: result.alreadyApplied,
+                        ...(holdId ? { hold_id: holdId } : {}),
                     },
                 },
             };
