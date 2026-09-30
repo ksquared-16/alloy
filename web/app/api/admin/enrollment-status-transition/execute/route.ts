@@ -8,6 +8,7 @@ import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import type { EnrollmentStatusDestinationKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { UPDATE_ENROLLMENT_STATUS_ACTION_KEY } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { executeEnrollmentStatusTransition } from "@/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition";
+import { resolveTransitionRefForOpportunity } from "@/lib/admin/enrollmentStatus/resolveTransitionRefForOpportunity";
 import { resolveEnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/resolveEnrollmentStatusTransitionScope";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
@@ -15,6 +16,12 @@ import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/
 type Body = {
     opportunity_id?: string;
     destination_key?: EnrollmentStatusDestinationKey;
+    /**
+     * A CONFIGURED transition reference, resolved server-side into `destination_key`. Preferred over
+     * sending a destination: the operator surface holds what the tenant authored, not a typed
+     * canonical destination, and it must not be the thing that chooses one.
+     */
+    configured_transition_ref?: string | null;
     target_status_key?: string | null;
     reason?: string | null;
     note?: string | null;
@@ -55,9 +62,42 @@ export async function POST(request: NextRequest) {
     }
 
     const opportunityId = body.opportunity_id?.trim() ?? "";
-    const destinationKey = body.destination_key;
-    if (!opportunityId || !destinationKey) {
-        return NextResponse.json({ error: "opportunity_id and destination_key are required" }, { status: 400 });
+    const configuredRef = body.configured_transition_ref?.trim() ?? "";
+    let destinationKey = body.destination_key;
+    let resolvedTargetStatusKey = body.target_status_key?.trim() ?? "";
+
+    if (!opportunityId || (!destinationKey && !configuredRef)) {
+        return NextResponse.json(
+            { error: "opportunity_id and one of destination_key or configured_transition_ref are required" },
+            { status: 400 },
+        );
+    }
+
+    /*
+     * A configured ref is resolved HERE, against the subject's current stage, and never trusted as
+     * executable authority. It is scoped to the transitions the tenant's own configuration offers from
+     * that stage, so a ref naming a transition out of some other stage does not resolve.
+     */
+    if (!destinationKey && configuredRef) {
+        const resolution = await resolveTransitionRefForOpportunity({
+            supabase: createAdminClient(),
+            orgId: ctx.orgId,
+            opportunityId,
+            ref: configuredRef,
+        });
+        if (!resolution.ok) {
+            return NextResponse.json(
+                { ok: false, error: `Configured transition could not be resolved: ${resolution.reason}` },
+                { status: 400 },
+            );
+        }
+        destinationKey = resolution.destinationKey;
+        if (!resolvedTargetStatusKey && resolution.targetStatusKey) {
+            resolvedTargetStatusKey = resolution.targetStatusKey;
+        }
+    }
+    if (!destinationKey) {
+        return NextResponse.json({ error: "destination_key could not be resolved" }, { status: 400 });
     }
 
     const scope = resolveEnrollmentStatusTransitionScope({
@@ -80,7 +120,7 @@ export async function POST(request: NextRequest) {
             actionKey: UPDATE_ENROLLMENT_STATUS_ACTION_KEY,
             scope,
             destinationKey,
-            targetStatusKey: body.target_status_key?.trim() ?? "",
+            targetStatusKey: resolvedTargetStatusKey,
             confirmationRequired: true,
             reason: body.reason,
             note: body.note,
