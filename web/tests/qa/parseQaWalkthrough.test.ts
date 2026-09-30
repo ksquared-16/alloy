@@ -27,23 +27,40 @@ const DOC = join(
 describe("the real document", () => {
     const blocks = parseQaWalkthrough(readFileSync(DOC, "utf8"));
 
-    it("keeps both human QA tracks, in order", () => {
-        const tracks = blocks
-            .filter((b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^TRACK /.test(b.text))
-            .map((b) => b.slug);
+    it("keeps all eight human QA gates, in order", () => {
+        const gates = blocks
+            .filter((b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^H\d+ /.test(b.text))
+            .map((b) => b.text.split(" ")[0]);
         /*
-         * Track A is the family's experience and Track B is whether an administrator could have
-         * built it. Track B is the one that gets forgotten — it is a future gate rather than
-         * today's work — so its presence in the document is asserted rather than assumed.
+         * The lifecycle is only tested from the beginning if every gate is on the page. H1 gets
+         * forgotten least — it is where the Director starts — and H6 to H8 get forgotten most, because
+         * nothing reaches them yet.
          */
-        expect(tracks).toEqual(["track-a-the-participant-experience", "track-b-configuration-and-authoring"]);
+        expect(gates).toEqual(["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8"]);
+    });
+
+    it("starts at H1 rather than at the participant packet", () => {
+        const firstGate = blocks.find(
+            (b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^H\d+ /.test(b.text),
+        );
+        expect(firstGate?.text.startsWith("H1")).toBe(true);
+    });
+
+    it("scopes H1's steps to H1", () => {
+        const labels = blocks.filter((b) => b.kind === "step").map((b) => (b as { label: string }).label);
+        expect(labels.length).toBeGreaterThan(0);
+        // Gate-scoped labels say which gate they belong to, which is why the parser accepts them.
+        expect(labels.every((l) => /^H\d+[a-z]$/.test(l))).toBe(true);
+        expect(labels).toContain("H1a");
     });
 
     it("finds the numbered steps as steps, not prose", () => {
         const steps = blocks.filter((b) => b.kind === "step");
-        // The script is ~59 steps; assert it is clearly a script rather than a page of paragraphs.
-        expect(steps.length).toBeGreaterThan(50);
-        expect(steps.every((s) => s.kind === "step" && /^(?:[A-G]\d+|0\.\d+)$/.test(s.label))).toBe(true);
+        // H1 is a real click-by-click gate, not a paragraph of intent.
+        expect(steps.length).toBeGreaterThan(5);
+        expect(
+            steps.every((s) => s.kind === "step" && /^(?:H\d+[a-z]|[A-G]\d+|0\.\d+)$/.test(s.label)),
+        ).toBe(true);
     });
 
     it("every step is DO or EXPECT", () => {
@@ -51,20 +68,16 @@ describe("the real document", () => {
         expect([...verbs].sort()).toEqual(["DO", "EXPECT"]);
     });
 
-    it("marks a STOP callout in each track so it can be made unmissable", () => {
-        const trackStarts = blocks
+    it("marks a STOP callout inside H1, where stopping too late costs the most", () => {
+        const gateStarts = blocks
             .map((b, i) => ({ b, i }))
-            .filter(({ b }) => b.kind === "heading" && /^TRACK /.test((b as { text: string }).text))
+            .filter(({ b }) => b.kind === "heading" && /^H\d+ /.test((b as { text: string }).text))
             .map(({ i }) => i);
-        expect(trackStarts.length).toBe(2);
-        // A track whose stopping conditions are prose is a track nobody stops in.
-        for (const [n, start] of trackStarts.entries()) {
-            const end = trackStarts[n + 1] ?? blocks.length;
-            const stops = blocks
-                .slice(start, end)
-                .filter((b) => b.kind === "note" && (b as { stop: boolean }).stop);
-            expect(stops.length).toBeGreaterThan(0);
-        }
+        expect(gateStarts.length).toBe(8);
+        const h1 = blocks.slice(gateStarts[0], gateStarts[1]);
+        // H1 ends at a DRAFT. Publishing it over the live Admissions Packet is the one irreversible
+        // mistake available in this gate, so the stop has to be unmissable rather than prose.
+        expect(h1.filter((b) => b.kind === "note" && (b as { stop: boolean }).stop).length).toBeGreaterThan(0);
     });
 
     it("keeps the Configuration Health table", () => {

@@ -152,8 +152,9 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
         }
 
         // A numbered step: "**A1. DO** — ..." or "**E3. EXPECT** — ...".
-        // "A1" through "G9", plus Part 0's "0.1" form.
-        const step = trimmed.match(/^\*\*((?:[A-G]\d+|0\.\d+))\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
+        // "A1" through "G9", Part 0's "0.1", and a gate-scoped "H1a" for the human QA overlay,
+        // whose steps belong to a GATE rather than to a lettered part.
+        const step = trimmed.match(/^\*\*((?:H\d+[a-z]|[A-G]\d+|0\.\d+))\.\s*(DO|EXPECT)\*\*\s*(?:—|-)?\s*(.*)$/);
         if (step) {
             flushParagraph(para);
             const body: string[] = [step[3]!];
@@ -162,7 +163,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*(?:[A-G]\d+|0\.\d+)\.\s*(?:DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:H\d+[a-z]|[A-G]\d+|0\.\d+)\.\s*(?:DO|EXPECT)\*\*/.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }
@@ -184,7 +185,7 @@ export function parseQaWalkthrough(markdown: string): QaBlock[] {
             while (i < lines.length) {
                 const n = lines[i]!.trim();
                 if (!n || n.startsWith(">") || n.startsWith("|") || /^(#{1,3})\s/.test(n) || /^---+$/.test(n)) break;
-                if (/^\*\*(?:[A-G]\d+|0\.\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
+                if (/^\*\*(?:H\d+[a-z]|[A-G]\d+|0\.\d+)\./.test(n) || /^\*\*EXPECT\*\*/.test(n)) break;
                 body.push(n);
                 i += 1;
             }

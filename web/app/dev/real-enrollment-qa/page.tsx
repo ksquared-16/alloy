@@ -6,9 +6,11 @@ import { notFound } from "next/navigation";
 import { classifyPublicRuntime, isHostedRuntime } from "@/lib/publicAppUrl";
 import { parseQaWalkthrough } from "@/lib/qa/parseQaWalkthrough";
 
+import H1SourceCard from "./H1SourceCard";
 import ParticipantJourneyCard from "./ParticipantJourneyCard";
 import QaNotesPad from "./QaNotesPad";
 import QaWalkthroughReader from "./QaWalkthroughReader";
+import { readH1Readiness } from "./readH1Readiness";
 import { readRealEnrollmentQaJourney } from "./readQaJourney";
 
 /**
@@ -72,7 +74,7 @@ export default async function RealEnrollmentQaPage() {
         );
     }
 
-    const journey = await readRealEnrollmentQaJourney();
+    const [journey, h1] = await Promise.all([readRealEnrollmentQaJourney(), readH1Readiness()]);
 
     return (
         <>
@@ -82,6 +84,17 @@ export default async function RealEnrollmentQaPage() {
              * dock is fixed to the viewport instead, so it does not scroll away mid-walkthrough.
              */}
             <div className="mx-auto max-w-3xl px-6 pt-10">
+                <H1SourceCard readiness={h1} />
+                <details className="my-8 rounded-2xl border border-alloy-midnight/12 bg-alloy-midnight/[0.02] p-5">
+                    <summary className="cursor-pointer text-[14px] font-semibold text-alloy-midnight">
+                        H4 · the participant journey — locked until H1 to H3 are done by hand
+                    </summary>
+                    <p className="mt-2 text-[13px] leading-relaxed text-alloy-midnight/70">
+                        This journey is real and still open. It is kept here because H4 will use it, not because it
+                        is where to begin: reaching it through H1, H2 and H3 is the point of the reset. Opening it
+                        changes nothing.
+                    </p>
+                    <div className="mt-2">
                 {journey.ok ? (
                     <ParticipantJourneyCard journey={journey.journey} />
                 ) : (
@@ -93,6 +106,8 @@ export default async function RealEnrollmentQaPage() {
                         </p>
                     </section>
                 )}
+                    </div>
+                </details>
             </div>
             {/* Fixed to the viewport, so it is reachable from anywhere in the script rather than only
                 from the top of it. Rendered outside the column for that reason. */}
