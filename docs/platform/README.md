@@ -48,6 +48,7 @@ them, so a reader (or an agent) can reach a specific authority without already k
 
 - [`core/commercial-execution-simulator-deltas.md`](./core/commercial-execution-simulator-deltas.md) — Commercial Execution Simulator — expected deltas vs Substrate A
 - [`core/effective-dated-assignment-doctrine.md`](./core/effective-dated-assignment-doctrine.md) — Effective-dated assignment doctrine — truth intervals, supersession, cancellation, correction
+- [`core/operations-temporal-truth-certification.md`](./core/operations-temporal-truth-certification.md) — Operations temporal truth — what is proven, the measured surface authority, and the benchmark inference contract
 
 ### `experience/`
 

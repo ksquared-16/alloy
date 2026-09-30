@@ -5,9 +5,12 @@
  * replaces and closes the prior row on the day before the move, so a partner that had already
  * synchronised the old placement receives the change rather than diverging silently.
  *
- * There is deliberately no `PATCH /placements/{id}`. The domain exports
- * `assertNoOperationalPlacementPatch()` — in-place mutation of an effective-dated row is refused
- * for every caller, Alloy's own surfaces included.
+ * There is deliberately no `PATCH /placements/{id}`, and in-place mutation of an effective-dated row is
+ * refused for every caller, Alloy's own surfaces included. What makes that true is not a guard function
+ * - one existed, always threw, and was called by nothing while an internal surface bypassed it anyway.
+ * It is true because no in-place path exists: every placement change, internal or external, resolves to
+ * one `apply_participation_operational_change` transaction that closes the prior interval and inserts a
+ * successor. `tests/access/participationTemporalWriterCensus.test.ts` fails if a new writer appears.
  */
 
 import { externalOperationRoute } from "@/lib/platform/external/operationRoute";
