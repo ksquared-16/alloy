@@ -14,6 +14,15 @@ const mockOnChildDispositionEntrySpawnWorkIntent = vi.fn();
 const mockInstantiateStageWorkFromTemplate = vi.fn();
 const mockEmitEvent = vi.fn();
 
+vi.mock("@/lib/admin/statusTransitionRules", () => ({
+    /*
+     * The canonical executor validates every governed transition against `status_transition_rules`
+     * (D-BP4). These suites assert destination routing and outcome effects, so policy is permissive
+     * here; the gate has its own cases.
+     */
+    validateStatusTransition: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/lifecycle/executeStageOperatingOutcome")>();
     return {
@@ -242,6 +251,8 @@ describe("executeEnrollmentStatusTransition outcome wiring", () => {
             targetStatusKey: "waitlisted",
             validation: { ok: true, blocking: [], warnings: [], recommendations: [] },
             requiresBypassReason: true,
+            // The executor reads the grain-correct current status from the preflight now.
+            currentStatusKey: "qualified",
             destinationSource: "bp",
             skippedStageLabels: [],
         });

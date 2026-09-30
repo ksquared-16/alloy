@@ -115,12 +115,17 @@ describe("Business Process is listed at its true certification state", () => {
      * So the pair is what gets checked.
      */
     const bypassOpen = () => {
-        const map = path.join(repoRoot, "web/lib/recordChrome/opportunityRecordActionMap.ts");
-        const helper = path.join(repoRoot, "web/lib/recordChrome/executeOpportunityRecordAction.ts");
-        if (!existsSync(map) || !existsSync(helper)) return false;
-        const mapCarriesLifecycle = /status_key|close_reason_key/.test(read("web/lib/recordChrome/opportunityRecordActionMap.ts"));
-        const helperPatches = /\/api\/admin\/opportunities\//.test(read("web/lib/recordChrome/executeOpportunityRecordAction.ts"));
-        return mapCarriesLifecycle && helperPatches;
+        /*
+         * D-BP1 is open while the generic record route can persist governed lifecycle state.
+         * Closed in erun_fbaf1ac1049f1050: the keys left the writable allow-list and the route now
+         * refuses them outright. This reads the refusal rather than a sender list, because the senders
+         * are what kept moving — the route's own authority is the durable fact.
+         */
+        const route = read("web/app/api/admin/opportunities/[id]/route.ts");
+        const refuses = /canonical_transition_required/.test(route);
+        const allowList = route.slice(route.indexOf("ALLOWED_KEYS"), route.indexOf("PIPELINE_ONLY_KEYS"));
+        const writable = /"status_key"|"close_reason_key"/.test(allowList);
+        return writable || !refuses;
     };
 
     it("is PENDING_CERTIFICATION while the bypass is open", () => {

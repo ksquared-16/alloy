@@ -195,6 +195,15 @@ describe("tourBypassRequiredForDestination", () => {
     });
 });
 
+vi.mock("@/lib/admin/statusTransitionRules", () => ({
+    /*
+     * The canonical executor validates every governed transition against `status_transition_rules`
+     * (D-BP4). These suites assert destination routing and outcome effects, so policy is permissive
+     * here; the gate has its own cases.
+     */
+    validateStatusTransition: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 vi.mock("@/lib/completion/loadRecordForEffectiveRequirements", () => ({
     loadOpportunityRecordForEffectiveRequirements: vi.fn(),
     buildOpportunityCompletionContextFromDb: vi.fn(),

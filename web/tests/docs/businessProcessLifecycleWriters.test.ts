@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -38,7 +38,7 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
      * That blind spot is why the sender count read as one: `lib/recordChrome/executeOpportunityRecordAction.ts`
      * is a client helper that PATCHes, and it lives outside the component tree.
      */
-    function lifecyclePatchSenders(): string[] {
+    function opportunityPatchCallers(): string[] {
         const senders: string[] = [];
         const files = [
             ...walk("web/components", (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f)),
@@ -60,24 +60,45 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
         return senders.sort();
     }
 
-    it("the record-action path is the last lifecycle consumer of the generic PATCH", () => {
+    it("has NO lifecycle consumer left — the bypass is closed", () => {
         /*
-         * This cannot be proven by scanning for `status_key` in the sender: the helper forwards a body
-         * built elsewhere, so the literal never appears in its own source. Three earlier versions of
-         * this guard looked correct and saw nothing. The checkable relationship is the pair —
-         * the map supplies lifecycle keys, and the helper PATCHes the route with what the map returns.
-         *
-         * While this pair holds, the route cannot reject lifecycle keys. `mark_lost` is the transition
-         * that matters: `closed` + `close_reason_key: lost`. The other three mapped keys write
-         * `status_key: "open"`, which is a no-op on an already-open case.
+         * The end of a four-run sequence. Quote Intake was unreachable and removed; Current Work was
+         * rewired once the canonical boundary acquired prior-stage reconciliation; and the record-action
+         * helper that turned `mark_lost` into a raw {status_key, close_reason_key} PATCH had zero
+         * callers and is gone. The map it used SURVIVES on purpose — `correctInvalidClosedLostTargets`
+         * reads it to learn what `mark_lost` means so a config repair can preserve the close reason.
          */
-        const map = read("web/lib/recordChrome/opportunityRecordActionMap.ts");
-        const helper = read("web/lib/recordChrome/executeOpportunityRecordAction.ts");
-        expect(map).toMatch(/status_key/);
-        expect(map).toMatch(/close_reason_key/);
-        expect(helper).toMatch(/\/api\/admin\/opportunities\//);
-        expect(helper).toMatch(/method:\s*"PATCH"/);
-        expect(helper).toMatch(/opportunityRecordActionMap|recordActionPatch|OPPORTUNITY_RECORD_ACTION/);
+        expect(existsSync(path.join(repoRoot, "web/lib/recordChrome/executeOpportunityRecordAction.ts"))).toBe(false);
+        /*
+         * What remains may PATCH the route, but cannot carry lifecycle state through it — the refusal
+         * below is what makes that true, and it is a property of the ROUTE rather than of its callers.
+         * Pinning the caller set as well keeps a new one from arriving unnoticed.
+         */
+        expect(opportunityPatchCallers()).toEqual([
+            "web/lib/admin/actions/submitChangeLeadLocation.ts",
+            "web/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit.ts",
+        ]);
+    });
+
+    it("the generic route refuses governed lifecycle keys rather than persisting them", () => {
+        const route = read("web/app/api/admin/opportunities/[id]/route.ts");
+        expect(route).toMatch(/GOVERNED_LIFECYCLE_KEYS/);
+        expect(route).toMatch(/canonical_transition_required/);
+        // The keys are gone from the writable allow-list, not merely guarded downstream.
+        const allowList = route.slice(route.indexOf("ALLOWED_KEYS"), route.indexOf("PIPELINE_ONLY_KEYS"));
+        expect(allowList).not.toMatch(/"status_key"/);
+        expect(allowList).not.toMatch(/"close_reason_key"/);
+    });
+
+    it("ordinary field editing still works through the record route", () => {
+        // Closing lifecycle must not close the route. These callers are field-only and must survive.
+        for (const rel of [
+            "web/lib/admin/actions/submitChangeLeadLocation.ts",
+            "web/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit.ts",
+        ]) {
+            expect(existsSync(path.join(repoRoot, rel)), rel).toBe(true);
+            expect(read(rel)).toMatch(/\/api\/admin\/opportunities\//);
+        }
     });
 
     it("Current Work no longer sends a lifecycle field — it sends configured intent", () => {
@@ -131,15 +152,21 @@ describe("converging the last sender may not drop prior-stage reconciliation", (
         expect(canonical).toMatch(/validateStageTransitionReconciliationPayload/);
     });
 
-    it("prior-stage reconciliation callers are the known set", () => {
-        // If an unexpected one appears, the invariant above needs re-deriving rather than assuming.
-        const callers = [
-            "web/app/api/admin/opportunities/[id]/route.ts",
-            "web/app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts",
-        ];
-        for (const rel of callers) {
-            expect(read(rel), rel).toMatch(/StageTransitionReconciliation/);
-        }
+    it("prior-stage reconciliation now lives on the canonical path, not the record route", () => {
+        /*
+         * It moved. The canonical executor owns it; the standalone preflight route still serves the
+         * dialog; and the generic record PATCH no longer mentions it at all, because it no longer
+         * performs transitions.
+         */
+        expect(read("web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts")).toMatch(
+            /applyStageTransitionReconciliation/,
+        );
+        expect(
+            read("web/app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts"),
+        ).toMatch(/preflightStageTransitionReconciliation/);
+        expect(read("web/app/api/admin/opportunities/[id]/route.ts")).not.toMatch(
+            /StageTransitionReconciliation/,
+        );
     });
 });
 

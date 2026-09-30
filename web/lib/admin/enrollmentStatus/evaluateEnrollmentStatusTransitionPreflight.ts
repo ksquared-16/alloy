@@ -54,6 +54,12 @@ export type EnrollmentStatusTransitionPreflightResult = {
     requiresBypassReason: boolean;
     destinationSource: "bp" | "default_fallback";
     skippedStageLabels: string[];
+    /**
+     * The subject's current status IN THE GRAIN BEING MOVED — the case's `status_key`, or the OCM's
+     * `outcome_status_key` when a child scope is present. Computed here already; returned so callers
+     * validating the transition do not read it a second time.
+     */
+    currentStatusKey: string | null;
 };
 
 async function loadDepartmentMetadata(
@@ -110,6 +116,8 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             requiresBypassReason: false,
             destinationSource: "default_fallback",
             skippedStageLabels: [],
+            // The record could not be read, so there is no current status to report.
+            currentStatusKey: null,
             validation: buildRequirementValidationResult([
                 makeRequirementViolation({
                     entity_type: "opportunity",
@@ -214,6 +222,7 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             requiresBypassReason: false,
             destinationSource: bpResolved.destinationSource,
             skippedStageLabels,
+            currentStatusKey,
             validation: mergeRequirementValidationResults(
                 buildRequirementValidationResult(destinationViolations),
                 buildRequirementValidationResult([
@@ -317,5 +326,6 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
         requiresBypassReason,
         destinationSource: bpResolved.destinationSource,
         skippedStageLabels,
+        currentStatusKey,
     };
 }
