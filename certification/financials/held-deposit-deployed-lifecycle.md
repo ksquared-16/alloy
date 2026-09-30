@@ -1,9 +1,8 @@
----
-title: Held / Deposit deployed lifecycle
-status: measured
-measured_on: 2026-09-30
-surface: Financials account card (Focus Panel), deployed staging
----
+<!--
+A CERTIFICATION EVIDENCE RECORD, not doctrine — which is why it lives here and not under
+docs/platform/. It reports what was measured on deployed staging on 2026-09-30 through the
+Financials account card, and it does not tell anyone what the product ought to do.
+-->
 
 # Held / Deposit deployed lifecycle
 
