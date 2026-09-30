@@ -177,3 +177,68 @@ provider-backed receipt with a held lot raised from it.
 53 files / 779 tests green across payment methods, payer ownership, provider installation,
 collection, recognition, refund, responsibility, Financials projections and the participant
 credential path; plus the webhook and action-link replay suites. No attributable red.
+
+
+---
+
+# ADDENDUM — after PR #1360
+
+| | |
+| --- | --- |
+| merge SHA | `fe834f584` (PR #1360 into `staging`) |
+| deployed SHA | `2a9d40b35`, which contains it |
+
+PR #1360 could not be merged at the candidate `31686f4de`: it was `CONFLICTING` against a moved
+`staging`, which is why only four of the twelve gates had ever run on it. Staging was merged in and
+both add/add conflicts resolved in favour of the branch — staging's side was verified to be the
+pre-repair content, a strict subset of the branch's. All twelve gates then passed at `a9d0ec5c7`.
+
+## The three repairs, re-verified on deployed
+
+| repair | measured |
+| --- | --- |
+| the payer is named from the canonical `persons` authority | page reads **"for Bo Certopp"**; the public API returns `payerName: "Bo Certopp"` |
+| `/bank-setup/<token>` does not inherit the marketing site | Sign In, Book a Demo, the Platform/Vision/About nav and the copyright footer are **all absent** |
+| provider-native error text does not reach the payer | a forged setup answers *"That could not be completed just now. Nothing has been saved, and you can try again."* — scanned for `setupintent`, `seti_`, `pm_`, `cus_`, `us_bank_account`: **none** |
+
+Screenshot: `bank-setup-payer-page-after-1360.png`.
+
+## Structure, reconfirmed without creating a second method
+
+| | measured |
+| --- | --- |
+| Request bank account setup | present |
+| operator Add bank account | absent from the whole surface |
+| `/bank-setup/<token>` | served; `canAddBankAccount: true` |
+| canonical projection | 1 row · `ach` · STRIPE TEST BANK ••••6789 · `verified` / `usable` · payer `person`, named |
+| credential scan — projection and payer DOM | clean; the payer page has **0 input elements** |
+| operator leaks — routing, account number, provider ids, provider status words, mandate internals | none |
+| Autopay eligibility | Payer **Bo Certopp** · **STRIPE TEST BANK •••• 6789** · Amount due · On each due date · No limit |
+| missing setup / unknown token | 400 *"No bank setup was named."* / 404 *"This link is not valid."* |
+
+No bank method was created for this verification. Certopp's was authorized by a real payer through
+the real flow, and a second one would prove nothing while costing the one that exists.
+
+## Phase A, reconfirmed
+
+| row | `data-financials-payment-kind` | `data-financials-payment-origin` | reads |
+| --- | --- | --- | --- |
+| three refunds | `refund` | **`operator`** | Refunded · Cash |
+| the receipt | `receipt` | absent | Received · Cash |
+
+Financial Activity: three `payment_refunded` entries, all **"Payment refunded"**, and "Payment
+returned" nowhere — correctly, because no provider-origin reversal exists. The distinction is
+derived through the canonical linked Payment, not duplicated into journal metadata.
+
+## One minor visual item, carried rather than fixed
+
+The payer page's **Continue to your bank** is midnight, while the submit inside the provider's own
+field block is Bend Pine — two primaries on one journey. The Bend Pine rule is stated for operator
+Financials, which is compliant, so this is a consistency nit on a participant surface rather than a
+breach. Left for the human pass rather than changed at the freeze.
+
+## Regression on the merged base
+
+197 files / 2644 tests green across `tests/financials` with live excluded, plus the canonical-routes
+and capability-registry suites. `typecheck` passed and all four prebuild guards are green. The
+twelve CI gates passed at `a9d0ec5c7`.
