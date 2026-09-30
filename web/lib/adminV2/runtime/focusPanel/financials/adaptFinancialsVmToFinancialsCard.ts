@@ -384,6 +384,14 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                  * would be arguing with the invariant instead of declining to act.
                  */
                 holdableCents: Math.max(0, p.unappliedCents - (p.heldCents ?? 0)),
+                /*
+                 * THE SAME MONEY, NAMED FOR THE OTHER ACT. Unapplied money that no lot restricts is
+                 * both what may be held and what may be APPLIED, and the apply control was quoting
+                 * `unappliedLabel` — the whole receipt, deposits included. On deployed that read
+                 * "Apply $522.00" beside an Available prepaid of $407.00, and the authority let the
+                 * difference be spent.
+                 */
+                applicableLabel: money(Math.max(0, p.unappliedCents - (p.heldCents ?? 0)), p.currencyCode || currency),
                 applications: p.applications.map((a) => ({
                     allocationId: a.allocationId,
                     chargeId: a.chargeId,

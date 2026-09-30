@@ -44,6 +44,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
+import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
 import {
     OperationalEnrollmentServiceError,
@@ -787,18 +788,47 @@ export async function applyPaymentToCharge(
     }
 
     const unapplied = await readPaymentUnappliedCents(supabase, orgId, paymentId, payment.amount_cents);
+
+    /*
+     * ── HELD MONEY IS NOT AVAILABLE TO APPLY ─────────────────────────────────────────────────
+     *
+     * `unapplied` counts the WHOLE receipt, and a hold is a restriction WITHIN it. Bounding an
+     * ordinary application by `unapplied` therefore let the ordinary path spend a deposit: no
+     * disposition, no decision about the lot, no refusal — the held figure simply shrank.
+     *
+     * MEASURED ON DEPLOYED STAGING (build e9694c5c8). A receipt showing AVAILABLE PREPAID $7.00
+     * beside HELD DEPOSIT $515.00 applied $75.00 to a registration fee. Prepaid went to zero and
+     * HELD fell to $447.00 — $68 of restricted money settled tuition, which is the one thing the
+     * surface's own sentence promises cannot happen: "It is not available prepaid and it does not
+     * reduce what the family owes until it is applied."
+     *
+     * A hold cannot be created beyond the unapplied balance — `enforce_payment_hold_within_unapplied`
+     * sees to that — but nothing stopped an allocation eroding the money an existing hold depends
+     * on, because no hold row changes and the trigger never fires.
+     *
+     * An application that DISCHARGES a lot is the exception and is bounded by the lot instead: that
+     * is the whole point of `disposeHoldId`, and `apply_held_funds_atomic` re-derives the bound.
+     */
+    const disposeHoldId = trimOrNull(input.disposeHoldId ?? null);
+    const heldCents = disposeHoldId
+        ? 0
+        : heldCentsFor(paymentId, await readHoldsForPayments(supabase, { orgId, paymentIds: [paymentId] }));
+    const applicable = Math.max(0, unapplied - heldCents);
+
     /*
      * THE DEFAULT IS THE SMALLER OF THE TWO CEILINGS, which is what makes a partial payment work
      * without the operator doing arithmetic: pay $500 against a $1,300 charge and $500 applies; pay
      * $2,000 against it and $1,300 applies with $700 left on the account.
      */
-    const requested = input.amountCents ?? Math.min(unapplied, charge.outstandingCents);
+    const requested = input.amountCents ?? Math.min(applicable, charge.outstandingCents);
     assertPositiveIntCents(requested, "amountCents");
 
-    if (requested > unapplied) {
+    if (requested > applicable) {
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
-            `applying ${requested} cents would over-apply payment ${paymentId}: only ${unapplied} cents remain unapplied`,
+            heldCents > 0
+                ? `applying ${requested} cents would spend held money on payment ${paymentId}: ${unapplied} cents are unapplied but ${heldCents} of them are held, leaving ${applicable} available to apply`
+                : `applying ${requested} cents would over-apply payment ${paymentId}: only ${applicable} cents remain unapplied`,
         );
     }
     if (requested > charge.outstandingCents) {
@@ -824,7 +854,6 @@ export async function applyPaymentToCharge(
      * id; the row is then re-read through the same columns the ordinary path selects, so the shape
      * the caller receives does not depend on which writer produced it.
      */
-    const disposeHoldId = trimOrNull(input.disposeHoldId ?? null);
     if (disposeHoldId) {
         const { data: applied, error: appliedError } = await supabase.rpc("apply_held_funds_atomic", {
             p_org_id: orgId,
