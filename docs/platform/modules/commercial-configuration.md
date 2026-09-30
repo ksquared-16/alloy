@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-17
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -128,15 +128,27 @@ ambiguous and the operator settles it.
 
 ---
 
-## Future domains (deferred)
+## Future domains — CORRECTED 2026-09-30
 
-- **Funding Sources** — discount programs, subsidies, vouchers
-- **Fees & Add-Ons** — registration fees, supply fees, activity fees
-- **Billing Policies** — payment schedules, late fees, auto-billing
-- **Accounting** — chart of accounts, revenue recognition
-- **Simulator** — what-if tuition modeling
+**This list said "deferred" and was wrong about most of it.** It was written 2026-07-17 and several of
+these shipped afterwards. A canonical document telling a reader that subsidies and discount programs do
+not exist is worse than silence, so each line is now measured rather than asserted. Counts are from the
+certification stack.
 
-These are scoped out of V1. Program-owned commercial, funding, and billing **defaults** remain declarations on the reusable service; authoritative pricing, funding, and billing behavior stays with the corresponding domain runtime.
+| Was listed as deferred | Measured state 2026-09-30 |
+|---|---|
+| **Funding Sources — discount programs** | **IMPLEMENTED AND IN USE.** `discount_programs` (5 rows), plus `discount_program_benefits`, `discount_program_qualifiers`, `discount_program_commitment_rules`, `discount_commitments`, `discount_codes`, `discount_redemptions`, `discount_applications` |
+| **Funding Sources — subsidies** | **IMPLEMENTED.** Seven `financial_subsidy_*` tables, `financial_funding_agencies`, `financial_expected_funding`, and **10 production registered commands** under one capability `fin.subsidy`. Zero rows on this stack, which is not the same as unimplemented. Owned by Subsidy, not by Commercial — see below |
+| **Funding Sources — vouchers** | **NOT FOUND** as a distinct concept. Not implemented and not merely deferred |
+| **Fees & Add-Ons** | **TABLES EXIST, UNUSED HERE.** `commercial_fees` and `commercial_addons` exist with 0 rows; `pricing_addons` exists |
+| **Billing Policies** | `financial_policies`, `payment_autopay_arrangements` and `payment_collection_attempts` exist. Not audited by this pass — treat as unmeasured rather than deferred |
+| **Accounting** | **IMPLEMENTED AND HEAVILY USED.** `financial_journal_entries` holds **13,136 rows** and `financial_accounting_periods` 102, with `financial_accounting_calendars`. Revenue recognition specifically was NOT verified by this pass; journal entries are not by themselves revenue recognition |
+| **Simulator** | A canonical owner exists: [`../core/commercial-execution-simulator-deltas.md`](../core/commercial-execution-simulator-deltas.md) |
+
+**Where the boundary actually falls.** Commercial owns **intent** — what something costs and under what
+policy. It does not own the financial obligation that intent produces, the payment that settles it, or
+the subsidy that suppresses collection of it. Those are Financials, Payments and Subsidy respectively,
+and collapsing them is the specific error this correction guards against.
 
 ---
 
