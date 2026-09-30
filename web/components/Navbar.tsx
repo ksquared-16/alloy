@@ -19,7 +19,6 @@ export default function Navbar() {
   const router = useRouter();
 
   const servicesLinks = [
-    { href: "/services/cleaning", label: "Home Cleaning" },
     { href: "/gutters", label: "Gutter Cleaning" },
   ];
 
