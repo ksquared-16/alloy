@@ -222,9 +222,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor.tsx": 5,
     "components/childcareOperational/ChangeOperationalPlacementModal.tsx": 2,
     "components/childcareOperational/ChangeOperationalScheduleModal.tsx": 1,
-    "components/cleaning/CleaningQuickQuoteForm.tsx": 6,
-    "components/cleaning/CleaningQuoteForm.tsx": 5,
-    "components/cleaning/SpecialtyCleaningQuoteForm.tsx": 4,
     "components/forms/admin/FormIntakeRuntimeOrchestrationPanel.tsx": 1,
     "components/forms/admin/FormLifecycleUsagePanel.tsx": 2,
     "components/forms/admin/FormOutcomeConfigPanel.tsx": 4,
@@ -308,9 +305,10 @@ describe("raw <select> adoption ledger", () => {
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
         // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
-        // Payments V1 · W6-A: AdminCollectPaymentModal deleted (0 mounted callers), 1 -> 0. The
-        // ledger had already drifted to 416 before that, so this lowers it to the measured sum
-        // rather than to 417 — the ledger is one-way and the number is what the files now hold.
-        expect(ledgerTotal).toBe(415);
+        // Payments V1 · W6-A1: AdminCollectPaymentModal deleted (0 JSX uses, 0 imports anywhere),
+        // 1 -> 0, so 401 -> 400. Independent of the conversions that brought it to 401; the number
+        // is the MEASURED sum of what the files now hold, not arithmetic on either side of the
+        // merge, because this ledger is one-way and a guessed total would let adoption drift back.
+        expect(ledgerTotal).toBe(400);
     });
 });

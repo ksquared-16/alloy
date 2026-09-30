@@ -8,25 +8,23 @@ interface GetQuoteButtonProps {
   children?: ReactNode;
   className?: string;
   variant?: "primary" | "secondary";
-  defaultService?: "cleaning" | "gutters";
 }
 
 /**
  * Unified "Get a Quote" button component that opens the QuoteModal.
  * Use this component everywhere instead of custom implementations.
  */
-export default function GetQuoteButton({ 
-  children, 
+export default function GetQuoteButton({
+  children,
   className,
   variant = "primary",
-  defaultService
 }: GetQuoteButtonProps) {
   const { openModal } = useQuoteModal();
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    openModal({ defaultService });
+    openModal();
   };
 
   if (variant === "secondary") {
