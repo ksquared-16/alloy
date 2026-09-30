@@ -468,6 +468,11 @@ export type FinancialsEvidence = {
      * different terms.
      */
     heldDeposits: FinancialsEvidenceHeldDeposit[];
+    /**
+     * Lots whose money is entirely gone — released, applied, refunded, or some of each. They carry
+     * the same provenance as an open lot and contribute to NO figure on this card.
+     */
+    heldDepositHistory: FinancialsEvidenceHeldDeposit[];
 };
 
 /**
@@ -559,6 +564,8 @@ export type FinancialsEvidencePayment = {
      * card asks whether this is above zero and offers the act; it never computes it.
      */
     holdableCents: number;
+    /** What of this receipt is restricted by a hold. Inside `unappliedCents`, never available. */
+    heldCents: number;
     /** Unapplied money no lot restricts — what may be applied. Same quantity as `holdableCents`. */
     applicableLabel: string;
     applications: FinancialsEvidenceApplication[];
