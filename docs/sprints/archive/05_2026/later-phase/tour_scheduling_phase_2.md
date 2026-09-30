@@ -2,7 +2,7 @@
 
 This document extends **Tour Scheduling V1** (`tour_scheduling_v1.md`) after **manual QA sign-off (May 2026)**.
 
-**Band A status (May 2026):** **COMPLETE** — confirmation/reminder/reschedule/cancel comms, quiet hours, add-to-calendar links, booking-backed lifecycle. Closeout: [`completed/tour_scheduling_phase2_band_a_closeout.md`](../completed/tour_scheduling_phase2_band_a_closeout.md). Implementation detail: [`completed/tour_scheduling_phase2_foundation.md`](./completed/tour_scheduling_phase2_foundation.md), [`completed/tour_scheduling_phase2_band_a_readiness.md`](./completed/tour_scheduling_phase2_band_a_readiness.md).
+**Band A status (May 2026):** **COMPLETE** — confirmation/reminder/reschedule/cancel comms, quiet hours, add-to-calendar links, booking-backed lifecycle. Closeout: [`completed/tour_scheduling_phase2_band_a_closeout.md`](../completed/tour_scheduling_phase2_band_a_closeout.md). Implementation detail: [`completed/tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md), [`completed/tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md).
 
 **Band B+:** Planning-only below — calendar sync, public hardening, settings UI, analytics — **deferred** until sequenced.
 

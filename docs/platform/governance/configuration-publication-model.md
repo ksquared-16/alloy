@@ -9,7 +9,7 @@ supersedes: []
 
 Sprint: `bp-config-integrity` (slot 6), Law 4. Design + implementation contract.
 Companions: [`configuration-integrity-laws.md`](./configuration-integrity-laws.md),
-[`configuration-overwriter-root-cause.md`](./configuration-overwriter-root-cause.md).
+`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md` (`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md`).
 
 ## The model
 

@@ -1,11 +1,17 @@
 ---
 owner: platform
-status: sprint
+status: historical
 last_reviewed: 2026-09-04
 supersedes: []
+status_note: Reclassified 2026-09-30 from sprint and moved into incidents/ - see the note under the H1.
 ---
 
 # Run identity and store durability
+
+> **Reclassified 2026-09-30.** Moved here from `platform/governance/` and relabelled from
+> `status: sprint`, matching the shape of the sibling incident record in this directory. It is an
+> incident record; the durable contract it informed is owned by
+> [`../execution-run-durability.md`](../execution-run-durability.md).
 
 > **Incident record and contract.** Two canonical stores were emptied twice, taking 20 registered
 > lanes and every run. The first diagnosis was wrong. This records what actually happened, because

@@ -68,7 +68,7 @@ messages — the claim is policy backed by audit logs, never a permission bounda
 that, `gmail.metadata` is itself a restricted scope carrying an annual CASA assessment that
 would switch off inbound for every Google customer at once if missed, and an OAuth refresh
 token inverts the deployment-provisioned credential rule in `providerCredentialCatalog.ts`.
-`INBOUND-EMAIL-PRIVACY-POSTURE.md` still stands: no Gmail or Outlook OAuth without its own
+`docs/platform/modules/inbound-email-privacy-posture.md` still stands: no Gmail or Outlook OAuth without its own
 decision record.
 
 **The engagement signal is dead — do not re-propose it.** "Endpoint provenance + prior
@@ -92,4 +92,4 @@ future.
 
 The live Email round trip. That is Communications Operationalization, it is owed, and it
 uses temporary Gmail forwarding as **test infrastructure only** — never as the production
-mixed-inbox architecture. See `live-email-routing-test.md`.
+mixed-inbox architecture. See `docs/sprints/active/live-email-routing-test.md`.

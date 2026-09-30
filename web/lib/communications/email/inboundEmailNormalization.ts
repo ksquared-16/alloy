@@ -2,7 +2,7 @@
  * A received email, reduced to the truth Alloy stores.
  *
  * THE PROVIDER CONTRACT IS TWO STEPS, and that shapes everything here. Per
- * Resend's documentation (see RESEND-INBOUND-CONTRACT.md), the `email.received`
+ * Resend's documentation (see docs/platform/modules/resend-inbound-provider-contract.md), the `email.received`
  * webhook carries METADATA ONLY — no body, no headers. The body and the RFC
  * headers that make threading possible come from `GET /emails/receiving/{id}`.
  *

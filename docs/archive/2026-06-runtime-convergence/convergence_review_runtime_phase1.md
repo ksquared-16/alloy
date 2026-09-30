@@ -3,7 +3,7 @@
 **Verdict: APPROVED**
 **Reviewed:** staging commit `e296b300` ("Add layout runtime foundation (Phase 0) and relationship/reference readiness (Phase 1)"), parent `87eaf986`. Net: 22 files, +1985/−54. **0 migrations. 0 production drawer/queue/VM files touched.**
 **Scope:** Layout V2 runtime read path + relationship/reference binding layer, **flag-gated (default off)**, proof/foundation only — no live cutover.
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · doctrine [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md).
+**Reviewer:** Convergence Review Authority · rubric `./convergence_review_rubric.md` · doctrine [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md).
 
 ---
 

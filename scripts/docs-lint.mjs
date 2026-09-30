@@ -639,7 +639,10 @@ export function main(argv = process.argv) {
     const payload = {
       generatedAt: new Date().toISOString(),
       summary,
-      note: "Pre-existing documentation debt baseline for report-only CI enforcement",
+      note:
+        "Documentation debt ceiling. Emptied 2026-09-30 when every class reached zero, so any "
+        + "violation in any class now reads as a debt increase. It is a FLOOR, not an allowance: "
+        + "refresh it downward as debt falls, never upward to accommodate new violations.",
     };
     fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
     console.log(`Wrote baseline ${BASELINE_PATH}`);

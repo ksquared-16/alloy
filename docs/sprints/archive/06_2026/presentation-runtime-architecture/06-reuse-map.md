@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/06-reuse-map.md`
 **Status:** Architecture sprint — design only (June 2026)
-**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`05-surface-inventory.md`](./05-surface-inventory.md)
+**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`05-surface-inventory.md`](./05-surface-inventory.md)
 
 ---
 
@@ -137,7 +137,7 @@ This sprint defines architecture only. Implementation should follow this phasing
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime doctrine | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
+| Presentation Runtime doctrine | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | Surface inventory | [`05-surface-inventory.md`](./05-surface-inventory.md) |
 | Architecture recommendations | [`07-architecture-recommendations.md`](./07-architecture-recommendations.md) |
 | Existing EB doctrine | `docs/platform/operator/experience-builder-doctrine.md` |

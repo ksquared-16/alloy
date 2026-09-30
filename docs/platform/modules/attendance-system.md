@@ -545,7 +545,8 @@ operational workspace, peer to Inbox / Work Items / Processing / Assignments:
   not pre-empted.
 
 Owners: `web/app/adminV2/roster/`, `web/components/adminV2/roster/RosterWorkspace.tsx`.
-Product record: [`../planning/roster-product-v1-stage1.md`](../planning/roster-product-v1-stage1.md).
+Product record: `docs/platform/planning/roster-product-v1-stage1.md` — named as a path rather than
+linked, because the ownership and boundaries above are stated here and do not depend on it.
 
 ### Known V1 boundaries
 

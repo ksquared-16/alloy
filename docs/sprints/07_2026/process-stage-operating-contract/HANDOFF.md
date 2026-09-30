@@ -34,7 +34,7 @@ All commits are on `fix/process-stage-operating-contract`. After pulling this br
 
 > **Start here after checkout:** `e7c2ea2bc` + `4ebf71b54` for the V2 authoring model; `c7c25819a` for certification fixtures/tests.
 
-> **Audit note:** Two branch audits ran mid-sprint. [Audit authoring model coverage](f0e6e6d0-ca29-43ad-ad56-18c4ab1afebd) inspected `8fbce8026` — **before** `e7c2ea2bc`/`4ebf71b54`, which added stage-owned transitions, composable behavior editors, and deleted `LifecycleStageOutcomeAutomationEditor.tsx`. Treat that audit's transition-graph and composable-automation gaps as **addressed in later commits** unless re-verified. [Audit test and QA coverage](102fed84-b44c-4d77-bcf8-a4c732346ae9) reflects post-V2 state; gaps below still apply.
+> **Audit note:** Two branch audits ran mid-sprint. Audit authoring model coverage (`f0e6e6d0-ca29-43ad-ad56-18c4ab1afebd`) inspected `8fbce8026` — **before** `e7c2ea2bc`/`4ebf71b54`, which added stage-owned transitions, composable behavior editors, and deleted `LifecycleStageOutcomeAutomationEditor.tsx`. Treat that audit's transition-graph and composable-automation gaps as **addressed in later commits** unless re-verified. Audit test and QA coverage (`102fed84-b44c-4d77-bcf8-a4c732346ae9`) reflects post-V2 state; gaps below still apply.
 
 ---
 

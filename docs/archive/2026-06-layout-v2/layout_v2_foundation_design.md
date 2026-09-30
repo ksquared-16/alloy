@@ -216,7 +216,7 @@ not a production renderer:
 - reuses the existing admin visual language (borders, type colors, spacing) so
   previews look like the product — with no custom CSS/color/theme introduced.
 
-The config UI ([`LayoutsClient.tsx`](../web/app/admin/system/layouts/LayoutsClient.tsx))
+The config UI (`../web/app/admin/system/layouts/LayoutsClient.tsx`)
 drives the full lifecycle: list, create-from-default, edit (section
 rename/reorder/expand toggle, plus a schema-validated JSON editor for full
 row/column/item control with live client-side validation), save draft, publish,

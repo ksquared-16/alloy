@@ -17,9 +17,9 @@
 
 **Related (do not redesign):**
 
-- [`required_information_v2_operational_readiness_framework.md`](../sprints/archive/06_2026/required_information_v2_operational_readiness_framework.md) — readiness spine for lifecycle consumers
+- [`required_information_v2_operational_readiness_framework.md`](../sprints-superseded/06_2026/operational-work-plans/required_information_v2_operational_readiness_framework.md) — readiness spine for lifecycle consumers
 - [`completed/readiness_phase_1_closeout.md`](../../sprints/archive/06_2026/completed/readiness_phase_1_closeout.md) — Phase 1 shipped; field-catalog convergence extends identity, not readiness architecture
-- [`documents-and-forms.md`](../product/documents-and-forms.md) — forms schema boundary
+- [`documents-and-forms.md`](../2026-06-product/documents-and-forms.md) — forms schema boundary
 
 ---
 

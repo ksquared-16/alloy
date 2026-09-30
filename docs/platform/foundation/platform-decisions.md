@@ -432,8 +432,12 @@ No new foundational execute API for BOS Create Lead. No Processing Case on first
 
 **Canonical owners:**  
 - [`../modules/ai-platform.md`](../modules/ai-platform.md)  
-- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)  
-- [`../../sprints/active/bos-actionable-interface/`](../../sprints/active/bos-actionable-interface/)
+- [`../modules/actions-and-workflows.md`](../modules/actions-and-workflows.md)
+
+**Design reference (not an owner):** the BOS actionable-interface sprint material at
+`docs/sprints/active/bos-actionable-interface/`. A sprint directory cannot be a canonical owner, and
+listing it as one here was an authority defect — the two owners above hold the doctrine. Named as a
+path rather than linked, so this decision register takes no dependency on execution material.
 
 **Status:** Active  
 

@@ -2,9 +2,20 @@
 owner: platform
 status: canonical
 last_reviewed: 2026-08-11
+supersedes: []
 ---
 
 # Inbound email — privacy posture
+
+> **Moved into the canonical tree 2026-09-30**, from
+> `platform/planning/conversation-platform-v1/`. It was carrying `status: canonical` inside the
+> planning tree, which the planning index explicitly disclaims as doctrine — so a Director-recorded
+> scope boundary was only discoverable by knowing it existed. Its content is unchanged.
+>
+> It is **not** superseded by the Email Ingress V2 capability audit in
+> `platform/planning/conversation-platform-v1/` — that audit's §0 states it "does not itself change
+> the posture", and it is the separate decision record this posture demands. Named as a path rather
+> than linked on purpose: canonical doctrine does not take a dependency on the planning tree.
 
 **Director-recorded, 2026-08-11.** This is a scope boundary, not an implementation
 note. It constrains what Alloy may be built to receive.
@@ -47,7 +58,7 @@ reach it even by mistake.
 
 This is also why tenant ownership resolves from the receiving address and refuses
 to guess: an email that names no Alloy identity is quarantined rather than
-attributed. See `RESEND-INBOUND-CONTRACT.md` and
+attributed. See `docs/platform/modules/resend-inbound-provider-contract.md` and
 `web/lib/communications/email/inboundEmailRouting.ts`.
 
 ## User model for this milestone

@@ -1,8 +1,9 @@
 ---
 owner: analytics
-status: canonical
+status: proposed
 last_reviewed: 2026-07-12
 supersedes: []
+status_note: Reclassified 2026-09-30 from canonical. A phased roadmap: Phase 1 is delivered, later phases are not. Forward-looking overall, so not canonical doctrine.
 ---
 
 # Analytics V2 Roadmap

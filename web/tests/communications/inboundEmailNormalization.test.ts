@@ -2,7 +2,7 @@
  * The provider contract, as documented — not as guessed.
  *
  * `CANONICAL_RECEIVED_EVENT` and `CANONICAL_RETRIEVED_EMAIL` are the payloads
- * from Resend's official documentation (RESEND-INBOUND-CONTRACT.md). Everything
+ * from Resend's official documentation (docs/platform/modules/resend-inbound-provider-contract.md). Everything
  * else here varies from them deliberately. If Resend changes the contract these
  * fixtures are what must be updated, in one place.
  *

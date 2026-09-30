@@ -1,8 +1,9 @@
 ---
 owner: platform
-status: canonical
+status: proposed
 last_reviewed: 2026-07-12
 supersedes: []
+status_note: Reclassified 2026-09-30 from canonical. Its own status line reads "Proposed core integration doctrine".
 ---
 
 # Operational Consumption × Commercial Operating System — Integration Doctrine

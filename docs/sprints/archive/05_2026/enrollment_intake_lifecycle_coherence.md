@@ -7,7 +7,7 @@
 
 **Demo fixtures:** Demo Childcare Co · Enrollment Lead — Demo (`enrollment_lead_capture_demo`) · enrollment work unit `5ba90557-876d-4450-9c28-36beac6e83be`
 
-**Related:** [`forms_intake_case_operational_model.md`](./completed/forms_intake_case_operational_model.md) (IC-8), [`forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md)
+**Related:** [`forms_intake_case_operational_model.md`](./completed/forms_intake_case_operational_model.md) (IC-8), [`forms-intake-prefill-doctrine.md`](completed/forms-intake-prefill-doctrine.md)
 
 ---
 
