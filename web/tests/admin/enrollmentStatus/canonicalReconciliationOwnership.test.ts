@@ -7,10 +7,25 @@
  * the semantics that moved, and the ORDER, because ordering is the part that can silently regress.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import path from "node:path";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+const read = (rel: string) => readFileSync(path.join(repoRoot, rel), "utf8");
 
 const calls: string[] = [];
 
 vi.mock("@/lib/emitEvent", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined) }));
+
+const validateTransition = vi.fn();
+vi.mock("@/lib/admin/statusTransitionRules", () => ({
+    validateStatusTransition: (...a: unknown[]) => {
+        calls.push("transition-policy");
+        return validateTransition(...a);
+    },
+}));
+
 
 vi.mock("@/lib/admin/enrollmentStatus/evaluateEnrollmentStatusTransitionPreflight", () => ({
     evaluateEnrollmentStatusTransitionPreflight: vi.fn().mockResolvedValue({
@@ -18,6 +33,7 @@ vi.mock("@/lib/admin/enrollmentStatus/evaluateEnrollmentStatusTransitionPrefligh
         targetStatusKey: "closed",
         validation: { ok: true, blocking: [], warnings: [], recommendations: [] },
         requiresBypassReason: false,
+        currentStatusKey: "open",
     }),
 }));
 
@@ -101,6 +117,7 @@ beforeEach(() => {
     preflightReconciliation.mockReset();
     applyReconciliation.mockReset().mockResolvedValue({ errors: [] });
     validatePayload.mockReset();
+    validateTransition.mockReset().mockResolvedValue({ ok: true });
     caseStatusWrite.mockReset().mockResolvedValue({ error: null });
 });
 
@@ -117,7 +134,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         // The operator is mid-decision. A status write here is the partial state the move must avoid.
         preflightReconciliation.mockResolvedValue(REQUIRED_PREFLIGHT);
         await run();
-        expect(calls).toEqual(["preflight"]);
+        expect(calls).toEqual(["transition-policy", "preflight"]);
         expect(caseStatusWrite).not.toHaveBeenCalled();
         expect(applyReconciliation).not.toHaveBeenCalled();
     });
@@ -132,7 +149,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         validatePayload.mockReturnValue({ ok: true, reconciliation: { work: [{ work_id: "w1", resolution: "completed" }] } });
         const r = (await run({ reconciliation: { work: [{ work_id: "w1", resolution: "completed" }] } })) as { ok: boolean };
         expect(r.ok).toBe(true);
-        expect(calls).toEqual(["preflight", "apply-reconciliation", "status-write"]);
+        expect(calls).toEqual(["transition-policy", "preflight", "apply-reconciliation", "status-write"]);
     });
 
     it("revalidates against its OWN preflight, not the one the client echoed back", async () => {
@@ -150,7 +167,7 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         const r = (await run({ reconciliation: { work: [{ work_id: "nope", resolution: "completed" }] } })) as { ok: boolean; error?: string };
         expect(r.ok).toBe(false);
         expect(r.error).toContain("unknown work item");
-        expect(calls).toEqual(["preflight"]);
+        expect(calls).toEqual(["transition-policy", "preflight"]);
         expect(caseStatusWrite).not.toHaveBeenCalled();
     });
 
@@ -168,7 +185,61 @@ describe("prior-stage reconciliation is owned by the canonical path", () => {
         preflightReconciliation.mockResolvedValue({ required: false, work: [], attention: null });
         const r = (await run()) as { ok: boolean };
         expect(r.ok).toBe(true);
-        expect(calls).toEqual(["preflight", "status-write"]);
+        expect(calls).toEqual(["transition-policy", "preflight", "status-write"]);
         expect(applyReconciliation).not.toHaveBeenCalled();
+    });
+});
+
+describe("one transition-policy gate governs every lifecycle status change (D-BP4)", () => {
+    it("validates the transition BEFORE asking the operator to reconcile", () => {
+        /*
+         * Order matters for the human, not just the machine. Asking someone to decide what happens to
+         * the work they are leaving and only then refusing the move wastes the decision and makes the
+         * dialog look like it did nothing.
+         */
+        preflightReconciliation.mockResolvedValue(REQUIRED_PREFLIGHT);
+        return run().then(() => {
+            expect(calls[0]).toBe("transition-policy");
+            expect(calls.indexOf("transition-policy")).toBeLessThan(calls.indexOf("preflight"));
+        });
+    });
+
+    it("refuses a blocked transition and writes nothing", async () => {
+        validateTransition.mockResolvedValue({ ok: false, message: "lead cannot go straight to enrolled" });
+        const r = (await run()) as { ok: boolean; error?: string };
+        expect(r.ok).toBe(false);
+        expect(r.error).toContain("lead cannot go straight to enrolled");
+        expect(calls).toEqual(["transition-policy"]);
+        expect(caseStatusWrite).not.toHaveBeenCalled();
+        expect(applyReconciliation).not.toHaveBeenCalled();
+    });
+
+    it("carries a policy refusal that names no reason with a safe default message", async () => {
+        validateTransition.mockResolvedValue({ ok: false });
+        const r = (await run()) as { ok: boolean; error?: string };
+        expect(r.ok).toBe(false);
+        expect(r.error).toMatch(/not permitted/i);
+    });
+
+    it("governs the CASE grain against opportunities", async () => {
+        preflightReconciliation.mockResolvedValue({ required: false, work: [], attention: null });
+        await run();
+        expect(validateTransition.mock.calls[0]?.[0]).toMatchObject({
+            entityType: "opportunities",
+            entityId: "opp-1",
+            toStatusKey: "closed",
+        });
+    });
+
+    it("reuses the invariant owner rather than re-deriving policy", () => {
+        /*
+         * The gate must be `validateStatusTransition` — the function that owns `status_transition_rules`.
+         * A second validator is the failure this asserts against: two implementations drift, and the one
+         * an outcome happens to call becomes the real policy.
+         */
+        const src = read("web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts");
+        expect(src).toMatch(/from "@\/lib\/admin\/statusTransitionRules"/);
+        // No inline re-query of the rules table: the gate is the imported function, not a second reader.
+        expect(src).not.toMatch(/from\("status_transition_rules"\)/);
     });
 });
