@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -70,12 +70,29 @@ Unsupported historical entities **fail closed** — `AdminEntityDrawer` returns 
 
 ## Configuration plane
 
-| Layer | Route | Responsibility |
-|-------|-------|----------------|
-| Admin home | `/admin` | Settings hub |
-| Business processes | `/admin/settings/lifecycle` | Stage builder, operating plans |
-| Control plane | `/admin/settings/*` | Fields, layouts, actions, statuses |
-| Authoring | `/admin/forms`, `/admin/workflows` | Forms and workflow definitions |
+> **Corrected 2026-09-30.** This table previously named `/admin` as the settings hub and
+> `/admin/settings/*` as the control plane. Measured against `web/next.config.ts`, three of its four
+> rows were wrong: bare `/admin` and `/admin/settings` **redirect** to `/organization`, and
+> `/admin/settings/*` redirects to `/settings/*`. The row that was right is the authoring row —
+> `/admin/*` remains canonical as a prefix for non-settings modules. The error mattered because this
+> document and [`system-overview.md`](system-overview.md) were both marked canonical and disagreed
+> about Alloy's own configuration URLs, and because an agent told to look in `web/app/admin/settings`
+> finds no such directory.
+
+**This document does not own product URLs.** [`../../system/routing-doctrine.md`](../../system/routing-doctrine.md)
+does, and the code outranks both: `web/lib/admin/canonicalAdminRoutes.ts` and `web/next.config.ts`.
+What follows is the shape only.
+
+Three canonical bases coexist:
+
+| Canonical base | Serves | Compatibility |
+|---|---|---|
+| `/organization` | configuration landing and its domain surfaces (access, surfaces, processes, programs, financials, data-model, …) | bare `/admin`, `/admin/settings`, `/settings` and `/settings/organization` all redirect here |
+| `/settings/*` | settings sub-surfaces — fields, layouts, actions, statuses, lifecycle | `/admin/settings/*` redirects here |
+| `/admin/*` | non-settings admin modules — forms, workflows, messages, tasks, finance, ai-activity | canonical as a **prefix**; only the bare root redirects. Any `/admin/*` outside `CANONICAL_ADMIN_PATH_PREFIXES` redirects to `/legacy-admin/*` |
+
+**URLs are not filesystem paths.** All three bases are **rewritten** onto the implementation tree
+`web/app/adminV2/**`. There is no `web/app/organization` and no `web/app/settings`.
 
 Four-plane settings model: Fields · Field grouping · Layouts · Actions — see `../modules/configuration-platform.md`.
 

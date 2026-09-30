@@ -104,6 +104,11 @@ Then: **`platform/foundation/system-overview.md`**
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
 11b. `platform/core/work-view-membership-and-navigation.md` — **Work View membership, evaluation and navigation** (membership is not stage position; one evaluator produces rows, counts and eligibility)
 11c. `context/alloy-benchmark-context.md` — **benchmark context pack** (which documents may be loaded as authoritative AI context, and what may be inferred from each)
+
+11c-i. `context/alloy-platform-synthesis.md` — **the current platform in one document** (Tier 1; synthesized from fourteen certified domain records)
+11c-ii. `context/alloy-canonical-owner-map.md` — **one concern, one owner**, plus the staleness / re-certification contract
+11c-iii. `context/alloy-inference-contract.md` — **safe and forbidden inference** (the AI guardrail)
+11c-iv. `context/alloy-context-packages.md` — **what to load**: GPT tiers and Vacilando ingestion classes
 11d. [`platform/README.md`](platform/README.md) — **platform domain index** (the folder map, and the canonical owner inside each area)
 
 ### 3. Operator experience

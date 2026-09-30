@@ -6,7 +6,7 @@ last_reviewed: 2026-09-30
 supersedes: []
 ---
 
-# Alloy benchmark context pack — V1
+# Alloy benchmark context pack — V2
 
 **This file defines which Alloy documents may be loaded as authoritative context, and what may be
 inferred from each.** It is a curated corpus, deliberately much smaller than the repository. Loading
@@ -15,11 +15,19 @@ contains several generations of design history, and most of it is not current tr
 
 | | |
 |---|---|
-| **Version** | V1 |
+| **Version** | V2 |
 | **Certified** | 2026-09-30 |
-| **Base** | `f3fd86b4b` (staging) |
+| **Base** | `3c4ac97f1` (staging), plus the Configuration and AI/BOS records carried in PR 1368 candidate `5d24b0d08` — **not yet on staging** |
 | **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments (stability gate CLOSED — 0 days quiet)** · foundation synthesis |
+| **Domains pending** | **Financials / Payments only** — stability gate CLOSED, 0 days quiet; last semantic change `75c1a016c` (2026-09-30), thirteen commits under `web/lib/financials/payments` in the preceding seven days |
+
+**Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into four
+companion documents, which together are the Tier 1 load set:
+[`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current platform model),
+[`alloy-canonical-owner-map.md`](alloy-canonical-owner-map.md) (one concern, one owner, plus the
+staleness contract), [`alloy-inference-contract.md`](alloy-inference-contract.md) (safe and forbidden
+inference) and [`alloy-context-packages.md`](alloy-context-packages.md) (GPT tiers and Vacilando
+ingestion). This manifest remains the per-domain certification record.
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -90,7 +98,9 @@ availability ("held money was available to spend after all"), payer authorizatio
 return-versus-refund distinction. Freezing a domain mid-mutation is how a benchmark corpus starts
 describing behaviour that has already changed. `web/lib/financials/payments` last changed 2026-09-30.
 
-**COMMERCIAL — NOT CERTIFIED; one active misinformation corrected.**
+**COMMERCIAL — superseded by the Commercial section below, which certifies it.** The paragraph that
+follows records the state at the time of the money pass and the misinformation it corrected; read the
+certification, not this verdict.
 `../platform/modules/commercial-configuration.md` listed discount programs, subsidies, fees/add-ons,
 accounting and the simulator as "Future domains (deferred)". Measured: `discount_programs` holds 5 rows,
 `financial_journal_entries` **13,136**, `financial_accounting_periods` 102, and subsidy is ten production
@@ -232,6 +242,61 @@ A domain appears here only when it has been certified by an authority-discovery 
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
 
 ---
+
+## Domain status — the program scoreboard
+
+One row per domain. `Declaration` is the certification token that exists in the tree; where it is
+absent, the certification lives in this manifest's prose and nowhere else, which is recorded rather
+than tidied away.
+
+| Domain | Status | Declaration | DIRECT owner | Known non-blocking debt | Next re-certification trigger |
+|---|---|---|---|---|---|
+| Developer Platform / API | CERTIFIED | `API_…_PROMOTED_CERTIFIED` | [`../api/api-architecture.md`](../api/api-architecture.md) | — | a new `/api/v1` route, operation or scope |
+| Runtime | CERTIFIED | `RUNTIME_…_PROMOTED_CERTIFIED` | [`../platform/foundation/architecture.md`](../platform/foundation/architecture.md) | `architecture.md` was `last_reviewed` 2026-07-12 and carried a stale configuration-plane table, corrected this pass | a new foundational runtime |
+| Business Process | CERTIFIED | `BUSINESS_PROCESS_…` | [`../platform/core/business-process-system.md`](../platform/core/business-process-system.md) | — | a new writer of lifecycle state |
+| Identity / Access | CERTIFIED | `IDENTITY_ACCESS_…_PROMOTED_CERTIFIED` | [`../platform/governance/roles-and-permissions.md`](../platform/governance/roles-and-permissions.md) | bounded implementation debt, itemised in §6 | an EXECUTE grant on a mutating RPC; a new public table |
+| Operations temporal truth | CERTIFIED | *shares* `ENROLLMENT_PLACEMENT_…` — no separate token | [`../platform/core/effective-dated-assignment-doctrine.md`](../platform/core/effective-dated-assignment-doctrine.md) | cross-site move unrepresented; no correction path (both deliberate) | a migration touching `child_placements`, `schedule_assignments` or `employments` |
+| Enrollment / Placement | CERTIFIED | `ENROLLMENT_PLACEMENT_…` | [`../platform/core/placement-system.md`](../platform/core/placement-system.md) | owner carries no `measured` record of its own | a change to supersession or site consistency |
+| Staff / Scheduling | CERTIFIED | `STAFF_SCHEDULING_…` | [`../platform/governance/staff-coverage-authority.md`](../platform/governance/staff-coverage-authority.md) | [`../platform/governance/assignments-authority-model-debt.md`](../platform/governance/assignments-authority-model-debt.md); no shift model | a staff single-operational index, or a shift model |
+| Attendance | CERTIFIED | `ATTENDANCE_…` | [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md) | record says *measured 2026-09-30* while frontmatter still says `last_reviewed: 2026-09-10` | a new attendance producer; kiosk identity change |
+| Subsidy | CERTIFIED | **none — no token exists in the tree** | §0.1 of [`../platform/modules/financials-canonical-authorities.md`](../platform/modules/financials-canonical-authorities.md) | certified in this manifest only; the owner document declares no state | an eleventh `fin.subsidy` command; a mounted HTTP write surface |
+| Commercial | CERTIFIED | `COMMERCIAL_…` | [`../platform/modules/commercial-configuration.md`](../platform/modules/commercial-configuration.md) | pending DELETE declarations on the **retired Jobs/Booking** pricing vertical; this manifest says *five* in the Commercial section and *six* in the money section — one is wrong and the Commercial owner should settle it | a new pricing or catalog table |
+| Operational Intelligence | CERTIFIED | `OPERATIONAL_INTELLIGENCE_…` | **record:** §0 of [`../platform/core/operational-calculations.md`](../platform/core/operational-calculations.md) | the module narrative [`../platform/modules/operational-intelligence-platform.md`](../platform/modules/operational-intelligence-platform.md) is `last_reviewed` 2026-07-28 and does **not** carry the record | a new registered metric key or Answer consumer |
+| Communications | CERTIFIED | `COMMUNICATIONS_…` | [`../platform/modules/communications-platform.md`](../platform/modules/communications-platform.md) | — | a provider change or addition |
+| Configuration | CERTIFIED | `CONFIGURATION_…` | [`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md) | Programs publication chain is built with **zero rows**; **record is on PR 1368, not yet on staging** | first rows in the publication chain; a fifth lifecycle |
+| AI / BOS | CERTIFIED | `AI_BOS_…` | [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md) | two of four Trust capabilities are deterministic — a fact, not debt; **record is on PR 1368, not yet on staging** | a new provider or adapter |
+| **Financials / Payments** | **PENDING** | — | **none — do not load a Payments document as current truth** | the domain is mid-mutation, not merely undocumented | seven consecutive quiet days under `web/lib/financials/payments` |
+
+**Declarations reconcile to twelve tokens for fourteen rows.** Operations temporal truth shares the
+Enrollment/Placement declaration, and Subsidy has no token at all. Neither is a reason to doubt the
+certifications, which rest on measurement recorded in the owner documents — but a table that silently
+implied fourteen tokens would be the kind of tidy-looking falsehood this corpus exists to prevent.
+
+## Financials / Payments — what may enter context now
+
+Financials/Payments is **PENDING**, and the reason is measurable rather than editorial: the last
+substantive semantic change under `web/lib/financials/payments` is `75c1a016c` (2026-09-30), with
+thirteen commits under that path in the preceding seven days. The recent subjects are corrections to
+core money meaning — refund ordering, held-deposit availability, payer authorization, and the
+return-versus-refund distinction — not polish.
+
+**Allowed into context now:**
+
+- **Subsidy**, certified and stable — §0.1 of [`../platform/modules/financials-canonical-authorities.md`](../platform/modules/financials-canonical-authorities.md).
+- **Commercial**, certified — [`../platform/modules/commercial-configuration.md`](../platform/modules/commercial-configuration.md).
+- Core Financials QA material **only** as `EXCLUDE_HISTORY` evidence: `certification/financials/**`.
+- The top-level statement that Financials/Payments is pending re-certification because its semantics
+  are actively changing.
+
+**Forbidden now:**
+
+- Freezing current Payments behaviour into DIRECT context.
+- Claiming or implying Financials certification, including by omission in a summary.
+- Inferring current payment semantics from older Payments or Billing documents — several were
+  overtaken during September 2026.
+
+Subsidy and Commercial are **not** blocked by the Payments hold. They are separately certified, and
+subsidy is collection suppression rather than a payment concept.
 
 ## 1. Corpus rules
 
@@ -589,6 +654,7 @@ was certified; it is not a claim that the repository must stay there.
 
 | Version | Base | Change |
 |---|---|---|
+| **V2** | `3c4ac97f1` + PR 1368 | **Foundation synthesis.** Fourteen certified records synthesized into a five-file Tier 1 set; the domain status scoreboard and the Financials placeholder added here. Reconciled three internal inconsistencies in this manifest: Commercial was listed both NOT CERTIFIED and CERTIFIED, the pending-DELETE count differs between two sections, and declarations reconcile to twelve tokens for fourteen rows (Operations shares Enrollment/Placement's; Subsidy has none). Foundation convergence corrected four documents whose canonical claims had gone stale — most seriously a foundation document asserting Alloy has no partner API while `/api/v1` is a frozen 18-path contract with an OAuth token exchange. |
 | **V1** | `f3fd86b4b` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **456 of 872 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
 | V0 | `9cbe2915b` | First certification: Developer Platform / API, Runtime, Business Process. |
 

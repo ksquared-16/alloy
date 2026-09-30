@@ -1,7 +1,7 @@
 ---
 owner: runtime
 status: frozen
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -34,16 +34,42 @@ Department UUID routes are **internal/compat** — not the operator home path.
 
 ## Canonical admin / config URLs
 
+> **Corrected 2026-09-30.** This section is the single source of truth for product URLs, and it had
+> gone stale on exactly that. It named `/admin` as the config landing and `/admin/settings/*` as the
+> settings namespace, and stated that `/admin/settings` redirects to `/admin`. Measured against
+> `web/next.config.ts` and `web/lib/admin/canonicalAdminRoutes.ts`: the landing is `/organization`,
+> `/admin/settings/*` redirects to `/settings/*`, and `/admin/settings` redirects to `/organization`
+> — not to `/admin`. The stale copy had also propagated into
+> [`../platform/foundation/architecture.md`](../platform/foundation/architecture.md), which was
+> corrected in the same pass.
+
+**Three canonical bases coexist.** This is the part most often got wrong: `/admin` is not retired —
+it is no longer the *config landing*, while remaining canonical as a prefix for non-settings modules.
+
 | URL | Role |
 |-----|------|
-| `/admin` | Admin / settings / config landing (not operator home) |
-| `/admin/settings/*` | Settings sub-surfaces (lifecycle hub, fields, layouts, actions, …) |
+| `/organization` | **Configuration landing** (`CANONICAL_ORGANIZATION_BASE`) |
+| `/organization/{access,surfaces,processes,programs,locations,financials,data-model,staff,communications,integrations,commands,calculations,programs-locations,operational-intelligence}` | Organization domain surfaces |
+| `/settings/*` | **Settings sub-surfaces** (`CANONICAL_SETTINGS_BASE`) — fields, layouts, actions, statuses, lifecycle |
 | `/admin/forms` | Forms module |
 | `/admin/workflows` | Automations hub |
 | `/admin/ai-activity` | AI activity strip destination |
-| `/admin/tasks`, `/admin/messages`, … | Other canonical AdminV2 modules (see `CANONICAL_ADMIN_PATH_PREFIXES`) |
+| `/admin/tasks`, `/admin/messages`, `/admin/finance`, … | Other canonical AdminV2 modules (see `CANONICAL_ADMIN_PATH_PREFIXES`) |
 
-Exact `/admin/settings` redirects to `/admin` (settings index is the admin landing).
+**Compatibility redirects** (all 307/302, `permanent: false`):
+
+| From | To |
+|-----|-----|
+| `/admin`, `/admin/settings`, `/settings`, `/settings/organization` | `/organization` |
+| `/admin/settings/:path*` | `/settings/:path*` |
+| `/adminV2`, `/admin/v2`, `/adminv2` (bare) | `/organization` |
+| `/settings/commercial`, `/settings/commercial/tuition` | `/organization/financials` |
+| `/settings/surfaces`, `/settings/layouts` | `/organization/surfaces` |
+| `/settings/users-roles`, `/settings/user-access` | `/organization/access` |
+
+**Rewrites** then serve every canonical base from the implementation tree: `/organization` →
+`/adminV2/settings/organization`, `/settings/:path*` → `/adminV2/settings/:path*`. So a browser URL
+never matches its filesystem path, and `web/app/organization` does not exist.
 
 ---
 
@@ -51,7 +77,7 @@ Exact `/admin/settings` redirects to `/admin` (settings index is the admin landi
 
 | URL | Behavior |
 |-----|----------|
-| `/adminV2`, `/adminV2/*` | 302 → `/admin`, `/admin/*` |
+| `/adminV2/*` | 302 → `/admin/*` (the **bare** `/adminV2` goes to `/organization`, not `/admin`) |
 | `/admin/v2`, `/adminv2`, and `/*` variants | 302 → `/admin/*` |
 | `/admin/workspace/*` | Rewrites to operator tree; prefer `/workspace` in product nav |
 
