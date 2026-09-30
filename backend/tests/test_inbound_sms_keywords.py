@@ -15,8 +15,6 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import patch
 
-os.environ.setdefault("STRIPE_SECRET_KEY", "unit_test_stripe_secret_placeholder")
-os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "unit_test_stripe_webhook_placeholder")
 
 from app.services.inbound_keyword_handler import handle_inbound_keyword, resolve_person_id  # noqa: E402
 from app.services.sms_keywords import (  # noqa: E402

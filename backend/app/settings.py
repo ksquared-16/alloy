@@ -21,37 +21,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("alloy-dispatcher")
 
 # ---------------------------------------------------------------------------
-# Stripe
+# NO STRIPE, AND NO PAYMENT EXECUTOR (Payments V1 · W6-A2)
 # ---------------------------------------------------------------------------
-
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
-
-# Fail fast if required Stripe env vars are missing
-if not STRIPE_SECRET_KEY:
-    raise ValueError("STRIPE_SECRET_KEY environment variable is required but not set")
-if not STRIPE_WEBHOOK_SECRET:
-    raise ValueError("STRIPE_WEBHOOK_SECRET environment variable is required but not set")
-
-# Dedicated credential for the payment executor (POST /admin/payments/run),
-# called only by the authenticated Next.js proxy.
 #
-# This is deliberately its own secret: a card-charging executor must not be
-# reachable with a credential shared with anything else.
+# This module used to read STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET and REFUSE TO BOOT without
+# them, plus a dedicated PAYMENT_EXECUTOR_SECRET for `POST /admin/payments/run`.
 #
-# Server-only. Never exposed to the browser (no NEXT_PUBLIC_ prefix anywhere).
-PAYMENT_EXECUTOR_SECRET = os.getenv("PAYMENT_EXECUTOR_SECRET", "").strip()
-
-
-def payment_executor_configured() -> bool:
-    """True when the payment executor can authenticate. When false it fails closed."""
-    return bool(PAYMENT_EXECUTOR_SECRET)
-
-
-if not payment_executor_configured():
-    logger.warning(
-        "PAYMENT_EXECUTOR_SECRET not set. POST /admin/payments/run will return 503 until configured."
-    )
+# All three are gone with that endpoint. The backend now serves Communications dispatch and inbound
+# SMS, and neither touches Stripe — the canonical webhook is `web/app/api/stripe/webhook/route.ts`
+# and money is written through the registered action registry.
+#
+# Removing the boot check is part of the repair rather than incidental to it: a service that refuses
+# to start for a credential it never uses is a false dependency, and three backend tests had already
+# begun setting STRIPE_WEBHOOK_SECRET to a placeholder purely to get past it.
 
 # ---------------------------------------------------------------------------
 # Supabase (system of record)
