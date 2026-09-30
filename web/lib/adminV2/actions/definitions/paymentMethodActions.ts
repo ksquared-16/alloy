@@ -29,6 +29,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolvePayerCandidates } from "@/lib/financials/payments/paymentSubjectModel";
+import { requestBankAccountSetup } from "@/lib/financials/payments/bankSetupRequest";
 import {
     beginAddPaymentMethod,
     completeAddPaymentMethod,
@@ -41,6 +42,7 @@ import {
 export const PAYMENT_METHOD_ADD_ACTION_KEY = "payment_method.add";
 export const PAYMENT_METHOD_SET_DEFAULT_ACTION_KEY = "payment_method.set_default";
 export const PAYMENT_METHOD_REVOKE_ACTION_KEY = "payment_method.revoke";
+export const PAYMENT_METHOD_REQUEST_SETUP_ACTION_KEY = "payment_method.request_setup";
 
 /** Ordinary financial operations work. See the header for why this is not `fin.provider`. */
 export const PAYMENT_METHOD_PERMISSION = "fin.write" as const;
@@ -171,6 +173,34 @@ const addPaymentMethod: RegisteredAction = {
                 };
             }
             /*
+             * ── A BANK ACCOUNT IS NOT THIS CAPABILITY'S TO OPEN ──
+             *
+             * The operator surface removed its Add bank account button on the grounds that saving a
+             * bank account establishes a DEBIT MANDATE the account holder must accept in person.
+             * Removing a button is not removing a capability: this action still accepted
+             * `rail: "ach"` and would have opened the provider's collection, presented the mandate
+             * to whoever was at the desk, and emailed its confirmation to a payer who never agreed.
+             *
+             * The door is closed HERE, where the act actually happens, so the boundary holds for
+             * every caller rather than for the one screen that stopped offering it.
+             *
+             * `payment_method.request_setup` is the operator's half, and asking is not authorizing.
+             */
+            if (rail === "ach") {
+                return {
+                    ok: false,
+                    blockers: [
+                        {
+                            code: "bank_setup_is_the_payers_act",
+                            message:
+                                "A bank account is authorized by the payer, not saved here. Use Request bank "
+                                + "account setup to send them a secure link.",
+                            field: "rail",
+                        },
+                    ],
+                };
+            }
+            /*
              * A payer is NOT required from the caller. The Details panel names an account, not a
              * person, and the server resolves the account's primary contact when none is given —
              * see `resolveDefaultPayer`. Requiring it here would refuse the mounted flow for want of
@@ -292,7 +322,13 @@ const addPaymentMethod: RegisteredAction = {
                 return {
                     ok: false,
                     correlationId,
-                    status: done.reason === "no_instrument" ? 409 : done.reason === "already_claimed" ? 409 : 502,
+                    status:
+                        /* Not this payer's setup is "no such thing here", never "forbidden". */
+                        done.reason === "not_this_payers_setup"
+                            ? 404
+                            : done.reason === "no_instrument" || done.reason === "already_claimed"
+                              ? 409
+                              : 502,
                     error: done.message,
                     blockers: [{ code: done.reason, message: done.message }],
                 };
@@ -537,4 +573,140 @@ const revokeMethod: RegisteredAction = {
     },
 };
 
-export const paymentMethodActions: RegisteredAction[] = [addPaymentMethod, setDefaultMethod, revokeMethod];
+/**
+ * ASK THE PAYER TO SET UP A BANK ACCOUNT — and nothing more than ask.
+ *
+ * This is the operator's whole half of bank setup. It mints a link addressed to ONE named person
+ * and writes nothing in Financials: no payment method, no mandate, no provider object. If the payer
+ * never opens it, the account is exactly as it was, which is what makes "the operator request does
+ * not constitute authorization" a fact about the code rather than a promise about the UI.
+ *
+ * ── THE PAYER IS NAMED, AND MAY BE DEFAULTED, AND THAT IS NOT THE SAME THING ──
+ *
+ * `resolveDefaultPayer` fills a gap when the surface named nobody, exactly as it does for a card,
+ * and it resolves the household's PRIMARY CONTACT rather than whoever is responsible for the fees.
+ * That decides who is ASKED. It does not decide whose bank account results: the person who opens
+ * the link authorizes their own account, and the canonical row records them. Being sent a request
+ * is not being recorded as a payer.
+ */
+const requestBankSetup: RegisteredAction = {
+    actionKey: PAYMENT_METHOD_REQUEST_SETUP_ACTION_KEY,
+    defaultLabel: "Request bank account setup",
+    description: "Send the payer a secure link so they can authorize bank payments themselves.",
+    supportedEntityTypes: ["opportunity", "person", "child", "opportunity_customer_member"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.customer_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "missing_account", message: "An account is required.", field: "customer_id" }],
+            };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ supabase, ctx }) {
+        if (!(await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId))) {
+            return ineligible("Requesting bank account setup");
+        }
+        return { eligible: true, blockers: [], availableTransitions: [], requiredInputs: [] };
+    },
+
+    async buildPreview() {
+        return {
+            summary: "Send the payer a link to set up bank payments",
+            changes: [
+                "Sends a secure link to the payer — nothing is saved on this account yet",
+                "The payer enters their own bank details and accepts the debit authorization themselves",
+                "The bank account appears here once they finish, with the bank name and last four digits",
+            ],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }) {
+        const correlationId = randomUUID();
+        const db = supabase as SupabaseClient;
+        if (!(await permitted(db, ctx.orgId, ctx.userId))) {
+            return denied(correlationId, "Requesting bank account setup");
+        }
+
+        const customerId = t(payload?.customer_id);
+        if (!(await accountInOrg(db, ctx.orgId, customerId))) {
+            return {
+                ok: false,
+                correlationId,
+                status: 404,
+                error: "That account is not in this organization.",
+                blockers: [{ code: "account_not_found", message: "Account not found." }],
+            };
+        }
+
+        const namedPayer = t(payload?.payer_entity_id);
+        const payerEntityId = namedPayer || (await resolveDefaultPayer(db, ctx.orgId, customerId));
+        if (!payerEntityId) {
+            return {
+                ok: false,
+                correlationId,
+                status: 409,
+                error: "This account has nobody to send the request to, so bank setup cannot be requested for it.",
+                blockers: [{ code: "no_payer", message: "No payer could be resolved for this account." }],
+            };
+        }
+
+        try {
+            const minted = await requestBankAccountSetup({
+                orgId: ctx.orgId,
+                customerId,
+                payerEntityId,
+                /* Provenance. Read as who asked, never as who authorized. */
+                requestedByUserId: ctx.userId ?? null,
+            });
+            if (!minted.ok) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: minted.reason === "invalid_input" ? 400 : 502,
+                    error: minted.message,
+                    blockers: [{ code: minted.reason, message: minted.message }],
+                };
+            }
+
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: PAYMENT_METHOD_REQUEST_SETUP_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: "",
+                    detail: {
+                        payer_entity_id: payerEntityId,
+                        /*
+                         * The bearer URL, returned to the operator so they can hand it over. It is
+                         * NOT stored — the row carries only the digest — and the short-code form is
+                         * deliberately not offered for this act: an eight-character code is the
+                         * wrong credential for a standing authorization to debit a bank account.
+                         */
+                        setup_url: minted.url,
+                        expires_in_minutes: minted.expiresInMinutes,
+                    },
+                },
+            };
+        } catch (e) {
+            return failed(correlationId, e, "The request could not be sent.");
+        }
+    },
+};
+
+export const paymentMethodActions: RegisteredAction[] = [
+    addPaymentMethod,
+    requestBankSetup,
+    setDefaultMethod,
+    revokeMethod,
+];

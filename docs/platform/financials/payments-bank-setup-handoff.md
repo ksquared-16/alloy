@@ -1,14 +1,15 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
 # Bank account setup is the payer's act — the handoff, and the slice that builds it
 
-**Status:** boundary established; participant flow NOT built.
+**Status:** boundary established; participant flow BUILT.
 **Established:** Payments V1, Payment Method experience productization.
+**Built:** Payments V1, payer-authorized bank setup. See "What was built" at the end.
 
 ## The finding
 
@@ -46,6 +47,12 @@ those are UI problems, and none are fixed by relabeling the control.
 **Decision:** the operator `Add bank account` control is removed until the payer-authorized flow
 exists. A disabled control was considered and rejected — *disabled* reads as "your action, not
 right now", when the truth is that it is not the operator's action at all.
+
+**Amended when the flow was built.** Removing the control did not remove the capability:
+`payment_method.add` still accepted `rail: "ach"`, so anything that could POST an action could open
+the provider's collection and present the mandate at the desk. The boundary now lives in
+`validatePayload`, where the act happens, and the control is back with the verb it should always
+have had — `Request bank account setup`.
 
 Card is unaffected. A card setup stores an instrument and carries no mandate of this kind, so the
 operator may complete it, and W5 certification proceeds on card.
@@ -122,3 +129,42 @@ the default — and must not widen the default for every other link type to get 
 
 Autopay still requires explicit authorization. A stored card or bank account does **not** enable
 Autopay. That is unchanged by this document and unchanged by the slice above.
+
+## What was built
+
+The slice above, against the seam this document named. Two departures from the plan, both narrower
+than what was planned rather than wider:
+
+1. **The action type and the link** — `payment_method_setup` on `action_links`, `entity_id` naming
+   the payer, `metadata` carrying the account and the rail, and an explicit seven-day expiry set by
+   the mint rather than the module's two-hour default. `lib/financials/payments/bankSetupRequest.ts`.
+2. **The participant surface** — `/bank-setup/<token>`, reached from `/a/<token>`, backed by
+   `app/api/public/bank-setup/[token]/route.ts`. It reuses `PaymentMethodSetupField` unchanged, so
+   there is one provider integration and one place the payer's credentials could have been seen —
+   an iframe Alloy cannot read.
+3. **Server completion** — `completeAddPaymentMethod`, as planned.
+4. **Operator capabilities** — `payment_method.request_setup`; the existing payer/bank/last4/state
+   projection; revocation through the canonical authority, unchanged.
+5. **Microdeposits** — the payer confirms with the provider, `setup_intent.succeeded` reaches the
+   webhook, and the canonical row flips. Nothing on the route would accept a deposit amount.
+
+**Departure 1 — the short code is not offered for this act.** The table above lists `/a/{code}` as
+an SMS-friendly path, and it stays that for every other link type. After S-3 a short code cannot be
+exchanged for the plaintext token, and eight characters is the wrong credential for a standing
+authorization to debit a bank account, so the entry page refuses one for this action type and the
+resolver looks up by digest only.
+
+**Departure 2 — the link is consumed on SAVE, not on open.** A payer who closes the provider's
+window has authorized nothing; burning their link at that point would strand them with no way back
+in. It closes when the bank account is actually on file, including when that account is still
+`pending` — a pending account is a success with a next step the payer takes up with their bank, and
+the webhook rather than another visit is what finishes it.
+
+**One gap this closed that the plan had not seen.** `completeAddPaymentMethod` documented that a
+tampered payload's "setup's customer will not match the payer's" and nothing compared them —
+`retrieveMethodSetup` did not read the customer back at all. On an operator surface the setup
+reference never left the server session; on a payer surface it travels through a browser Alloy does
+not control, which is the difference between two families' bank accounts. Setups are now stamped
+with the org and payer at creation with Alloy's own key, read back, and checked against the payer
+the caller resolved canonically, with the platform customer re-derived rather than taken from the
+payload.

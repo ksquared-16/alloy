@@ -195,6 +195,48 @@ export async function readPayerUsableMethods(
     return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toRecord);
 }
 
+/**
+ * Every method ONE PAYER OWNS, whatever state it is in — what that person sees about themselves.
+ *
+ * The third reader, and the reason it is not one of the other two: `readPayerUsableMethods` answers
+ * "what could pay this right now", which correctly hides a bank account waiting on its deposits;
+ * `readAccountMethods` answers "what has this account got", which correctly includes a co-parent's
+ * card. Neither is the right answer to "what have I got on file", and a payer shown only usable
+ * methods would add the same bank account a second time every time they came back during the day or
+ * two their bank takes to confirm it.
+ *
+ * Revoked rows stay out. A payer removed it; showing it back to them is not history, it is noise.
+ * The narrowing is in the query for the same reason it is there — rows never fetched cannot leak.
+ */
+export async function readPayerOwnMethods(
+    supabase: SupabaseClient,
+    args: { orgId: string; payerEntityType: string; payerEntityId: string; customerId: string; rail?: MethodRail | null },
+): Promise<PaymentMethodRecord[]> {
+    const orgId = t(args.orgId);
+    const payerEntityType = t(args.payerEntityType);
+    const payerEntityId = t(args.payerEntityId);
+    const customerId = t(args.customerId);
+    /* A missing scope reads as nothing. Same rule, same reason, as the reader above. */
+    if (!orgId || !payerEntityType || !payerEntityId || !customerId) return [];
+
+    let query = supabase
+        .from("payment_methods")
+        .select(COLUMNS)
+        .eq("org_id", orgId)
+        .eq("payer_entity_type", payerEntityType)
+        .eq("payer_entity_id", payerEntityId)
+        .eq("customer_id", customerId)
+        .neq("usability_state", "revoked");
+    if (args.rail) query = query.eq("rail", args.rail);
+
+    const { data, error } = await query
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: false });
+
+    if (error) return [];
+    return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(toRecord);
+}
+
 /** One method, scoped by org. A method belonging to another tenant reads as absent, not as forbidden. */
 export async function readMethod(
     supabase: SupabaseClient,
@@ -300,7 +342,13 @@ export async function beginAddPaymentMethod(
         customerRef = created.customerRef;
     }
 
-    const setup = await createMethodSetup(call, { customerRef, rail: args.rail });
+    const setup = await createMethodSetup(call, {
+        customerRef,
+        rail: args.rail,
+        /* Stamped so completion can refuse a setup opened for somebody else. */
+        orgId,
+        payerEntityId,
+    });
     if (!setup.ok) return { ok: false, reason: "provider_error", message: setup.message };
 
     return {
@@ -348,17 +396,88 @@ export type CompleteAddOutcome =
     | { ok: true; method: PaymentMethodRecord; created: boolean }
     | {
           ok: false;
-          reason: "no_instrument" | "provider_error" | "already_claimed" | "invalid_input" | "write_failed";
+          reason:
+              | "no_instrument"
+              | "provider_error"
+              | "already_claimed"
+              | "invalid_input"
+              | "write_failed"
+              /** The setup belongs to a different payer or a different organisation. */
+              | "not_this_payers_setup";
           message: string;
       };
+
+/**
+ * IS THIS SETUP THIS PAYER'S? — the one question a setup reference from a browser cannot answer.
+ *
+ * Three independent facts, and a refusal if any of them disagrees:
+ *
+ *   the ORG stamped on the setup at creation, against the org resolved from the session or link;
+ *   the PAYER stamped on the setup at creation, against the payer the caller resolved canonically;
+ *   the platform CUSTOMER the setup was opened against, against the one already on file for this
+ *   payer — re-derived here, never taken from the payload.
+ *
+ * The customer check is skipped only for a payer with no method on file yet, because there is
+ * nothing to compare against; the stamp still answers for that case, and it was written by Alloy's
+ * own key rather than by anything the browser can reach.
+ *
+ * A setup created before this stamp existed carries no org or payer, and is not refused for that —
+ * refusing would strand methods mid-flight on the day this ships. Its customer is checked where
+ * there is one to check.
+ */
+async function assertSetupBelongsToPayer(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        payerEntityType: string;
+        payerEntityId: string;
+        outcome: { customerRef: string | null; stampedOrgId: string | null; stampedPayerId: string | null };
+    },
+): Promise<{ ok: true } | { ok: false; refusal: CompleteAddOutcome }> {
+    /* One sentence for every mismatch: which one it was is not the payer's business, or an attacker's. */
+    const refuse = (): { ok: false; refusal: CompleteAddOutcome } => ({
+        ok: false,
+        refusal: {
+            ok: false,
+            reason: "not_this_payers_setup",
+            message: "This payment method setup does not belong to this payer. Nothing has been saved.",
+        },
+    });
+
+    const { outcome } = args;
+    if (outcome.stampedOrgId && outcome.stampedOrgId !== args.orgId) return refuse();
+    if (outcome.stampedPayerId && outcome.stampedPayerId !== args.payerEntityId) return refuse();
+
+    const onFile = await existingCustomerRef(supabase, {
+        orgId: args.orgId,
+        payerEntityType: args.payerEntityType,
+        payerEntityId: args.payerEntityId,
+        processor: "stripe",
+    });
+    if (onFile && outcome.customerRef && onFile !== outcome.customerRef) return refuse();
+
+    return { ok: true };
+}
 
 /**
  * Persist the canonical method, from provider evidence read back on the SERVER.
  *
  * The browser hands over a setup reference and nothing else. Every fact written here — which
  * instrument, which customer, what brand, what state — is read from the provider using Alloy's own
- * key, so a tampered payload can at most name a setup that does not belong to it, and that setup's
- * customer will not match the payer's.
+ * key, so a tampered payload can at most name a setup that does not belong to it.
+ *
+ * ── AND THAT NAMING IS WHAT `assertSetupBelongsToPayer` REFUSES ──
+ *
+ * This comment used to end "and that setup's customer will not match the payer's", which was a
+ * statement of intent rather than of fact: nothing compared them, `retrieveMethodSetup` did not
+ * even read the customer back, and a caller holding somebody else's setup reference could have had
+ * their bank account written onto its own payer. On a payer-facing surface, where the setup
+ * reference travels through a browser Alloy does not control, that is the difference between two
+ * families' bank accounts.
+ *
+ * The check is server-side on both sides: the stamp was written with Alloy's key when the setup was
+ * created, the payer and org are resolved canonically by the caller, and the platform customer —
+ * when the payer already has one on file — is re-derived here rather than taken from the payload.
  */
 export async function completeAddPaymentMethod(
     supabase: SupabaseClient,
@@ -385,6 +504,14 @@ export async function completeAddPaymentMethod(
     const read = await retrieveMethodSetup(call, setupRef);
     if (!read.ok) return { ok: false, reason: "provider_error", message: read.message };
     const outcome = read.outcome;
+
+    const owned = await assertSetupBelongsToPayer(supabase, {
+        orgId,
+        payerEntityType: t(args.payerEntityType) || "person",
+        payerEntityId,
+        outcome,
+    });
+    if (!owned.ok) return owned.refusal;
 
     if (!outcome.methodRef) {
         /*
@@ -414,7 +541,12 @@ export async function completeAddPaymentMethod(
         /* The PROVIDER's answer decides the rail, not the caller's request. */
         rail: display.rail,
         processor: "stripe",
-        provider_customer_ref: t(args.providerCustomerRef),
+        /*
+         * The SETUP's own customer wins over the payload's. Both are the same value on an honest
+         * call; when they differ, the one Alloy read back from the provider is the true one, and it
+         * has already had to match the payer's own customer above.
+         */
+        provider_customer_ref: t(outcome.customerRef) || t(args.providerCustomerRef),
         provider_method_ref: outcome.methodRef,
         mandate_ref: outcome.mandateRef,
         mandate_accepted_at: outcome.mandateRef ? now : null,

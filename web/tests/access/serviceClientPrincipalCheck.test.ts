@@ -133,10 +133,20 @@ describe("W-4 · the check is not vacuous", () => {
          *     own projection so a substituted charge id is unreachable, the amount
          *     ceiling and currency are `resolveFamilyCollectible`'s, and cash is
          *     recognised only from a provider intent read on the server.
+         *   26 -> 27 (2026-09-30) the payer-authorized BANK SETUP surface. It is
+         *     public for the reason the slice exists: saving a bank account
+         *     establishes a debit mandate Stripe's ACH terms require the ACCOUNT
+         *     HOLDER to accept by name, so a route behind an operator session
+         *     would put an operator in front of that mandate. Capability-token,
+         *     on `resolveBankSetupLink`, by digest only — a short code is refused
+         *     for this action type. Org, account and payer come off the
+         *     `action_links` row; the only body field is a setup reference, which
+         *     is re-read from the provider on the server and refused unless the
+         *     org and payer stamped on it at creation match.
          *
          * The transitive-only ceiling has not moved across any of them.
          */
-        expect(report.ratchet.max_subject_unresolved).toBe(26);
+        expect(report.ratchet.max_subject_unresolved).toBe(27);
         expect(report.ratchet.max_transitive_only_unresolved).toBe(13);
         expect(report.violations).toEqual([]);
         // And the kiosk routes resolve WITHOUT reaching a human session, which is

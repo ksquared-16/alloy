@@ -10,6 +10,8 @@
 import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
 export const PAYMENT_METHOD_COMMANDS = {
     add: "payment_method.add",
+    /* Asks the payer to authorize a bank debit themselves. Writes nothing in Financials. */
+    requestSetup: "payment_method.request_setup",
     setDefault: "payment_method.set_default",
     revoke: "payment_method.revoke",
 } as const;

@@ -121,7 +121,11 @@ export default function PaymentMethodsSection({
     }, [load]);
 
     const run = useCallback(
-        async (key: string, command: "add" | "setDefault" | "revoke", payload: Record<string, unknown>) => {
+        async (
+            key: string,
+            command: "add" | "requestSetup" | "setDefault" | "revoke",
+            payload: Record<string, unknown>,
+        ) => {
             setBusy(key);
             setError(null);
             const out = await executePaymentMethodCommand(command, payload);
@@ -189,6 +193,27 @@ export default function PaymentMethodsSection({
         [customerId, payerEntityId, payerName, payerEmail, run],
     );
 
+    /**
+     * The link an operator hands to the payer, once, after asking for it.
+     *
+     * Held in state and not stored anywhere: the row carries only a digest, so this is the single
+     * moment the bearer URL exists in readable form. Losing it costs a second request, which is the
+     * right trade against keeping a standing debit-authorization credential lying about.
+     */
+    const [setupLink, setSetupLink] = useState<string | null>(null);
+
+    const requestBankSetup = useCallback(async () => {
+        setSetupLink(null);
+        const out = await run("request:ach", "requestSetup", { customer_id: customerId, payer_entity_id: payerEntityId ?? "" });
+        if (!out.ok) return;
+        const url = String(out.detail.setup_url ?? "");
+        if (!url) {
+            setError("The request could not be created. Nothing has been sent.");
+            return;
+        }
+        setSetupLink(url);
+    }, [customerId, payerEntityId, run]);
+
     /* The payer finished at the provider. The SERVER decides what that actually produced. */
     const finishAdd = useCallback(async () => {
         if (!pendingSetup) return;
@@ -227,22 +252,31 @@ export default function PaymentMethodsSection({
                             <Plus className="h-3 w-3" strokeWidth={2} /> Add card
                         </button>
                         {/*
-                          * NO OPERATOR "ADD BANK ACCOUNT" CONTROL. THIS IS A PRODUCT BOUNDARY,
-                          * NOT AN UNFINISHED BUTTON.
+                          * AND THE BANK CONTROL IS A REQUEST, NOT AN ADD.
                           *
-                          * Saving a bank account is not the same act as saving a card. It
-                          * establishes a DEBIT MANDATE, and Stripe's ACH terms have the platform
-                          * warrant that it holds the account holder's authorization — by name —
-                          * before any debit is initiated. An operator pressing through that
-                          * mandate on a parent's behalf would make Alloy warrant an authorization
-                          * nobody obtained, and Stripe emails the mandate confirmation to the
-                          * payer, who never agreed to it.
+                          * This is where "Add bank account" used to be and was removed, because
+                          * saving a bank account establishes a DEBIT MANDATE and Stripe's ACH terms
+                          * have the platform warrant that it holds the account holder's
+                          * authorization BY NAME before any debit is initiated. An operator
+                          * pressing through that mandate would make Alloy warrant an authorization
+                          * nobody gave, and the provider emails its confirmation to a payer who
+                          * never agreed.
                           *
-                          * A disabled button was rejected: disabled reads as "your action, not
-                          * right now", and this is not the operator's action at all. The control
-                          * returns as "Request bank account setup" when the payer-authorized flow
-                          * exists — see docs/platform/financials/payments-bank-setup-handoff.md.
+                          * The control is back with the verb it always should have had. Pressing it
+                          * sends the payer a link and writes nothing on this account; the bank
+                          * account appears in the list below only once THEY have authorized it. The
+                          * capability refuses `rail: "ach"` too, so this boundary is not a property
+                          * of which buttons happen to be rendered.
                           */}
+                        <button
+                            type="button"
+                            data-testid="payment-method-request-bank-setup"
+                            disabled={busy !== null || pendingSetup !== null}
+                            onClick={() => void requestBankSetup()}
+                            className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight/80 hover:bg-alloy-cloud/50 disabled:opacity-50"
+                        >
+                            <Plus className="h-3 w-3" strokeWidth={2} /> Request bank account setup
+                        </button>
                     </div>
                 ) : null}
             </div>
@@ -254,6 +288,25 @@ export default function PaymentMethodsSection({
                 >
                     {error}
                 </p>
+            ) : null}
+
+            {setupLink ? (
+                <div
+                    data-testid="payment-method-setup-link"
+                    className="rounded-md border border-alloy-stone/30 px-3 py-2"
+                >
+                    <p className="alloy-os-depthcard__value">Send this to the payer.</p>
+                    {/*
+                      * The operator's job ends at handing it over. They do not open it, and opening
+                      * it would put them back in front of the mandate this whole boundary exists to
+                      * keep them away from.
+                      */}
+                    <p className="alloy-os-depthcard__hint mt-0.5 break-all">{setupLink}</p>
+                    <p className="alloy-os-depthcard__hint mt-1">
+                        It works for seven days. The bank account appears here once they have
+                        authorized it themselves.
+                    </p>
+                </div>
             ) : null}
 
             {pendingSetup ? (

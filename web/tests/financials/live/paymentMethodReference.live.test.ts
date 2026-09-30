@@ -283,7 +283,7 @@ describe.runIf(runnable)("the payment method reference — live, against the dat
         if (!customer.ok) return;
         expect(customer.customerRef).toMatch(/^cus_/);
 
-        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "card" });
+        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "card", orgId: ORG, payerEntityId: PAYER });
         expect(setup.ok, !setup.ok ? setup.message : "").toBe(true);
         if (!setup.ok) return;
         expect(setup.setupRef).toMatch(/^seti_/);
@@ -308,7 +308,7 @@ describe.runIf(runnable)("the payment method reference — live, against the dat
         expect(customer.ok).toBe(true);
         if (!customer.ok) return;
 
-        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "ach" });
+        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "ach", orgId: ORG, payerEntityId: PAYER });
         expect(setup.ok, !setup.ok ? setup.message : "").toBe(true);
         if (!setup.ok) return;
 
@@ -382,7 +382,7 @@ describe.runIf(runnable)("the payment method reference — live, against the dat
         expect(customer.ok).toBe(true);
         if (!customer.ok) return;
 
-        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "card" });
+        const setup = await createMethodSetup(defaultStripeFormCall, { customerRef: customer.customerRef, rail: "card", orgId: ORG, payerEntityId: PAYER });
         expect(setup.ok).toBe(true);
         if (!setup.ok) return;
 
