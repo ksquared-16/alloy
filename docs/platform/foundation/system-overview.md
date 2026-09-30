@@ -37,7 +37,7 @@ Work units, departments, and internal routing constructs support this model but 
 | Plane | Entry | Purpose |
 |-------|-------|---------|
 | **Operator** | `/workspace` | Business process landing → stage queues → **Focus Panel** (the modal record product was deleted August 2026; "drawer" survives only as infrastructure naming) |
-| **Configuration** | `/organization/*` | Business processes, fields, layouts, actions, forms, workflows. `/admin` and `/settings` are 307 compatibility redirects to `/organization` (`web/next.config.ts`), not the control plane |
+| **Configuration** | `/organization/*` | Business processes, fields, layouts, actions, forms, workflows. The **bare** `/admin`, `/admin/settings`, `/settings` and `/settings/organization` are 307 redirects to `/organization` (`web/next.config.ts`); `/settings/*` sub-surfaces and `/admin/*` non-settings modules remain canonical. Owner: [`../../system/routing-doctrine.md`](../../system/routing-doctrine.md) |
 | **Data** | Supabase + RLS | Org-scoped truth; service-role server mutations |
 
 `/legacy-admin` is archived — landing redirects to `/workspace`. Settings and operator surfaces are canonical.
@@ -88,11 +88,15 @@ Work units, departments, and internal routing constructs support this model but 
 
 ---
 
-## Platform maturity (July 2026)
+## Platform maturity (September 2026)
 
 The architecture is **stable**. Foundational runtimes — Presentation, Surface Host, Focus Panel, VM, Business Process, Processing, Communications, Configuration, and Current Work — are **complete**. Legacy entity drawer runtime has been **removed**.
 
-Future work primarily improves **experience**, **performance**, **automation**, and **operator intelligence** — plus domain productization (Scheduling, Attendance, Billing, Payments, Commercial, AI, Partner APIs). It should **not** introduce additional foundational runtimes or restore legacy drawer paths.
+> **Corrected 2026-09-30.** This section previously listed "domain productization (Scheduling, Attendance, Billing, Payments, Commercial, AI, Partner APIs)" as **future work**. Most of that list has shipped and is certified: Staff/Scheduling, Attendance, Commercial, Operational Intelligence, Communications, Configuration and AI/BOS all carry certification records, and the partner API is a frozen versioned surface. Describing shipped, certified domains as future work is the characteristic failure of this document family — it happened in three other canonical documents in the same period.
+
+**Fourteen domains are certified** as documented-and-measured; the scoreboard and per-domain owners are in [`../../context/alloy-benchmark-context.md`](../../context/alloy-benchmark-context.md), and the synthesized platform model is [`../../context/alloy-platform-synthesis.md`](../../context/alloy-platform-synthesis.md).
+
+**Genuinely still ahead:** Financials/Payments certification (the domain is mid-mutation, not undocumented), forecasting, Parent and Teacher experience, broad automation, and outbound partner event delivery. New work should **not** introduce additional foundational runtimes or restore legacy drawer paths.
 
 Milestone record: [`../milestones/stabilization-july-2026.md`](../milestones/stabilization-july-2026.md). Capability inventory: `platform-capabilities.md`. Sequencing: `product-roadmap.md`.
 

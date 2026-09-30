@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FormField, FormSchemaV1 } from "./schema";
-import { formSchemaV1Schema } from "./schema";
+import { safeParseFormSchema } from "./schema";
 import { validateCollectionPayloadContract } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 export type FormPayloadMode = "draft" | "submit";
@@ -581,7 +581,17 @@ export function validateFormPayload(input: {
     mode: FormPayloadMode;
     optionValuesByFieldId?: Record<string, readonly string[]>;
 }): ValidateFormPayloadResult {
-    const schemaParsed = formSchemaV1Schema.safeParse(input.schemaJson);
+    /*
+     * The NORMALIZING entry point, not the raw zod object.
+     *
+     * A published version outlives the code that authored it. Admissions v12 carries four field
+     * properties the current schema does not name, and `normalizeLegacyPublishedFormSchema`
+     * translates them before the strict parse — which is why `/resolve` can read it. This call site
+     * reached past that into `formSchemaV1Schema` and so rejected 23 of its 58 fields, which a family
+     * saw as "Invalid submission payload" the moment the page opened a draft. The read path was
+     * repaired and the write path was not.
+     */
+    const schemaParsed = safeParseFormSchema(input.schemaJson);
     if (!schemaParsed.success) {
         return { ok: false, errors: normalizeValidationErrors(schemaParsed.error) };
     }

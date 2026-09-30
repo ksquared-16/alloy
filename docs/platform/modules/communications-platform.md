@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -173,9 +173,133 @@ Helpers: `deriveActivityCommsCompositionState`, `shouldShowActivityTopicRail` in
 
 **Presentation helpers:** `threadTopicPresentation.ts`, `timelinePresentation.ts`.
 
-**Out of scope (next sprint):** attachments, rich editor, Configuration/provider onboarding, compliance UX, inbound email, Test Email/SMS, Announcements/Templates expansion. Command Center modal layout and send runtime unchanged.
+**Out of scope (next sprint) — CORRECTED 2026-09-30.** This line was written 2026-07-12 and two of its
+items shipped afterwards. Measured on the certification stack:
+
+| Listed out of scope | Measured state |
+|---|---|
+| **inbound email** | **IMPLEMENTED AND IN USE.** `communication_inbound_ingress` holds **32 rows**, every one paired with a `communication_ingress_eligibility_observations` row, and `lib/communications/email/inboundEmailIngestion.ts` writes threads, messages and ingress records. All 32 inbound messages are `channel = email`, `direction = inbound` |
+| **Announcements/Templates expansion** | **Templates are in use** — `communication_templates` 12 rows with `communication_template_versions`, authored through four `communications.templates.manage` handlers. `announcements` holds 0 rows |
+| attachments · rich editor · Configuration/provider onboarding · compliance UX · Test Email/SMS | not measured by this pass; treat as unverified rather than as shipped |
+
+Command Center modal layout and send runtime unchanged.
 
 Sprint closeout: `../../sprints/archive/2026-07/communications-activity-sprint-closeout.md` (historical: `../../sprints/archive/2026-07/communications-activity-sprint-closeout.md`).
+
+---
+
+## Certification record — measured 2026-09-30
+
+**State:** `COMMUNICATIONS_DOCUMENTATION_CONTEXT_READY`. Measured against staging `c500c7a4e`. Row counts
+are from the certification stack.
+
+### Providers — measured from implementation, not from this document
+
+**There are no provider SDKs in `package.json`.** Both providers are called over raw HTTP, which is why a
+dependency scan finds nothing and why the endpoints below are the evidence.
+
+| Channel | Provider | Evidence | Webhook authority |
+|---|---|---|---|
+| email (outbound) | **Resend** | `https://api.resend.com/emails`; `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | — |
+| email (domains) | **Resend** | `https://api.resend.com/domains` | — |
+| email (status/inbound) | **Resend** | `app/api/webhooks/resend` | **Svix**: `svix-id` / `svix-timestamp` / `svix-signature` verified by `Webhook.verify` against `RESEND_WEBHOOK_SECRET`; refuses 503 unconfigured, 400 on missing headers |
+| SMS | **Twilio** | `https://api.twilio.com/2010-04-01/`; `TWILIO_AUTH_TOKEN` | **`X-Twilio-Signature`** verified per binding inside `lib/communications/twilioSmsStatusWebhook.ts`, falling back to the global token, refusing when none resolves |
+
+The doc's existing claim that Twilio/Resend webhooks are "Complete" is **correct**. Verification lives in
+the handler library, not the route file — a route-level scan reports these as ungated and is wrong.
+
+**SMS is implemented and unexercised here:** all 35 messages are `email` (32 inbound, 3 outbound). Zero SMS
+rows on this stack, which is not the same as unimplemented.
+
+### Storage and thread model
+
+`thread_id` on `communication_messages` is **NOT NULL** with a foreign key to `communication_threads`
+(`ON DELETE CASCADE`). **A message cannot exist without a thread.** Measured: 35 messages, all referencing
+a single thread, **zero orphans**. `channel` and `direction` are both NOT NULL, so every message declares
+which pipe it came through and which way it went; `provider_message_id` is nullable, because Alloy records
+the message before the provider has answered.
+
+`communication_delivery_events` and `communication_message_recipients` hold **0 rows** here — the delivery
+state model exists and is unexercised on this stack. `messages` and `messages_outbox` (0 rows) are the
+legacy pair, reachable only from `legacy-admin/messages-outbox`.
+
+### Writers — 21 files, all classified, zero unexplained
+
+| Class | Files |
+|---|---|
+| CANONICAL_OPERATOR | 8 route handlers: bindings ×2, conversation assign/triage, provider-connection, templates ×3 |
+| CANONICAL | `canonicalOutboundEnqueue.ts` (the outbound path — threads + messages), `inboxThreadsService.ts`, `communicationScheduledSendsService.ts`, `deliverQueuedEmailHtml.ts` |
+| PROVIDER_INGRESS | `email/inboundEmailIngestion.ts` |
+| PROVIDER_STATUS | `providerDeliveryPersistence.ts` (messages, recipients, delivery events) |
+| SYSTEM_GENERATED | `v2/scheduleAnnouncementSendout.ts`, `tours/comms/tourSchedulingScheduledSends.ts`, `tours/comms/tourSystemTemplates.ts` |
+| IDENTITY PROJECTION | `identity/applyBindingIdentityProjection.ts` |
+| CROSS-DOMAIN | `lib/pos/processingIdentity/commands/ports.ts` — **the only writer of `communication_preferences`** |
+| SCRIPT | two seed scripts |
+
+**Consent is authored from the POS processing-identity command path, not from any communications
+surface**, and `communication_preferences` holds 0 rows here. That is worth knowing before assuming a
+consent record exists.
+
+### Surface and authority census — exact
+
+43 route files · **54 handlers** (32 write, 22 read) · 4 mounted UI pages
+(`adminV2/communications`, `adminV2/messages`, `adminV2/settings/organization/communications`, and the
+legacy `legacy-admin/messages-outbox`).
+
+**Every write resolves to real authority — zero unresolved, zero session-only:**
+
+| Authority class | Writes | Detail |
+|---|---|---|
+| CAPABILITY | **28** | `communications.bulk.send` 9 · `communications.send` 8 · `communications.provider.configure` 5 · `communications.templates.manage` 4 · `communications.assign` 1 · `communications.read` 1 |
+| PROVIDER_SIGNATURE | 3 | the Resend webhook and both Twilio status callbacks |
+| TOKEN | 1 | `communications/unsubscribe` — `verifyUnsubscribeToken` with expiry and tamper handling, and the token deliberately does not widen what the link authorizes |
+
+`communications.assign` governs conversation assignment specifically because assignment **grants scope**:
+an assigned thread bypasses site scope, so bundling it with `communications.send` would let a
+site-restricted sender reach every conversation in the organisation.
+
+### Benchmark inference contract
+
+**SAFE, because measured:** communication intent is owned by Alloy and recorded before the provider
+answers; provider delivery state is transport evidence carried in `communication_delivery_events` and
+`provider_message_id`, not domain intent; a message always belongs to a thread; inbound email is real and
+each ingress produces an eligibility observation; both providers' webhooks are signature-verified;
+`communications.assign` is separate because assignment grants scope.
+
+**FORBIDDEN:** an email address is a Person (Identity/Access owns identity, and `resolveLinkedPersonId`
+refuses an email fallback) · provider *accepted* means delivered · delivery means a business outcome ·
+holding someone's contact information implies consent (consent is `communication_preferences`, written
+only from the POS processing path, 0 rows here) · an unmatched inbound message must belong to a Person ·
+a provider webhook is trusted without verification · a template is sent-message truth
+(`communication_templates` is configuration; `communication_messages` is what was sent) · SMS is unused
+because this stack has no SMS rows · `announcements` or `messages_outbox` are live (0 rows; the latter is
+legacy).
+
+### A pre-existing condition this certification does not fix
+
+**13 files in `tests/communications` fail on staging, and none of them is caused by this pass** — which
+changed documentation and added one lock test, with no production code. Six are `commsV2*Schema` tests
+failing one assertion: *"contains NO destructive DDL (additive-only guardrail)"*, because the Communications
+V2 migrations contain `DROP` statements. Those migrations date from **2026-06-19 to 2026-06-23**, so this
+is three-month-old guardrail debt rather than a migration in flight — Communications is not mid-mutation,
+and `web/lib/communications` has had no semantic change since. The remaining seven are UI lifecycle and
+warm-cache tests.
+
+**Why this does not block the certification, stated so a reader can disagree with the judgement rather
+than discover it.** Every claim above is measured from the schema, the provider endpoints, the writer set
+and the authority chain directly — not from those suites. The failing guards concern migration DDL policy
+and presentation timing, neither of which the certification asserts. If the additive-only guardrail is
+meant to hold, six red guards are real debt worth a decision; they are simply not evidence about who may
+send a message or whether a webhook is verified.
+
+### Owner set
+
+DIRECT: this document and
+[`communications-identity-platform.md`](./communications-identity-platform.md) (canonical, 2026-09-10 —
+provider accounts, communication identities, canonical sender resolution).
+REFERENCE_ON_DEMAND: [`communications-runtime-contract.md`](./communications-runtime-contract.md) for
+transport detail. EXCLUDE_HISTORY: `docs/platform/communications/COMMUNICATIONS-V1-CLOSEOUT.md` and the
+`public-link-origin-defect` record — both prove releases and defects, not current doctrine.
 
 ---
 

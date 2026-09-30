@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-27
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -14,6 +14,95 @@ supersedes: []
 > **What changed (2026-07-27 — Path B).** Organizations may author **versioned, read-only calculations** by composing **approved platform inputs and functions** through a typed expression AST. They may **not** write SQL, JavaScript, arbitrary table references, or redefine protected operational invariants. Platform Operational Calculations remain the sole owner of protected domain handlers, canonical data access, effective-date semantics, ratio/capacity invariants, the typed function registry, validation, evaluation, authorization, and dependency safety. See §3.1 and `../../sprints/07_2026/operational-calculations-product-realization/OC-ORGANIZATION-CALCULATION-DESIGN.md`.
 
 ---
+
+## 0. Operational Intelligence — certification record, measured 2026-09-30
+
+**State:** `OPERATIONAL_INTELLIGENCE_DOCUMENTATION_CONTEXT_READY`. Measured against staging `c500c7a4e`.
+Row counts are from the certification stack.
+
+### The four output families, and what each one IS
+
+"Intelligence" is not a catch-all for every derived datum. Four families exist, and they differ in the
+property that matters most for a benchmark consumer — whether the value is **authored** or **derived**:
+
+| Family | Storage | Authored or derived | Rows | Can it mutate domain state? |
+|---|---|---|---|---|
+| **Operational Expectations** | `operational_expectations` + `operational_expectation_ratifications` | **AUTHORED** by an operator, then ratified | **1,243** / **258** | No |
+| **Operational Questions** | answered on demand; history appended to `org_settings.metadata` | **DERIVED**, computed per request | 4 question kinds | No |
+| **Metrics** | `metric_definitions`, `metric_snapshots`, `metric_rollups`, `metric_visualizations`, `metric_placements` | **DERIVED**, snapshot append-only | 7 / 36 / 0 | No |
+| **Observations** | `trust_decision_observations`, `communication_ingress_eligibility_observations` | **DERIVED** records of a decision | 0 / 32 | No |
+
+The four question kinds are `operational_question_future_room_capacity`,
+`operational_question_room_utilization`, `operational_question_room_utilization_fte` and
+`operational_question_equivalent_child_count`.
+
+**Operational Expectations are the exception that matters.** They are the one OI family that is *authored*
+rather than derived — an operator states what should be true and a ratification records that it was
+accepted. They are not a metric and not a projection, and nothing derives them from observed state.
+
+### Refresh and staleness — per family, because they differ
+
+| Family | When generated | Refresh | Staleness knowable from |
+|---|---|---|---|
+| Metrics | on snapshot write | `admin/metrics/snapshots/write` POST — **two branches**: an `x-cron-token` machine credential for all orgs (scheduled) or an operator session holding `reports.write` for one org | `metric_snapshots.computed_at`; snapshots are **append-only**, so history is durable and a stale value is visibly old rather than silently overwritten |
+| Operational Questions | per request, on demand | recomputed every call; nothing is cached as current | the answer carries its own evaluation context; persisted history is a record of past answers, not a current value |
+| Operational Expectations | when authored | only by authoring again | authored rows carry their own effective semantics |
+| Observations | when the decision they record is made | not refreshed — they record an event | the observation's own timestamp |
+
+**There is no OI cache presenting a stale value as current.** Metrics keep history and say when they were
+computed; questions recompute. A consumer must still read `computed_at` rather than assume freshness.
+
+### Reading OI is not authoring OI
+
+This distinction is enforced, not merely stated. `reports.read` and `reports.write` are separate, and
+`20260915120000` deliberately withheld `reports.write` from the ops default package while leaving
+`reports.read` in place — so **Operational Intelligence stays readable and only authoring narrows**.
+
+Measured surface: **44 route files · 62 handlers (33 write, 29 read) · 2 mounted UI pages**. 31 of 33
+writes declare a capability — `reports.write` ×29, `reports.read` ×2 (non-persisting evaluations declared
+read-like on proven behaviour rather than on their verb). The two that do not:
+
+- **`admin/operational-questions/answer` POST** — admission is deliberately open so a `reports.read`
+  holder can ASK, while the durable observation-history append is gated on `reports.write` through
+  `canManageAnalytics`. Before 2026-09-30 it persisted by default for any portal member, and a caller
+  could force it with a request flag. Recorded as conditional **side-effect** authority in
+  `ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT` and locked by
+  `web/tests/docs/operationalIntelligenceWriteAuthority.test.ts`.
+- **`admin/operational-questions/bos` POST** — session-gated and **read-only**: its entire import closure
+  contains no insert, update, upsert, delete or `saveOrgMetadata`. A POST-shaped read.
+
+**Zero unexplained side-effect authority.**
+
+### OI is not AI, and neither one is a command
+
+Operational Intelligence is **deterministic**: registered calculations with declared handlers, evaluated
+server-side (§5 Determinism, §6 Registry below). The BOS turn is a reasoning surface that *consumes* OI —
+it parses an intent and runs a question — and it **writes nothing**.
+
+**Nothing in OI executes a domain mutation.** No OI path writes a placement, an assignment, an attendance
+event, a charge or a payment. A recommendation is a value, not an act; turning one into an act requires a
+registered domain command with its own authority. Do not read a projection as a decision, or an OI write
+capability as permission to change the thing the number describes.
+
+### Benchmark inference contract
+
+**SAFE, because measured:** OI outputs derive from named upstream authorities and never replace them; an
+observation or measurement is distinct from the source domain truth it summarises; read authority
+(`reports.read`) and author authority (`reports.write`) are different and separately granted; metric
+snapshots are append-only and carry `computed_at`; Operational Expectations are authored and ratified
+rather than derived; nothing in OI mutates domain state.
+
+**FORBIDDEN:** a metric is the canonical source fact · a projection is durable future truth · a
+recommendation is an authorized action · a stale observation is current state (read `computed_at`) · an OI
+write capability confers domain mutation permission · AI/BOS capability implies OI capability · the BOS
+turn persists anything (it does not) · `metric_rollups` is in use (**0 rows** — implemented, unexercised).
+
+### Evidence treatment
+
+`docs/platform/analytics/metric-platform-doctrine.md` and `metric-data-model.md` own the metric platform
+(DIRECT). `operational-expectations-system-design.md` is **frozen** and is REFERENCE_ON_DEMAND for the
+two-ledger ontology this document reconciles with in §2. `analytics-v2-roadmap.md` is PLANNED_ONLY.
+`certification/**` OI artifacts and audit trees are EXCLUDE_HISTORY — they prove releases, not doctrine.
 
 ## 1. Purpose
 

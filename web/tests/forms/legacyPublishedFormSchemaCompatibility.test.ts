@@ -12,12 +12,13 @@
  * These cases are the contract that cannot regress: the historical artifact parses, its semantics
  * survive, and a property nobody has taught the normalizer is still refused.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { safeParseFormSchema, validateFormSchema } from "@/lib/forms/schema";
+import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import {
     LegacyFormSchemaConflictError,
     normalizeLegacyPublishedFormSchema,
@@ -271,16 +272,13 @@ describe("other historical artifacts carrying the same vocabulary", () => {
 /**
  * WHAT IS PRESERVED BUT NOT YET CONSUMED.
  *
- * `address_binding` now parses and survives into the runtime schema carrying its role and subject,
- * so nothing the author said is lost. Nothing READS it yet: resolving "the billing contact's
- * address" needs a canonical billing role→person authority, and `person.contact_role.billing`
- * exists only in the semantic shape — it is not one of the five relationship definitions the
- * collection registry derives providers from. Inventing that authority here would put address
- * ownership inside the Forms runtime instead of the relationship model that owns it.
- *
- * This case exists so the gap is recorded rather than remembered.
+ * `address_binding` parses, survives into the runtime schema carrying its role and subject, AND is
+ * now consumed: `lib/forms/prefill/addressBindingPrefill` resolves the person and reads the address
+ * through the canonical Location model. This case keeps asserting the artifact half of that contract
+ * — that the authored binding reaches the runtime intact — because the consumer is only correct if
+ * what it consumes is still there.
  */
-describe("address_binding is preserved and awaits its consumer", () => {
+describe("address_binding reaches the runtime intact", () => {
     it("survives the parse with role and subject intact", () => {
         const parsed = validateFormSchema(published);
         const home = fieldById(parsed, "untitled_address");
@@ -288,5 +286,62 @@ describe("address_binding is preserved and awaits its consumer", () => {
         // The group's children already say WHAT they hold, through canonical field_source.
         const line1 = fieldById(parsed, "untitled_address_address_line1");
         expect(line1?.field_source).toEqual({ entity_type: "person", field_key: "address_line1" });
+    });
+});
+
+/**
+ * THE WRITE PATH HAS TO NORMALIZE TOO.
+ *
+ * The compatibility repair wired normalization into `validateFormSchema` and `safeParseFormSchema`
+ * and claimed no caller could forget it. One could: `validateFormPayload` imported the raw
+ * `formSchemaV1Schema` and parsed with it directly, so every submission validation rejected 23 of
+ * this version's 58 fields. A family opening the packet — which creates a draft — was shown
+ * "Invalid submission payload" before answering anything, while `/resolve` read the same artifact
+ * perfectly. A read path repaired alone is a repair that is half done.
+ */
+describe("validating a submission against a legacy published version", () => {
+    it("accepts an empty draft payload for Admissions v12", () => {
+        const result = validateFormPayload({
+            schemaJson: published,
+            payload: { values: {}, groups: {} },
+            mode: "draft",
+        });
+        expect(result.ok).toBe(true);
+    });
+
+    it("still rejects a schema carrying a property nothing recognises", () => {
+        const invented = JSON.parse(JSON.stringify(published)) as { fields: Record<string, unknown>[] };
+        invented.fields[0]!.invented_property = true;
+        const result = validateFormPayload({ schemaJson: invented, payload: { values: {} }, mode: "draft" });
+        expect(result.ok).toBe(false);
+    });
+
+    it("leaves ONE module allowed to parse a schema without normalizing", () => {
+        /*
+         * The lock. `formSchemaV1Schema` is the strict parse WITHOUT the legacy translation in front
+         * of it, so any module that reaches for it can reintroduce exactly this defect. Only
+         * `lib/forms/schema.ts`, which owns the normalizing entry points, may name it.
+         */
+        const roots = ["lib", "app", "components", "scripts"];
+        const offenders: string[] = [];
+        const walk = (dir: string) => {
+            for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const full = join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    if (entry.name === "node_modules" || entry.name === ".next") continue;
+                    walk(full);
+                } else if (/\.tsx?$/.test(entry.name)) {
+                    if (full.endsWith(join("lib", "forms", "schema.ts"))) continue;
+                    // Comments discuss the symbol on purpose — this file's own fix explains it by
+                    // name. Only real code counts, so prose is stripped before looking.
+                    const code = readFileSync(full, "utf8")
+                        .replace(/\/\*[\s\S]*?\*\//g, "")
+                        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+                    if (code.includes("formSchemaV1Schema")) offenders.push(full);
+                }
+            }
+        };
+        for (const root of roots) walk(join(__dirname, "..", "..", root));
+        expect(offenders).toEqual([]);
     });
 });

@@ -26,6 +26,8 @@ const STORAGE_KEY = "alloy.real-enrollment-qa.notes";
 
 const CATEGORIES = [
     ["BLOCKER", "a family could not get through this"],
+    ["EXTRACTION", "what Alloy read out of the source document was wrong"],
+    ["FORM AUTHORING", "the draft could not be made into the Form you would publish"],
     ["PRODUCT / UX", "it works, but it is not good enough"],
     ["CONFIGURATION", "the wrong thing was set up"],
     ["RUNTIME DEFECT", "an error, a blank screen, something did not save"],
