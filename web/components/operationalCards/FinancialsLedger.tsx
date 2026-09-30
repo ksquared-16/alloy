@@ -7,6 +7,8 @@ import {
     ChevronRight,
     CheckCircle2,
     CircleDollarSign,
+    LockOpen,
+    RotateCcw,
     SlidersHorizontal,
     Undo2,
     type LucideIcon,
@@ -147,7 +149,19 @@ export type FinancialsLedgerRowView = {
 export type FinancialsRowActionKind =
     | "adjust" | "reverse" | "post" | "move" | "apply"
     /* Who owes this obligation — resolve it under the arrangement, or move it to another party. */
-    | "resolveResponsibility" | "reallocateResponsibility";
+    | "resolveResponsibility" | "reallocateResponsibility"
+    /*
+     * WHAT MAY BECOME OF HELD MONEY. Three acts, three icons, because they are three different
+     * outcomes for the family and not three degrees of one.
+     *
+     *   apply    it settles an obligation and the balance falls   (the shared `apply` above)
+     *   release  the restriction ends and it becomes ordinary available prepaid — nothing moves
+     *   refund   it goes back to the payer and leaves the organisation
+     *
+     * `release` reuses no icon: it read as a reversal when it was drawn with Undo2, and releasing is
+     * not undoing a hold — the lot stays on the record and a disposition is appended.
+     */
+    | "release" | "refund";
 
 const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     adjust: SlidersHorizontal,
@@ -157,6 +171,8 @@ const ROW_ACTION_ICON: Record<FinancialsRowActionKind, LucideIcon> = {
     apply: CircleDollarSign,
     resolveResponsibility: UserPlus,
     reallocateResponsibility: UserCog,
+    release: LockOpen,
+    refund: RotateCcw,
 };
 
 export function RowAction({

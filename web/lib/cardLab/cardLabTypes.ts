@@ -458,6 +458,55 @@ export type FinancialsEvidence = {
     payments: FinancialsEvidencePayment[];
     /** Manual reductions recorded against this account, newest first. Formatting only. */
     adjustments: FinancialsEvidenceAdjustment[];
+    /**
+     * Detail-only: the held deposits behind `period.heldFunds`, one per economic lot.
+     *
+     * The strip shows a TOTAL, which answers "how much is restricted" and no other question. An
+     * operator deciding what to do with held money needs the facts the total hides: which lot, taken
+     * when and why, under which refund terms, and how much of it is left. A single figure cannot be
+     * acted on — releasing "some of $500" requires knowing there are two lots of $250 taken under
+     * different terms.
+     */
+    heldDeposits: FinancialsEvidenceHeldDeposit[];
+};
+
+/**
+ * ONE HELD LOT, AS THE OPERATOR READS IT.
+ *
+ * ── THE TERMS TRAVEL WITH THE MONEY ──
+ *
+ * `refundableNote` is rendered from the SNAPSHOT the hold was taken under, never the organisation's
+ * current deposit policy. That is the whole reason `payment_holds` stores the terms rather than a
+ * policy pointer: if the policy changes next year, money already held keeps what the family was
+ * promised. `policyReference` is provenance — which policy this came from — and is deliberately not
+ * the thing consulted when deciding refundability.
+ *
+ * ── WHAT IS CARRIED AND NOT SHOWN ──
+ *
+ * `holdId` and `paymentId` are what the three acts address. They are carried because an operator
+ * cannot be asked to know an identifier, and they are never rendered as text.
+ */
+export type FinancialsEvidenceHeldDeposit = {
+    holdId: string;
+    paymentId: string;
+    /** What is still restricted. The figure every one of the three acts is bounded by. */
+    remaining: string;
+    remainingCents: number;
+    /** What was ORIGINALLY held. Shown only when something has been disposed of, so it explains the gap. */
+    original: string | null;
+    /** Released / applied / refunded so far, each omitted when zero — the same density rule as the strip. */
+    disposedLines: { label: string; value: string }[];
+    /** The operator's words for the terms, from the snapshot. Never inferred from current policy. */
+    refundable: boolean;
+    refundableNote: string;
+    /** Why the money was held, as recorded. Null when nothing was given. */
+    reason: string | null;
+    /** "Held on 12 Aug 2026", already formatted. Null when the stamp cannot be read. */
+    heldOn: string | null;
+    /** Provenance only. Present when the hold names a policy; never used to decide refundability. */
+    policyReference: string | null;
+    /** False once nothing remains: a closed lot is history and offers no acts. */
+    open: boolean;
 };
 
 /**
@@ -501,6 +550,15 @@ export type FinancialsEvidencePayment = {
     unappliedLabel: string;
     /** Raw cents, so the card can ASK whether there is money to apply without doing arithmetic. */
     unappliedCents: number;
+    /**
+     * How much of this receipt could still be restricted: unapplied money that is not already held.
+     *
+     * PRE-DIFFERENCED BY THE ADAPTER, for the same reason `unappliedCents` is raw and not summed in
+     * the card: `unapplied − held` is the exact bound the database's hold invariant enforces, and a
+     * subtraction done in a component could disagree with the trigger that refuses the write. The
+     * card asks whether this is above zero and offers the act; it never computes it.
+     */
+    holdableCents: number;
     applications: FinancialsEvidenceApplication[];
 };
 

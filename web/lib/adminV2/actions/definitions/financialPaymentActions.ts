@@ -28,6 +28,7 @@ import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 import {
     applyPaymentToCharge,
     CHILDCARE_PAYMENT_METHODS,
@@ -940,6 +941,28 @@ const applyPaymentToChargeAction: RegisteredAction = {
                 };
             }
         }
+        /*
+         * APPLYING A HELD DEPOSIT IS THIS ACT, NOT A SECOND ONE.
+         *
+         * `deposit.hold` and `deposit.release` were minted as the only two deposit authorities on the
+         * stated grounds that "applying held money is an ORDINARY allocation … `deposit.apply` would
+         * be a second authority over money that already has one". This is that ordinary allocation,
+         * so the hold is named HERE — an input to applying money, not a different way to apply it.
+         *
+         * An amount is required alongside it: a hold is a lot within a receipt, and the default
+         * "smaller of unapplied and outstanding" is computed over the whole receipt, which would
+         * silently apply more of the payment than the hold covers.
+         */
+        if (t(src.hold_id) && src.amount_cents == null) {
+            return {
+                ok: false,
+                blockers: [{
+                    code: "missing_amount",
+                    message: "Applying a held deposit needs an amount; the default is drawn from the whole payment.",
+                    field: "amount_cents",
+                }],
+            };
+        }
         return { ok: true, value: src };
     },
 
@@ -979,6 +1002,34 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return { summary: "This charge could not be found.", changes: [] };
         }
         const requested = payload?.amount_cents == null ? Math.min(unapplied, outstanding) : Number(payload.amount_cents);
+        /*
+         * HELD MONEY READS DIFFERENTLY TO THE OPERATOR.
+         *
+         * `unapplied` counts the whole receipt and held money is a restriction WITHIN it, so quoting
+         * "$500 is currently unapplied" beside a $200 hold invites applying the other $300 — which
+         * this act will not do. When a hold is named the preview speaks about the hold, and says
+         * plainly that the restriction ends, because that is the consequence an operator is
+         * authorising and it is not reversible by re-holding.
+         */
+        const holdId = t(payload?.hold_id);
+        if (holdId) {
+            const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentIds: [paymentId],
+            })).find((h) => h.id === holdId);
+            if (!hold) return { summary: "This held deposit could not be found.", changes: [] };
+            return {
+                summary: `Apply ${money(requested)} of this held deposit to the charge`,
+                changes: [
+                    `${money(hold.remainingCents)} of this deposit is still held.`,
+                    `This charge has ${money(outstanding)} outstanding.`,
+                    `${money(requested)} stops being held and is applied, reducing what the family owes by that amount.`,
+                    hold.refundable
+                        ? "The deposit was taken as refundable; applied money is no longer refundable as a deposit."
+                        : "The deposit was taken as non-refundable.",
+                ],
+            };
+        }
         return {
             summary: `Apply ${money(requested)} to this charge`,
             changes: [
@@ -995,11 +1046,20 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return denied(correlationId, "Applying a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
         }
         try {
+            const holdId = t(payload.hold_id);
             const result = await applyPaymentToCharge(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 paymentId: t(payload.payment_id),
                 chargeId: t(payload.charge_id),
                 amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
+                /*
+                 * WHO APPLIED THE MONEY. Previously omitted, so `created_by` was null on every
+                 * allocation this action wrote — the allocation recorded that money moved and not who
+                 * moved it, while the same column is populated on the hold and its disposition.
+                 */
+                actorUserId: ctx.userId ?? null,
+                /* Present only for held money; the allocation and the disposition then commit together. */
+                disposeHoldId: holdId || null,
             });
             return {
                 ok: true,
@@ -1015,6 +1075,7 @@ const applyPaymentToChargeAction: RegisteredAction = {
                         charge_id: t(payload.charge_id),
                         applied_amount_cents: result.allocation.allocated_amount_cents,
                         already_applied: result.alreadyApplied,
+                        ...(holdId ? { hold_id: holdId } : {}),
                     },
                 },
             };

@@ -1148,6 +1148,76 @@
   align-items: baseline;
   gap: 7px;
 }
+/*
+ * HELD DEPOSITS — a position, not a ledger.
+ *
+ * Deliberately NOT the eight-column ledger grid: a held lot has no date, GL account or status to put
+ * in those columns, and forcing it in would state a restriction as a transaction. It is a list of
+ * facts with the acts that discharge them, so it is laid out as one.
+ */
+.alloy-os-fdetail__held { margin-top: 10px; }
+/* The sentence that stops held money reading as spendable. Quiet, but not so quiet it is skipped. */
+.alloy-os-fdetail__heldnote {
+  margin: 2px 0 7px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, transparent);
+}
+.alloy-os-fdetail__heldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.alloy-os-fdetail__heldrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 7px;
+  /* River Stone: a standing position, not an exception to resolve. */
+  background: var(--alloy-os-wash, #f4f6f9);
+}
+.alloy-os-fdetail__heldfacts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloy-os-fdetail__heldamount {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--alloy-os-forge-ink, #18273a);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__heldreason {
+  font-size: 0.76rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* Provenance, wrapped rather than truncated: a refund term that is cut off is worse than a wide row. */
+.alloy-os-fdetail__heldmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, transparent);
+}
+/*
+ * NON-REFUNDABLE IS STATED, NOT ALARMED. It is a term the family agreed to, so it carries no Ember:
+ * a deposit taken as non-refundable is not an error anybody needs to resolve.
+ */
+.alloy-os-fdetail__heldmeta [data-financials-held-refundable="no"] {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, transparent);
+}
+.alloy-os-fdetail__heldactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
 
 /* ── add charge command ───────────────────────────────────────────────────── */
 .alloy-os-addcharge {
