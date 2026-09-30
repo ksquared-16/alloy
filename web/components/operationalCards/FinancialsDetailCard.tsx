@@ -956,7 +956,7 @@ export default function FinancialsDetailCard({
                                             {p.unappliedCents > 0 && onApplyPayment ? (
                                                 <RowAction
                                                     kind="apply"
-                                                    command="payment.apply"
+                                                    command="payment.apply_to_charge"
                                                     title={`Apply ${p.unappliedLabel} to an obligation`}
                                                     onClick={() => onApplyPayment({ paymentId: p.paymentId })}
                                                 />
@@ -969,7 +969,14 @@ export default function FinancialsDetailCard({
                                                           <RowAction
                                                               key={a.allocationId}
                                                               kind="move"
-                                                              command="payment.move"
+                                                              /*
+                                                               * `payment.move` was never registered. Moving a payment is
+                                                               * two canonical acts — reverse the application, then apply
+                                                               * to the chosen charge — and the first is what this control
+                                                               * raises. The command table already spells it that way; only
+                                                               * this label had invented a name.
+                                                               */
+                                                              command="payment.reverse_application"
                                                               title={`Move ${a.amountLabel} from ${a.chargeLabel}`}
                                                               onClick={() =>
                                                                   onMovePayment({
