@@ -97,26 +97,37 @@ path is implemented**, because no current operator behaviour means *"the stored 
 entered incorrectly"*. Route ordinary edits through supersession; do not build a general correction API
 speculatively.
 
-## Current-row semantics
+## Current-row semantics — and the one place the domains genuinely differ
 
-Each governed table enforces *at most one operational row per subject* through a partial unique index.
-For placements:
+All governed tables agree on what "in effect" *means*: the operational status set
+`('planned','active','ending')`. Every reader, every uniqueness index and the assignment overlap
+trigger name that same set, deliberately, so there is one definition rather than several that disagree.
 
-```sql
-ux_child_placements_one_operational_per_agreement
-  ON child_placements (org_id, enrollment_agreement_id)
-  WHERE status = ANY (ARRAY['planned','active','ending'])
-```
+They do **not** all enforce the same cardinality, and flattening that would be wrong:
+
+| Subject | Mechanism | Effect |
+|---|---|---|
+| Placement (per agreement) | partial unique index `ux_child_placements_one_operational_per_agreement` | at most **one** operational row |
+| Child primary assignment (per agreement) | partial unique index `ux_schedule_assignments_one_operational_primary_child` | at most **one** operational row |
+| Staff primary assignment (per person) | overlap trigger `validate_schedule_assignments_primary_overlap` only | many operational rows, provided their date ranges **do not overlap** |
+| Secondary assignments | neither | concurrent by design |
+
+So a **staff member may hold a current primary assignment and a future-dated one simultaneously**,
+because the two do not overlap. **A child may not** — the index forbids a second operational row per
+agreement whether or not the dates overlap. The 2026-07 assignment foundation argued for overlap-only
+uniqueness precisely so future primary changes stayed possible; 2026-10 then added the stricter child
+index, and 2026-10-23 narrowed the trigger to closed rows so both halves use one definition of "in
+effect". The asymmetry that remains is a real product difference, not an accident of migration order.
 
 Two consequences worth stating, because both are easy to get wrong:
 
 - **"Latest row" does not mean "active row."** The invariant constrains the *operational* set, not
   recency. Resolve the current row by the operational-state predicate, never by `ORDER BY created_at
   DESC LIMIT 1`.
-- **A future-dated change closes the present one immediately.** Superseding with a start date in the
-  future sets the prior row to `superseded` *now* and inserts a `planned` successor. The prior row does
-  not stay `active` until the date arrives. So "where is this child today" is a question about **dates**,
-  not about status alone — `planned` and `superseded` both coexist with today being inside neither.
+- **For placements and child assignments, a future-dated change closes the present one immediately.**
+  Superseding with a future start sets the prior row to `superseded` *now* and inserts a `planned`
+  successor; the prior row does not stay `active` until the date arrives. So "where is this child
+  today" is a question about **dates**, not status alone. For staff the future row simply coexists.
 
 ## Planned / future semantics
 
@@ -127,9 +138,10 @@ start_date > today  →  planned
 otherwise           →  active
 ```
 
-Because `planned` is inside the operational set, a subject cannot hold an active row and a planned row
-at the same time. A future-dated change is therefore a *replacement scheduled ahead*, not a second
-concurrent assignment.
+`planned` is inside the operational set. Where a single-operational index applies (placement, child
+primary assignment) a future-dated change is therefore a *replacement scheduled ahead* rather than a
+second concurrent row. Where only the overlap trigger applies (staff primary) it is a genuine second
+row, legal because the intervals are disjoint.
 
 ## Provenance
 

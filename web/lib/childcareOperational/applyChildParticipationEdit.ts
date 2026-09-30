@@ -19,14 +19,44 @@ import { parseRequestedDaysPerWeekInput } from "@/lib/enrollment/requestedDaysPe
 /** A daily time range persisted with the schedule draft. */
 export type DailyHoursRange = { arrive: string; depart: string };
 
-/** Participation facts an operator can edit inline. `outcome_status_key` (disposition) is NOT here. */
+/**
+ * Participation facts an operator can edit inline. `outcome_status_key` (disposition) is NOT here.
+ *
+ * ── THE SAME KEY MEANS TWO THINGS, DEPENDING ON MATERIALISATION ──
+ *
+ * This type is accepted in both routing branches, and several keys change meaning between them. That
+ * is not cosmetic: before materialisation these are DRAFT DESIRE held on `process_instances.metadata`
+ * and editing them in place is correct; after materialisation the same keys describe DURABLE
+ * EFFECTIVE-DATED TRUTH, where `docs/platform/core/effective-dated-assignment-doctrine.md` requires a
+ * successor record rather than an in-place edit.
+ *
+ * | Field | Draft meaning | Post-materialisation meaning | Operational change? |
+ * |---|---|---|---|
+ * | `program_category_id` | desired program | placement program | YES — supersede |
+ * | `program_room_cohort_key` | desired room | placement `room_location_id` | YES — supersede |
+ * | `location_id` | desired site | agreement + placement site | YES — supersede |
+ * | `schedule_type` | desired pattern | assignment `schedule_pattern_id` | YES — supersede |
+ * | `start_date` | family-requested start | **operational truth-interval start** | YES — supersede |
+ * | `notes` | draft note | agreement metadata note | no — non-temporal |
+ * | `requested_days_per_week` | requested days | requested days (not an interval) | no — non-temporal |
+ * | `tuition_plan_id`, `quote_accepted` | commercial intent | commercial intent | no — not assignment truth |
+ * | `end_date`, `weekdays`, `scheduleTimes` | schedule-draft extensions | **draft only** — not written durably | n/a |
+ *
+ * `start_date` is the one that most needs saying, because its old comment read "Requested Start
+ * (family preferred) — not operational Start Date" without qualification. That is true of the draft
+ * branch and false of the durable branch, where this key becomes the start of an asserted truth
+ * interval — the single most consequential field in the whole patch.
+ */
 export type ChildParticipationPatch = {
     program_category_id?: string | null;
     /** Room = a location id (kept under the OCM-era column name for editor compatibility). */
     program_room_cohort_key?: string | null;
     location_id?: string | null;
     schedule_type?: string | null;
-    /** Requested Start (family preferred) — not operational Start Date. */
+    /**
+     * Draft: family-requested start. Post-materialisation: the OPERATIONAL truth-interval start on the
+     * agreement and placement. See the table above — the two meanings are not interchangeable.
+     */
     start_date?: string | null;
     notes?: string | null;
     /** Requested days/week when exact preferred weekdays are still unknown. */
