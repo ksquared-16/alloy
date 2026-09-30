@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_c193762fafe9df",
-  "query_hash": "c8387660167c4ccfe89a9bf6bb8f22f5552fab65f340ccf2cc1396b2a289b4aa",
+  "trusted_host_action_id": "tha_6a20152d5ac95d",
+  "query_hash": "4f784d012d8f7a6167b7834102a01b8d3eacb92b1ab00de258d8e999804d3f72",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T14:11:18.145Z",
+    "executed_at": "2026-09-30T14:45:36.471Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_c193762fafe9df",
-    "query_hash": "c8387660167c4ccfe89a9bf6bb8f22f5552fab65f340ccf2cc1396b2a289b4aa",
-    "authorization_id": "grnt_bedf17ae89de4bf1",
+    "trusted_host_action_id": "tha_6a20152d5ac95d",
+    "query_hash": "4f784d012d8f7a6167b7834102a01b8d3eacb92b1ab00de258d8e999804d3f72",
+    "authorization_id": "grnt_5d3cc7770c894c84",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T14:11:23.332Z",
+    "census_run_at": "2026-09-30T14:45:42.717Z",
     "question_ids": [
       "v_applied"
     ],
@@ -26,6 +26,7 @@
         "rows": [
           "migration ~ 20261104120000 ~ true",
           "migration ~ 20261104130000 ~ true",
+          "migration ~ 20261107120000 ~ false",
           "schema_migrations ~ max_version ~ 20261106120000",
           "schema_migrations ~ applied_total ~ 502",
           "sibling_lane_migration ~ 20261105120000 ~ true",
@@ -33,6 +34,6 @@
         ]
       }
     },
-    "row_count": 6
+    "row_count": 7
   }
 }

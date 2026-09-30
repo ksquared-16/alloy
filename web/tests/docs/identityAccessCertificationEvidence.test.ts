@@ -58,8 +58,16 @@ const APPLY_CENSUS = "certification/migrations/identity-access-apply-verificatio
  * occurred. But a gate with a leg that reports the wrong answer is one accident away
  * from being a gate that agrees with the wrong conclusion, so the question is now asked
  * per version rather than by high-water mark.
+ *
+ * THE LIST ITSELF IS THE GATE, SO IT MUST NOT LAG THE REQUIREMENTS. 20261107120000 joined
+ * on 2026-09-30. It closes post_ledger_transaction, which 20261104120000 missed because it
+ * matched on parameter names. Until the version was added here, this gate would have
+ * certified Identity/Access with that follow-up migration entirely absent — the ACL leg
+ * would have caught the open function, but the apply leg would have reported a complete
+ * repair. Found by working the adversarial checklist rather than the happy path, which is
+ * the only reason it was found at all.
  */
-const APPLY_GATE_VERSIONS = ["20261104120000", "20261104130000"] as const;
+const APPLY_GATE_VERSIONS = ["20261104120000", "20261104130000", "20261107120000"] as const;
 
 type Census = { status?: string; query_hash?: string; results?: { questions?: Record<string, { rows?: string[] }> } };
 
