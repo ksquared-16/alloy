@@ -225,29 +225,30 @@ describe("scenario readiness", () => {
         expect(checkAccountState("has_second_child_without_agreement", bothBillable, noExtras)).toBe(false);
     });
 
-    it("offers no walkthrough for a deferred or out-of-scope capability", () => {
-        for (const key of ["card_collection", "ach_processing", "provider_return", "subsidy_processing"]) {
+    it("offers no walkthrough for a capability this environment cannot reach", () => {
+        /*
+         * `card_collection` and `ach_processing` LEFT this list: Payments V1 built them and they are
+         * walkable. What is left is the genuinely unreachable — a provider-origin reversal that
+         * would have to be manufactured, a card-rail held-deposit refund with no fixture, and
+         * another programme's acceptance.
+         */
+        for (const key of ["provider_return", "held_deposit_card_rail_refund", "subsidy_processing"]) {
             expect(scenarioByKey(key)!.disposition).not.toBe("HUMAN_WALKTHROUGH");
         }
         /*
-         * 29 since Repair Pass 5D added the billing-period walkthrough. Its sibling — the
-         * ACCOUNTING period — is deliberately not one of them: it carries MISSING_PRODUCTIZATION
-         * because the platform enforces it and shows it to nobody, and offering a walkthrough for a
-         * surface that does not exist would invite a PASS resting on a database query.
-         */
-        /*
-         * A COUNT, NOT A CEILING. This was 30 after Repair Pass 5F productized the accounting
-         * period's inspection half; 42 at the Core freeze, which added twelve walkthroughs for
-         * the recurring billing chain Section 7 certified and nobody had yet been asked to drive;
-         * and 44 at the 11B freeze — `payment_method_on_file`, which Payments W2 made walkable, and
-         * `discount_exception`, which 11B built.
+         * A COUNT, NOT A CEILING. 44 at the 11B freeze. 59 at the Financials + Payments
+         * integration: 44, plus the two Payments collections that stopped being deferred
+         * (card_collection, ach_processing), plus thirteen of the fourteen scenarios Payments V1
+         * built and this catalog had none of — bank setup and its payer authorization, the
+         * held-deposit lifecycle, the duplicate-charge notice, Activity's language and provider
+         * readiness. The fourteenth, `held_deposit_card_rail_refund`, is deferred for want of a
+         * provider-funded deposit to refund.
          *
-         * The number is asserted only so that a scenario cannot be QUIETLY dropped from the
-         * walkthrough set — losing one is a capability nobody is asked to accept. Raising it when
-         * scenarios are deliberately added is the correct maintenance; lowering it needs a reason
-         * written beside it.
+         * Asserted only so a scenario cannot be QUIETLY dropped: losing one is a capability nobody
+         * is asked to accept. Raising it when scenarios are deliberately added is correct
+         * maintenance; lowering it needs a reason written beside it.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(44);
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(59);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

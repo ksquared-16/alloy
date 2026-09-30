@@ -154,20 +154,33 @@ describe("the Director QA scenario catalog", () => {
     });
 
     /** The provider trio is deferred on ENVIRONMENT, not waved away — the reason must say so. */
-    it("defers the provider scenarios on stated environment evidence", () => {
-        for (const key of ["card_collection", "ach_processing", "provider_return"]) {
+    /*
+     * THE PROVIDER SCENARIOS ARE NO LONGER DEFERRED — except the one that genuinely still is.
+     *
+     * This assertion used to require all three of card_collection, ach_processing and
+     * provider_return to be EXPLICITLY_DEFERRED on environment evidence. Payments V1 built and
+     * deployed the first two, so holding them deferred would now be the catalog lying about a
+     * product that exists. `provider_return` stays deferred on a DIFFERENT and still-true reason:
+     * staging has no provider-origin reversal to look at, and producing one means manufacturing a
+     * chargeback against a real provider account.
+     */
+    it("asks a human to drive the collections Payments V1 actually built", () => {
+        for (const key of ["card_collection", "ach_processing"]) {
             const s = scenarioByKey(key)!;
-            expect(s.disposition).toBe("EXPLICITLY_DEFERRED");
-            /*
-             * The reason must cite what the environment actually SAYS, in whatever vocabulary the
-             * account reader currently uses. It used to cite `paymentSetup: null` — a hardcoded
-             * constant — which was accurate about the field and wrong about the world; the reader
-             * now derives capability states, so the evidence is the merchant and the capability.
-             */
-            expect(s.dispositionReason).toMatch(
-                /takePaymentCard|takePaymentAch|achAvailable|merchant|provider configuration/i,
-            );
+            expect(s.disposition, `${key} is built and deployed`).toBe("HUMAN_WALKTHROUGH");
+            /* A walkthrough with no steps is a placeholder wearing a disposition. */
+            expect(s.navigate.length, `${key} must say where to go`).toBeGreaterThan(0);
+            expect(s.doThis.length, `${key} must say what to do`).toBeGreaterThan(0);
+            expect(s.expectUnchanged.length, `${key} must say what must NOT move`).toBeGreaterThan(0);
         }
+    });
+
+    it("keeps the provider return deferred, on the reason that is still true", () => {
+        const s = scenarioByKey("provider_return")!;
+        expect(s.disposition).toBe("EXPLICITLY_DEFERRED");
+        /* The reason must be about the missing EVENT, not about missing configuration. */
+        expect(s.dispositionReason).toMatch(/chargeback|provider-origin|DEFERRED \/ PROVIDER-DEPENDENT/i);
+        expect(s.dispositionReason, "deferred is not failed").toMatch(/not FAIL|DEFERRED/i);
     });
 });
 
@@ -206,10 +219,31 @@ describe("the program each scenario belongs to", () => {
     });
 
     /* And the provider-dependent ones are not pretending to be runnable Core QA. */
-    it("moves provider-dependent scenarios to the Payments phase", () => {
-        for (const key of ["card_collection", "ach_processing", "provider_return", "refund"]) {
-            expect(SCENARIO_PROGRAM[key], `${key} needs Payments`).toBe("PAYMENTS_PHASE");
+    /*
+     * THE PAYMENTS PROGRAMME LANDED, so its scenarios are this product's.
+     *
+     * This used to require them to be PAYMENTS_PHASE — "waiting on a programme that has not been
+     * built". Payments V1 is deployed and frozen, and the value itself is gone. A Director walking
+     * Financials V1 meets a payment where a payment belongs, not in an appendix.
+     */
+    it("carries the landed Payments scenarios as part of this product", () => {
+        for (const key of [
+            "card_collection", "ach_processing", "provider_return", "refund",
+            "payment_method_on_file", "autopay_enrollment",
+            "bank_setup_request", "bank_setup_payer_authorization",
+            "held_deposit_take_and_hold", "held_deposit_apply", "held_deposit_release",
+            "held_deposit_refund", "held_deposit_non_refundable",
+            "duplicate_charge_notice", "financial_activity_language", "provider_readiness",
+        ]) {
+            expect(SCENARIO_PROGRAM[key], `${key} is part of Financials V1 now`).toBe("CORE_RUNNABLE");
         }
+    });
+
+    it("leaves no scenario waiting on a programme that has already landed", () => {
+        const stale = Object.entries(SCENARIO_PROGRAM)
+            .filter(([, v]) => String(v) === "PAYMENTS_PHASE")
+            .map(([k]) => k);
+        expect(stale, "PAYMENTS_PHASE is retired").toEqual([]);
     });
 
     /*
