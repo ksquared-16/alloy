@@ -97,7 +97,7 @@ against migrations and certification packs; see
 | **Billing** | **Shipped** Sept 2026 | Financial periods + journal, charge correction lineage, reduction applications, financial responsibility, subsidy (`20260902130000` … `20260909140000`); `certification/financials/` |
 | **Payments** | **Shipped** Sept 2026 | Stripe Connect collection: merchant, collection attempts (card + ACH), provider events, refunds, provider-initiated reversal (`20260909160000` … `20260909270000`); webhook `web/app/api/stripe/webhook/route.ts`. Not built: autopay, dunning, card chargebacks |
 | **Commercial** | **Shipped** (largely) | Accounting v1, catalog RLS, fees/addons/deposits, policies, products primitive, revenue categories, tuition rates v2 |
-| **Scheduling** | **Partial** | Employment foundation, staff assignment eligibility, staff presence facts (Aug 2026) and `web/app/adminV2/scheduling/` exist. **No shift model** — staff supply is `schedule_assignments` with `subject_type='staff'`. No canonical module doc owns this domain yet |
+| **Scheduling** | **Shipped and certified** Sept 2026 | Employment foundation, staff assignment eligibility, staff presence facts (Aug 2026) and `web/app/adminV2/scheduling/` exist. **No shift model** — staff supply is `schedule_assignments` with `subject_type='staff'`. *Corrected 2026-09-30:* this row previously ended "No canonical module doc owns this domain yet". Staff/Scheduling is certified (`STAFF_SCHEDULING_DOCUMENTATION_CONTEXT_READY`) with four governance owners led by [`../governance/staff-coverage-authority.md`](../governance/staff-coverage-authority.md) |
 | **Operational Intelligence** | **V1 frozen; Phase 2 begun** | The Answer-presentation seam ships (`web/lib/presentation/runtime/useOperationalAnswers.ts`) and renders on Workspace and Work Unit — two of the five named consumers. Neither "next" nor complete |
 
 Genuinely still future:
@@ -110,8 +110,14 @@ Genuinely still future:
    (foundation), not Planned.
 3. **Parent Experience**
 4. **Teacher Experience**
-5. **Partner APIs** — nothing exists today: no inbound machine credential, no API versioning, no
-   outbound event delivery. See
+5. **Outbound partner event delivery** — no subscription or delivery machinery exists. *Corrected
+   2026-09-30:* this entry previously read "**Partner APIs** — nothing exists today: no inbound
+   machine credential, no API versioning, no outbound event delivery." Two of those three claims were
+   false. The partner API is built, versioned and certified — `/api/v1` is a frozen contract of 18
+   paths with an OAuth token exchange at `web/app/api/v1/oauth/token/route.ts` and a closed scope
+   catalog; see the Developer Platform section of
+   [`../../context/alloy-benchmark-context.md`](../../context/alloy-benchmark-context.md). Only the
+   outbound half is genuinely absent. Background:
    [`../../audits/active/documentation-truth-audit-2026-09/api-inventory-and-gaps.md`](../../audits/active/documentation-truth-audit-2026-09/api-inventory-and-gaps.md).
 
 Additional product lanes (not foundational runtime):
