@@ -77,9 +77,9 @@ export default async function RealEnrollmentQaPage() {
     return (
         <>
             {/*
-             * The two things the document cannot carry: a journey that is still live when it is read,
-             * and somewhere to write down what you saw. Both sit above the script because Track A's
-             * first instruction is to open the one and its last is to have used the other.
+             * The one thing the document cannot carry: a journey that is still live when it is read.
+             * It sits above the script because Track A's first instruction is to open it. The notes
+             * dock is fixed to the viewport instead, so it does not scroll away mid-walkthrough.
              */}
             <div className="mx-auto max-w-3xl px-6 pt-10">
                 {journey.ok ? (
@@ -93,8 +93,10 @@ export default async function RealEnrollmentQaPage() {
                         </p>
                     </section>
                 )}
-                <QaNotesPad />
             </div>
+            {/* Fixed to the viewport, so it is reachable from anywhere in the script rather than only
+                from the top of it. Rendered outside the column for that reason. */}
+            <QaNotesPad />
             <QaWalkthroughReader blocks={parseQaWalkthrough(markdown)} />
         </>
     );

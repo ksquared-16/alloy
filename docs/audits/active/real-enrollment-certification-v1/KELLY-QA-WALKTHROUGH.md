@@ -66,9 +66,10 @@ This is named here so it cannot be quietly accepted. It is not signed off.
 
 ## How to record what you find
 
-Use the notes box at the top of this page — it stays with you as you scroll and you can copy the
-whole lot out at the end. Tag each note with one of these, so the difference between taste and
-breakage does not get lost:
+There is a **Notes** button in the bottom corner of this page. It is fixed to the screen, so it is
+there on every part of the walkthrough — tap it, write, close it, carry on; the text is still there
+when you come back, and **Copy notes** hands you the lot at the end. Tag each note with one of these,
+so the difference between taste and breakage does not get lost:
 
 - **BLOCKER** — a family could not get through this.
 - **PRODUCT / UX** — it works, but it is not good enough.
