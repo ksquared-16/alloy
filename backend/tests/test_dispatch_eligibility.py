@@ -15,8 +15,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 from unittest.mock import patch
 
-os.environ.setdefault("STRIPE_SECRET_KEY", "unit_test_stripe_secret_placeholder")
-os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "unit_test_stripe_webhook_placeholder")
 
 from app.services.dispatch_eligibility import (  # noqa: E402
     CONTRACT,

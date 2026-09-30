@@ -48,7 +48,6 @@ const CATALOG: PermissionCatalogEntry[] = [
     { key: "admin.access_scope.write", label: "Manage user access scope", group_key: "system" },
     { key: "fin.read", label: "View financials", group_key: "financials" },
     { key: "fin.write", label: "Manage financials", group_key: "financials" },
-    { key: "fin.post", label: "Post financial transactions", group_key: "financials" },
     { key: "fin.adjust", label: "Adjust an account by hand", group_key: "financials" },
     { key: "fin.responsibility", label: "Configure who is responsible", group_key: "financials" },
     { key: "fin.subsidy", label: "Administer subsidy funding", group_key: "financials" },
@@ -88,7 +87,7 @@ describe("a partial selection saves exactly what was selected", () => {
         // more. Ordinary financial authority must not reach the money-truth keys.
         const saved = applyGridRowSelection({ row: row("fin"), level: "write", granted: new Set<string>() });
         expect([...saved].sort()).toEqual(["fin.read", "fin.write"]);
-        for (const f of ["fin.post", "fin.adjust", "fin.responsibility", "fin.subsidy"]) {
+        for (const f of ["fin.adjust", "fin.responsibility", "fin.subsidy"]) {
             expect(saved.has(f), `${f} is money truth and must be granted deliberately`).toBe(false);
         }
     });
@@ -125,7 +124,8 @@ describe("what the AREA preset does — evidence for the Director, not a change"
 
     it("Financials → Manage grants ordinary authority AND every money-truth key", () => {
         expect(preset("financials")).toEqual([
-            "fin.adjust", "fin.post", "fin.read", "fin.responsibility", "fin.subsidy", "fin.write",
+            // Payments V1 · W6-A2 retired fin.post: its four money handlers are deleted and canonical Payments writes money through the registered action registry, so no route enforces it.
+            "fin.adjust", "fin.read", "fin.responsibility", "fin.subsidy", "fin.write",
         ]);
     });
 
