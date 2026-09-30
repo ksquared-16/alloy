@@ -3306,7 +3306,8 @@
     },
     "app/api/admin/operational-questions/answer/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "pending",
+        "note": "CONDITIONAL SIDE-EFFECT AUTHORITY. Admission is deliberately open so Operational Intelligence stays readable for reports.read holders; the durable observation-history write is gated on reports.write via canManageAnalytics. Stays pending because the handler does not REQUIRE a capability to answer - declaring one would over-claim. See ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT."
       }
     },
     "app/api/admin/operational-questions/bos/route.ts": {
@@ -5557,6 +5558,16 @@
         "fork": "inline per-branch checks in the handler (mayCreateSchedule / mayEditParticipation)",
         "condition": "no enrollment_agreement_id in the body AND an operational agreement exists for the child and site, which routes to applyChildParticipationEdit instead of schedule.create",
         "locked_by": "web/tests/access/schedulingWriteAuthorityLock.test.ts"
+      },
+      {
+        "route": "app/api/admin/operational-questions/answer/route.ts",
+        "method": "POST",
+        "declared": null,
+        "model": "CONDITIONAL SIDE-EFFECT — capability gates the WRITE, not admission",
+        "also_requires": "reports.write, for the durable observation-history append only",
+        "fork": "mayAuthor = canManageAnalytics(access.permissionKeys); passed as persistHistory",
+        "condition": "answering is always permitted for an authenticated org member; oiOrgCalcObserve appends the observation to org_settings.metadata and saves it ONLY when the caller holds reports.write. Before 2026-09-30 it persisted by default for any portal member, and a caller could force it with the request flag.",
+        "locked_by": "web/tests/docs/operationalIntelligenceWriteAuthority.test.ts"
       }
     ]
   }
