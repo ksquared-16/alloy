@@ -5,8 +5,12 @@
  * Known other write sites (audit, May 2026):
  * - `web/app/api/admin/opportunities/[id]/route.ts` — PATCH (already uses `emitStatusChangedEvent`)
  * - `web/app/api/book-v2/confirm/route.ts` — routed through this helper
- * - `web/app/api/book-v2/quote-start/route.ts` — `needs_a_quote` on reuse update (follow-up)
- * - `web/app/api/book-v2/specialty-quote-start/route.ts` — `needs_a_quote` (follow-up)
+ * - ~~`web/app/api/book-v2/quote-start/route.ts`~~ and
+ *   ~~`web/app/api/book-v2/specialty-quote-start/route.ts`~~ — both wrote `needs_a_quote`, and both
+ *   were DELETED on 2026-07-31 by `ea3eaf377` "retire GoHighLevel and the legacy cleaning product".
+ *   Listed here as removed rather than dropped silently, because the public cleaning forms that
+ *   posted to them are still mounted and now 404 — see the run-5 retirement packet. `needs_a_quote`
+ *   consequently has no live writer: only a demo seed row and an entry in the MVP status catalog.
  * - `web/lib/bookingLocations.ts` — location link patch (typically no status_key)
  * - `web/app/api/book-v2/opportunity-discount/route.ts`, `service-details`, specialty metadata patches — typically no status_key
  * - `web/scripts/seedRealisticChildcareDemoData.ts` — seed only
