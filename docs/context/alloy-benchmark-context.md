@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
-| **Domains pending** | **Financials / Payments (stability gate CLOSED — 0 days quiet)** · Configuration · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | **Financials / Payments (stability gate CLOSED — 0 days quiet)** · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -187,6 +187,46 @@ OI write capability confers domain mutation permission · an email address is a 
 *accepted* means delivered · contact information implies consent · an unmatched inbound message must
 belong to a Person · a provider webhook is trusted without verification · a template is sent-message
 truth · SMS or announcements are unused because this stack has no rows for them.
+
+### Configuration and AI/BOS — context treatment
+
+**CONFIGURATION — CERTIFIED.** DIRECT:
+[`../platform/governance/configuration-publication-model.md`](../platform/governance/configuration-publication-model.md).
+84 route files / 117 handlers / 62 writes / 67 UI pages. **It has four lifecycles, not one** —
+`org_settings.metadata` is a single JSON document mutated in place; `entity_layouts` is append-only
+(republish, never edit); Business Process runs draft → validate → publish → immutable revision; Programs
+adds publish → distribute. The publish/distribute machinery holds **zero rows** on the certification stack,
+and `business_process_revisions` is 0 against 2 drafts, so nothing has been published there. AI-assisted
+configuration separates **generate / review / apply** into three capabilities: proposing confers nothing.
+
+**AI/BOS — CERTIFIED.** DIRECT: [`../platform/trust/reasoning-runtime.md`](../platform/trust/reasoning-runtime.md)
+and `trust-platform.md`. REFERENCE_ON_DEMAND: `privacy-runtime.md`, `information-classification.md`,
+`decision-contract.md`, `reasoning-deployment-strategy.md`. PLANNED_ONLY:
+`../platform/planning/trust-runtime/**`. EXCLUDE_HISTORY: the BOS closeout milestone and trust-adoption
+evidence.
+
+**One provider, no SDK:** OpenAI wire protocol only, raw HTTP, via the *first* implementation of Trust's
+provider port. `OPENAI_BASE_URL` allows an OpenAI-compatible endpoint; that is not multi-provider support.
+**Not everything called "AI" invokes a model** — two of four Trust capabilities are model-backed, and
+the task-assist propose route (`web/app/api/admin/ai/task-assist/propose/route.ts`) says of its own output "Deterministic template draft (V1) — not from a
+live model". `lib/trust` is asserted by control to contain no `fetch`, no SDK, no credential and not even
+the substring `openai`; 133 boundary tests pass. When an AI path applies a change it takes the **domain's**
+capability, not an AI one.
+
+**Configuration and AI/BOS share handlers under `config-layout-assist/**` and that is not double
+ownership:** Configuration owns the authored setting, its lifecycle and the capability that applies it;
+AI/BOS owns the reasoning that proposes it.
+
+**Forbidden across both:** a config string is an executable command · a draft is active behaviour · schema
+support implies builder, UI or runtime support (four distinct layers) · a seed default is platform law ·
+configuration visibility is authorization · an AI recommendation is an approved action · model output is
+durable truth · AI bypasses capability checks · surface access is action authority · provider switching,
+local models or self-hosted inference are current · a route under the AI path necessarily invokes a
+model · an OI metric is model inference.
+
+**With these two, every platform domain is certified.** The only domain still pending is
+**Financials/Payments**, held by the seven-day stability gate — `75c1a016c`, 2026-09-30, **0 days quiet** —
+plus foundation synthesis, which is a whole-estate task rather than a domain.
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
