@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_32dac756f52183",
+  "trusted_host_action_id": "tha_fbca464477442a",
   "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T14:12:18.145Z",
+    "executed_at": "2026-09-30T18:58:55.411Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_32dac756f52183",
+    "trusted_host_action_id": "tha_fbca464477442a",
     "query_hash": "394f418ebb3d2bdf9e75e9f3da4995887b5f73412796490e8e95105b7428a1ed",
-    "authorization_id": "grnt_a2e8dfe02cce426f",
+    "authorization_id": "grnt_28bd415a735f4baa",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T14:12:24.111Z",
+    "census_run_at": "2026-09-30T18:59:11.196Z",
     "question_ids": [
       "k_rpc",
       "l_appusers",
@@ -29,10 +29,8 @@
         "question_id": "k_rpc",
         "row_count": null,
         "rows": [
-          "rpc ~ post_ledger_transaction ~ secdef=true :: auth_uid=false :: auth_role=false :: has_org_role=false :: capability_fn=false :: user_roles=false :: app_users=false :: search_path=search_path=public, pg_temp",
-          "mutating_rpc_excluding_triggers ~ authenticated_executable ~ 1",
-          "mutating_rpc ~ no_caller_authority_check ~ 1",
-          "rpc_acl ~ post_ledger_transaction ~ postgres=X/postgres | authenticated=X/postgres | service_role=X/postgres"
+          "mutating_rpc_excluding_triggers ~ authenticated_executable ~ 0",
+          "mutating_rpc ~ no_caller_authority_check ~ 0"
         ]
       },
       "l_appusers": {
@@ -227,6 +225,6 @@
         ]
       }
     },
-    "row_count": 165
+    "row_count": 163
   }
 }

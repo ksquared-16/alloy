@@ -21,6 +21,8 @@ export type OperationalEnrollmentMockStore = {
     schedule_patterns: Row[];
     schedule_assignments: Row[];
     child_attendance_events: Row[];
+    /** Attempt rows for `apply_participation_operational_change`; created on demand. */
+    participation_change_attempts?: Row[];
     charges: Row[];
     childcare_rate_plans: Row[];
     childcare_rate_rules: Row[];
@@ -781,6 +783,187 @@ export function createOperationalEnrollmentMockSupabase(
             } as Row;
             store.child_attendance_events.push(row);
             return { data: { ok: true, idempotent: false, event: row }, error: null };
+        }
+
+        /*
+         * Mirrors `apply_participation_operational_change` closely enough that the SERVICES are
+         * genuinely exercised rather than stubbed: the idempotency gate is checked before any write, the
+         * expected-current-row preconditions are honoured, the prior row is closed the day before the
+         * successor starts, successor status is derived from the date, and the whole thing is
+         * all-or-nothing.
+         *
+         * A thinner fake would have hidden the regression it exists to prevent. When the services moved
+         * their persistence into this RPC, the old `.from()`-based fakes stopped seeing the writes at
+         * all, so the unit tests reported "unknown rpc" instead of exercising supersession.
+         */
+        if (fnName === "apply_participation_operational_change") {
+            const orgId = String(params?.p_org_id ?? "");
+            const agreementId = String(params?.p_enrollment_agreement_id ?? "");
+            const key = String(params?.p_idempotency_key ?? "").trim();
+            const today = String(params?.p_today ?? "");
+            const actor = params?.p_actor == null ? null : String(params.p_actor);
+            const placement = (params?.p_placement ?? null) as Record<string, unknown> | null;
+            const assignment = (params?.p_assignment ?? null) as Record<string, unknown> | null;
+            const expectedPlacementId =
+                params?.p_expected_placement_id == null ? null : String(params.p_expected_placement_id);
+            const expectedAssignmentId =
+                params?.p_expected_assignment_id == null ? null : String(params.p_expected_assignment_id);
+
+            if (!placement && !assignment) {
+                return { data: null, error: { message: "nothing_to_change: supply p_placement, p_assignment, or both" } };
+            }
+            if (!today) return { data: null, error: { message: "today_required" } };
+
+            store.participation_change_attempts = store.participation_change_attempts ?? [];
+            const attempts = store.participation_change_attempts;
+            const prior = attempts.find(
+                (a) =>
+                    String(a.org_id) === orgId &&
+                    String(a.enrollment_agreement_id) === agreementId &&
+                    String(a.idempotency_key ?? "") === key,
+            );
+            if (prior) {
+                return { data: { ok: true, replayed: true, result: prior.result ?? {} }, error: null };
+            }
+
+            const OPERATIONAL = ["planned", "active", "ending"];
+            const dayBefore = (ymd: string): string => {
+                const d = new Date(`${ymd}T00:00:00Z`);
+                d.setUTCDate(d.getUTCDate() - 1);
+                return d.toISOString().slice(0, 10);
+            };
+            const result: Record<string, unknown> = {};
+
+            // Both halves are validated before either writes, so a failure leaves the store untouched.
+            const plcPrior = placement
+                ? store.child_placements.find(
+                      (r) =>
+                          String(r.org_id) === orgId &&
+                          String(r.enrollment_agreement_id) === agreementId &&
+                          OPERATIONAL.includes(String(r.status)),
+                  )
+                : undefined;
+            if (placement && !plcPrior) {
+                return { data: null, error: { message: "no_operational_placement" } };
+            }
+            if (placement && expectedPlacementId && plcPrior && String(plcPrior.id) !== expectedPlacementId) {
+                return { data: null, error: { message: `stale_placement: caller expected ${expectedPlacementId}` } };
+            }
+            const plcStart = placement ? String(placement.start_date ?? "") : "";
+            if (placement) {
+                if (!plcStart) return { data: null, error: { message: "placement_start_date_required" } };
+                const pStart = String(plcPrior!.start_date);
+                const pEnd = plcPrior!.end_date == null ? null : String(plcPrior!.end_date);
+                if (plcStart <= pStart || (pEnd != null && plcStart <= pEnd)) {
+                    return { data: null, error: { message: "invalid_placement_start" } };
+                }
+            }
+
+            const asgPrior = assignment
+                ? store.schedule_assignments.find(
+                      (r) =>
+                          String(r.org_id) === orgId &&
+                          String(r.enrollment_agreement_id) === agreementId &&
+                          String(r.subject_type ?? "child") === "child" &&
+                          r.is_primary !== false &&
+                          OPERATIONAL.includes(String(r.status)),
+                  )
+                : undefined;
+            if (assignment && !asgPrior) {
+                return { data: null, error: { message: "no_operational_assignment" } };
+            }
+            if (assignment && expectedAssignmentId && asgPrior && String(asgPrior.id) !== expectedAssignmentId) {
+                return { data: null, error: { message: `stale_assignment: caller expected ${expectedAssignmentId}` } };
+            }
+            const asgStart = assignment ? String(assignment.start_date ?? "") : "";
+            if (assignment) {
+                if (!asgStart) return { data: null, error: { message: "assignment_start_date_required" } };
+                const pStart = String(asgPrior!.start_date);
+                const pEnd = asgPrior!.end_date == null ? null : String(asgPrior!.end_date);
+                if (asgStart <= pStart || (pEnd != null && asgStart <= pEnd)) {
+                    return { data: null, error: { message: "invalid_assignment_start" } };
+                }
+            }
+
+            if (placement && plcPrior) {
+                const close = dayBefore(plcStart);
+                plcPrior.status = "superseded";
+                plcPrior.end_date = close;
+                plcPrior.updated_by = actor;
+                counters.child_placements += 1;
+                const named = (k: string) => Object.prototype.hasOwnProperty.call(placement, k);
+                const successor: Row = {
+                    ...plcPrior,
+                    id: nextId("plc-new", counters.child_placements),
+                    start_date: plcStart,
+                    end_date: null,
+                    status: plcStart > today ? "planned" : "active",
+                    // Key presence, not COALESCE: a named null clears, an absent key inherits.
+                    program_category_id: named("program_category_id")
+                        ? (placement.program_category_id as string | null)
+                        : plcPrior.program_category_id,
+                    room_location_id: named("room_location_id")
+                        ? (placement.room_location_id as string | null)
+                        : plcPrior.room_location_id,
+                    reason_key: (placement.reason_key as string | null) ?? "operator_change",
+                    source_key: (placement.source_key as string | null) ?? "operator",
+                    supersedes_placement_id: plcPrior.id,
+                    metadata: (placement.metadata as Record<string, unknown> | undefined) ?? {},
+                    created_by: actor,
+                    updated_by: actor,
+                };
+                store.child_placements.push(successor);
+                result.placement = {
+                    prior_id: plcPrior.id,
+                    prior_end_date: close,
+                    successor_id: successor.id,
+                    successor_status: successor.status,
+                    successor_start: plcStart,
+                };
+            }
+
+            if (assignment && asgPrior) {
+                const close = dayBefore(asgStart);
+                asgPrior.status = "superseded";
+                asgPrior.end_date = close;
+                asgPrior.updated_by = actor;
+                counters.schedule_assignments += 1;
+                const successor: Row = {
+                    // Carries room, site, type, program category and commitment kind forward, which is
+                    // the 20261109120000 repair.
+                    ...asgPrior,
+                    id: nextId("asg-new", counters.schedule_assignments),
+                    start_date: asgStart,
+                    end_date: null,
+                    status: asgStart > today ? "planned" : "active",
+                    schedule_pattern_id:
+                        (assignment.schedule_pattern_id as string | null) ?? asgPrior.schedule_pattern_id,
+                    source_key: (assignment.source_key as string | null) ?? "operator",
+                    supersedes_assignment_id: asgPrior.id,
+                    metadata: (assignment.metadata as Record<string, unknown> | undefined) ?? {},
+                    created_by: actor,
+                    updated_by: actor,
+                };
+                store.schedule_assignments.push(successor);
+                result.assignment = {
+                    prior_id: asgPrior.id,
+                    prior_end_date: close,
+                    successor_id: successor.id,
+                    successor_status: successor.status,
+                    successor_start: asgStart,
+                };
+            }
+
+            attempts.push({
+                id: `pca-${attempts.length + 1}`,
+                org_id: orgId,
+                enrollment_agreement_id: agreementId,
+                idempotency_key: key,
+                result,
+                created_by: actor,
+            } as Row);
+
+            return { data: { ok: true, replayed: false, result }, error: null };
         }
 
         return { data: null, error: { message: `unknown rpc: ${fnName}` } };

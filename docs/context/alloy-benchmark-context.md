@@ -18,8 +18,8 @@ contains several generations of design history, and most of it is not current tr
 | **Version** | V1 |
 | **Certified** | 2026-09-30 |
 | **Base** | `f3fd86b4b` (staging) |
-| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** (all three Operations domains: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md)) |
-| **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Attendance · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
+| **Domains pending** | Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
@@ -43,6 +43,33 @@ context. A PASS in one of them is not current evidence.
 most damage if got wrong: "latest row = active row" (resolve currency by the operational-state
 predicate, never by recency) and "a declared capability is an enforced one" (319 declarations are a
 `pending` backlog).
+
+### Attendance — context treatment
+
+**DIRECT**: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md) — the
+single canonical owner, carrying its certification record.
+
+**REFERENCE_ON_DEMAND**: `../platform/core/effective-dated-assignment-doctrine.md` — for the interval
+model Attendance deliberately does **not** use, and `placement-system.md` for the committed foundation it
+references.
+
+**EXCLUDE_HISTORY**: `certification/attendance/**`, `certification/kiosk/**`,
+`certification/playwright/**` attendance evidence, and the attendance QA guides and audits. These are
+point-in-time evidence; a PASS in one is not current doctrine.
+
+**Safe, because measured:** Attendance records observed presence, not schedule intent; schedule is
+expectation and is compared against attendance rather than becoming it; the child subject is
+`customer_member` + committed agreement while staff is canonical Person; corrections are append-only
+links (`entry_type` + `corrects_event_id`) enforced by database triggers; and the service day is the
+org's configured IANA-zone local day, derived at write time.
+
+**Forbidden:** scheduled = attended · enrolled = present · absence inferred from a missing record (an
+absence is an authored event with 328 rows) · a UI-hidden write means unauthorized (capability
+enforcement is in the domain service, not the route) · the auth email identifies the subject (explicitly
+refused in two places) · an old QA artifact is current doctrine · day boundaries follow the browser
+timezone · attendance uses effective-dated supersession (it has no `supersedes_*` and no `end_date`
+column) · `excused` exists (it does not, anywhere) · `present` and `schedule_override` are in use (both
+are admitted by the CHECK and never written).
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -200,60 +227,73 @@ brought into `status_definitions`.
 
 ---
 
-## 6. Identity / Authentication / Roles / Access — PENDING CERTIFICATION (one gate)
+## 6. Identity / Authentication / Roles / Access — CERTIFIED
 
-**State:** `IDENTITY_ACCESS_RLS_CONVERGENCE_MEASURED_MIGRATION_PACKET_READY_HOSTED_VERIFICATION_REQUIRED`.
+**State:** `IDENTITY_ACCESS_DOCUMENTATION_CONTEXT_READY_PROMOTED_CERTIFIED`.
 
 Authority discovery completed 2026-09-29; RLS Model A was ratified 2026-09-30; the convergence pass
-that followed measured the estate afresh, found a cross-tenant mutation class the first pass had no
-term for, and **authored the repair**. Everything on the documentation axis is done. One gate remains,
-and it is not a documentation gate:
+measured the estate afresh, found a cross-tenant mutation class the first pass had no term for, and
+authored the repair. **The last gate closed 2026-09-30:** PR 1350 merged and `20261107120000` applied to
+the deployed primary.
 
-> **THE ONE REMAINING GATE.** Migrations `20261104120000` and `20261104130000` are authored and
-> validated — but **applying them to the deployed primary is a separate governed action that has not
-> been performed.** Until it is, the exposures described below are **still open in production**, and
-> this section must not be read as saying otherwise.
->
-> **Re-verified 2026-09-30 11:26 UTC** against the deployed primary, and unchanged: all 14 mutating
-> functions remain `EXECUTE`-granted to `authenticated` (4 of them also to PUBLIC), all 14 still carry
-> no caller-authority check, and both tables still have no RLS. Measured per version, **neither
-> `20261104120000` nor `20261104130000` is in the hosted ledger.**
->
-> **A high-water mark is not proof, and this is the run that demonstrated it.** The ledger's
-> `max_version` now reads `20261106120000` — *past* both repair migrations — because another lane's
-> `20261105120000` and `20261106120000` applied (PR 1345). The first version of the gate below asked
-> exactly that question, `max_version >= 20261104130000`, and it was sound only by the accident that
-> these two were the newest migrations in the tree when it was written. It would now answer *yes* while
-> both repairs sat unapplied. Its other two legs still refused, so no false certification could have
-> occurred — but a gate with a leg that reports the wrong answer is one accident away from agreeing
-> with the wrong conclusion, so the question is now asked **per version**
-> (`identity-access-apply-verification.sql`).
->
-> This is not a claim you have to take on trust. `tests/docs/identityAccessCertificationEvidence.test.ts`
-> reads the committed hosted census artifacts and **fails if this section is ever moved to certified
-> while either repair migration is absent from the ledger by name, while any mutating function is still
-> executable by `authenticated`/`anon`/PUBLIC, while any public table lacks RLS, or while any of those
-> functions has lost its `service_role` EXECUTE** — protected and broken are not the same outcome. Each
-> artifact is checked against the SHA-256 of the query that produced it, so one edited by hand to say
-> the happy thing is rejected rather than believed.
+### The gate, and how it was proven closed
 
-**Why the distinction is stated this loudly.** The rest of this pack describes documentation that
-matches a shipped system. Here, two paragraphs describe a repair that exists in the tree and not yet
-in the database. A reader — human or model — who took "closed" to mean "closed in production" would
-draw exactly the wrong conclusion about the current risk. Certification of this domain resumes the
-moment the apply is confirmed by census; nothing else is outstanding.
+Per-version against the deployed primary, never max-version inference
+(`certification/migrations/identity-access-apply-verification.sql`, run 2026-09-30T18:59Z):
 
-**What is solid.** One permission registry (`permission_keys` / `permissions`), one additive grant
-model (`user_roles` → `role_permission_grants`), real scope tables for department, site and access
-profile, and seeded ADMIN/OPS packages guarded by in-migration self-tests. `user_person_links` joins
-`auth.users` to `persons` through an **explicit operator-created link with no email fallback** —
-identity is never inferred, deliberately, and re-verified 2026-09-30: every `persons`-by-email lookup
-in the tree resolves a *submitted or inbound* address, never the session's own.
+| Version | Applied |
+|---|---|
+| `20261104120000` — org/actor-parameterized RPC EXECUTE boundary | **true** |
+| `20261104130000` — RLS on unprotected org tables | **true** |
+| `20261107120000` — unchecked mutating RPC EXECUTE boundary | **true** |
 
-**The four layers, and the fact that they are four.** Authentication (Supabase Auth) → admission
-(`portal.access`) → authorization (route capability) → tenant isolation (RLS + the server's org pin).
-Each answers a question the others do not, and the most common wrong belief about this system is that
-the first implies the rest.
+RPC authority, deployed (`identity-access-rpc-and-tenancy-census.sql`):
+
+```
+mutating_rpc_excluding_triggers ~ authenticated_executable ~ 0
+mutating_rpc ~ no_caller_authority_check ~ 0
+```
+
+RLS, deployed (`identity-access-model-a-authority-census.sql`): **322 of 322** public base tables have
+row level security enabled, **zero** disabled. `payment_provider_disputes` and
+`commercial_policy_exceptions` each carry RLS with a service-role policy and grant `authenticated`
+SELECT only. `app_users` has **zero untenanted write policies** and reads are `id = auth.uid()`.
+`work_units` is org-scoped through `current_org_id()`.
+
+> **`authenticated` still holds table-level INSERT/UPDATE/DELETE grants on `app_users` and
+> `work_units`.** That reads alarming without the policy context and is not an exposure: under Model A
+> RLS owns tenant isolation, and a grant with no admitting policy denies. For `app_users` the write
+> policy count is zero, so those grants admit nothing; for `work_units` every policy is org-scoped.
+> Do not "repair" the grants — the policies are the control.
+
+### What the shape-based predicate caught that names would not have
+
+`20261107120000` defines its watched family by DANGER SHAPE — mutating, client-executable, and
+performing no recognised caller-authority check — rather than by parameter name. That choice paid for
+itself twice.
+
+The named target was `post_ledger_transaction`, which the earlier parameter-name predicate missed
+because it takes `p_ledger_tx_id` rather than `p_org_id`. The unnamed one was
+**`record_child_attendance_event`**: `SECURITY DEFINER`, taking `p_org_id` **from the caller**,
+performing no authority check, and granting EXECUTE to `authenticated` — so any signed-in principal
+could write an attendance event into any organization. It was closed by the same apply, and safely:
+every mounted caller (`admin/childcare-attendance`, `public/kiosk/attendance`, `public/kiosk/identify`)
+uses the service-role client, so no legitimate path called it with a user JWT.
+
+**A name-shaped audit would have left it open.** That is the same failure mode recorded in
+`assignments-authority-model-debt.md`, in the opposite direction.
+
+### Remaining implementation debt — bounded, and not model uncertainty
+
+**319 of 872 route handlers carry no declared capability** (303 program-owned, 16 inherited; ceiling
+303, ratcheted downward only). 56 of those are mutations. This is W-15's burndown and it is
+**propagation work, not doubt about the authority model**: the model is Model A, ratified and now proven
+closed at the database boundary. Each pending handler is enumerated in
+`scripts/routeCapabilities.declared.json` with a reason, so authority per route is a known quantity.
+
+Do not read the pending count as "the domain is ungated": 456 handlers declare and bind a capability,
+and the database-level exposures that a missing route gate could have been exploited through are the
+ones this section just proved closed.
 
 ### Blockers closed on the documentation axis
 
@@ -295,13 +335,13 @@ yet applied to the deployed primary; see the gate above.*
 | Debt | Size | Why it is not a certification blocker |
 |---|---|---|
 | `authenticated` INSERT/UPDATE/DELETE grants the architecture never needed | **259 tables**; **56** of them have no write policy at all | Latent by mechanism: RLS denies, and no supported path uses the authenticated principal to write. Phase 4 retires them per table family; the 56 are the risk-free start |
-| Route handlers with no declared capability | **319 of 870** (303 owned + 16 frozen), across **122 route families**; **56 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
+| Route handlers with no declared capability | **319 of 872** (303 owned + 16 frozen), across **122 route families**; **56 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
 | Write policies resting on `current_org_id()` | 41 | Returns NULL above one organization (measured: 3 orgs), so all 41 **deny**. Fails closed — but would silently become permissive in a single-org deployment |
 | Write policies matching none of the four known shapes | 142 | None are unconditionally permissive (measured: 0). Unclassified, not unsafe |
 | Read semantics for the two newly RLS-protected tables | 2 tables | Both are service-role-only reads today, which is what the product does. Choosing an org-scoped authenticated read predicate is a Financials decision, ledgered rather than guessed |
 
-**Route capability, stated correctly.** Of **870** handlers across 673 route files: **456 declare and
-bind a capability**, **95 are declared admission-sufficient**, **319 are pending**. An earlier version
+**Route capability, stated correctly.** Of **872** handlers across 674 route files: **456 declare and
+bind a capability**, **97 are declared admission-sufficient**, **319 are pending**. An earlier version
 of this pack said "~17 assert a capability" — that was wrong by more than an order of magnitude and
 would have led a reader to believe the domain was essentially ungated. It is roughly half-gated, with
 the remainder enumerated.
@@ -392,7 +432,7 @@ was certified; it is not a claim that the repository must stay there.
 
 | Version | Base | Change |
 |---|---|---|
-| **V1** | `f3fd86b4b` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **454 of 870 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
+| **V1** | `f3fd86b4b` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **456 of 872 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
 | V0 | `9cbe2915b` | First certification: Developer Platform / API, Runtime, Business Process. |
 
 Re-certify a domain when any of these occur:
