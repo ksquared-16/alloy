@@ -181,6 +181,8 @@ Then: **`platform/foundation/system-overview.md`**
 | API contracts | `platform/governance/api-contracts.md` |
 | **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
+| **Authentication & session model** | `platform/governance/authentication-and-session-model.md` — sign-in, sessions, account lifecycle; what is Alloy's vs the provider's vs unknown |
+| RLS authority model (measurement + staged plan) | `platform/governance/rls-authority-model-director-gate.md` |
 | Implementation patterns | `platform/governance/implementation-patterns.md` |
 | Deployment | `platform/governance/deployment-and-environments.md` |
 | Testing | `platform/governance/testing-and-quality.md` |

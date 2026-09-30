@@ -6,7 +6,7 @@ last_reviewed: 2026-09-30
 supersedes: []
 ---
 
-# Alloy benchmark context pack — V0
+# Alloy benchmark context pack — V1
 
 **This file defines which Alloy documents may be loaded as authoritative context, and what may be
 inferred from each.** It is a curated corpus, deliberately much smaller than the repository. Loading
@@ -15,11 +15,11 @@ contains several generations of design history, and most of it is not current tr
 
 | | |
 |---|---|
-| **Version** | V0 |
+| **Version** | V1 |
 | **Certified** | 2026-09-30 |
-| **Base** | `9cbe2915b` (staging) |
+| **Base** | `f3fd86b4b` (staging) |
 | **Domains certified** | Developer Platform / API · Runtime · Business Process |
-| **Domains pending** | Identity/Access (§6) · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
+| **Domains pending** | **Identity/Access (§6 — one gate remaining, named there)** · Enrollment beyond BP core · Attendance · Scheduling/Staffing · Financials · Commercial · Subsidy · Communications · Configuration · Operational Intelligence · AI/BOS · foundation synthesis |
 
 A domain appears here only when it has been certified by an authority-discovery pass. Absence means
 "not yet certified", never "not important" — and never "safe to infer from whatever the tree holds".
@@ -177,53 +177,159 @@ brought into `status_definitions`.
 
 ---
 
-## 6. Identity / Authentication / Roles / Access — PENDING CERTIFICATION
+## 6. Identity / Authentication / Roles / Access — PENDING CERTIFICATION (one gate)
 
-**State:** `PENDING_CERTIFICATION`. Read-only authority discovery completed 2026-09-29; the domain is
-coherent in parts and genuinely contested in others, so it is not certified.
+**State:** `IDENTITY_ACCESS_RLS_CONVERGENCE_MEASURED_MIGRATION_PACKET_READY_HOSTED_VERIFICATION_REQUIRED`.
+
+Authority discovery completed 2026-09-29; RLS Model A was ratified 2026-09-30; the convergence pass
+that followed measured the estate afresh, found a cross-tenant mutation class the first pass had no
+term for, and **authored the repair**. Everything on the documentation axis is done. One gate remains,
+and it is not a documentation gate:
+
+> **THE ONE REMAINING GATE.** Migrations `20261104120000` and `20261104130000` are authored and
+> validated — but **applying them to the deployed primary is a separate governed action that has not
+> been performed.** Until it is, the exposures described below are **still open in production**, and
+> this section must not be read as saying otherwise.
+>
+> **Re-verified 2026-09-30 11:26 UTC** against the deployed primary, and unchanged: all 14 mutating
+> functions remain `EXECUTE`-granted to `authenticated` (4 of them also to PUBLIC), all 14 still carry
+> no caller-authority check, and both tables still have no RLS. Measured per version, **neither
+> `20261104120000` nor `20261104130000` is in the hosted ledger.**
+>
+> **A high-water mark is not proof, and this is the run that demonstrated it.** The ledger's
+> `max_version` now reads `20261106120000` — *past* both repair migrations — because another lane's
+> `20261105120000` and `20261106120000` applied (PR 1345). The first version of the gate below asked
+> exactly that question, `max_version >= 20261104130000`, and it was sound only by the accident that
+> these two were the newest migrations in the tree when it was written. It would now answer *yes* while
+> both repairs sat unapplied. Its other two legs still refused, so no false certification could have
+> occurred — but a gate with a leg that reports the wrong answer is one accident away from agreeing
+> with the wrong conclusion, so the question is now asked **per version**
+> (`identity-access-apply-verification.sql`).
+>
+> This is not a claim you have to take on trust. `tests/docs/identityAccessCertificationEvidence.test.ts`
+> reads the committed hosted census artifacts and **fails if this section is ever moved to certified
+> while either repair migration is absent from the ledger by name, while any mutating function is still
+> executable by `authenticated`/`anon`/PUBLIC, while any public table lacks RLS, or while any of those
+> functions has lost its `service_role` EXECUTE** — protected and broken are not the same outcome. Each
+> artifact is checked against the SHA-256 of the query that produced it, so one edited by hand to say
+> the happy thing is rejected rather than believed.
+
+**Why the distinction is stated this loudly.** The rest of this pack describes documentation that
+matches a shipped system. Here, two paragraphs describe a repair that exists in the tree and not yet
+in the database. A reader — human or model — who took "closed" to mean "closed in production" would
+draw exactly the wrong conclusion about the current risk. Certification of this domain resumes the
+moment the apply is confirmed by census; nothing else is outstanding.
 
 **What is solid.** One permission registry (`permission_keys` / `permissions`), one additive grant
 model (`user_roles` → `role_permission_grants`), real scope tables for department, site and access
 profile, and seeded ADMIN/OPS packages guarded by in-migration self-tests. `user_person_links` joins
 `auth.users` to `persons` through an **explicit operator-created link with no email fallback** —
-identity is never inferred, deliberately.
+identity is never inferred, deliberately, and re-verified 2026-09-30: every `persons`-by-email lookup
+in the tree resolves a *submitted or inbound* address, never the session's own.
 
-**Blockers, measured:**
+**The four layers, and the fact that they are four.** Authentication (Supabase Auth) → admission
+(`portal.access`) → authorization (route capability) → tenant isolation (RLS + the server's org pin).
+Each answers a question the others do not, and the most common wrong belief about this system is that
+the first implies the rest.
 
-- **~~An open Director gate~~ — RATIFIED 2026-09-30 (Model A).** The decision now lives in
-  `platform/foundation/platform-decisions.md` § *2026-09 — Route capabilities authorize; RLS isolates
-  tenants; mutation is server-side*, and the measurement document points at it rather than holding an
-  unmade decision. What remains is **convergence, not choice**: retire the excess authenticated write
-  grants and repair the tenancy class. Original analysis retained below because the measurement is
-  what the ratification rests on.
-- **(analysis, retained)**
-  `platform/governance/rls-authority-model-director-gate.md` is `status: canonical` while carrying
-  `DIRECTOR_DECISION_READY`. On reading it fully, it is not an architectural fork: the recommended
-  model (routes authorize, RLS tenants, mutation server-only) is **already the written doctrine** in
-  `implementation-patterns.md` § Supabase access and `configuration-publication-model.md`, and 604 of
-  682 route files arrive as `service_role`, which bypasses RLS by definition — so a layer the product
-  never executes cannot be the authorization model. The drift is **latent unused grants, not a live
-  dual-authority conflict**, reachable only by calling PostgREST directly, which no product code does
-  and the browser client cannot (it is auth-only; the 6 server components touching `supabase.from()`
-  are `select`-only). So the blocker is a **ratification plus a precision requirement** — authority
-  claims should read "on the supported path" until grants are retired — rather than an unknown. The
-  document's own verdict on whether this blocks Access & Identity V2 is NO.
-- **Admission is not authority on most routes.** Of 682 API route files, ~128 rely on
-  `requireAdminOrOps` (portal admission, no role, no capability) while only ~17 assert a capability.
-  The enrollment area already repaired exactly this and proves the pattern; it has not propagated.
-- **No canonical owner for the authentication/session layer.** Roles and permissions are well owned by
-  `platform/governance/roles-and-permissions.md`; sessions and account lifecycle are owned by nobody.
-- **Customer/parent authentication is absent**, stated as unsolved in code rather than documented.
+### Blockers closed on the documentation axis
 
-**What may be used on demand.** `platform/governance/roles-and-permissions.md` is the strongest
-document in the domain and is the DIRECT candidate once the domain certifies: it explicitly separates
-"the rule" from "what the code does today" and names each gap with a workstream id, on the stated
-principle that a canonical document asserting an unfollowed rule as as-built is itself a defect. Read
-the RLS gate as an **open decision**, never as settled. Treat `platform/planning/access-identity-v2/**`
-as PLANNED_ONLY — it is planning material, not authority.
+- **The Director gate.** RATIFIED 2026-09-30 (Model A): route capabilities authorize, RLS isolates
+  tenants, supported mutation is server-side under `service_role`, UI visibility is presentation only.
+  Lives in `platform/foundation/platform-decisions.md` § *2026-09 — Route capabilities authorize; RLS
+  isolates tenants; mutation is server-side*.
+- **The tenancy class.** The 51 `app_users` write policies with no org predicate and the 2 `work_units`
+  self-comparison tautologies are **gone** — remeasured to zero 2026-09-30 by reading every write
+  policy's text, not by a negative pattern test. Repaired by `20260916040000`; held by
+  `tests/access/rlsTenancyLock.test.ts`.
+- **Cross-tenant read exposure.** Two tables had no RLS at all (`payment_provider_disputes`,
+  `commercial_policy_exceptions`), both with `org_id` and a standing `authenticated` SELECT grant, so
+  any authenticated principal read every organization's rows. **Repair authored** in
+  `20261104130000` — *not yet applied; see the gate above.* The estate invariant is held going forward
+  by `tests/access/rlsEstateCoverage.test.ts`.
+- **The authentication/session layer has an owner.**
+  `platform/governance/authentication-and-session-model.md` — new, canonical, and explicit about which
+  facts are Alloy's, which are Supabase's, which are **UNKNOWN_EXTERNAL** provider configuration, and
+  which are simply absent.
 
-**Promotion trigger.** The RLS authority decision is made, capability assertion propagates past
-admission on the route population above, and the authentication/session layer gets an owner.
+### The finding this pass added
+
+**SECURITY DEFINER functions taking their organization as a parameter.** The September measurement
+framed the drift as *table grants* and called it latent because RLS still denies the write. That
+reasoning does not extend to SECURITY DEFINER, which never consults RLS at all — and nobody had
+counted those.
+
+Measured: **14 mutating functions EXECUTE-granted to `authenticated`, 9 SECURITY DEFINER, none
+containing any caller-authority check.** Every one took `p_org_id` as a parameter. The live subset is
+`execute_lead_status_mutation` / `execute_enrollment_status_mutation`, which write governed lifecycle
+state for whatever org the caller names — bypassing the route, the capability check, and
+`validateStatusTransition` together. **Repair authored** in `20261104120000`, which also **widens `access_rpc_boundary_report`** so the
+existing live lock guards the *shape* rather than the *spellings* that let this family through. *Not
+yet applied to the deployed primary; see the gate above.*
+
+### Debt that remains, with exact sizes
+
+| Debt | Size | Why it is not a certification blocker |
+|---|---|---|
+| `authenticated` INSERT/UPDATE/DELETE grants the architecture never needed | **259 tables**; **56** of them have no write policy at all | Latent by mechanism: RLS denies, and no supported path uses the authenticated principal to write. Phase 4 retires them per table family; the 56 are the risk-free start |
+| Route handlers with no declared capability | **321 of 870** (305 owned + 16 frozen), across **122 route families**; **58 are mutations**, 263 reads | Measured, enumerated, and CI-gated by `scripts/checkRouteCapabilities.mjs` with a **downward ratchet**. Authority per route is knowable from `scripts/routeCapabilities.declared.json`; it is a known quantity, not an unknown one |
+| Write policies resting on `current_org_id()` | 41 | Returns NULL above one organization (measured: 3 orgs), so all 41 **deny**. Fails closed — but would silently become permissive in a single-org deployment |
+| Write policies matching none of the four known shapes | 142 | None are unconditionally permissive (measured: 0). Unclassified, not unsafe |
+| Read semantics for the two newly RLS-protected tables | 2 tables | Both are service-role-only reads today, which is what the product does. Choosing an org-scoped authenticated read predicate is a Financials decision, ledgered rather than guessed |
+
+**Route capability, stated correctly.** Of **870** handlers across 673 route files: **454 declare and
+bind a capability**, **95 are declared admission-sufficient**, **321 are pending**. An earlier version
+of this pack said "~17 assert a capability" — that was wrong by more than an order of magnitude and
+would have led a reader to believe the domain was essentially ungated. It is roughly half-gated, with
+the remainder enumerated.
+
+**Admission is not authorization, and the helper name hides it.** `requireAdminOrOps` resolves
+`portal.access` and *returns* the principal's permission-key union; asserting a key from it is the
+route's job. The invariant is locked polarity-aware by
+`tests/access/admissionDoesNotAuthorize.test.ts`: using admission affirmatively to grant
+(`if (portalEligible) return true`) fails; using it to refuse (`if (!portalEligible) return forbidden`)
+is correct and common.
+
+**Customer/parent authentication is ABSENT** — no credential, no portal, no session. Stated in code as
+unsolved (`lib/access/linkedPersonIdentity.ts`). Everything in `platform/planning/**` describing one is
+PLANNED.
+
+### Treatment
+
+**DIRECT:** `platform/governance/roles-and-permissions.md`,
+`platform/governance/authentication-and-session-model.md`,
+`platform/foundation/platform-decisions.md` § *2026-09*.
+**REFERENCE_ON_DEMAND:** `platform/governance/rls-authority-model-director-gate.md` — read it as the
+*measurement and staged plan*, no longer as an open decision; its §*Remeasured 2026-09-30* supersedes
+every count in §*The database, measured*.
+**GENERATED_REFERENCE:** `scripts/routeCapabilities.declared.json` — the authoritative per-route
+answer, and the only place to ask it.
+**PLANNED_ONLY:** `platform/planning/access-identity-v2/**`, `platform/planning/vacilando-os/qa/**`.
+
+### SAFE inferences
+
+- Route capability checks authorize domain operations; RLS isolates tenant data.
+- Supported server writes run under `service_role` **after** the application has authorized them.
+- UI visibility is presentation only and grants no authority.
+- Role permissions are additive across roles, scoped to an organization.
+- User→Person linkage is explicit (`user_person_links`); email is contact data, never identity.
+- Portal admission (`portal.access`) is a real grantable capability, and it is not domain authorization.
+- The browser Supabase client is for `supabase.auth.*`; it does not write.
+
+### FORBIDDEN inferences
+
+- ✗ Portal admission means all admin actions are allowed.
+- ✗ Hidden UI implies server authorization exists.
+- ✗ RLS is the product permission system.
+- ✗ Email identifies the canonical Person.
+- ✗ Parent or customer login exists.
+- ✗ Planned Access V2 constructs are implemented.
+- ✗ Direct PostgREST mutation is supported merely because a DB grant exists.
+- ✗ A route is capability-gated because it is under `/api/admin/`. Ask the declared table.
+- ✗ MFA, trusted devices, or account disabling exist. Two are absent; the third is provider-side and unverified here.
+- ✗ There is a session idle timeout. The mechanism exists and ships disabled.
+- ✗ Revoking membership disables the credential. It does not — the user still authenticates and fails admission.
+- ✗ Provider settings (password policy, token lifetime, signup openness, rate limits) can be inferred from this repository.
 
 ---
 
@@ -256,8 +362,15 @@ from whatever the tree happens to contain. The tree is not the corpus.
 
 ## 8. Maintenance
 
-This manifest is versioned, not eternal. The base SHA records what was true when V0 was certified;
-it is not a claim that the repository must stay there.
+This manifest is versioned, not eternal. The base SHA records what was true when the current version
+was certified; it is not a claim that the repository must stay there.
+
+### Version history
+
+| Version | Base | Change |
+|---|---|---|
+| **V1** | `f3fd86b4b` | Identity/Access measured, repaired in code, and **still pending certification on one gate** — the migration apply (§6). Its authentication/session layer gained a canonical owner, the cross-tenant SECURITY DEFINER mutation family was closed, and the route-capability figure was corrected from "~17 assert a capability" to **454 of 870 handlers declare and bind one** — an error of more than an order of magnitude that would have led a reader to believe the domain was essentially ungated. |
+| V0 | `9cbe2915b` | First certification: Developer Platform / API, Runtime, Business Process. |
 
 Re-certify a domain when any of these occur:
 

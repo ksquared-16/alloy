@@ -1,0 +1,38 @@
+{
+  "trusted_host_action_id": "tha_18c83bc8ac7cff",
+  "query_hash": "c8387660167c4ccfe89a9bf6bb8f22f5552fab65f340ccf2cc1396b2a289b4aa",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T11:19:28.520Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_18c83bc8ac7cff",
+    "query_hash": "c8387660167c4ccfe89a9bf6bb8f22f5552fab65f340ccf2cc1396b2a289b4aa",
+    "authorization_id": "grnt_498c04a9c22947e9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T11:19:33.859Z",
+    "question_ids": [
+      "v_applied"
+    ],
+    "questions": {
+      "v_applied": {
+        "question_id": "v_applied",
+        "row_count": null,
+        "rows": [
+          "migration ~ 20261104120000 ~ false",
+          "migration ~ 20261104130000 ~ false",
+          "schema_migrations ~ max_version ~ 20261106120000",
+          "schema_migrations ~ applied_total ~ 500",
+          "sibling_lane_migration ~ 20261105120000 ~ true",
+          "sibling_lane_migration ~ 20261106120000 ~ true"
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}
