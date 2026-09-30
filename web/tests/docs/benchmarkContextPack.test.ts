@@ -105,11 +105,23 @@ describe("treatments cannot promote non-current material", () => {
 
 describe("Business Process is listed at its true certification state", () => {
     /** D-BP1 is open while either operator surface still sends a lifecycle status key. */
-    const bypassOpen = () =>
-        [
-            // Quote Intake was removed as unreachable; Current Work is the remaining sender.
-            "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx",
-        ].some((rel) => existsSync(path.join(repoRoot, rel)) && /(?<!next_)status_key\s*:/.test(read(rel)));
+    /**
+     * D-BP1 is open while any supported caller can still write lifecycle state through the generic
+     * Opportunity PATCH.
+     *
+     * Current Work converged in erun_3c3e4601ce8ab9fb, so checking it would now read as closed. The
+     * remaining consumer is the record-action path, and it cannot be detected by scanning its own
+     * source: `executeOpportunityRecordAction` forwards a body built by `opportunityRecordActionMap`.
+     * So the pair is what gets checked.
+     */
+    const bypassOpen = () => {
+        const map = path.join(repoRoot, "web/lib/recordChrome/opportunityRecordActionMap.ts");
+        const helper = path.join(repoRoot, "web/lib/recordChrome/executeOpportunityRecordAction.ts");
+        if (!existsSync(map) || !existsSync(helper)) return false;
+        const mapCarriesLifecycle = /status_key|close_reason_key/.test(read("web/lib/recordChrome/opportunityRecordActionMap.ts"));
+        const helperPatches = /\/api\/admin\/opportunities\//.test(read("web/lib/recordChrome/executeOpportunityRecordAction.ts"));
+        return mapCarriesLifecycle && helperPatches;
+    };
 
     it("is PENDING_CERTIFICATION while the bypass is open", () => {
         if (!bypassOpen()) return; // converged: the domain may certify

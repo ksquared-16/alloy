@@ -31,29 +31,61 @@ function walk(rel: string, test: (f: string) => boolean): string[] {
 }
 
 describe("D-BP1 containment — the direct status PATCH bypass may not spread", () => {
-    /** Client files that PATCH the opportunity route with a lifecycle status key. */
+    /**
+     * Client-side files that PATCH the opportunity route with a lifecycle status key.
+     *
+     * Scans `web/lib` as well as `web/components`, which an earlier version of this guard did not.
+     * That blind spot is why the sender count read as one: `lib/recordChrome/executeOpportunityRecordAction.ts`
+     * is a client helper that PATCHes, and it lives outside the component tree.
+     */
     function lifecyclePatchSenders(): string[] {
         const senders: string[] = [];
-        for (const rel of walk("web/components", (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f))) {
+        const files = [
+            ...walk("web/components", (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f)),
+            ...walk("web/lib", (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f)),
+        ];
+        for (const rel of files) {
             const text = read(rel);
             if (!/\/api\/admin\/opportunities\//.test(text)) continue;
             if (!/method:\s*"PATCH"/.test(text)) continue;
-            // `status_key:` as a sent body field (not `next_status_key`, which is the preflight input)
-            if (/(?<!next_)status_key\s*:/.test(text)) senders.push(rel);
+            /*
+             * Any PATCH caller counts, not only one that spells `status_key` inline.
+             * `executeOpportunityRecordAction` forwards a body built by `opportunityRecordActionMap`,
+             * so the lifecycle key never appears in its own source — a literal scan looked right and
+             * saw nothing. The route should not be receiving lifecycle writes from anywhere, so the
+             * honest detector is "who PATCHes it at all".
+             */
+            senders.push(rel);
         }
         return senders.sort();
     }
 
-    it("is exactly the ONE known sender — a second one fails this test on purpose", () => {
+    it("the record-action path is the last lifecycle consumer of the generic PATCH", () => {
         /*
-         * Was two. The Quote Intake section was removed in erun_79bed0c987eef455 after a necessity
-         * census found it had ZERO importers: it could not be rendered, so it was never a live
-         * bypass. Its `needs_a_quote` write also belonged to the cleaning quote pipeline rather than
-         * the Enrollment process, so it was never convergeable onto the enrollment boundary either.
+         * This cannot be proven by scanning for `status_key` in the sender: the helper forwards a body
+         * built elsewhere, so the literal never appears in its own source. Three earlier versions of
+         * this guard looked correct and saw nothing. The checkable relationship is the pair —
+         * the map supplies lifecycle keys, and the helper PATCHes the route with what the map returns.
+         *
+         * While this pair holds, the route cannot reject lifecycle keys. `mark_lost` is the transition
+         * that matters: `closed` + `close_reason_key: lost`. The other three mapped keys write
+         * `status_key: "open"`, which is a no-op on an already-open case.
          */
-        expect(lifecyclePatchSenders()).toEqual([
-            "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx",
-        ]);
+        const map = read("web/lib/recordChrome/opportunityRecordActionMap.ts");
+        const helper = read("web/lib/recordChrome/executeOpportunityRecordAction.ts");
+        expect(map).toMatch(/status_key/);
+        expect(map).toMatch(/close_reason_key/);
+        expect(helper).toMatch(/\/api\/admin\/opportunities\//);
+        expect(helper).toMatch(/method:\s*"PATCH"/);
+        expect(helper).toMatch(/opportunityRecordActionMap|recordActionPatch|OPPORTUNITY_RECORD_ACTION/);
+    });
+
+    it("Current Work no longer sends a lifecycle field — it sends configured intent", () => {
+        const panel = read("web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx");
+        expect(panel).toMatch(/enrollment-status-transition\/execute/);
+        expect(panel).toMatch(/configured_transition_ref/);
+        // It must not name the lifecycle column at all, in any request body.
+        expect(panel).not.toMatch(/status_key:/);
     });
 
     it("the generic opportunity route still never writes stage_key", () => {
@@ -64,7 +96,7 @@ describe("D-BP1 containment — the direct status PATCH bypass may not spread", 
 
 describe("converging the last sender may not drop prior-stage reconciliation", () => {
     const PANEL = "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx";
-    const CANONICAL_EFFECTS = "web/lib/admin/enrollmentStatus/applyEnrollmentStatusTransitionOutcomeEffects.ts";
+    const CANONICAL_EXECUTION = "web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts";
 
     /*
      * The two paths are complementary, not nested. The generic PATCH is the ONLY path that lets an
@@ -78,7 +110,7 @@ describe("converging the last sender may not drop prior-stage reconciliation", (
      */
     it("either the panel still reconciles, or the canonical path has acquired reconciliation", () => {
         const panelReconciles = /stage_transition_reconciliation/.test(read(PANEL));
-        const canonicalReconciles = /applyStageTransitionReconciliation/.test(read(CANONICAL_EFFECTS));
+        const canonicalReconciles = /applyStageTransitionReconciliation/.test(read(CANONICAL_EXECUTION));
         expect(
             panelReconciles || canonicalReconciles,
             "The Current Work panel no longer reconciles prior-stage work and the canonical transition " +
@@ -87,8 +119,20 @@ describe("converging the last sender may not drop prior-stage reconciliation", (
         ).toBe(true);
     });
 
-    it("prior-stage reconciliation has exactly the two known production callers", () => {
-        // If a third appears, the invariant above needs re-deriving rather than assuming.
+    it("the canonical execution path has acquired reconciliation, so the rewire is now unblocked", () => {
+        /*
+         * erun_3c3e4601ce8ab9fb moved it. The panel may now be rewired; until it is, BOTH paths
+         * reconcile, which is safe. This case asserts the acquisition directly rather than leaving it
+         * implied by the disjunction above, so losing it again fails loudly.
+         */
+        const canonical = read(CANONICAL_EXECUTION);
+        expect(canonical).toMatch(/preflightStageTransitionReconciliation/);
+        expect(canonical).toMatch(/applyStageTransitionReconciliation/);
+        expect(canonical).toMatch(/validateStageTransitionReconciliationPayload/);
+    });
+
+    it("prior-stage reconciliation callers are the known set", () => {
+        // If an unexpected one appears, the invariant above needs re-deriving rather than assuming.
         const callers = [
             "web/app/api/admin/opportunities/[id]/route.ts",
             "web/app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts",

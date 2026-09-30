@@ -14,6 +14,10 @@ import type {
 import { evaluateEnrollmentStatusTransitionPreflight } from "@/lib/admin/enrollmentStatus/evaluateEnrollmentStatusTransitionPreflight";
 import { applyEnrollmentStatusTransitionOutcomeEffects } from "@/lib/admin/enrollmentStatus/applyEnrollmentStatusTransitionOutcomeEffects";
 import { resolveEnrollmentStatusTargetKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionDestinations";
+import { preflightStageTransitionReconciliation } from "@/lib/lifecycle/preflightStageTransitionReconciliation";
+import { applyStageTransitionReconciliation } from "@/lib/lifecycle/applyStageTransitionReconciliation";
+import { validateStageTransitionReconciliationPayload } from "@/lib/lifecycle/validateStageTransitionReconciliationPayload";
+import type { StageTransitionReconciliationPreflight } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 
@@ -24,6 +28,12 @@ export type ExecuteEnrollmentStatusTransitionInput = {
     request: EnrollmentStatusTransitionExecutionRequest;
     departmentId?: string | null;
     workUnitId?: string | null;
+    /*
+     * The operator's answers to the reconciliation preflight, unvalidated as received.
+     * Revalidated here against a preflight this function computes itself — never trusted because the
+     * client echoed one back.
+     */
+    reconciliation?: unknown;
 };
 
 export type ExecuteEnrollmentStatusTransitionResult =
@@ -35,7 +45,18 @@ export type ExecuteEnrollmentStatusTransitionResult =
           placementHook?: { attempted: boolean; created: boolean; skipped_reason?: string } | null;
           outcomeEffects?: Awaited<ReturnType<typeof applyEnrollmentStatusTransitionOutcomeEffects>>;
       }
-    | { ok: false; error: string; validation?: RequirementValidationResult };
+    | { ok: false; error: string; validation?: RequirementValidationResult }
+    /*
+     * The operator has to answer for the work being left behind before the transition may proceed.
+     * Distinct from a requirement failure: nothing is wrong, the caller simply has not yet supplied
+     * the dispositions. The caller re-submits the same request carrying `reconciliation`.
+     */
+    | {
+          ok: false;
+          reconciliationRequired: true;
+          reconciliationPreflight: StageTransitionReconciliationPreflight;
+          error: string;
+      };
 
 async function resolveOcmIdFromCandidate(
     supabase: SupabaseClient,
@@ -167,6 +188,83 @@ export async function executeEnrollmentStatusTransition(
             placementHook: result.placementHook ?? null,
             outcomeEffects,
         };
+    }
+
+    /*
+     * ── PRIOR-STAGE RECONCILIATION, CASE GRAIN, BEFORE THE STATUS MOVES ──
+     *
+     * This is the half the canonical path did not own. The generic Opportunity PATCH carried it, and
+     * that is the only reason an operator surface still had to go through the PATCH to change a
+     * lifecycle state: it is where the "what happens to the work you are leaving behind" question
+     * lived. Moving it here — reusing the same three functions, not forking them — is what lets the
+     * canonical path become a superset and the bypass be closed.
+     *
+     * GRAIN. This is deliberately on the CASE path only. `preflightStageTransitionReconciliation` is
+     * keyed on `opportunities.status_key` and derives the stage being left from it, and the generic
+     * PATCH it moved from could only ever write that column. A child-grain transition moves the OCM's
+     * own `outcome_status_key` and leaves the case status alone, so keying a case preflight off it
+     * would reconcile against a stage the child is not leaving.
+     *
+     * ORDER. This runs after requirements pass and BEFORE the status write, for two reasons that are
+     * not interchangeable:
+     *
+     *   1. `preflightStageTransitionReconciliation` is keyed on the CURRENT status to derive the
+     *      stage being left. Once the status is written the prior stage is no longer discoverable
+     *      from the row, so a preflight after the write would reconcile against the wrong stage.
+     *   2. Outcome execution may move the stage (`move_to_stage`). Work belonging to the stage being
+     *      left has to be resolved while that stage is still the current one.
+     *
+     * ATOMICITY, stated honestly. Reconciliation and the status write are separate operations, so a
+     * failure between them leaves work reconciled and the transition not made. That window is
+     * PRE-EXISTING and unchanged — the PATCH path has exactly the same shape — and closing it means a
+     * transactional RPC, which is a migration-bearing change beyond this convergence. What this move
+     * must not do is make it worse, and it does not: the two operations stay adjacent and in the same
+     * order they had. The ordering test pins that.
+     */
+    const { data: caseRow } = await supabase
+        .from("opportunities")
+        .select("status_key")
+        .eq("id", scope.opportunityId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    const currentCaseStatusKey = (caseRow as { status_key?: string | null } | null)?.status_key ?? null;
+
+    const reconciliationPreflight = await preflightStageTransitionReconciliation({
+        supabase,
+        orgId,
+        opportunityId: scope.opportunityId,
+        previousStatusKey: currentCaseStatusKey,
+        nextStatusKey: targetStatusKey,
+    });
+
+    if (reconciliationPreflight.required) {
+        if (input.reconciliation == null) {
+            return {
+                ok: false,
+                reconciliationRequired: true,
+                reconciliationPreflight,
+                error: "Prior-stage work requires reconciliation before this transition can proceed.",
+            };
+        }
+        // Revalidated against the preflight computed above, not the one the client was handed.
+        const validated = validateStageTransitionReconciliationPayload(
+            reconciliationPreflight,
+            input.reconciliation,
+        );
+        if (!validated.ok) {
+            return { ok: false, error: validated.message };
+        }
+        const applied = await applyStageTransitionReconciliation({
+            supabase,
+            orgId,
+            opportunityId: scope.opportunityId,
+            actorUserId: input.userId ?? "",
+            preflight: reconciliationPreflight,
+            reconciliation: validated.reconciliation,
+        });
+        if (applied.errors.length) {
+            return { ok: false, error: applied.errors.join("; ") };
+        }
     }
 
     const caseResult = await updateOpportunityStatusWithEvent({
