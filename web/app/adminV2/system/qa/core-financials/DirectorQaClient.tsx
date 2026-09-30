@@ -83,6 +83,8 @@ type Payload = {
     noAutomaticPass?: string;
     /** Where engineering stopped deliberately, keyed to the scenario that meets each one. */
     evidenceBoundaries?: { key: string; scenarioKey: string; statement: string }[];
+    /** Which account may be spent and which may only be read. Stated before the walk starts. */
+    fixtureDoctrine?: { fixture: string; rule: string; why: string }[];
     navigation: Navigation;
     readiness: Readiness[];
     results: ResultRow[];
@@ -343,8 +345,17 @@ export default function DirectorQaClient() {
                         {tally.pass} / {walkthrough.length} scenarios accepted
                     </p>
                     <p className="mt-1 text-xs text-alloy-midnight/60">
+                        {/*
+                          * ONE WORD, ONE MEANING. This line used to end "Deferred 0 · Not run 70 ·
+                          * Deferred 1": the first is how many scenarios the Director has ANSWERED
+                          * deferred, the second was how many the catalog holds outside the walk.
+                          * Two different facts wearing one label is exactly the confusion this
+                          * packet exists to refuse everywhere else.
+                          */}
                         Passed {tally.pass} · Failed {tally.fail} · Blocked {tally.blocked} · Deferred {tally.deferred} · Not run {tally.not_run}
-                        {" · "}Deferred {(data.scenarios.length - walkthrough.length)}
+                        {data.scenarios.length - walkthrough.length > 0
+                            ? ` · ${data.scenarios.length - walkthrough.length} not in this walk`
+                            : ""}
                     </p>
                 </Panel>
 
@@ -474,6 +485,27 @@ export default function DirectorQaClient() {
                         confused tester and a worthless record, not a finding.
                     </p>
                 </Callout>
+            ) : null}
+
+            {/*
+              * WHICH ACCOUNT YOU MAY SPEND, before you touch one.
+              *
+              * This used to live only in a markdown packet — somewhere the person walking the
+              * product was not looking. One of these fixtures IS a certification, and the cost of
+              * learning that late is destroying evidence that cannot be re-created.
+              */}
+            {(data?.fixtureDoctrine ?? []).length ? (
+                <Panel title="Which account you may spend" testId="fixture-doctrine">
+                    <ul className="space-y-2" data-qa-fixture-doctrine>
+                        {(data?.fixtureDoctrine ?? []).map((f) => (
+                            <li key={f.fixture} data-qa-fixture={f.fixture}>
+                                <p className="text-sm font-medium text-alloy-midnight">{f.fixture}</p>
+                                <p className="text-sm text-alloy-midnight/80">{f.rule}</p>
+                                <p className="mt-0.5 text-[11px] leading-relaxed text-alloy-midnight/55">{f.why}</p>
+                            </li>
+                        ))}
+                    </ul>
+                </Panel>
             ) : null}
 
             <Panel title="Verified starting state" testId="starting-state">
@@ -611,15 +643,28 @@ function Callout({ tone, children, testId }: { tone: "warn"; children: React.Rea
 function BackBar({ onBack }: { onBack: () => void }) {
     return <button type="button" onClick={onBack} className="text-xs text-alloy-midnight/60 underline" data-qa-back="true">← Director QA</button>;
 }
+/**
+ * BEND PINE, NOT MIDNIGHT.
+ *
+ * Measured on the deployed surface: PASS rendered `rgb(24, 39, 58)`. Every other primary the
+ * Director meets while walking Financials — Take payment, Apply a held deposit, Set up Autopay,
+ * Authorize and save — is Bend Pine, so the one button that records their acceptance was the odd
+ * one out, and the QA surface is supposed to feel like the product it is judging.
+ *
+ * The `data-testid` also lives here now. It was passed as `data-qa-action`, which meant every
+ * selector written against `[data-testid="record-pass"]` matched nothing and a test asserting the
+ * controls exist could only ever have passed by reading their text.
+ */
 function Primary({ children, onClick, disabled, testId }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; testId?: string }) {
     return (
-        <button type="button" onClick={onClick} disabled={disabled} data-qa-action={testId}
-            className="rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">{children}</button>
+        <button type="button" onClick={onClick} disabled={disabled} data-qa-action={testId} data-testid={testId}
+            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40">{children}</button>
     );
 }
 function Secondary({ children, onClick, disabled, testId }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; testId?: string }) {
     return (
         <button type="button" onClick={onClick} disabled={disabled} data-qa-action={testId}
+            data-testid={testId}
             className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-sm text-alloy-midnight disabled:opacity-40">{children}</button>
     );
 }

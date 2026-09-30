@@ -2410,6 +2410,37 @@ export const NO_AUTOMATIC_PASS =
     + "to expect; it does not answer for you.";
 
 /**
+ * WHICH ACCOUNT A DIRECTOR MAY SPEND, AND WHICH THEY MAY ONLY READ.
+ *
+ * This lived in the W7 markdown, which means it lived somewhere the person walking the product was
+ * not looking. A fixture rule that is only in a document is a rule that gets broken by someone
+ * being helpful — and the two fixtures here are not interchangeable: one of them IS the evidence.
+ *
+ * Stated on the surface, above the walk, because the cost of learning it late is destroying a
+ * certification that cannot be re-created.
+ */
+export const FIXTURE_DOCTRINE: readonly { fixture: string; rule: string; why: string }[] = Object.freeze([
+    {
+        fixture: "Certhouse",
+        rule: "READ ONLY, unless a scenario explicitly says otherwise.",
+        why:
+            "Its W5 Autopay history is genuine human-authorized consent and real unattended Stripe TEST collections — it does not merely demonstrate the certification, it IS the certification. Re-creating it to see it again would destroy what it is evidence of.",
+    },
+    {
+        fixture: "Certopp",
+        rule: "Its Deposit, Available prepaid and payer-bank history is preserved. The bank method is READ ONLY.",
+        why:
+            "The bank account on it was authorized by a real payer through the real flow, with a real mandate. A second one proves nothing new and costs the one that exists. The deposit and prepaid position is what several scenarios read their starting figures from.",
+    },
+    {
+        fixture: "A disposable household you create",
+        rule: "Anything destructive, anything repeatable, and anything that would spoil the two above.",
+        why:
+            "Create it, spend it, abandon it. A scenario that needs to be run twice needs somewhere it can be run twice.",
+    },
+]);
+
+/**
  * THE EVIDENCE BOUNDARIES THIS PACKET CARRIES INTO HUMAN QA.
  *
  * Each is a place where engineering stopped deliberately and said so, rather than a gap discovered
