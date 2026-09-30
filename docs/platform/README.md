@@ -47,6 +47,7 @@ them, so a reader (or an agent) can reach a specific authority without already k
 ### `core/`
 
 - [`core/commercial-execution-simulator-deltas.md`](./core/commercial-execution-simulator-deltas.md) — Commercial Execution Simulator — expected deltas vs Substrate A
+- [`core/effective-dated-assignment-doctrine.md`](./core/effective-dated-assignment-doctrine.md) — Effective-dated assignment doctrine — truth intervals, supersession, cancellation, correction
 
 ### `experience/`
 
