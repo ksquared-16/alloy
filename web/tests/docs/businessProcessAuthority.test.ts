@@ -186,35 +186,57 @@ describe("BP authority — guard 5: unimplemented stage-condition vocabulary is 
     });
 });
 
-describe("BP authority — guard 6: the D-BP1 bypass is not declared resolved before it converges", () => {
-    const SENDERS = [
-        "web/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel.tsx",
-        "web/components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx",
-    ];
+describe("BP authority — guard 6: the lifecycle bypass is closed and stays closed", () => {
+    const ROUTE = "web/app/api/admin/opportunities/[id]/route.ts";
+    const CANONICAL = "web/lib/admin/enrollmentStatus/executeEnrollmentStatusTransition.ts";
 
-    /** A sender still participates in the bypass while it puts status_key on the wire. */
-    const stillBypassing = () =>
-        SENDERS.filter((rel) => existsSync(path.join(repoRoot, rel)) && /status_key/.test(read(rel)));
+    /*
+     * This guard used to be conditional — "while any sender remains, the debt must be documented" —
+     * and its predicate read `/status_key/` in the sender files. That matched the rewired panel's own
+     * explanatory COMMENT, so it reported an open bypass after the bypass had closed. The lesson keeps
+     * recurring: a literal scan of a sender is the wrong instrument. The durable fact is the ROUTE's
+     * authority, so that is what these assert.
+     */
+    it("the record route does not accept governed lifecycle fields", () => {
+        const route = read(ROUTE);
+        const allowList = route.slice(route.indexOf("ALLOWED_KEYS"), route.indexOf("PIPELINE_ONLY_KEYS"));
+        expect(allowList).not.toMatch(/"status_key"/);
+        expect(allowList).not.toMatch(/"close_reason_key"/);
+        expect(route).toMatch(/GOVERNED_LIFECYCLE_KEYS/);
+        expect(route).toMatch(/canonical_transition_required/);
+    });
 
-    it("while any sender remains, the debt is documented and not claimed closed", () => {
-        if (stillBypassing().length === 0) return; // converged: the marker may be retired
+    it("the record route performs no transition work at all", () => {
+        // Not merely guarded: the completion gate, reconciliation and status emission are gone.
+        const route = read(ROUTE);
+        expect(route).not.toMatch(/StageTransitionReconciliation/);
+        expect(route).not.toMatch(/emitStatusChangedEvent/);
+        expect(route).not.toMatch(/enforceOpportunityCompletionOnStatusTransition/);
+    });
+
+    it("canonical execution owns reconciliation AND the transition gate", () => {
+        const canonical = read(CANONICAL);
+        expect(canonical).toMatch(/preflightStageTransitionReconciliation/);
+        expect(canonical).toMatch(/applyStageTransitionReconciliation/);
+        expect(canonical).toMatch(/validateStatusTransition/);
+    });
+
+    it("no second transition validator appears", () => {
+        // One invariant owner. A second implementation drifts, and whichever a path calls becomes policy.
+        expect(read(CANONICAL)).not.toMatch(/from\("status_transition_rules"\)/);
+    });
+
+    it("the dead record-action lifecycle sender stays deleted", () => {
+        expect(existsSync(path.join(repoRoot, "web/lib/recordChrome/executeOpportunityRecordAction.ts"))).toBe(false);
+    });
+
+    it("documentation states the closure rather than the old debt", () => {
         const bp = read("docs/platform/core/business-process-system.md");
-        expect(bp).toMatch(/Direct status PATCH/i);
-        expect(bp).toMatch(/implementation\s+debt/i);
-        expect(bp).not.toMatch(/bypass (is|has been) (resolved|closed|removed|converged)/i);
-    });
-
-    it("while any sender remains, no doc claims outcome execution is the ONLY status writer", () => {
-        if (stillBypassing().length === 0) return;
-        const claim = /outcome execution is the only writer(?![^.\n]*full process semantics)/i;
-        for (const rel of currentDoctrineDocs()) {
-            expect(claim.test(read(rel)), `${rel} claims outcome execution is the only writer`).toBe(false);
-        }
-    });
-
-    it("the transition gate is not described as universal while known paths bypass it", () => {
+        expect(bp).toMatch(/not writable through the record route/i);
+        expect(bp).not.toMatch(/active implementation\s+debt/i);
         const status = read("docs/platform/core/status-and-state-system.md");
-        expect(status).toMatch(/not yet universal/i);
-        expect(status).toMatch(/Bypasses today/i);
+        expect(status).toMatch(/One transition-policy gate/);
+        expect(status).not.toMatch(/not yet universal/i);
     });
 });
+
