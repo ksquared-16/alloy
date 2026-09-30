@@ -1,21 +1,21 @@
 {
-  "trusted_host_action_id": "tha_9b5283939ea26a",
+  "trusted_host_action_id": "tha_b92d2c0f9fc41e",
   "query_hash": "53a0e98bc367c68b4322ba27916aa6028e855e537921a1aaf4c2748962ec46d3",
   "status": "executed",
   "execution": {
     "executed": true,
-    "executed_at": "2026-09-30T11:18:28.467Z",
+    "executed_at": "2026-09-30T14:12:48.180Z",
     "executed_by": "trusted_host_action",
-    "trusted_host_action_id": "tha_9b5283939ea26a",
+    "trusted_host_action_id": "tha_b92d2c0f9fc41e",
     "query_hash": "53a0e98bc367c68b4322ba27916aa6028e855e537921a1aaf4c2748962ec46d3",
-    "authorization_id": "grnt_ff5310343fb443d4",
+    "authorization_id": "grnt_431561de8f7f4c46",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4",
     "blocker": null
   },
   "results": {
     "format": "q15_labeled_rows",
-    "census_run_at": "2026-09-30T11:18:35.300Z",
+    "census_run_at": "2026-09-30T14:12:54.571Z",
     "question_ids": [
       "a_rls",
       "b_grants",
@@ -33,9 +33,7 @@
         "row_count": null,
         "rows": [
           "public_base_tables ~ total ~ 321",
-          "public_base_tables ~ rls_enabled ~ 319",
-          "rls_disabled ~ table ~ commercial_policy_exceptions",
-          "rls_disabled ~ table ~ payment_provider_disputes"
+          "public_base_tables ~ rls_enabled ~ 321"
         ]
       },
       "b_grants": {
@@ -311,12 +309,12 @@
         "question_id": "c_policy",
         "row_count": null,
         "rows": [
-          "policies ~ total_public ~ 832",
-          "policies ~ write_capable_tables ~ 250",
+          "policies ~ total_public ~ 834",
+          "policies ~ write_capable_tables ~ 252",
           "write_policy_shape ~ current_org_id ~ 41",
           "write_policy_shape ~ has_org_role ~ 211",
           "write_policy_shape ~ other ~ 142",
-          "write_policy_shape ~ service_role_only ~ 86",
+          "write_policy_shape ~ service_role_only ~ 88",
           "write_policy_shape ~ user_roles_handrolled ~ 88",
           "untenanted_app_users_write_policy ~ total ~ 0",
           "authenticated_write_grant_no_write_policy ~ tables ~ 55"
@@ -335,8 +333,8 @@
         "question_id": "f_ppd",
         "row_count": null,
         "rows": [
-          "payment_provider_disputes ~ rls_enabled ~ false",
-          "payment_provider_disputes ~ policies ~ 0",
+          "payment_provider_disputes ~ rls_enabled ~ true",
+          "payment_provider_disputes ~ policies ~ 1",
           "payment_provider_disputes ~ authenticated ~ select",
           "payment_provider_disputes ~ postgres ~ delete,insert,references,select,trigger,truncate,update",
           "payment_provider_disputes ~ service_role ~ delete,insert,references,select,trigger,truncate,update",
@@ -393,26 +391,13 @@
         "row_count": null,
         "rows": [
           "functions ~ security_definer_public ~ 81",
-          "functions ~ authenticated_execute_public ~ 380",
-          "mutating_rpc ~ apply_held_funds_atomic ~ secdef=false :: volatile=v :: args=p_org_id uuid, p_hold_id uuid, p_charge_id uuid, p_amount_cents bigint, p_actor uuid DEFAULT NULL::uuid, p_notes text DEFAULT NULL::text :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ execute_enrollment_status_mutation ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_ocm_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ execute_lead_status_mutation ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_opportunity_id uuid, p_new_status_key text, p_operator_id text, p_origin text, p_context_payload jsonb :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ execute_processing_identity_group ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_actor text, p_idempotency_key text, p_operations jsonb :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ grant_operational_authority_assignment ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_authority_key text, p_holder_type text, p_holder_id text, p_scope_type text, p_scope_id text, p_effective_start timestamp with time zone, p_effective_end timestamp with time zone, p_actor uuid :: mentions_org=true :: mentions_auth_uid=false",
+          "functions ~ authenticated_execute_public ~ 367",
           "mutating_rpc ~ handle_new_user ~ secdef=false :: volatile=v :: args= :: mentions_org=false :: mentions_auth_uid=false",
-          "mutating_rpc ~ insert_enrollment_participation_and_maintain_facts ~ secdef=false :: volatile=v :: args=p_org_id uuid, p_row jsonb, p_ignore_duplicates boolean DEFAULT false :: mentions_org=true :: mentions_auth_uid=false",
           "mutating_rpc ~ post_ledger_transaction ~ secdef=true :: volatile=v :: args=p_ledger_tx_id uuid :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ record_child_attendance_event ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_fact jsonb :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ revoke_operational_authority_assignment ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_assignment_id uuid, p_actor uuid :: mentions_org=true :: mentions_auth_uid=false",
           "mutating_rpc ~ seed_assignment_weekday_intervals ~ secdef=false :: volatile=v :: args= :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ seed_default_role_definitions ~ secdef=true :: volatile=v :: args=p_org_id uuid :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ set_assignment_weekday_intervals ~ secdef=false :: volatile=v :: args=p_assignment_id uuid, p_days jsonb, p_actor uuid DEFAULT NULL::uuid :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ staff_coverage_plan ~ secdef=false :: volatile=v :: args=p_org_id uuid, p_employment_id uuid, p_service_date date, p_start_time time without time zone, p_end_time time without time zone, p_site_location_id uuid, p_room_location_id uuid DEFAULT NULL::uuid, p_reason_key text DEFAULT NULL::text, p_note text DEFAULT NULL::text, p_source_key text DEFAULT 'operator'::text, p_actor uuid DEFAULT NULL::uuid :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ staff_coverage_supersede ~ secdef=false :: volatile=v :: args=p_coverage_id uuid, p_transition text, p_service_date date DEFAULT NULL::date, p_start_time time without time zone DEFAULT NULL::time without time zone, p_end_time time without time zone DEFAULT NULL::time without time zone, p_site_location_id uuid DEFAULT NULL::uuid, p_room_location_id uuid DEFAULT NULL::uuid, p_room_explicit boolean DEFAULT false, p_reason_key text DEFAULT NULL::text, p_note text DEFAULT NULL::text, p_actor uuid DEFAULT NULL::uuid :: mentions_org=true :: mentions_auth_uid=false",
           "mutating_rpc ~ trg_jobs_assign_pricing_tier ~ secdef=false :: volatile=v :: args= :: mentions_org=false :: mentions_auth_uid=false",
           "mutating_rpc ~ trg_jobs_increment_completed_counter ~ secdef=false :: volatile=v :: args= :: mentions_org=false :: mentions_auth_uid=false",
-          "mutating_rpc ~ upsert_operational_authority ~ secdef=true :: volatile=v :: args=p_org_id uuid, p_authority_key text, p_label text, p_description text, p_kind text, p_is_active boolean, p_actor uuid :: mentions_org=true :: mentions_auth_uid=false",
-          "mutating_rpc ~ authenticated_executable_total ~ 18",
+          "mutating_rpc ~ authenticated_executable_total ~ 5",
           "effective_capability_keys ~ exists ~ true",
           "policies ~ referencing_effective_capability_keys ~ 0"
         ]
@@ -449,10 +434,10 @@
         "row_count": null,
         "rows": [
           "schema_migrations ~ max_version ~ 20261106120000",
-          "schema_migrations ~ applied_total ~ 500"
+          "schema_migrations ~ applied_total ~ 502"
         ]
       }
     },
-    "row_count": 370
+    "row_count": 355
   }
 }
