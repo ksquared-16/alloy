@@ -21,13 +21,31 @@ contains several generations of design history, and most of it is not current tr
 | **Domains certified** | Developer Platform / API · Runtime · Business Process · **Identity/Access** · **Operations temporal truth** · **Enrollment / Placement** · **Staff / Scheduling** · **Attendance** · **Subsidy** · **Commercial** · **Operational Intelligence** · **Communications** · **Configuration** · **AI/BOS** (Operations: see [`../platform/core/operations-temporal-truth-certification.md`](../platform/core/operations-temporal-truth-certification.md); Attendance: [`../platform/modules/attendance-system.md`](../platform/modules/attendance-system.md)) |
 | **Domains pending** | **Financials / Payments only** — stability gate CLOSED, 0 days quiet; last semantic change `75c1a016c` (2026-09-30), thirteen commits under `web/lib/financials/payments` in the preceding seven days |
 
-**Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into four
-companion documents, which together are the Tier 1 load set:
-[`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current platform model),
-[`alloy-canonical-owner-map.md`](alloy-canonical-owner-map.md) (one concern, one owner, plus the
-staleness contract), [`alloy-inference-contract.md`](alloy-inference-contract.md) (safe and forbidden
-inference) and [`alloy-context-packages.md`](alloy-context-packages.md) (GPT tiers and Vacilando
-ingestion). This manifest remains the per-domain certification record.
+**Foundation synthesis (2026-09-30).** The fourteen certified records are synthesized into three
+companion documents — [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md) (the current
+platform model), [`alloy-canonical-owner-map.md`](alloy-canonical-owner-map.md) (one concern, one
+owner, plus the staleness contract) and
+[`alloy-inference-contract.md`](alloy-inference-contract.md) (safe and forbidden inference). **This
+manifest is both the per-domain certification record and the fourth Tier 1 document**, loaded
+`FETCH_LIVE` because it carries measured counts.
+
+**The Tier 1 load set is exactly five files**, defined authoritatively by
+[`package/alloy-context-package.json`](package/alloy-context-package.json) and published in
+[`package/gpt-project-sources.json`](package/gpt-project-sources.json):
+
+1. [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md)
+2. [`alloy-inference-contract.md`](alloy-inference-contract.md)
+3. [`alloy-canonical-owner-map.md`](alloy-canonical-owner-map.md)
+4. [`alloy-benchmark-context.md`](alloy-benchmark-context.md) — this file
+5. [`../platform/governance/glossary.md`](../platform/governance/glossary.md)
+
+> **Corrected 2026-10-01.** This paragraph previously called four companion documents "the Tier 1
+> load set" and counted [`alloy-context-packages.md`](alloy-context-packages.md) among them, while
+> omitting this manifest and the glossary — so it named a five-file set wrongly in both directions.
+> `alloy-context-packages.md` is the **prose rationale** for the tiering and the Vacilando ingestion
+> classes; it is **not** a Tier 1 GPT project source and is not uploaded. Found while installing
+> `alloy-context.v1` into GPT Project Sources. The package manifests were correct throughout; only
+> this prose disagreed with them.
 
 ### Enrollment / Placement and Staff / Scheduling — context treatment
 
