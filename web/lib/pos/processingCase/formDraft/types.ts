@@ -64,6 +64,19 @@ export interface DraftFormField {
     /** Canonical binding (operator-reviewed or auto-suggested) — persisted to the form. */
     field_source?: import("@/lib/forms/schema").FormFieldSource;
     /**
+     * An ACCEPTED conditional relationship: show this field only when another field holds a value.
+     *
+     * The importer can SEE that "If yes, describe the allergies" follows a yes/no question, but seeing
+     * is not the same as publishing. A detected relationship stays a suggestion until an operator
+     * accepts it, and acceptance is recorded HERE so it survives save, reload, promotion and
+     * publication — `draftFormToFormSchemaV1` turns it into the field's `visibility`, which the
+     * published schema validates and the participant runtime already honours.
+     *
+     * Absent means the field is always shown. Never inferred at publish time: if an operator did not
+     * accept it, the form does not hide anything.
+     */
+    visible_when?: import("@/lib/forms/schema").FormVisibilityCondition;
+    /**
      * Set when this flat question was REPLACED by a collection group (POS-FP17 projection): the id of
      * the `DraftCollectionGroup` that now collects it. Suppressed questions are excluded from
      * participant execution (they never reach the generated form) but are RETAINED on the draft as

@@ -45,7 +45,9 @@ export const formSignatureConfigSchema = z
     })
     .strict();
 
-type FormVisibility = z.infer<typeof formVisibilitySchema>;
+/* Exported because the import draft now records an ACCEPTED condition and converts it to this shape. */
+export type FormVisibilityCondition = z.infer<typeof formVisibilityConditionSchema>;
+export type FormVisibility = z.infer<typeof formVisibilitySchema>;
 type FormValidateRules = z.infer<typeof formValidateRulesSchema>;
 type FormRepeatRules = z.infer<typeof formRepeatRulesSchema>;
 type FormSignatureConfig = z.infer<typeof formSignatureConfigSchema>;
