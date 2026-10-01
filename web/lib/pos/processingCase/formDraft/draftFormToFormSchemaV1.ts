@@ -40,6 +40,12 @@ function mapDraftField(f: DraftFormField): FormField {
         // Source-declared validation travels onto the published field. `formValidateRulesSchema` is
         // the existing owner; nothing new is invented here.
         ...(f.validate && Object.keys(f.validate).length ? { validate: f.validate } : {}),
+        /*
+         * An accepted conditional relationship becomes real visibility. Only an ACCEPTED one — the
+         * importer's detection lives on the review surface and never reaches here, so a form cannot
+         * hide a question nobody agreed to hide.
+         */
+        ...(f.visible_when ? { visibility: { all: [f.visible_when] as [typeof f.visible_when] } } : {}),
     };
     switch (f.type) {
         case "number":

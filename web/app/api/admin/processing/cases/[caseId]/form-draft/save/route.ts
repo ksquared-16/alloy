@@ -67,6 +67,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 bbox,
                 evidence: typeof f.evidence === "string" ? f.evidence : undefined,
                 ...(field_source ? { field_source } : {}),
+                /*
+                 * An accepted conditional relationship. Validated rather than trusted: a client may
+                 * only name a field, an operator, and a literal — anything else is ignored, so a
+                 * posted condition cannot smuggle in a shape the published schema would reject.
+                 */
+                ...(() => {
+                    const vw = (f as { visible_when?: unknown }).visible_when as
+                        | { field_id?: unknown; op?: unknown; value?: unknown }
+                        | undefined;
+                    const fieldId = typeof vw?.field_id === "string" ? vw.field_id.trim() : "";
+                    const op: "eq" | "neq" | null = vw?.op === "eq" ? "eq" : vw?.op === "neq" ? "neq" : null;
+                    const value = vw?.value;
+                    if (!fieldId || !op) return {};
+                    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+                        return { visible_when: { field_id: fieldId, op, value } };
+                    }
+                    return {};
+                })(),
             };
         })
         .filter((f) => f.label.trim().length > 0);

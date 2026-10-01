@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ProcessingAlloyDialog from "./ProcessingAlloyDialog";
 import {
-    PROCESSING_IMPORT_INTENT_OPTIONS,
+    OFFERED_PROCESSING_IMPORT_INTENTS,
     type ProcessingImportIntent,
     processingIntentMetadata,
 } from "@/lib/pos/processingImportIntent";
@@ -156,7 +156,7 @@ export default function ProcessingImportIntentModal({
                 />
 
                 <div className="space-y-2">
-                    {PROCESSING_IMPORT_INTENT_OPTIONS.map((opt) => (
+                    {OFFERED_PROCESSING_IMPORT_INTENTS.map((opt) => (
                         <label
                             key={opt.value}
                             className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors ${

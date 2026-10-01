@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from "react";
 
-import { buildOperatorFormView, type FormViewItem, type FormViewQuestion, type MappingState } from "@/lib/pos/formDraft/buildOperatorFormView";
+import {
+    buildOperatorFormView,
+    type FormViewAddress,
+    type FormViewItem,
+    type FormViewQuestion,
+    type MappingState,
+} from "@/lib/pos/formDraft/buildOperatorFormView";
+import { mappingChoicesFor, type MappingChoice } from "@/lib/pos/formDraft/buildMappingChangePayload";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 
 /**
@@ -25,6 +32,47 @@ const BADGE: Record<MappingState, { readonly text: string; readonly className: s
     form_only: { text: "○ Kept with the form", className: "bg-alloy-midnight/[0.05] text-alloy-midnight/55" },
     derived: { text: "↗ Alloy fills this in", className: "bg-alloy-midnight/[0.05] text-alloy-midnight/55" },
 };
+
+/**
+ * "Whose answer is this?" — answered here, in the form.
+ *
+ * The decision an operator has to make is short, so the control is short: four business choices, no
+ * dropdown of canonical fields, and no trip to a separate decision queue. Saving posts the WHOLE draft
+ * through the canonical save route, so answering one question cannot drop the others.
+ */
+function MappingChooser({
+    fieldId,
+    answerShape,
+    onChoose,
+}: {
+    fieldId: string;
+    answerShape: string;
+    onChoose: (fieldId: string, choice: MappingChoice) => Promise<void> | void;
+}) {
+    const [busy, setBusy] = useState<string | null>(null);
+    return (
+        <div className="mt-2 flex flex-wrap gap-1.5" data-qa-mapping-chooser={fieldId}>
+            {mappingChoicesFor(answerShape).map((choice) => (
+                <button
+                    key={choice.id}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={async () => {
+                        setBusy(choice.id);
+                        try {
+                            await onChoose(fieldId, choice);
+                        } finally {
+                            setBusy(null);
+                        }
+                    }}
+                    className="min-h-[32px] rounded-full border border-alloy-ember/35 bg-white px-3 text-[12px] font-medium text-alloy-midnight/80 disabled:opacity-50"
+                >
+                    {busy === choice.id ? "Saving…" : choice.label}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 function SourceContext({ question }: { question: FormViewQuestion }) {
     const [open, setOpen] = useState(false);
@@ -49,7 +97,15 @@ function SourceContext({ question }: { question: FormViewQuestion }) {
     );
 }
 
-function Question({ question, nested = false }: { question: FormViewQuestion; nested?: boolean }) {
+function Question({
+    question,
+    nested = false,
+    onChoose,
+}: {
+    question: FormViewQuestion;
+    nested?: boolean;
+    onChoose?: (fieldId: string, choice: MappingChoice) => Promise<void> | void;
+}) {
     const badge = BADGE[question.mapping];
     const redLined = question.mapping === "needs_review";
     return (
@@ -63,7 +119,9 @@ function Question({ question, nested = false }: { question: FormViewQuestion; ne
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="text-[14px] font-medium text-alloy-midnight">{question.label}</span>
                 <span className="text-[11px] text-alloy-midnight/45">{question.answerShape}</span>
-                {question.required ? <span className="text-[11px] text-alloy-midnight/40">required</span> : null}
+                <span className={`text-[11px] ${question.required ? "text-alloy-midnight/60" : "text-alloy-midnight/40"}`}>
+                    {question.requirednessText}
+                </span>
                 <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
                     {badge.text}
                 </span>
@@ -72,20 +130,33 @@ function Question({ question, nested = false }: { question: FormViewQuestion; ne
             {question.options.length ? (
                 <p className="mt-1 text-[12px] text-alloy-midnight/50">Choices: {question.options.join(" · ")}</p>
             ) : null}
+            {question.absenceText ? (
+                <p className="mt-1 text-[12px] text-alloy-bend-pine">{question.absenceText}</p>
+            ) : null}
             {redLined && question.decisionPrompt ? (
-                <p className="mt-2 text-[13px] font-medium text-alloy-ember">{question.decisionPrompt}</p>
+                <>
+                    <p className="mt-2 text-[13px] font-medium text-alloy-ember">{question.decisionPrompt}</p>
+                    {onChoose ? (
+                        <MappingChooser fieldId={question.id} answerShape={question.answerShape} onChoose={onChoose} />
+                    ) : null}
+                </>
             ) : null}
             <SourceContext question={question} />
 
             {question.dependents.length ? (
                 <div className="mt-3 space-y-2">
-                    <p className="text-[12px] font-medium text-alloy-midnight/60">
-                        {question.conditionConfidence === "detected"
-                            ? `✓ Only asked when the answer is ${question.conditionTriggerLabel}`
-                            : `⚠ Looks like it is only asked when the answer is ${question.conditionTriggerLabel} — worth checking`}
-                    </p>
+                    {question.conditionConfidence === "accepted" ? (
+                        <p className="text-[12px] font-medium text-alloy-bend-pine">
+                            ✓ Only asked when the answer is {question.conditionTriggerLabel}
+                        </p>
+                    ) : (
+                        <p className="text-[12px] font-medium text-alloy-ember">
+                            ⚠ Looks like it is only asked when the answer is {question.conditionTriggerLabel}. Until you
+                            accept it, families are asked this either way.
+                        </p>
+                    )}
                     {question.dependents.map((d) => (
-                        <Question key={d.id} question={d} nested />
+                        <Question key={d.id} question={d} nested onChoose={onChoose} />
                     ))}
                 </div>
             ) : null}
@@ -93,7 +164,60 @@ function Question({ question, nested = false }: { question: FormViewQuestion; ne
     );
 }
 
-function Item({ item }: { item: FormViewItem }) {
+function Address({
+    address,
+    onChoose,
+}: {
+    address: FormViewAddress;
+    onChoose?: (fieldId: string, choice: MappingChoice) => Promise<void> | void;
+}) {
+    const badge = BADGE[address.mapping];
+    const redLined = address.mapping === "needs_review";
+    return (
+        <div
+            data-qa-form-address={address.id}
+            data-qa-mapping={address.mapping}
+            className={`rounded-xl border px-3.5 py-3 ${
+                redLined ? "border-alloy-ember/40 bg-alloy-ember/[0.04]" : "border-alloy-midnight/12 bg-white"
+            }`}
+        >
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-[14px] font-medium text-alloy-midnight">{address.label}</span>
+                <span className="text-[11px] text-alloy-midnight/45">Address</span>
+                <span className={`text-[11px] ${address.required ? "text-alloy-midnight/60" : "text-alloy-midnight/40"}`}>
+                    {address.required ? "Required" : "Optional"}
+                </span>
+                <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+                    {badge.text}
+                </span>
+            </div>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-alloy-midnight/65">{address.mappingText}</p>
+            {/* One control, shown as the lines a family fills in — not five separate questions. */}
+            <ul className="mt-2 space-y-1 rounded-lg bg-alloy-midnight/[0.03] px-3 py-2">
+                {address.lines.map((l) => (
+                    <li key={l.id} className="text-[12.5px] text-alloy-midnight/70">
+                        {l.label}
+                    </li>
+                ))}
+            </ul>
+            {redLined && address.decisionPrompt ? (
+                <>
+                    <p className="mt-2 text-[13px] font-medium text-alloy-ember">{address.decisionPrompt}</p>
+                    {onChoose ? <MappingChooser fieldId={address.id} answerShape="Address" onChoose={onChoose} /> : null}
+                </>
+            ) : null}
+        </div>
+    );
+}
+
+function Item({
+    item,
+    onChoose,
+}: {
+    item: FormViewItem;
+    onChoose?: (fieldId: string, choice: MappingChoice) => Promise<void> | void;
+}) {
+    if (item.kind === "address") return <Address address={item} onChoose={onChoose} />;
     if (item.kind === "prose") {
         return (
             <p className="rounded-xl bg-alloy-midnight/[0.03] px-3.5 py-3 text-[13px] leading-relaxed text-alloy-midnight/70">
@@ -117,24 +241,27 @@ function Item({ item }: { item: FormViewItem }) {
                 ) : null}
                 <div className="mt-2 space-y-2">
                     {item.questions.map((q) => (
-                        <Question key={q.id} question={q} nested />
+                        <Question key={q.id} question={q} nested onChoose={onChoose} />
                     ))}
                 </div>
                 <p className="mt-2 text-[12px] text-alloy-midnight/50">+ {item.addLabel}</p>
             </div>
         );
     }
-    return <Question question={item} />;
+    return <Question question={item} onChoose={onChoose} />;
 }
 
 export default function ProcessingFormMappingReview({
     draft,
     sourceDocumentName,
     onOpenAdvanced,
+    onChangeMapping,
 }: {
     draft: StoredFormDraftPreview;
     sourceDocumentName?: string | null;
     onOpenAdvanced: () => void;
+    /** Resolve a destination from inside the form. Absent renders the surface read-only. */
+    onChangeMapping?: (fieldId: string, choice: MappingChoice) => Promise<void> | void;
 }) {
     const view = useMemo(() => buildOperatorFormView(draft, sourceDocumentName ?? null), [draft, sourceDocumentName]);
 
@@ -172,7 +299,7 @@ export default function ProcessingFormMappingReview({
                     </h3>
                     <div className="mt-2 space-y-2">
                         {section.items.map((item, i) => (
-                            <Item key={`${section.id}-${i}`} item={item} />
+                            <Item key={`${section.id}-${i}`} item={item} onChoose={onChangeMapping} />
                         ))}
                     </div>
                 </section>

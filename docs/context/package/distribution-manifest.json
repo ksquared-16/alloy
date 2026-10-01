@@ -11,7 +11,7 @@
     {
       "path": "docs/context/alloy-benchmark-context.md",
       "tier": 1,
-      "blob_sha": "b237f57dca32cd63358a8efec4572ee3f5d9e056",
+      "blob_sha": "4bd869190b2c4a4d88ad0e8698b9f0652c7c9d75",
       "exists": true
     },
     {
@@ -299,55 +299,55 @@
     {
       "path": "docs/context/package/context-resolution.md",
       "tier": "contract",
-      "blob_sha": null,
+      "blob_sha": "926515aca763cd0646720d3061305a27e6aad287",
       "exists": true
     },
     {
       "path": "docs/context/package/documentation-impact-contract.md",
       "tier": "contract",
-      "blob_sha": null,
+      "blob_sha": "1b30f71788ddc30113a9c8f995d763516f573a76",
       "exists": true
     },
     {
       "path": "docs/context/package/gpt-installation.md",
       "tier": "contract",
-      "blob_sha": null,
+      "blob_sha": "0658fc50dbad3272f76199ff425c0b6cca6278c1",
       "exists": true
     },
     {
       "path": "docs/context/package/vacilando-integration-spec.md",
       "tier": "contract",
-      "blob_sha": null,
+      "blob_sha": "8a6a89aa737b78112371e0ac2e5e551eea577632",
       "exists": true
     },
     {
       "path": "docs/context/package/README.md",
       "tier": "contract",
-      "blob_sha": null,
+      "blob_sha": "08b3bee43d50cd85144c874f2e5492ed97e08496",
       "exists": true
     },
     {
       "path": "docs/context/package/alloy-context-package.json",
       "tier": "manifest",
-      "blob_sha": null,
+      "blob_sha": "6a83eee735c1619bcc795d9bf2936c426fac6c33",
       "exists": true
     },
     {
       "path": "docs/context/package/vacilando-lanes.json",
       "tier": "manifest",
-      "blob_sha": null,
+      "blob_sha": "03bc99c45aaac534aa9aae91cb80db125589c127",
       "exists": true
     },
     {
       "path": "docs/context/package/recertification-triggers.json",
       "tier": "manifest",
-      "blob_sha": null,
+      "blob_sha": "3f66a8a1f4bdc19e26f5bb39baa90d9749dca927",
       "exists": true
     },
     {
       "path": "docs/context/package/gpt-project-sources.json",
       "tier": "manifest",
-      "blob_sha": null,
+      "blob_sha": "2a2f0554a3fc2e9fcc97ae5277a3313928d15358",
       "exists": true
     }
   ]
