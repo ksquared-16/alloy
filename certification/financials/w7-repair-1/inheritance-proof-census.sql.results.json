@@ -1,0 +1,77 @@
+{
+  "trusted_host_action_id": "tha_cb299fa142a288",
+  "query_hash": "cf3200e635c6cff32cbe3e21bece51c79f95e63f026a7e8ec50b07ab5fa9ac3b",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T22:05:43.534Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_cb299fa142a288",
+    "query_hash": "cf3200e635c6cff32cbe3e21bece51c79f95e63f026a7e8ec50b07ab5fa9ac3b",
+    "authorization_id": "grnt_aa615ab72ec94ff8",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T22:05:50.013Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "7dce5d42-0a40-4f33-9c2a-d4afa03d6c52",
+            "charge_type": "fee",
+            "status": "posted",
+            "amount_cents": 4000,
+            "service_date": "2026-10-01",
+            "occurs_on": "2026-10-01",
+            "billable_on": "2026-11-01",
+            "due_date": "2026-11-11",
+            "billable_source_type": "customer",
+            "created_at": "2026-10-01T22:03:52.936785+00:00",
+            "created_by_set": true,
+            "source": "charge_template"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "arrangement_id": "e5f7deef-a551-4486-ac0f-7fde959470bf",
+            "state": "active",
+            "charge_id": null,
+            "effective_start": "2026-10-01",
+            "effective_end": null,
+            "created_at": "2026-10-01T22:00:01.394896+00:00"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "arrangement_id": "e5f7deef-a551-4486-ac0f-7fde959470bf",
+            "arrangement_charge_id": null,
+            "arrangement_state": "active",
+            "responsible_party_id": "fb4eb21b-ad0e-446b-bab1-5a426fd1846e",
+            "method": "percentage",
+            "percent_basis_points": 10000,
+            "amount_cents": null
+          }
+        ]
+      }
+    },
+    "row_count": 3
+  }
+}
