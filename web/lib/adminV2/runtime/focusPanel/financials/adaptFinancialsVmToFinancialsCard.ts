@@ -812,6 +812,8 @@ export function adaptAddChargeSpecimen(input: {
         previewAfter: money(input.balanceCents, input.currency),
         /** The gross this charge is raised at, as the domain resolved it. */
         previewGross: resolvedAmount ?? (grossCents != null ? money(grossCents, input.currency) : null),
+        /** The same figure in cents. Zero is an answer; null is the absence of one. */
+        previewGrossCents: grossCents,
         /**
          * What the chosen discount takes off it, already carrying the domain's minus sign, or null
          * when none does. Callers render it as-is; prefixing another sign is the defect above.

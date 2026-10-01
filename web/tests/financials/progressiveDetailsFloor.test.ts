@@ -23,12 +23,13 @@ const FLOOR = () => read("components/operationalCards/FinancialsDetailCard.tsx")
 const pendingBranch = () => {
     const c = CARD();
     const from = c.slice(c.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-    return from.slice(0, from.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+    return from.slice(0, from.indexOf('if (detailFloorWanted && vm && reconciliation)'));
 };
 
 describe("B — the floor mounts on selection, not on truth", () => {
     it("B: the pending branch is reached while the view model is absent", () => {
-        expect(CARD()).toMatch(/if \(overlay === "detail" && detailsAreTheSurface && !\(vm && reconciliation\)/);
+        /* the floor's guard is now `detailFloorWanted` — being the floor is enough, it need not also be the top layer, so a command can render above it without emptying the pane. */
+        expect(CARD()).toMatch(/if \(detailFloorWanted && detailsAreTheSurface && !\(vm && reconciliation\)/);
     });
 
     it("B: and it names the account it belongs to, by canonical id", () => {

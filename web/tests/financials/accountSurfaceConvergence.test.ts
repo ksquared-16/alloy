@@ -2008,7 +2008,10 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
          * must stay singular is the COMPONENT: both states are the same product surface, so they
          * cannot drift into two Details the way the workspace once grew a second ledger.
          */
-        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
+        /* Renamed to `detailFloorWanted` when commands learned to render ABOVE the floor rather
+           than instead of it; counting the old spelling here would have counted zero. */
+        const branches = card.match(/if \(detailFloorWanted[^)]*\)/g) ?? [];
+        expect(branches.length, "both Details branches are still found").toBe(2);
         expect(branches.length, "a pending Details branch and a settled one").toBeLessThanOrEqual(2);
         expect(card, "and both render the canonical surface").toContain("<FinancialsDetailCard");
         for (const forbidden of ["PendingFinancialsDetailCard", "AccountsFinancialsLoadingCard", "FinancialsAccountWorkspaceDetail"]) {
@@ -2019,7 +2022,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
     it("C · unresolved money is reserved, never a zero and never the last account's figure", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the reserved evidence states every figure as an em dash").toContain("hydratingFinancialsEvidence()");
         expect(upto, "and declares itself hydrating so the surface says it is reading").toContain("hydrating");
         expect(upto, "no figure may be composed here at all").not.toMatch(/\$\d|toFixed\(|formatMoney|moneyExact/);
@@ -2033,7 +2036,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
          */
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "ledgerPending holds the region instead of drawing rows").toContain("ledgerPending");
         expect(upto, "and no periods are supplied for it to draw").toMatch(/periods=\{\[\]\}/);
 
@@ -2049,7 +2052,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
     it("F/G · no stale administration truth, and no command bound to an unresolved account", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the relationship row waits rather than restating the last account's").toContain("loading: true");
         for (const live of ["onPayment=", "onAddCharge=", "onPostCharge=", "onReverseCharge=", "onAdjustCharge=", "onApplyPayment=", "onMovePayment=", "onResolveResponsibility=", "onReallocateResponsibility="]) {
             expect(upto, `${live} must not be wired before this account's authority resolves`).not.toContain(live);
@@ -2073,7 +2076,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
             "both branches ask financialsSurfaceRole",
         ).toBeGreaterThanOrEqual(2);
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the pending floor introduces no modal or scrim of its own").not.toMatch(/backdrop|scrim|modalClass/i);
     });
 

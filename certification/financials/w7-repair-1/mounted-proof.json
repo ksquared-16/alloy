@@ -1,0 +1,221 @@
+[
+  {
+    "proof": "add-charge",
+    "target": {
+      "id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "label": "Certopp Family $55.00 4 charges · account-wide fees $55 collectible Outstanding"
+    },
+    "before": {
+      "ledgerRows": 1,
+      "accountRows": 12,
+      "detailAccount": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+      "overlay": "detail",
+      "bodyChars": 4469,
+      "truth": null
+    },
+    "form": {
+      "fields": [
+        "CHARGE TYPEREQUIRED Enrollment fee (waived) ▾ 6 configured types",
+        "APPLIES TOREQUIRED Household ▾ Household · one charge for the account",
+        "AMOUNT $0.00",
+        "NOTE",
+        "SERVICE DATE Oct 1, 2026",
+        "BILLING PERIOD Oct 1, 2026",
+        "DUE Configured policy"
+      ],
+      "hasAmount": false,
+      "hasNote": true,
+      "serviceDateEditable": false,
+      "serviceDateControl": null,
+      "nativeDateInputs": 0,
+      "chargeTo": null,
+      "submitDisabled": false
+    },
+    "preview": {
+      "responsibility": null,
+      "standing": null,
+      "discount": null,
+      "net": null,
+      "consequence": "ON CONFIRM",
+      "chargeTo": null,
+      "error": null
+    }
+  },
+  {
+    "proof": "post-write",
+    "timeline": [
+      {
+        "at": 2,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 4,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 6,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 8,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 10,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 12,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 14,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 16,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 18,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 20,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 22,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 24,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 26,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 28,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      },
+      {
+        "at": 30,
+        "ledgerRows": 0,
+        "accountRows": 12,
+        "detailAccount": null,
+        "overlay": "add_charge",
+        "bodyChars": 3178,
+        "truth": null
+      }
+    ],
+    "after": {
+      "ledgerRows": 0,
+      "accountRows": 12,
+      "detailAccount": null,
+      "overlay": "add_charge",
+      "bodyChars": 3178,
+      "truth": null
+    },
+    "errors": [
+      "Failed to load resource: the server responded with a status of 409 ()"
+    ],
+    "failed": [
+      "409 /api/admin/actions/execute"
+    ]
+  },
+  {
+    "proof": "discounts-focus-panel",
+    "reachable": false,
+    "diagnostic": {
+      "attrs": [
+        "data-financials-card=true",
+        "data-financials-subject=46105cd4-6030-417d-a7cb-",
+        "data-financials-reserved=true",
+        "data-financials-empty=loading",
+        "data-financials-card-skeleton=true"
+      ],
+      "url": "/workspace/work-unit/enrolled-children"
+    }
+  },
+  {
+    "proof": "discounts-accounts",
+    "present": true,
+    "state": null,
+    "childRows": 2,
+    "policies": 0,
+    "bodyLen": 260,
+    "body": "DISCOUNTS CC Certa Certhouse Sibling discount (QA specimen) · 10% Expected $18.50 · 10% of $185.00 Waive discount → Add discount → CC Certb Certhouse Sibling discount (QA specimen) · 10% Expected $145.00 · 10% of $1,450."
+  }
+]

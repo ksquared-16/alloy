@@ -190,7 +190,8 @@ describe("A/B/K — the host participates, and F44 is untouched", () => {
          */
         const card = executable(read("components/admin/focusPanel/cards/FinancialsCard.tsx"));
         expect(card, "the floor mounts without the view model").toMatch(
-            /if \(overlay === "detail" && detailsAreTheSurface && !\(vm && reconciliation\)/,
+            /* the floor's guard is now `detailFloorWanted` — being the floor is enough, it need not also be the top layer, so a command can render above it without emptying the pane. */
+            /if \(detailFloorWanted && detailsAreTheSurface && !\(vm && reconciliation\)/,
         );
         expect(card, "and read-ahead is KEPT, not replaced").toContain("await readFinancialsCardVm(query)");
         expect(card, "one canonical surface in both states").not.toContain("PendingFinancialsDetailCard");
