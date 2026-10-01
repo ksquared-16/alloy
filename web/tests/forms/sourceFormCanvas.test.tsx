@@ -134,7 +134,15 @@ describe("mapping is drawn on the field, not in a list beside it", () => {
     });
 
     it("offers the fix on the unmapped field itself", () => {
-        expect(render()).toContain('data-qa-map-it="describe"');
+        const html = render();
+        expect(html).toContain('data-qa-map-it="describe"');
+        expect(html).toContain("Map it");
+    });
+
+    it("lets the operator change a mapping Alloy was confident about", () => {
+        const html = render();
+        expect(html).toContain('data-qa-map-it="name"');
+        expect(html).toContain("Change");
     });
 
     it("offers no inline fix when the surface is read-only", () => {

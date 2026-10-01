@@ -294,14 +294,21 @@ function QuestionRow({
             <Control control={question.control} options={question.options} />
             <div className="mt-1 flex flex-wrap items-center gap-2">
                 <Badge state={question.mapping} detail={question.mappingText} />
-                {question.mapping === "needs_review" && editable ? (
+                {editable && question.mapping !== "derived" ? (
+                    /*
+                     * Reachable on every field, not only the red ones. A destination Alloy was confident
+                     * about can still be the wrong one, and an operator who can see that but not change
+                     * it has been shown a problem instead of given a fix.
+                     */
                     <button
                         type="button"
                         onClick={() => setOpen((v) => !v)}
                         data-qa-map-it={question.id}
-                        className="text-[11px] font-medium text-alloy-ember underline underline-offset-2"
+                        className={`text-[11px] font-medium underline underline-offset-2 ${
+                            question.mapping === "needs_review" ? "text-alloy-ember" : "text-alloy-midnight/50"
+                        }`}
                     >
-                        {open ? "Cancel" : "Map it"}
+                        {open ? "Cancel" : question.mapping === "needs_review" ? "Map it" : "Change"}
                     </button>
                 ) : null}
                 {question.source.excerpt || question.source.page != null ? (
