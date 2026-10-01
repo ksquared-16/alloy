@@ -11,6 +11,8 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { implementedOperations } from "../support/publicSurfaceInventory";
+
 import { apiReference } from "@/lib/developerDocs/openApiReference";
 
 const WEB = resolve(__dirname, "../..");
@@ -19,27 +21,9 @@ const byId = (id: string) => reference.operations.find((o) => o.id === id)!;
 
 describe("the reference is exactly the implemented surface", () => {
     it("every implemented operation, named", () => {
-        expect(reference.operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual([
-            "GET /api/v1/attendance-events",
-            "GET /api/v1/children",
-            "GET /api/v1/context",
-            "GET /api/v1/enrollments",
-            "GET /api/v1/households",
-            "GET /api/v1/locations",
-            "GET /api/v1/placements",
-            "GET /api/v1/relationships",
-            "GET /api/v1/schedule-assignments",
-            "GET /api/v1/schedule-days",
-            "GET /api/v1/staff",
-            "POST /api/v1/attendance-events",
-            "POST /api/v1/enrollments",
-            "POST /api/v1/enrollments/end",
-            "POST /api/v1/oauth/token",
-            "POST /api/v1/placements",
-            "POST /api/v1/placements/move",
-            "POST /api/v1/schedule-assignments",
-            "POST /api/v1/schedule-assignments/change",
-        ]);
+        // Derived from the route files, not restated here: a list in a test is a second source of
+        // truth, and this one spent a release asserting a surface that had already been replaced.
+        expect(reference.operations.map((o) => `${o.method} ${o.path}`).sort()).toEqual(implementedOperations());
     });
 
     it("attendance is represented as a read and a fact submission, and nothing else", () => {
@@ -113,7 +97,7 @@ describe("examples are derived from the schema, never invented", () => {
                 .match(/export const GOVERNED_OPENAPI_DOCUMENT: string = ("[\s\S]*");/)![1]
                 .replace(/^"/, '"'),
         ) as string;
-        const document = JSON.parse(spec) as { components: { schemas: Record<string, unknown> } };
+        const document = JSON.parse(spec) as Record<string, unknown>;
         const declared = new Set<string>();
         const walk = (node: unknown) => {
             if (!node || typeof node !== "object") return;
@@ -123,7 +107,15 @@ describe("examples are derived from the schema, never invented", () => {
             }
             for (const value of Object.values(record)) walk(value);
         };
-        walk(document.components.schemas);
+        /*
+         * The WHOLE document, not just `components.schemas`.
+         *
+         * A request body may declare its schema inline, and three lifecycle operations do. Walking
+         * only the component schemas made `cancelPlacement`'s `placement_id` look invented when the
+         * contract declares it one level away — the only name on the surface declared inline and
+         * nowhere else, which is why exactly one operation failed and the rule looked sound.
+         */
+        walk(document);
 
         for (const operation of reference.operations) {
             for (const example of [operation.requestBody?.example, operation.successExample]) {

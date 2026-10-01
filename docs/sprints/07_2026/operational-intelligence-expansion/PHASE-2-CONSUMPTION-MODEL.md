@@ -49,7 +49,7 @@ Phase 2 is the **consumption roadmap**: who presents answers, at what depth, and
 
 Related (do not reopen):
 
-- [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)
+- [`docs/platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`](../../../platform/milestones/Operational-Intelligence-Platform-V1-Certified.md)
 - `docs/platform/modules/operational-intelligence-platform.md`
 - `docs/sprints/07_2026/operational-calculations-product-realization/UNIFIED-OPERATIONAL-INTELLIGENCE-PLATFORM.md`
 - `docs/sprints/07_2026/operational-intelligence-expansion/SCOPE.md`

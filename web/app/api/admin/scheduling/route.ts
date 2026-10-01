@@ -5,6 +5,8 @@ import {
     setAssignmentTime,
 } from "@/lib/assignmentTime/setAssignmentTime";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { SCHEDULING_WRITE, requireSchedulingJobsCapability } from "@/lib/access/schedulingJobsAuthority";
+import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import {
@@ -680,6 +682,33 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    /*
+     * TWO AUTHORITIES, BECAUSE THIS HANDLER CHANGES TWO KINDS OF TRUTH.
+     *
+     * It enforced only an authenticated session with org membership, so any portal member could reach
+     * both paths. Fixing that with one key would have been the obvious move and the wrong one:
+     * `schedulingJobsAuthority` states the rule as "authority follows the business consequence rather
+     * than the URL folder", and `assignments-authority-model-debt.md` rules specifically that
+     * `scheduling.write` does NOT own the child-agreement scheduling that `schedule_assignments`
+     * carries.
+     *
+     * So each branch is gated by the authority whose truth it changes:
+     *   - the proposed/participation branch edits a child's enrollment participation through the same
+     *     `applyChildParticipationEdit` that `admin/child-participation` POST calls, and takes that
+     *     route's key, `enrollment.record.manage`;
+     *   - the `schedule.create` branch creates a visit in `schedules`, which is what
+     *     `admin/schedules` POST already governs with `scheduling.write`.
+     *
+     * A caller must hold at least one of them to get past admission, so neither branch is reachable
+     * by portal membership alone.
+     */
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const mayEditParticipation = !requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE);
+    const mayCreateSchedule = !requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE);
+    if (!mayEditParticipation && !mayCreateSchedule) {
+        return requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE)!;
+    }
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const customerMemberId = String(body.customer_member_id ?? "").trim();
@@ -716,6 +745,9 @@ export async function POST(request: NextRequest) {
             const weekdays = Array.isArray(body.weekdays)
                 ? (body.weekdays as unknown[]).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
                 : null;
+            if (!mayEditParticipation) {
+                return requireEnrollmentCapability(access, ENROLLMENT_RECORD_MANAGE)!;
+            }
             const edit = await applyChildParticipationEdit(supabase, {
                 orgId: ctx.orgId,
                 customerMemberId,
@@ -759,6 +791,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: validated.blockers[0]?.message ?? "invalid payload", blockers: validated.blockers }, { status: 400 });
     }
 
+    if (!mayCreateSchedule) {
+        return requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE)!;
+    }
     const action = getRegisteredAction("schedule.create");
     if (!action) {
         return NextResponse.json({ error: "schedule.create is not registered", code: "server_error" }, { status: 500 });

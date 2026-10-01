@@ -8,7 +8,7 @@ This is a **stabilization** record, not an architecture sprint. Enrollment is th
 process proving the generic runtime; the work here makes operator surfaces agree after record create.
 
 Canonical runtime reference (updated in same closeout):
-[`docs/platform/runtime/enrollment-process-runtime.md`](../platform/runtime/enrollment-process-runtime.md)
+[`docs/platform/runtime/enrollment-process-runtime.md`](../../platform/runtime/enrollment-process-runtime.md)
 — see **Process Runtime V1 — operator surface convergence**.
 
 ---

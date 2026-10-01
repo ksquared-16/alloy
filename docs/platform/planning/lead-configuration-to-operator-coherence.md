@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-03
+supersedes: []
+---
+
 # Lead — Configuration → Runtime → Operator Coherence
 
 **The sprint's question:** configure *"Contact Family → Left Message → follow up tomorrow → no

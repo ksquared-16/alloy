@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Mission-Integrity Failure — trace & authority model
 
 Failed run: `msn_d32a9c061f9615d429` (Access & Roles), executed + accepted, but it performed the generic "refresh the V2 proposal" objective, not the operator's substantial discovery scope. Evidence preserved alongside this file (01–04).

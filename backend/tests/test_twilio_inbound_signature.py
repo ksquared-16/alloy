@@ -4,8 +4,6 @@ import os
 import unittest
 
 # settings.py requires Stripe env at import time
-os.environ.setdefault("STRIPE_SECRET_KEY", "unit_test_stripe_secret_placeholder")
-os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "unit_test_stripe_webhook_placeholder")
 from unittest.mock import patch
 
 from twilio.request_validator import RequestValidator

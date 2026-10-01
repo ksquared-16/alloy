@@ -50,6 +50,44 @@ const ACTIVITY_LABELS: Record<JournalEntryType, string> = {
     payment_refunded: "Payment refunded",
 };
 
+/**
+ * ── THE SAME CONSEQUENCE, TWO CAUSES ────────────────────────────────────────────────────────────
+ *
+ * `payment_refunded` is the entry type for money leaving a receipt, and it is the right type for
+ * both an operator's refund and a bank's return: the CONSEQUENCE is identical, which is what the
+ * journal records. `providerDispute` reuses the same writer for exactly that reason.
+ *
+ * But the CAUSE is opposite, the domain says so on the payment row, and Activity was flattening it:
+ * a chargeback read as "Payment refunded", as though an operator had chosen to give the money back.
+ * That is false operator history.
+ *
+ * DERIVED, NOT DUPLICATED. The cause is already canonical on `payments.reversal_origin`, and the
+ * entry's `source_id` for this type IS the refund payment. Copying it into journal metadata would
+ * put a second copy of Payments' truth in the accounting spine and would only describe entries
+ * written after today; reading it through the link the entry already carries describes every row
+ * ever written, including the historical ones. The resolver already batches lookups this way for
+ * agreements, customers and locations.
+ *
+ * A row whose origin cannot be established keeps the neutral label. Nothing is guessed.
+ */
+const REVERSAL_LABELS: Readonly<Record<string, string>> = Object.freeze({
+    operator: "Payment refunded",
+    provider: "Payment returned",
+});
+
+/** What an operator reads for this entry — the cause, where the cause is knowable. */
+function activityLabel(
+    entry: { entry_type: JournalEntryType; source_type: string; source_id: string },
+    reversalOrigins: ReadonlyMap<string, string>,
+): string {
+    if (entry.entry_type === "payment_refunded" && entry.source_type === "payment") {
+        const origin = reversalOrigins.get(entry.source_id) ?? "";
+        const named = REVERSAL_LABELS[origin];
+        if (named) return named;
+    }
+    return ACTIVITY_LABELS[entry.entry_type] ?? entry.entry_type;
+}
+
 export type FinancialActivityRow = {
     entryId: string;
     entryType: JournalEntryType;
@@ -172,6 +210,25 @@ export async function resolveFinancialActivity(
         (((customerRows ?? []) as unknown) as Array<{ id: string; name: string | null }>).map((c) => [c.id, c.name]),
     );
 
+    /*
+     * The refund payments these entries are about, read once for the whole page. Only
+     * `payment_refunded` entries point at a payment row; every other type's `source_id` is a charge
+     * or an allocation, and asking `payments` about those would be asking the wrong table.
+     */
+    const reversalPaymentIds = [...new Set(
+        placed.filter((p) => p.entry.entry_type === "payment_refunded" && p.entry.source_type === "payment")
+            .map((p) => p.entry.source_id)
+            .filter((v): v is string => !!v),
+    )];
+    const { data: reversalRows } = reversalPaymentIds.length
+        ? await supabase.from("payments").select("id, reversal_origin")
+            .eq("org_id", args.orgId).in("id", reversalPaymentIds)
+        : { data: [] };
+    const reversalOrigins = new Map(
+        (((reversalRows ?? []) as unknown) as Array<{ id: string; reversal_origin: string | null }>)
+            .map((r) => [r.id, (r.reversal_origin ?? "").trim()]),
+    );
+
     const siteIds = [...new Set(placed.map((p) => p.siteLocationId).filter((v): v is string => !!v))];
     const { data: siteRows } = siteIds.length
         ? await supabase.from("locations").select("id, label").eq("org_id", args.orgId).in("id", siteIds)
@@ -183,7 +240,7 @@ export async function resolveFinancialActivity(
     const rows: FinancialActivityRow[] = placed.map(({ entry, customerId, scope: locationScope, siteLocationId }) => ({
         entryId: entry.id,
         entryType: entry.entry_type,
-        label: ACTIVITY_LABELS[entry.entry_type] ?? entry.entry_type,
+        label: activityLabel(entry, reversalOrigins),
         amountCents: Number(entry.amount_cents),
         obligationDeltaCents: Number(entry.obligation_delta_cents),
         currencyCode: entry.currency,

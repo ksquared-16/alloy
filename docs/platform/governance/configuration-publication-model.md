@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-06
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -9,7 +9,87 @@ supersedes: []
 
 Sprint: `bp-config-integrity` (slot 6), Law 4. Design + implementation contract.
 Companions: [`configuration-integrity-laws.md`](./configuration-integrity-laws.md),
-[`configuration-overwriter-root-cause.md`](./configuration-overwriter-root-cause.md).
+`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md` (`docs/sprints/archive/07_2026/configuration-overwriter-root-cause.md`).
+
+## Certification record — measured 2026-09-30
+
+**State:** `CONFIGURATION_DOCUMENTATION_CONTEXT_READY`. Measured against staging `3c4ac97f1`. Row counts
+are from the certification stack.
+
+### Configuration does not share one lifecycle — it has four
+
+This is the claim most likely to be got wrong, so it is measured rather than generalised. **Do not assume
+a draft/publish model applies to a family that does not have one.**
+
+| Family | Store | Lifecycle | Rows here |
+|---|---|---|---|
+| organization settings | `org_settings.metadata` | a **single JSON document per org, mutated in place**; no draft, no version, no history | **1** |
+| entity layouts | `entity_layouts` | **append-only** — republish, never edit or delete; the current layout is the newest row | **20** |
+| Business Process | `business_process_drafts` → `business_process_revisions` | draft → validate → publish → immutable revision | 2 drafts, **0 revisions** |
+| Programs | `program_drafts` → `program_revisions` → `configuration_publications` → `configuration_distribution_targets`/`_runs` | draft → publish → distribute to locations | **all 0** |
+
+**The publish-and-distribute machinery carries zero rows on this stack.** `configuration_publications` and
+`configuration_distribution_runs` are implemented and unexercised here; `business_process_revisions` is 0
+against 2 drafts, so nothing has been published. Live configuration on this stack is `entity_layouts` (20)
+and `org_settings` (1). Zero rows is not proof of disuse in production — it means this pass did not
+exercise them.
+
+### Configuration expresses intent; the runtime owns executable semantics
+
+A configured string never becomes mutation authority by being present. The AI-assisted configuration path
+shows the pattern most clearly, and it is a **three-stage authority separation**, not one permission:
+
+| Stage | Capability | Helper |
+|---|---|---|
+| propose a configuration change | `config_assist.generate` | `forbidUnlessGeneratePermission` |
+| move a proposal between states | `config_assist.review` | `forbidUnlessTransitionPermission` |
+| apply a proposal to real configuration | `config_assist.apply` | the apply path |
+
+Generating a proposal confers nothing. Applying it is a separate, separately-granted act. The
+`proposals/[id]/state` PATCH is declared `pending` on purpose: its required key depends on the **target
+state**, which the one-capability-per-method table cannot express, and it is recorded in
+`ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT`.
+
+### Surface and authority census — exact
+
+**84 route files · 117 handlers (62 write, 55 read) · 67 mounted UI pages.** 53 of 62 writes declare a
+capability, spread across the configuration vocabulary rather than one folder-shaped key:
+`layouts.manage` 9 · `business_process.configure` 8 · `fields.manage` 5 ·
+`configuration.vocabulary.manage` 5 · `sections.manage` 5 · `config_assist.generate` 4 ·
+`reports.write` 4 · `layouts.lifecycle` 4, and others.
+
+Following the chain rather than the route file: **49 writes capability-gated, 6 role-gated, 6 through the
+`config_assist` helper family, 1 session**. The session one —
+`admin/agent/v1/record-overview-layout` — is declared and reached through the agent path; its authority is
+the agent/Trust boundary described in the AI/BOS record, not portal admission alone.
+
+### Where Configuration stops
+
+Configuration parameterises certified domains; it does not own their behaviour. The boundary in each case:
+
+| Domain | Configuration owns | The domain owns |
+|---|---|---|
+| Business Process | stage definitions, drafts, revisions | stage execution, work instantiation |
+| Enrollment/Placement | program categories, rooms, schedule vocabulary | the effective-dated truth itself |
+| Commercial | tuition grids, policies, discount programs | the obligation those produce |
+| Communications | provider bindings, templates | sent-message truth, delivery state |
+| Operational Intelligence | metric definitions, populations, weightings | observation and measurement semantics |
+| AI/BOS | provider/model selection, prompts where configured | inference semantics and tool behaviour |
+
+### Benchmark inference contract
+
+**SAFE, because measured:** configuration expresses governed intent; the runtime and domain code own
+executable semantics; each family follows its **own** measured lifecycle; `entity_layouts` is append-only
+and `org_settings` is in-place; AI-assisted configuration separates generate, review and apply into three
+capabilities.
+
+**FORBIDDEN:** a config string is an executable command · a draft is active behaviour
+(`business_process_revisions` is 0 against 2 drafts — nothing has been published here) · schema support
+implies builder exposure, builder exposure implies UI exposure, or UI exposure implies runtime support
+(these are four distinct layers) · a seed default is immutable platform law · deleting current
+configuration erases historical truth (`entity_layouts` is append-only, so it does not) · configuration
+visibility is authorization · one configuration family's lifecycle applies to another · the
+publish/distribute path is exercised because it exists (zero rows here).
 
 ## The model
 

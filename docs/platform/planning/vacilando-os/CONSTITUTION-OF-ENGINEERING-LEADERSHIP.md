@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # The Constitution of Engineering Leadership
 
 *The foundational doctrine of Director. It describes not what Director does, but what Director **is**. It names no feature, no model, no mechanism. Every future capability must reinforce these articles or be rejected for violating them. When a feature and an article conflict, the article wins.*

@@ -40,6 +40,8 @@ const CurrentWorkAddChildPanel = dynamic(
     { ssr: false },
 );
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
+import EnrollmentPacketCommandBody from "@/components/admin/focusPanel/cards/EnrollmentPacketCommandBody";
 import {
     resolveCurrentWorkActionSurface,
     type CurrentWorkActionSurface,
@@ -189,6 +191,49 @@ export default function CurrentWorkActionPanel({
         mutation?.tour.dispatchTourUpdated(opportunityId, actionKey || "schedule_tour");
         onComplete();
     }, [actionKey, mutation, onComplete, opportunityId]);
+
+    /*
+     * THE COMMAND SURFACE'S REVIEW STEP.
+     *
+     * A capability that declares a body is shown here before it runs. Without this branch a
+     * `command_surface` capability reaching the panel would fall through to `UnsupportedPanelBody`
+     * and tell the operator to "use drawer header actions" — which is exactly the dead end measured
+     * on deployed staging for `send_enrollment_packet`, whose header carries no such command.
+     *
+     * The body reads its own preview and confirms through the canonical route. This panel supplies
+     * the subject and the chrome; it decides nothing about whether the launch may run.
+     */
+    if (surface === "command_surface") {
+        const declaredBody = canonicalActionDefinition(actionKey)?.commandSurfaceBody;
+        if (declaredBody === "enrollment_packet") {
+            // A wrong child is worse than no child: absent refuses rather than falling back to the
+            // enclosing opportunity, which would review one child and launch for another.
+            const childId = context.participantScope?.customerMemberId?.trim() ?? "";
+            return (
+                <aside
+                    className="alloy-os-currentwork__action-panel"
+                    data-work-action-panel="true"
+                    data-work-action-panel-key={action.key}
+                    data-work-action-surface="command_surface"
+                >
+                    {childId ? (
+                        <EnrollmentPacketCommandBody
+                            customerMemberId={childId}
+                            onClose={onClose}
+                            onLaunched={onComplete}
+                        />
+                    ) : (
+                        <div className="alloy-os-currentwork__action-panel-body" data-work-action-panel-state="no_child">
+                            <p className="alloy-os-household__row-detail">
+                                Open a child in this family first — this sends one child&rsquo;s paperwork, and the
+                                surface has not resolved which.
+                            </p>
+                        </div>
+                    )}
+                </aside>
+            );
+        }
+    }
 
     if (surface === "process_transition") {
         const nextStatusKey = (action.actionRef ?? action.key).trim();

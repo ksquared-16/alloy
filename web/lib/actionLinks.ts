@@ -95,7 +95,20 @@ export async function createActionLink(
     return null;
 }
 
-export type ActionType = "vendor_accept_job" | "customer_reschedule" | "customer_cancel";
+export type ActionType =
+    | "vendor_accept_job"
+    | "customer_reschedule"
+    | "customer_cancel"
+    /**
+     * A PAYER IS ASKED TO AUTHORIZE A BANK DEBIT. `entity_id` names the payer; the account and the
+     * intended rail travel in `metadata`.
+     *
+     * Its expiry is set explicitly by the mint and is deliberately not this module's two-hour
+     * default: two hours is right for confirming an appointment and wrong for a bank authorization
+     * a parent will get to that evening. Widening the default for every link type to reach it would
+     * have lengthened the life of every appointment link on the platform.
+     */
+    | "payment_method_setup";
 
 /**
  * Claim a single-use action link ATOMICALLY — `RL-32`, the replay leg.

@@ -40,21 +40,35 @@ describe("a configured cell is never removed", () => {
         expect(code).toContain('cardReadiness.get(typeKey) ?? "reserved"');
     });
 
+    /*
+     * The window is "inside this component", and a character count is only a proxy for it. The cell
+     * grew a key, a readiness, a subject and a settled reason — each with the reasoning that earns
+     * it — and a 1,200-character window silently stopped reaching the JSX, so two guards failed
+     * without anything they guard having changed. Bounded at the component that follows instead, so
+     * the window tracks the component rather than its length.
+     */
+    const RESERVED_CELL = (() => {
+        const from = GRID.indexOf("function ReservedFocusPanelCell");
+        const rest = GRID.slice(from);
+        const next = rest.indexOf("\ntype Props");
+        return next > 0 ? rest.slice(0, next) : rest;
+    })();
+
     it("a reserved cell carries the same card class as a filled one, so geometry counts include it", () => {
         /*
          * This is the property the bad measurement tripped over. A reserved cell is
          * `div.alloy-os-ucard`; a filled card is `article.alloy-os-ucard`. Anything counting
          * configured GEOMETRY must select on the class, never on the tag.
          */
-        const reserved = GRID.slice(GRID.indexOf("function ReservedFocusPanelCell"));
-        expect(reserved.slice(0, 1200)).toContain('className="alloy-os-ucard"');
-        expect(reserved.slice(0, 1200)).toContain("data-focus-panel-cell-reserved");
+        expect(RESERVED_CELL).toContain('className="alloy-os-ucard"');
+        expect(RESERVED_CELL).toContain("data-focus-panel-cell-reserved");
+        // The window must actually be the component, not the rest of the file.
+        expect(RESERVED_CELL.length).toBeLessThan(GRID.length / 2);
     });
 
     it("a reserved cell states the card's identity, so the frame reads as complete", () => {
         // It is not a blank rectangle: the cell names which card it belongs to while its detail
         // settles. That is what makes six cells an honest frame rather than four plus two gaps.
-        const reserved = GRID.slice(GRID.indexOf("function ReservedFocusPanelCell"));
-        expect(reserved.slice(0, 1200)).toContain("cardTitle(typeKey)");
+        expect(RESERVED_CELL).toContain("cardTitle(typeKey)");
     });
 });

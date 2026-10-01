@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # WS3 Inbox Ingestion + WS5 Communication Intelligence — Discovery Findings
 
 Sprint: `conversation-platform-v1-discovery` (slot 2)

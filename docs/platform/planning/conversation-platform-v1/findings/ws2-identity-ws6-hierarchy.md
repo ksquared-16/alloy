@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # WS2 Conversation Identity Platform + WS6 Communication Hierarchy — Discovery Findings
 
 Sprint: `conversation-platform-v1-discovery` (slot 2). Base `origin/staging @ 3fc2e0f4e`. Read-only.

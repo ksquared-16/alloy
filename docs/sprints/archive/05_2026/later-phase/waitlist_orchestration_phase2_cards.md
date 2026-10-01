@@ -3,7 +3,7 @@
 **Status:** **Phase 2 complete** — Cards 0–7 shipped; pilot-ready with `shadow_mode: true`  
 **Date:** 2026-05-27  
 **Architecture:** [waitlist_orchestration_phase2_architecture.md](waitlist_orchestration_phase2_architecture.md)  
-**Audit:** [waitlist_orchestration_phase2_audit.md](waitlist_orchestration_phase2_audit.md)  
+**Audit:** `waitlist_orchestration_phase2_audit.md`  
 **Pilot playbook:** [waitlist_orchestration_phase2_pilot_playbook.md](waitlist_orchestration_phase2_pilot_playbook.md)
 
 ---
@@ -59,7 +59,7 @@ Cross-links added: **`docs/product/crm-system.md`**, **`docs/archive/2026-06-sup
 
 ### Scope (completed)
 
-- [x] Publish [audit](waitlist_orchestration_phase2_audit.md) + [architecture](waitlist_orchestration_phase2_architecture.md) + this cards doc.  
+- [x] Publish audit (`waitlist_orchestration_phase2_audit.md`) + [architecture](waitlist_orchestration_phase2_architecture.md) + this cards doc.  
 - [x] Cross-links from CRM + workspace system docs.  
 - [x] Decision log + implementation guardrails (above).  
 
@@ -667,10 +667,10 @@ Use on every PR:
 
 ## References
 
-- [Phase 2 audit](waitlist_orchestration_phase2_audit.md)  
+- Phase 2 audit (`waitlist_orchestration_phase2_audit.md`)  
 - [Phase 2 architecture](waitlist_orchestration_phase2_architecture.md)  
 - [Phase 2 pilot playbook](waitlist_orchestration_phase2_pilot_playbook.md)  
-- [Priority Placement V1](priority_placement_orchestration_may_2026.md)
+- [Priority Placement V1](../priority_placement_orchestration_may_2026.md)
 
 ---
 

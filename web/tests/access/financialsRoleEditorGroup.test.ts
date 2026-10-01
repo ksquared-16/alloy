@@ -45,7 +45,6 @@ const FINANCIAL_KEYS = [
      * under `schedules/` and `jobs/`, because authority follows the business consequence rather than
      * the URL folder, but it is a Financials capability and the operator finds it here.
      */
-    "fin.post",
 ] as const;
 
 function financialsArea(granted: ReadonlySet<string>) {
@@ -62,12 +61,13 @@ describe("the Financials capability group", () => {
         // product's actual money authority under a heading whose other rows change nothing.
         const rowIds = area.rows.map((r) => r.id).sort();
         /*
-         * `fin.post` is its OWN row, for the reason `fin.adjust` is: the grid collapses a pair into
+         * `fin.adjust` is its OWN row because the grid collapses a pair into
          * one row only when the final segments are the read/write verbs it recognises. "post" is
          * not one, so it cannot fold into the View/Manage radio — which is wanted, because posting
          * money must never be something an operator grants as a side effect of granting Manage.
          */
-        expect(rowIds).toEqual(["fin", "fin.adjust", "fin.post", "fin.responsibility", "fin.subsidy"]);
+        /* Payments V1 · W6-A2 retired fin.post: its four money handlers are deleted and canonical Payments writes money through the registered action registry, so no route enforces it. */
+        expect(rowIds).toEqual(["fin", "fin.adjust", "fin.responsibility", "fin.subsidy"]);
     });
 
     it("reaches every Financials capability the platform enforces — none is ungrantable", () => {

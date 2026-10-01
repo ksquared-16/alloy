@@ -117,5 +117,5 @@ cd web && set -a && source .env.local && set +a && npx tsx --tsconfig tsconfig.j
 
 ## Related
 
-- [forms_intake_inbox_operationalization.md](./forms_intake_inbox_operationalization.md)
+- [forms_intake_inbox_operationalization.md](../../../../sprints/archive/05_2026/forms_intake_inbox_operationalization.md)
 - [forms_runtime_test_2_submission_review_finalize.md](./forms_runtime_test_2_submission_review_finalize.md)

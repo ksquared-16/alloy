@@ -9,10 +9,10 @@
 
 - [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md)
 - [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) — configurable labels ↔ fixed layers; default disposition matrix; mapping metadata
-- [`docs/system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md)
+- [`docs/system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md)
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
-- [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md)
-- [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md)
+- `./program_interest_configurable_model_audit.md`
+- `./location_scoped_programs_configuration_design.md`
 
 **Parallel work (must not block):**
 
@@ -372,7 +372,7 @@ Lifecycle Builder Stage (operator mental model)
 | Drawer | Supports single `active_subject` and multi `active_subject_group` |
 | Layout `focused_subject` | One child: “Child A — Tour”; multiple: “2 children — Tour” |
 
-See [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §4.1 and [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) § grouped rows.
+See [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §4.1 and [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) § grouped rows.
 
 ### 3.5 Drawer (single-subject focus — §3.1 Child B Tour)
 
@@ -520,7 +520,7 @@ When a published layout includes editable repeater columns:
 | Question | Answer (today) |
 |----------|----------------|
 | `location_program_offerings` table? | **No** — not shipped |
-| Programs per location configured in Admin UI? | **No dedicated offerings editor** — Settings → Locations is flat hierarchy; Programs/Offerings **tab not shipped** (design in [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md)) |
+| Programs per location configured in Admin UI? | **No dedicated offerings editor** — Settings → Locations is flat hierarchy; Programs/Offerings **tab not shipped** (design in `./location_scoped_programs_configuration_design.md`) |
 | Program catalog vocabulary | **`childcare_program_type`** option set (`option_sets` / `option_set_items`) |
 | Programs offered at a site (V1) | **Derived** — distinct `metadata.category` on **active `unit` rows** under site, joined to option set for labels |
 | Rooms | **`locations`** `unit` rows under site; filter by `metadata.category` = program key |
@@ -649,8 +649,8 @@ See `web/lib/workUnits/lifecycleSubjectContracts.ts` — optional fields documen
 > **This contract is not separate from lifecycle or layout work.** Status ownership, location scope, and cascade rules are the **domain inputs** that Lifecycle Builder configures, work-unit queues resolve into membership, runtime normalizes into `QueueRowContext`, the drawer focuses via `active_subject`, and Layout Configuration blocks render without recomputing grain logic.
 
 **Upstream config:** Lifecycle Builder (`departments.metadata` lifecycle activation board) — see [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md).  
-**Runtime contract:** [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md), `web/lib/workUnits/lifecycleSubjectContracts.ts`.  
-**Layout cutover:** [`layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) (C4 queue rows require `QueueRowContext`).
+**Runtime contract:** [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md), `web/lib/workUnits/lifecycleSubjectContracts.ts`.  
+**Layout cutover:** [`layout_runtime_cutover_plan.md`](../../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md) (C4 queue rows require `QueueRowContext`).
 
 ### 7.1 Lifecycle Builder integration
 
@@ -878,7 +878,7 @@ Configured layouts (published `entity_layouts` / drawer variants) **place system
 | Redaction before render | Access resolver sets `visibility` on siblings **before** `LayoutRuntimeRenderer` — layout never sees cross-site PII for restricted users |
 | Queue vs drawer | Queue row blocks read `item._queue_row_context`; drawer blocks read drawer VM + same context paths |
 
-**Parallel sprint:** Layout Configuration may author block layouts and field placements against **stub/fixture** `WorkUnitSurfaceContext` and partial `_queue_row_context` today — see [`layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) C1–C4.
+**Parallel sprint:** Layout Configuration may author block layouts and field placements against **stub/fixture** `WorkUnitSurfaceContext` and partial `_queue_row_context` today — see [`layout_runtime_cutover_plan.md`](../../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md) C1–C4.
 
 ---
 
@@ -991,12 +991,12 @@ Freeze vocabulary, stage vs status, location ownership, access redaction, layout
 | Doc | Role |
 |-----|------|
 | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) | Lifecycle subject + queue row context |
-| [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md) | Settings UX for programs/rooms |
-| [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md) | Current program field audit |
-| [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md) | Layout runtime parallel work |
+| `./location_scoped_programs_configuration_design.md` | Settings UX for programs/rooms |
+| `./program_interest_configurable_model_audit.md` | Current program field audit |
+| [`../archive/2026-06-runtime-convergence/platform_convergence/layout_runtime_cutover_plan.md`](../../../archive/2026-06-runtime-convergence/layout_runtime_cutover_plan.md) | Layout runtime parallel work |
 | [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) | Builder stage / queue view config plane |
-| [`../system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) | `QueueRowContext` developer contract |
-| [`../system/entity-model.md`](../system/entity-model.md) | Entity location semantics |
+| [`../system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) | `QueueRowContext` developer contract |
+| [`../system/entity-model.md`](../../../archive/2026-06-superseded-system/entity-model.md) | Entity location semantics |
 
 ---
 

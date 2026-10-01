@@ -1,0 +1,94 @@
+{
+  "trusted_host_action_id": "tha_c672e122a53dc7",
+  "query_hash": "624dadb696d8bd106f288702d99ae678b57caca8860e33f35502f030e891998a",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-30T19:01:25.345Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c672e122a53dc7",
+    "query_hash": "624dadb696d8bd106f288702d99ae678b57caca8860e33f35502f030e891998a",
+    "authorization_id": "grnt_9d239b775a3c469f",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-30T19:01:31.034Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "rail": "ach",
+            "processor": "stripe",
+            "display_brand": "STRIPE TEST BANK",
+            "display_last4": "6789",
+            "verification_state": "verified",
+            "usability_state": "usable",
+            "is_default": false,
+            "payer_entity_type": "person",
+            "payer_is_named": true,
+            "account_scoped": true,
+            "provider_method_ref_prefix": "pm_",
+            "provider_customer_ref_prefix": "cus_",
+            "mandate_ref_present": true,
+            "mandate_ref_prefix": "manda",
+            "mandate_accepted_at_present": true,
+            "created_by_present": false,
+            "verified_at_present": true
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          1
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "credential_shaped_columns": "none"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "links": 1,
+            "entity_types": "person",
+            "consumed": 1,
+            "revoked": 0,
+            "expiry_hours_min": "168"
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "payments": 0,
+            "collection_attempts": 0
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

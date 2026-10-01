@@ -1,7 +1,7 @@
 # Waitlist Ranking Policy settings V2
 
 **Status:** Cards 1–10 complete (2026-05-31)  
-**Depends on:** [Waitlist ranking validation + position controls](waitlist_ranking_validation_position_controls.md), [Priority placement orchestration](priority_placement_orchestration_may_2026.md), [Card 0.5 priority fact audit](waitlist_priority_fact_truth_child_scope.md) (fact audit in chat / sprint notes)
+**Depends on:** [Waitlist ranking validation + position controls](./completed/waitlist_ranking_validation_position_controls.md), [Priority placement orchestration](priority_placement_orchestration_may_2026.md), [Card 0.5 priority fact audit](./completed/waitlist_priority_fact_truth_child_scope.md) (fact audit in chat / sprint notes)
 
 ---
 

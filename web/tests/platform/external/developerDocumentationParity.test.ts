@@ -202,3 +202,71 @@ describe("the OpenAPI is the reference, and the package copies it exactly", () =
             .not.toContain("reserved on the public API");
     });
 });
+
+/**
+ * The error table is a `type` table, so every cell in that column must be a type.
+ *
+ * It drifted the other way: the 422 row named `validation_failed`, which is the `code` a partner
+ * branches on and is not a member of the `Error.type` enum at all. A client that had trusted the
+ * table and switched on `error.type === "validation_failed"` would have matched nothing, on the one
+ * class of refusal it most needs to handle. Prose review cannot catch this — the row reads
+ * perfectly — so the column is bound to the enum here.
+ */
+describe("the documented error classes are the ones the schema declares", () => {
+    const errorTypes: string[] = JSON.parse(read(OPENAPI))
+        .components.schemas.Error.properties.error.properties.type.enum;
+
+    /** Rows of the `| status | type | ... |` table in the specification's error model. */
+    const rows = [...read(SPEC).matchAll(/^\|\s*(\d{3})\s*\|\s*`([a-z_]+)`\s*\|/gm)]
+        .map(([, status, type]) => ({ status: Number(status), type }));
+
+    it("finds the error table at all", () => {
+        // A renamed heading or a reformatted table would otherwise make every assertion below
+        // vacuously true.
+        expect(rows.length, "no `| status | `type` |` rows found in the specification").toBeGreaterThanOrEqual(7);
+        expect(rows.map((r) => r.status)).toContain(422);
+    });
+
+    it("names only types the OpenAPI enum declares", () => {
+        for (const row of rows) {
+            expect(
+                errorTypes,
+                `the specification says HTTP ${row.status} carries type \`${row.type}\`, which is not in the Error.type enum`,
+            ).toContain(row.type);
+        }
+    });
+
+    it("never presents a `code` as though it were a `type`", () => {
+        // `validation_failed` is real, and it is a code. It must never reappear in the type column.
+        for (const row of rows) {
+            expect(row.type, `HTTP ${row.status} lists the code \`validation_failed\` as its type`)
+                .not.toBe("validation_failed");
+        }
+    });
+});
+
+/**
+ * Ten HTTP write operations carry twelve domain intents, because attendance submission accepts
+ * `original`, `correction` and `reversal` through one endpoint. A sentence claiming the operations
+ * and the intents are the same ten contradicts the count the same documents state elsewhere, and
+ * tells a partner they have seen every intent when they have not.
+ */
+describe("the write surface is not described as one intent per operation", () => {
+    const CANONICAL_PROSE = [SPEC, GUIDE, FRONT_DOOR];
+
+    it("states the operation/intent split where it states a count", () => {
+        const guide = read(GUIDE).toLowerCase();
+        expect(guide).toContain(`${WORD[writes.length]} http write operations`);
+        expect(guide, "the guide must name the domain-intent count alongside the operation count")
+            .toContain("twelve domain intents");
+    });
+
+    it("never equates the operation count with the intent count", () => {
+        for (const file of CANONICAL_PROSE) {
+            expect(read(file), `${file} says the operations are one intent each`)
+                .not.toMatch(/each one an intent/i);
+            expect(read(file), `${file} calls the operation list "the complete catalog" without saying of what`)
+                .not.toMatch(/complete catalog\.\s*[A-Z]\w+ operations,/);
+        }
+    });
+});

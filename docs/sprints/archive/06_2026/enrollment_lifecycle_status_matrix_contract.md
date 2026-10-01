@@ -15,11 +15,11 @@ Customers may rename, add, hide, and reorder **disposition** labels within confi
 
 - [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) — five-layer domain model, placement, display, builder integration (§7)
 - [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) — lifecycle subject, queue row context, drawer focus
-- [`docs/system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) — `QueueRowContext` runtime output
+- [`docs/system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) — `QueueRowContext` runtime output
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) — operator vs internal terminology
 - [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) — Lifecycle Builder surfaces and metadata keys
 - [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) — `queue_membership_v1` bridge for per-stage grain + disposition predicates
-- [`enrollment_status_stage_binding_reality_check_v1.md`](./enrollment_status_stage_binding_reality_check_v1.md) — transitional `enrollment_operator_stage` on status definitions
+- [`enrollment_status_stage_binding_reality_check_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/enrollment_status_stage_binding_reality_check_v1.md) — transitional `enrollment_operator_stage` on status definitions
 
 **Authority:** Enrollment status configuration, Lifecycle Builder stage cards, seed migrations, layout field labels, and queue membership convergence align with this document unless an explicit exception is recorded in §12.
 
@@ -143,7 +143,7 @@ Every **enrollment disposition** (`entity_type = opportunity_customer_members`) 
 | `outcome_category` | string? | `success` \| `lost` \| `withdrawn` \| `deferred` \| `duplicate` \| null |
 | `automation_meaning` | string? | Optional stable token for workflows/BOS (e.g. `tour_scheduled`, `family_withdrew`) |
 
-**Transitional metadata (shipped today):** `metadata.enrollment_operator_stage` on **opportunity** status rows binds case CRM keys to builder stages for Settings → Enrollment Process UI. OCM dispositions should use **`enrollment_stage_key`** on disposition rows as the long-term model. See [`enrollment_status_stage_binding_reality_check_v1.md`](./enrollment_status_stage_binding_reality_check_v1.md).
+**Transitional metadata (shipped today):** `metadata.enrollment_operator_stage` on **opportunity** status rows binds case CRM keys to builder stages for Settings → Enrollment Process UI. OCM dispositions should use **`enrollment_stage_key`** on disposition rows as the long-term model. See [`enrollment_status_stage_binding_reality_check_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/enrollment_status_stage_binding_reality_check_v1.md).
 
 ### 2.2 Mapping examples
 
@@ -255,7 +255,7 @@ Other children:
   Child C — Enrolled
 ```
 
-**Primary subject rule:** A grouped row must **not** pretend there is only one primary child. Use `row_subjects[]` / `active_subject_group` — not a single `row_subject` alone. See [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) § grouped rows.
+**Primary subject rule:** A grouped row must **not** pretend there is only one primary child. Use `row_subjects[]` / `active_subject_group` — not a single `row_subject` alone. See [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) § grouped rows.
 
 **Click behavior:**
 
@@ -433,7 +433,7 @@ Default case keys remain **Open / Closed / Inactive / Archived** — not pipelin
 - **Queue membership (target):** OCM enrollment track matches builder stage via `enrollment_stage_key` + disposition terminal flags — not `opportunities.status_key`.
 - **Queue row context:** Primary enrollment labels on `row_subject` (single) or `row_subjects` (grouped); case context secondary — see [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) §4–§5.
 - **Same-stage siblings:** Two Tour OCM tracks on one case → count **2**, optional **one grouped card** — see §4.1 and entity status contract §3.4.
-- **Work unit surface:** Layout blocks consume normalized context — see [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md).
+- **Work unit surface:** Layout blocks consume normalized context — see [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md).
 - **Placement:** Enrollment lanes may filter by placement scope — see entity status contract §4.6–§6.
 
 ---
@@ -472,7 +472,7 @@ Update when:
 |-----|------|
 | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) | Parent five-layer model + placement |
 | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) | Lifecycle subject + queue/drawer contracts |
-| [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) | Runtime `QueueRowContext` |
+| [`work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) | Runtime `QueueRowContext` |
 | [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) | Builder metadata keys |
 | [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) | Operator vocabulary |
-| [`enrollment_status_stage_binding_reality_check_v1.md`](./enrollment_status_stage_binding_reality_check_v1.md) | Transitional case status ↔ stage binding |
+| [`enrollment_status_stage_binding_reality_check_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/enrollment_status_stage_binding_reality_check_v1.md) | Transitional case status ↔ stage binding |

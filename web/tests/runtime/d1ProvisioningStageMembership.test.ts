@@ -1,11 +1,15 @@
 /**
  * D1 — Provisioning contract: the New Leads cohort resolves through STAGE MEMBERSHIP.
  *
- * Governing: docs/platform/runtime/runtime-implementation-authorization.md
- *   U-P3 "Queue truth: the active lens's rows … from Records via the queue evaluator"
- *   U-P2 "Work View resolution: the active lens"
- * and docs/platform/runtime/stage-work-view-queue-canonical-model.md §1.4 (one evaluator),
- * §0.5.1 (Row Grain is Stage-owned; `case` is a compatibility name for `family`).
+ * Governing (canonical): docs/platform/core/work-view-membership-and-navigation.md
+ *   §1 membership is not stage position · §3 one evaluator · §6 Row Grain is Stage-owned and
+ *   `case` is a compatibility name for `family`.
+ *
+ * Explanatory reference, NOT governing — both remain `status: proposed`:
+ *   docs/platform/runtime/runtime-implementation-authorization.md
+ *     U-P3 "Queue truth: the active lens's rows … from Records via the queue evaluator"
+ *     U-P2 "Work View resolution: the active lens"
+ *   docs/platform/runtime/stage-work-view-queue-canonical-model.md — fork diagnosis / plan
  *
  * What this pins:
  *   1. The lens admits its cohort by STAGE, not by a status allowlist. The lane predicate system

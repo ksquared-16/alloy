@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Conversation Platform — Executive Summary
 
 **Date:** 2026-07-31 · **Phase:** 0 complete · **Audience:** leadership

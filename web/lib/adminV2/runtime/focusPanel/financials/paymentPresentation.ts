@@ -72,6 +72,38 @@ export type PaymentPresentation = {
      */
     refundedCents: number;
     refundableCents: number;
+    /**
+     * How much of this receipt may still be RESTRICTED: unapplied money not already held.
+     *
+     * `unapplied − held`, which is precisely the bound the database's hold invariant enforces. It is
+     * differenced here, beside the other money figures, so no surface subtracts it for itself and
+     * disagrees with the trigger that refuses the write.
+     */
+    holdableCents: number;
+    /**
+     * What of this receipt a hold restricts.
+     *
+     * Stated rather than left implicit inside `unappliedCents`, because a row that says only
+     * "unapplied" overstates what can answer an obligation by exactly this amount. The receipt is
+     * the only place an operator can see the difference between money that is merely unallocated
+     * and money that is deliberately restricted.
+     */
+    heldCents: number;
+    /**
+     * What of this receipt can still answer an obligation: received, less what went back, less what
+     * is applied, less what is held. The APPLY ceiling — `holdableCents` is the hold ceiling, and
+     * the two differ by the refunds.
+     */
+    applicableCents: number;
+    /**
+     * Whether the card offers `deposit.hold` on this row.
+     *
+     * Posted inbound money with something left to restrict. Holding a refund is meaningless — the
+     * money is leaving — and holding a pending receipt would restrict money that has not arrived.
+     * The invariant trigger still owns the real bound; this anticipates the obvious cases and lets
+     * the domain answer the rest, exactly as `offersRefund` does.
+     */
+    offersHold: boolean;
 };
 
 /** `pending | posted | failed | voided` → the operator's word for it. */
@@ -100,6 +132,12 @@ function humanize(value: string): string {
 export function presentPayment(
     payment: FinancialsPaymentRow,
     refundedCents = 0,
+    /*
+     * ⚠ A THIRD POSITIONAL PARAMETER, and the note on `unappliedTotalCents` says why that is
+     * dangerous: `.map(presentPayment)` would pass the array as this argument. Every call site is an
+     * explicit arrow for that reason, and `presentPayments` below is the only supported entry point.
+     */
+    heldCents = 0,
 ): PaymentPresentation {
     const received = Math.abs(Number(payment.amountCents) || 0);
     const applied = Math.abs(Number(payment.appliedCents) || 0);
@@ -107,6 +145,28 @@ export function presentPayment(
     const isPosted = payment.status === "posted";
     const refunded = Math.max(0, Math.min(received, Math.abs(Number(refundedCents) || 0)));
     const refundable = isRefund ? 0 : Math.max(0, received - refunded);
+    /*
+     * Clamped, and bounded by the unapplied remainder rather than by the receipt: money already
+     * answering an obligation is not available to restrict, and the invariant enforces exactly that.
+     */
+    const held = Math.max(0, Math.abs(Number(heldCents) || 0));
+    const holdable = isRefund ? 0 : Math.max(0, Math.max(0, received - applied) - held);
+    /*
+     * ── WHAT CAN STILL ANSWER AN OBLIGATION ─────────────────────────────────────────────────────
+     *
+     * NOT `holdable`, and the difference is the refunds. `unappliedCents` here is measured against
+     * what was RECEIVED, so on a partly refunded receipt it counts money that has already left; the
+     * canonical apply ceiling nets refunds as well as holds.
+     *
+     * Measured on deployed staging with the terminology repair in place: the row offered
+     * "$472.00 available to apply" — 562 unapplied minus 90 held — beside an account Available
+     * prepaid of $332.00 and an Apply control quoting $332.00. Two figures for one quantity, which
+     * is the very thing the repair exists to stop, reintroduced one line lower.
+     *
+     * `holdable` is left alone on purpose: it is the HOLD ceiling, and the database's own invariant
+     * is the authority on that. This is the APPLY ceiling and it is stated separately.
+     */
+    const applicable = isRefund ? 0 : Math.max(0, received - refunded - applied - held);
     return {
         paymentId: payment.paymentId,
         kind: isRefund ? (payment.reversalOrigin === "provider" ? "return" : "refund") : "receipt",
@@ -127,6 +187,10 @@ export function presentPayment(
         offersRefund: isPosted && !isRefund && !payment.refundsPaymentId && refundable > 0,
         refundedCents: isRefund ? 0 : refunded,
         refundableCents: refundable,
+        holdableCents: holdable,
+        heldCents: held,
+        applicableCents: applicable,
+        offersHold: isPosted && !isRefund && !payment.refundsPaymentId && holdable > 0,
     };
 }
 
@@ -139,6 +203,12 @@ export function presentPayment(
  */
 export function presentPayments(
     payments: readonly FinancialsPaymentRow[],
+    /*
+     * What is currently restricted, per receipt, from the hold reader. Omitted, every receipt reads
+     * as unrestricted — which is right for the callers that only need unapplied totals, and is why
+     * `unappliedTotalCents` does not pass it.
+     */
+    heldByPayment: Readonly<Record<string, number>> = {},
 ): PaymentPresentation[] {
     const refundedByReceipt = new Map<string, number>();
     for (const row of payments) {
@@ -148,7 +218,8 @@ export function presentPayments(
         const cents = Math.abs(Number(row.amountCents) || 0);
         refundedByReceipt.set(target, (refundedByReceipt.get(target) ?? 0) + cents);
     }
-    return payments.map((row) => presentPayment(row, refundedByReceipt.get(row.paymentId) ?? 0));
+    return payments.map((row) =>
+        presentPayment(row, refundedByReceipt.get(row.paymentId) ?? 0, heldByPayment[row.paymentId] ?? 0));
 }
 
 /**

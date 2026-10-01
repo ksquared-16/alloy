@@ -1,3 +1,10 @@
+---
+owner: platform
+status: historical
+last_reviewed: 2026-09-25
+supersedes: []
+---
+
 # Child visibility lifecycle, and the pickup hosted certification path
 
 Post-closeout hardening, run `erun_8a0e1fa29eaa157a`. Thread 7 remains **CLOSED**; this run resolves

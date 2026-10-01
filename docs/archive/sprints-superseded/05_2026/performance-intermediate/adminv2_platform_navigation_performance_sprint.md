@@ -10,11 +10,11 @@
 | Doc | Role |
 |-----|------|
 | [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md) | Hard / soft / local nav matrix — **binding** |
-| [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md) | Load-path map, blocking vs deferred |
-| [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md) | Locked `/dept` runtime reference |
-| [`adminv2_work_unit_runtime_cards_1_3_plan.md`](./adminv2_work_unit_runtime_cards_1_3_plan.md) | WU bootstrap parity plan |
+| [`adminv2_performance_phase2_load_path_architecture.md`](../../../../sprints/archive/05_2026/adminv2_performance_phase2_load_path_architecture.md) | Load-path map, blocking vs deferred |
+| [`adminv2_dept_runtime_closeout_handoff.md`](../../../../sprints/archive/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md) | Locked `/dept` runtime reference |
+| [`adminv2_work_unit_runtime_cards_1_3_plan.md`](../../../../sprints/archive/05_2026/adminv2_work_unit_runtime_cards_1_3_plan.md) | WU bootstrap parity plan |
 | [`adminv2_performance_scope_lock.md`](./adminv2_performance_scope_lock.md) | Premium UX north star |
-| [`docs/archive/2026-06-superseded-system/workspace-system.md`](../system/workspace-system.md) | Queue truth boundary |
+| [`docs/archive/2026-06-superseded-system/workspace-system.md`](../../../2026-06-superseded-system/workspace-system.md) | Queue truth boundary |
 
 **Contract tests (must stay green):** `adminV2NavigationContracts`, `adminV2QueueRowClick`, `adminV2WorkUnitLaneLocalState`, `adminV2DrawerLoadingCoherence`, `adminV2LoadingGeometry`, `workUnitOperationalBootstrap`
 

@@ -7,9 +7,9 @@
 
 **Related audits (inputs, not superseded):**
 
-- [`lifecycle_runtime_orchestration_audit.md`](./lifecycle_runtime_orchestration_audit.md)
-- [`lifecycle_visibility_vs_ownership_architecture.md`](./lifecycle_visibility_vs_ownership_architecture.md)
-- [`lifecycle_builder_architecture_reality_check_v1.md`](./lifecycle_builder_architecture_reality_check_v1.md)
+- [`lifecycle_runtime_orchestration_audit.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_runtime_orchestration_audit.md)
+- [`lifecycle_visibility_vs_ownership_architecture.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_visibility_vs_ownership_architecture.md)
+- [`lifecycle_builder_architecture_reality_check_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_builder_architecture_reality_check_v1.md)
 - [`lifecycle_required_info_child_fields_audit.md`](./lifecycle_required_info_child_fields_audit.md)
 - [`completed/forms_lifecycle_requirement_coverage.md`](./completed/forms_lifecycle_requirement_coverage.md)
 - [`05_2026/task_system_audit_v1.md`](../05_2026/task_system_audit_v1.md)
@@ -76,7 +76,7 @@ Lifecycle V2 should **extend the builder as a configuration hub** with six opera
 | **Visibility** | Derived from stage status sets (+ optional overlays); separate from assignment |
 | **Assignment** | `opportunities.work_unit_id` = execution home for actions/KPI default — one at a time |
 
-Approved architecture: [`lifecycle_visibility_vs_ownership_architecture.md`](./lifecycle_visibility_vs_ownership_architecture.md) — **Model C (hybrid)**: many lenses, one assignment home.
+Approved architecture: [`lifecycle_visibility_vs_ownership_architecture.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_visibility_vs_ownership_architecture.md) — **Model C (hybrid)**: many lenses, one assignment home.
 
 ---
 
@@ -404,7 +404,7 @@ Keep existing `operational_tasks.status` — do not introduce parallel task stat
 
 **Automations UX:** `/adminV2/workflows` — same engine as workflows tables. Settings “Workflow automation rules” = read-only `status_transition_rules` reference.
 
-Full inventory: [`lifecycle_runtime_orchestration_audit.md`](./lifecycle_runtime_orchestration_audit.md).
+Full inventory: [`lifecycle_runtime_orchestration_audit.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_runtime_orchestration_audit.md).
 
 ### 6.2 Recommended Lifecycle Orchestration section
 

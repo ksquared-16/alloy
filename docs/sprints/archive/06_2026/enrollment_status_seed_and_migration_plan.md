@@ -311,4 +311,4 @@ psql "$DATABASE_URL" -f supabase/migrations/20260610140000_enrollment_status_mat
 |-----|------|
 | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) | Layer doctrine + default matrix |
 | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) | Five-layer model |
-| [`enrollment_status_stage_binding_reality_check_v1.md`](./enrollment_status_stage_binding_reality_check_v1.md) | Transitional `enrollment_operator_stage` on opportunities |
+| [`enrollment_status_stage_binding_reality_check_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/enrollment_status_stage_binding_reality_check_v1.md) | Transitional `enrollment_operator_stage` on opportunities |

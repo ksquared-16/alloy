@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-04
+supersedes: []
+---
+
 # Deliverable Review — before / after (W-4)
 
 ## Before (worker / technical review)

@@ -49,15 +49,28 @@ describe("payment-method state shares the payer row it is about", () => {
 
     it("one state, one sentence", () => {
         /*
-         * "No payment method on file" is what `paymentSubjectModel` says and what the payment
-         * methods surface says. The Focus Panel adapter said "No method on file", so the same
-         * fact wore two names depending on which surface an operator read it on — and on the
-         * relationship row it sits beside a real method label, where a near-miss synonym reads
-         * as a different state rather than the same one.
+         * ONE SENTENCE, NOW WITH ONE AUTHOR.
+         *
+         * This first said the adapter must CONTAIN "No payment method on file", because the
+         * adapter had been saying "No method on file" and the same fact wore two names. That
+         * converged the wording and left the deeper problem: the adapter was still authoring the
+         * sentence, from `vm.payers[].method`, which the VM hardcodes to null. It therefore said
+         * "No payment method on file" about an account with a usable stored card.
+         *
+         * So the assertion is now the stronger one it was always reaching for. The adapter must
+         * not author the sentence AT ALL — `paymentSubjectModel` decides it, having actually
+         * looked — and the near-miss stays banned everywhere.
          */
         const adapter = code("lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard.ts");
-        expect(adapter).toContain('"No payment method on file"');
+        expect(adapter, "the adapter must not author this claim").not.toContain(
+            '"No payment method on file"',
+        );
+        expect(adapter, "it defers to the model that looked").toMatch(/paymentCapabilities\?\.summaryLine/);
         expect(adapter, "and never the near-miss").not.toMatch(/"No method on file"/);
+
+        /* The one author still says it, and still only when it has looked. */
+        const model = code("lib/financials/payments/paymentSubjectModel.ts");
+        expect(model).toContain('"No payment method on file"');
     });
 
     it("Add card and Add bank account are never permanent controls in Details", () => {
@@ -602,9 +615,12 @@ describe("every centred card ends the same way", () => {
         const at = section.indexOf('data-testid="payment-methods-empty"');
         const block = section.slice(at - 200, at + 700);
         expect(block, "the empty state is a bounded region").toMatch(/border-dashed|rounded-md border/);
-        expect(block, "and says what to do next").toMatch(/Add a card or a bank account/);
-        expect(section, "the controls it points at are still there")
-            .toMatch(/Add card|Add bank account/);
+        /* The hint must name only the act this operator may perform — see PaymentMethodsSection. */
+        expect(block, "and says what to do next").toMatch(/Add a card above/);
+        expect(block, "and says who owns the bank mandate").toMatch(/set up by the payer/);
+        expect(section, "the control it points at is still there").toMatch(/Add card/);
+        expect(section, "and the operator bank control is gone")
+            .not.toMatch(/data-testid="payment-method-add-bank"/);
     });
 
     it("the action row is a real rule, not a class name with nothing behind it", () => {

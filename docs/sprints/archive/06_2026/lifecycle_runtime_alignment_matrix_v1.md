@@ -9,7 +9,7 @@
 **Builds on:**
 
 - [`lifecycle_information_matrix_v1.md`](../05_2026/lifecycle_information_matrix_v1.md) — information + capture surfaces
-- [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](../05_2026/lifecycle_sprint_final_coverage_closeout_audit_v1.md) — coverage + inventory
+- [`lifecycle_sprint_final_coverage_closeout_audit_v1.md`](../../../archive/sprints-superseded/05_2026/completed-intermediate/lifecycle_sprint_final_coverage_closeout_audit_v1.md) — coverage + inventory
 - [`childcare_lifecycle_matrix_v1.md`](../05_2026/childcare_lifecycle_matrix_v1.md) — operator doctrine
 - [`adminv2_action_runtime_audit_and_plan_v1.md`](../05_2026/adminv2_action_runtime_audit_and_plan_v1.md) — runtime taxonomy
 - Runtime: `enrollmentPipelineQueueDefinitionV2.ts`, `lifecycleActionRequirementCatalog.ts`, `operationalRecommendationCatalog.ts`

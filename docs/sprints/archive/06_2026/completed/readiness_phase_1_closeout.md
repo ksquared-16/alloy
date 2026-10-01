@@ -7,9 +7,9 @@
 
 **Planning docs (sprint inputs, not moved):**
 
-- [`../readiness_phase_1_implementation_plan.md`](../readiness_phase_1_implementation_plan.md)
-- [`../readiness_engine_architecture_and_runtime_contract.md`](../readiness_engine_architecture_and_runtime_contract.md)
-- [`../required_information_v2_operational_readiness_framework.md`](../required_information_v2_operational_readiness_framework.md)
+- [`../readiness_phase_1_implementation_plan.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/readiness_phase_1_implementation_plan.md)
+- [`../readiness_engine_architecture_and_runtime_contract.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/readiness_engine_architecture_and_runtime_contract.md)
+- [`../required_information_v2_operational_readiness_framework.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/required_information_v2_operational_readiness_framework.md)
 - [`lifecycle_canonical_vocabulary.md`](./lifecycle_canonical_vocabulary.md)
 - [`lifecycle_builder_hardening_closeout.md`](./lifecycle_builder_hardening_closeout.md)
 
@@ -235,7 +235,7 @@ References only — **no design work in this closeout.**
 | **Tasks V2** | Optional task creation from enforced gaps |
 | **Operational Intelligence** | Reporting aggregates, event log, BOS deeper integration |
 
-See [`readiness_engine_architecture_and_runtime_contract.md`](../readiness_engine_architecture_and_runtime_contract.md) §1.4 plugin table and Phase 3+ storage/events notes.
+See [`readiness_engine_architecture_and_runtime_contract.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/readiness_engine_architecture_and_runtime_contract.md) §1.4 plugin table and Phase 3+ storage/events notes.
 
 ---
 
@@ -275,7 +275,7 @@ cd web && npm run test -- tests/admin/drawer/drawerDeterminism.test.ts \
 | Full-repo `tsc --noEmit` | Low | Unrelated type errors outside readiness files at closeout time |
 | Drawer gap → field navigation | Enhancement | “Go to field” on drawer gaps deferred; preflight panel supports it |
 | `READINESS_LEVELS_V1=0` rollback flag | Optional | Documented in plan; not required if parity tests hold |
-| Phase 1 plan doc status | Housekeeping | Update [`readiness_phase_1_implementation_plan.md`](../readiness_phase_1_implementation_plan.md) header to **Closed** when convenient |
+| Phase 1 plan doc status | Housekeeping | Update [`readiness_phase_1_implementation_plan.md`](../../../../archive/sprints-superseded/06_2026/operational-work-plans/readiness_phase_1_implementation_plan.md) header to **Closed** when convenient |
 
 None of the above block production use of Phase 1 readiness capabilities.
 

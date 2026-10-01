@@ -1,6 +1,6 @@
 # Navigation doctrine
 
-> **Canonical summary (June 2026 rebaseline):** [`docs/platform/core/navigation-and-workspace-doctrine.md`](../platform/core/navigation-and-workspace-doctrine.md)  
+> **Canonical summary (June 2026 rebaseline):** [`docs/platform/core/navigation-and-workspace-doctrine.md`](../../platform/core/navigation-and-workspace-doctrine.md)  
 > This file retains routing/sidebar detail as transitional expanded reference.
 
 **Path:** `docs/archive/2026-06-superseded-system/navigation-doctrine.md`  

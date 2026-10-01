@@ -1,6 +1,6 @@
 # Entity model
 
-> **Canonical summary:** [`docs/platform/core/entity-model.md`](../platform/core/entity-model.md)  
+> **Canonical summary:** [`docs/platform/core/entity-model.md`](../../platform/core/entity-model.md)  
 > This file retains expanded location/tour/forms detail as transitional reference.
 
 ## Purpose

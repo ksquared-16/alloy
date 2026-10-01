@@ -287,7 +287,7 @@
 
 ## Phase 7
 
-See [`lifecycle_walkthrough_validation_v1.md`](./lifecycle_walkthrough_validation_v1.md).
+See [`lifecycle_walkthrough_validation_v1.md`](../../../archive/sprints-superseded/06_2026/lifecycle-execution-sprawl/lifecycle_walkthrough_validation_v1.md).
 
 ---
 

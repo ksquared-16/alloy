@@ -9,9 +9,7 @@ import Drawer from "@/components/admin/Drawer";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
-import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
 import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 
 type ScheduleRecord = Record<string, unknown> & {
@@ -38,10 +36,6 @@ export default function ScheduleDetailClient({
     const orgOpTz = useAdminOrgOperationalTimezone();
     const [schedule, setSchedule] = useState<ScheduleRecord>(initialSchedule);
     const [tab, setTab] = useState<TabKey>("overview");
-    const [payments, setPayments] = useState<JobPaymentRow[]>([]);
-    const [paymentSummary, setPaymentSummary] = useState<JobPaymentsPaymentSummary | null>(null);
-    const [paymentsFetchError, setPaymentsFetchError] = useState<string | null>(null);
-    const [loadingPayments, setLoadingPayments] = useState(false);
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
     const [rescheduleForm, setRescheduleForm] = useState({ start_at: "", end_at: "", timezone: orgOpTz });
     const [rescheduleLoading, setRescheduleLoading] = useState(false);
@@ -71,44 +65,6 @@ export default function ScheduleDetailClient({
         setSchedule(initialSchedule);
     }, [initialSchedule]);
 
-    useEffect(() => {
-        if (tab !== "related" || !jobId) return;
-        setLoadingPayments(true);
-        setPaymentsFetchError(null);
-        fetch(`/api/admin/jobs/${jobId}/payments`)
-            .then(async (r) => {
-                const raw = await r.text();
-                let json: { payments?: JobPaymentRow[]; payment_summary?: JobPaymentsPaymentSummary; error?: string } = {};
-                try {
-                    json = raw ? (JSON.parse(raw) as typeof json) : {};
-                } catch {
-                    setPayments([]);
-                    setPaymentSummary(null);
-                    setPaymentsFetchError("Invalid response from payments API.");
-                    return;
-                }
-                if (!r.ok) {
-                    setPayments([]);
-                    setPaymentSummary(null);
-                    setPaymentsFetchError(json.error ?? `Payments unavailable (${r.status}).`);
-                    return;
-                }
-                if (json.payment_summary == null || typeof json.payment_summary !== "object") {
-                    setPayments([]);
-                    setPaymentSummary(null);
-                    setPaymentsFetchError("Payment summary missing from server response.");
-                    return;
-                }
-                setPayments(json.payments ?? []);
-                setPaymentSummary(json.payment_summary);
-            })
-            .catch(() => {
-                setPayments([]);
-                setPaymentSummary(null);
-                setPaymentsFetchError("Could not load payments.");
-            })
-            .finally(() => setLoadingPayments(false));
-    }, [tab, jobId]);
 
     const handleReschedule = async () => {
         if (!rescheduleForm.start_at || !rescheduleForm.end_at) {
@@ -284,123 +240,6 @@ export default function ScheduleDetailClient({
                         <div>
                             <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
-                        </div>
-                        <div>
-                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
-                            <p className="text-xs text-alloy-midnight/55 mb-3">
-                                Figures are for the linked job. Charges linked to this visit are highlighted in the table below.
-                            </p>
-                            {!jobId ? (
-                                <p className="text-sm text-alloy-midnight/60">No job linked.</p>
-                            ) : loadingPayments ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading…</p>
-                            ) : paymentsFetchError ? (
-                                <p className="text-sm text-red-600">{paymentsFetchError}</p>
-                            ) : !paymentSummary ? (
-                                <p className="text-sm text-alloy-midnight/60">Payment summary unavailable.</p>
-                            ) : (
-                                <>
-                                    <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-3 py-2 text-sm space-y-1 mb-3">
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">
-                                                {jobTotalSummaryLabel(paymentSummary.receivable_source)}
-                                            </span>
-                                            <span className="font-medium">
-                                                {paymentSummary.job_total_cents != null
-                                                    ? formatMoneyFromCents(paymentSummary.job_total_cents)
-                                                    : paymentSummary.original_amount_cents != null
-                                                      ? formatMoneyFromCents(paymentSummary.original_amount_cents)
-                                                      : "—"}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Paid (posted)</span>
-                                            <span className="font-medium">{formatMoneyFromCents(paymentSummary.paid_amount_cents)}</span>
-                                        </div>
-                                        <div className="flex justify-between gap-2">
-                                            <span className="text-alloy-midnight/70">Outstanding</span>
-                                            <span className="font-medium">
-                                                {(paymentSummary.outstanding_balance_cents ?? paymentSummary.balance_due_cents) != null
-                                                    ? formatMoneyFromCents(
-                                                          (paymentSummary.outstanding_balance_cents ??
-                                                              paymentSummary.balance_due_cents) as number
-                                                      )
-                                                    : "—"}
-                                            </span>
-                                        </div>
-                                        {paymentSummary.pending_payment_amount_cents > 0 ? (
-                                            <div className="flex justify-between gap-2">
-                                                <span className="text-alloy-midnight/70">Pending (authorized)</span>
-                                                <span className="font-medium">
-                                                    {formatMoneyFromCents(paymentSummary.pending_payment_amount_cents)}
-                                                </span>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                    <JobReceivableChargesPanel
-                                        receivableSource={paymentSummary.receivable_source}
-                                        chargeRows={paymentSummary.charge_balance_rows}
-                                        openChargeCount={paymentSummary.open_charge_count}
-                                        contextScheduleId={scheduleId}
-                                        className="mb-3"
-                                    />
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                                    <th className="pb-2 pr-4">Amount</th>
-                                                    <th className="pb-2 pr-4">Status</th>
-                                                    <th className="pb-2 pr-4">Received</th>
-                                                    <th className="pb-2 pr-4">Posted</th>
-                                                    <th className="pb-2 pr-4">Processor</th>
-                                                    <th className="pb-2 pr-4">Txn / ref</th>
-                                                    <th className="pb-2 pr-4">Allocated</th>
-                                                    <th className="pb-2 pr-4">Unallocated</th>
-                                                    <th className="pb-2 pr-4">Allocation</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {payments.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={9} className="py-4 text-alloy-midnight/60">
-                                                            No payments.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    payments.map((p) => {
-                                                        const refId =
-                                                            (p.processor_transaction_id?.trim() || "") ||
-                                                            (p.provider_payment_id?.trim() || "");
-                                                        return (
-                                                            <tr key={p.id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
-                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.amount_cents)}</td>
-                                                                <td className="py-2 pr-4">
-                                                                    <StatusBadge label={paymentRowStatusDisplayLabel(p)} variant="neutral" />
-                                                                </td>
-                                                                <td className="py-2 pr-4">
-                                                                    {p.received_at ? formatDateTime(p.received_at) : "—"}
-                                                                </td>
-                                                                <td className="py-2 pr-4">
-                                                                    {p.posted_at
-                                                                        ? formatDateTime(p.posted_at)
-                                                                        : p.paid_at
-                                                                          ? formatDateTime(p.paid_at)
-                                                                          : "—"}
-                                                                </td>
-                                                                <td className="py-2 pr-4">{p.processor ?? "—"}</td>
-                                                                <td className="py-2 pr-4 font-mono text-xs">{refId || "—"}</td>
-                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.allocated_amount_cents)}</td>
-                                                                <td className="py-2 pr-4">{formatMoneyFromCents(p.unallocated_amount_cents)}</td>
-                                                                <td className="py-2 pr-4">{p.allocation_state ?? "—"}</td>
-                                                            </tr>
-                                                        );
-                                                    })
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </>
-                            )}
                         </div>
                     </div>
                 )}

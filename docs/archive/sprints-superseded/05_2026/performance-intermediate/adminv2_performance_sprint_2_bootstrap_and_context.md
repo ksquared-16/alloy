@@ -50,9 +50,9 @@
 
 **Per-request cost stack:**
 
-1. **Session resolution** — `getCachedAuthUser()` (used by `getAdminAuth`) always calls `supabase.auth.getUser()` ([`cachedAuthSession.ts`](../../../web/lib/admin/cachedAuthSession.ts)). `getCachedAuthUserId()` (used by the access bundle) tries `getClaims()` first, then `getUser()`. These are **separate** `cache()` wrappers, so a route that calls **both** `requireAdminOrOps()` and `getAdminContextCached()` can still pay **two auth round-trips** when the claims fast path misses.
+1. **Session resolution** — `getCachedAuthUser()` (used by `getAdminAuth`) always calls `supabase.auth.getUser()` ([`cachedAuthSession.ts`](../../../../../web/lib/admin/cachedAuthSession.ts)). `getCachedAuthUserId()` (used by the access bundle) tries `getClaims()` first, then `getUser()`. These are **separate** `cache()` wrappers, so a route that calls **both** `requireAdminOrOps()` and `getAdminContextCached()` can still pay **two auth round-trips** when the claims fast path misses.
 
-2. **Access bundle** — `resolveAdminAccessCore()` ([`resolveAdminAccessCore.ts`](../../../web/lib/admin/resolveAdminAccessCore.ts)) sequentially loads:
+2. **Access bundle** — `resolveAdminAccessCore()` ([`resolveAdminAccessCore.ts`](../../../../../web/lib/admin/resolveAdminAccessCore.ts)) sequentially loads:
    - `user_roles` (all org memberships)
    - optional legacy `user_profiles` / `app_users` fallback
    - `role_permission_grants` for all role keys
@@ -66,7 +66,7 @@
    ```
    Bundle resolves once per request, but **full User fetch + redundant portal check** often still runs first.
 
-4. **Workspace RSC layout** — [`workspace/layout.tsx`](../../../web/app/adminV2/workspace/layout.tsx) calls `getAdminAuth()` then `getAdminAccessContextCached()` on every layout render (hard nav reload tax amplifies this).
+4. **Workspace RSC layout** — [`workspace/layout.tsx`](../../../../../web/app/adminV2/workspace/layout.tsx) calls `getAdminAuth()` then `getAdminAccessContextCached()` on every layout render (hard nav reload tax amplifies this).
 
 **Suspected:** Supabase Auth latency + 4–6 DB round-trips in `resolveAdminAccessCore` dominate; not CPU-bound JS.
 
@@ -108,13 +108,13 @@
 | `workflow-runs?list=kpis` | orgId + operational TZ | Gate; avoid second context call |
 | AI `*/capabilities` | orgId + permission subset | Gate + targeted permission check vs full grant list |
 
-**Client-side:** [`OperationalTasksNavBadge.tsx`](../../../web/app/adminV2/components/OperationalTasksNavBadge.tsx) already skips fetch when `isAdminV2OperNavigationActive(10_000)` — extend pattern to other pollers.
+**Client-side:** [`OperationalTasksNavBadge.tsx`](../../../../../web/app/adminV2/components/OperationalTasksNavBadge.tsx) already skips fetch when `isAdminV2OperNavigationActive(10_000)` — extend pattern to other pollers.
 
 ---
 
 ### 2.5 Why is WU `loader_ms` over 1s?
 
-**Confirmed: serial critical path inside `loadWorkUnitOperationalBootstrap`** ([`loadWorkUnitOperationalBootstrap.ts`](../../../web/lib/workspace/loadWorkUnitOperationalBootstrap.ts)):
+**Confirmed: serial critical path inside `loadWorkUnitOperationalBootstrap`** ([`loadWorkUnitOperationalBootstrap.ts`](../../../../../web/lib/workspace/loadWorkUnitOperationalBootstrap.ts)):
 
 ```text
 dept + wu fetch (parallel)     ~small
@@ -125,9 +125,9 @@ dept + wu fetch (parallel)     ~small
 → getWorkUnitQueueItems (primary lane) primary_lane_rows_ms ~455–537ms
 ```
 
-**Dept bootstrap contrast:** [`loadDeptOperationalBootstrap.ts`](../../../web/lib/workspace/loadDeptOperationalBootstrap.ts) already runs **summaries ∥ attention ∥ pipeline** after shared bootstrap (`Promise.all`).
+**Dept bootstrap contrast:** [`loadDeptOperationalBootstrap.ts`](../../../../../web/lib/workspace/loadDeptOperationalBootstrap.ts) already runs **summaries ∥ attention ∥ pipeline** after shared bootstrap (`Promise.all`).
 
-**Route-level:** [`operational-bootstrap/route.ts`](../../../web/app/api/admin/work-units/[id]/operational-bootstrap/route.ts) already parallelizes **KPI placements** and **right rail** with the bootstrap loader promise — good; they do not explain `loader_ms` wall clock unless bootstrap serial chain is longer than those (~133ms).
+**Route-level:** [`operational-bootstrap/route.ts`](../../../../../web/app/api/admin/work-units/[id]/operational-bootstrap/route.ts) already parallelizes **KPI placements** and **right rail** with the bootstrap loader promise — good; they do not explain `loader_ms` wall clock unless bootstrap serial chain is longer than those (~133ms).
 
 **`primary_lane_rows_ms` is the largest single phase** — full queue row fetch for first lane (limit 20) before response.
 
@@ -534,6 +534,6 @@ cd web && npm run test -- \
 
 - [`adminv2_platform_navigation_performance_sprint.md`](./adminv2_platform_navigation_performance_sprint.md)
 - [`adminv2_performance_phase1_navigation_and_interaction_contracts.md`](./adminv2_performance_phase1_navigation_and_interaction_contracts.md)
-- [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
-- [`adminv2_dept_runtime_closeout_handoff.md`](./completed/adminv2_dept_runtime_closeout_handoff.md)
-- [`docs/archive/2026-06-superseded-system/workspace-system.md`](../system/workspace-system.md) — queue preview boundary
+- [`adminv2_performance_phase2_load_path_architecture.md`](../../../../sprints/archive/05_2026/adminv2_performance_phase2_load_path_architecture.md)
+- [`adminv2_dept_runtime_closeout_handoff.md`](../../../../sprints/archive/05_2026/completed/adminv2_dept_runtime_closeout_handoff.md)
+- [`docs/archive/2026-06-superseded-system/workspace-system.md`](../../../2026-06-superseded-system/workspace-system.md) — queue preview boundary

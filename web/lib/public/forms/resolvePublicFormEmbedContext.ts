@@ -1,5 +1,7 @@
 import { resolveParticipantCanonicalValues } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
+import { resolveAddressBindingPrefill } from "@/lib/forms/prefill/addressBindingPrefill";
+import { mergeLaunchFksPreferringSessionCrmSnapshot } from "@/lib/forms/packets/formPacketService";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
 import {
@@ -241,10 +243,48 @@ export async function resolvePublicFormEmbedContext(
                 step_summaries: stepSummaries ?? undefined,
                 shared_prefill_by_field_id: await (async () => {
                     const values = await participantPrefillValues(supabase, v.orgId, session);
+                    /*
+                     * Address binding is resolved separately and last, because it is the only prefill
+                     * here that is addressed PER GROUP rather than per fact. The canonical value map
+                     * is keyed `entity:field`, so both of a form's address groups ask for
+                     * `person:address_line1` and any answer to that key fills both — which is the
+                     * exact confusion the authored binding exists to prevent. Keyed by field id, one
+                     * group can be answered and another deliberately left empty.
+                     */
+                    /*
+                     * The SESSION's crm_snapshot, not the link's launch metadata. An Enrollment
+                     * packet link carries `form_context_mode: "packet"` but no
+                     * `source_entity_id`, so `deriveSubmissionFksFromLaunchMetadata` returns an
+                     * empty stamp for it and reading the household from there resolves nothing.
+                     * The session is where the household was actually recorded, and preferring it
+                     * is the same precedence `ensurePacketSessionForPublicLink` already applies.
+                     */
+                    const sessionFks = mergeLaunchFksPreferringSessionCrmSnapshot(
+                        launchFks,
+                        (session.crm_snapshot && typeof session.crm_snapshot === "object" && !Array.isArray(session.crm_snapshot)
+                            ? (session.crm_snapshot as Record<string, unknown>)
+                            : {}),
+                    );
+                    const addressValues = await resolveAddressBindingPrefill(
+                        supabase,
+                        envelope.schemaJson as never,
+                        {
+                            orgId: v.orgId,
+                            customerId: sessionFks.customer_id,
+                            customerMemberId: sessionFks.customer_member_id,
+                            /*
+                             * The adult this link was sent to. Validated at mint and never
+                             * client-asserted; the payment view treats the same identity as the payer.
+                             */
+                            participantPersonId:
+                                typeof meta.recipient_person_id === "string" ? meta.recipient_person_id : sessionFks.person_id,
+                        },
+                    );
                     return {
                         ...sharedValuesToFieldIds(envelope.schemaJson as never, values),
                         // Addressed to one destination on this Form, never claimed by another.
                         ...processScopedAnswersToFieldIds(envelope.schemaJson as never, values, envelope.formDefinitionId),
+                        ...addressValues.values,
                     };
                 })(),
             },

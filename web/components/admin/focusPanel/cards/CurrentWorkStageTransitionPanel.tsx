@@ -34,19 +34,33 @@ export default function CurrentWorkStageTransitionPanel({
     const [preflight, setPreflight] = useState<StageTransitionReconciliationPreflight | null>(null);
     const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-    const patchStatus = useCallback(
+    /*
+     * CANONICAL LIFECYCLE BOUNDARY, not the generic record PATCH.
+     *
+     * This panel used to send `status_key` to `PATCH /api/admin/opportunities/[id]`, because that route
+     * was the only one that could reconcile the work being left behind. That reconciliation now lives
+     * in the canonical transition execution, so the configured transition reference goes to the server
+     * and the server decides what it means: ref -> current-stage-scoped resolution -> typed destination
+     * -> enrollment.decide -> transition policy -> reconciliation -> outcome execution.
+     *
+     * The panel no longer names a lifecycle field at all. It sends the operator's intent and, when
+     * asked, the operator's reconciliation answers.
+     */
+    const executeTransition = useCallback(
         async (
-            statusKey: string,
+            configuredRef: string,
             reconciliation?: {
                 work: Array<{ work_id: string; resolution: "completed" | "skipped" | "carry_forward" }>;
                 attention?: "cleared" | "carry_forward";
             },
         ) => {
-            const res = await fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}`, {
-                method: "PATCH",
+            const res = await fetch("/api/admin/enrollment-status-transition/execute", {
+                method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    status_key: statusKey,
+                    opportunity_id: opportunityId,
+                    configured_transition_ref: configuredRef,
+                    source_surface: "opportunity_drawer",
                     ...(reconciliation ? { stage_transition_reconciliation: reconciliation } : {}),
                 }),
             });
@@ -72,31 +86,16 @@ export default function CurrentWorkStageTransitionPanel({
         onComplete();
     }, [onComplete, opportunityId]);
 
+    /*
+     * One attempt. The canonical endpoint answers 409 with the preflight when the operator still owes
+     * a reconciliation decision, so the separate preflight round-trip this panel used to make is gone —
+     * there is one source of that answer now instead of two that could disagree.
+     */
     const runTransition = useCallback(async () => {
         setBusy(true);
         setError(null);
         try {
-            const preflightRes = await fetch(
-                `/api/admin/opportunities/${encodeURIComponent(opportunityId)}/stage-transition-reconciliation/preflight`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ next_status_key: nextStatusKey }),
-                },
-            );
-            const preflightJson = (await preflightRes.json().catch(() => ({}))) as {
-                preflight?: StageTransitionReconciliationPreflight;
-                error?: string;
-            };
-            if (!preflightRes.ok) throw new Error(preflightJson.error ?? "Preflight failed");
-            if (preflightJson.preflight?.required) {
-                setPendingKey(nextStatusKey);
-                setPreflight(preflightJson.preflight);
-                setBusy(false);
-                return;
-            }
-
-            const result = await patchStatus(nextStatusKey);
+            const result = await executeTransition(nextStatusKey);
             if (!result.ok && result.reconciliationRequired && result.preflight) {
                 setPendingKey(nextStatusKey);
                 setPreflight(result.preflight);
@@ -108,7 +107,7 @@ export default function CurrentWorkStageTransitionPanel({
             setError(err instanceof Error ? err.message : "Transition failed");
             setBusy(false);
         }
-    }, [finishOk, nextStatusKey, opportunityId, patchStatus]);
+    }, [executeTransition, finishOk, nextStatusKey]);
 
     useEffect(() => {
         void runTransition();
@@ -165,7 +164,7 @@ export default function CurrentWorkStageTransitionPanel({
                             setBusy(true);
                             setError(null);
                             try {
-                                const result = await patchStatus(pendingKey, reconciliation);
+                                const result = await executeTransition(pendingKey, reconciliation);
                                 if (!result.ok) {
                                     throw new Error("Transition still requires reconciliation.");
                                 }

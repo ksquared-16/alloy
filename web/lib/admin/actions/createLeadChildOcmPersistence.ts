@@ -109,11 +109,22 @@ export function buildCreateLeadOcmInsertRow(args: {
         org_id: orgId,
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
-        // No child enrollment disposition at lead creation: the OCM status domain only defines real
-        // enrollment outcomes (waitlisted/enrolling/enrolled/…), none of which a brand-new lead has.
-        // Leave outcome_status_key null so the child badge is suppressed until enrollment starts —
-        // do NOT write `new_inquiry` (which has no OCM definition and humanizes to "New Inquiry").
-        outcome_status_key: null,
+        /*
+         * FRESH-LEAD DISPOSITION MATCHES PRODUCTION, because this row is a fixture of it.
+         *
+         * This builder feeds `scripts/seedCanonicalLeadE2eFixture.ts`, which INSERTS the row it
+         * returns. It previously wrote null with a comment forbidding `new_inquiry` — describing an
+         * intended end state rather than the shipped one. Live Create Lead resolves the child
+         * participation through `ensureOpportunityCustomerMemberParticipation`, which persists
+         * `new_inquiry`, and this module's own `validateCreateLeadOcmInsertRow` asserts that value.
+         * So the fixture contradicted both production and its sibling validator, and only escaped
+         * notice because the seed validates grain rather than disposition.
+         *
+         * A fixture that does not match what production writes cannot certify what production does.
+         * Converging the WRITER to null is a separate product decision (tracked as D-BP5); until it
+         * is made, the fixture reflects shipped behaviour.
+         */
+        outcome_status_key: NEW_LEAD_STATUS_KEY,
         // No child process stage at lead creation: the child rides the family track until a
         // decision creates the enrollment participation. Stage is a persisted column (S4) — leave
         // it null now; outcome execution writes it when the child enters waitlist/enrolling/etc.

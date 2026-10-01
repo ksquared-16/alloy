@@ -4,7 +4,7 @@
 **Status:** Draft v1 (May 2026)  
 **Scope:** Default childcare lead-to-enrollment lifecycle — statuses, actions, requirements, automations, and BOS guidance.
 
-**Related:** [`alloy_operational_doctrine_v1.md`](./alloy_operational_doctrine_v1.md), [`action_button_lifecycle_alignment_audit.md`](./action_button_lifecycle_alignment_audit.md), [`docs/product/crm-system.md`](../../product/crm-system.md)
+**Related:** [`alloy_operational_doctrine_v1.md`](./alloy_operational_doctrine_v1.md), [`action_button_lifecycle_alignment_audit.md`](./action_button_lifecycle_alignment_audit.md), [`docs/product/crm-system.md`](../../../product/crm-system.md)
 
 ---
 

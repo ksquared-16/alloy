@@ -480,8 +480,9 @@ state always converged, which is what made it easy to miss.
 **Incident.** A `database.read_census` executed that was not intended as program
 work, related to `q15-authority-census.results.json`.
 
-**The artifact is not the defect.** It is preserved, and marked
-[NON-EVIDENCE](../planning/vacilando-os/qa/access-identity-v2/q15-authority-census.NON-EVIDENCE.md).
+**The artifact is not the defect.** It is preserved, and marked NON-EVIDENCE at
+`docs/platform/planning/vacilando-os/qa/access-identity-v2/q15-authority-census.NON-EVIDENCE.md`
+(named as a path, not linked: this doctrine takes no dependency on the planning tree).
 Its contents were not read or interpreted.
 
 **The defect** is that a census naming no query silently became a request to run

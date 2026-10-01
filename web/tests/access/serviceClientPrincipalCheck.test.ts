@@ -111,16 +111,43 @@ describe("W-4 · the check is not vacuous", () => {
         // The kiosk must not have cost the ratchet anything: it resolves, so it is
         // not exempted, and the reviewed-exception ceiling is untouched.
         /*
-         * 23 -> 24 on 2026-09-21, and the edit is the point: this line exists so
-         * that widening the ceiling cannot happen quietly inside an allow-list
-         * commit. The one addition is Governed Scheduled Work's wake, which
-         * resolves no principal BY CONSTRUCTION - its caller is the hosting
-         * platform's clock and the work it claims spans organizations, so there is
-         * no operator subject to resolve. It is admitted on a machine secret and
-         * bounded by the code-owned handler registry. Nothing else moved, and the
-         * transitive-only ceiling is untouched.
+         * THIS LINE IS THE WHOLE POINT, so it is kept current deliberately.
+         *
+         * It exists so that widening the ceiling cannot happen quietly inside an
+         * allow-list commit. It had gone STALE at 24 while the ledger said 25 —
+         * which made this assertion a permanent red rather than a gate, and a
+         * permanently red gate stops being read. Both moves since are recorded
+         * here instead:
+         *
+         *   23 -> 24 (2026-09-21) Governed Scheduled Work's wake, which resolves
+         *     no principal BY CONSTRUCTION: its caller is the hosting platform's
+         *     clock and the work it claims spans organizations, so there is no
+         *     operator subject. Admitted on a machine secret, bounded by the
+         *     code-owned handler registry.
+         *   24 -> 25 (2026-09-25) the Family Enrollment Experience read, the
+         *     twelfth member of the `public/forms/[token]` capability-token family.
+         *   25 -> 26 (2026-09-28) the participant Enrollment PAYMENT surface — the
+         *     thirteenth member of that family and the first that moves MONEY. It
+         *     adds no financial authority: the payer is the link's mint-validated
+         *     recipient, the payable obligation set is recomputed from the token's
+         *     own projection so a substituted charge id is unreachable, the amount
+         *     ceiling and currency are `resolveFamilyCollectible`'s, and cash is
+         *     recognised only from a provider intent read on the server.
+         *   26 -> 27 (2026-09-30) the payer-authorized BANK SETUP surface. It is
+         *     public for the reason the slice exists: saving a bank account
+         *     establishes a debit mandate Stripe's ACH terms require the ACCOUNT
+         *     HOLDER to accept by name, so a route behind an operator session
+         *     would put an operator in front of that mandate. Capability-token,
+         *     on `resolveBankSetupLink`, by digest only — a short code is refused
+         *     for this action type. Org, account and payer come off the
+         *     `action_links` row; the only body field is a setup reference, which
+         *     is re-read from the provider on the server and refused unless the
+         *     org and payer stamped on it at creation match.
+         *
+         * The transitive-only ceiling has not moved across any of them.
          */
-        expect(report.ratchet.max_subject_unresolved).toBe(24);
+        expect(report.ratchet.max_subject_unresolved).toBe(27);
+        expect(report.ratchet.max_transitive_only_unresolved).toBe(13);
         expect(report.violations).toEqual([]);
         // And the kiosk routes resolve WITHOUT reaching a human session, which is
         // the distinction the W-40 cross-check depends on staying visible.

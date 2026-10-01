@@ -35,7 +35,21 @@ const GOVERNED_GLOBS = [
   /^docs\/platform\//,
   /^docs\/system\//,
   /^docs\/product\//,
+  /^docs\/api\//,
+  // The benchmark context pack decides which documents an AI may treat as authoritative.
+  // A manifest about authority that is not itself governed can drift without anything failing.
+  /^docs\/context\//,
 ];
+
+// The partner package's six shipped members are the one documentation output that must NOT
+// carry frontmatter. `web/scripts/buildPartnerPackage.mjs` strips it on the way in — "Internal
+// governance frontmatter is Alloy's bookkeeping, not the partner's" — and
+// web/tests/developerDocs/partnerPackage.test.ts fails the build if `owner:`/`status:` reaches a
+// shipped file. Requiring frontmatter here would ask the generator to ship Alloy's bookkeeping to
+// a partner. Their canonical SOURCES are governed: `package/source/` is deliberately NOT excluded,
+// and the hand-authored canonical documents the generator reads (guide/, external/, openapi/) are
+// governed where they live.
+const GOVERNED_EXCLUSIONS = [/^docs\/api\/developer-platform\/package\/(?!source\/)/];
 
 // `docs/platform/planning/` is a named, dated exception to placement rule 3.
 //
@@ -67,6 +81,9 @@ const CANONICAL_LINK_SCOPES = [
   /^docs\/README\.md$/,
   /^docs\/platform\//,
   /^docs\/system\//,
+  // The context pack's entire job is pointing at documents, so a dead pointer in it is a
+  // blocking error rather than a cosmetic one.
+  /^docs\/context\//,
 ];
 
 // Directories whose every file is machine-produced. docs/api/ is deliberately NOT
@@ -224,6 +241,7 @@ export function parseFrontmatter(text) {
 }
 
 export function isGovernedPath(relPath) {
+  if (GOVERNED_EXCLUSIONS.some((re) => re.test(relPath))) return false;
   return GOVERNED_GLOBS.some((re) => re.test(relPath));
 }
 
@@ -273,15 +291,54 @@ export function resolveLink(fromFile, target, rootDir = ROOT) {
   return { kind: "file", exists: false, resolved: candidates[0], anchor };
 }
 
-function loadReadmeIndexedPaths(readmeText) {
+/**
+ * Every doc path one index cites, by markdown link or by a backticked doc path.
+ *
+ * `fromPath` matters: a domain index cites its children RELATIVELY, so the same
+ * `core/x.md` string means different files depending on which index carries it.
+ */
+function citedDocPaths(fromPath, text, rootDir = ROOT) {
+  const out = new Set();
+  for (const link of extractMarkdownLinks(text)) {
+    const resolved = resolveLink(fromPath, link.target, rootDir);
+    if (resolved.exists && resolved.resolved?.startsWith("docs/")) out.add(resolved.resolved);
+  }
+  for (const match of text.matchAll(/`((?:\.\.\/)*[A-Za-z0-9_][A-Za-z0-9_./-]*\.md)`/g)) {
+    const resolved = resolveLink(fromPath, match[1], rootDir);
+    if (resolved.exists && resolved.resolved?.startsWith("docs/")) out.add(resolved.resolved);
+  }
+  return out;
+}
+
+function loadReadmeIndexedPaths(readmeText, rootDir = ROOT) {
   const indexed = new Set(["docs/README.md"]);
   for (const link of extractMarkdownLinks(readmeText)) {
-    const resolved = resolveLink("docs/README.md", link.target);
+    const resolved = resolveLink("docs/README.md", link.target, rootDir);
     if (resolved.exists && resolved.resolved?.startsWith("docs/")) indexed.add(resolved.resolved);
   }
-  for (const match of readmeText.matchAll(/`((?:platform|schema|governance|system|product|api)\/[^`\s]+)`/g)) {
+  for (const match of readmeText.matchAll(/`((?:platform|schema|governance|system|product|api|context)\/[^`\s]+)`/g)) {
     indexed.add(`docs/${match[1]}`);
     if (!match[1].endsWith(".md")) indexed.add(`docs/${match[1]}.md`);
+  }
+
+  /*
+   * ONE HOP FURTHER, because discoverability is a chain and not a flat list.
+   *
+   * The rule used to ask only "is this file named in docs/README.md", which made every
+   * canonical document reachable through a DOMAIN index an orphan — 67 of them. The cure it
+   * implied was worse than the disease: pasting hundreds of deep links into the root index,
+   * which is not navigation, it is a directory listing that no reader uses.
+   *
+   * So a document counts as discoverable when the root index cites it, OR when an index the
+   * root cites goes on to cite it. That is exactly the documented model — root index → domain
+   * index → canonical child — and nothing further: two hops, not transitive closure, so a
+   * document cited only by another deep document is still correctly an orphan.
+   */
+  for (const indexPath of [...indexed]) {
+    if (!indexPath.endsWith(".md")) continue;
+    const abs = path.join(rootDir, indexPath);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) continue;
+    for (const cited of citedDocPaths(indexPath, fs.readFileSync(abs, "utf8"), rootDir)) indexed.add(cited);
   }
   return indexed;
 }
@@ -302,7 +359,7 @@ export function lintDocumentation(options = {}) {
   const readmeText = fs.existsSync(path.join(rootDir, readmePath))
     ? fs.readFileSync(path.join(rootDir, readmePath), "utf8")
     : "";
-  const indexedPaths = loadReadmeIndexedPaths(readmeText);
+  const indexedPaths = loadReadmeIndexedPaths(readmeText, rootDir);
 
   const violations = [];
   const basenameIndex = new Map();
@@ -582,7 +639,10 @@ export function main(argv = process.argv) {
     const payload = {
       generatedAt: new Date().toISOString(),
       summary,
-      note: "Pre-existing documentation debt baseline for report-only CI enforcement",
+      note:
+        "Documentation debt ceiling. Emptied 2026-09-30 when every class reached zero, so any "
+        + "violation in any class now reads as a debt increase. It is a FLOOR, not an allowance: "
+        + "refresh it downward as debt falls, never upward to accommodate new violations.",
     };
     fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
     console.log(`Wrote baseline ${BASELINE_PATH}`);

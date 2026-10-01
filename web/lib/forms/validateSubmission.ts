@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FormField, FormSchemaV1 } from "./schema";
-import { formSchemaV1Schema } from "./schema";
+import { safeParseFormSchema } from "./schema";
 import { validateCollectionPayloadContract } from "@/lib/forms/collection/formsCollectionSubmissionValidation";
 
 export type FormPayloadMode = "draft" | "submit";
@@ -581,7 +581,17 @@ export function validateFormPayload(input: {
     mode: FormPayloadMode;
     optionValuesByFieldId?: Record<string, readonly string[]>;
 }): ValidateFormPayloadResult {
-    const schemaParsed = formSchemaV1Schema.safeParse(input.schemaJson);
+    /*
+     * The NORMALIZING entry point, not the raw zod object.
+     *
+     * A published version outlives the code that authored it. Admissions v12 carries four field
+     * properties the current schema does not name, and `normalizeLegacyPublishedFormSchema`
+     * translates them before the strict parse — which is why `/resolve` can read it. This call site
+     * reached past that into `formSchemaV1Schema` and so rejected 23 of its 58 fields, which a family
+     * saw as "Invalid submission payload" the moment the page opened a draft. The read path was
+     * repaired and the write path was not.
+     */
+    const schemaParsed = safeParseFormSchema(input.schemaJson);
     if (!schemaParsed.success) {
         return { ok: false, errors: normalizeValidationErrors(schemaParsed.error) };
     }
@@ -671,7 +681,28 @@ export function validateFormPayload(input: {
     };
 
     for (const field of schema.fields) {
+        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
+
         if (field.type === "group") {
+            /*
+             * A COLLECTION THAT DOES NOT APPLY CANNOT BE INCOMPLETE — AND IS NOT A HIDING PLACE.
+             *
+             * This dispatched into `validateGroupInstances` BEFORE visibility was computed, so a
+             * conditional collection was validated as if it were always asked. Measured on a sibling
+             * gate with `repeat.min = 1`: a family answering "No" was refused with "Expected at least
+             * 1 group instance(s)" — blocked for answering honestly, with no way forward, because the
+             * question they answered was the one that hid the collection. The mirror case was just as
+             * wrong: a hidden collection carrying stray rows submitted as VALID.
+             *
+             * Every other field kind already asks this question first; only the group branch skipped
+             * it. Hidden means NOT ASKED, and not asked means neither required nor permitted.
+             */
+            if (!vis) {
+                if (mode === "submit" && (payload.groups?.[field.id]?.length ?? 0) > 0) {
+                    errors.push(err(["groups", field.id], "Group is hidden and must be empty on submit", "custom"));
+                }
+                continue;
+            }
             validateGroupInstances(
                 field,
                 payload.groups?.[field.id],
@@ -684,8 +715,6 @@ export function validateFormPayload(input: {
             );
             continue;
         }
-
-        const vis = evaluateFieldVisibility(field.id, schema, rootLookup);
 
         if (field.type === "signature") {
             const sig = payload.signatures?.[field.id];

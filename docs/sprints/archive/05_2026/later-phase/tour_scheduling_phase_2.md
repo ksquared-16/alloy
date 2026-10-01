@@ -2,7 +2,7 @@
 
 This document extends **Tour Scheduling V1** (`tour_scheduling_v1.md`) after **manual QA sign-off (May 2026)**.
 
-**Band A status (May 2026):** **COMPLETE** — confirmation/reminder/reschedule/cancel comms, quiet hours, add-to-calendar links, booking-backed lifecycle. Closeout: [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). Implementation detail: [`completed/tour_scheduling_phase2_foundation.md`](./completed/tour_scheduling_phase2_foundation.md), [`completed/tour_scheduling_phase2_band_a_readiness.md`](./completed/tour_scheduling_phase2_band_a_readiness.md).
+**Band A status (May 2026):** **COMPLETE** — confirmation/reminder/reschedule/cancel comms, quiet hours, add-to-calendar links, booking-backed lifecycle. Closeout: [`completed/tour_scheduling_phase2_band_a_closeout.md`](../completed/tour_scheduling_phase2_band_a_closeout.md). Implementation detail: [`completed/tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md), [`completed/tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md).
 
 **Band B+:** Planning-only below — calendar sync, public hardening, settings UI, analytics — **deferred** until sequenced.
 
@@ -106,7 +106,7 @@ Phases are **dependency-aware suggestions**; parallel work is possible within ea
 
 | Track | Scope | Rationale |
 |-------|--------|-----------|
-| **Phase 2A** | **Reminders + communications** (workstream 2) | **Band A shipped May 2026** — see [`completed/tour_scheduling_phase2_band_a_closeout.md`](./completed/tour_scheduling_phase2_band_a_closeout.md). |
+| **Phase 2A** | **Reminders + communications** (workstream 2) | **Band A shipped May 2026** — see [`completed/tour_scheduling_phase2_band_a_closeout.md`](../completed/tour_scheduling_phase2_band_a_closeout.md). |
 | **Phase 2B** | **Public booking polish** (workstream 3) + **Platform hardening** subset (rate limits, audit, 2A telemetry) | Reduces reputational and abuse risk before scaling traffic. |
 | **Phase 2C** | **Calendar integrations** (workstream 1) | Depends on clear SoT rules when external calendars disagree with Alloy. |
 | **Phase 2D** | **AI + analytics** (workstreams 6–7) + deeper **workflow automation** (5) | Needs stable event stream, data hygiene, and reporting contracts from 2A–2C. |

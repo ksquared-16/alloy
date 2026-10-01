@@ -123,6 +123,9 @@ export type PaymentSetupState = {
         verificationState: "unverified" | "pending" | "verified" | "failed";
         expMonth: number | null;
         expYear: number | null;
+        /** The canonical owner. Safe identity only — never a provider reference. */
+        payerEntityType: string | null;
+        payerEntityId: string | null;
     }>;
     /**
      * The four questions an operator surface asks about stored methods, answered once here rather
@@ -309,7 +312,13 @@ export async function resolvePaymentSetup(
                   .from("payment_methods")
                   .select(
                       "id, display_brand, display_last4, display_exp_month, display_exp_year, "
-                      + "is_default, rail, usability_state, verification_state",
+                      + "is_default, rail, usability_state, verification_state, "
+                      /* WHO OWNS IT. A stored method belongs to a payer, and a surface that offers
+                         methods without knowing that cannot filter to the payer the operator named
+                         — it would offer Person B's card for a payment Person A is making, which
+                         `collectionAttempt` then refuses as `method_payer_mismatch`. Offering a
+                         choice the server will refuse is worse than not offering it. */
+                      + "payer_entity_type, payer_entity_id",
                   )
                   .eq("org_id", orgId)
                   .eq("customer_id", customerId)
@@ -353,6 +362,8 @@ export async function resolvePaymentSetup(
         verificationState: (t(m.verification_state) || "unverified") as PaymentSetupState["methodsOnFile"][number]["verificationState"],
         expMonth: m.display_exp_month != null ? Number(m.display_exp_month) : null,
         expYear: m.display_exp_year != null ? Number(m.display_exp_year) : null,
+        payerEntityType: t(m.payer_entity_type) || null,
+        payerEntityId: t(m.payer_entity_id) || null,
     }));
 
     const usable = methodsOnFile.filter((m) => m.usabilityState === "usable");

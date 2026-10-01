@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
+import { readAllPages, readInBatches } from "@/lib/financials/workspace/resolveFinancialPosition";
 import {
     resolvePrepaidPositionOutcome,
     type PrepaidPaymentRow,
@@ -67,6 +68,19 @@ export type PrepaidReaderResult = {
 const t = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 /**
+ * HOW MANY RECEIPTS ONE ACCOUNT'S PREPAID POSITION MAY SCAN.
+ *
+ * Matched to `HOUSEHOLD_VIEW_SCAN_CAP`, the cap the household payment view already uses for the
+ * same question at the same grain: one account, all of its receipts. It clears the largest measured
+ * account — 4,750 receipts on the certification tenant — with room that is not wishful.
+ *
+ * Reaching it is UNAVAILABLE, never a smaller figure. The workspace's cohort scans may honestly
+ * report "there is more"; an account's own money may not, because a total computed from part of a
+ * ledger is not a partial answer — it is a wrong one.
+ */
+export const PREPAID_RECEIPT_SCAN_CAP = 25_000;
+
+/**
  * @param authorized  The caller's request-time Financials read decision. `false` yields FORBIDDEN
  *                    without touching the database — the reader never decides authorization itself.
  */
@@ -130,19 +144,56 @@ export async function readAccountPrepaidPosition(
         ? `and(billable_source_type.eq.customer,billable_source_id.eq.${householdId}),`
           + `and(billable_source_type.eq.enrollment_agreement,billable_source_id.in.(${agreementIds.join(",")}))`
         : `and(billable_source_type.eq.customer,billable_source_id.eq.${householdId})`;
-    const paymentsRes = await phase("payments", () => Promise.resolve(supabase
-        .from("payments")
-        .select("id, amount_cents, status")
-        .eq("org_id", orgId)
-        .eq("direction", "inbound")
-        // Refund rows are not receipts; they are read separately as reductions of one.
-        .is("refunds_payment_id", null)
-        .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
-        .or(sourceFilter)));
-    if (paymentsRes.error) {
+    /*
+     * ── PAGED, BECAUSE AN UNPAGED COHORT WAS A SCALE BOUNDARY (Payments V1 · W6-A) ──────────────
+     *
+     * This was one unpaged select. PostgREST answers at most `db-max-rows` — 1,000 here — to ANY
+     * single query, with no error and no header anyone reads, so an account with more receipts than
+     * that was answered with a page the caller treated as whole. HOP 4's `.in("payment_id", …)`
+     * over those thousand ids then overflowed the request URI and failed outright, so the account
+     * reported `unavailable`.
+     *
+     * That failure was HONEST — never a false zero — which is why it was safe to carry out of W6-B.
+     * It was still a ceiling: measured on the certification tenant, a household holding 4,750
+     * receipts on one agreement could not report a prepaid position at all.
+     *
+     * `readAllPages` is the canonical primitive and its doctrine decides the hard part: order
+     * totally so paging cannot repeat or skip a row, and DECIDE WHAT TRUNCATION MEANS. For a single
+     * account's money that is not negotiable — "a number computed from part of a ledger is wrong,
+     * not partial" — so reaching the cap stays UNAVAILABLE rather than becoming a smaller figure
+     * that looks whole.
+     */
+    const paymentsPaged = await phase("payments", async () => {
+        try {
+            const out = await readAllPages<Record<string, unknown>>(
+                "account prepaid receipts",
+                PREPAID_RECEIPT_SCAN_CAP,
+                (from, to) => supabase
+                    .from("payments")
+                    .select("id, amount_cents, status")
+                    .eq("org_id", orgId)
+                    .eq("direction", "inbound")
+                    // Refund rows are not receipts; they are read separately as reductions of one.
+                    .is("refunds_payment_id", null)
+                    .in("billable_source_type", [...CHILDCARE_BILLABLE_SOURCE_TYPES])
+                    .or(sourceFilter)
+                    /* Unique terminal key: range paging over a non-unique order repeats or skips. */
+                    .order("id", { ascending: true })
+                    .range(from, to),
+            );
+            return { rows: out.rows as Array<Record<string, unknown>> | null, truncated: out.truncated };
+        } catch {
+            return { rows: null as Array<Record<string, unknown>> | null, truncated: false };
+        }
+    });
+    if (!paymentsPaged.rows) {
         return done({ state: "unavailable", reason: "payments unreadable" });
     }
-    const payments: PrepaidPaymentRow[] = ((paymentsRes.data ?? []) as Array<Record<string, unknown>>).map((p) => ({
+    if (paymentsPaged.truncated) {
+        /* More receipts than the scan may carry. A partial monetary figure is worse than none. */
+        return done({ state: "unavailable", reason: "account exceeds the prepaid receipt scan cap" });
+    }
+    const payments: PrepaidPaymentRow[] = paymentsPaged.rows.map((p) => ({
         id: t(p.id),
         amountCents: Number(p.amount_cents) || 0,
         status: t(p.status),
@@ -164,18 +215,46 @@ export async function readAccountPrepaidPosition(
     // ── HOP 4 — allocations, refunds and holds together. Batched, never per payment. ─────────────
     diagnostics.queryCount += 3; // holds costs a further disposition read inside the canonical reader
     const [allocRes, refundRes, holds] = await Promise.all([
-        phase("allocations", () => Promise.resolve(supabase
-            .from("payment_allocations")
-            .select("payment_id, allocated_amount_cents")
-            .eq("org_id", orgId)
-            .eq("status", "active")
-            .in("payment_id", paymentIds))),
-        phase("refunds", () => Promise.resolve(supabase
-            .from("payments")
-            .select("refunds_payment_id, amount_cents")
-            .eq("org_id", orgId)
-            .neq("status", "voided")
-            .in("refunds_payment_id", paymentIds))),
+        /*
+         * BATCHED BY ID — the second half of the same defect. `readInBatches` spends the id list in
+         * chunks of `ID_BATCH` so the request URI cannot overflow however many receipts the account
+         * holds, and it throws rather than returning an empty result: a read that fails is an
+         * error, never a cheaper falsehood.
+         */
+        phase("allocations", async () => {
+            try {
+                const rows = await readInBatches<Record<string, unknown>>(
+                    "account prepaid allocations",
+                    paymentIds,
+                    (batch) => supabase
+                        .from("payment_allocations")
+                        .select("payment_id, allocated_amount_cents")
+                        .eq("org_id", orgId)
+                        .eq("status", "active")
+                        .in("payment_id", batch),
+                );
+                return { data: rows as Array<Record<string, unknown>> | null, error: null as { message: string } | null };
+            } catch (e) {
+                return { data: null, error: { message: String(e) } };
+            }
+        }),
+        phase("refunds", async () => {
+            try {
+                const rows = await readInBatches<Record<string, unknown>>(
+                    "account prepaid refunds",
+                    paymentIds,
+                    (batch) => supabase
+                        .from("payments")
+                        .select("refunds_payment_id, amount_cents")
+                        .eq("org_id", orgId)
+                        .neq("status", "voided")
+                        .in("refunds_payment_id", batch),
+                );
+                return { data: rows as Array<Record<string, unknown>> | null, error: null as { message: string } | null };
+            } catch (e) {
+                return { data: null, error: { message: String(e) } };
+            }
+        }),
         phase("holds", () => readHoldsForPayments(supabase, { orgId, paymentIds }).then(
             (h) => ({ ok: true as const, holds: h }),
             () => ({ ok: false as const, holds: [] }),

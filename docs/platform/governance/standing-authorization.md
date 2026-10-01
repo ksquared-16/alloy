@@ -1,7 +1,8 @@
 ---
 owner: platform
-status: shipped
+status: canonical
 last_reviewed: 2026-09-03
+status_note: Vocabulary repair 2026-09-30: status read `shipped`, which is not in the lint vocabulary. The document defines the Standing Authorization contract and is indexed as a canonical owner.
 ---
 
 # Standing Authorization

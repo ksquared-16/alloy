@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/06_2026/presentation-runtime-architecture/05-surface-inventory.md`
 **Status:** Architecture sprint — design only (June 2026)
-**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`07-architecture-recommendations.md`](./07-architecture-recommendations.md)
+**Companion:** [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md), [`07-architecture-recommendations.md`](./07-architecture-recommendations.md)
 
 ---
 
@@ -189,7 +189,7 @@ Each future module **configures existing Design Surface categories** with domain
 
 | Concern | Doc |
 |---|---|
-| Presentation Runtime doctrine | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](./01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
+| Presentation Runtime doctrine | [`01-archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md`](../../../../archive/2026-06-presentation-runtime/presentation-runtime-doctrine.md) |
 | Reuse map | [`06-reuse-map.md`](./06-reuse-map.md) |
 | Architecture recommendations | [`07-architecture-recommendations.md`](./07-architecture-recommendations.md) |
 | Existing surface registry | `web/lib/layout/surfaceLayoutRegistry.ts` |

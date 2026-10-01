@@ -280,7 +280,7 @@ Attention chips + operational read live in `OpportunityDrawerHeaderControls` (be
 
 **Overall:** Enrollment lifecycle can close via gated **`approve_enrollment`**. Remaining gaps: **`reserve_spot` execute**, **`mark_won` deprecation**, BOS action wiring, billing policies, packet paperwork gates.
 
-**Closeout (May 2026):** See [`lifecycle_closeout.md`](./lifecycle_closeout.md) for BOS header finalization, `mark_won` migration plan, `reserve_spot` recommendation, `review_enrollment_packet` runtime gating, and BOS→action readiness inventory (~**84%** sprint completion).
+**Closeout (May 2026):** See [`lifecycle_closeout.md`](./completed/lifecycle_closeout.md) for BOS header finalization, `mark_won` migration plan, `reserve_spot` recommendation, `review_enrollment_packet` runtime gating, and BOS→action readiness inventory (~**84%** sprint completion).
 
 ---
 

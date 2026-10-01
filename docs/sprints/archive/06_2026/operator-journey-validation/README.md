@@ -23,6 +23,6 @@ integration begins.
 
 ## Doctrine validated
 
-- [`operational-grammar.md`](../../../platform/operator/operational-grammar.md)
-- [`card-language.md`](../../../platform/operator/card-language.md) (§ Subject Change)
-- [`operational-context-boundary.md`](../../../platform/operator/operational-context-boundary.md)
+- [`operational-grammar.md`](../../../../platform/operator/operational-grammar.md)
+- [`card-language.md`](../../../../platform/operator/card-language.md) (§ Subject Change)
+- [`operational-context-boundary.md`](../../../../platform/operator/operational-context-boundary.md)

@@ -111,6 +111,38 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      /**
+       * CORE FINANCIALS DIRECTOR QA — one room, and this is not it.
+       *
+       * Two Director QA surfaces were built for Financials on 2026-09-14. The authenticated one
+       * inside the operator shell (`cd5e8ca54`) was superseded the same day by the walkthrough
+       * beside the product (`333e11b09`), because a QA script wearing the product's own chrome is
+       * neither the script nor the product. The integration of the Payments scenarios then landed
+       * on the abandoned one, which is how it came to look canonical: it was deployed, it rendered,
+       * and it was the one under `/workspace`.
+       *
+       * A redirect rather than a 404, because this path was a working URL that people and a
+       * certification spec have both pointed at, and there is exactly one place it can mean. It is
+       * permanent: there is no plan under which an operator-shell Financials QA comes back.
+       */
+      { source: "/workspace/qa/core-financials", destination: "/dev/core-financials-qa", permanent: true },
+      /*
+       * RETIRED — the legacy public home-cleaning product.
+       *
+       * `ea3eaf377` (2026-07-31) retired the cleaning product and deleted its API, including
+       * `/api/book-v2/quote-start` and `/api/book-v2/specialty-quote-start`. It did not remove the
+       * public pages that post to them, so those forms have been submitting to endpoints that do not
+       * exist. Redirecting is what stops a visitor reaching a form that cannot succeed; the dead
+       * components are removed in a follow-up scoped to the marketing site, because the quote modal
+       * they share still serves the live gutters vertical.
+       *
+       * `/quote` chose between cleaning and gutters. Only gutters remains, so it goes there.
+       */
+      { source: "/services/cleaning", destination: "/services", permanent: false },
+      { source: "/services/cleaning/:path*", destination: "/services", permanent: false },
+      { source: "/quote", destination: "/gutters", permanent: false },
+      { source: "/offers/firstfree4x120", destination: "/", permanent: false },
+      { source: "/offers/firstfree4x60", destination: "/", permanent: false },
       /** Phase H1: transitional public routes → canonical `/admin`. */
       { source: "/adminV2", destination: "/organization", permanent: false },
       { source: "/adminV2/:path*", destination: "/admin/:path*", permanent: false },
@@ -356,7 +388,7 @@ const nextConfig: NextConfig = {
        * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
        */
       /**
-       * Core Financials Director QA — an internal operator surface.
+       * Staffing V1 Director QA — an internal operator surface.
        *
        * It lives under `/workspace` because that is `CANONICAL_OPERATOR_BASE`: the middleware's
        * operator gate protects everything beneath it, and nothing redirects it away. The obvious
@@ -366,9 +398,11 @@ const nextConfig: NextConfig = {
        * guessed: `/admin/system` answered with `/organization` and `/admin/roster` with
        * `/workspace`.
        *
+       * Core Financials had a surface here too, and it is gone — see the redirect above. Financials
+       * human QA is walked beside the product, not inside it.
+       *
        * The implementation stays under `/adminV2/*`, like every other operator surface here.
        */
-      { source: "/workspace/qa/core-financials", destination: "/adminV2/system/qa/core-financials" },
       { source: "/workspace/qa/staffing-v1", destination: "/adminV2/system/qa/staffing-v1" },
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },

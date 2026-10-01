@@ -1,0 +1,269 @@
+{
+  "trusted_host_action_id": "tha_5533c1952974a3",
+  "query_hash": "12762b1887a4ed8abd440c9dc3f44de07269376110ccc607fc5224611c7d7a83",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-29T21:03:42.706Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_5533c1952974a3",
+    "query_hash": "12762b1887a4ed8abd440c9dc3f44de07269376110ccc607fc5224611c7d7a83",
+    "authorization_id": "grnt_2e86f133dce744a7",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-29T21:03:47.999Z",
+    "question_ids": [
+      "w5_arrangement",
+      "w5_schedule",
+      "w5_occurrence",
+      "w5_attempt",
+      "w5_collection_attempt",
+      "w5_provider_event",
+      "w5_counts"
+    ],
+    "questions": {
+      "w5_arrangement": {
+        "question_id": "w5_arrangement",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "0fa8c3b7-f4c7-4ccb-9fc5-68fa4999abd0",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "status": "active",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "retry_policy": "standard_v1",
+            "amount_policy": "amount_due",
+            "authorized_at": "2026-09-29T20:57:04.413325+00:00",
+            "failure_count": 0,
+            "timing_policy": "on_due_date",
+            "effective_from": "2026-09-29",
+            "last_attempt_at": "2026-09-29T21:00:01.209+00:00",
+            "payer_entity_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "max_amount_cents": null,
+            "payment_method_id": "dda1bc19-73d4-46e6-b617-9653593861cf",
+            "timing_offset_days": 0,
+            "last_failure_reason": null
+          }
+        ]
+      },
+      "w5_schedule": {
+        "question_id": "w5_schedule",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "77759009-7b12-4dd1-ab6c-d79506072cf1",
+            "label": "Autopay",
+            "is_active": true,
+            "domain_ref": {
+              "arrangement_id": "0fa8c3b7-f4c7-4ccb-9fc5-68fa4999abd0"
+            },
+            "handler_key": "payments.autopay.evaluate",
+            "next_due_at": "2026-09-30T00:00:00+00:00",
+            "recurrence_kind": "daily",
+            "interval_seconds": null
+          }
+        ]
+      },
+      "w5_occurrence": {
+        "question_id": "w5_occurrence",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "c3982355-9e9b-4183-8bd2-a188b89bda9c",
+            "due_at": "2026-09-29T00:00:00+00:00",
+            "status": "completed",
+            "claimed_by": "worker-e721206d",
+            "created_at": "2026-09-29T21:00:00.663639+00:00",
+            "handler_key": "payments.autopay.evaluate",
+            "completed_at": "2026-09-29T21:00:00.481+00:00",
+            "attempt_count": 1,
+            "failure_reason": null,
+            "lease_expires_at": null,
+            "scheduled_work_id": "77759009-7b12-4dd1-ab6c-d79506072cf1"
+          }
+        ]
+      },
+      "w5_attempt": {
+        "question_id": "w5_attempt",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "cd2184c4-058d-40d8-9576-9fcf0e73634f",
+            "outcome": "completed",
+            "worker_id": "worker-e721206d",
+            "diagnostic": {
+              "rail": "card",
+              "lease": "applied",
+              "domain": "autopay",
+              "reason": "autopay: 2 collection attempt(s) created",
+              "attempts": [
+                {
+                  "reused": false,
+                  "chargeId": "74770ad6-17e8-4dfc-b369-5436173428b8",
+                  "attemptId": "524f6001-7c50-4a41-b0b4-1af4ea8c2d10",
+                  "amountCents": 7500
+                },
+                {
+                  "reused": false,
+                  "chargeId": "867b46fc-943e-405b-a555-422e54a1e891",
+                  "attemptId": "6bcabaa4-b40d-40dd-a4f0-6d7a263d11d4",
+                  "amountCents": 1800
+                }
+              ],
+              "refusals": [
+                {
+                  "reason": "amount_exceeds_collectible",
+                  "chargeId": "18e860f9-8ce5-4645-9283-ca3ebcb9a4a9"
+                }
+              ],
+              "collected": true,
+              "total_cents": 9300
+            },
+            "started_at": "2026-09-29T21:00:01.161697+00:00",
+            "finished_at": "2026-09-29T21:00:06.673+00:00",
+            "handler_key": "payments.autopay.evaluate",
+            "occurrence_id": "c3982355-9e9b-4183-8bd2-a188b89bda9c",
+            "attempt_number": 1
+          }
+        ]
+      },
+      "w5_collection_attempt": {
+        "question_id": "w5_collection_attempt",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "524f6001-7c50-4a41-b0b4-1af4ea8c2d10",
+            "rail": "card",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "currency": "USD",
+            "charge_id": "74770ad6-17e8-4dfc-b369-5436173428b8",
+            "processor": "stripe",
+            "created_at": "2026-09-29T21:00:03.78143+00:00",
+            "intent_key": "collect:74770ad6-17e8-4dfc-b369-5436173428b8:7500:card:2026-09-29",
+            "updated_at": "2026-09-29T21:00:06.201+00:00",
+            "merchant_id": "62b2651b-3f4a-4f86-a1e2-8c0ae0f9f1d0",
+            "payer_person_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "processor_state": "succeeded",
+            "payment_method_id": "dda1bc19-73d4-46e6-b617-9653593861cf",
+            "billable_source_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+            "processor_state_at": "2026-09-29T21:00:04.657+00:00",
+            "canonical_posted_at": "2026-09-29T21:00:06.201+00:00",
+            "billable_source_type": "enrollment_agreement",
+            "canonical_payment_id": "441440d3-f60e-4e1d-aef1-064e79508983",
+            "provider_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "expected_settlement_on": null,
+            "requested_amount_cents": 7500,
+            "provider_transaction_id": "pi_3UL887AN1Xn62hhm0rsJQ8rA"
+          },
+          {
+            "id": "6bcabaa4-b40d-40dd-a4f0-6d7a263d11d4",
+            "rail": "card",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "currency": "USD",
+            "charge_id": "867b46fc-943e-405b-a555-422e54a1e891",
+            "processor": "stripe",
+            "created_at": "2026-09-29T21:00:05.621146+00:00",
+            "intent_key": "collect:867b46fc-943e-405b-a555-422e54a1e891:1800:card:2026-09-29",
+            "updated_at": "2026-09-29T21:00:08.314+00:00",
+            "merchant_id": "62b2651b-3f4a-4f86-a1e2-8c0ae0f9f1d0",
+            "payer_person_id": "f06b6750-3db4-4968-824f-6aa6290efda0",
+            "processor_state": "succeeded",
+            "payment_method_id": "dda1bc19-73d4-46e6-b617-9653593861cf",
+            "billable_source_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+            "processor_state_at": "2026-09-29T21:00:06.541+00:00",
+            "canonical_posted_at": "2026-09-29T21:00:08.314+00:00",
+            "billable_source_type": "enrollment_agreement",
+            "canonical_payment_id": "cf7f6930-8513-4690-b382-13e647707cd8",
+            "provider_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "expected_settlement_on": null,
+            "requested_amount_cents": 1800,
+            "provider_transaction_id": "pi_3UL889AN1Xn62hhm3ioN3mkJ"
+          }
+        ]
+      },
+      "w5_provider_event": {
+        "question_id": "w5_provider_event",
+        "row_count": null,
+        "rows": [
+          {
+            "id": "5f433231-22e6-47af-8a23-ce8a22ddcc24",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "processor": "stripe",
+            "disposition": "stale",
+            "received_at": "2026-09-29T21:00:05.240162+00:00",
+            "processed_at": "2026-09-29T21:00:05.457+00:00",
+            "provider_event_id": "evt_3UL887AN1Xn62hhm0whYWwXl",
+            "disposition_detail": "attempt is terminal at succeeded; requires_payment_method is older provider truth and was not applied",
+            "provider_created_at": "2026-09-29T21:00:04+00:00",
+            "provider_event_type": "payment_intent.created",
+            "collection_attempt_id": "524f6001-7c50-4a41-b0b4-1af4ea8c2d10",
+            "connected_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "provider_transaction_id": "pi_3UL887AN1Xn62hhm0rsJQ8rA"
+          },
+          {
+            "id": "78f76477-a144-4002-ae29-0c92a971f6bf",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "processor": "stripe",
+            "disposition": "applied",
+            "received_at": "2026-09-29T21:00:05.273994+00:00",
+            "processed_at": "2026-09-29T21:00:06.24+00:00",
+            "provider_event_id": "evt_3UL887AN1Xn62hhm04PTCo9o",
+            "disposition_detail": "attempt converged to succeeded and posted canonical payment 441440d3-f60e-4e1d-aef1-064e79508983",
+            "provider_created_at": "2026-09-29T21:00:04+00:00",
+            "provider_event_type": "payment_intent.succeeded",
+            "collection_attempt_id": "524f6001-7c50-4a41-b0b4-1af4ea8c2d10",
+            "connected_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "provider_transaction_id": "pi_3UL887AN1Xn62hhm0rsJQ8rA"
+          },
+          {
+            "id": "be4b292d-7c4f-48e0-b9b0-ea35e66dae4b",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "processor": "stripe",
+            "disposition": "applied",
+            "received_at": "2026-09-29T21:00:07.075702+00:00",
+            "processed_at": "2026-09-29T21:00:08.365+00:00",
+            "provider_event_id": "evt_3UL889AN1Xn62hhm3FdADn0y",
+            "disposition_detail": "attempt converged to succeeded and posted canonical payment cf7f6930-8513-4690-b382-13e647707cd8",
+            "provider_created_at": "2026-09-29T21:00:06+00:00",
+            "provider_event_type": "payment_intent.succeeded",
+            "collection_attempt_id": "6bcabaa4-b40d-40dd-a4f0-6d7a263d11d4",
+            "connected_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "provider_transaction_id": "pi_3UL889AN1Xn62hhm3ioN3mkJ"
+          },
+          {
+            "id": "4800d562-1e5b-445a-bf64-e6a963b9d310",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "processor": "stripe",
+            "disposition": "stale",
+            "received_at": "2026-09-29T21:00:07.354035+00:00",
+            "processed_at": "2026-09-29T21:00:07.474+00:00",
+            "provider_event_id": "evt_3UL889AN1Xn62hhm35A0Y63k",
+            "disposition_detail": "attempt is terminal at succeeded; requires_payment_method is older provider truth and was not applied",
+            "provider_created_at": "2026-09-29T21:00:05+00:00",
+            "provider_event_type": "payment_intent.created",
+            "collection_attempt_id": "6bcabaa4-b40d-40dd-a4f0-6d7a263d11d4",
+            "connected_account_ref": "acct_1UIV5GAN1Xn62hhm",
+            "provider_transaction_id": "pi_3UL889AN1Xn62hhm3ioN3mkJ"
+          }
+        ]
+      },
+      "w5_counts": {
+        "question_id": "w5_counts",
+        "row_count": null,
+        "rows": [
+          {
+            "occurrences": 1,
+            "attempts": 1,
+            "collection_attempts": 2,
+            "provider_events": 4
+          }
+        ]
+      }
+    },
+    "row_count": 11
+  }
+}

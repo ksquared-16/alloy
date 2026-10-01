@@ -370,6 +370,9 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
         adjustments: [],
+        /* Nothing restricted on this account. */
+        heldDeposits: [],
+        heldDepositHistory: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -433,6 +436,9 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
         adjustments: [],
+        /* Nothing restricted on this account. */
+        heldDeposits: [],
+        heldDepositHistory: [],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -460,7 +466,7 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
         currentBalance: "$40",
         dueNow: "$40",
         availablePrepaid: null,
-        heldFunds: null,
+        heldFunds: "$675",
         dueLabel: "Due Sep 1",
     },
     pastDue: null,
@@ -481,6 +487,68 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     payments: [],
         // No manual reductions in the lab fixtures: these specimens are about layout.
         adjustments: [],
+        /*
+         * TWO LOTS, DIFFERENT TERMS — the case a single total cannot represent.
+         *
+         * The strip says "$675 held". An operator deciding what to do with it needs to know it is a
+         * refundable $500 security deposit and a non-refundable $175 registration fee, because the
+         * second cannot be refunded whatever the first allows. The partially-disposed lot also shows
+         * `original`, which is the only condition under which that line says anything.
+         */
+        heldDeposits: [
+            {
+                holdId: "hold-spec-security",
+                paymentId: "pay-spec-1",
+                remaining: "$500",
+                remainingCents: 50000,
+                original: null,
+                disposedLines: [],
+                refundable: true,
+                refundableNote: "Refundable on the terms it was taken under",
+                reason: "Security deposit",
+                heldOn: "Aug 1, 2026",
+                policyReference: "policy-deposit-2026",
+                open: true,
+            },
+            {
+                holdId: "hold-spec-registration",
+                paymentId: "pay-spec-1",
+                remaining: "$175",
+                remainingCents: 17500,
+                original: "$250",
+                disposedLines: [{ label: "Applied", value: "$75" }],
+                refundable: false,
+                refundableNote: "Taken as non-refundable",
+                reason: "Registration fee",
+                heldOn: "Aug 1, 2026",
+                policyReference: null,
+                open: true,
+            },
+        ],
+        /*
+         * A lot whose money is entirely gone. It renders under Deposit history and contributes to
+         * nothing — which is the fixture's job here: to show the card that the two lists are
+         * different things.
+         */
+        heldDepositHistory: [
+            {
+                holdId: "hold-spec-spent",
+                paymentId: "pay-spec-1",
+                remaining: "$0",
+                remainingCents: 0,
+                original: "$300",
+                disposedLines: [
+                    { label: "Applied", value: "$200" },
+                    { label: "Released", value: "$100" },
+                ],
+                refundable: true,
+                refundableNote: "Refundable on the terms it was taken under",
+                reason: "Enrollment deposit",
+                heldOn: "Jul 1, 2026",
+                policyReference: null,
+                open: false,
+            },
+        ],
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },

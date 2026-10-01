@@ -158,11 +158,24 @@ describe("RL-19 — declared Financial authority is the EFFECTIVE authority", ()
 });
 
 describe("RL-19 — the fin.* distinctions are not collapsed", () => {
-    it("money-truth operations keep fin.post rather than generic fin.write", () => {
-        for (const route of ["payments/run/route.ts", "payments/[id]/route.ts"]) {
-            const entry = INVENTORY.routes[`app/api/admin/${route}`];
-            const decl = Object.values(entry ?? {}).find((e) => e?.status === "declared");
-            expect(decl?.capability, `${route} posts money truth`).toBe("fin.post");
+    /**
+     * RL-19's money-truth case is REMOVED, not repointed again, because it has no subject left.
+     *
+     * It named `payments/run` and `payments/[id]`; W6-A1 deleted those and repointed it at the four
+     * job/schedule handlers that still held `fin.post`, recording in the same breath that when
+     * `fin.post` retired the case "has no subject and should be removed rather than repointed
+     * again". W6-A2 retired it: all four handlers are gone and the permission is out of the catalog.
+     *
+     * The RULE it protected has not been dropped — it has been made unnecessary. `fin.post` existed
+     * so that money-posting routes would not borrow `fin.write`, which ops holds. There are now NO
+     * money-posting routes: every money write goes through a registered action carrying its own
+     * permission, and the case below is what keeps that true by refusing to let the deleted
+     * duplicates return under any capability.
+     */
+    it("the deleted Payments duplicates are gone from the inventory, not silently rehomed", () => {
+        /* If either came back under any capability, the estate has two ways to post money again. */
+        for (const route of ["payments/run/route.ts", "payments/[id]/route.ts", "payments/route.ts"]) {
+            expect(INVENTORY.routes[`app/api/admin/${route}`], `${route} is retired`).toBeUndefined();
         }
     });
 

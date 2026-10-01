@@ -20,6 +20,8 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { implementedOperations } from "../support/publicSurfaceInventory";
+
 import {
     API_REFERENCE_PATH,
     DOCUMENTATION_BASE_PATH,
@@ -77,7 +79,8 @@ describe("no destination depends on a file the deployed runtime does not have", 
         const spec = JSON.parse(GOVERNED_OPENAPI_DOCUMENT) as { openapi?: string; paths?: object };
         expect(spec.openapi).toMatch(/^3\./);
         expect(Object.keys(spec.paths ?? {}).length).toBeGreaterThan(0);
-        expect(publicOperations().length).toBe(19);
+        // Derived from the implemented route files, so a new operation cannot pass unpublished.
+        expect(publicOperations().length).toBe(implementedOperations().length);
     });
 });
 

@@ -18,33 +18,36 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { allPublicScopes, allKnownScopes } from "@/lib/platform/external/scopeCatalog";
+import {
+    CANONICAL_OPENAPI,
+    catalogOperationIds,
+    implementedOperations,
+    numberWord,
+    openApiOperationIds,
+    openApiOperations,
+    surfaceInventory,
+} from "../support/publicSurfaceInventory";
 import { RATE_LIMIT_POLICY } from "@/lib/platform/external/rateLimit";
 
 const WEB = path.resolve(__dirname, "../..");
 const REPO = path.dirname(WEB);
 const PKG = path.join(REPO, "docs/api/developer-platform/package");
-const spec = JSON.parse(readFileSync(path.join(REPO, "docs/api/openapi/alloy-public-api.v1.json"), "utf8")) as {
+/*
+ * Counts are DERIVED, never pinned.
+ *
+ * This file used to anchor on `{ token: 1, reads: 11, writes: 7, total: 19 }`. When three lifecycle
+ * operations shipped the anchor went red and stayed red, asserting a surface that had been retired
+ * rather than a surface that was wrong — and replacing 19 with 22 would only have re-armed the trap
+ * for the next operation. The expectation now comes from the implemented route files, and the
+ * published artifact is checked against them.
+ */
+const inventory = surfaceInventory();
+const word = numberWord;
+
+/** The published artifact itself, for the scope and parameter claims asserted further down. */
+const spec = JSON.parse(readFileSync(CANONICAL_OPENAPI, "utf8")) as {
     paths: Record<string, Record<string, { "x-required-scope"?: string }>>;
 };
-
-/** Measured, not asserted. */
-const inventory = (() => {
-    let token = 0, reads = 0, writes = 0;
-    for (const [p, ops] of Object.entries(spec.paths)) {
-        for (const method of Object.keys(ops)) {
-            if (p.endsWith("/oauth/token")) token += 1;
-            else if (method === "get") reads += 1;
-            else writes += 1;
-        }
-    }
-    return { token, reads, writes, total: token + reads + writes };
-})();
-
-const WORDS: Record<number, string> = {
-    1: "one", 6: "six", 7: "seven", 11: "eleven", 12: "twelve", 13: "thirteen",
-    14: "fourteen", 15: "fifteen", 19: "nineteen", 20: "twenty",
-};
-const word = (n: number) => WORDS[n] ?? String(n);
 
 const read = (rel: string) => readFileSync(path.join(PKG, rel), "utf8");
 const COVER = "README.md";
@@ -52,16 +55,18 @@ const GUIDE = "01-integrating-with-alloy.md";
 const SPEC = "02-technical-specification.md";
 
 describe("the package tells one consistent story", () => {
-    it("the measured surface is what this batch was told to expect", () => {
-        // A sanity anchor: if these drift, every expectation below drifts with them silently.
-        expect(inventory).toEqual({ token: 1, reads: 11, writes: 7, total: 19 });
+    it("the published artifact describes exactly the implemented surface", () => {
+        // Neither side is the authority for the other, so publishing an operation that does not
+        // exist — or shipping one and not publishing it — fails here rather than reaching a partner.
+        expect(openApiOperations()).toEqual(implementedOperations());
+        expect(openApiOperationIds()).toEqual(catalogOperationIds());
     });
 
     it("the specification states the measured operation counts", () => {
         const body = read(SPEC).toLowerCase();
-        expect(body).toContain(`${word(inventory.total)} operations`);
-        expect(body, "the read count must be stated").toContain(`**${word(inventory.reads)}** are authenticated`);
-        expect(body, "the write count must be stated").toContain(`**${word(inventory.writes)}** are governed domain writes`);
+        expect(body).toContain(`${word(inventory.total)} operations across ${word(inventory.paths)} paths`);
+        expect(body, "the read count must be stated").toContain(`**${word(inventory.reads)} authenticated reads**`);
+        expect(body, "the write count must be stated").toContain(`**${word(inventory.writes)} governed domain writes**`);
     });
 
     it("the specification states the measured grantable scope count", () => {

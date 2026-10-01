@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`  
 **Status:** **CLOSED** (May 2026) — Band A shipped + staging QA complete. Band B+ deferred.  
-**Canonical supplements:** [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md), [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md), [`tour_scheduling_phase_2.md`](../tour_scheduling_phase_2.md), [`docs/execution/roadmap-and-gaps.md`](../../execution/roadmap-and-gaps.md).
+**Canonical supplements:** [`tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md), [`tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md), [`tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md), [`docs/execution/roadmap-and-gaps.md`](../../../../archive/2026-06-execution/roadmap-and-gaps.md).
 
 ---
 
@@ -123,7 +123,7 @@ Items discovered during Band A implementation and staging QA — **not in Band A
 - SMS compliance management (TCPA, opt-out semantics)
 - Org-level comms preview / testing surfaces
 
-**Roadmap pointer:** [`tour_scheduling_phase_2.md`](../tour_scheduling_phase_2.md) (Phase 2B–2D tracks).
+**Roadmap pointer:** [`tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md) (Phase 2B–2D tracks).
 
 ---
 
@@ -146,10 +146,10 @@ Items discovered during Band A implementation and staging QA — **not in Band A
 
 | Doc / path | Role |
 |------------|------|
-| [`tour_scheduling_phase2_foundation.md`](./tour_scheduling_phase2_foundation.md) | Phase 2 audit, bands, cards |
-| [`tour_scheduling_phase2_band_a_readiness.md`](./tour_scheduling_phase2_band_a_readiness.md) | Batch plan, code map, staging SQL |
+| [`tour_scheduling_phase2_foundation.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_foundation.md) | Phase 2 audit, bands, cards |
+| [`tour_scheduling_phase2_band_a_readiness.md`](../../../../archive/sprints-superseded/05_2026/completed-intermediate/tour_scheduling_phase2_band_a_readiness.md) | Batch plan, code map, staging SQL |
 | [`tour_scheduling_v1.md`](../tour_scheduling_v1.md) | V1 shipped baseline |
-| [`tour_scheduling_phase_2.md`](../tour_scheduling_phase_2.md) | Phase 2 roadmap sketch + Band B+ tracks |
+| [`tour_scheduling_phase_2.md`](../later-phase/tour_scheduling_phase_2.md) | Phase 2 roadmap sketch + Band B+ tracks |
 | `web/lib/tours/comms/*` | Band A comms implementation |
 | `web/lib/tours/bookings/tourBookingService.ts` | Lifecycle hooks |
 | `docs/product/communications.md` | Canonical comms doctrine |

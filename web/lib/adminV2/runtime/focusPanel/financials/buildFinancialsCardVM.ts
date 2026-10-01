@@ -146,6 +146,22 @@ export type FinancialsPaymentRow = {
      */
     unappliedCents: number;
     /**
+     * How much of THIS receipt is currently restricted by a hold.
+     *
+     * Carried per receipt and not only as the account total, because holding is an act on a receipt:
+     * an operator choosing what to restrict needs to know what is already restricted on the one in
+     * front of them. `unappliedCents - heldCents` is what remains holdable, and the database's own
+     * INVARIANT 2 enforces that bound — this figure exists so the surface agrees with it rather than
+     * offering an act the trigger will refuse.
+     *
+     * OPTIONAL, because it is resolved by a LATER read than the rest of the row. The holds read can
+     * fail on its own — the VM catches that and reports the account as unable to answer rather than
+     * as unrestricted — and a row composed before that read has no honest value to carry. Every
+     * consumer defaults it to zero, which is also the right reading for the callers that never ask
+     * for holds at all.
+     */
+    heldCents?: number;
+    /**
      * The household the receipt was taken against, named. Null when canonical data cannot name it —
      * an absent label is never replaced with a guess, because the wrong family on a payment is worse
      * than no family at all.
@@ -875,8 +891,19 @@ export async function readResponsibility(
             name: p.name,
             // A REAL share, because a real allocation assigned it.
             share: `$${(p.assignedCents / 100).toFixed(2)}`,
-            // Still null: there is no per-payer payment-method store, and inventing one here would
-            // repeat exactly the mistake Thread 2 refused to make about shares.
+            /*
+             * Still null HERE, and deliberately so — but no longer for the original reason.
+             *
+             * When this was written there was no stored-method authority at all. Payments W2 then
+             * shipped `payment_methods`, and `vm.paymentCapabilities` on this same VM now carries
+             * the canonical answer, including `summaryLine`. The presentation adapter reads it
+             * from there.
+             *
+             * What is still genuinely absent is a PER-PAYER answer: `methodsOnFile` is scoped to
+             * the household, not to one payer, so a per-payer line cannot be resolved without
+             * widening the canonical model. Leaving this null keeps that honest, and the adapter
+             * falls back to the account-level line rather than to a claim.
+             */
             method: null,
         })),
         expectedFunding: ((fundingRows ?? []) as Array<Record<string, unknown>>).map((f) => ({
@@ -1075,6 +1102,7 @@ async function readAccountPayments(
             // Enriched below from the canonical application composition; a payment read that never
             // reaches it still renders, with no applications rather than invented ones.
             unappliedCents: 0,
+            heldCents: 0,
             payerLabel: null,
             applications: [],
             reference: t(raw.reference_number) || null,
@@ -2009,6 +2037,15 @@ async function buildFinancialsCardVMInner(
                 const held = heldCentsFor(v.paymentId, holds);
                 if (held > 0) heldByPayment[v.paymentId] = held;
             }
+            /*
+             * Folded onto the receipts AFTER the holds are read, because it cannot be known before.
+             * Same authority as the account total below — one read of the lots, two consumers, so a
+             * receipt's held figure cannot disagree with the strip's.
+             */
+            vm.payments = vm.payments.map((row) => ({
+                ...row,
+                heldCents: heldByPayment[row.paymentId] ?? 0,
+            }));
             vm.prepaid = resolveAccountPrepaidPosition(views, heldByPayment);
             /* Details owns held-money administration and needs the lots, not just the total. */
             vm.heldDeposits = holds.filter((h) => h.remainingCents > 0 || h.dispositions.length > 0);

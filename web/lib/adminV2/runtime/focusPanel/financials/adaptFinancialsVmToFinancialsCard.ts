@@ -160,19 +160,30 @@ export function adaptFinancialsVmToFinancialsCard(input: {
      * arrives here because a persisted responsibility allocation named them, and their share is the
      * cents that allocation assigned — never a percentage derived here.
      *
-     * `method` is still null, and for the original reason: there is no per-payer payment method
-     * store, and inventing one here would repeat exactly the mistake this note was written about.
+     * `method` NO LONGER FALLS BACK TO A CLAIM.
+     *
+     * The original note said there was no per-payer payment-method store, so `vm.payers[].method`
+     * was hardcoded null — and that was true when it was written. Payments W2 then shipped
+     * `payment_methods`, and this line did not move: it kept turning "we never looked" into the
+     * positive sentence "No payment method on file", which an operator read beside a Manage
+     * payments panel showing `visa •••• 4242 Ready`.
+     *
+     * `paymentSubjectModel` already holds the answer and already states the rule — its
+     * `summaryLine` is "the one line a compact surface may show", and it is null "when there is
+     * genuinely nothing to say, which is different from 'no payment method on file', a claim this
+     * cannot make without looking". That module DOES look: it says the brand and last four when a
+     * usable method exists, names an unverified bank or one needing attention, and only says "No
+     * payment method on file" when the household genuinely has none AND storing one is something
+     * this organisation could do.
+     *
+     * So the fallback is now that line, and null stays null. Saying nothing is the correct output
+     * for an unknown; the bug was never the wording, it was answering at all.
      */
+    const methodLine = vm.paymentCapabilities?.summaryLine ?? null;
     const payers: FinancialsPayer[] = vm.payers.map((p) => ({
         name: p.name,
         share: p.share ?? "",
-        /*
-         * THE CANONICAL SENTENCE FOR THIS STATE, not a shorter one meaning the same thing.
-         * `paymentSubjectModel` and the payment-methods surface both say "No payment method on
-         * file"; this said "No method on file", so the same fact wore two names depending on
-         * which surface an operator happened to read it on.
-         */
-        method: p.method ?? "No payment method on file",
+        method: p.method ?? methodLine ?? "",
     }));
 
     return {
@@ -366,6 +377,23 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 appliedLabel: money(p.appliedCents, p.currencyCode || currency),
                 unappliedLabel: money(p.unappliedCents, p.currencyCode || currency),
                 unappliedCents: p.unappliedCents,
+                /*
+                 * WHAT IS LEFT TO RESTRICT. Clamped at zero rather than allowed negative: the two
+                 * figures come from one read of the same lots, but a receipt whose holds somehow
+                 * exceeded its unapplied money must not render as a negative offer — the surface
+                 * would be arguing with the invariant instead of declining to act.
+                 */
+                holdableCents: Math.max(0, p.unappliedCents - (p.heldCents ?? 0)),
+                /* What of this receipt is restricted — the difference the row has to be able to state. */
+                heldCents: p.heldCents ?? 0,
+                /*
+                 * THE SAME MONEY, NAMED FOR THE OTHER ACT. Unapplied money that no lot restricts is
+                 * both what may be held and what may be APPLIED, and the apply control was quoting
+                 * `unappliedLabel` — the whole receipt, deposits included. On deployed that read
+                 * "Apply $522.00" beside an Available prepaid of $407.00, and the authority let the
+                 * difference be spent.
+                 */
+                applicableLabel: money(Math.max(0, p.unappliedCents - (p.heldCents ?? 0)), p.currencyCode || currency),
                 applications: p.applications.map((a) => ({
                     allocationId: a.allocationId,
                     chargeId: a.chargeId,
@@ -406,6 +434,116 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 applied: r.chargeStatus === "posted",
                 reversed: r.reversedByApplicationId !== null,
                 isReversal: r.reversesApplicationId !== null,
+            })),
+        /*
+         * THE HELD LOTS BEHIND THE TOTAL.
+         *
+         * CLOSED LOTS ARE DROPPED. A hold with nothing remaining is history: it offers no act, and
+         * listing it beside open ones would put rows an operator cannot do anything with in a
+         * section that exists to be acted on. What became of the money is still recoverable from the
+         * receipt's own applications and refunds, which is where it belongs.
+         *
+         * Nothing here is computed. `remainingCents` is the reader's fold over the dispositions, the
+         * same fold the invariant trigger enforces, and the adapter only formats it — a subtraction
+         * done here could disagree with the boundary that refuses an over-disposal.
+         */
+        heldDeposits: (vm.heldDeposits ?? [])
+            .filter((h) => h.open)
+            .map((h) => ({
+                holdId: h.id,
+                paymentId: h.paymentId,
+                remaining: money(h.remainingCents, currency),
+                remainingCents: h.remainingCents,
+                /*
+                 * Shown ONLY when part of the lot is gone, because that is the only time it explains
+                 * anything. On an untouched hold "held $500, $500 remaining" is the same fact twice.
+                 */
+                original:
+                    h.remainingCents !== h.originalAmountCents
+                        ? money(h.originalAmountCents, currency)
+                        : null,
+                disposedLines: [
+                    ...(h.releasedCents > 0 ? [{ label: "Released", value: money(h.releasedCents, currency) }] : []),
+                    ...(h.appliedCents > 0 ? [{ label: "Applied", value: money(h.appliedCents, currency) }] : []),
+                    ...(h.refundedCents > 0 ? [{ label: "Refunded", value: money(h.refundedCents, currency) }] : []),
+                ],
+                refundable: h.refundable,
+                /*
+                 * FROM THE SNAPSHOT, NOT FROM CURRENT POLICY. The terms a family was promised do not
+                 * change because the organisation's policy did, which is the entire reason the terms
+                 * are stored on the hold.
+                 */
+                refundableNote: h.refundable
+                    ? "Refundable on the terms it was taken under"
+                    : "Taken as non-refundable",
+                reason: h.reason,
+                /* Never a raw ISO date on an operator surface. */
+                heldOn: displayDate(h.heldAt),
+                /*
+                 * PROVENANCE ONLY, and named as provenance. It is not consulted to decide
+                 * refundability — `refundable` above is — and it is not offered as a link, because a
+                 * deposit policy has no operator surface to reach.
+                 */
+                policyReference: h.policyId,
+                open: h.open,
+            })),
+
+        /*
+         * ── A DEPOSIT'S LIFE DOES NOT END WHEN ITS MONEY DOES ───────────────────────────────────
+         *
+         * A lot whose remaining reaches zero left the held list entirely, and with it went the only
+         * surface that could say what was held, why, on what terms, and what became of it. The
+         * history was never lost — the dispositions are append-only and the reader already folds
+         * them — but nothing rendered it, so the questions the held row exists to answer stopped
+         * being answerable the moment the lifecycle completed.
+         *
+         * SEPARATE FROM THE POSITION, DELIBERATELY. These lots contribute to no figure: not Held
+         * deposit, not Available prepaid, not Current balance. `remainingCents` is zero and every
+         * total folds the same dispositions, so a completed lot cannot add to anything by being
+         * rendered. It is history, and it is shown as history.
+         *
+         * NO SECOND TABLE. Same rows, same fold, same provenance authority — only the filter
+         * differs.
+         */
+        heldDepositHistory: (vm.heldDeposits ?? [])
+            .filter((h) => !h.open && h.dispositions.length > 0)
+            .map((h) => ({
+                holdId: h.id,
+                paymentId: h.paymentId,
+                remaining: money(h.remainingCents, currency),
+                remainingCents: h.remainingCents,
+                /*
+                 * Shown ONLY when part of the lot is gone, because that is the only time it explains
+                 * anything. On an untouched hold "held $500, $500 remaining" is the same fact twice.
+                 */
+                original:
+                    h.remainingCents !== h.originalAmountCents
+                        ? money(h.originalAmountCents, currency)
+                        : null,
+                disposedLines: [
+                    ...(h.releasedCents > 0 ? [{ label: "Released", value: money(h.releasedCents, currency) }] : []),
+                    ...(h.appliedCents > 0 ? [{ label: "Applied", value: money(h.appliedCents, currency) }] : []),
+                    ...(h.refundedCents > 0 ? [{ label: "Refunded", value: money(h.refundedCents, currency) }] : []),
+                ],
+                refundable: h.refundable,
+                /*
+                 * FROM THE SNAPSHOT, NOT FROM CURRENT POLICY. The terms a family was promised do not
+                 * change because the organisation's policy did, which is the entire reason the terms
+                 * are stored on the hold.
+                 */
+                refundableNote: h.refundable
+                    ? "Refundable on the terms it was taken under"
+                    : "Taken as non-refundable",
+                reason: h.reason,
+                /* Never a raw ISO date on an operator surface. */
+                heldOn: displayDate(h.heldAt),
+                /*
+                 * PROVENANCE ONLY, and named as provenance. It is not consulted to decide
+                 * refundability — `refundable` above is — and it is not offered as a link, because a
+                 * deposit policy has no operator surface to reach.
+                 */
+                policyReference: h.policyId,
+                open: h.open,
             })),
     };
 }
@@ -756,5 +894,8 @@ export function hydratingFinancialsEvidence(): FinancialsEvidence {
         upcoming: [],
         payments: [],
         adjustments: [],
+        /* The degraded payload claims no holds rather than inventing an empty position. */
+        heldDeposits: [],
+        heldDepositHistory: [],
     };
 }

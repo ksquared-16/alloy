@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-26
+supersedes: []
+---
+
 # Vacilando Product Architecture
 
 *The canonical entry point to the Vacilando product architecture. Read this first.*

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-29
+supersedes: []
+---
+
 # Mapping worksheet
 
 **Alloy's side is filled in. Yours is not, and we have deliberately not guessed.**

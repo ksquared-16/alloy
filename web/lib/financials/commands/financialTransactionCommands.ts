@@ -17,7 +17,14 @@ export const FINANCIAL_TRANSACTION_ACTIONS = {
     adjust: "billing.adjust_account",
     reverseAdjustment: "billing.reverse_adjustment",
     movePayment: "payment.reverse_application",
-    applyPayment: "payment.apply",
+    /*
+     * `payment.apply` was never a registered action — the canonical key has always been
+     * `payment.apply_to_charge`. This table's own contract is that the keys are "spelled once, so
+     * no host can invent a variant", and it was carrying the variant: the label reached the DOM as
+     * `data-charge-command` and mounted instrumentation therefore reported a key the registry does
+     * not contain. Nothing dispatched it, so nothing was broken — which is exactly why it survived.
+     */
+    applyPayment: "payment.apply_to_charge",
     /*
      * WHO OWES THIS ONE OBLIGATION — the charge-grain half of responsibility.
      *

@@ -1,7 +1,7 @@
 # Workspace V3 — Operational Command Center Sprint
 
 **Status:** Design blueprint (pre-implementation) — June 2026  
-**Canonical doctrine:** [`docs/platform/operator/workspace-v3-command-center-doctrine.md`](../../../platform/operator/workspace-v3-command-center-doctrine.md)  
+**Canonical doctrine:** [`docs/platform/operator/workspace-v3-command-center-doctrine.md`](../../../../platform/operator/workspace-v3-command-center-doctrine.md)  
 **Scope:** `/workspace` landing only — **not** Work Units, Queues, Focus Panel, Universal Cards, or BOS  
 **Runtime:** Frozen — compose and elevate existing systems
 
@@ -25,7 +25,7 @@ This sprint redesigns `/workspace` around the operating system doctrine: four op
 
 | # | Deliverable | Section |
 |---|-------------|---------|
-| 1 | Workspace V3 doctrine | [Canonical doc](../../../platform/operator/workspace-v3-command-center-doctrine.md) |
+| 1 | Workspace V3 doctrine | [Canonical doc](../../../../platform/operator/workspace-v3-command-center-doctrine.md) |
 | 2 | Information architecture | [§2](#2-information-architecture) |
 | 3 | Complete page layout | [§3](#3-complete-page-layout) |
 | 4 | Business Process card redesign | [§4](#4-business-process-card-redesign) |
@@ -473,7 +473,7 @@ Each row validates that the four-zone model + Business Process card doctrine wor
 
 ## Related
 
-- [`workspace-v3-command-center-doctrine.md`](../../../platform/operator/workspace-v3-command-center-doctrine.md)
-- [`navigation-and-workspace-doctrine.md`](../../../platform/core/navigation-and-workspace-doctrine.md)
-- [`operational-surface-design-system.md`](../../../platform/operator/operational-surface-design-system.md)
-- [`adminv2-runtime-performance-doctrine.md`](../../../system/adminv2-runtime-performance-doctrine.md)
+- [`workspace-v3-command-center-doctrine.md`](../../../../platform/operator/workspace-v3-command-center-doctrine.md)
+- [`navigation-and-workspace-doctrine.md`](../../../../platform/core/navigation-and-workspace-doctrine.md)
+- [`operational-surface-design-system.md`](../../../../platform/operator/operational-surface-design-system.md)
+- [`adminv2-runtime-performance-doctrine.md`](../../../../system/adminv2-runtime-performance-doctrine.md)

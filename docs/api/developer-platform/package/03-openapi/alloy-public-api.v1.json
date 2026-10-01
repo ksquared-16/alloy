@@ -23,6 +23,10 @@
   ],
   "tags": [
     {
+      "name": "Attendance",
+      "description": "Append-only attendance facts and governed attendance submission."
+    },
+    {
       "name": "Authentication",
       "description": "Exchanging an installation credential for a short-lived access token."
     },
@@ -290,7 +294,7 @@
       "get": {
         "operationId": "listAttendanceEvents",
         "tags": [
-          "Locations"
+          "Attendance"
         ],
         "summary": "List canonical attendance facts",
         "description": "Append-only attendance facts for children at sites within this installation's location boundary.\n\nNothing in this collection is ever removed or rewritten. A mistake is corrected by a later fact whose `entry_type` is `correction` (it restates) or `reversal` (it voids), and which names the fact it supersedes in `corrects_event_id`. Fold them the way Alloy does: a superseded fact is no longer effective, and a reversal leaves nothing behind but its own record. Because nothing disappears, a consumer that has read every page holds the complete history.\n\nOrder and synchronization both advance on `recorded_at` \u2014 when Alloy recorded the fact \u2014 not on `event_at`. A correction to last week is recorded today and therefore arrives today; ordering by when things happened would file it behind a checkpoint you had already passed.\n\n## Keeping a copy in step\n\n1. Bootstrap: request without `since_token` or `updated_since`.\n2. Follow `next_cursor` until it is null, storing each page as you go.\n3. When the pass completes, persist the `sync_token` from the last page you consumed. Persist it only after the whole pass succeeded \u2014 a token saved mid-pass would skip whatever you did not store.\n4. Next time, request with `since_token` set to the value you persisted.\n5. Follow `next_cursor` to exhaustion again, then persist the new `sync_token`.\n\nA `sync_token` identifies one record, not an instant, so records sharing a timestamp are neither skipped nor repeated. If you checkpoint with `updated_since` instead, supply the exact `recorded_at` you stopped at \u2014 it is matched at full precision.\n\n### Example\n\nBootstrap, then resume:\n\n```\nGET /api/v1/attendance-events?limit=200\n  -> { \"data\": [...], \"next_cursor\": \"eyJ...\", \"sync_token\": \"eyJ...\" }\nGET /api/v1/attendance-events?limit=200&cursor=eyJ...\n  -> { \"data\": [...], \"next_cursor\": null, \"sync_token\": \"eyJhZ...\" }\n\n# store \"eyJhZ...\", then later:\nGET /api/v1/attendance-events?limit=200&since_token=eyJhZ...\n  -> only facts recorded after the one that token names\n```\n\nNarrow a sync to one site or one child with `site_id` or `child_id`; filters never widen what your installation may read.",
@@ -442,7 +446,7 @@
       "post": {
         "operationId": "submitAttendanceEvents",
         "tags": [
-          "Locations"
+          "Attendance"
         ],
         "summary": "Submit attendance facts",
         "description": "Record attendance facts for children at locations within this installation's boundary.\n\nAttendance is a ledger, not a mutable record. There is no update and no delete: a mistake is fixed by submitting a **correction**, which restates the fact and names the event it supersedes, or a **reversal**, which voids it and asserts nothing in its place. Both appear through `GET /api/v1/attendance-events` as new facts carrying `corrects_event_id`.\n\n## Each event is judged on its own\n\nThis operation is **not atomic**. Every event you send gets its own durable outcome, and one unmapped identifier does not discard the events either side of it. The response is `200` whenever the batch was processed \u2014 including when every event was refused \u2014 so read `results`, not the status code. Results may be returned in any order; match them by `external_event_id`.\n\nEvents are applied in the order you send them, so a correction may name an original earlier in the same batch.\n\n## Retrying is safe\n\n`external_event_id` is the replay identity. If a request times out or you are unsure whether it arrived, send it again: an event Alloy already accepted comes back as `replayed` with the fact it recorded the first time, and nothing is created twice. Reusing an id for DIFFERENT content is a `conflict` \u2014 use a new id for a new fact, or submit a correction. You do not need an idempotency header; your own event id is the key.\n\n## Identifiers\n\nChildren and rooms are named with YOUR identifiers, as mapped for this installation. Alloy never creates a record from an identifier it does not recognise: an unmapped identifier returns `pending_mapping`, and the event applies when you submit it again after the mapping exists.\n\n## Reading your own writes\n\nAn accepted fact is immediately readable through `GET /api/v1/attendance-events` at its `recorded_at` position, so a synchronizing consumer picks it up on the next incremental pass.",

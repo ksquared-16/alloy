@@ -125,6 +125,20 @@ export default async function ActionLinkPage({
     if (actionType === "customer_cancel") {
         redirect(`/action/${encodeURIComponent(resolvedToken)}`);
     }
+    /*
+     * A PAYER AUTHORIZING A BANK DEBIT gets its own surface, not the generic `/action` one: the
+     * page mounts the provider's own fields and shows mandate terms the payer must read before
+     * they agree, none of which the shared consume-and-confirm page does.
+     *
+     * It is deliberately among the types that require the PLAINTEXT token — a short code bounces a
+     * few lines above, with its reason logged. A tour can be rescheduled from an eight-character
+     * code because the worst case is a stranger moving an appointment; this one ends in a standing
+     * authorization to debit a family's bank account, and the bearer credential for that is the
+     * full token or nothing.
+     */
+    if (actionType === "payment_method_setup" && entityType === "person") {
+        redirect(`/bank-setup/${encodeURIComponent(resolvedToken)}`);
+    }
 
     // Unrecognised action type. Unchanged from before this repair — widening it would be
     // inventing routing, not fixing a dropped column.

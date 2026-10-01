@@ -19,12 +19,12 @@
 
 | Topic | Document |
 |-------|----------|
-| Runtime validation | [`docs/system/forms-intake-runtime-validation.md`](../../system/forms-intake-runtime-validation.md) |
-| Operating phase | [`docs/system/forms-intake-runtime-phase.md`](../../system/forms-intake-runtime-phase.md) |
-| Prefill / launch context | [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md) |
-| Inbox operationalization (OI-4) | [`forms_intake_inbox_operationalization.md`](./forms_intake_inbox_operationalization.md) |
-| Demo childcare test | [`forms_runtime_test_2d_demo_childcare_intake.md`](./forms_runtime_test_2d_demo_childcare_intake.md) |
-| Product | [`docs/product/documents-and-forms.md`](../../platform/modules/documents-and-forms.md) |
+| Runtime validation | `docs/system/forms-intake-runtime-validation.md` (`../../system/forms-intake-runtime-validation.md`) |
+| Operating phase | [`docs/system/forms-intake-runtime-phase.md`](forms-intake-runtime-phase.md) |
+| Prefill / launch context | [`docs/system/forms-intake-prefill-doctrine.md`](forms-intake-prefill-doctrine.md) |
+| Inbox operationalization (OI-4) | [`forms_intake_inbox_operationalization.md`](../forms_intake_inbox_operationalization.md) |
+| Demo childcare test | [`forms_runtime_test_2d_demo_childcare_intake.md`](../../../../archive/sprints-superseded/05_2026/forms-runtime-debug/forms_runtime_test_2d_demo_childcare_intake.md) |
+| Product | [`docs/product/documents-and-forms.md`](../../../../platform/modules/documents-and-forms.md) |
 
 ---
 
@@ -241,7 +241,7 @@ Review mode UI maps to runtime: `always` | `confidence` (exception-based) | `nev
 2. `buildFormIntakeMetaFromPayload` → structured `payload.meta.intake` hints (vertical, guardian, child, opportunity hints)
 3. `applyFormIntakeSafe` → CRM FKs + outcome meta on submission
 
-**Location / work unit / vertical / source** come from **link metadata**, not form definition. Doctrine confirmed in [`forms-intake-runtime-phase.md`](../../system/forms-intake-runtime-phase.md) §2.
+**Location / work unit / vertical / source** come from **link metadata**, not form definition. Doctrine confirmed in [`forms-intake-runtime-phase.md`](forms-intake-runtime-phase.md) §2.
 
 **Demo path:** `scripts/prepareDemoChildcareMedicationIntakeTest.ts` patches link metadata for Demo Childcare Co — production operators today rely on scripts or manual JSON PATCH.
 
@@ -444,7 +444,7 @@ Location and routing may come from (combine only where metadata explicitly merge
 5. Existing-record launch (`source_entity_*`)
 6. Operator manual correction post-submit
 
-See [`forms-intake-runtime-phase.md`](../../system/forms-intake-runtime-phase.md) §2.
+See [`forms-intake-runtime-phase.md`](forms-intake-runtime-phase.md) §2.
 
 ## Review doctrine (target)
 
@@ -791,7 +791,7 @@ Entity type: `form_submissions` · entity id: submission id.
 
 - Tokens bind to existing field keys
 - Preview/runtime render placeholders → values
-- Status: **not built** — aligns with [`forms-intake-runtime-phase.md`](../../system/forms-intake-runtime-phase.md) §5
+- Status: **not built** — aligns with [`forms-intake-runtime-phase.md`](forms-intake-runtime-phase.md) §5
 
 **Do not implement unless explicitly selected.**
 
@@ -1146,7 +1146,7 @@ Intake process is inferred from link metadata + form key: enrollment lead, exist
 **Direction documented:**
 
 - `form_context_mode: existing_record` on distribution link → **Existing family update** process (attach evidence, no duplicate lead)
-- Prefill via launch context per [`docs/system/forms-intake-prefill-doctrine.md`](../../system/forms-intake-prefill-doctrine.md)
+- Prefill via launch context per [`docs/system/forms-intake-prefill-doctrine.md`](forms-intake-prefill-doctrine.md)
 - Submissions stamp `opportunity_id` / session context when bound; intake dedup attaches instead of creating
 - UX placement: same “What this form does” rail; process template switches copy from “Creates lead” to “Updates existing record”
 

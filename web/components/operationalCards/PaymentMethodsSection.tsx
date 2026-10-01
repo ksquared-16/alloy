@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CreditCard, Landmark, Plus, RefreshCw } from "lucide-react";
 
 import PaymentMethodSetupField from "@/components/operationalCards/PaymentMethodSetupField";
+import { announcePaymentMethodsChanged } from "@/lib/financials/payments/paymentMethodEvents";
 import { executePaymentMethodCommand } from "@/lib/financials/payments/paymentMethodCommands";
 
 export type StoredMethod = {
@@ -37,6 +38,8 @@ export type StoredMethod = {
     verificationState: "unverified" | "pending" | "verified" | "failed";
     usabilityState: "usable" | "blocked" | "expired" | "revoked";
     isDefault: boolean;
+    payerEntityType?: string | null;
+    payerEntityId?: string | null;
     revokedAt: string | null;
 };
 
@@ -118,16 +121,31 @@ export default function PaymentMethodsSection({
     }, [load]);
 
     const run = useCallback(
-        async (key: string, command: "add" | "setDefault" | "revoke", payload: Record<string, unknown>) => {
+        async (
+            key: string,
+            command: "add" | "requestSetup" | "setDefault" | "revoke",
+            payload: Record<string, unknown>,
+        ) => {
             setBusy(key);
             setError(null);
             const out = await executePaymentMethodCommand(command, payload);
             if (!out.ok) setError(out.error);
             await load();
+            /*
+             * TELL THE SIBLINGS. Autopay reads the same authority and would otherwise keep the
+             * answer it fetched on mount — which is how a stored card and "Add a usable payment
+             * method before setting up Autopay" came to be on screen at the same time.
+             *
+             * `add/begin` is excluded on purpose: it opens the provider's session and writes
+             * nothing canonical, so announcing it would make every other surface refetch to learn
+             * that nothing had changed yet.
+             */
+            const beganOnly = command === "add" && payload.stage === "begin";
+            if (out.ok && !beganOnly) announcePaymentMethodsChanged(customerId);
             setBusy(null);
             return out;
         },
-        [load],
+        [load, customerId],
     );
 
     /*
@@ -175,6 +193,27 @@ export default function PaymentMethodsSection({
         [customerId, payerEntityId, payerName, payerEmail, run],
     );
 
+    /**
+     * The link an operator hands to the payer, once, after asking for it.
+     *
+     * Held in state and not stored anywhere: the row carries only a digest, so this is the single
+     * moment the bearer URL exists in readable form. Losing it costs a second request, which is the
+     * right trade against keeping a standing debit-authorization credential lying about.
+     */
+    const [setupLink, setSetupLink] = useState<string | null>(null);
+
+    const requestBankSetup = useCallback(async () => {
+        setSetupLink(null);
+        const out = await run("request:ach", "requestSetup", { customer_id: customerId, payer_entity_id: payerEntityId ?? "" });
+        if (!out.ok) return;
+        const url = String(out.detail.setup_url ?? "");
+        if (!url) {
+            setError("The request could not be created. Nothing has been sent.");
+            return;
+        }
+        setSetupLink(url);
+    }, [customerId, payerEntityId, run]);
+
     /* The payer finished at the provider. The SERVER decides what that actually produced. */
     const finishAdd = useCallback(async () => {
         if (!pendingSetup) return;
@@ -191,6 +230,8 @@ export default function PaymentMethodsSection({
     }, [pendingSetup, customerId, payerEntityId, run]);
 
     const live = (methods ?? []).filter((m) => m.usabilityState !== "revoked");
+    /* One usable method IS the effective default; a second one makes the choice real. */
+    const usableCount = (methods ?? []).filter((m) => m.usabilityState === "usable").length;
     const removed = (methods ?? []).filter((m) => m.usabilityState === "revoked");
 
     return (
@@ -210,14 +251,31 @@ export default function PaymentMethodsSection({
                         >
                             <Plus className="h-3 w-3" strokeWidth={2} /> Add card
                         </button>
+                        {/*
+                          * AND THE BANK CONTROL IS A REQUEST, NOT AN ADD.
+                          *
+                          * This is where "Add bank account" used to be and was removed, because
+                          * saving a bank account establishes a DEBIT MANDATE and Stripe's ACH terms
+                          * have the platform warrant that it holds the account holder's
+                          * authorization BY NAME before any debit is initiated. An operator
+                          * pressing through that mandate would make Alloy warrant an authorization
+                          * nobody gave, and the provider emails its confirmation to a payer who
+                          * never agreed.
+                          *
+                          * The control is back with the verb it always should have had. Pressing it
+                          * sends the payer a link and writes nothing on this account; the bank
+                          * account appears in the list below only once THEY have authorized it. The
+                          * capability refuses `rail: "ach"` too, so this boundary is not a property
+                          * of which buttons happen to be rendered.
+                          */}
                         <button
                             type="button"
-                            data-testid="payment-method-add-bank"
+                            data-testid="payment-method-request-bank-setup"
                             disabled={busy !== null || pendingSetup !== null}
-                            onClick={() => void startAdd("ach")}
+                            onClick={() => void requestBankSetup()}
                             className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/40 px-2 py-1 text-xs text-alloy-midnight/80 hover:bg-alloy-cloud/50 disabled:opacity-50"
                         >
-                            <Plus className="h-3 w-3" strokeWidth={2} /> Add bank account
+                            <Plus className="h-3 w-3" strokeWidth={2} /> Request bank account setup
                         </button>
                     </div>
                 ) : null}
@@ -232,10 +290,30 @@ export default function PaymentMethodsSection({
                 </p>
             ) : null}
 
+            {setupLink ? (
+                <div
+                    data-testid="payment-method-setup-link"
+                    className="rounded-md border border-alloy-stone/30 px-3 py-2"
+                >
+                    <p className="alloy-os-depthcard__value">Send this to the payer.</p>
+                    {/*
+                      * The operator's job ends at handing it over. They do not open it, and opening
+                      * it would put them back in front of the mandate this whole boundary exists to
+                      * keep them away from.
+                      */}
+                    <p className="alloy-os-depthcard__hint mt-0.5 break-all">{setupLink}</p>
+                    <p className="alloy-os-depthcard__hint mt-1">
+                        It works for seven days. The bank account appears here once they have
+                        authorized it themselves.
+                    </p>
+                </div>
+            ) : null}
+
             {pendingSetup ? (
                 <PaymentMethodSetupField
                     clientSecret={pendingSetup.clientSecret}
                     rail={pendingSetup.rail}
+                    payerName={payerName}
                     authorizationDisclosure={pendingSetup.disclosure}
                     disabled={busy !== null}
                     onResult={(r) => {
@@ -271,8 +349,15 @@ export default function PaymentMethodsSection({
                       * which is the fact an operator came to check — read like disabled chrome.
                       */}
                     <p className="alloy-os-depthcard__value">No payment method on file.</p>
+                    {/*
+                      * The hint names ONLY what this operator can actually do. It used to offer
+                      * "a card or a bank account"; a bank account is the payer's own act to
+                      * authorize, so promising it here sent the operator looking for a control
+                      * that should not exist.
+                      */}
                     <p className="alloy-os-depthcard__hint mt-0.5">
-                        Add a card or a bank account above to collect from this family automatically.
+                        Add a card above to collect from this family automatically. A bank account is
+                        set up by the payer, who authorizes the debit themselves.
                     </p>
                 </div>
             ) : (
@@ -315,8 +400,14 @@ export default function PaymentMethodsSection({
 
                                 {canManage ? (
                                     <div className="flex shrink-0 items-center gap-2">
-                                        {/* Offered only when it would do something: a default cannot be set twice. */}
-                                        {!m.isDefault && m.usabilityState === "usable" ? (
+                                        {/*
+                                          * Offered only when it would do something: a default cannot be set twice,
+                                          * and WITH ONE USABLE METHOD THERE IS NOTHING TO CHOOSE BETWEEN. That
+                                          * lone method is already the one every surface preselects, so asking the
+                                          * operator to press "Set as default" was asking them to confirm a fact
+                                          * rather than make a decision — and it read as a step Autopay required.
+                                          */}
+                                        {!m.isDefault && m.usabilityState === "usable" && usableCount > 1 ? (
                                             <button
                                                 type="button"
                                                 data-testid="payment-method-set-default"

@@ -8,7 +8,7 @@
 |------|-----|
 | 0 — Audit | [`forms_documents_phase_2_step0_audit.md`](./forms_documents_phase_2_step0_audit.md) |
 | 1 — Design | [`forms_documents_phase_2_step1_design.md`](./forms_documents_phase_2_step1_design.md) |
-| Long-range Phase 2 themes | [`enrollment_packet_phase_2.md`](./enrollment_packet_phase_2.md) (sections A–G deferred) |
+| Long-range Phase 2 themes | [`enrollment_packet_phase_2.md`](./later-phase/enrollment_packet_phase_2.md) (sections A–G deferred) |
 
 **Product docs to update when cards ship:** `docs/product/documents-and-forms.md`, `docs/product/crm-system.md` (as-built only).
 

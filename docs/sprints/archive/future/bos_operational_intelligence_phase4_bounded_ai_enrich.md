@@ -7,7 +7,7 @@
 **Consolidated Phase 2 planning:** [`./bos_operational_assist_phase2.md`](./bos_operational_assist_phase2.md)  
 **May 2026 closeout (shipped):** [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md)
 
-**Program parent:** [`../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../05_2026/bos_operational_recommendation_intelligence_sprint.md)  
+**Program parent:** [`../05_2026/bos_operational_recommendation_intelligence_sprint.md`](../../../archive/sprints-superseded/05_2026/bos-planning-superseded/bos_operational_recommendation_intelligence_sprint.md)  
 **Phase 3 pack:** [`./bos_operational_intelligence_phase3_workflow_comms.md`](./bos_operational_intelligence_phase3_workflow_comms.md)  
 **GATE 0 doctrine:** [`../05_2026/completed/bos_operational_recommendation_intelligence_gate0.md`](../05_2026/completed/bos_operational_recommendation_intelligence_gate0.md)
 

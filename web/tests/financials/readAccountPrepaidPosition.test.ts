@@ -18,13 +18,22 @@ import { readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
  * nothing about any of them.
  */
 
-type Q = { table: string; filters: Record<string, unknown>; ins: Record<string, unknown[]>; ors: string[]; neqs: Record<string, unknown> };
+type Q = {
+    table: string;
+    filters: Record<string, unknown>;
+    ins: Record<string, unknown[]>;
+    ors: string[];
+    neqs: Record<string, unknown>;
+    /** Range paging, so a test can see WHETHER the reader paged and in what order. */
+    range: { from: number; to: number } | null;
+    orders: string[];
+};
 
 function fake(rows: Record<string, unknown[]>, fails: Set<string> = new Set()) {
     const queries: Q[] = [];
     const client = {
         from(table: string) {
-            const q: Q = { table, filters: {}, ins: {}, ors: [], neqs: {} };
+            const q: Q = { table, filters: {}, ins: {}, ors: [], neqs: {}, range: null, orders: [] };
             queries.push(q);
             const b = {
                 select() { return b; },
@@ -33,10 +42,15 @@ function fake(rows: Record<string, unknown[]>, fails: Set<string> = new Set()) {
                 is(c: string, v: unknown) { q.filters[c] = v; return b; },
                 in(c: string, v: unknown[]) { q.ins[c] = v; return b; },
                 or(f: string) { q.ors.push(f); return b; },
+                order(c: string) { q.orders.push(c); return b; },
+                range(from: number, to: number) { q.range = { from, to }; return b; },
                 then(res: (r: { data: unknown[] | null; error: unknown }) => void) {
                     const key = `${table}${table === "payments" && q.ins.refunds_payment_id ? ":refunds" : ""}`;
                     if (fails.has(key)) return res({ data: null, error: { message: "boom" } });
-                    return res({ data: (rows[key] ?? []) as unknown[], error: null });
+                    const all = (rows[key] ?? []) as unknown[];
+                    /* The reader pages the receipt cohort; a range slice is what it asks for. */
+                    const slice = q.range ? all.slice(q.range.from, q.range.to + 1) : all;
+                    return res({ data: slice, error: null });
                 },
             };
             return b;

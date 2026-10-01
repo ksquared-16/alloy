@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # P0 — Vacilando interactivity regression (2026-07-30)
 
 ## Symptom

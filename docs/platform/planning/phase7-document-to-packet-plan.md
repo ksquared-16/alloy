@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: accepted
+status: sprint
 last_reviewed: 2026-07-24
 supersedes: []
 ---
@@ -9,7 +9,7 @@ supersedes: []
 
 **Status:** ACCEPTED baseline for execution (2026-07-24). This is the single canonical plan for the
 Document-to-Packet journey. The live execution ledger is
-[`../../sprints/active/phase-7-document-to-packet-ledger.md`](../../sprints/active/phase-7-document-to-packet-ledger.md).
+`../../sprints/active/phase-7-document-to-packet-ledger.md`.
 
 Architecture is frozen (see [`../milestones/packet-obligation-architecture-closeout.md`](../milestones/packet-obligation-architecture-closeout.md)).
 This is Product Realization + implementation execution, not architecture.

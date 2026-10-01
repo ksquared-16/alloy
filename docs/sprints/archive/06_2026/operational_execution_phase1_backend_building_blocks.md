@@ -3,12 +3,12 @@
 **Status:** Planning only (June 2026). No code, migrations, schema, or runtime changes. This report maps backend building blocks for the first implementation arc: **L1 Configuration truth → L3 Schedule-derived Expectations → L4 Attendance facts → L5 Billing generalization**.
 
 **Doctrine basis (locked, not revisited here):**
-- [`docs/platform/core/operational-truth-flow-doctrine.md`](../../platform/core/operational-truth-flow-doctrine.md)
-- [`docs/platform/modules/attendance-system.md`](../../platform/modules/attendance-system.md)
-- [`docs/platform/modules/billing-financials-platform.md`](../../platform/modules/billing-financials-platform.md)
-- [`docs/platform/core/operational-ux-doctrine.md`](../../platform/core/operational-ux-doctrine.md)
-- [`docs/platform/core/placement-system.md`](../../platform/core/placement-system.md)
-- [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md) §6
+- [`docs/platform/core/operational-truth-flow-doctrine.md`](../../../platform/core/operational-truth-flow-doctrine.md)
+- [`docs/platform/modules/attendance-system.md`](../../../platform/modules/attendance-system.md)
+- [`docs/platform/modules/billing-financials-platform.md`](../../../platform/modules/billing-financials-platform.md)
+- [`docs/platform/core/operational-ux-doctrine.md`](../../../platform/core/operational-ux-doctrine.md)
+- [`docs/platform/core/placement-system.md`](../../../platform/core/placement-system.md)
+- [`docs/archive/2026-06-runtime-convergence/archive/2026-06-runtime-convergence/platform_convergence/child_namespace_decision.md`](../../../archive/2026-06-runtime-convergence/child_namespace_decision.md) §6
 
 ---
 
@@ -18,9 +18,9 @@ The committed enrollment foundation shipped in slice 1 is the correct substrate,
 
 Three findings drive the plan:
 
-1. **L1 config rules are the real prerequisite, and they are missing as first-class entities.** Capacity, ratio, and schedule-rule configuration currently live as EAV location fields (`license_capacity`, `classroom_age_group`, `room_schedule_type` seeded in [`supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql`](../../../supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql)). Expected occupancy/ratio cannot be computed deterministically from EAV without drift. **First-class config rules must land first.**
+1. **L1 config rules are the real prerequisite, and they are missing as first-class entities.** Capacity, ratio, and schedule-rule configuration currently live as EAV location fields (`license_capacity`, `classroom_age_group`, `room_schedule_type` seeded in [`supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql`](../../../../supabase/migrations/20260430211000_childcare_mvp_control_plane_seed.sql)). Expected occupancy/ratio cannot be computed deterministically from EAV without drift. **First-class config rules must land first.**
 2. **L3 Expectations are pure derivations** of `schedule_assignments` × `schedule_patterns.weekdays` × `child_placements` (room/program) × L1 rules. They require **no new tables** and must not get any. This is the lowest-risk, highest-signal first slice.
-3. **L5 billing generalization is decoupled and can proceed in parallel after Phase 1/2**, because the existing financial stack already hints at the cutover: `charges.job_id` is `NOT NULL` (job-anchored), but `payment_allocations` already carries polymorphic `target_entity_type`/`target_entity_id` and a nullable `charge_id` with a migration comment naming a future "cutover" ([`supabase/migrations/20260331120000_charges_receivables_foundation.sql`](../../../supabase/migrations/20260331120000_charges_receivables_foundation.sql)). The generalization is an abstraction-and-relax exercise, not a rewrite.
+3. **L5 billing generalization is decoupled and can proceed in parallel after Phase 1/2**, because the existing financial stack already hints at the cutover: `charges.job_id` is `NOT NULL` (job-anchored), but `payment_allocations` already carries polymorphic `target_entity_type`/`target_entity_id` and a nullable `charge_id` with a migration comment naming a future "cutover" ([`supabase/migrations/20260331120000_charges_receivables_foundation.sql`](../../../../supabase/migrations/20260331120000_charges_receivables_foundation.sql)). The generalization is an abstraction-and-relax exercise, not a rewrite.
 
 Recommended sequencing: **Phase 1 (config + derived expectations, read-only)** → **Phase 2 (attendance facts + comparison service)** → **Phase 3 (billing generalization, no childcare billing UI)**.
 
@@ -28,7 +28,7 @@ Recommended sequencing: **Phase 1 (config + derived expectations, read-only)** �
 
 ## 2. Current canonical foundation
 
-All four committed tables are defined in [`supabase/migrations/20260625120000_childcare_operational_enrollment_slice1.sql`](../../../supabase/migrations/20260625120000_childcare_operational_enrollment_slice1.sql). Row types: [`web/lib/childcareOperational/enrollmentOperationalTypes.ts`](../../../web/lib/childcareOperational/enrollmentOperationalTypes.ts).
+All four committed tables are defined in [`supabase/migrations/20260625120000_childcare_operational_enrollment_slice1.sql`](../../../../supabase/migrations/20260625120000_childcare_operational_enrollment_slice1.sql). Row types: [`web/lib/childcareOperational/enrollmentOperationalTypes.ts`](../../../../web/lib/childcareOperational/enrollmentOperationalTypes.ts).
 
 | Table | Grain | Key columns (verified) | Notes |
 |-------|-------|------------------------|-------|
@@ -39,12 +39,12 @@ All four committed tables are defined in [`supabase/migrations/20260625120000_ch
 
 Supporting runtime (all reusable patterns):
 
-- **Effective-dating utilities:** [`web/lib/childcareOperational/effectiveDating.ts`](../../../web/lib/childcareOperational/effectiveDating.ts) — `computePriorRowCloseDate`, `isInvalidSupersedeStartDate`, `validateEndOnOrAfterStart`, `shouldTransitionAgreementEndingToEnded`, ISO-date guards.
-- **Supersede service pattern:** [`web/lib/childcareOperational/scheduleAssignmentService.ts`](../../../web/lib/childcareOperational/scheduleAssignmentService.ts) and `childPlacementService.ts` — close prior (`status='superseded'`, `end_date=close`), insert successor with `supersedes_*`, emit changed event. This is the canonical write shape for any future fact stream.
-- **Events:** [`web/lib/childcareOperational/operationalEnrollmentEvents.ts`](../../../web/lib/childcareOperational/operationalEnrollmentEvents.ts) over [`web/lib/emitEvent.ts`](../../../web/lib/emitEvent.ts) → `workflow_events` (`event_type`, `entity_type`, `entity_id`, `action_type`, `payload` with `schema_version`).
-- **Read model:** [`web/lib/childcareOperational/operationalEnrollmentReadModel.ts`](../../../web/lib/childcareOperational/operationalEnrollmentReadModel.ts) — joins agreement + operational placement + assignment + pattern + labels + warnings. This is the template for the L3 derived read model.
-- **Handoff (intent creation):** `approve_enrollment` → `enrollmentAgreementHandoff.ts` (`executeOperationalEnrollmentHandoffFromApprovedOpportunity`) invoked from [`web/lib/admin/actions/executeAdminAction.ts`](../../../web/lib/admin/actions/executeAdminAction.ts).
-- **Child operational panel:** [`web/components/childcareOperational/ChildOperationalEnrollmentPanel.tsx`](../../../web/components/childcareOperational/ChildOperationalEnrollmentPanel.tsx) (flag-gated).
+- **Effective-dating utilities:** [`web/lib/childcareOperational/effectiveDating.ts`](../../../../web/lib/childcareOperational/effectiveDating.ts) — `computePriorRowCloseDate`, `isInvalidSupersedeStartDate`, `validateEndOnOrAfterStart`, `shouldTransitionAgreementEndingToEnded`, ISO-date guards.
+- **Supersede service pattern:** [`web/lib/childcareOperational/scheduleAssignmentService.ts`](../../../../web/lib/childcareOperational/scheduleAssignmentService.ts) and `childPlacementService.ts` — close prior (`status='superseded'`, `end_date=close`), insert successor with `supersedes_*`, emit changed event. This is the canonical write shape for any future fact stream.
+- **Events:** [`web/lib/childcareOperational/operationalEnrollmentEvents.ts`](../../../../web/lib/childcareOperational/operationalEnrollmentEvents.ts) over [`web/lib/emitEvent.ts`](../../../../web/lib/emitEvent.ts) → `workflow_events` (`event_type`, `entity_type`, `entity_id`, `action_type`, `payload` with `schema_version`).
+- **Read model:** [`web/lib/childcareOperational/operationalEnrollmentReadModel.ts`](../../../../web/lib/childcareOperational/operationalEnrollmentReadModel.ts) — joins agreement + operational placement + assignment + pattern + labels + warnings. This is the template for the L3 derived read model.
+- **Handoff (intent creation):** `approve_enrollment` → `enrollmentAgreementHandoff.ts` (`executeOperationalEnrollmentHandoffFromApprovedOpportunity`) invoked from [`web/lib/admin/actions/executeAdminAction.ts`](../../../../web/lib/admin/actions/executeAdminAction.ts).
+- **Child operational panel:** [`web/components/childcareOperational/ChildOperationalEnrollmentPanel.tsx`](../../../../web/components/childcareOperational/ChildOperationalEnrollmentPanel.tsx) (flag-gated).
 
 ---
 
@@ -195,7 +195,7 @@ Grouped by layer. "New" = net-new entity/service; "Derive" = read model only; "G
 
 ## 10. Recommended Cursor / Claude build prompts (DO NOT EXECUTE YET)
 
-Per [`docs/platform/governance/agent-repo-boundaries.md`](../../platform/governance/agent-repo-boundaries.md), the Cursor workspace owns scheduling/billing/attendance platform layers; these are scoped for this repo. Hold until config-rule grain (Open Questions 1-3) is decided.
+Per [`docs/platform/governance/agent-repo-boundaries.md`](../../../platform/governance/agent-repo-boundaries.md), the Cursor workspace owns scheduling/billing/attendance platform layers; these are scoped for this repo. Hold until config-rule grain (Open Questions 1-3) is decided.
 
 **Prompt P1 — L1 config rules (Cursor):**
 > Implement first-class L1 config tables `capacity_rules`, `ratio_rules`, `schedule_rules`, and a `rate_rules` shell, modeled on `schedule_patterns` (config-posture RLS via `has_org_role`, BEFORE INSERT/UPDATE validation triggers, `set_updated_at`, org+site scoping). Add row types and read/write services under `web/lib/childcareOperational/config/`. No EAV dual-write; no operator UI. Include migration + Vitest + `tsc --noEmit`. Honor truth-flow + placement doctrine.
@@ -330,7 +330,7 @@ Open the **L4 attendance facts** batch as a separate, reviewable unit. It should
 
 ## 13. P2 implementation status — Attendance Facts foundation (L4)
 
-**Status:** Implemented (backend only). Doctrine: `docs/platform/modules/attendance-system.md` → [Implemented model (P2)](../../platform/modules/attendance-system.md#implemented-model-p2).
+**Status:** Implemented (backend only). Doctrine: `docs/platform/modules/attendance-system.md` → [Implemented model (P2)](../../../platform/modules/attendance-system.md#implemented-model-p2).
 
 ### What P2 added
 
@@ -376,7 +376,7 @@ None. P2 honors append-only immutability, derived (not stored) expectations, com
 
 ## 14. P2.1 implementation status — Attendance hardening + actual compliance read models
 
-**Status:** Implemented (backend/read-model only). Doctrine: `docs/platform/modules/attendance-system.md` → [Hardening + actual compliance (P2.1)](../../platform/modules/attendance-system.md#hardening--actual-compliance-p21). **No new migration** — reuses the P2 `reason_key` column. No UI, billing, subsidy, materialized rollups, mutable rows, or staff-scheduling tables.
+**Status:** Implemented (backend/read-model only). Doctrine: `docs/platform/modules/attendance-system.md` → [Hardening + actual compliance (P2.1)](../../../platform/modules/attendance-system.md#hardening--actual-compliance-p21). **No new migration** — reuses the P2 `reason_key` column. No UI, billing, subsidy, materialized rollups, mutable rows, or staff-scheduling tables.
 
 ### What P2.1 added
 

@@ -99,7 +99,7 @@ The user's location examples (school/site, classroom, room, household address, p
 
 ## Convergence guardrails (how this is enforced)
 
-These hook directly into the [`convergence_review_rubric.md`](./convergence_review_rubric.md):
+These hook directly into the `./convergence_review_rubric.md`:
 
 1. **Catalog growth is a smell.** A new field on entity X whose value actually lives on entity Y is a flattening violation → Gate B **FAIL/CONCERN**. Use a reference/relationship instead.
 2. **No related-record fields in the catalog.** `*_name`, `*_email`, `*_label` columns that mirror a related record indicate a missing relationship.

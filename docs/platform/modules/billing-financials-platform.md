@@ -1232,3 +1232,95 @@ chargebacks. Card disputes share the dispute plumbing but are deliberately out o
 - The subsidy contract changes — the collection-suppression policy or its bounds, the shortfall non-default, agency identity, the advice/cash separation, the authorization supersession rule, or the Processing ingestion seam.
 - The workspace contract changes — the location provenance rules, the org-scoped visibility choice, the site-filter intersection, the account-wide detail labelling, or the single-read counts.
 - The provider collection contract changes — the rail/processor separation, which rails require an executor, the collectible authority the collection path consumes, the pre-recognition boundary, what `collection-state` is allowed to report, the connected-account tenancy rule, or the no-platform-fallback guarantee.
+
+### Stored payment methods have one owner, and it is `payment_methods` (September 2026)
+
+`public.payment_methods` (`20260921120000_payments_payment_method_reference.sql`) is the canonical
+model for a stored, reusable payment instrument. `customer_payment_methods` was retired alongside it
+(`20260921130000`). There is no second stored-method model, and nothing should introduce one.
+
+**FIVE IDENTITIES, NONE IMPLYING ANOTHER.**
+
+| Identity | Owner | Record |
+|---|---|---|
+| Respondent | Enrollment | packet session / link recipient |
+| Responsible party | Financials | `financial_responsibility_shares` / `_allocations` |
+| Expected funder | Financials | `financial_expected_funding` — not money |
+| Actual payer | Financials | `payments.payer_entity_type` / `payer_entity_id` |
+| Payment-method owner | Financials | `payment_methods.payer_entity_type` / `payer_entity_id` |
+
+Owning a stored method assigns no responsibility, modifies no arrangement, changes no subsidy and
+creates no obligation. Becoming responsible grants no access to another person's method. Paying makes
+nobody responsible. Completing paperwork makes a person neither payer nor owner. `payment_methods`
+keeps account CONTEXT (`customer_id`) deliberately separate from OWNERSHIP, which is what makes
+"which stored methods may this payer use" answerable without consulting who owes anything.
+
+**A SUPERSEDED EXPERIMENT, RECORDED SO IT IS NOT REPEATED.** An Enrollment certification lane authored
+a parallel `payment_instruments` model in late September 2026, having measured a base 1,309 commits
+behind staging in which `customer_payment_methods` was still the only stored-method model — it was, in
+that lane. It was applied to the certification database and never promoted; `payment_methods` is
+materially more complete (owner columns NOT NULL rather than CHECK-paired, and `usability_state`
+separating verified from collectable-now). It is **CERTIFICATION-LANE EXPERIMENT / NOT PROMOTED /
+SUPERSEDED BY `payment_methods`**, and it is not future architecture.
+
+The lesson generalises: "no canonical owner exists" is a claim about a BASE, not about the platform,
+and a lane far behind staging cannot make it safely.
+
+### Two payers are two payments (September 2026)
+
+`payment.record` derives an idempotency key when the caller supplies none. The key already carried the
+date, for a reason its own comment states: "a second $500 cash payment against the same charge on a
+LATER day is a real, legitimate second payment, and must not be swallowed as a retry." The same
+argument applies across PEOPLE, and the payer was missing.
+
+Measured on a split-payment certification: two payers each paid $37.50 against one household charge on
+one day, and the second request returned the FIRST payer's payment id with `already_recorded: true`.
+One payment existed, the family's outstanding stopped halfway, and nothing was reported to anyone.
+
+The payer entity now joins the derived key. A payer-less payment keys exactly as before, so nothing
+that never named a payer changes; the same payer repeating the same request is still correctly a retry;
+and a later day remains a separate payment. Certified live: two distinct payments, two applications,
+outstanding reaching zero exactly once, and responsibility unchanged throughout.
+
+### An Enrollment fee is a charge definition Enrollment points at, never a price it holds (September 2026)
+
+Enrollment can now require a fee to leave a stage (`financial` requirement kind — see
+`docs/platform/runtime/enrollment-process-runtime.md`). The boundary is worth stating from this side,
+because it is the side that owns the money.
+
+**Enrollment sends three facts and no figures:** which charge definition (`charge_template_key`),
+which grain (`RequirementScope` — `record` for the household, `each_child` per enrolling child), and
+the date the requirement became due. It never sends an amount, and a caller-supplied `amount_cents` is
+ignored — certified: a request carrying `amount_cents: 1` against the $75 definition produced a charge
+of 7500.
+
+**Financials answers with everything else.** Creation, posting and idempotency are
+`writeTemplateDraftCharge`'s (dedupe scoped to the billable source, so a replay returns the same
+charge and a different due date is a different obligation). Position is `resolveFamilyCollectible`'s.
+Corrections are `createChildcareCorrection`'s, and the corrected-once rule is the database's.
+Enrollment keeps no ledger and composes no negative charge of its own.
+
+**Billable source follows grain**: `each_child` → one `enrollment_agreement` source per child;
+`record` → one `customer` source. The household case is the one that reveals a disagreement inside
+Financials: `writeTemplateDraftCharge` accepts a `customer` source on purpose — a family incurs
+registration and deposit fees before anyone is enrolled — while `resolveAllocatableNet` refuses to
+position anything not enrolment-backed. A household-grain fee can therefore post as real money and
+then be unpositionable. Enrollment resolves that in neither direction: the obligation is reported with
+`position: null` and a reason, and an operator is told. Do not "fix" this by having Enrollment invent a
+position.
+
+**A reversed fee still reports its charge.** The obligation is excluded from every aggregate figure
+but keeps its line and its `reversedByChargeId`, so a withdrawal is legible rather than absent.
+
+**Enrolment fees are not subsidy-claimable**: `buildSubsidyClaim` filters `charge_category = 'tuition'`.
+An expected subsidy alone does not suppress collectible either — `SUPPRESSING_CLAIM_STATES` is
+`["submitted","accepted"]`.
+
+One route mints these: `POST /api/admin/enrollment/fee-obligations`. It takes
+`requireFinancialsCapability(FINANCIALS_WRITE_PERMISSION_KEY)` alongside `requireAdminOrOps`, on the
+rule the charge-templates route already records — portal admission is not financial authority, and
+this route mints money. There is still **no route anywhere that records a payment against a childcare
+charge**; `recordAndApplyChildcarePayment` is called only from tests. That is the checkout gap, and it
+is why partial-payment behaviour is certified by
+`web/tests/enrollment/live/enrollmentFeeProjection.live.test.ts` against the certification stack
+rather than over HTTP.

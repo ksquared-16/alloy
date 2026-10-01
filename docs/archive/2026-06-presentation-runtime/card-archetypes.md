@@ -1,8 +1,8 @@
 # Alloy Card Archetypes
 
 **Status:** Foundational platform doctrine (June 2026). Defines the reusable operational building blocks used throughout the platform.
-**Follows:** [`operational-grammar.md`](./operational-grammar.md) (why Alloy exists) · [`card-language.md`](./card-language.md) (how cards behave).
-**Code-anchored companion:** [`universal-universal-card-archetypes.md`](./universal-universal-card-archetypes.md) (System 5A composition primitives in `web/lib/adminV2/runtime/focusPanel/`).
+**Follows:** [`operational-grammar.md`](../../platform/operator/operational-grammar.md) (why Alloy exists) · [`card-language.md`](../../platform/operator/card-language.md) (how cards behave).
+**Code-anchored companion:** `./universal-universal-card-archetypes.md` (System 5A composition primitives in `web/lib/adminV2/runtime/focusPanel/`).
 
 > An archetype is **not a visual template** — it is an **operational pattern**. Every card belongs to exactly one archetype and inherits its behavior automatically.
 
@@ -23,7 +23,7 @@ The operational question · information hierarchy · interaction behavior · edi
 - **Typical actions:** Call, Message, Edit, Assign, Add Relationship.
 - **Focus behavior:** Select one subject while preserving context.
 
-> **Reference implementation (frozen):** the **Household Card** is the canonical Identity reference — see the design freeze [`household-reference-card.md`](./household-reference-card.md). It answers *"Who belongs to this household, and who can I contact?"* (one question, two facets: belonging + reachability), assembles its answer from the observed Operational Context (primary contact, children, additional contacts, emergency contacts, authorized pickups, billing contact), and supports collapsed → expanded → focused-evidence perspectives as local UI state. Cards build against the Operational Context boundary ([`operational-context-boundary.md`](./operational-context-boundary.md)), not "drawer". Convergence sequencing: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+> **Reference implementation (frozen):** the **Household Card** is the canonical Identity reference — see the design freeze [`household-reference-card.md`](../../platform/operator/household-reference-card.md). It answers *"Who belongs to this household, and who can I contact?"* (one question, two facets: belonging + reachability), assembles its answer from the observed Operational Context (primary contact, children, additional contacts, emergency contacts, authorized pickups, billing contact), and supports collapsed → expanded → focused-evidence perspectives as local UI state. Cards build against the Operational Context boundary ([`operational-context-boundary.md`](../../platform/operator/operational-context-boundary.md)), not "drawer". Convergence sequencing: [`drawer-sunset-roadmap.md`](../../platform/operator/drawer-sunset-roadmap.md).
 
 ---
 

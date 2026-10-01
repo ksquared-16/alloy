@@ -3,14 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, logAdminAudit } from "@/lib/adminAuth";
-import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { emitEvent } from "@/lib/emitEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
-import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
-import {
-    COMPLETION_REQUIREMENT_VALIDATION_ERROR,
-    enforceOpportunityCompletionOnStatusTransition,
-} from "@/lib/completion/enforceOpportunityCompletionOnStatusTransition";
 import {
     mergeOpportunityQuotePricing,
     opportunityQuotePipelineActive,
@@ -30,10 +24,6 @@ import {
     fieldPolicyValidationResponse,
 } from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 import { opportunityBodyHasCustomFieldUpdates } from "@/lib/admin/drawer/opportunityDrawerFieldSave";
-import { applyStageTransitionReconciliation } from "@/lib/lifecycle/applyStageTransitionReconciliation";
-import { preflightStageTransitionReconciliation } from "@/lib/lifecycle/preflightStageTransitionReconciliation";
-import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
-import { validateStageTransitionReconciliationPayload } from "@/lib/lifecycle/validateStageTransitionReconciliationPayload";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 
 /**
@@ -50,8 +40,6 @@ const ALLOWED_KEYS = [
     "quote_total",
     "price_breakdown",
     "notes",
-    "status_key",
-    "close_reason_key",
     "source",
     "assigned_to",
     "lost_reason",
@@ -212,18 +200,12 @@ export async function PATCH(
             if (key === "discount_amount" && (val === "" || val === null)) val = null;
             if (key === "quote_override_total" && (val === "" || val === null)) val = null;
             if (key === "quote_is_overridden" && val === "") val = false;
-            if (key === "status_key") {
-                updates.status_key =
-                    val === "" || val == null ? null : typeof val === "string" ? val.trim() || null : val;
-                continue;
-            }
             if (
                 [
                     "name",
                     "source",
                     "assigned_to",
                     "lost_reason",
-                    "close_reason_key",
                     "appointment_id",
                     "location_id",
                     "discount_code",
@@ -262,93 +244,46 @@ export async function PATCH(
             updates.metadata = metadataMergedBase;
         }
 
-        const explicitStatusKey = body.status_key !== undefined;
-        if (explicitStatusKey) {
-            const sk = updates.status_key as string | null;
-            const chk = await assertAllowedStatusKey(supabase, orgId, "opportunities", sk);
-            if (!chk.ok) {
-                return NextResponse.json({ error: chk.message }, { status: 400 });
-            }
-            if (sk && typeof sk === "string" && sk.trim()) {
-                let inferredWorkUnitId: string | null = (existingRow?.work_unit_id ?? null) as string | null;
-                inferredWorkUnitId = inferredWorkUnitId != null && String(inferredWorkUnitId).trim() ? String(inferredWorkUnitId).trim() : null;
-                let inferredDepartmentId: string | null = null;
-                if (inferredWorkUnitId) {
-                    const { data: wu, error: wuErr } = await supabase
-                        .from("work_units")
-                        .select("id, department_id")
-                        .eq("id", inferredWorkUnitId)
-                        .eq("org_id", orgId)
-                        .maybeSingle();
-                    if (!wuErr && wu) {
-                        inferredWorkUnitId = (wu as { id?: string | null }).id ?? inferredWorkUnitId;
-                        inferredDepartmentId = ((wu as { department_id?: string | null }).department_id ?? null) as string | null;
-                    }
-                }
-                const transition = await enforceOpportunityCompletionOnStatusTransition({
-                    supabase,
-                    orgId,
-                    opportunityId: id,
-                    fromStatusKey: oldStatusKey,
-                    toStatusKey: sk.trim(),
-                    existingRow: existingRow as Record<string, unknown>,
-                    body,
-                    departmentId: inferredDepartmentId,
-                    workUnitId: inferredWorkUnitId,
-                    actionKey: null,
-                });
-                if (!transition.ok) {
-                    return NextResponse.json(
-                        {
-                            error: transition.message || COMPLETION_REQUIREMENT_VALIDATION_ERROR,
-                            completion_requirements: transition.validation,
-                        },
-                        { status: 400 }
-                    );
-                }
-
-                const stageReconciliationPreflight = await preflightStageTransitionReconciliation({
-                    supabase,
-                    orgId,
-                    opportunityId: id,
-                    previousStatusKey: oldStatusKey,
-                    nextStatusKey: sk.trim(),
-                });
-
-                if (stageReconciliationPreflight.required) {
-                    const reconciliationRaw = body.stage_transition_reconciliation;
-                    if (reconciliationRaw == null) {
-                        return NextResponse.json(
-                            {
-                                error: STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR,
-                                stage_transition_reconciliation_preflight: stageReconciliationPreflight,
-                            },
-                            { status: 409 },
-                        );
-                    }
-                    const validated = validateStageTransitionReconciliationPayload(
-                        stageReconciliationPreflight,
-                        reconciliationRaw,
-                    );
-                    if (!validated.ok) {
-                        return NextResponse.json({ error: validated.message }, { status: 400 });
-                    }
-                    const applyResult = await applyStageTransitionReconciliation({
-                        supabase,
-                        orgId,
-                        opportunityId: id,
-                        actorUserId: auth.user.id,
-                        preflight: stageReconciliationPreflight,
-                        reconciliation: validated.reconciliation,
-                    });
-                    if (applyResult.errors.length) {
-                        return NextResponse.json(
-                            { error: applyResult.errors.join("; ") },
-                            { status: 400 },
-                        );
-                    }
-                }
-            }
+        /*
+         * ── GOVERNED LIFECYCLE STATE IS NOT WRITABLE HERE ──
+         *
+         * This route edits the enrollment RECORD. It is not lifecycle authority, and as of
+         * erun_fbaf1ac1049f1050 it has no supported caller that treats it as one: Quote Intake was
+         * unreachable and was removed, Current Work was rewired onto the canonical transition
+         * boundary once that boundary acquired prior-stage reconciliation, and the record-action
+         * helper that turned `mark_lost` into a raw `{status_key, close_reason_key}` PATCH had zero
+         * callers and is gone.
+         *
+         * Refusing is the point. A generic field writer that also persists governed status is how the
+         * lifecycle acquires a second authority: it skips destination resolution, transition policy,
+         * prior-stage reconciliation, outcome consequences and the destination-stage spawn, and
+         * nothing about the request says so. The refusal names where the intent belongs instead.
+         *
+         * Closing a case as lost is `executeGovernedFamilyClose`. Any other governed transition is
+         * `POST /api/admin/enrollment-status-transition/execute`, which takes a configured transition
+         * reference and resolves it server-side.
+         */
+        const GOVERNED_LIFECYCLE_KEYS = ["status_key", "close_reason_key", "stage_key"] as const;
+        const attemptedLifecycleKeys = GOVERNED_LIFECYCLE_KEYS.filter((k) =>
+            Object.prototype.hasOwnProperty.call(body, k),
+        );
+        if (attemptedLifecycleKeys.length > 0) {
+            logOpportunityPatchRejected("lifecycle_not_writable_here", {
+                opportunity_id: id,
+                body_keys: Object.keys(body),
+                attempted: attemptedLifecycleKeys,
+            });
+            return NextResponse.json(
+                {
+                    error:
+                        `Governed lifecycle state (${attemptedLifecycleKeys.join(", ")}) cannot be changed through the record ` +
+                        "endpoint. Use the canonical transition: POST /api/admin/enrollment-status-transition/execute " +
+                        "with a configured transition reference, or the governed family-close action to close a case.",
+                    lifecycle_authority: "canonical_transition_required",
+                    attempted_keys: attemptedLifecycleKeys,
+                },
+                { status: 400 },
+            );
         }
 
         if (updates.location_id != null && updates.location_id !== "") {
@@ -432,25 +367,6 @@ export async function PATCH(
             ...ALLOWED_KEYS,
             ...Array.from(PIPELINE_ONLY_KEYS),
         ]);
-
-        if (explicitStatusKey && orgId) {
-            const newStatusKey = (data as { status_key?: string | null }).status_key ?? null;
-            const metadata: Record<string, unknown> = {};
-            if (existingRow.customer_id != null) metadata.customer_id = existingRow.customer_id;
-            if (existingRow.primary_person_id != null) metadata.primary_person_id = existingRow.primary_person_id;
-            // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
-            if (existingRow.primary_contact_id != null) metadata.fallback_contact_id = existingRow.primary_contact_id;
-            await emitStatusChangedEvent({
-                supabase,
-                orgId,
-                entityType: "opportunities",
-                entityId: id,
-                oldStatusKey,
-                newStatusKey,
-                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-                actorUserId: auth.user.id,
-            });
-        }
 
         if (body.notes !== undefined && orgId) {
             const oldNotes =

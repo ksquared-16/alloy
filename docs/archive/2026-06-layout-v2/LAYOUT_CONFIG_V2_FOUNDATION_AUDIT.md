@@ -10,7 +10,7 @@
 
 ## 0. TL;DR
 
-Alloy **already has a layout system** — it is just **hardcoded in TypeScript instead of stored in the database**. The single source of truth is [`web/lib/entityPresentation.ts`](../web/lib/entityPresentation.ts) (1,569 lines), whose `EntityPresentationConfig` type already models tables, drawer tabs, sections, fields, related modules, and quick actions. The drawer and queue renderers already consume this config via shared, reusable components (`EntityDrawerOverview`, `EntityDrawerSection`, `EntityDrawerField`, `DataTable`, `buildEntityTableColumns`, `StatusBadge`, render-hint formatters).
+Alloy **already has a layout system** — it is just **hardcoded in TypeScript instead of stored in the database**. The single source of truth is [`web/lib/entityPresentation.ts`](../../../web/lib/entityPresentation.ts) (1,569 lines), whose `EntityPresentationConfig` type already models tables, drawer tabs, sections, fields, related modules, and quick actions. The drawer and queue renderers already consume this config via shared, reusable components (`EntityDrawerOverview`, `EntityDrawerSection`, `EntityDrawerField`, `DataTable`, `buildEntityTableColumns`, `StatusBadge`, render-hint formatters).
 
 There is a **DB-backed field metadata layer** (`field_definitions`, `field_section_definitions`, `option_sets`) that controls *which* fields exist and whether they are visible — but **section order, column order, drawer tabs, grids, and related modules are not in the database**; they live in the hardcoded registry.
 
@@ -27,13 +27,13 @@ There is a **DB-backed field metadata layer** (`field_definitions`, `field_secti
 | Layer | Where | Stored in DB? | Controls |
 |---|---|---|---|
 | **A. Field metadata layer** | `field_definitions`, `field_section_definitions`, `option_sets` tables + `/admin/system/*-fields` UI | **Yes** | Which fields exist per entity; per-context visibility (form/drawer/table/public); section grouping key; sort order; labels, help text, placeholder; select options |
-| **B. Presentation/layout layer** | [`web/lib/entityPresentation.ts`](../web/lib/entityPresentation.ts) (`ENTITY_PRESENTATION_REGISTRY`) | **No (hardcoded TS)** | Table columns + order + render hints; drawer tabs; drawer header fields; overview sections + order + grid columns + collapse state; fields-per-section + spans; subsections; related modules; quick actions |
+| **B. Presentation/layout layer** | [`web/lib/entityPresentation.ts`](../../../web/lib/entityPresentation.ts) (`ENTITY_PRESENTATION_REGISTRY`) | **No (hardcoded TS)** | Table columns + order + render hints; drawer tabs; drawer header fields; overview sections + order + grid columns + collapse state; fields-per-section + spans; subsections; related modules; quick actions |
 
 Layer A answers *"what data exists and may be shown."* Layer B answers *"how it is arranged."* **Layout V2 is fundamentally about moving Layer B into the database** and merging it with Layer A, while preserving the renderers.
 
 ### 1.2 The de-facto layout schema (already in code)
 
-`EntityPresentationConfig` ([`entityPresentation.ts:223`](../web/lib/entityPresentation.ts)) is the existing layout contract:
+`EntityPresentationConfig` ([`entityPresentation.ts:223`](../../../web/lib/entityPresentation.ts)) is the existing layout contract:
 
 ```
 EntityPresentationConfig {
@@ -64,7 +64,7 @@ Notable: every config object already has a **`locked?`** flag — the original a
 
 There is **no drag-and-drop forms builder** today. The closest thing is the field-admin CRUD UI:
 
-- [`web/components/admin/EntityFieldsClient.tsx`](../web/components/admin/EntityFieldsClient.tsx) (~800 lines) — generic field-definition editor, used by `/admin/system/{customer,job,opportunity,vendor,schedule}-fields`.
+- [`web/components/admin/EntityFieldsClient.tsx`](../../../web/components/admin/EntityFieldsClient.tsx) (~800 lines) — generic field-definition editor, used by `/admin/system/{customer,job,opportunity,vendor,schedule}-fields`.
 - Entity-specific variants: `person-fields/PersonFieldsClient.tsx`, `location-fields/LocationFieldsClient.tsx`, `document-fields/DocumentFieldsClient.tsx`.
 - These edit `field_definitions` rows: label, type, required, active, **visibility (form/drawer/table)**, filterable/sortable, **section_key**, **sort_order**, placeholder, help text.
 - Section keys are presented from a **hardcoded list** (`SECTION_OPTIONS`: basic, contact, profile, system, custom) at `EntityFieldsClient.tsx:11`, even though `field_section_definitions` exists as the data-driven source.
@@ -73,24 +73,24 @@ So today the "builder" is a **form-based table editor**, not a visual layout des
 
 ### 1.4 Drawer rendering architecture
 
-Single orchestrator: [`web/components/admin/AdminEntityDrawer.tsx`](../web/components/admin/AdminEntityDrawer.tsx) (~2,000 lines, ~17 entity types). Flow:
+Single orchestrator: `web/components/admin/AdminEntityDrawer.tsx` (`../web/components/admin/AdminEntityDrawer.tsx`) (~2,000 lines, ~17 entity types). Flow:
 
-1. Open with `{ type, id }`. Fetch entity via `/api/admin/{entity}/{id}`; the API attaches `_field_definitions` and `_field_sections` (see [`web/lib/admin/entityFieldRegistryAttach.ts`](../web/lib/admin/entityFieldRegistryAttach.ts)).
+1. Open with `{ type, id }`. Fetch entity via `/api/admin/{entity}/{id}`; the API attaches `_field_definitions` and `_field_sections` (see [`web/lib/admin/entityFieldRegistryAttach.ts`](../../../web/lib/admin/entityFieldRegistryAttach.ts)).
 2. Look up `ENTITY_PRESENTATION_REGISTRY[type].drawer` for tabs, sections, related modules, quick actions.
-3. Render shell via [`Drawer.tsx`](../web/components/admin/Drawer.tsx) (right slide-out, sticky header w/ 4px accent, scroll body).
+3. Render shell via [`Drawer.tsx`](../../../web/components/admin/Drawer.tsx) (right slide-out, sticky header w/ 4px accent, scroll body).
 4. Render the **Overview** tab either:
-   - **Config-driven path:** [`EntityDrawerOverview.tsx`](../web/components/admin/entity/EntityDrawerOverview.tsx) → `EntityDrawerSection` → `EntityDrawerField`, formatting by `renderHint`; or
+   - **Config-driven path:** [`EntityDrawerOverview.tsx`](../../../web/components/admin/entity/EntityDrawerOverview.tsx) → `EntityDrawerSection` → `EntityDrawerField`, formatting by `renderHint`; or
    - **Hardcoded path:** entity-specific JSX inside `AdminEntityDrawer` for complex entities (Jobs relationships/pricing/financials, Vendors payouts, Subscriptions generate-next, Documents preview, Workflows condition/action builders).
-5. Render **Related** tab via [`RelatedRecordsTabs.tsx`](../web/components/admin/RelatedRecordsTabs.tsx) (+ `EntityDocumentsSection`).
+5. Render **Related** tab via [`RelatedRecordsTabs.tsx`](../../../web/components/admin/RelatedRecordsTabs.tsx) (+ `EntityDocumentsSection`).
 6. Render special tabs (Financials/Payments/Ledger) via dedicated widgets.
 
 **Verdict:** ~70% config-driven, ~30% hardcoded. Simple entities (customers, locations, opportunities, contacts, subscriptions overview) are fully config-driven. Jobs/Vendors/Documents/Workflows carry heavy custom JSX tied to business widgets.
 
 ### 1.5 Queue (list/table) rendering architecture
 
-- [`DataTable.tsx`](../web/components/admin/DataTable.tsx) — generic table: client-side pagination (20/page), sort, filter, search, row click. Accepts `Column[]` with optional custom `render()`.
-- [`buildEntityTableColumns.tsx`](../web/components/admin/entity/buildEntityTableColumns.tsx) — factory that turns `ENTITY_PRESENTATION_REGISTRY[type].table.columns` into `DataTable` columns, applying `renderHint` defaults (status→`StatusBadge`, money→`formatMoneyFromCents`, etc.), with per-page override hooks.
-- [`AdminListPageHeader.tsx`](../web/components/admin/AdminListPageHeader.tsx) — title + KPI pills + toolbar.
+- [`DataTable.tsx`](../../../web/components/admin/DataTable.tsx) — generic table: client-side pagination (20/page), sort, filter, search, row click. Accepts `Column[]` with optional custom `render()`.
+- [`buildEntityTableColumns.tsx`](../../../web/components/admin/entity/buildEntityTableColumns.tsx) — factory that turns `ENTITY_PRESENTATION_REGISTRY[type].table.columns` into `DataTable` columns, applying `renderHint` defaults (status→`StatusBadge`, money→`formatMoneyFromCents`, etc.), with per-page override hooks.
+- [`AdminListPageHeader.tsx`](../../../web/components/admin/AdminListPageHeader.tsx) — title + KPI pills + toolbar.
 - Each `/admin/{entity}/*Client.tsx` page composes header + DataTable + filters.
 
 **Verdict:** ~60% config-driven across queues. Many pages call `buildEntityTableColumns("type", overrides)`; a minority hardcode columns entirely (subscriptions, workflows, verticals) or use bespoke tables (messages-outbox, users, workflow-runs, documents).
@@ -177,7 +177,7 @@ Rendered by `DataTable` + `buildEntityTableColumns` + `AdminListPageHeader`, unl
 | **Users** (`UsersClient.tsx`) | custom | bespoke `SectionCard` table | role dropdown, reset-password, remove actions | ~0% |
 | **adminV2 QueueBlock** (`adminV2/.../QueueBlock.tsx`) | view-model driven | 3 surfaces (department rollup / work-unit lanes / default) | tier styling; mock data only | n/a (prototype) |
 
-**Reusable queue primitives:** `DataTable`, `buildEntityTableColumns`, `AdminListPageHeader`, `StatusBadge`/`getStatusVariant`, `KpiCard`, formatters in [`web/lib/adminFormatters.ts`](../web/lib/adminFormatters.ts) (`formatMoneyFromCents`, `formatDate`, `formatDateTime`, `formatPhoneUS`, `formatPayoutPercent`, `formatFrequencyLabel`).
+**Reusable queue primitives:** `DataTable`, `buildEntityTableColumns`, `AdminListPageHeader`, `StatusBadge`/`getStatusVariant`, `KpiCard`, formatters in [`web/lib/adminFormatters.ts`](../../../web/lib/adminFormatters.ts) (`formatMoneyFromCents`, `formatDate`, `formatDateTime`, `formatPhoneUS`, `formatPayoutPercent`, `formatFrequencyLabel`).
 
 ---
 

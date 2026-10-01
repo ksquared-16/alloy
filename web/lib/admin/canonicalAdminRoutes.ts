@@ -415,6 +415,19 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
     }
     if (p === "/tour-booking" || p.startsWith("/tour-booking/")) return true;
     /*
+     * A PAYER AUTHORIZING A BANK DEBIT IS NOT A VISITOR.
+     *
+     * Measured on deployed staging: `/bank-setup/<token>` rendered inside the marketing site, so a
+     * parent about to authorize a standing debit was offered Platform, Vision, About, Contact,
+     * Sign In and Book a Demo above the mandate, and a copyright footer below it. Sign In is the
+     * worst of them — it invites the one person on this page who has no account to go and look for
+     * one, on a page whose whole premise is that they do not need one.
+     *
+     * Same judgement as `/tour-booking`, and for the same reason: a token-addressed participant
+     * surface is the product, not an advert for it.
+     */
+    if (p === "/bank-setup" || p.startsWith("/bank-setup/")) return true;
+    /*
      * LOCAL QA READERS ARE NOT MARKETING PAGES.
      *
      * `/dev/*` is the human-acceptance walkthrough surface — local by construction, gated on the

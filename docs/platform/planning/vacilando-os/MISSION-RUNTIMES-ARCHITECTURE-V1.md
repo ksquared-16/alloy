@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Vacilando — Mission Runtimes Architecture (revised)
 
 > Status: architecture proposal for review. Supersedes the "Director becomes

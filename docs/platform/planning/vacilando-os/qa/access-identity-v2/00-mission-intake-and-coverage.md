@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # 00 — Mission intake & discovery coverage
 
 > **Intake report** for the Access & Roles mission. Establishes what the operator actually

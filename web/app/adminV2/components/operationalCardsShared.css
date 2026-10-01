@@ -2423,6 +2423,118 @@
   align-items: baseline;
   gap: 7px;
 }
+/*
+ * HELD DEPOSITS — a position, not a ledger.
+ *
+ * Deliberately NOT the eight-column ledger grid: a held lot has no date, GL account or status to put
+ * in those columns, and forcing it in would state a restriction as a transaction. It is a list of
+ * facts with the acts that discharge them, so it is laid out as one.
+ */
+.alloy-os-fdetail__held { margin-top: 10px; }
+/* The sentence that stops held money reading as spendable. Quiet, but not so quiet it is skipped. */
+.alloy-os-fdetail__heldnote {
+  margin: 2px 0 7px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, transparent);
+}
+.alloy-os-fdetail__heldlist {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.alloy-os-fdetail__heldrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--alloy-os-fp-card-border, color-mix(in srgb, #273f52 14%, transparent));
+  border-radius: 7px;
+  /* River Stone: a standing position, not an exception to resolve. */
+  background: var(--alloy-os-wash, #f4f6f9);
+}
+.alloy-os-fdetail__heldfacts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloy-os-fdetail__heldamount {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--alloy-os-forge-ink, #18273a);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__heldreason {
+  font-size: 0.76rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* Provenance, wrapped rather than truncated: a refund term that is cut off is worse than a wide row. */
+.alloy-os-fdetail__heldmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 60%, transparent);
+}
+/*
+ * NON-REFUNDABLE IS STATED, NOT ALARMED. It is a term the family agreed to, so it carries no Ember:
+ * a deposit taken as non-refundable is not an error anybody needs to resolve.
+ */
+.alloy-os-fdetail__heldmeta [data-financials-held-refundable="no"] {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 78%, transparent);
+}
+.alloy-os-fdetail__heldactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+/*
+ * ── THE THREE ACTS ON A DEPOSIT ARE NOT PEERS ──────────────────────────────────────────────────
+ *
+ * Apply, Release and Refund rendered at identical weight — same size, same 55% midnight, same
+ * everything — so the row offered three equally-likely-looking choices, one of which sends money
+ * out of the building. Measured on deployed staging.
+ *
+ * Applying a deposit to what the family owes is the ordinary, expected end of a deposit's life, so
+ * it takes the product's active accent. Releasing lifts a restriction and changes no balance, so it
+ * stays as it was. Refunding is the exception and the only one that is not reversible by another
+ * click, so it carries the same danger colour this stylesheet already gives an irreversible act —
+ * quiet until the operator is on it, then unmistakable.
+ *
+ * NO NEW PRIMITIVE. `RowAction` already marks itself with the act it raises; this is emphasis on
+ * the control that exists, scoped to the held row so the ledger's own action column is untouched.
+ */
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"] {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="apply"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* Release keeps the row's ordinary weight: it ends a restriction and settles nothing. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="release"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, transparent);
+}
+
+/* Refund is the way money leaves. Subordinate at rest, and named as danger the moment it is hovered. */
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"] {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 42%, transparent);
+}
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:hover,
+.alloy-os-fdetail__heldactions [data-financials-row-action="refund"]:focus-visible {
+  border-color: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 40%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-danger, #b3261e) 7%, var(--alloy-os-surface, #fff));
+  color: var(--alloy-os-danger, #b3261e);
+}
+
 
 /* The draft note under the preview — quiet, and never competing with the amount above it. */
 .alloy-os-addcharge__draftnote {

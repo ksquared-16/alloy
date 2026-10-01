@@ -142,7 +142,7 @@ export async function createPlatformCustomer(
  */
 export async function createMethodSetup(
     call: StripeFormCall,
-    args: { customerRef: string; rail: MethodRail },
+    args: { customerRef: string; rail: MethodRail; orgId: string; payerEntityId: string },
 ): Promise<{ ok: true; setupRef: string; clientSecret: string } | { ok: false; message: string }> {
     const res = await call(
         "POST",
@@ -150,6 +150,20 @@ export async function createMethodSetup(
         {
             customer: args.customerRef,
             "payment_method_types[]": stripeMethodType(args.rail),
+            /*
+             * WHOSE SETUP THIS IS, stamped by Alloy's own key at creation.
+             *
+             * The browser is handed a client secret, which lets it CONFIRM this setup and nothing
+             * else — it cannot alter the customer and it cannot alter metadata. So these two values
+             * are a server-written fact that comes back unchanged, and `completeAddPaymentMethod`
+             * refuses a setup whose stamp is not the payer it was asked to save a method for.
+             *
+             * This does not RESOLVE tenancy — the payer and the org are resolved canonically, from
+             * the session or the participant link, before this is ever read. It only refuses a
+             * mismatch, which is the difference between trusting provider metadata and checking it.
+             */
+            "metadata[alloy_org_id]": args.orgId,
+            "metadata[alloy_payer_id]": args.payerEntityId,
             /*
              * `off_session` usage: the payer is present now, but the whole point of storing the
              * method is collecting later without them. Declaring it here is what makes the stored
@@ -185,6 +199,11 @@ export type MethodSetupOutcome = {
     status: string;
     methodRef: string | null;
     mandateRef: string | null;
+    /** The platform customer the setup was opened against. Null only if the provider omitted it. */
+    customerRef: string | null;
+    /** The org and payer stamped on the setup when Alloy created it. See `createMethodSetup`. */
+    stampedOrgId: string | null;
+    stampedPayerId: string | null;
     /** `verify_with_microdeposits` when the payer must still confirm deposits. */
     nextActionType: string | null;
     failureMessage: string | null;
@@ -200,8 +219,15 @@ export async function retrieveMethodSetup(
         status?: string;
         payment_method?: string | { id?: string } | null;
         mandate?: string | { id?: string } | null;
+        customer?: string | { id?: string } | null;
+        metadata?: Record<string, unknown> | null;
         next_action?: { type?: string } | null;
         last_setup_error?: { message?: string } | null;
+    };
+    const metadata = (body.metadata ?? {}) as Record<string, unknown>;
+    const stamp = (key: string): string | null => {
+        const raw = metadata[key];
+        return typeof raw === "string" && raw.trim() ? raw.trim() : null;
     };
     return {
         ok: true,
@@ -209,6 +235,9 @@ export async function retrieveMethodSetup(
             status: String(body.status ?? ""),
             methodRef: refOf(body.payment_method),
             mandateRef: refOf(body.mandate),
+            customerRef: refOf(body.customer),
+            stampedOrgId: stamp("alloy_org_id"),
+            stampedPayerId: stamp("alloy_payer_id"),
             nextActionType: body.next_action?.type ? String(body.next_action.type) : null,
             failureMessage: body.last_setup_error?.message ? String(body.last_setup_error.message) : null,
         },

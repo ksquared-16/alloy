@@ -256,7 +256,13 @@ describe("W-11 — catalog against enforcement, both directions", () => {
         // 23 since AI + Agent Authority V2 activated `ops.workflows.write`: Workflow Assist
         // apply now gates on it before writing `workflows` and `workflow_actions`, so it is no
         // longer a control that changes nothing.
-        expect(unenforced.length).toBe(23);
+        // 23 -> 24 (Payments V1 · W6-A2): fin.post. Its four enforcement sites are deleted, so the
+        // catalog declares a key nothing consults. The delta is exactly one and it moves IN, which
+        // is the second such entry this initiative has recorded — every other movement has been OUT,
+        // the direction that means the product grew a real gate. Here the gate did not weaken: the
+        // four money handlers are gone and canonical Payments writes money through the action
+        // registry, so there is no route left to enforce anything on.
+        expect(unenforced.length).toBe(24);
     });
 
     it("C13 resolves the other way for the WRITE key, because the measurement moved", () => {

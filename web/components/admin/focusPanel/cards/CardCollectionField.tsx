@@ -12,11 +12,17 @@
  */
 import { loadStripe, type Stripe, type StripeElements } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
+import { stripePublishableKey } from "@/lib/financials/payments/stripePublishableKey";
+import {
+    ALLOY_ELEMENTS_APPEARANCE,
+    ALLOY_ELEMENTS_FONTS,
+    createAlloyOperatorPaymentElement,
+} from "@/lib/financials/payments/stripeElementsPresentation";
 
 let stripePromise: Promise<Stripe | null> | null = null;
 function stripeClient(): Promise<Stripe | null> {
     if (!stripePromise) {
-        const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+        const key = stripePublishableKey();
         // The publishable key is public by Stripe's design. Its ABSENCE is the interesting case:
         // without it the operator gets a plain explanation rather than a dead form.
         stripePromise = key ? loadStripe(key) : Promise.resolve(null);
@@ -56,7 +62,7 @@ export default function CardCollectionField({
         void (async () => {
             // `stripeAccount` is what makes Elements talk to the PROVIDER's account. Without it the
             // client secret belongs to an intent Stripe.js cannot see.
-            const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
+            const key = stripePublishableKey();
             const s = key
                 ? await loadStripe(key, { stripeAccount: connectedAccount })
                 : await stripeClient();
@@ -65,8 +71,12 @@ export default function CardCollectionField({
                 setUnavailable("Card entry is unavailable because card processing is not configured for this environment.");
                 return;
             }
-            const els = s.elements({ clientSecret });
-            const payment = els.create("payment", { layout: "tabs" });
+            const els = s.elements({
+                clientSecret,
+                appearance: ALLOY_ELEMENTS_APPEARANCE,
+                fonts: ALLOY_ELEMENTS_FONTS,
+            });
+            const payment = createAlloyOperatorPaymentElement(els);
             if (mountRef.current) payment.mount(mountRef.current);
             payment.on("ready", () => !cancelled && setReady(true));
             setStripe(s);

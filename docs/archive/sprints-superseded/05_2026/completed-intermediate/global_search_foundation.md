@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/archive/05_2026/global_search_foundation.md`  
 **Status:** **COMPLETE** (May 2026) — Global Search V1 is shipped and operational in AdminV2.  
-**Phase 2 candidates:** [global_search_phase2_candidates.md](./global_search_phase2_candidates.md)
+**Phase 2 candidates:** [global_search_phase2_candidates.md](../../../../sprints/archive/05_2026/later-phase/global_search_phase2_candidates.md)
 
 ---
 
@@ -176,4 +176,4 @@ cd web && npm run test -- tests/admin/globalSearch/globalRecordSearch.test.ts
 
 ## Deferred to Phase 2+
 
-See [global_search_phase2_candidates.md](./global_search_phase2_candidates.md) for future enhancements. Global Search V1 is complete and operational without them.
+See [global_search_phase2_candidates.md](../../../../sprints/archive/05_2026/later-phase/global_search_phase2_candidates.md) for future enhancements. Global Search V1 is complete and operational without them.

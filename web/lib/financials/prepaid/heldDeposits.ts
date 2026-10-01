@@ -370,18 +370,22 @@ export async function disposeHold(
  * `applyPaymentToCharge`, the same authority every other application uses. The result is an ordinary
  * `payment_allocations` row with no deposit flavour on it at all.
  *
- * ── THE ORDER IS DELIBERATE, AND IT IS THE SAFE ONE ──
+ * ── ONE TRANSACTION, NOT TWO ORDERED WRITES ──
  *
- * Two writes cannot share a transaction through this client, so one of them happens first. Recording
- * the disposition first would briefly RAISE available money — the hold would be gone and the
- * allocation not yet made — and another operation could take it in between.
+ * This function used to allocate and then dispose as two sequential client writes, and defended the
+ * ORDER on the grounds that the safe failure was the recoverable one: a disposition failing after a
+ * successful allocation leaves the money applied to the charge AND still counted as restricted, so
+ * held money is overstated rather than spent twice.
  *
- * Allocating first cannot do that. During the window the money is already committed to the
- * obligation, and a concurrent hold attempt computes an unapplied remainder that has ALREADY been
- * reduced, so it refuses more strictly rather than less. The worst case is a disposition that fails
- * after a successful allocation, which leaves held money overstated and visible — an operator sees a
- * hold that is too large, which is recoverable. The other order risks money being spent twice, which
- * is not.
+ * That reasoning was right about which order is safer and wrong that a choice had to be made. The
+ * "recoverable" state is one an operator cannot actually diagnose — the balance has moved, available
+ * prepaid is short by the same cents, the hold looks too large, and no surface connects the three.
+ * Nothing in the product repairs it.
+ *
+ * So the pair now commits in the database. `applyPaymentToCharge` is told which hold this application
+ * discharges and writes both rows through `apply_held_funds_atomic`. Every guard it applies to an
+ * ordinary application — household parity, both ceilings, the childcare-source rule — still runs,
+ * and the general ledger entry is still the one it records, because this is still an application.
  */
 export async function applyHeldFunds(
     supabase: SupabaseClient,
@@ -393,6 +397,12 @@ export async function applyHeldFunds(
         actorUserId?: string | null;
         notes?: string | null;
     },
+    /*
+     * `applyPaymentToCharge`, injected rather than imported so this module keeps no dependency on the
+     * childcare payment service. `disposeHoldId` is what makes the pair atomic; a caller that drops
+     * it gets an allocation and no disposition, which is the defect this function exists to prevent —
+     * so it is not optional in this signature.
+     */
     allocate: (input: {
         orgId: string;
         paymentId: string;
@@ -400,6 +410,7 @@ export async function applyHeldFunds(
         amountCents: number;
         actorUserId?: string | null;
         notes?: string | null;
+        disposeHoldId: string;
     }) => Promise<{ allocationId: string; appliedCents: number }>,
 ): Promise<DisposeResult> {
     const orgId = t(args.orgId);
@@ -431,24 +442,40 @@ export async function applyHeldFunds(
         };
     }
 
-    const allocated = await allocate({
-        orgId,
-        paymentId: found.payment_id,
-        chargeId: t(args.chargeId),
-        amountCents: args.amountCents,
-        actorUserId: args.actorUserId ?? null,
-        notes: args.notes ?? null,
-    });
+    /*
+     * One call, both rows. There is no second write to fail, so there is no window to reason about
+     * and no compensating path to get wrong.
+     */
+    try {
+        await allocate({
+            orgId,
+            paymentId: found.payment_id,
+            chargeId: t(args.chargeId),
+            amountCents: args.amountCents,
+            actorUserId: args.actorUserId ?? null,
+            notes: args.notes ?? null,
+            disposeHoldId: holdId,
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        /* The database's own bound refusal, surfaced in the operator's words. */
+        if (/remain held on deposit|would exceed hold/i.test(message)) {
+            return {
+                ok: false,
+                reason: "exceeds_remaining",
+                message: "That is more than is still held on this deposit.",
+            };
+        }
+        return { ok: false, reason: "write_failed", message };
+    }
 
-    return await disposeHold(supabase, {
-        orgId,
-        holdId,
-        kind: "applied",
-        amountCents: allocated.appliedCents,
-        allocationId: allocated.allocationId,
-        reason: args.notes ?? null,
-        actorUserId: args.actorUserId ?? null,
-    });
+    /* Re-read so the caller sees the hold as it now stands, not as the arithmetic predicted. */
+    const after = (await readHoldsForPayments(supabase, { orgId, paymentIds: [found.payment_id] }))
+        .find((h) => h.id === holdId);
+    if (!after) {
+        return { ok: false, reason: "write_failed", message: "the held deposit could not be re-read" };
+    }
+    return { ok: true, hold: after, disposedCents: args.amountCents };
 }
 
 /**

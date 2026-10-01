@@ -1,6 +1,6 @@
 # V2 workspace — slice 1 (cleaning org, proving chain)
 
-**Status:** Implementation spec (staging-first). **Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Foundation already shipped:** Track A Batch 1 — RRS v0, `record_overview_layouts`, cleaning job overview config (org `7803388d-cdee-4afb-89cf-23a137f39423`), `queue_definition` v1 types/parser, [`web/lib/rrs/`](../../web/lib/rrs/).
+**Status:** Implementation spec (staging-first). **Doctrine:** [`docs/architecture/README.md`](../architecture/README.md). **Foundation already shipped:** Track A Batch 1 — RRS v0, `record_overview_layouts`, cleaning job overview config (org `7803388d-cdee-4afb-89cf-23a137f39423`), `queue_definition` v1 types/parser, `web/lib/rrs/` (`../../../../web/lib/rrs`).
 
 **Purpose:** Define the **first end-to-end workspace chain** — **department → work unit → queue → record** — for the **current Alloy cleaning (staging) org**, without building the full multi-level platform, bespoke industry pages, or mature KPI/signal engines.
 
@@ -58,7 +58,7 @@
 
 | Criterion | Unassigned jobs | Today’s jobs |
 |-----------|-----------------|--------------|
-| **API readiness** | **`GET /api/admin/jobs?unassigned_work_unit=true`** already exists ([`web/app/api/admin/jobs/route.ts`](../../web/app/api/admin/jobs/route.ts)) | Requires **date window** on `scheduled_at` / schedule joins — not yet first-class in `queue_definition` v1 |
+| **API readiness** | **`GET /api/admin/jobs?unassigned_work_unit=true`** already exists ([`web/app/api/admin/jobs/route.ts`](../../../../web/app/api/admin/jobs/route.ts)) | Requires **date window** on `scheduled_at` / schedule joins — not yet first-class in `queue_definition` v1 |
 | **Clarity** | Single crisp predicate (`work_unit_id` IS NULL) | “Today” semantics (timezone, canceled schedules) need product rules |
 | **Doctrine fit** | Triage **before** execution routing — natural entry to assign into a work unit | Strong execution view **after** routing |
 
@@ -67,7 +67,7 @@
 ### 3.2 Work unit record in DB
 
 - Staging should have (or create) a **`work_units`** row under **Operations** with **key/name** like `unassigned` / “Unassigned jobs” **or** use a **virtual** work unit in the UI only (route by slug `unassigned`) that **does not** require `jobs.work_unit_id` to point to it — **prefer a real row** for consistency with hierarchy admin and future `queue_definition` storage.
-- **`queue_definition` v1:** Set JSON to match parser ([`web/lib/rrs/queue/queueDefinitionV1.ts`](../../web/lib/rrs/queue/queueDefinitionV1.ts)) **or** leave `{}` for slice 1 and drive the list **only** via the dedicated **`unassigned_work_unit`** query param (explicitly documented as **bridge** until interpreter powers the same shape).
+- **`queue_definition` v1:** Set JSON to match parser ([`web/lib/rrs/queue/queueDefinitionV1.ts`](../../../../web/lib/rrs/queue/queueDefinitionV1.ts)) **or** leave `{}` for slice 1 and drive the list **only** via the dedicated **`unassigned_work_unit`** query param (explicitly documented as **bridge** until interpreter powers the same shape).
 
 ### 3.3 What this work unit surface shows
 
@@ -112,12 +112,12 @@
 |--------|---------|----------|
 | **First open from queue** | **`drawer`** | Fast inspect: subset of `_rrs.fields`, compact relationship group; existing **`AdminEntityDrawer`** patterns where possible |
 | **Drill-in** | **`full`** | Full job detail (existing **job detail page** or expanded panel) using **`surface=full`** for resolver payload |
-| **Overview-focused pass** | **`overview`** | Use when rendering **summary band** inside drawer tab or dedicated “Summary” sub-view — payload driven by **`record_overview_layouts`** for cleaning org ([migration `20260408170000_*`](../../supabase/migrations/20260408170000_record_overview_layouts_cleaning_org_jobs.sql)) |
+| **Overview-focused pass** | **`overview`** | Use when rendering **summary band** inside drawer tab or dedicated “Summary” sub-view — payload driven by **`record_overview_layouts`** for cleaning org ([migration `20260408170000_*`](../../../../supabase/migrations/20260408170000_record_overview_layouts_cleaning_org_jobs.sql)) |
 
 ### 4.2 What to show first in V2 for cleaning jobs
 
 - **Drawer:** Title, status display, customer + primary person, location line, next schedule, work unit, assign vendor CTA or link, financial one-liner if already in flat payload.
-- **Overview (when invoked):** Exactly what cleaning config encodes — header strip, summary grid, service/property, operational, financial bands; **relationship groups** `primary_customer_person`, `customer_account` ([`web/lib/rrs/entities/job.ts`](../../web/lib/rrs/entities/job.ts)).
+- **Overview (when invoked):** Exactly what cleaning config encodes — header strip, summary grid, service/property, operational, financial bands; **relationship groups** `primary_customer_person`, `customer_account` ([`web/lib/rrs/entities/job.ts`](../../../../web/lib/rrs/entities/job.ts)).
 - **Full:** All fields admin already expects; **no** removal of legacy behavior in this slice.
 
 ### 4.3 Deferred at record layer
@@ -157,12 +157,12 @@
 
 ### 6.1 Already exists (reuse)
 
-- **Hierarchy APIs:** [`GET /api/admin/departments`](../../web/app/api/admin/departments/route.ts), [`GET /api/admin/work-units`](../../web/app/api/admin/work-units/route.ts) (optional `department_id`).
-- **Jobs list:** [`GET /api/admin/jobs`](../../web/app/api/admin/jobs/route.ts) with **`unassigned_work_unit`**, **`work_unit_id`**, **`department_id`**.
-- **Job record:** [`GET /api/admin/entity/jobs/:id`](../../web/app/api/admin/entity/[type]/[id]/route.ts) with **`?surface=`** and **`_rrs`**.
-- **RRS + overview:** [`web/lib/rrs/`](../../web/lib/rrs/), cleaning **`record_overview_layouts`** seed.
-- **Work unit admin:** [`web/app/admin/system/work-units/`](../../web/app/admin/system/work-units/WorkUnitsClient.tsx) for `queue_definition` JSON editing (validate with existing `parseQueueDefinition` on PATCH).
-- **Drawer shell:** [`AdminEntityDrawer`](../../web/components/admin/AdminEntityDrawer.tsx) (incremental wiring to `_rrs` / surfaces).
+- **Hierarchy APIs:** [`GET /api/admin/departments`](../../../../web/app/api/admin/departments/route.ts), [`GET /api/admin/work-units`](../../../../web/app/api/admin/work-units/route.ts) (optional `department_id`).
+- **Jobs list:** [`GET /api/admin/jobs`](../../../../web/app/api/admin/jobs/route.ts) with **`unassigned_work_unit`**, **`work_unit_id`**, **`department_id`**.
+- **Job record:** [`GET /api/admin/entity/jobs/:id`](../../../../web/app/api/admin/entity/[type]/[id]/route.ts) with **`?surface=`** and **`_rrs`**.
+- **RRS + overview:** `web/lib/rrs/` (`../../../../web/lib/rrs`), cleaning **`record_overview_layouts`** seed.
+- **Work unit admin:** `web/app/admin/system/work-units/` (`../../web/app/admin/system/work-units/WorkUnitsClient.tsx`) for `queue_definition` JSON editing (validate with existing `parseQueueDefinition` on PATCH).
+- **Drawer shell:** `AdminEntityDrawer` (`../../web/components/admin/AdminEntityDrawer.tsx`) (incremental wiring to `_rrs` / surfaces).
 
 ### 6.2 New backend work (likely)
 

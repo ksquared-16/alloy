@@ -39,6 +39,20 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 
 **Runtime Realization — the governing Runtime corpus (July 2026):** The Runtime's constitutional authority. **`platform/runtime/runtime-realization-architecture.md`** is the **Alloy Operating System Constitution** (canonical) — read it first. The **Kernel** (`platform/runtime/alloy-runtime-kernel.md`) defines the four runtime authorities **K1 Attention · K2 Provisioning · K3 Focus · K4 Instrumentation**; the **Engineering Specification** (`platform/runtime/runtime-realization-engineering-specification.md`) expresses K1–K4 as buildable structure; the **Implementation Authorization Package** (`platform/runtime/runtime-implementation-authorization.md`) carries the **ratified Work Unit contracts** — Operational (U-O1…U-O7), Preparation (U-P1…U-P7), Retention (U-R1…U-R8), Settlement (U-S1…U-S9) — the operator budgets, and the D1–D7 sequence. Provenance for the Constitution's ratification is **`platform/runtime/runtime-constitution-ratification-review.md`**. Product semantics are **not** owned here: the Runtime expresses **Record of Truth / Record of Attention / Context Frame** as defined in **`platform/operator/canonical-interaction-model.md`**.
 
+**Workspaces Operator Experience — reliability freeze (frozen, September 2026):** The completed
+runtime/performance programme. **`platform/runtime/WORKSPACES-OPERATOR-EXPERIENCE-FREEZE.md`** owns the
+frozen contract: fifteen canonical laws (§3) — hover may warm but may not navigate; data reuse is not
+navigation authority; visited is not current; no mixed-subject frame; unknown is not zero;
+`ALL_FIRST_ORDER_READY` is the operator readiness contract — plus the load-bearing seam map (§5), the
+regression guards (§6), the accepted debt (§9) and the procedure a future change to a law must follow
+(§10). The laws are stated **once, there**;
+**`platform/runtime/operator-runtime-performance-certification.md`** is the certification record and
+points at them rather than restating them, so the two cannot drift. The canonical definition of
+`ALL_FIRST_ORDER_READY` is **`runtime/CARD-READINESS-LIFECYCLE.md`** §8. Extending Workspaces needs
+nothing from the freeze; changing one of its laws requires all five conditions in §10. Remaining
+performance debt is named and deliberately open (§9) — it is **not** evidence that runtime
+architecture is unfinished.
+
 **Operational Expectations — two-ledger architecture (frozen, July 2026):** The platform's authored operational truth is **two ledgers** — **Operational Facts** (observed) and **Operational Expectations** (intended) — with everything else (Judgment, Gap, Projection, Scheduling, Forecasting, Billing) **derived**. Architecture is frozen; implementation is sequenced P0–P8. Frozen corpus: **`platform/core/operational-expectations-system-design.md`** (system design + §0.5 reconciliation), **`platform/milestones/operational-expectations-architecture-closeout.md`** (freeze), **`platform/milestones/operational-expectations-doctrine-convergence.md`** (terminology sweep), **`platform/milestones/operational-expectations-engineering-realization.md`** (the implementation contract), **`platform/milestones/operational-expectations-implementation-program.md`** (execution index), **`platform/milestones/operational-expectations-p0-substrate-reconciliation.md`** (P0 / G-Reconciliation certification), and **`platform/milestones/operational-expectations-p1-certification.md`** (P1 / M1 certification — the append-only ledger, the one authoring intake, Authority→Standing, revision/correction effectivity). **P0 and P1 are complete.** The generic authoring intake is server-side and flag-gated `oe.ledger.author` **OFF** by default, but an **activated-purpose seam** authors production ledger rows without that flag for one named purpose today — `attendance.service_day_exception`, which has an operator surface. Judgment/Gap (P3) onward are not started, so the capability is **not yet generally operational** (that is M7). See `platform/foundation/platform-capabilities.md` for the seam's code references.
 
 **Organization Configuration product realization (July 2026):** Programs, Locations, Financials, Access (UI), Business Processes, Surfaces, and Data Model share Collection → Selected → Focused workspace under `/organization/*`. Closeout: **`platform/milestones/organization-configuration-product-realization-closeout.md`**.
@@ -48,6 +62,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 **Operational Intelligence Platform V1 (frozen, July 2026):** Questions → Measurements → Definitions → Answers. Consumers present **Answers** (not Measurements). Freeze: **`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`**. Product closeout: **`sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`**. Phase 2 consumption: **`sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`**. Module: **`platform/modules/operational-intelligence-platform.md`**.
 
 **Two registers, not one list:** Alloy names foundational **runtimes** (operator-plane subsystems — `platform/foundation/architecture.md`) and foundational **platforms** (`platform/trust/trust-platform.md`). Trust is a platform, not a runtime, which is why it does not appear in the runtime register. The **K1–K4 kernel** (`platform/runtime/alloy-runtime-kernel.md`) is a third thing again — the substrate beneath the runtimes, explicitly "not a new foundational runtime".
+
+**Developer Platform / Public API V1 (complete, promoted and hard-frozen, September 2026):** Alloy's external boundary is a supported platform surface, not an integration script. Authority runs **Developer Application → Installation → Credential → Application Principal → scopes + resource boundary → `/api/v1`**, and a token resolves to exactly one organization. Current external doctrine lives in **`api/developer-platform/external/alloy-developer-platform-specification.md`** (the contract) and **`api/developer-platform/guide/integrating.md`** (the integration read); the machine contract is **`api/openapi/alloy-public-api.v1.json`**. The partner package under `api/developer-platform/package/` is **generated** from those sources — a downstream output, never an alternate authority. The dated workstream records in `api/developer-platform/product/` are **history** (`status: historical`): they record earlier surface counts that were correct on their own date and are not current doctrine.
 
 **Trust Platform (publication in progress, August 2026):** Alloy’s cognitive platform for **trusted operational reasoning** — not an AI/prompt/model layer. Entry: **`platform/trust/trust-platform.md`**. Corpus index: **`platform/trust/README.md`**.
 
@@ -86,6 +102,14 @@ Then: **`platform/foundation/system-overview.md`**
 10. `platform/core/record-system.md`
 11. `platform/core/status-and-state-system.md`
 11a. `platform/core/data/README.md` — **canonical data-contract layer** (data system, field catalog, status architecture)
+11b. `platform/core/work-view-membership-and-navigation.md` — **Work View membership, evaluation and navigation** (membership is not stage position; one evaluator produces rows, counts and eligibility)
+11c. `context/alloy-benchmark-context.md` — **benchmark context pack** (which documents may be loaded as authoritative AI context, and what may be inferred from each)
+
+11c-i. `context/alloy-platform-synthesis.md` — **the current platform in one document** (Tier 1; synthesized from fourteen certified domain records)
+11c-ii. `context/alloy-canonical-owner-map.md` — **one concern, one owner**, plus the staleness / re-certification contract
+11c-iii. `context/alloy-inference-contract.md` — **safe and forbidden inference** (the AI guardrail)
+11c-iv. `context/alloy-context-packages.md` — **what to load**: GPT tiers and Vacilando ingestion classes
+11d. [`platform/README.md`](platform/README.md) — **platform domain index** (the folder map, and the canonical owner inside each area)
 
 ### 3. Operator experience
 
@@ -146,6 +170,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Trust Platform (cognitive / reasoning) | `platform/trust/trust-platform.md` — corpus index `platform/trust/README.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
+| Developer Platform / Public API (external boundary — frozen) | `api/developer-platform/external/alloy-developer-platform-specification.md` — integration read `api/developer-platform/guide/integrating.md` |
 
 ### 5. Governance & standards
 
@@ -161,6 +186,8 @@ Then: **`platform/foundation/system-overview.md`**
 | API contracts | `platform/governance/api-contracts.md` |
 | **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
+| **Authentication & session model** | `platform/governance/authentication-and-session-model.md` — sign-in, sessions, account lifecycle; what is Alloy's vs the provider's vs unknown |
+| RLS authority model (measurement + staged plan) | `platform/governance/rls-authority-model-director-gate.md` |
 | Implementation patterns | `platform/governance/implementation-patterns.md` |
 | Deployment | `platform/governance/deployment-and-environments.md` |
 | Testing | `platform/governance/testing-and-quality.md` |

@@ -4,7 +4,7 @@
 
 # Alloy Interface Architecture
 
-> **Note (2026-04):** Structural doctrine for workspaces, work units, drawers vs full record, and RRS is in [`docs/architecture/`](./architecture/README.md). This document is a **conceptual region map** (sidebar, canvas, inspector); it is not the canonical data or resolver model.
+> **Note (2026-04):** Structural doctrine for workspaces, work units, drawers vs full record, and RRS is in [`docs/architecture/`](../architecture/README.md). This document is a **conceptual region map** (sidebar, canvas, inspector); it is not the canonical data or resolver model.
 
 ## Overview
 

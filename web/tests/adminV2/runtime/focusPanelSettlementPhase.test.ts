@@ -19,7 +19,15 @@ const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*
 describe("Focus Panel settlement phase", () => {
     it("the grid reads the declared phase, not the producer's name", () => {
         const grid = code(read("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx"));
-        expect(grid).toMatch(/model\.phase === "settled"/);
+        /*
+         * The rule moved into `resolveReservedCellSettledReason`, which also states WHY a cell left
+         * the reserve — so the phase test is now one branch of a named rule rather than an inline
+         * comparison. What the guard protects is unchanged and is asserted in both halves: the rule
+         * reads a declared phase, and the grid hands it `model.phase` rather than branching on the
+         * producer.
+         */
+        expect(grid).toMatch(/input\.phase === "settled"/);
+        expect(grid).toMatch(/phase: model\.phase/);
         expect(grid).not.toMatch(/model\.source/);
         expect(grid).not.toMatch(/"drawer_vm"/);
         expect(grid).not.toMatch(/"provisioning_answer"/);

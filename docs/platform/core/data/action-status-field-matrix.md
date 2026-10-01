@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-09-29
 supersedes: []
 ---
 
@@ -62,7 +62,7 @@ Guard: `assertNoChildProfileKeysOnOcmPatch`, `validateFieldDefinitionOwnership`.
 | `mark_enrolled` | Completion preflight | OCM outcome `enrolled`; agreement handoff | Enrollment outcome |
 | `withdraw_child` | OCM context | OCM outcome `withdrawn`/`not_enrolling` + `close_reason_key` | Terminal child outcome |
 | `close_lead` | Case context | `status_key=closed` + `close_reason_key` | Terminal case status |
-| `add_enrollment_participation` | customer_members | Creates OCM row | `outcome_status_key=null` at intake |
+| `add_enrollment_participation` | customer_members | Creates OCM row | `outcome_status_key=new_inquiry` at intake (measured 2026-09-29 via `ensureOpportunityCustomerMemberParticipation`; the null shape is intended, not current — D-BP5) |
 | Relationship actions | persons, customer_persons | Join rows | None on status_key directly |
 
 Full catalog: `action_definitions` seeds + `docs/platform/core/status-and-state-system.md`.
@@ -86,7 +86,7 @@ Full catalog: `action_definitions` seeds + `docs/platform/core/status-and-state-
 | Pattern | Enforcement |
 |---------|-------------|
 | Legacy text `status` in PATCH | `rejectLegacyTextStatusPatch` |
-| Direct `status_key`/`outcome_status_key`/`stage_key` PATCH | Outcome execution is the only writer |
+| Direct `status_key`/`outcome_status_key`/`stage_key` PATCH | **Refused.** The record route does not accept governed lifecycle fields; a request carrying one is rejected with an error naming the canonical transition. Canonical process/outcome execution is the only writer — see `../business-process-system.md` § Governed lifecycle state is not writable through the record route |
 | Profile fields on OCM | `findCustomerMemberProfileKeysInPatch` |
 | Wrong entity_type in field_definitions POST | `validateFieldDefinitionOwnership` |
 | Non-canonical status values | `assertAllowedStatusKey` (API) |

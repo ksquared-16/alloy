@@ -1,6 +1,6 @@
 ---
 title: Phase 0 — Production Safety & Schema Repair — Implementation Contract (v2)
-status: COMPLETE — authorized to execute
+status: sprint
 supersedes: v1 (2026-07-30 morning)
 date: 2026-07-30
 evidence: PHASE-0-LIVE-VERIFICATION.md · SEND-PATH-MATRIX.md

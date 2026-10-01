@@ -1,0 +1,52 @@
+{
+  "trusted_host_action_id": "tha_ef7958d9b6420d",
+  "query_hash": "cac4c81da3ad9fc7da553ba91fb52dba81fc8457a1941e552d2f4a1e1197ae30",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-09-25T16:54:23.649Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_ef7958d9b6420d",
+    "query_hash": "cac4c81da3ad9fc7da553ba91fb52dba81fc8457a1941e552d2f4a1e1197ae30",
+    "authorization_id": "grnt_2587d4693d1b4a4a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-09-25T16:54:29.154Z",
+    "question_ids": [
+      "webhook_delivery"
+    ],
+    "questions": {
+      "webhook_delivery": {
+        "question_id": "webhook_delivery",
+        "row_count": null,
+        "rows": [
+          {
+            "events_total": 2,
+            "events_by_type": {
+              "account.updated": 2
+            },
+            "events_by_disposition": {
+              "applied": 2
+            },
+            "with_connected_account": 2,
+            "with_org_attributed": 2,
+            "with_attempt_linked": 0,
+            "first_received_at": "2026-09-25 16:12:15.020565+00",
+            "last_received_at": "2026-09-25 16:13:12.41504+00",
+            "distinct_event_ids": 2,
+            "merchant_count": 1,
+            "merchant_readiness": "ready",
+            "merchant_created_at": "2026-09-22 14:54:20.610166+00",
+            "collection_attempts": 0,
+            "payments_total": 4
+          }
+        ]
+      }
+    },
+    "row_count": 1
+  }
+}

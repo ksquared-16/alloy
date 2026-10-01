@@ -224,3 +224,97 @@ Implementation: `b4af8d883` (Children commit-truth) + `f413fa8c7` (provider-avai
 **Certification evidence (prod build, arm64):** build gate `verify:module-imports ok (8563 files)` + `✓ Compiled successfully`. Milestones excluded across cold + warm + record-switch, all 6 queue subjects (4 cells). Cold operational-ready 7837ms (within the ~6.5–8.2s baseline — not worsened). Warm record-switch (both warm, B→A) 72ms (matches the certified ~46ms). Warm firstCell median ~4.5s was **host-load-inflated** (server/client split shows host-wide elevation: ttfb, htmlEnd, and hydrate all ~2× / 20–40×; the change is subtractive so cannot regress warm — the quiet-host 1.85s cert stands). Tests: `focusPanelCardProviderAvailability` 6/6 pass (arm64 vitest). Pre-existing baseline rot classified (`focusPanelSummaryCompositionInputs` "all published cells" fails identically without this change).
 
 **Known residual (not Step-1 blockers):** no childless subject exists in the org to demonstrate the empty case live (covered by contract test + the provably-wired provider); for a childless subject Children reserves at commit then shows authoritative "No children linked" at settlement (LAW-compliant, unchanged from baseline).
+
+
+---
+
+## 8. `ALL_FIRST_ORDER_READY` — the canonical T6, and why the two earlier ones were not it
+
+**Added 2026-09-25 from the OX J5 convergence run.** Certified on served `131fa153`, n=52 all-cold
+samples (`OX_PER_LOAD=1`), one build across the whole population, 0 mixed-subject frames, canonical
+instrument present on 52/52.
+
+### The definition
+
+For the **committed** subject, every **first-order** cell configured on the surface is in a terminal,
+truthful state:
+
+- **mounted** with a readiness of `ready` or `self_loading`, **or**
+- resolved as **genuinely** `not_applicable`.
+
+and it must **name that subject**. First-order means the commit-critical registry
+(`focusPanelCommitCriticalCards.ts`), intersected with what the surface actually configures.
+
+A cell fails the milestone when it is still `reserved`, when it left the reserve only because the
+surface declared itself settled (`phase_settled_unresolved` — an absence of an answer, not an answer),
+or when it cannot name its subject. UNKNOWN is not ABSENT, and it is certainly not "the current one".
+
+The milestone deliberately does **not** require the full drawer, second-order enrichment, or the atomic
+swap. `self_loading` passes: the card owns its own read and its later data enriches the same mounted cell.
+
+### Why the two predecessors were not this
+
+Both were real events on the same NDJSON stream, and neither was the product contract. Measured
+per-sample on one population:
+
+- the **carrier** predicate minus the `__viewModel` line arrival — **P50 35ms** (21–88, n=47)
+- the **clear-semantics** predicate minus the `__truthPatch` line arrival — **P50 17ms** (11–75, n=47)
+
+The carrier predicate waits for `data-card-subject`, which is fed from the payload **on screen** and by
+its own contract becomes the destination only at the atomic swap — so it *is* full-drawer completion.
+The clear-semantics predicate waits for the preparing attribute, which a cell drops both when it
+resolves not-applicable and when the surface gives up; the DOM could not tell those apart, so a card
+nobody ever answered scored as ready.
+
+That is why the same build reported cold T6 P50 ~960ms and ~1,291ms, and why on re-measurement the
+spread reversed sign: the two were never two samplings of one event.
+
+### The instrument
+
+Every cell states what the grid already knew when it decided — `data-focus-panel-cell-key`,
+`-readiness`, `-subject`, and `-settled-reason`. Diagnostic only: read, never branched on. The mounted
+wrapper uses `display: contents` so the card stays the grid item it was.
+`resolveReservedCellSettledReason` owns the precedence and is planted in
+`tests/adminV2/runtime/reservedCellSettledReason.test.tsx`.
+
+### Certified result — Vienna → fra1 → pdx1, the longest realistic operator path
+
+| milestone | P50 | P95 | max | target | verdict |
+|---|---|---|---|---|---|
+| T4_snapshot | 82 | 135 | 147 | — | — |
+| T5_executable | 274 | 627 | 1203 | < 750 / < 1250 | **PASS** |
+| T6_canonical | 580 | 1368 | 2881 | < 1000 / < 1500 | **PASS** |
+| T6_all_cells | 580 | 1368 | 2881 | < 1000 / < 1500 | **PASS** |
+| T6_semantics | 492 | 919 | 2796 | — | — |
+| T6_carrier | 1056 | 1612 | 3779 | — | — |
+
+`T6_all_cells` applies the identical test to **all six** configured cells rather than the three
+first-order ones. It is reported so the scope cannot be read as chosen to fit the gate — it is never the
+gate itself, because waiting for the self-loading cards is waiting for second-order enrichment.
+
+### The tail, classified per sample rather than inferred from the distribution
+
+2 of 52 samples exceed the T6 P95 target. Both are **server round-trip outliers**, and the server says
+so itself — the route publishes its phases on the final stream line:
+
+| | `gate_ms` | `assert_row_org_ms` | `participant_resolve_ms` | `full_compose_end_ms` |
+|---|---|---|---|---|
+| population P50 | 3 | 63 | 70 | 996 |
+| population P95 | 142 | 131 | 138 | 1538 |
+| run 18 | 4 | **784** | **811** | 3008 |
+| run 46 | 196 | 98 | 191 | **3842** |
+
+Individual REST hops at ten times their median, on a runtime whose per-hop quantum is ~37ms. Nothing
+client-side is implicated and the alternatives were measured, not assumed:
+
+- **long tasks** — observer supported and registered on 52/52 samples (`longtask` in
+  `supportedEntryTypes`), max 0ms on both tail samples, population max 92ms. UNSUPPORTED would have
+  been reported as UNSUPPORTED; 0 here means 0.
+- **page-initialization contention** — every click lands 17–19s after navigation start, with
+  `loadEventEnd` at 1.3–4.9s. The page is long finished.
+- **speculative work escaping the primary-selection gate** — at most one phased drawer request per
+  click across the whole population, and no neighbour-subject request at all.
+- **resource scheduling** — the request is issued at hover, a steady ~805ms *before* the click.
+
+So the remaining J5 variance is platform round-trip variance, not composition. It is the right owner to
+carry into the shared-runtime workstream and the wrong one to spend another composition repair on.

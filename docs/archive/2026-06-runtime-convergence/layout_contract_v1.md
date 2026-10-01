@@ -3,7 +3,7 @@
 **Status:** Frozen architecture contract. This is the source of truth for the remainder of the Platform Convergence Sprint.
 **Scope:** The contract that runtime, lifecycle, queues, drawers, and AdminV2 converge onto.
 **Nature:** Architecture-only. No implementation, no migrations, no code, no new platform concepts.
-**Companions (non-normative):** [FIELD_CATALOG_LAYOUT_ALIGNMENT_V1.md](../FIELD_CATALOG_LAYOUT_ALIGNMENT_V1.md) (audit), [PLATFORM_CONVERGENCE_LAYOUT_SPEC_V1.md](../PLATFORM_CONVERGENCE_LAYOUT_SPEC_V1.md) (implementation plan). Where those differ from this document, **this document wins.**
+**Companions (non-normative):** `../FIELD_CATALOG_LAYOUT_ALIGNMENT_V1.md` (audit), `../PLATFORM_CONVERGENCE_LAYOUT_SPEC_V1.md` (implementation plan). Where those differ from this document, **this document wins.**
 
 ---
 

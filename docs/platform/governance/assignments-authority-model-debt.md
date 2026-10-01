@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-15
+last_reviewed: 2026-09-30
 supersedes: []
 ---
 
@@ -39,14 +39,35 @@ assignee-bearing columns, belonging to four products:
 
 Two findings are worth keeping because they contradict what the names suggest:
 
-- **There is no staff assignment in this product.** No table assigns a person to a shift, a room or
-  a schedule. The only staff-shaped table is `staff_presence_events`, which is attendance capture.
-  The Director's hypothesised `STAFF ASSIGNER` / `SCHEDULE MANAGER` split does not apply, because
-  the operation it would split does not exist. What the product schedules is **vendors**, for
-  **jobs**.
-- **`schedule_assignments` is not staff scheduling.** It binds a schedule *pattern* to an enrollment
-  agreement — which child follows which timetable. Despite the name, `scheduling.write` does not own
-  it.
+- ~~**There is no staff assignment in this product.**~~ **WITHDRAWN 2026-09-30 — this was wrong when
+  it was written, not merely stale.** Measured on the certification stack: `schedule_assignments`
+  holds staff rows (1 staff, 97 child), its
+  `schedule_assignments_subject_shape_check` carries an explicit `subject_type = 'staff'` branch
+  requiring `subject_person_id` and `site_location_id`,
+  `validate_schedule_assignments_primary_overlap` governs staff primary assignments specifically, and
+  `lib/operationalAssignments/setPrimaryOperationalAssignment.ts` handles staff subjects. The staff
+  branch shipped in `20260725030801_operational_assignment_foundation_v1.sql` on 2026-07-25, and
+  `20260811120100_staff_assignment_eligibility_employment_v1.sql` followed on 2026-08-11 — about seven
+  weeks before this document was dated. `staff_coverage_allocations` additionally assigns an
+  `employment_id` to a `room_location_id` on a `service_date`, with its own supersession chain.
+
+  The failure mode is worth keeping even though the finding is not: absence was concluded from a
+  name-shaped search ("the only staff-shaped table is `staff_presence_events`"), and the staff
+  capability lives inside a table named for neither staff nor assignment-by-person. **A capability
+  audit cannot establish absence by filename.** Measure the constraint, the catalog and the rows.
+
+- **`schedule_assignments` is not ONLY child scheduling** — the original phrasing said it "is not
+  staff scheduling", which is false. It carries both subjects deliberately, under one temporal law
+  ([`../core/effective-dated-assignment-doctrine.md`](../core/effective-dated-assignment-doctrine.md)),
+  with **intentionally different cardinality**: a child primary assignment is single-operational by
+  partial unique index, while a staff primary is overlap-governed only, so a current and a
+  future-dated staff primary may legally coexist.
+
+  What survives of the original point is the authority claim, and it is still correct:
+  `scheduling.write` does **not** own the child-agreement binding. That is Enrollment truth, governed
+  by `enrollment.record.manage` / `enrollment.decide`. This is why `app/api/admin/scheduling` POST is
+  gated per branch rather than by one key — see
+  `ROUTE_INVENTORY_CONDITIONAL_OWNER_DEBT` in `scripts/routeCapabilities.declared.json`.
 
 Deliberately **not** treated as assignment: `financial_responsibility_allocations.assigned_amount_cents`
 (who owes what is Financials truth, owned by `fin.responsibility`), and the UI-layout "placement"

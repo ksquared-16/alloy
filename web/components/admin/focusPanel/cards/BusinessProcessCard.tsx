@@ -27,6 +27,7 @@ import {
 } from "@/lib/adminV2/runtime/diagnostics/processCardCommandDiagnostics";
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { executeCommandSurfaceAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCommandSurfaceAction";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { warmCurrentWorkCapabilityOnIntent } from "@/lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
@@ -271,6 +272,29 @@ function BusinessProcessSummary({ model, context, receded = false, coordination 
                      * someone else — so there is deliberately no fallback, and the host refuses.
                      */
                     const childId = context.participantScope?.customerMemberId?.trim() ?? "";
+
+                    /*
+                     * A DECLARED BODY MEANS REVIEW FIRST.
+                     *
+                     * Running immediately is right for a command whose inputs configuration bound
+                     * and whose effect is local. Sending a family their paperwork is neither: they
+                     * receive it, so the operator sees the child, the recipient and the requirement
+                     * set before it happens. Absent a declared body this falls through to the
+                     * existing immediate path, so no other command's behaviour changes.
+                     */
+                    const declaredBody = canonicalActionDefinition(
+                        plan.action.handlerKey ?? plan.action.key,
+                    )?.commandSurfaceBody;
+                    if (declaredBody) {
+                        /*
+                         * The panel hosts the review, not this file. This card supplies canonical
+                         * evidence to a locked presentation and deliberately draws nothing, so the
+                         * preview opens where every other action's interaction already opens.
+                         */
+                        coordination?.openCurrentWorkWorkspace?.({ kind: "action", actionKey: command.key });
+                        return;
+                    }
+
                     void executeCommandSurfaceAction({
                         actionKey: plan.action.handlerKey ?? plan.action.key,
                         entityType: "child",

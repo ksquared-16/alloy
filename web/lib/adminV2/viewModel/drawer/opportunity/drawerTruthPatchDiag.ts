@@ -61,11 +61,28 @@ function diag(): Diag | null {
     return d;
 }
 
+/**
+ * The most recent subjects, and no more.
+ *
+ * `subjects` gained one entry per opportunity the operator opened and evicted none. Each entry is
+ * only a handful of numbers, so this was never going to exhaust a tab — but an operator works a
+ * queue for a whole shift, and a diagnostic that grows for as long as the session lasts is a leak
+ * whatever its constant factor. Nothing reads further back than the switch being measured.
+ *
+ * Insertion order is what gets evicted, and for these keys that is well defined: subject ids are
+ * UUIDs, so they are non-integer-like string keys and JavaScript preserves their insertion order.
+ */
+const MAX_SUBJECTS = 24;
+
 function marksFor(d: Diag, subjectId: string): SubjectMarks {
     const existing = d.subjects[subjectId];
     if (existing) return existing;
     const created: SubjectMarks = { subject_id: subjectId };
     d.subjects[subjectId] = created;
+    const keys = Object.keys(d.subjects);
+    for (let i = 0; i < keys.length - MAX_SUBJECTS; i += 1) {
+        delete d.subjects[keys[i]];
+    }
     return created;
 }
 

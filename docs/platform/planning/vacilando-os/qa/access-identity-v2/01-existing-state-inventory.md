@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # 01 — Existing-state & authority inventory
 
 > **Operational inventory** for Access & Identity V2 closeout. Refreshes and refines the accepted

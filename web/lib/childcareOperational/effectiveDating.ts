@@ -63,6 +63,25 @@ export function validateEndOnOrAfterStart(
     return null;
 }
 
+/**
+ * Calendar day immediately after `ymd`.
+ *
+ * Used when an operator changes an operational fact without naming an effective date. Superseding from
+ * TODAY would assert that the prior row never applied today, which is false - the child was on the old
+ * schedule this morning. Starting the successor tomorrow keeps the superseded interval non-empty, which
+ * is the same reason `computePriorRowCloseDate` closes the prior row the day before.
+ */
+export function computeNextDayYmd(ymd: string): string {
+    assertValidIsoDate(ymd, "ymd");
+    const m = ISO_DATE_RE.exec(ymd.trim())!;
+    const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+}
+
 /** Calendar day immediately before newStartDate (for closing prior operational row). */
 export function computePriorRowCloseDate(newStartDate: string): string {
     assertValidIsoDate(newStartDate, "newStartDate");

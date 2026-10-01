@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { documentCompositionSchema } from "@/lib/forms/documentComposition";
+import { normalizeLegacyPublishedFormSchema } from "@/lib/forms/normalizeLegacyPublishedFormSchema";
 
 /** Single visibility condition; submit evaluation uses AND across `visibility.all`. */
 export const formVisibilityConditionSchema = z
@@ -48,6 +49,49 @@ type FormVisibility = z.infer<typeof formVisibilitySchema>;
 type FormValidateRules = z.infer<typeof formValidateRulesSchema>;
 type FormRepeatRules = z.infer<typeof formRepeatRulesSchema>;
 type FormSignatureConfig = z.infer<typeof formSignatureConfigSchema>;
+
+/**
+ * The explicit "nothing to report" a parent may give instead of typing a false value.
+ *
+ * Authored ON the field because only the author knows the honest words: "No known allergies" is a
+ * true clinical statement, "None we know of" is not the same sentence, and "Nothing to add" is a
+ * description of the click rather than an answer. The runtime already owns the AFFORDANCE — an
+ * optional need offers a skip, and `enrollmentSessionDeclines` records that it was offered and
+ * taken — so this adds the wording, never a second decline system.
+ *
+ * `offered: false` states that the author considered a skip and decided against one, which is a
+ * different fact from never having configured it.
+ */
+export const formFieldAbsenceSchema = z
+    .object({
+        label: z.string().min(1),
+        offered: z.boolean(),
+    })
+    .strict();
+
+export type FormFieldAbsence = z.infer<typeof formFieldAbsenceSchema>;
+
+/**
+ * WHOSE address a structured address group is.
+ *
+ * The group's own children already say WHAT they hold, through `field_source` (`person.address_line1`,
+ * `person.city`, …). What they cannot say is which person: two address groups on one form — a home
+ * address and a mailing address — both resolve `entity_type: "person"` and would fill from the same
+ * person, so a family would see their guardian's address offered as the billing address.
+ *
+ * `subject` is the entity the address belongs to and `role` is the relationship that selects WHICH
+ * one. Deliberately not a provider ref: the relationship leaves are name/email/phone, there is no
+ * canonical address leaf, and inventing one to fit here would put address ownership inside the Forms
+ * runtime instead of the relationship model that owns it.
+ */
+export const formGroupAddressBindingSchema = z
+    .object({
+        subject: z.string().min(1),
+        role: z.string().min(1),
+    })
+    .strict();
+
+export type FormGroupAddressBinding = z.infer<typeof formGroupAddressBindingSchema>;
 
 export const formFieldSourceRelationshipSchema = z
     .object({
@@ -140,6 +184,8 @@ type FormFieldBase = {
     validate?: FormValidateRules;
     entity_hint?: string;
     pdf_slot?: string;
+    /** The author's own wording for an explicit "nothing to report". @see formFieldAbsenceSchema */
+    absence?: FormFieldAbsence;
 };
 
 /** Parsed `schema_json` field node (recursive for groups). */
@@ -179,6 +225,8 @@ export type FormField =
           repeat?: FormRepeatRules;
           /** When set, repeat instances bind to a canonical collection provider. */
           collection_binding?: FormGroupCollectionBinding;
+          /** When set, the group's address fields resolve from the person this names. */
+          address_binding?: FormGroupAddressBinding;
       });
 
 const staticOptionRowSchema = z
@@ -204,6 +252,7 @@ const fieldCoreSchema = z
         derived: formFieldDerivedSchema.optional(),
         field_source: formFieldSourceSchema.optional(),
         layout_width: z.enum(["full", "half", "third", "quarter"]).optional(),
+        absence: formFieldAbsenceSchema.optional(),
     })
     .strict();
 
@@ -269,6 +318,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
                 fields: z.array(formFieldSchema).min(1),
                 repeat: formRepeatRulesSchema.optional(),
                 collection_binding: formGroupCollectionBindingSchema.optional(),
+                address_binding: formGroupAddressBindingSchema.optional(),
             })
             .strict(),
     ])
@@ -424,10 +474,19 @@ export const formSchemaV1Schema = z
 
 export type FormSchemaV1 = z.infer<typeof formSchemaV1Schema>;
 
+/*
+ * ── HISTORICAL VOCABULARY, THEN STRICT PARSE ───────────────────────────────────────────────────
+ *
+ * A published version is immutable, so an artifact authored before a property was renamed keeps the
+ * old name forever. Normalization translates the NAMED historical contracts and nothing else; the
+ * strict parse below is unchanged, so a property nobody has taught the normalizer is still an
+ * error. Both entry points normalize, because a caller that forgot would meet a 500 on a family's
+ * screen rather than a failing test.
+ */
 export function validateFormSchema(schemaJson: unknown): FormSchemaV1 {
-    return formSchemaV1Schema.parse(schemaJson);
+    return formSchemaV1Schema.parse(normalizeLegacyPublishedFormSchema(schemaJson));
 }
 
 export function safeParseFormSchema(schemaJson: unknown) {
-    return formSchemaV1Schema.safeParse(schemaJson);
+    return formSchemaV1Schema.safeParse(normalizeLegacyPublishedFormSchema(schemaJson));
 }

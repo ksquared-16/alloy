@@ -1,0 +1,323 @@
+governed: null · workers default -> n/a · weight 0 · admitted in 4ms
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      197 |
+      198 |     const goWorkspace = async () => {
+    > 199 |         const ok = await page.evaluate(`(() => { const a=[...document.querySelectorAll('a[href$="/workspace"],a[href*="/workspace?"]')].find((x)=>!/work-unit/.test(x.getAttribute('href')||'')); if(a){a.click();return true;} return false; })()`);
+          |                               ^
+      200 |         if (!ok) {
+      201 |             // A hard navigation here is the PROBE's own doing, not a product reset. It is labelled so
+      202 |             // the classification cannot later confuse the two.
+        at goWorkspace (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:199:31)
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:255:19)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      89 |     await page.addInitScript(INIT);
+      90 |
+    > 91 |     const sha = async () => page.evaluate(`(async () => { try { const r = await fetch('/api/build-info', { cache: 'no-store' }); return ((await r.json()) || {}).gitSha || null; } catch (e) { return null; } })()`) as Promise<string | null>;
+         |                                  ^
+      92 |     /*
+      93 |      * A READ MUST NOT BE ABLE TO KILL THE RUN.
+      94 |      *
+        at sha (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:91:34)
+        at record (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:183:30)
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:247:17)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 6ms
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":1,"contextDestroyed":0,"opens":[],"events":[]}
+
+[1A[2K  1 passed (19.1s)
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      197 |
+      198 |     const goWorkspace = async () => {
+    > 199 |         const ok = await page.evaluate(`(() => { const a=[...document.querySelectorAll('a[href$="/workspace"],a[href*="/workspace?"]')].find((x)=>!/work-unit/.test(x.getAttribute('href')||'')); if(a){a.click();return true;} return false; })()`);
+          |                               ^
+      200 |         if (!ok) {
+      201 |             // A hard navigation here is the PROBE's own doing, not a product reset. It is labelled so
+      202 |             // the classification cannot later confuse the two.
+        at goWorkspace (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:199:31)
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:255:19)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+governed: null · workers default -> n/a · weight 0 · admitted in 7ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":16,"contextDestroyed":0,"opens":[{"href":"/workspace/work-unit/waitlist","T4":3766,"T6":3766,"T7":3766,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1001,"T6":1001,"T7":1001,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":143,"T6":143,"T7":143,"rows":4,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"view","actions":10,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"view","actions":15,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null}]}
+
+[1A[2K  1 passed (1.2m)
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":24,"contextDestroyed":1,"opens":[{"href":"/workspace/work-unit/waitlist","T4":176,"T6":176,"T7":176,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1151,"T6":1151,"T7":1151,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":214,"T6":214,"T7":7276,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":173,"T6":173,"T7":173,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":1858,"T6":1858,"T7":1858,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"view","actions":10,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"row","actions":13,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:work-unit/registration","actions":16,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"view","actions":19,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:unit/enrolled-children","actions":21,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null},{"label":"view","actions":23,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null}]}
+
+[1A[2K  1 passed (1.8m)
+governed: null · workers default -> n/a · weight 0 · admitted in 4ms
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      243 |             const rows = await page.evaluate(`(() => [...document.querySelectorAll('.alloy-os-queue-row-card')].map((e)=>e.getAttribute('data-entity-id')).filter(Boolean).slice(0,3))()`) as string[];
+      244 |             for (const r of rows.slice(1, 3)) {
+    > 245 |                 await page.evaluate(`((id) => { const e=document.querySelector('.alloy-os-queue-row-card[data-entity-id="'+id+'"]'); if(e) e.click(); })(${JSON.stringify(r)})`);
+          |                            ^
+      246 |                 await page.waitForTimeout(2200);
+      247 |                 await record("row");
+      248 |             }
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:245:28)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      197 |
+      198 |     const goWorkspace = async () => {
+    > 199 |         const ok = await page.evaluate(`(() => { const a=[...document.querySelectorAll('a[href$="/workspace"],a[href*="/workspace?"]')].find((x)=>!/work-unit/.test(x.getAttribute('href')||'')); if(a){a.click();return true;} return false; })()`);
+          |                               ^
+      200 |         if (!ok) {
+      201 |             // A hard navigation here is the PROBE's own doing, not a product reset. It is labelled so
+      202 |             // the classification cannot later confuse the two.
+        at goWorkspace (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:199:31)
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:255:19)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 4ms
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":25,"contextDestroyed":1,"opens":[{"href":"/workspace/work-unit/waitlist","T4":181,"T6":181,"T7":181,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":1043,"T6":1043,"T7":1043,"rows":8,"subject":"present","revisit":false},{"href":"/workspace/work-unit/new","T4":141,"T6":141,"T7":141,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":153,"T6":153,"T7":153,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":2348,"T6":2348,"T7":2348,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"wuRemounts":1,"url":"/workspace/work-unit/all","rows":8,"view":null},{"label":"view","actions":10,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:orkspace/work-unit/new","actions":12,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"view","actions":15,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:work-unit/registration","actions":17,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"view","actions":20,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:unit/enrolled-children","actions":22,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null},{"label":"view","actions":24,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null}]}
+
+[1A[2K  1 passed (1.8m)
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+governed: null · workers default -> n/a · weight 0 · admitted in 3ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":22,"contextDestroyed":2,"opens":[{"href":"/workspace/work-unit/waitlist","T4":181,"T6":181,"T7":181,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":null,"T6":null,"T7":null,"rows":0,"subject":null,"revisit":false},{"href":"/workspace/work-unit/new","T4":142,"T6":142,"T7":142,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":158,"T6":158,"T7":158,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":4167,"T6":4167,"T7":4167,"rows":2,"subject":"present","revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:orkspace/work-unit/new","actions":9,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"view","actions":12,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:work-unit/registration","actions":14,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"view","actions":17,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:unit/enrolled-children","actions":19,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null},{"label":"view","actions":21,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null}]}
+
+[1A[2K  1 passed (2.0m)
+governed: null · workers default -> n/a · weight 0 · admitted in 2ms
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K[chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[GR] {"mode":"session","servedSha":"31bcc7568","endSha":"31bcc7568","actions":26,"contextDestroyed":4,"opens":[{"href":"/workspace/work-unit/waitlist","T4":213,"T6":213,"T7":213,"rows":16,"subject":"present","revisit":false},{"href":"/workspace/work-unit/all","T4":null,"T6":null,"T7":null,"rows":0,"subject":null,"revisit":false},{"href":"/workspace/work-unit/new","T4":143,"T6":143,"T7":143,"rows":4,"subject":"present","revisit":false},{"href":"rkspace/work-unit/registration","T4":151,"T6":151,"T7":151,"rows":3,"subject":"present","revisit":false},{"href":"ce/work-unit/enrolled-children","T4":3563,"T6":3563,"T7":3563,"rows":2,"subject":"present","revisit":false},{"href":"pace/work-unit/active-pipeline","T4":null,"T6":null,"T7":null,"rows":0,"subject":null,"revisit":false},{"href":"/workspace/work-unit/tours","T4":null,"T6":null,"T7":null,"rows":0,"subject":null,"revisit":false}],"events":[{"label":"open:ace/work-unit/waitlist","actions":2,"wuRemounts":1,"url":"/workspace/work-unit/waitlist","rows":16,"view":null},{"label":"open:orkspace/work-unit/all","actions":7,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:orkspace/work-unit/new","actions":9,"wuRemounts":1,"url":"/workspace/work-unit/new","rows":4,"view":null},{"label":"view","actions":12,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:work-unit/registration","actions":14,"wuRemounts":1,"url":"/workspace/work-unit/registration","rows":3,"view":null},{"label":"view","actions":17,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:unit/enrolled-children","actions":19,"wuRemounts":1,"url":"/workspace/work-unit/enrolled-children","rows":2,"view":null},{"label":"view","actions":21,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:k-unit/active-pipeline","actions":23,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null},{"label":"open:kspace/work-unit/tours","actions":25,"FULL_DOCUMENT_NAVIGATION":true,"url":"/workspace","rows":0,"view":null}]}
+
+[1A[2K  1 passed (3.2m)
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability
+[1A[2K  1) [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability 
+
+    Error: page.evaluate: Execution context was destroyed, most likely because of a navigation
+
+      247 |                 await record("row");
+      248 |             }
+    > 249 |             const pl = await page.evaluate(`(() => [...document.querySelectorAll('button[role="tab"][data-work-view-id]')].map((e)=>e.getAttribute('data-work-view-id')))()`) as string[];
+          |                                   ^
+      250 |             if (pl.length > 1) {
+      251 |                 await page.evaluate(`((id) => { const p=[...document.querySelectorAll('button[role="tab"][data-work-view-id]')].find((e)=>e.getAttribute('data-work-view-id')===id); if(p) p.click(); })(${JSON.stringify(pl[1])})`);
+      252 |                 await page.waitForTimeout(2600);
+        at openUnits (/Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:249:35)
+        at /Users/vacilando/Code/alloy-worktrees/wt1-work-unit-grade-a/web/playwright/tests/zz-gateR-reliability.spec.ts:260:5
+
+    Error Context: test-results/zz-gateR-reliability-gate-R-workspace-reliability-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › playwright/tests/zz-gateR-reliability.spec.ts:87:5 › gate R workspace reliability ─

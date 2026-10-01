@@ -58,6 +58,24 @@ test("j5 carrier certify and measure", async ({ page }) => {
      * the sample count is the binding constraint on knowing whether the tail is real.
      */
     const PER_LOAD = Number(process.env.OX_PER_LOAD ?? "3");
+    /*
+     * A COLD RUN CANNOT BE STARTED BY DEFAULT ANY MORE.
+     *
+     * Three switches per page load means two of every three samples are served from the drawer VM
+     * session cache. Run that way this probe reported T5 P50 243 / P95 605 and T6 P50 948 / P95
+     * 1,486 — all four gates passing — where the all-cold truth on the same build was P95 2,088 and
+     * 3,596. Nothing about the invocation said which had been measured, and one default stood
+     * between that run and a journey closed on warm samples.
+     *
+     * So the pooling is now something a caller asks for out loud. OX_PER_LOAD=1 is cold; anything
+     * else needs OX_ALLOW_WARM_POOLING, and the value is stamped on every sample either way.
+     */
+    if (!process.env.OX_ALLOW_WARM_POOLING && PER_LOAD !== 1) {
+        throw new Error(
+            `OX_PER_LOAD=${PER_LOAD} pools warm switches with cold ones and must not be used for ` +
+            `certification. Set OX_PER_LOAD=1, or OX_ALLOW_WARM_POOLING=1 to measure warm behaviour.`,
+        );
+    }
     for (let i = 0; i < RUNS; i += 1) {
         if (i % PER_LOAD === 0) {
             await page.goto("/adminV2/workspace/work-unit/new-leads", { waitUntil: "domcontentloaded", timeout: 180_000 });
@@ -165,6 +183,7 @@ test("j5 carrier certify and measure", async ({ page }) => {
                 .map((r) => ({ rel: r.at - w.clickAt, dur: r.end - r.at, phased: r.path.includes('phased=1') }));
 
             return {
+                perLoad: ${PER_LOAD},
                 milestones: m,
                 mixedFrames,
                 subjectBefore, subjectAfter: nowBody,

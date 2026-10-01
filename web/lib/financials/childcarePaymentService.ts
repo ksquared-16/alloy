@@ -44,6 +44,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBillableSourceHouseholdId } from "@/lib/financials/billableSourceHousehold";
+import { heldCentsFor, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 
 import {
     OperationalEnrollmentServiceError,
@@ -94,6 +95,8 @@ export type PaymentRow = {
     billable_source_type: string | null;
     billable_source_id: string | null;
     refunds_payment_id: string | null;
+    /** Who caused this reversal: an operator's refund, or a provider/bank return. Null on receipts. */
+    reversal_origin: string | null;
     idempotency_key: string | null;
     amount_cents: number;
     currency: string;
@@ -133,11 +136,23 @@ export type PaymentAllocationRow = {
     updated_by: string | null;
 };
 
+/*
+ * ── WHY `reversal_origin` IS IN THIS LIST ───────────────────────────────────────────────────────
+ *
+ * It is WRITTEN on every outbound row and was never SELECTED back, so `PaymentRow` could not carry
+ * the one fact that distinguishes an operator's refund from a provider's return. The Financials
+ * card was unaffected — `buildFinancialsCardVM` selects the column in its own list — but every
+ * service-layer consumer of a `PaymentRow` was blind to it, and a test asserting on it was
+ * measuring a mock's fidelity rather than the product.
+ *
+ * The domain draws this distinction deliberately: an operator chose to give money back; a bank took
+ * it. Reading it back is what lets anything downstream say so.
+ */
 const PAYMENT_COLUMNS =
     "id, org_id, job_id, customer_id, billable_source_type, billable_source_id, refunds_payment_id, "
     + "idempotency_key, amount_cents, currency, status, direction, payment_method, processor, "
     + "processor_transaction_id, reference_number, received_at, posted_at, failed_at, voided_at, notes, "
-    + "metadata, created_at, updated_at, created_by, updated_by";
+    + "reversal_origin, metadata, created_at, updated_at, created_by, updated_by";
 
 const ALLOCATION_COLUMNS =
     "id, org_id, payment_id, charge_id, target_entity_type, target_entity_id, allocated_amount_cents, "
@@ -462,6 +477,19 @@ export type ApplyPaymentToChargeInput = {
     actorUserId?: string | null;
     notes?: string | null;
     metadata?: Record<string, unknown>;
+    /**
+     * A held deposit this application discharges.
+     *
+     * Supplying it does not change what is applied, who may apply it, or how it is journalled — every
+     * guard below runs identically. It changes only HOW the allocation row is written: through
+     * `apply_held_funds_atomic`, so the allocation and the hold's `applied` disposition commit in one
+     * transaction instead of two round trips with an unrecoverable window between them.
+     *
+     * It lives here rather than in a second apply path because held money becoming an allocation is
+     * the SAME act as any other application. A parallel writer would be a second application path,
+     * with its own household guard to forget and its own journal to omit.
+     */
+    disposeHoldId?: string | null;
 };
 
 export type ApplyPaymentToChargeResult = {
@@ -774,18 +802,47 @@ export async function applyPaymentToCharge(
     }
 
     const unapplied = await readPaymentUnappliedCents(supabase, orgId, paymentId, payment.amount_cents);
+
+    /*
+     * ── HELD MONEY IS NOT AVAILABLE TO APPLY ─────────────────────────────────────────────────
+     *
+     * `unapplied` counts the WHOLE receipt, and a hold is a restriction WITHIN it. Bounding an
+     * ordinary application by `unapplied` therefore let the ordinary path spend a deposit: no
+     * disposition, no decision about the lot, no refusal — the held figure simply shrank.
+     *
+     * MEASURED ON DEPLOYED STAGING (build e9694c5c8). A receipt showing AVAILABLE PREPAID $7.00
+     * beside HELD DEPOSIT $515.00 applied $75.00 to a registration fee. Prepaid went to zero and
+     * HELD fell to $447.00 — $68 of restricted money settled tuition, which is the one thing the
+     * surface's own sentence promises cannot happen: "It is not available prepaid and it does not
+     * reduce what the family owes until it is applied."
+     *
+     * A hold cannot be created beyond the unapplied balance — `enforce_payment_hold_within_unapplied`
+     * sees to that — but nothing stopped an allocation eroding the money an existing hold depends
+     * on, because no hold row changes and the trigger never fires.
+     *
+     * An application that DISCHARGES a lot is the exception and is bounded by the lot instead: that
+     * is the whole point of `disposeHoldId`, and `apply_held_funds_atomic` re-derives the bound.
+     */
+    const disposeHoldId = trimOrNull(input.disposeHoldId ?? null);
+    const heldCents = disposeHoldId
+        ? 0
+        : heldCentsFor(paymentId, await readHoldsForPayments(supabase, { orgId, paymentIds: [paymentId] }));
+    const applicable = Math.max(0, unapplied - heldCents);
+
     /*
      * THE DEFAULT IS THE SMALLER OF THE TWO CEILINGS, which is what makes a partial payment work
      * without the operator doing arithmetic: pay $500 against a $1,300 charge and $500 applies; pay
      * $2,000 against it and $1,300 applies with $700 left on the account.
      */
-    const requested = input.amountCents ?? Math.min(unapplied, charge.outstandingCents);
+    const requested = input.amountCents ?? Math.min(applicable, charge.outstandingCents);
     assertPositiveIntCents(requested, "amountCents");
 
-    if (requested > unapplied) {
+    if (requested > applicable) {
         throw new OperationalEnrollmentServiceError(
             "invalid_state",
-            `applying ${requested} cents would over-apply payment ${paymentId}: only ${unapplied} cents remain unapplied`,
+            heldCents > 0
+                ? `applying ${requested} cents would spend held money on payment ${paymentId}: ${unapplied} cents are unapplied but ${heldCents} of them are held, leaving ${applicable} available to apply`
+                : `applying ${requested} cents would over-apply payment ${paymentId}: only ${applicable} cents remain unapplied`,
         );
     }
     if (requested > charge.outstandingCents) {
@@ -796,6 +853,57 @@ export async function applyPaymentToCharge(
     }
 
     const now = nowIso();
+
+    /*
+     * HELD MONEY COMMITS BOTH ROWS OR NEITHER.
+     *
+     * When this application discharges a hold, the allocation is written by
+     * `apply_held_funds_atomic`, which inserts the allocation and the `applied` disposition in one
+     * transaction. Written as two client round trips, a failure after the allocation left the money
+     * applied to the charge AND still counted as restricted — the balance fell, available prepaid
+     * under-reported by the same cents, and no surface explained why.
+     *
+     * Everything above this line has already run, so the RPC inherits the household guard, both
+     * ceilings and the childcare-source rule rather than restating them. It returns the allocation's
+     * id; the row is then re-read through the same columns the ordinary path selects, so the shape
+     * the caller receives does not depend on which writer produced it.
+     */
+    if (disposeHoldId) {
+        const { data: applied, error: appliedError } = await supabase.rpc("apply_held_funds_atomic", {
+            p_org_id: orgId,
+            p_hold_id: disposeHoldId,
+            p_charge_id: chargeId,
+            p_amount_cents: requested,
+            p_actor: input.actorUserId ?? null,
+            p_notes: trimOrNull(input.notes),
+        });
+        if (appliedError) translateDbError(appliedError, "apply held deposit");
+        /* RETURNS TABLE, so PostgREST hands back an array of one row. */
+        const row = (Array.isArray(applied) ? applied[0] : applied) as
+            | { allocation_id?: string | null }
+            | null;
+        const allocationId = trimOrNull(row?.allocation_id ?? null);
+        if (!allocationId) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_state",
+                "applying the held deposit reported no allocation",
+            );
+        }
+        const { data: heldAllocation, error: reReadError } = await supabase
+            .from("payment_allocations")
+            .select(ALLOCATION_COLUMNS)
+            .eq("org_id", orgId)
+            .eq("id", allocationId)
+            .single();
+        if (reReadError) translateDbError(reReadError, "re-read the held-deposit application");
+        const allocation = heldAllocation as unknown as PaymentAllocationRow;
+        return {
+            allocation,
+            alreadyApplied: false,
+            journal: await recordPaymentAppliedEntry(supabase, payment, allocation, input.actorUserId ?? null),
+        };
+    }
+
     const { data, error } = await supabase
         .from("payment_allocations")
         .insert({
@@ -1180,6 +1288,22 @@ export type RefundChildcarePaymentInput = {
      * `processor`, a Stripe refund and a Stripe dispute look identical.
      */
     reversalOrigin?: "operator" | "provider";
+
+    /**
+     * THE HELD LOT THIS REFUND DISCHARGES, when it was raised from one.
+     *
+     * A lot's money is restricted and UNAPPLIED BY CONSTRUCTION —
+     * `enforce_payment_hold_within_unapplied` refuses a hold larger than the receipt's unapplied
+     * balance — so giving it back settles nothing and must un-settle nothing. Reversing
+     * applications to fund it takes the money out of obligations the family had already paid.
+     *
+     * Measured on deployed staging before this existed: an $80 deposit refunded against a $700
+     * receipt holding $582 unapplied reversed all three of its applications and re-applied $38.
+     * The balance rose $75 -> $137, PAID fell $100 -> $38, and Available prepaid rose by exactly
+     * the $80 refunded — the lot became spendable prepaid while the refund came out of settled
+     * obligations, which is the release-then-refund shape the held-money design exists to refuse.
+     */
+    heldLotId?: string | null;
 };
 
 export type RefundChildcarePaymentResult = {
@@ -1199,7 +1323,13 @@ export type RefundChildcarePaymentResult = {
  *
  *   1. A NEW outbound payment row is written pointing at the receipt through `refunds_payment_id`.
  *      The receipt keeps reading exactly as it was received; the database refuses to change it.
- *   2. The APPLICATIONS are reversed by the refunded amount, which is what puts the balance back.
+ *   2. The APPLICATIONS are reversed by the part of the refund that nothing else can fund, which is
+ *      what puts the balance back. An operator's refund is funded from eligible ordinary unapplied
+ *      retained money FIRST — `received − already refunded − applied − held` — and only the
+ *      shortfall reverses anything, so returning a credit balance no longer re-opens obligations
+ *      the family had already settled. A held-lot refund is funded by the lot and reverses
+ *      nothing; a provider return reverses in full, because the bank removed recognised money and
+ *      nobody chose how to fund it. See the funding block below.
  *      A reversal sets `status = 'reversed'` with `reversed_at` and a reason — the correction shape
  *      the table was designed with — and never deletes the row, so "this money was applied and then
  *      given back" stays legible. For a partial refund the remainder is RE-APPLIED as a new active
@@ -1254,6 +1384,56 @@ export async function refundChildcarePayment(
             "invalid_state",
             `refunding ${amountCents} cents exceeds the ${original.amount_cents} cents received`,
         );
+    }
+
+    /*
+     * ── WHAT FUNDS AN OPERATOR'S REFUND ─────────────────────────────────────────────────────────
+     *
+     * DIRECTOR DECISION. An operator-initiated refund is funded from eligible ordinary unapplied
+     * RETAINED money first, and only the portion that money cannot cover reverses applications:
+     *
+     *     unapplied-funded  = min(X, U)
+     *     must reverse      = max(0, X − U)
+     *
+     * where U is what this receipt still holds that nothing has a claim on —
+     * `received − already refunded − actively applied − held`. `readPaymentUnappliedCents` is the
+     * canonical reader for the first three of those (it nets refunds itself, which is why they are
+     * not subtracted again here); the held total is the only thing it does not know about.
+     * Before this, every refund reversed
+     * applications for its whole amount, so returning a credit balance silently re-opened
+     * obligations the family had already settled: an $80 refund against $400 of unapplied money
+     * added $80 to what they owed.
+     *
+     * HELD MONEY IS NOT ELIGIBLE. A deposit is unapplied by construction, and an ordinary refund
+     * that quietly consumed one would be the very thing `heldLotId` exists to prevent. It is
+     * subtracted out of U, and a refund that NAMES a lot is funded by that lot and reverses
+     * nothing — the W6-B / #1348 authority, untouched.
+     *
+     * A PROVIDER RETURN IS NOT THIS. Nobody chose how to fund a chargeback; the bank removed money
+     * that had already been recognised, and the obligations it settled genuinely come back. It is
+     * excluded by `reversalOrigin`, which `providerDispute` has always set and which is recorded on
+     * the row, so the distinction is in the data and not only in this branch.
+     *
+     * COMPUTED BEFORE THE REFUND ROW EXISTS. `readPaymentUnappliedCents` nets the outbound rows
+     * pointing at this receipt, and the row written below is one of them — asking afterwards would
+     * count this refund as already made and under-fund it by its own amount.
+     *
+     * NO NEW ARITHMETIC: the three readers are the canonical ones every other surface uses.
+     */
+    const fundedFromHeldLot = Boolean(trimOrNull(input.heldLotId ?? null));
+    const isProviderReturn = (input.reversalOrigin ?? "operator") === "provider";
+
+    let unappliedFundedCents = 0;
+    if (!fundedFromHeldLot && !isProviderReturn) {
+        const unappliedRetained = await readPaymentUnappliedCents(
+            supabase, orgId, original.id, original.amount_cents,
+        );
+        const heldCents = heldCentsFor(
+            original.id,
+            await readHoldsForPayments(supabase, { orgId, paymentIds: [original.id] }),
+        );
+        const eligible = Math.max(0, unappliedRetained - heldCents);
+        unappliedFundedCents = Math.min(amountCents, eligible);
     }
 
     const now = nowIso();
@@ -1316,9 +1496,20 @@ export async function refundChildcarePayment(
     const active = (allocData ?? []) as unknown as PaymentAllocationRow[];
     const reversedAllocationIds: string[] = [];
     let reappliedAllocation: PaymentAllocationRow | null = null;
-    let remaining = amountCents;
 
-    for (const alloc of active) {
+    /*
+     * ONLY THE SHORTFALL. `unappliedFundedCents` has already left money nothing had a claim on, so
+     * what remains is the part of the refund that must come out of settled obligations. It is
+     * zero whenever the receipt could fund the refund by itself, zero for a held-lot refund, and
+     * the whole amount for a provider return.
+     *
+     * The ORDER is unchanged: oldest-first, straddling allocation reversed in full with its kept
+     * remainder re-applied. This decision changes WHEN a reversal is required, not which
+     * allocation goes first.
+     */
+    let remaining = fundedFromHeldLot ? 0 : Math.max(0, amountCents - unappliedFundedCents);
+
+    for (const alloc of remaining > 0 ? active : []) {
         if (remaining <= 0) break;
         const allocAmount = Number(alloc.allocated_amount_cents) || 0;
 

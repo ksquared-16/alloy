@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: active
+status: sprint
 last_reviewed: 2026-07-26
 supersedes: []
 ---

@@ -4,13 +4,13 @@
 **Status:** Phase 1 **COMPLETE** (GATE 1 passed) — Phase 2 **COMPLETE** (GATE 2 passed); Phase 3 may begin  
 **Date:** 2026-05-21
 
-**GATE 0 implementation doctrine (binding before code):** [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md)  
-**Phase 1 execution pack:** [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md)  
-**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md)  
-**May 2026 operational assist closeout:** [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) — **COMPLETE**
-**Forward planning (Phase 2 opportunities):** [`../future/bos_operational_assist_phase2.md`](../future/bos_operational_assist_phase2.md) — not implemented
-**Phase 3 planning:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md)
-**Phase 4 planning:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
+**GATE 0 implementation doctrine (binding before code):** [`completed/bos_operational_recommendation_intelligence_gate0.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_intelligence_gate0.md)  
+**Phase 1 execution pack:** [`completed/bos_operational_recommendation_phase1_execution.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md)  
+**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md)  
+**May 2026 operational assist closeout:** [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../../../../sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) — **COMPLETE**
+**Forward planning (Phase 2 opportunities):** [`../future/bos_operational_assist_phase2.md`](../../../../sprints/archive/future/bos_operational_assist_phase2.md) — not implemented
+**Phase 3 planning:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase3_workflow_comms.md)
+**Phase 4 planning:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 **Prerequisite sprints (must be landed or in closeout):**
 
@@ -19,13 +19,13 @@
 - Active operational context + stale proposal protection (`activeOperationalContext.ts`, `isStaleOperationalProposalEntity`)
 - OperationalProposalCardFrame + routing/denial copy (`operationalProposalPresentation.ts`, `commandSurfaceRoutingCopy.ts`)
 
-**Canonical interaction reference (binding):** Forms/Documents operational UX — [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 2+ BOS presentation **must align** to that model (case-file hierarchy, Review assist region, deterministic-first, human authority). Do not invent a parallel “suggestion feed” personality.
+**Canonical interaction reference (binding):** Forms/Documents operational UX — [`forms_documents_operational_experience_hardening.md`](../../../../sprints/archive/05_2026/later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine. Phase 2+ BOS presentation **must align** to that model (case-file hierarchy, Review assist region, deterministic-first, human authority). Do not invent a parallel “suggestion feed” personality.
 
 **Binding doctrine (read before build):**
 
 | Doc | Use |
 |-----|-----|
-| [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) | **Reference interaction model** — Review assist, cognition hierarchy, anti-patterns |
+| [`forms_documents_operational_experience_hardening.md`](../../../../sprints/archive/05_2026/later-phase/forms_documents_operational_experience_hardening.md) | **Reference interaction model** — Review assist, cognition hierarchy, anti-patterns |
 | `docs/execution/operating-doctrine.md` | Doc/code parity; no parallel AI authority |
 | `docs/product/bos-foundation.md` | Capability classes, lifecycle, hard prohibitions |
 | `docs/product/ai-system.md` | Stub → `bos-foundation.md` |
@@ -69,7 +69,7 @@ Recommendation intelligence **enhances** workflows; it does not replace operator
 
 ## Unified BOS Operational Interaction Doctrine
 
-**Authority:** Shared with Forms/Documents program. Full canonical copy and Forms reference mapping: [`forms_documents_operational_experience_hardening.md`](./forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
+**Authority:** Shared with Forms/Documents program. Full canonical copy and Forms reference mapping: [`forms_documents_operational_experience_hardening.md`](../../../../sprints/archive/05_2026/later-phase/forms_documents_operational_experience_hardening.md) § Unified BOS Operational Interaction Doctrine.
 
 This program **adopts** the Forms/Documents review UX as the **reference interaction model** for all BOS operational intelligence surfaces (drawer, queue, handoff, case file). Phase 2 presentation work must not introduce a second BOS personality.
 
@@ -128,7 +128,7 @@ Then optionally: LLM enrich (preview-only, non-authoritative). **Phase 1–2 rem
 | Human authority footer | No implied auto-apply; governed paths only; enhance draft subordinate |
 | Anti-feed doctrine | No stacked recommendation cards; one intelligence region per entity view |
 
-**Visual sophistication** for both programs: [`forms_documents_product_experience_refresh.md`](./forms_documents_product_experience_refresh.md).
+**Visual sophistication** for both programs: [`forms_documents_product_experience_refresh.md`](../../../../sprints/archive/05_2026/forms_documents_product_experience_refresh.md).
 
 ---
 
@@ -537,7 +537,7 @@ flowchart LR
 
 | Gate | Blocks | Pass when |
 |------|--------|-----------|
-| **GATE 0** | Implementation | [`gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md) approved (§10 checklist); trust boundaries locked |
+| **GATE 0** | Implementation | [`gate0.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_intelligence_gate0.md) approved (§10 checklist); trust boundaries locked |
 | **GATE 1** | UX phase | Contract types + deterministic builder + tests; legacy adapter parity |
 | **GATE 2** | AI enrich phase | Drawer/queue/handoff show new anatomy; no prototype placeholders |
 | **GATE C** | Sprint close | Demo script + contract tests + doc updates |
@@ -558,9 +558,9 @@ flowchart LR
 
 **Goal:** Ship `OperationalRecommendationV1` with deep deterministic copy — no new AI routes required.
 
-**Status:** **COMPLETE** (2026-05-21). Closeout: [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) §12.
+**Status:** **COMPLETE** (2026-05-21). Closeout: [`completed/bos_operational_recommendation_phase1_execution.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md) §12.
 
-**Implementation spec:** [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
+**Implementation spec:** [`completed/bos_operational_recommendation_phase1_execution.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md) (module layout, contract, pipeline, replacement map, GATE 1 checklist).
 
 | Card | Work | Status |
 |------|------|--------|
@@ -596,7 +596,7 @@ flowchart LR
 
 ### 5.4 Phase 2 — Operational UX (drawer, queue, Orchestrator)
 
-**Execution pack (audit + doctrine alignment + cards):** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) — **doctrine-aligned** to Forms operational cognition (2026-05-21).
+**Execution pack (audit + doctrine alignment + cards):** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md) — **doctrine-aligned** to Forms operational cognition (2026-05-21).
 
 **Goal:** Operators get **operational cognition support** (readiness, focus, sequencing) — not a recommendation feed.
 
@@ -621,11 +621,11 @@ flowchart LR
 - [x] Queue preview boundary copy preserved
 - [x] Forms doctrine parity (vocabulary + assist band)
 
-**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2 — Cards 2.1–2.8 complete; demo script in same section.
+**Phase 2 closeout:** [`completed/bos_operational_recommendation_phase2_operational_ux.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2 — Cards 2.1–2.8 complete; demo script in same section.
 
 ### 5.5 Phase 3 — Workflow + communications integration
 
-**Execution pack:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md) — workflow-native operational intelligence; **forward-looking / not implemented**.
+**Execution pack:** [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase3_workflow_comms.md) — workflow-native operational intelligence; **forward-looking / not implemented**.
 
 | Card | Work |
 |------|------|
@@ -636,7 +636,7 @@ flowchart LR
 
 ### 5.6 Phase 4 — Trust, governance, AI-assisted (V1.5 behind gate)
 
-**Execution pack:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md) — bounded AI enrich; **forward-looking / not implemented**.
+**Execution pack:** [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase4_bounded_ai_enrich.md) — bounded AI enrich; **forward-looking / not implemented**.
 
 | Card | Work |
 |------|------|
@@ -755,12 +755,12 @@ autonomous AI scope.
 
 ## 10. Implementation status
 
-- [x] **GATE 0 APPROVED** — [`completed/bos_operational_recommendation_intelligence_gate0.md`](./completed/bos_operational_recommendation_intelligence_gate0.md) §10
-- [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`completed/bos_operational_recommendation_phase1_execution.md`](./completed/bos_operational_recommendation_phase1_execution.md) §12
-- [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`completed/bos_operational_recommendation_phase2_operational_ux.md`](./completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
-- [x] **May 2026 operational assist** — routing + synthesis + channel-aware drafting — [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md)
-- [ ] **Phase 2 opportunities** — forward planning only: [`../future/bos_operational_assist_phase2.md`](../future/bos_operational_assist_phase2.md)
-- [ ] **Phase 3** — Workflow + comms — planning: [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../future/bos_operational_intelligence_phase3_workflow_comms.md)
-- [ ] **Phase 4** — Bounded AI enrich — planning: [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
+- [x] **GATE 0 APPROVED** — [`completed/bos_operational_recommendation_intelligence_gate0.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_intelligence_gate0.md) §10
+- [x] **Phase 1 COMPLETE** — Cards 1.1–1.9; GATE 1 passed — see [`completed/bos_operational_recommendation_phase1_execution.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase1_execution.md) §12
+- [x] **Phase 2 COMPLETE** — Cards 2.1–2.8; GATE 2 passed — see [`completed/bos_operational_recommendation_phase2_operational_ux.md`](../../../../sprints/archive/05_2026/completed/bos_operational_recommendation_phase2_operational_ux.md) §2.1.2
+- [x] **May 2026 operational assist** — routing + synthesis + channel-aware drafting — [`../06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](../../../../sprints/archive/06_2026/completed/bos_assist_routing_communication_drafting_closeout.md)
+- [ ] **Phase 2 opportunities** — forward planning only: [`../future/bos_operational_assist_phase2.md`](../../../../sprints/archive/future/bos_operational_assist_phase2.md)
+- [ ] **Phase 3** — Workflow + comms — planning: [`../future/bos_operational_intelligence_phase3_workflow_comms.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase3_workflow_comms.md)
+- [ ] **Phase 4** — Bounded AI enrich — planning: [`../future/bos_operational_intelligence_phase4_bounded_ai_enrich.md`](../../../../sprints/archive/future/bos_operational_intelligence_phase4_bounded_ai_enrich.md)
 
 Phase 3 may begin with §5.5 Card **3.1** (`available_actions` placement mapping).

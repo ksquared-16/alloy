@@ -277,7 +277,7 @@ export async function dbListSubmissionLinkedDocuments(
 
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -289,9 +289,9 @@ export async function dbListSubmissionLinkedDocuments(
         const doc = docById.get(row.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -302,9 +302,9 @@ export async function dbListSubmissionLinkedDocuments(
             junction_created_at: row.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },
@@ -340,7 +340,7 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
     const ids = [...new Set(rows.map((r: { document_id: string }) => r.document_id))];
     const { data: docs, error: dErr } = await supabase
         .from("documents")
-        .select("id, name, original_filename, document_type, status, created_at")
+        .select("id, title, original_filename, doc_type, status, created_at")
         .eq("org_id", orgId)
         .in("id", ids);
     if (dErr) return { data: null, error: dErr };
@@ -362,9 +362,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
         const doc = docById.get(j.document_id) as
             | {
                   id: string;
-                  name: string | null;
+                  title: string | null;
                   original_filename: string | null;
-                  document_type: string | null;
+                  doc_type: string | null;
                   status: string | null;
                   created_at: string | null;
               }
@@ -375,9 +375,9 @@ export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
             junction_created_at: j.created_at,
             document: {
                 id: doc.id,
-                name: doc.name,
+                name: doc.title,
                 original_filename: doc.original_filename,
-                document_type: doc.document_type,
+                document_type: doc.doc_type,
                 status: doc.status,
                 created_at: doc.created_at,
             },

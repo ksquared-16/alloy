@@ -9,10 +9,10 @@
 | Doc | Role |
 |-----|------|
 | [`forms_operational_intelligence_workflow_polish.md`](./forms_operational_intelligence_workflow_polish.md) | OI command center + intelligence cards |
-| [`../system/forms-intake-prefill-doctrine.md`](../system/forms-intake-prefill-doctrine.md) | Prefill precedence |
-| [`../system/forms-intake-embed-doctrine.md`](../system/forms-intake-embed-doctrine.md) | Embed / iframe boundaries (FD-6) |
-| [`../system/forms-intake-runtime-validation.md`](../system/forms-intake-runtime-validation.md) | Runtime validation plan + outcome doctrine (FD-14) |
-| [`../system/forms-ai-document-recreation.md`](../system/forms-ai-document-recreation.md) | PDF → draft architecture (FD-7) |
+| [`../system/forms-intake-prefill-doctrine.md`](completed/forms-intake-prefill-doctrine.md) | Prefill precedence |
+| [`../system/forms-intake-embed-doctrine.md`](completed/forms-intake-embed-doctrine.md) | Embed / iframe boundaries (FD-6) |
+| `../system/forms-intake-runtime-validation.md` | Runtime validation plan + outcome doctrine (FD-14) |
+| [`../system/forms-ai-document-recreation.md`](later-phase/forms-ai-document-recreation.md) | PDF → draft architecture (FD-7) |
 
 ---
 
@@ -107,7 +107,7 @@ Wider preview column, document-canvas styling, sticky scroll containment — edi
 | Operational narratives | Intake-case row language — family name, created/matched summary |
 | Operator diagnostic | Collapsed org/session mismatch notes |
 
-**Intentionally deferred** — see [Next Phase: Intake Case Operational Model](#next-phase-intake-case-operational-model) below and [`forms_intake_case_operational_model.md`](./forms_intake_case_operational_model.md).
+**Intentionally deferred** — see [Next Phase: Intake Case Operational Model](#next-phase-intake-case-operational-model) below and [`forms_intake_case_operational_model.md`](./completed/forms_intake_case_operational_model.md).
 
 ---
 

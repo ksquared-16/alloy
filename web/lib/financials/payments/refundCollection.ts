@@ -47,6 +47,18 @@ export type RequestRefundInput = {
     intentDiscriminator?: string;
     reason?: string | null;
     actorUserId?: string | null;
+    /**
+     * The held lot this refund discharges, when it discharges one.
+     *
+     * CARRIED, not derived. It is persisted on the provider refund record so `recognizeProviderRefund`
+     * can write the `refunded` disposition once a canonical refund row exists — which is the earliest
+     * moment the disposition's own constraint can be satisfied. Deriving it at recognition from the
+     * payment's open holds would be a guess whenever a receipt holds more than one lot.
+     *
+     * Eligibility by the hold's SNAPSHOT terms is decided by the caller, before this function is
+     * reached, so a non-refundable deposit never becomes a Stripe request at all.
+     */
+    holdId?: string | null;
 };
 
 export type RequestRefundResult =
@@ -224,6 +236,8 @@ export async function requestProviderRefund(
             amount_cents: amountCents,
             intent_key: intentKey,
             reason: input.reason ?? null,
+            /* Carried so recognition knows which lot to discharge. Null for an ordinary refund. */
+            hold_id: (input.holdId ?? "").trim() || null,
             created_by: input.actorUserId ?? null,
             updated_by: input.actorUserId ?? null,
         })
@@ -340,12 +354,13 @@ export async function recognizeProviderRefund(
 ): Promise<RecognizeOutcome> {
     const { data: row } = await supabase
         .from("payment_provider_refunds")
-        .select("id, org_id, original_payment_id, amount_cents, provider_state, canonical_refund_payment_id, reason")
+        .select("id, org_id, original_payment_id, amount_cents, provider_state, canonical_refund_payment_id, reason, hold_id")
         .eq("id", refundRecordId)
         .maybeSingle();
     const record = row as {
         id: string; org_id: string; original_payment_id: string; amount_cents: number;
         provider_state: string; canonical_refund_payment_id: string | null; reason: string | null;
+        hold_id: string | null;
     } | null;
     if (!record) return { recognized: false, reason: "failed", detail: "refund record not found" };
 
@@ -366,6 +381,12 @@ export async function recognizeProviderRefund(
             // Anchored on the refund INTENT, so a replayed event and a retried recognition converge.
             idempotencyKey: `stripe-refund:${record.id}`,
             actorUserId: null,
+            /*
+             * Carried from the provider refund record, which has held it since the operator raised
+             * the refund. The card rail reaches this line long after the click, and without the lot
+             * the recognition would reverse applications to fund money that was never applied.
+             */
+            heldLotId: record.hold_id,
         });
     } catch (e) {
         const detail = e instanceof Error ? e.message : "canonical refund failed";
@@ -393,5 +414,48 @@ export async function recognizeProviderRefund(
     if (((claimed ?? []) as Array<{ id: string }>).length !== 1) {
         return { recognized: false, reason: "already_recognized", detail: result.refund.id };
     }
+
+    /*
+     * ── DISCHARGING THE HELD LOT, AT THE EARLIEST MOMENT IT IS POSSIBLE ──────────────────────────
+     *
+     * `..._refunded_names_payment_chk` requires the disposition to name the refund payment it
+     * became, so this cannot happen when the operator clicks: at that point Stripe has been asked
+     * and no canonical refund row exists. It happens HERE, where one now does.
+     *
+     * HELD GOES STRAIGHT TO REFUNDED. No release first. Releasing would make the money ordinary
+     * available prepaid for the interval before the refund lands, and another operation could spend
+     * it against an obligation while it was already on its way back to the payer.
+     *
+     * Written AFTER the claim, so only the recogniser that actually produced the canonical refund
+     * writes it. `uq_payment_hold_dispositions_one_per_refund` makes a replay a no-op rather than a
+     * second disposal — the webhook and the inline path both reach this line for the same refund.
+     *
+     * A FAILURE HERE DOES NOT FAIL RECOGNITION. The refund is canonical and the money has gone back;
+     * reporting the recognition as failed would invite a retry of a refund that already happened,
+     * which is the one outcome worse than an overstated hold. It is recorded on the record instead,
+     * where it is visible and repairable.
+     */
+    if (record.hold_id) {
+        const { error: disposeError } = await supabase
+            .from("payment_hold_dispositions")
+            .insert({
+                org_id: record.org_id,
+                hold_id: record.hold_id,
+                kind: "refunded",
+                amount_cents: record.amount_cents,
+                refund_payment_id: result.refund.id,
+                reason: record.reason ?? null,
+            });
+        if (disposeError && !/uq_payment_hold_dispositions_one_per_refund/.test(String(disposeError.message))) {
+            await supabase
+                .from("payment_provider_refunds")
+                .update({
+                    recognition_error: `refund recognised but the held deposit was not discharged: ${disposeError.message}`,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", record.id);
+        }
+    }
+
     return { recognized: true, canonicalRefundId: result.refund.id };
 }

@@ -198,3 +198,144 @@ Open Record (config-resolved Work Unit route — not legacy drawer)
 - **Stage movement, Work Unit Header, Actions/Comms/Waitlist operator flows** — next sprint; not part of this stabilization closeout.
 
 Handoff record: [`docs/archive/2026-06-handoffs/process-runtime-stabilization.md`](../../archive/2026-06-handoffs/process-runtime-stabilization.md).
+
+## Family Enrollment Experience — composition over child journeys (September 2026)
+
+`web/lib/enrollment/family/`. A parent with two children enrolling got two disconnected experiences:
+two links, two conversations, two signatures, and the household's own facts asked twice. Every RECORD
+underneath was already correctly grained — one process instance, session, link, submission, artifact
+and Processing case per child — so the deficiency was the EXPERIENCE, and the fix is a composition
+layer with no system of record of its own.
+
+### The grouping authority — existing, and no schema added
+
+`resolveLiveEnrollmentContextForHousehold` already answers "which child journeys are one family
+enrolment": an Opportunity containing at least one running `process_instances` row. It refuses "the
+newest opportunity" by name, because attaching a later sibling to a finished enrolment "would reopen
+finished history", and it breaks ties deterministically so grouping cannot depend on row order. Being
+DERIVED from process state rather than stored, the grouping survives reload, resume, one child
+finishing first, Processing transitions and payment with nothing to keep in sync.
+
+Three candidates were rejected, each for a stated reason:
+
+| Rejected | Why |
+|---|---|
+| the session's `crm_snapshot` opportunity | D-95's migration exists precisely to stop a CRM Opportunity being load-bearing for runtime correctness |
+| `form_packet_sessions.packet_instance_id` | that mechanism groups by sharing ONE session between recipients — it MERGES sessions, which the grain rule forbids for process-governed Enrollment. It remains correct for a hand-composed packet |
+| recency, first child, client arrays, name matching | the context resolver already refuses these |
+
+### What it may not do
+
+It composes and never merges child process instances, sessions, links, submissions, artifacts,
+Processing cases or financial obligations, and stores no rollup. Every figure is quoted from the
+child's own projection (`resolveEnrollmentParticipantProgress`, one call per child, so the family list
+and the child's own screen cannot disagree). There is **no family submission**: the authoritative
+completion actions are child-scoped, and a family-level submit would be a second finalization
+authority over work that already has one. Family state is derived, one incomplete child stays visibly
+incomplete, and the shell stays open while any sibling is still going.
+
+### Shared versus per-child
+
+Declared in code as `FAMILY_FACT_OWNERSHIP`, with a reason per concept, because the real risk of a
+family shell is OVER-deduplication — asking once for something whose evidence belongs separately to
+each child.
+
+| Ownership | Concepts |
+|---|---|
+| Reused canonical | guardians, home/mailing address, emergency contacts |
+| Shared once | other children in the household, handbook acknowledgment + signature (per recipient), per-family fee |
+| Repeated per child | health/allergies/providers, immunization, routines/eating/personality, placement + schedule + location, consent, per-child fee |
+
+Health, immunization and consent stay per child because each answer is its own evidence on its own
+submission; deduplicating them would attach one child's medical record to another.
+
+### Sibling visibility is a bounded boundary
+
+A participant arrives on ONE child's token. The family view returns a sibling's NAME and PROGRESS and
+never their answers, uploads or documents — a token minted for one child's session is not authority
+over another child's evidence. The focused child is read from the session's own snapshot, never from
+the query string, so a caller-supplied id cannot make one family's link ask about another child.
+
+### Financial composition
+
+The shell holds no balance. Its financial slot consumes the Enrollment Financial Bridge's projection;
+it performs no gross, responsibility, expected-funding, collectible or balance calculation. The
+stored-method side will consume canonical `payment_methods` in a follow-up — see
+`docs/platform/modules/billing-financials-platform.md`.
+
+## The enrollment fee as a requirement (September 2026)
+
+A stage could require a field, a form, or its own work. It could not require money. The fee therefore
+lived wherever somebody had put a currency question on a form, which made it a typed ANSWER rather
+than an obligation: nothing was owed, nothing could be paid, and nothing could tell a family what was
+left. `financial` is the requirement kind that closes that, and the chain behind it runs
+configuration → applicability → charge-definition reference → canonical obligation → canonical
+Financials projection → what the family is shown.
+
+### The ownership line, stated once
+
+Enrollment owns exactly three decisions:
+
+1. whether a fee applies to this stage,
+2. which charge DEFINITION applies, by key, and
+3. whether it is owed once per family or once per enrolling child.
+
+Financials owns everything else: amount, discounts, responsibility, expected funding, what is
+collectible now, payments, applications, outstanding, corrections. Forms owns no fee at all, and
+Admissions v12 is fee-free by Director decision.
+
+The requirement therefore references `charge_template_key` and **structurally cannot carry a price**.
+`parseRef` builds a closed `{ kind, charge_template_key }` rather than spreading the stored row, so a
+configuration row carrying `amount_cents` parses to a ref with no amount to read and serializes back
+without it. That is asserted, not assumed: a stored `7500` is absent from the parsed result.
+
+### Grain is `scope`, not a second enum
+
+`record` is the family record; `each_child` is once per enrolling child. Every other requirement kind
+is already read through `RequirementScope`, and a parallel `per_family | per_child` would have been a
+second vocabulary for one truth — where the first disagreement between the two is a billing bug. A
+child with no enrollment agreement is SKIPPED rather than folded into the household, because charging
+the family instead loses the attribution per-child grain exists for, and does it silently.
+
+### Two things that must never read as good news
+
+- **A configured, due fee with no charge is not satisfied.** `worst([])` answers SATISFIED, which is
+  right for "every obligation is settled" and catastrophic for "there are none". It returns
+  `ATTENTION_REQUIRED` and says a charge has not been created yet.
+- **A missing or invalid charge definition is not a $0 fee.** It is `ATTENTION_REQUIRED` with the
+  configuration error named. A family is never told a fee is settled because pricing failed.
+
+A **cancelled** fee is also distinguished from a **free** one. A reversed obligation is excluded from
+every figure, which leaves gross at zero and makes the two arithmetically identical; they are not the
+same fact, and conflating them sends an operator to fix pricing that was never wrong.
+
+### Dueness, idempotency, and the read-only twin
+
+Dueness is resolved from canonical current state — every non-financial requirement outstanding — with
+the financial requirement excluded from its own prerequisites so it cannot block itself. It is not a
+browser event. Charge creation delegates to `writeTemplateDraftCharge`'s own idempotency and is not
+keyed to `today`, so tomorrow does not mint a second fee; corrections delegate to
+`createChildcareCorrection`, whose corrected-once rule the database enforces. Enrollment keeps no
+ledger of its own.
+
+`readEnrollmentFeeProjection` is the read-only twin the family surface uses: it creates, posts and
+corrects nothing, and its tests inject a Supabase fake whose `insert`/`update` throw. A family-scoped
+fee read once per child is deduped by `requirement_id`, or a two-child household would be shown
+double what it owes.
+
+**Reading an existing fee must narrow in the DATABASE.** The first implementation selected every
+charge on the billable source and filtered in JavaScript; PostgREST caps a response at 1000 rows, so
+a family with a longer history could return a page that did not contain the fee, and the projection
+would then claim no charge existed for one that did. The charge-definition key is matched in the
+query. Certification on the real database found this; unit tests could not.
+
+### Authoring
+
+A director configures this in the stage requirement surface beside forms and work
+(`StageFinancialRequirementsEditor`) — definition, once per family or once per enrolling child,
+required — with no raw ids and no JSON, and not in Forms Studio. The price beside each option is READ
+from Financials and never copied, and only the current version of a definition lineage is offered. A
+key with no active definition is called out rather than smoothed over.
+
+There is no Pay button. Participant checkout does not exist yet, and a button that does nothing is
+worse than its absence.

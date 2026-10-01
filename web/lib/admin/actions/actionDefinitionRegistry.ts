@@ -26,6 +26,21 @@ export type ActionRegistryEntry = {
      * never from the action name/label. Omit to derive the host from `category`.
      */
     interactionHost?: CapabilityInteractionHost;
+    /**
+     * Which body the COMMAND SURFACE renders before running, when this capability needs the operator
+     * to review a resolved plan first.
+     *
+     * Omit and the command surface runs immediately, which is correct for a capability whose inputs
+     * configuration already bound and whose effect is local (`stage_work.start` starts one piece of
+     * work). Declare one and the same host shows that body, collects a confirmation, and only then
+     * runs the SAME registered-action path — it is a preview step, never a second execution runtime.
+     *
+     * Needed because "nothing left to collect" and "safe to do without looking" are different
+     * claims. Sending a family their enrolment paperwork is irreversible from the family's point of
+     * view: they receive it. An operator has to be able to see which child, which guardian and which
+     * requirements before that happens.
+     */
+    commandSurfaceBody?: CommandSurfaceBody;
     /** Optional Lucide icon name for operator action buttons (What's Next, etc.). */
     icon?: string;
 };
@@ -44,6 +59,14 @@ export type CapabilityInteractionHost =
      * inputs, so the only remaining act is to run it through the registered-action runtime.
      */
     | "command_surface";
+
+/**
+ * Bodies the command surface can render for review before running.
+ *
+ * Named by the DOMAIN the review is about, not by the action, so a second enrolment command that
+ * needs the same review reuses this one rather than adding a host.
+ */
+export type CommandSurfaceBody = "enrollment_packet";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
@@ -263,6 +286,19 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         description: "Start the enrollment packet workflow for this family when your org has one configured.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
+        /*
+         * `command_surface`, not the header default. This is a CHILD-subject command and the drawer
+         * header is opportunity-scoped: with no host declared it fell through to `header_delegate`,
+         * reached a header that carries no such command, and told the operator to "use drawer header
+         * actions" for an action the header does not have. Measured on deployed staging against the
+         * real configured packet — the Process Card offered the action and nothing could run it, so
+         * there was no way in the product to send a family their paperwork.
+         *
+         * Same defect and same repair as `stage_work.start`. The difference is the body below: this
+         * one is reviewed before it runs.
+         */
+        interactionHost: "command_surface",
+        commandSurfaceBody: "enrollment_packet",
         icon: "Send",
     },
     {

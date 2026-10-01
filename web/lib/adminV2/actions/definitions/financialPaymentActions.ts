@@ -26,8 +26,9 @@
 
 import { randomUUID } from "crypto";
 
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { heldRefundEligibility, readHoldsForPayments } from "@/lib/financials/prepaid/heldDeposits";
 import {
     applyPaymentToCharge,
     CHILDCARE_PAYMENT_METHODS,
@@ -44,6 +45,28 @@ import { resolveCollectionMerchant } from "@/lib/financials/payments/providerMer
 import { recognizeProviderRefund, requestProviderRefund } from "@/lib/financials/payments/refundCollection";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ── THE GRAINS THIS FAMILY IS INVOKED AT ────────────────────────────────────────────────────
+ *
+ * `customer` is the one that was missing, and its absence made the whole held-money lifecycle
+ * unreachable in production. The Financials account card is customer-grain — a receipt, a held
+ * deposit and available prepaid belong to the household — so it dispatches `customer`, and
+ * `checkContext` refused it before the action ever ran. Nothing could create a hold, apply held
+ * money, release it, or deliberately apply available prepaid.
+ *
+ * The entity is ATTRIBUTION, not routing: `payment_id`, `hold_id` and `charge_id` in the payload
+ * decide what the money does, which is why the same receipt and payload previewed
+ * `eligible: true` under every already-declared grain on deployed staging and 400 under this one.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
+
 
 export const PAYMENT_RECORD_ACTION_KEY = "payment.record";
 export const PAYMENT_REFUND_ACTION_KEY = "payment.refund";
@@ -140,6 +163,22 @@ function idempotencyKeyFor(payload: Record<string, unknown>, prefix: string): st
         t(payload.amount_cents),
         t(payload.payment_method),
         day,
+        /*
+         * THE PAYER IS PART OF THE KEY, because two payers are two payments.
+         *
+         * The date above was included for exactly this class of reason — "a second $500 cash payment
+         * against the same charge on a LATER day is a real, legitimate second payment, and must not
+         * be swallowed as a retry". The same argument applies across PEOPLE and was missed: Mom
+         * paying $37.50 and Dad paying $37.50 against one charge on one day are two real payments,
+         * and without the payer here the second was returned as a replay of the first. Measured on a
+         * split-payment certification: Dad's request came back carrying Mom's payment id with
+         * `already_recorded: true`, and the family's outstanding stopped halfway with no error shown
+         * to anyone.
+         *
+         * A payer-less payment keys exactly as before, so nothing that never named a payer changes.
+         */
+        t(payload.payer_entity_type),
+        t(payload.payer_entity_id),
     ].join(":");
 }
 
@@ -147,7 +186,7 @@ const recordPayment: RegisteredAction = {
     actionKey: PAYMENT_RECORD_ACTION_KEY,
     defaultLabel: "Record payment",
     description: "Record money received against a posted charge and apply it to the balance.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     // Same as `charge.post`: the subject of a payment is the charge it settles, not a child.
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
@@ -380,7 +419,7 @@ const refundPayment: RegisteredAction = {
     actionKey: PAYMENT_REFUND_ACTION_KEY,
     defaultLabel: "Refund payment",
     description: "Refund a recorded payment, leaving the original receipt intact.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -416,13 +455,44 @@ const refundPayment: RegisteredAction = {
     async resolveEligibility({ supabase, ctx, payload }) {
         const paymentId = t(payload?.payment_id);
         const allowed = await permitted(supabase as SupabaseClient, ctx.orgId, ctx.userId, PAYMENT_REFUND_PERMISSION);
+
+        /*
+         * ── THE TERMS ARE PART OF ELIGIBILITY, NOT ONLY OF EXECUTION ─────────────────────────────
+         *
+         * `execute` refuses a non-refundable lot before any provider call, and always did. This hook
+         * did not look at the lot at all, so it answered `eligible: true` with no blockers for a
+         * deposit the very next call would refuse. Measured on deployed staging: a preview of
+         * `payment.refund` against a lot marked "Taken as non-refundable" was indistinguishable from
+         * one against a refundable lot.
+         *
+         * It matters because this hook is the ANSWER other surfaces read — previews, and BOS
+         * proposals, which never reach `execute` before telling an operator what is possible. The
+         * terms consulted are the snapshot the money was taken under, never current policy.
+         */
+        const holdId = t(payload?.hold_id);
+        let holdBlockers: { code: string; message: string }[] = [];
+        if (paymentId && holdId) {
+            const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentIds: [paymentId],
+            })).find((h) => h.id === holdId);
+            if (!hold) {
+                holdBlockers = [{ code: "hold_not_found", message: "That held deposit is not on this payment." }];
+            } else {
+                const requested = payload?.amount_cents == null ? hold.remainingCents : Number(payload.amount_cents);
+                const eligible = heldRefundEligibility(hold, requested);
+                if (!eligible.ok) holdBlockers = [{ code: "hold_not_refundable", message: eligible.message }];
+            }
+        }
+
         return {
-            eligible: Boolean(paymentId) && allowed,
+            eligible: Boolean(paymentId) && allowed && holdBlockers.length === 0,
             blockers: [
                 ...(paymentId ? [] : [{ code: "missing_payment", message: "A payment is required." }]),
                 ...(allowed
                     ? []
                     : [{ code: "refund_permission_required", message: `Refunding a payment requires ${PAYMENT_REFUND_PERMISSION}.` }]),
+                ...holdBlockers,
             ],
             availableTransitions: [],
             requiredInputs: [],
@@ -447,6 +517,50 @@ const refundPayment: RegisteredAction = {
         }
         try {
             const paymentId = t(payload.payment_id);
+            const refundHoldId = t(payload.hold_id);
+
+            /*
+             * ── A NON-REFUNDABLE DEPOSIT IS REFUSED BEFORE ANYTHING IS EXECUTED ──────────────────
+             *
+             * Placed above every branch below, and deliberately so. `heldRefundEligibility` was
+             * separated from the refund itself for exactly this: a non-refundable deposit that
+             * reached Stripe and failed there would already have told the family a refund was under
+             * way. The terms consulted are the SNAPSHOT the money was taken under, never the
+             * organisation's current deposit policy — a later policy change must not retroactively
+             * alter what the family was promised.
+             *
+             * The amount is bounded here too, because the hold is a lot WITHIN the receipt: the
+             * refundable ceiling below is the receipt's, and a $500 refundable receipt holding a
+             * $175 lot may not refund $500 of that lot.
+             */
+            if (refundHoldId) {
+                const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                    orgId: ctx.orgId,
+                    paymentIds: [paymentId],
+                })).find((h) => h.id === refundHoldId);
+                if (!hold) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 404,
+                        error: "That held deposit is not on this payment.",
+                        blockers: [{ code: "hold_not_found", message: "That held deposit is not on this payment." }],
+                    };
+                }
+                const requested = payload.amount_cents == null
+                    ? hold.remainingCents
+                    : Number(payload.amount_cents);
+                const eligible = heldRefundEligibility(hold, requested);
+                if (!eligible.ok) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 409,
+                        error: eligible.message,
+                        blockers: [{ code: "hold_not_refundable", message: eligible.message }],
+                    };
+                }
+            }
 
             /*
              * ── MONEY EXECUTED BY A PROCESSOR MUST BE GIVEN BACK BY THAT PROCESSOR ───────────────
@@ -477,6 +591,12 @@ const refundPayment: RegisteredAction = {
                     intentDiscriminator: t(payload.refund_intent) || undefined,
                     reason: t(payload.reason) || null,
                     actorUserId: ctx.userId ?? null,
+                    /*
+                     * Carried onto the provider refund record so RECOGNITION can discharge the lot.
+                     * It cannot be discharged here: no canonical refund row exists yet, and the
+                     * disposition's constraint requires one to name.
+                     */
+                    holdId: refundHoldId || null,
                 });
                 if (!requested.ok) {
                     return { ok: false, correlationId, status: 409, error: requested.message };
@@ -520,7 +640,68 @@ const refundPayment: RegisteredAction = {
                 reason: t(payload.reason) || null,
                 idempotencyKey: idempotencyKeyFor(payload, "payment.refund"),
                 actorUserId: ctx.userId ?? null,
+                /*
+                 * The lot funds the refund, so no application is reversed to pay for it. Without
+                 * this the deposit's return came out of obligations the family had already settled.
+                 */
+                heldLotId: refundHoldId || null,
             });
+
+            /*
+             * ── THE MANUAL RAIL DISCHARGES THE LOT IMMEDIATELY ───────────────────────────────────
+             *
+             * Cash handed back across a desk has no executor to wait for, so the canonical refund
+             * exists by the time this line runs and the disposition's constraint can be satisfied
+             * here. The card rail cannot do this — see `recognizeProviderRefund`, which does it when
+             * the provider refund is recognised.
+             *
+             * HELD GOES STRAIGHT TO REFUNDED, with no release in between: releasing first would make
+             * the money ordinary available prepaid for an interval in which it could be spent
+             * against an obligation while already on its way back to the payer.
+             *
+             * The unique index makes a retried refund a no-op rather than a second disposal, and a
+             * failure here does not fail the refund — the money has gone back, and reporting failure
+             * would invite a retry of a refund that already happened.
+             */
+            if (refundHoldId) {
+                const { error: disposeError } = await (supabase as SupabaseClient)
+                    .from("payment_hold_dispositions")
+                    .insert({
+                        org_id: ctx.orgId,
+                        hold_id: refundHoldId,
+                        kind: "refunded",
+                        amount_cents: Number(result.refund.amount_cents),
+                        refund_payment_id: result.refund.id,
+                        reason: t(payload.reason) || null,
+                        disposed_by: ctx.userId ?? null,
+                    });
+                if (disposeError && !/uq_payment_hold_dispositions_one_per_refund/.test(String(disposeError.message))) {
+                    /*
+                     * Reported as a SUCCESS WITH A NAMED DEFECT rather than a failure. The refund is
+                     * canonical; what did not happen is the discharge, and the operator needs to be
+                     * told that specific thing rather than that the refund failed.
+                     */
+                    return {
+                        ok: true,
+                        correlationId,
+                        result: {
+                            actionKey: PAYMENT_REFUND_ACTION_KEY,
+                            entityType: invocation.entityType,
+                            entityId: t(invocation.entityId),
+                            affectedId: result.refund.id,
+                            detail: {
+                                refund_payment_id: result.refund.id,
+                                refunds_payment_id: result.original.id,
+                                amount_cents: result.refund.amount_cents,
+                                hold_id: refundHoldId,
+                                hold_discharged: false,
+                                hold_discharge_error: disposeError.message,
+                            },
+                        },
+                    };
+                }
+            }
+
             return {
                 ok: true,
                 correlationId,
@@ -536,6 +717,7 @@ const refundPayment: RegisteredAction = {
                         reversed_allocation_ids: result.reversedAllocationIds,
                         reapplied_allocation_id: result.reappliedAllocation?.id ?? null,
                         already_refunded: result.alreadyRefunded,
+                        ...(refundHoldId ? { hold_id: refundHoldId, hold_discharged: true } : {}),
                     },
                 },
             };
@@ -561,7 +743,7 @@ const collectCardPayment: RegisteredAction = {
     actionKey: PAYMENT_COLLECT_CARD_ACTION_KEY,
     defaultLabel: "Collect by card",
     description: "Collect an amount that is owed by charging a card, through the provider's own merchant account.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -672,6 +854,17 @@ const collectCardPayment: RegisteredAction = {
                 actorUserId: ctx.userId ?? null,
                 payerPersonId: t(payload.payer_person_id) || null,
                 /*
+                 * A METHOD THE FAMILY ALREADY GAVE US, when the operator chose one. Omitted means
+                 * collect a new instrument through the provider's fields, which was the only thing
+                 * this action could do before — so an account with a stored card still made the
+                 * operator type it again.
+                 *
+                 * The service owns every rule about it: same org, same customer, rail agreement,
+                 * usability, and that the method's owner IS the named payer (`method_payer_mismatch`).
+                 * Passing it here does not widen what may be collected; it names an instrument.
+                 */
+                paymentMethodId: t(payload.payment_method_id) || null,
+                /*
                  * The rail the operator chose. Intent only — the server still resolves the merchant,
                  * its capability for THIS rail, and the collectible amount, and refuses an ACH
                  * request on a merchant the provider has not enabled for it.
@@ -705,6 +898,14 @@ const collectCardPayment: RegisteredAction = {
                         connected_account: created.connectedAccountRef,
                         provider_transaction_id: created.providerTransactionId,
                         reused: created.reused,
+                        /*
+                         * WHICH STORED METHOD WAS USED, or null for a newly entered one. The
+                         * surface needs this to know whether to open card entry at all: a stored
+                         * method is confirmed off-session by the service, so presenting Stripe's
+                         * fields afterwards would ask the operator to enter a card that has
+                         * already been charged.
+                         */
+                        payment_method_id: created.paymentMethodId,
                         // The honest state: a request, not a receipt.
                         recognized: false,
                     },
@@ -735,7 +936,7 @@ const reversePaymentApplicationAction: RegisteredAction = {
     defaultLabel: "Unapply payment",
     description:
         "Undo a payment application so the money becomes unapplied and the charge owes it again. The payment itself is unchanged.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -881,7 +1082,7 @@ const applyPaymentToChargeAction: RegisteredAction = {
     actionKey: PAYMENT_APPLY_ACTION_KEY,
     defaultLabel: "Apply payment",
     description: "Apply received money that is not yet allocated to an outstanding charge.",
-    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -904,6 +1105,28 @@ const applyPaymentToChargeAction: RegisteredAction = {
                     blockers: [{ code: "invalid_amount", message: "An amount must be greater than zero.", field: "amount_cents" }],
                 };
             }
+        }
+        /*
+         * APPLYING A HELD DEPOSIT IS THIS ACT, NOT A SECOND ONE.
+         *
+         * `deposit.hold` and `deposit.release` were minted as the only two deposit authorities on the
+         * stated grounds that "applying held money is an ORDINARY allocation … `deposit.apply` would
+         * be a second authority over money that already has one". This is that ordinary allocation,
+         * so the hold is named HERE — an input to applying money, not a different way to apply it.
+         *
+         * An amount is required alongside it: a hold is a lot within a receipt, and the default
+         * "smaller of unapplied and outstanding" is computed over the whole receipt, which would
+         * silently apply more of the payment than the hold covers.
+         */
+        if (t(src.hold_id) && src.amount_cents == null) {
+            return {
+                ok: false,
+                blockers: [{
+                    code: "missing_amount",
+                    message: "Applying a held deposit needs an amount; the default is drawn from the whole payment.",
+                    field: "amount_cents",
+                }],
+            };
         }
         return { ok: true, value: src };
     },
@@ -944,6 +1167,34 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return { summary: "This charge could not be found.", changes: [] };
         }
         const requested = payload?.amount_cents == null ? Math.min(unapplied, outstanding) : Number(payload.amount_cents);
+        /*
+         * HELD MONEY READS DIFFERENTLY TO THE OPERATOR.
+         *
+         * `unapplied` counts the whole receipt and held money is a restriction WITHIN it, so quoting
+         * "$500 is currently unapplied" beside a $200 hold invites applying the other $300 — which
+         * this act will not do. When a hold is named the preview speaks about the hold, and says
+         * plainly that the restriction ends, because that is the consequence an operator is
+         * authorising and it is not reversible by re-holding.
+         */
+        const holdId = t(payload?.hold_id);
+        if (holdId) {
+            const hold = (await readHoldsForPayments(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                paymentIds: [paymentId],
+            })).find((h) => h.id === holdId);
+            if (!hold) return { summary: "This held deposit could not be found.", changes: [] };
+            return {
+                summary: `Apply ${money(requested)} of this held deposit to the charge`,
+                changes: [
+                    `${money(hold.remainingCents)} of this deposit is still held.`,
+                    `This charge has ${money(outstanding)} outstanding.`,
+                    `${money(requested)} stops being held and is applied, reducing what the family owes by that amount.`,
+                    hold.refundable
+                        ? "The deposit was taken as refundable; applied money is no longer refundable as a deposit."
+                        : "The deposit was taken as non-refundable.",
+                ],
+            };
+        }
         return {
             summary: `Apply ${money(requested)} to this charge`,
             changes: [
@@ -960,11 +1211,20 @@ const applyPaymentToChargeAction: RegisteredAction = {
             return denied(correlationId, "Applying a payment", PAYMENT_WRITE_PERMISSION, "payment_permission_required");
         }
         try {
+            const holdId = t(payload.hold_id);
             const result = await applyPaymentToCharge(supabase as SupabaseClient, {
                 orgId: ctx.orgId,
                 paymentId: t(payload.payment_id),
                 chargeId: t(payload.charge_id),
                 amountCents: payload.amount_cents == null ? undefined : Number(payload.amount_cents),
+                /*
+                 * WHO APPLIED THE MONEY. Previously omitted, so `created_by` was null on every
+                 * allocation this action wrote — the allocation recorded that money moved and not who
+                 * moved it, while the same column is populated on the hold and its disposition.
+                 */
+                actorUserId: ctx.userId ?? null,
+                /* Present only for held money; the allocation and the disposition then commit together. */
+                disposeHoldId: holdId || null,
             });
             return {
                 ok: true,
@@ -980,6 +1240,7 @@ const applyPaymentToChargeAction: RegisteredAction = {
                         charge_id: t(payload.charge_id),
                         applied_amount_cents: result.allocation.allocated_amount_cents,
                         already_applied: result.alreadyApplied,
+                        ...(holdId ? { hold_id: holdId } : {}),
                     },
                 },
             };

@@ -5,9 +5,9 @@
 **Authority:** Governs all Phase 2+ performance work on AdminV2 workspace surfaces  
 
 **Baseline evidence:**
-- [`adminv2_performance_deep_dive_phase0_audit.md`](./adminv2_performance_deep_dive_phase0_audit.md) — performance map, bottlenecks, instrumentation
+- [`adminv2_performance_deep_dive_phase0_audit.md`](../../../../sprints/archive/05_2026/adminv2_performance_deep_dive_phase0_audit.md) — performance map, bottlenecks, instrumentation
 - [`adminv2_performance_rebuild_audit.md`](./adminv2_performance_rebuild_audit.md) — navigation matrix, Build Pass history
-- **Load-path architecture (Phase 2):** [`adminv2_performance_phase2_load_path_architecture.md`](./adminv2_performance_phase2_load_path_architecture.md)
+- **Load-path architecture (Phase 2):** [`adminv2_performance_phase2_load_path_architecture.md`](../../../../sprints/archive/05_2026/adminv2_performance_phase2_load_path_architecture.md)
 
 **Enforcement (automated):** `web/tests/admin/adminV2NavigationContracts.test.ts`, `adminV2QueueRowClick.test.ts`, `adminV2WorkUnitLaneLocalState.test.ts`, `adminV2DrawerLoadingCoherence.test.ts`, `opportunityDrawerQueuePreviewSeed.test.ts`
 

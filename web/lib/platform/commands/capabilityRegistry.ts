@@ -101,6 +101,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "provider.refresh_readiness",
     "provider.disconnect",
     "payment_method.add",
+    "payment_method.request_setup",
     "payment_method.set_default",
     "payment_method.revoke",
     "payment.recognize",
@@ -973,6 +974,32 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
             + "until an instrument actually exists, and a bank account awaiting verification is "
             + "recorded as pending rather than offered as usable. Alloy never receives a card "
             + "number, a CVC, or an account and routing number.",
+    }),
+    /*
+     * ASKING IS NOT AUTHORIZING, and that is why this is a capability of its own rather than a
+     * `rail: "ach"` branch of the one above. `payment_method.add` opens the provider's collection
+     * and persists what comes back; this writes nothing at all in Financials. The two are different
+     * acts with different consequences, so an operator's catalog names both.
+     */
+    def({
+        capabilityKey: "payment_method.request_setup",
+        canonicalCommandKey: "payment_method.request_setup",
+        operatorLabel: "Request bank account setup",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "payment_method.request_setup",
+        implementationStatus: "production",
+        reason:
+            "Sends the payer a secure link so they can authorize bank payments themselves, and "
+            + "writes nothing on the account: no payment method, no mandate, no provider object. A "
+            + "bank account establishes a standing authorization to debit it, which the account "
+            + "holder must accept by name, so an operator may ask for it and may not complete it. "
+            + "The method that results belongs to whoever opened the link, not to whoever asked.",
     }),
     def({
         capabilityKey: "payment_method.set_default",

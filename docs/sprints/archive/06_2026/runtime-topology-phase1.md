@@ -1,8 +1,8 @@
 # Runtime Topology — Phase 1 Report (Complexity, Violations, Simplification Order)
 
 **Date:** 2026-06-29 · **Author:** Claude Code · **Type:** Analysis/blueprint only — **no code, no optimization, no deletion.**
-**Canonical map:** [`../../platform/runtime/operational-runtime-topology.md`](../../platform/runtime/operational-runtime-topology.md) (how Alloy works today, literally).
-**Governs against:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../platform/runtime/operational-runtime-doctrine.md).
+**Canonical map:** [`../../platform/runtime/operational-runtime-topology.md`](../../../archive/2026-06-runtime/operational-runtime-topology.md) (how Alloy works today, literally).
+**Governs against:** [`../../platform/runtime/operational-runtime-doctrine.md`](../../../platform/runtime/operational-runtime-doctrine.md).
 **Goal restatement:** the objective is **reduce runtime complexity until the platform behaves like one continuous OS** — not "make a page faster." Simpler, not just faster.
 
 **Measurement provenance.** All raw counts below are **measured** by `grep`/`wc` at `origin/staging fa83113a6` + Phase 2 Slice 1. Paint *sequences* are **modeled** from state-commit points + the reveal gate (flagged where so). Exact wall-clock paint/CLS counts require capturing existing perf marks (`perfWorkspaceLoad`, `[workspace-reveal-gate]`, `[wu-reveal-gate]`, `[drawer-primary-perf]`) in a browser — flagged `NEEDS_RUM`.
@@ -10,7 +10,7 @@
 ---
 
 ## 1. Runtime Topology — see canonical doc
-The literal layer stack (L0–L7), 8 transition flows, ownership/fetch/cache/reveal maps live in [`operational-runtime-topology.md`](../../platform/runtime/operational-runtime-topology.md). This report is the **measurement + decision** layer over it.
+The literal layer stack (L0–L7), 8 transition flows, ownership/fetch/cache/reveal maps live in [`operational-runtime-topology.md`](../../../archive/2026-06-runtime/operational-runtime-topology.md). This report is the **measurement + decision** layer over it.
 
 ## 2. Runtime Complexity Report
 

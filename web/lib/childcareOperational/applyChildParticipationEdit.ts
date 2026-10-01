@@ -14,19 +14,75 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { getOperationalPlacementForAgreement } from "@/lib/childcareOperational/childPlacementService";
 import { getOperationalScheduleAssignmentForAgreement } from "@/lib/childcareOperational/scheduleAssignmentService";
+import { applyCombinedParticipationChange } from "@/lib/childcareOperational/applyCombinedParticipationChange";
+import { computeNextDayYmd } from "@/lib/childcareOperational/effectiveDating";
+import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import { parseRequestedDaysPerWeekInput } from "@/lib/enrollment/requestedDaysPerWeek";
 
 /** A daily time range persisted with the schedule draft. */
 export type DailyHoursRange = { arrive: string; depart: string };
 
-/** Participation facts an operator can edit inline. `outcome_status_key` (disposition) is NOT here. */
+/**
+ * Participation facts an operator can edit inline. `outcome_status_key` (disposition) is NOT here.
+ *
+ * ── THE SAME KEY MEANS TWO THINGS, DEPENDING ON MATERIALISATION ──
+ *
+ * This type is accepted in both routing branches, and several keys change meaning between them. That
+ * is not cosmetic: before materialisation these are DRAFT DESIRE held on `process_instances.metadata`
+ * and editing them in place is correct; after materialisation the same keys describe DURABLE
+ * EFFECTIVE-DATED TRUTH, where `docs/platform/core/effective-dated-assignment-doctrine.md` requires a
+ * successor record rather than an in-place edit.
+ *
+ * Columns: DRAFT MEANING / OPERATIONAL MEANING / TEMPORAL TRUTH / IN-PLACE EDIT OK PRE-MATERIALISATION /
+ * SUPERSESSION REQUIRED POST-MATERIALISATION.
+ *
+ * | Field | Draft meaning | Operational meaning | Temporal truth? | In-place pre-mat? | Supersede post-mat? |
+ * |---|---|---|---|---|---|
+ * | `program_category_id` | desired program | placement `program_category_id` | YES | yes | YES — routed |
+ * | `program_room_cohort_key` | desired room | placement `room_location_id` | YES | yes | YES — routed |
+ * | `start_date` | family-requested start | **placement truth-interval start** | YES | yes | YES — routed |
+ * | `schedule_type` | desired pattern | assignment `schedule_pattern_id` | YES | yes | YES — routed |
+ * | `location_id` | desired site | agreement site (**see gap below**) | YES, on placement | yes | NOT ROUTED |
+ * | `notes` | draft note | agreement metadata note | no | yes | no — non-temporal |
+ * | `requested_days_per_week` | requested days | requested days, not an interval | no | yes | no — non-temporal |
+ * | `tuition_plan_id` | commercial intent | commercial intent | no | yes | no — not assignment truth |
+ * | `quote_accepted` | commercial intent | commercial intent | no | yes | no — not assignment truth |
+ * | `end_date` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ * | `weekdays` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ * | `scheduleTimes` | schedule-draft extension | **draft only**, never written durably | n/a | yes | n/a |
+ *
+ * ── THE ONE GAP, STATED RATHER THAN IMPLIED ──
+ *
+ * `location_id` post-materialisation updates `child_enrollment_agreements.site_location_id` and does NOT
+ * supersede the placement, so the placement keeps its original site. This predates the temporal
+ * convergence - the previous in-place block did not carry site either - and it is left as it is on
+ * purpose rather than quietly routed, for two reasons.
+ *
+ * First, the primitive cannot express it: a supersession carries the prior row's site forward, because
+ * `validate_child_placements_consistency` derives and pins placement site to the agreement and a
+ * cross-site move is not a room change with a different argument.
+ *
+ * Second, moving a child between SITES is a different operator intent from moving them between rooms -
+ * different capacity, different staffing, plausibly a different agreement - and inventing a
+ * representation for it here would be guessing at a product decision. It is recorded as product work,
+ * not smuggled in under a field that currently means something narrower. Until then a site change is
+ * recorded on the agreement header only, which is what it has always done.
+ *
+ * `start_date` is the one that most needs saying, because its old comment read "Requested Start
+ * (family preferred) — not operational Start Date" without qualification. That is true of the draft
+ * branch and false of the durable branch, where this key becomes the start of an asserted truth
+ * interval — the single most consequential field in the whole patch.
+ */
 export type ChildParticipationPatch = {
     program_category_id?: string | null;
     /** Room = a location id (kept under the OCM-era column name for editor compatibility). */
     program_room_cohort_key?: string | null;
     location_id?: string | null;
     schedule_type?: string | null;
-    /** Requested Start (family preferred) — not operational Start Date. */
+    /**
+     * Draft: family-requested start. Post-materialisation: the OPERATIONAL truth-interval start on the
+     * agreement and placement. See the table above — the two meanings are not interchangeable.
+     */
     start_date?: string | null;
     notes?: string | null;
     /** Requested days/week when exact preferred weekdays are still unknown. */
@@ -165,37 +221,115 @@ export async function applyChildParticipationEdit(
         updated.push(...Object.keys(agrPatch).filter((k) => k !== "updated_at").map((k) => `agreement.${k}`));
     }
 
-    // Placement: program / room / site / start on the current operational placement.
-    const plc = await getOperationalPlacementForAgreement(supabase, args.orgId, agreement.id);
-    if (plc) {
-        const plcPatch: Record<string, unknown> = {};
-        if ("program_category_id" in patch) plcPatch.program_category_id = patch.program_category_id;
-        if ("program_room_cohort_key" in patch) plcPatch.room_location_id = patch.program_room_cohort_key;
-        if ("start_date" in patch) plcPatch.start_date = patch.start_date;
-        if (Object.keys(plcPatch).length) {
-            plcPatch.updated_at = nowIso;
-            const { error } = await supabase.from("child_placements").update(plcPatch).eq("id", plc.id).eq("org_id", args.orgId);
-            if (error) return { ok: false, routed: "durable", agreement_id: agreement.id, error: error.message };
-            updated.push(...Object.keys(plcPatch).filter((k) => k !== "updated_at").map((k) => `placement.${k}`));
-        }
-    }
+    /*
+     * POST-MATERIALISATION: EFFECTIVE-DATED TRUTH IS SUPERSEDED, NEVER PATCHED.
+     *
+     * This block used to UPDATE `child_placements` (program, room, start_date) and
+     * `schedule_assignments` (pattern) in place, and emit no change event. That is the bypass the
+     * effective-dating doctrine forbids: the prior interval stopped being true without ever being
+     * closed, no successor recorded what became true instead, and a partner that had already
+     * synchronised the row was never told. A silent divergence is worse than a visible failure.
+     *
+     * Both halves now go through the canonical command, whose persistence is ONE
+     * `apply_participation_operational_change` transaction and whose events fire after the commit. When
+     * a single edit touches both, it is one transaction - not two service calls that can half-succeed.
+     */
+    const placementFieldsTouched =
+        "program_category_id" in patch || "program_room_cohort_key" in patch || "start_date" in patch;
+    const scheduleFieldTouched = "schedule_type" in patch && !!patch.schedule_type;
 
-    // Schedule assignment: resolve the pattern for the edited schedule_type, update the current assignment.
-    if ("schedule_type" in patch && patch.schedule_type) {
-        const sched = await getOperationalScheduleAssignmentForAgreement(supabase, args.orgId, agreement.id);
-        const { data: pat } = await supabase
-            .from("schedule_patterns")
-            .select("id")
-            .eq("org_id", args.orgId)
-            .eq("site_location_id", agreement.site_location_id)
-            .or(`schedule_type_key.eq.${patch.schedule_type},key.eq.${patch.schedule_type}`)
-            .limit(1)
-            .maybeSingle();
-        const patternId = (pat as { id?: string } | null)?.id ?? null;
-        if (sched && patternId) {
-            const { error } = await supabase.from("schedule_assignments").update({ schedule_pattern_id: patternId, updated_at: nowIso }).eq("id", sched.id).eq("org_id", args.orgId);
-            if (error) return { ok: false, routed: "durable", agreement_id: agreement.id, error: error.message };
-            updated.push("schedule_assignment.schedule_pattern_id");
+    if (placementFieldsTouched || scheduleFieldTouched) {
+        const plc = await getOperationalPlacementForAgreement(supabase, args.orgId, agreement.id);
+
+        let assignmentChange: { startDate: string; schedulePatternId: string } | undefined;
+        if (scheduleFieldTouched) {
+            const sched = await getOperationalScheduleAssignmentForAgreement(
+                supabase,
+                args.orgId,
+                agreement.id
+            );
+            const { data: pat } = await supabase
+                .from("schedule_patterns")
+                .select("id")
+                .eq("org_id", args.orgId)
+                .eq("site_location_id", agreement.site_location_id)
+                .or(`schedule_type_key.eq.${patch.schedule_type},key.eq.${patch.schedule_type}`)
+                .limit(1)
+                .maybeSingle();
+            const patternId = (pat as { id?: string } | null)?.id ?? null;
+            if (sched && patternId) {
+                assignmentChange = {
+                    // A schedule change with no operator-chosen date takes effect from the next day, so
+                    // the superseded interval is non-empty. Superseding with today's date would be
+                    // legal, but it would assert that the old schedule never applied today, which is
+                    // false - the child was on it this morning.
+                    startDate:
+                        typeof patch.start_date === "string" && patch.start_date
+                            ? patch.start_date
+                            : computeNextDayYmd(todayYmd),
+                    schedulePatternId: patternId,
+                };
+            }
+        }
+
+        let placementChange:
+            | {
+                  startDate: string;
+                  programCategoryId?: string | null;
+                  roomLocationId?: string | null;
+                  reasonKey?: string | null;
+              }
+            | undefined;
+        if (plc && placementFieldsTouched) {
+            placementChange = {
+                startDate:
+                    typeof patch.start_date === "string" && patch.start_date
+                        ? patch.start_date
+                        : computeNextDayYmd(todayYmd),
+                reasonKey: "operator_change",
+            };
+            // Only fields the operator actually named are sent. An absent key means "leave it as the
+            // prior row had it"; an explicit null means "clear it". The primitive distinguishes them.
+            if ("program_category_id" in patch) {
+                placementChange.programCategoryId =
+                    (patch.program_category_id as string | null) ?? null;
+            }
+            if ("program_room_cohort_key" in patch) {
+                placementChange.roomLocationId =
+                    (patch.program_room_cohort_key as string | null) ?? null;
+            }
+        }
+
+        if (placementChange || assignmentChange) {
+            try {
+                const change = await applyCombinedParticipationChange(supabase, {
+                    orgId: args.orgId,
+                    enrollmentAgreementId: agreement.id,
+                    todayYmd,
+                    actorUserId: args.actorUserId ?? null,
+                    sourceKey: "operator",
+                    placement: placementChange,
+                    assignment: assignmentChange,
+                });
+                if (change.placement) {
+                    if (placementChange?.programCategoryId !== undefined) {
+                        updated.push("placement.program_category_id");
+                    }
+                    if (placementChange?.roomLocationId !== undefined) {
+                        updated.push("placement.room_location_id");
+                    }
+                    updated.push("placement.start_date");
+                }
+                if (change.assignment) updated.push("schedule_assignment.schedule_pattern_id");
+            } catch (e) {
+                const message =
+                    e instanceof OperationalEnrollmentServiceError
+                        ? e.message
+                        : e instanceof Error
+                          ? e.message
+                          : "participation change failed";
+                return { ok: false, routed: "durable", agreement_id: agreement.id, error: message };
+            }
         }
     }
 

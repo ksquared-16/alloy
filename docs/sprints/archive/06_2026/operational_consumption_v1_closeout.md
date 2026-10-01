@@ -1,6 +1,6 @@
 # Operational Consumption V1 — closeout summary (Slices 1–4)
 
-**Status:** COMPLETE (June 2026). Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../platform/modules/operational-consumption-platform.md). Per-slice detail: [v1](operational_consumption_v1.md) · [v2](operational_consumption_v2.md) · [v3](operational_consumption_v3.md) · [v4](operational_consumption_v4.md).
+**Status:** COMPLETE (June 2026). Doctrine: [`../../platform/modules/operational-consumption-platform.md`](../../../platform/modules/operational-consumption-platform.md). Per-slice detail: [v1](operational_consumption_v1.md) · [v2](operational_consumption_v2.md) · [v3](operational_consumption_v3.md) · [v4](operational_consumption_v4.md).
 
 Operational Consumption is the **runtime interpretation layer** between Operational Execution and Commercial / Financial Resolution. It answers one question — *given an operational fact, what commercial meaning should exist?* — and produces recomputable, non-authoritative draft intent. It **posts nothing**.
 

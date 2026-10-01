@@ -2,7 +2,7 @@
 
 **Verdict: APPROVED** — *(updated 2026-06-07; the documentation-governance concern is resolved after rebase `2e11a9a7`. Original verdict below was APPROVED WITH CONCERNS @ `cd2f8a54`. See the Re-review addendum at the end.)*
 **Reviewed:** `origin/cursor/field-catalog-fc1` @ `cd2f8a54` ("Align layout field catalog to canonical refKey namespaces (FC-1)"), single commit on merge-base `8dd0f2f1`. Net: 10 files, +574/−49. **0 migrations. No lifecycle/readiness/evaluator/runtime/production/seed files touched.**
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · naming [`child_namespace_decision.md`](./child_namespace_decision.md) / [`child_namespace_addendum.md`](./child_namespace_addendum.md).
+**Reviewer:** Convergence Review Authority · rubric `./convergence_review_rubric.md` · naming [`child_namespace_decision.md`](./child_namespace_decision.md) / [`child_namespace_addendum.md`](./child_namespace_addendum.md).
 
 ---
 

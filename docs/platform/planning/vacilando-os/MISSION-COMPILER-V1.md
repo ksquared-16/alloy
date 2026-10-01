@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Mission Compiler V1 — architecture (blueprint for the upstream half of Vacilando)
 
 > Status: **Mission Compiler V1 implemented** for Brief → Compiled Mission (2026-07-30).

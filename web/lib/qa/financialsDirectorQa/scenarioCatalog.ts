@@ -35,7 +35,7 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-20.3";
+export const CATALOG_VERSION = "2026-09-30.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -50,15 +50,50 @@ export const SUITE_KEY = "core_financials_director_qa";
  * planning Core acceptance needs the second one.
  *
  *   CORE_RUNNABLE            a human can drive it today against the certified Core product
- *   PAYMENTS_PHASE           it needs the Payments productization that has not been built
  *   DEFERRED_PRODUCTIZATION  the capability is real and correct, with no operator surface in Core
  *   RETIRED                  it no longer describes this product, named so its absence is not silent
  */
 export type ScenarioProgram =
     | "CORE_RUNNABLE"
-    | "PAYMENTS_PHASE"
+    /*
+     * `PAYMENTS_PHASE` USED TO LIVE HERE AND IS GONE ON PURPOSE.
+     *
+     * It meant "it needs the Payments productization that has not been built". Payments V1 is
+     * built, deployed and frozen, so every scenario that carried it is now something a human can
+     * drive against the certified product — which is what CORE_RUNNABLE already means. Keeping the
+     * value would have left the catalog describing a wait that has ended, and would have let a
+     * Payments scenario sit in a list a Director reads as "not yet".
+     *
+     * This is the convergence: there is one Financials V1 acceptance, and Payments is part of it.
+     */
     | "DEFERRED_PRODUCTIZATION"
     | "RETIRED";
+
+/**
+ * WHAT KIND OF PROOF A SCENARIO EXPECTS — a third axis, and the one a human reads first.
+ *
+ * `disposition` says whether a human must drive it. `program` says whose it is. This says what the
+ * proof is MADE OF, which is what tells a Director what they are walking into: a read, a real card
+ * in test mode, a fixture they may spend, or something the provider will not let them reach today.
+ *
+ * A scenario may need several. "Real Stripe act on a controlled fixture" is two facts, and
+ * collapsing them would hide which one is the constraint.
+ */
+export type EvidenceClass =
+    /** The Director drives the product themselves. Nothing else can produce this. */
+    | "HUMAN_WALKTHROUGH"
+    /** A deterministic suite already proves the rule. Supporting evidence, never a human pass. */
+    | "AUTOMATED_CERTIFIED"
+    /** Proven against the deployed build through the mounted surface. Supporting evidence. */
+    | "MOUNTED_CERTIFIED"
+    /** Requires a real act against Stripe in TEST mode. Never real card or bank details. */
+    | "REAL_STRIPE_TEST_ACT"
+    /** Needs a fixture the Director may spend. Says so before they start, not after. */
+    | "CONTROLLED_FIXTURE"
+    /** Read an existing record without changing it. Certhouse and Certopp history live here. */
+    | "READ_ONLY_EVIDENCE"
+    /** The provider will not let this be reached safely today. Deferred is not failed. */
+    | "DEFERRED_PROVIDER_DEPENDENT";
 
 export type ScenarioDisposition =
     | "HUMAN_WALKTHROUGH"
@@ -687,37 +722,72 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         key: "card_collection",
         order: 29,
         title: "Collecting a card payment",
-        disposition: "EXPLICITLY_DEFERRED",
+        disposition: "HUMAN_WALKTHROUGH",
         purpose: "Take a card payment through the product and recognise the provider's result.",
         whyItMatters:
-            "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure.",
-        dispositionReason:
-            "PROVIDER CONFIGURATION NOW EXISTS — the reason this was deferred no longer holds. Payments V1 W1 built the operator act: /organization/financials -> Payments connects a provider, and the certification tenant's account read reports takePaymentCard available with a ready merchant. What remains is this scenario's own walkthrough, which has not been driven by a human. Do not mark it PASS because configuration exists. Real card details must never be used.",
-        requires: [],
-        navigate: [],
-        doThis: [],
-        expectChanges: [],
-        expectUnchanged: [],
+            "Most families pay by card. The product must start the collection, recognise what the processor says, and represent a failure as a failure. An attempt is not money: the receipt appears when the provider says it settled, not when the operator pressed the button.",
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "something owed to collect against" }],
+        navigate: [
+            "Confirm the organization has a connected provider: Settings -> Financials -> Payments must read Ready.",
+            "Open the family in the Focus Panel.",
+            "Open the Financials card, then Details.",
+            "Use the Payment control on an obligation the family actually owes.",
+        ],
+        doThis: [
+            "Choose card, and enter a Stripe TEST card in the provider's own fields.",
+            "Complete the collection.",
+            "Read the receipt, and read what the obligation now says.",
+            "Attempt the same collection a second time on the same obligation.",
+        ],
+        expectChanges: [
+            "A receipt exists for the amount the provider confirmed.",
+            "What the family owes falls by the amount applied.",
+        ],
+        expectUnchanged: [
+            "No second receipt from the repeated attempt.",
+            "The card number is never shown back to you — brand and last four only.",
+        ],
         invariant: MONEY_INVARIANTS.PAYER_IS_HISTORY,
-        failSymptoms: [],
+        failSymptoms: [
+            "A receipt that appears before the provider confirmed anything.",
+            "A card number, CVC or full PAN rendered anywhere in Alloy.",
+            "Two receipts for one collection.",
+            "A provider status string shown to the operator instead of a sentence.",
+        ],
     }),
     S({
         key: "ach_processing",
         order: 30,
         title: "ACH initiation, processing and recognition",
-        disposition: "EXPLICITLY_DEFERRED",
+        disposition: "HUMAN_WALKTHROUGH",
         purpose: "Distinguish an ACH collection that has started from one that has actually settled.",
         whyItMatters:
             "ACH is not instant. Treating initiation as settlement would show money the business does not have yet, and a return days later would arrive as a surprise.",
-        dispositionReason:
-            "AVAILABLE NOW, AND UNWALKED. Measured on the certification tenant after Payments V1 W1: the account read reports achAvailable true and takePaymentAch available, because the connected merchant carries the bank rail. The settlement distinction this scenario exists to prove — initiation is not settlement — still requires a human walkthrough, which has not happened.",
-        requires: [],
-        navigate: [],
-        doThis: [],
-        expectChanges: [],
-        expectUnchanged: [],
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation the family has NOT already covered" }],
+        navigate: [
+            "Confirm Settings -> Financials -> Payments reports the bank rail ready, not only the card rail.",
+            "Open the family, then Financials -> Details.",
+            "Use the Payment control on an obligation with nothing already covering it.",
+        ],
+        doThis: [
+            "Choose the bank rail and a bank method that is on file and ready.",
+            "Start the collection.",
+            "BEFORE anything settles, read the balance, Paid, and the receipts list.",
+            "Then let the provider settle it, and read them again.",
+        ],
+        expectChanges: [
+            "Once the provider confirms settlement, a receipt exists and what the family owes falls.",
+        ],
+        expectUnchanged: [
+            "While the debit is in flight, the balance does NOT move and no receipt exists.",
+            "Nothing suggests the money has arrived before the provider says it has.",
+        ],
         invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
-        failSymptoms: [],
+        failSymptoms: [
+            "A balance that falls the moment the collection is started.",
+            "A receipt for a debit that is still processing.",
+            "Processing shown to the operator as a provider status word rather than a sentence.",
+        ],
     }),
     S({
         key: "provider_return",
@@ -728,14 +798,28 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "One is a bank reversing itself; the other is a decision a person made and must answer for. Showing them as the same event destroys the audit trail for both.",
         dispositionReason:
-            "The provider configuration it depended on now exists (Payments V1 W1), and provider returns are certified at the service layer. What is unwalked is the operator-facing half: seeing a return render as Returned rather than Refunded. The operator-refund half IS covered, as scenario 19.",
+            "DEFERRED / PROVIDER-DEPENDENT, and deliberately not FAIL. The distinction is built and certified: the canonical payment carries who caused the reversal, the receipt reads Returned rather than Refunded, and Financial Activity says Payment returned rather than Payment refunded. What does not exist on staging is a provider-origin reversal to look at, and producing one means manufacturing a chargeback against a real provider account. That was declined. If Stripe TEST mode offers a safe controlled return, walk it and record the result; otherwise leave this DEFERRED.",
         requires: [],
-        navigate: [],
-        doThis: [],
+        navigate: [
+            "If — and only if — a provider return exists on the account, open Financials -> Details and read the receipt it reversed.",
+            "Then open Financials -> Activity and find the matching entry.",
+        ],
+        doThis: [
+            "Read the outbound row's own word.",
+            "Read the Activity entry's own word.",
+            "Compare both against an ordinary operator refund on the same account.",
+        ],
         expectChanges: [],
-        expectUnchanged: [],
+        expectUnchanged: [
+            "A provider return reads Returned, and its Activity entry reads Payment returned.",
+            "An operator refund reads Refunded, and its Activity entry reads Payment refunded.",
+            "Neither is described with the provider's own vocabulary.",
+        ],
         invariant: MONEY_INVARIANTS.PROVIDER_RETURN_IS_NOT_A_REFUND,
-        failSymptoms: [],
+        failSymptoms: [
+            "A bank-initiated reversal presented as though an operator chose it.",
+            "Both events sharing one word.",
+        ],
     }),
     /*
      * ADDED BY PAYMENTS V1 · W2. The catalog was silent about stored methods because, until W2,
@@ -1692,6 +1776,402 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "The arrangement silently deleted rather than shown as needing attention.",
         ],
     }),
+
+    /* ── PAYER-AUTHORIZED BANK SETUP ─────────────────────────────────────────────────────────
+     *
+     * The one act in Financials an operator may NOT perform for a family. Saving a bank account
+     * establishes a standing authorization to debit it, which the account holder must accept by
+     * name, so the product removed the operator's control and replaced it with a request.
+     */
+    S({
+        key: "bank_setup_request",
+        order: 80,
+        title: "An operator asks for a bank account, and that is all they do",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Send the payer a setup link and confirm nothing at all was written on the account.",
+        whyItMatters:
+            "Asking is not authorizing. If pressing this created anything — a method, a mandate, a pending row — the operator would have started something the payer never agreed to, and the family's bank account would be in the product before its owner had seen a word.",
+        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the account to resolve" }],
+        navigate: [
+            "Open the family in the Focus Panel.",
+            "Open the Financials card, then Details, then Manage payments.",
+            "Find the Payment methods section.",
+        ],
+        doThis: [
+            "Read the controls offered. Note what is NOT there.",
+            "Write down the payment methods on file and the account's figures.",
+            "Press Request bank account setup.",
+            "Read the panel that appears, then re-read the methods and the figures.",
+        ],
+        expectChanges: ["A link to hand to the payer appears, with how long it lasts."],
+        expectUnchanged: [
+            "No new payment method.",
+            "No change to Balance, Paid, Available prepaid or Held deposit.",
+            "There is NO Add bank account control anywhere — this is a product boundary, not a missing button.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "An Add bank account control on the operator's screen.",
+            "A method, mandate or pending row created by the request itself.",
+            "A figure moving because somebody asked a question.",
+        ],
+    }),
+    S({
+        key: "bank_setup_payer_authorization",
+        order: 81,
+        title: "The payer authorizes their own bank account",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Open the setup link as the parent would and put a bank account on file yourself.",
+        whyItMatters:
+            "This is the scenario the whole boundary exists for. Stripe's ACH terms require the platform to hold the account holder's authorization by name before any debit, and the provider emails its confirmation to that person. An operator clicking through it would make Alloy warrant an authorization nobody gave.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "bank_setup_request" }],
+        navigate: [
+            "Open the link from the previous scenario on your PHONE, or in a private window — somewhere with no operator session.",
+        ],
+        doThis: [
+            "Read the page before touching anything: whose authorization is it, and what does it say you are agreeing to?",
+            "Reload it. Confirm the link still works.",
+            "Continue to your bank, and use a Stripe TEST bank account in the provider's own fields.",
+            "Finish, and read what the page says you now have.",
+            "Open the same link once more.",
+        ],
+        expectChanges: [
+            "The bank account is on file, and the operator's screen shows it without you telling them.",
+        ],
+        expectUnchanged: [
+            "The page never asks YOU for a routing or account number — those are the provider's fields.",
+            "Opening the link does not use it up. Only saving does.",
+            "After saving, the link says the request is already completed rather than starting a second one.",
+        ],
+        invariant: MONEY_INVARIANTS.AUTOPAY_IS_CONSENT_NOT_A_BALANCE,
+        failSymptoms: [
+            "A page addressed to nobody, with no payer named.",
+            "Any field in Alloy's own page that would take a bank credential.",
+            "A link consumed merely by opening it, stranding the payer.",
+            "Marketing navigation or a Sign In link above the authorization.",
+        ],
+    }),
+    S({
+        key: "bank_method_operator_projection",
+        order: 82,
+        title: "What the operator may see about a family's bank account",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Read the saved bank account from the operator's side and confirm it says only safe things.",
+        whyItMatters:
+            "An operator needs to answer \"which account are we debiting?\" on the phone. They do not need, and must never be shown, the numbers that would let them move that family's money anywhere else.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "bank_setup_payer_authorization" }],
+        navigate: ["Focus Panel -> Financials -> Details -> Manage payments."],
+        doThis: [
+            "Read the bank account row in full.",
+            "Read its state in whatever words the product uses.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "The bank's name and the last four digits, and nothing more.",
+            "No routing number and no account number.",
+            "No provider identifiers, no provider status words, no mandate internals.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "A routing or account number anywhere on an operator surface.",
+            "A raw provider id or status string presented as the method's state.",
+        ],
+    }),
+    S({
+        key: "bank_setup_visual_review",
+        order: 83,
+        title: "Does the payer's page feel like Alloy?",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Judge the participant surface as a parent would, and say whether it is acceptable.",
+        whyItMatters:
+            "A parent authorizing a standing debit is deciding whether to trust this. Engineering can prove the page is correct; only a person can say whether it reads as the organisation they know.",
+        dispositionReason:
+            "CARRIED AS A KNOWN VISUAL ITEM, NOT A DEFECT. The page's Continue to your bank is midnight while the submit inside the provider's own field block is Bend Pine — two primaries on one journey. The Bend Pine rule is stated for operator Financials, which is compliant, so this is a participant-surface consistency question. It was deliberately NOT repaired before this walkthrough: the human decides whether it is acceptable.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "bank_setup_request" }],
+        navigate: ["Open a setup link as the payer, on a phone if you can."],
+        doThis: [
+            "Look at it as a parent, not as a reviewer.",
+            "Note the two primary buttons on the journey and whether the difference bothers you.",
+            "Decide whether the page reads as Alloy around the bank's own fields, or as two products stitched together.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["Alloy's frame, the provider's fields, and no marketing chrome around either."],
+        invariant: MONEY_INVARIANTS.PROVIDER_RETURN_IS_NOT_A_REFUND,
+        failSymptoms: ["A page you would not want sent to a family in your name."],
+    }),
+
+    /* ── HELD DEPOSITS ───────────────────────────────────────────────────────────────────────
+     *
+     * Core recorded this as DEPOSIT_OPERATOR_PRODUCTIZATION_GAP — real authority, no operator
+     * surface. Payments V1 built the surface, so the gap is closed and these are the scenarios
+     * that close it.
+     */
+    S({
+        key: "held_deposit_take_and_hold",
+        order: 70,
+        title: "Money received and restricted is not available prepaid",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Hold part of a receipt as a deposit and confirm it stops behaving like ordinary money.",
+        whyItMatters:
+            "A deposit is money the organisation is holding under terms, not money the family has paid toward anything. Letting it read as available prepaid would let an operator spend a security deposit on this month's tuition.",
+        requires: [{ kind: "account_state", check: "has_unapplied_money", describe: "a receipt with money not yet applied" }],
+        navigate: ["Focus Panel -> Financials -> Details.", "Find the receipt, and use its Hold control."],
+        doThis: [
+            "Write down Available prepaid and Held deposit before you start.",
+            "Hold part of the receipt, naming what the deposit is for and the terms it is taken under.",
+            "Read both figures again, and read the held row itself.",
+        ],
+        expectChanges: [
+            "Held deposit rises by exactly what you held.",
+            "Available prepaid falls by exactly the same amount.",
+            "The held row states what it is for and the terms it was taken under.",
+        ],
+        expectUnchanged: [
+            "What the family owes does not move. Holding money settles nothing.",
+            "The receipt still reads as the amount originally received.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "Held money still counted as available prepaid.",
+            "A balance that falls because money was held.",
+            "A held row that cannot say why it exists.",
+        ],
+    }),
+    S({
+        key: "held_deposit_apply",
+        order: 71,
+        title: "Applying a held deposit to what is owed",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Spend a held deposit against an obligation and watch it stop being held.",
+        whyItMatters:
+            "This is the moment a deposit becomes payment. Both halves must happen together: the hold is discharged and the obligation falls. Half of it would either lose the money or spend it twice.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "held_deposit_take_and_hold" }],
+        navigate: ["Focus Panel -> Financials -> Details -> the held deposit row."],
+        doThis: [
+            "Read the control's own words before pressing it.",
+            "Apply the deposit to an obligation.",
+            "Read Balance, Paid, Available prepaid and Held deposit.",
+        ],
+        expectChanges: [
+            "Held deposit falls, what the family owes falls, and Paid rises.",
+        ],
+        expectUnchanged: [
+            "Available prepaid does NOT rise on the way through. The money must never become spendable in between.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "Available prepaid briefly rising — that is release-then-apply wearing this control's name.",
+            "A hold discharged with no obligation reduced, or the reverse.",
+        ],
+    }),
+    S({
+        key: "held_deposit_release",
+        order: 72,
+        title: "Releasing a deposit moves no money",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "End the restriction on a deposit and confirm nothing left the organisation.",
+        whyItMatters:
+            "Release and refund are different acts and an operator must be able to tell which one they are about to perform. Release ends a restriction; refund sends money away.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "held_deposit_take_and_hold" }],
+        navigate: ["Focus Panel -> Financials -> Details -> a refundable held deposit row."],
+        doThis: ["Read the control's own words.", "Release the deposit.", "Read every figure."],
+        expectChanges: ["Held deposit falls; Available prepaid rises by the same amount."],
+        expectUnchanged: [
+            "What the family owes does not move.",
+            "Nothing leaves the organisation.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: ["Money leaving on a release.", "A balance changing because a restriction ended."],
+    }),
+    S({
+        key: "held_deposit_refund",
+        order: 73,
+        title: "Refunding a deposit sends it back without touching what was settled",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Give a refundable deposit back and confirm nothing the family already paid was disturbed.",
+        whyItMatters:
+            "A deposit's money is restricted by construction, so giving it back settles nothing and must un-settle nothing. Funding it by reversing applications would take the refund out of obligations the family had already paid.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "held_deposit_take_and_hold" }],
+        navigate: ["Focus Panel -> Financials -> Details -> a refundable held deposit row."],
+        doThis: [
+            "Write down Balance, Paid, Available prepaid and every application on the account.",
+            "Refund the deposit.",
+            "Read all of them again.",
+        ],
+        expectChanges: ["Held deposit falls, and an outbound refund is recorded against its receipt."],
+        expectUnchanged: [
+            "Available prepaid does NOT rise on the way out.",
+            "No application is reversed. Balance and Paid do not move.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "Available prepaid rising as the deposit leaves.",
+            "The balance rising because applications were reversed to fund it.",
+        ],
+    }),
+    S({
+        key: "held_deposit_non_refundable",
+        order: 74,
+        title: "A non-refundable deposit refuses, and says the same thing twice",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Try to refund a deposit taken as non-refundable and read what the product says.",
+        whyItMatters:
+            "The terms a deposit was taken under are a promise to the family, and the product must keep it. A preview that says one thing and an execution that says another is worse than either: the operator cannot tell which one to believe.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "held_deposit_take_and_hold" }],
+        navigate: ["Focus Panel -> Financials -> Details -> a deposit taken as non-refundable."],
+        doThis: [
+            "Read which controls the row offers.",
+            "If a refusal is previewed anywhere, read it.",
+            "Attempt the refund anyway and read the answer.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "Refund is not offered on a non-refundable deposit.",
+            "The refusal is a sentence about the terms, not a code.",
+            "The preview and the execution say the SAME thing.",
+            "Nothing moves.",
+        ],
+        invariant: MONEY_INVARIANTS.POSTED_MONEY_IS_IMMUTABLE,
+        failSymptoms: [
+            "A refund control offered on a deposit that cannot be refunded.",
+            "A preview and an execution that disagree.",
+            "A machine token shown as the reason.",
+        ],
+    }),
+    S({
+        key: "held_deposit_card_rail_refund",
+        order: 75,
+        title: "Refunding a deposit that arrived on a card",
+        disposition: "EXPLICITLY_DEFERRED",
+        purpose: "Refund a held deposit whose money came in through the provider rather than as cash.",
+        whyItMatters:
+            "The cash rail is proven end to end. The provider rail runs the same arithmetic through a real refund, and the two must agree — the hold discharges, no application reverses, and the money never becomes spendable on its way out.",
+        dispositionReason:
+            "CARRIED BOUNDARY. The cash rail is certified end to end on deployed staging. The provider rail is certified in code and unit proof only, because the controlled fixture's held deposits are cash-rail and this programme gave it a BANK method rather than a card. Proving it needs a provider-backed receipt with a held lot raised from it. Walk it if you are willing to build that fixture; otherwise leave it DEFERRED.",
+        requires: [],
+        navigate: ["Collect by card on a disposable fixture, hold part of that receipt, then refund the hold."],
+        doThis: ["Follow the same reading as the cash-rail deposit refund."],
+        expectChanges: ["The hold is discharged and the provider records the refund."],
+        expectUnchanged: [
+            "No application is reversed.",
+            "Available prepaid does not rise on the way out.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: ["The provider rail behaving differently from the cash rail."],
+    }),
+
+    /* ── THE REST OF THE PAYMENTS SURFACE ────────────────────────────────────────────────────── */
+    S({
+        key: "duplicate_charge_notice",
+        order: 76,
+        title: "Adding the same charge twice creates one charge",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Ask for the same charge twice and confirm the operator is told nothing new was created.",
+        whyItMatters:
+            "Operators double-click, and requests get retried. Silently creating a second identical charge would bill a family twice; silently doing nothing and saying nothing would leave the operator pressing it again.",
+        dispositionReason:
+            "SHIPPED AND REGRESSION-BOUND, WITHOUT DEPLOYED MOUNTED PROOF. An automated attempt at this was refused on its own request envelope, which proves nothing either way, so the mounted proof is still owed and this is the scenario that takes it.",
+        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "an account to charge" }],
+        navigate: ["Focus Panel -> Financials -> Add charge."],
+        doThis: [
+            "Count the rows on the ledger.",
+            "Add a charge.",
+            "Add the identical charge again, the same way.",
+            "Read what the product tells you, and count the rows again.",
+        ],
+        expectChanges: ["The first charge exists."],
+        expectUnchanged: [
+            "The second attempt creates nothing.",
+            "The row count is the same after the second attempt as after the first.",
+            "The operator is told plainly that nothing new was created.",
+        ],
+        invariant: MONEY_INVARIANTS.EXISTING_IS_NOT_GENERATED,
+        failSymptoms: [
+            "Two identical charges.",
+            "Silence — a second attempt that neither creates nor explains.",
+        ],
+    }),
+    S({
+        key: "ach_uncovered_obligation",
+        order: 77,
+        title: "A bank debit is refused when the family has already paid",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Try to collect by bank against an obligation the family's own prepaid money already covers.",
+        whyItMatters:
+            "You do not debit a family's bank account for money they have already given you. The refusal is the product being right, and an operator should be able to tell it apart from a broken rail.",
+        dispositionReason:
+            "CARRIED BOUNDARY. The deployed run could not exercise a bank collection because the controlled account held more available prepaid than it owed, and canonical collection correctly refused. That refusal is worth seeing; so is the collection itself, on an obligation nothing covers.",
+        requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "something owed" }],
+        navigate: ["Focus Panel -> Financials -> Details -> the Payment control."],
+        doThis: [
+            "On an account with available prepaid exceeding what is owed, attempt a bank collection and read the refusal.",
+            "Then find or create an obligation nothing covers, and collect against that one.",
+        ],
+        expectChanges: ["The second collection proceeds."],
+        expectUnchanged: [
+            "The first is refused, in a sentence an operator can act on.",
+            "Nothing is debited for money already held.",
+        ],
+        invariant: MONEY_INVARIANTS.FOUR_DISTINCT_FIGURES,
+        failSymptoms: [
+            "A debit raised against a family who has already paid.",
+            "A refusal that reads like a system error rather than a decision.",
+        ],
+    }),
+    S({
+        key: "financial_activity_language",
+        order: 78,
+        title: "Financial Activity in the operator's words",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Read the activity feed end to end and confirm every line is about money, not machinery.",
+        whyItMatters:
+            "Activity is where an operator reconstructs what happened to a family's money. A line that speaks the provider's language, or that calls a bank's reversal an operator's decision, makes that reconstruction wrong.",
+        requires: [{ kind: "account_state", check: "has_inbound_payment", describe: "some financial history to read" }],
+        navigate: ["Open Financials -> Activity.", "Then the same account's Details for comparison."],
+        doThis: [
+            "Read every entry type present: charges, applications, reversals, receipts, refunds.",
+            "Find a refund and read its line.",
+            "Read the completed Deposit history section on the account.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "An operator's refund reads Payment refunded.",
+            "A provider's return would read Payment returned — a different sentence for a different cause.",
+            "No provider identifier, status string or internal vocabulary appears anywhere.",
+            "Completed deposits hold no money and change no figure above them.",
+        ],
+        invariant: MONEY_INVARIANTS.PROVIDER_RETURN_IS_NOT_A_REFUND,
+        failSymptoms: [
+            "A bank reversal described as though somebody here decided it.",
+            "Provider vocabulary on an operator surface.",
+        ],
+    }),
+    S({
+        key: "provider_readiness",
+        order: 79,
+        title: "Whether this organization can take money, said plainly",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Read provider configuration and readiness as an administrator, not as an engineer.",
+        whyItMatters:
+            "An operator whose collection just failed needs to know whether the organisation is connected, waiting on the provider, or not set up — and what to do about it. A provider status string tells them to go and argue with a vendor they have no relationship with.",
+        requires: [],
+        navigate: ["Settings -> Financials -> Payments."],
+        doThis: [
+            "Read the connection state and what it says is needed.",
+            "Read the card rail's readiness and the bank rail's readiness separately.",
+        ],
+        expectChanges: [],
+        expectUnchanged: [
+            "Readiness is stated in business language.",
+            "The bank rail's readiness is stated separately from the card rail's.",
+            "No provider status string is shown as the answer.",
+        ],
+        invariant: MONEY_INVARIANTS.FAILED_READ_IS_NOT_ZERO,
+        failSymptoms: [
+            "A raw provider state presented as the organisation's status.",
+            "One readiness figure standing for both rails.",
+        ],
+    }),
 ]);
 
 /** The scenarios a human is actually asked to drive. */
@@ -1705,9 +2185,9 @@ export function scenarioByKey(key: string): Scenario | undefined {
  * WHICH PROGRAM OWNS EACH SCENARIO — stated per key, because a classification that is derived is a
  * classification nobody decided.
  *
- * Read with `disposition`, never instead of it. `refund` is a HUMAN_WALKTHROUGH that belongs to
- * PAYMENTS_PHASE: it is written, it is drivable in principle, and the product it needs does not
- * exist yet. `subsidy_processing` is RETIRED from THIS catalog and not from the platform — Core's
+ * Read with `disposition`, never instead of it. `provider_return` is CORE_RUNNABLE and
+ * EXPLICITLY_DEFERRED at once: it belongs to this product and this list, and the environment cannot
+ * produce the thing it looks at. `subsidy_processing` is RETIRED from THIS catalog and not from the platform — Core's
  * boundary with Subsidy is still walked through by `subsidy_exclusion`, and the processing
  * scenarios belong to the Subsidy program's own acceptance, not to a Core list that can never run
  * them.
@@ -1767,28 +2247,48 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
      */
     discount_exception: "CORE_RUNNABLE",
 
-    // ── The next program ───────────────────────────────────────────────────────────────────
-    card_collection: "PAYMENTS_PHASE",
-    ach_processing: "PAYMENTS_PHASE",
-    provider_return: "PAYMENTS_PHASE",
-    refund: "PAYMENTS_PHASE",
-    /* Shipped by W2, and unlike the four above it is walkable rather than waiting on the program. */
-    payment_method_on_file: "PAYMENTS_PHASE",
-
     /*
-     * AUTOPAY, shipped by W5. Walkable rather than waiting: the authorization, the surface and the
-     * scheduled execution all exist. Human acceptance is W7, which is why every one of these is
-     * AUTOMATED_CERTIFIED_HUMAN_PENDING and none is a PASS.
+     * ── PAYMENTS, WHICH IS NOW PART OF THIS PRODUCT ────────────────────────────────────────
+     *
+     * Every key below carried `PAYMENTS_PHASE` — "waiting on a programme that has not been built".
+     * Payments V1 is built, deployed and frozen at PAYMENTS_V1_ENGINEERING_COMPLETE_W7_READY, so
+     * they are CORE_RUNNABLE: a human can drive them today against the certified product.
+     *
+     * Reclassifying them is the whole point of the integration. A Director walking Financials V1
+     * should meet a payment where a payment belongs in the journey, not in an appendix.
      */
-    autopay_enrollment: "PAYMENTS_PHASE",
-    autopay_card_collection: "PAYMENTS_PHASE",
-    autopay_bank_processing: "PAYMENTS_PHASE",
-    autopay_failure: "PAYMENTS_PHASE",
-    autopay_retry: "PAYMENTS_PHASE",
-    autopay_pause: "PAYMENTS_PHASE",
-    autopay_resume: "PAYMENTS_PHASE",
-    autopay_revoke: "PAYMENTS_PHASE",
-    autopay_method_invalidated: "PAYMENTS_PHASE",
+    card_collection: "CORE_RUNNABLE",
+    ach_processing: "CORE_RUNNABLE",
+    provider_return: "CORE_RUNNABLE",
+    refund: "CORE_RUNNABLE",
+    payment_method_on_file: "CORE_RUNNABLE",
+
+    /* Autopay, shipped by W5. Certified; the human acceptance is still owed. */
+    autopay_enrollment: "CORE_RUNNABLE",
+    autopay_card_collection: "CORE_RUNNABLE",
+    autopay_bank_processing: "CORE_RUNNABLE",
+    autopay_failure: "CORE_RUNNABLE",
+    autopay_retry: "CORE_RUNNABLE",
+    autopay_pause: "CORE_RUNNABLE",
+    autopay_resume: "CORE_RUNNABLE",
+    autopay_revoke: "CORE_RUNNABLE",
+    autopay_method_invalidated: "CORE_RUNNABLE",
+
+    /* ── Built by Payments V1, and new to this catalog ──────────────────────────────────── */
+    bank_setup_request: "CORE_RUNNABLE",
+    bank_setup_payer_authorization: "CORE_RUNNABLE",
+    bank_method_operator_projection: "CORE_RUNNABLE",
+    bank_setup_visual_review: "CORE_RUNNABLE",
+    held_deposit_take_and_hold: "CORE_RUNNABLE",
+    held_deposit_apply: "CORE_RUNNABLE",
+    held_deposit_release: "CORE_RUNNABLE",
+    held_deposit_refund: "CORE_RUNNABLE",
+    held_deposit_non_refundable: "CORE_RUNNABLE",
+    held_deposit_card_rail_refund: "CORE_RUNNABLE",
+    duplicate_charge_notice: "CORE_RUNNABLE",
+    ach_uncovered_obligation: "CORE_RUNNABLE",
+    financial_activity_language: "CORE_RUNNABLE",
+    provider_readiness: "CORE_RUNNABLE",
 
     /*
      * PRODUCTIZED BY FINANCIALS 11B. It was the last accepted "real, correct, no operator surface"
@@ -1801,6 +2301,184 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     // ── Another program's acceptance, not this list's ───────────────────────────────────────
     subsidy_processing: "RETIRED",
 });
+
+/**
+ * WHAT EACH SCENARIO'S PROOF IS MADE OF — stated per key, for the same reason `SCENARIO_PROGRAM` is.
+ *
+ * A Director reads this before they start. It is the difference between "open a screen and read it"
+ * and "you will need a fixture you are willing to spend, and a Stripe test card".
+ *
+ * `AUTOMATED_CERTIFIED` and `MOUNTED_CERTIFIED` appear beside HUMAN_WALKTHROUGH on purpose: they are
+ * SUPPORTING evidence. They never turn a human result green — see `NO_AUTOMATIC_PASS`.
+ */
+export const SCENARIO_EVIDENCE: Readonly<Record<string, readonly EvidenceClass[]>> = Object.freeze({
+    /* Core: reading and driving the product against a live account. */
+    financial_subject: ["HUMAN_WALKTHROUGH"],
+    add_charge_honours_review_boundary: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    draft_moves_nothing: ["HUMAN_WALKTHROUGH"],
+    post_charge: ["HUMAN_WALKTHROUGH"],
+    charge_detail_attribution: ["HUMAN_WALKTHROUGH"],
+    manage_responsibility: ["HUMAN_WALKTHROUGH"],
+    responsibility_supersession: ["HUMAN_WALKTHROUGH"],
+    expected_funding: ["HUMAN_WALKTHROUGH"],
+    expected_funding_correction: ["HUMAN_WALKTHROUGH"],
+    adjustment_draft: ["HUMAN_WALKTHROUGH"],
+    adjustment_post: ["HUMAN_WALKTHROUGH"],
+    reduction_zero_bound: ["HUMAN_WALKTHROUGH"],
+    reverse_adjustment: ["HUMAN_WALKTHROUGH"],
+    reverse_charge: ["HUMAN_WALKTHROUGH"],
+    cross_surface_consistency: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
+    reload_switch_viewport: ["HUMAN_WALKTHROUGH"],
+    overview_smoke: ["HUMAN_WALKTHROUGH"],
+    tuition_chain: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    discount_vs_adjustment: ["HUMAN_WALKTHROUGH"],
+    multi_child_attribution: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    subsidy_exclusion: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
+    billing_period: ["HUMAN_WALKTHROUGH"],
+    payment_receipt: ["HUMAN_WALKTHROUGH"],
+    actual_payer_is_not_responsibility: ["HUMAN_WALKTHROUGH"],
+    apply_payment: ["HUMAN_WALKTHROUGH"],
+    partial_unapplied: ["HUMAN_WALKTHROUGH"],
+    move_payment: ["HUMAN_WALKTHROUGH"],
+    failed_reapply_recovery: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    billing_preview_reachable: ["HUMAN_WALKTHROUGH"],
+    accept_recurring_terms: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_preview_is_the_run: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_generation_bills_the_accepted_price: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_rerun_is_honest: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_term_lifecycle: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_discount_reduces_net: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    discount_rerun_and_veto: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE"],
+    recurring_due_date: ["HUMAN_WALKTHROUGH"],
+    prepaid_available_and_applied: ["HUMAN_WALKTHROUGH"],
+    child_responsibility_and_partial: ["HUMAN_WALKTHROUGH"],
+    organization_financial_configuration: ["HUMAN_WALKTHROUGH"],
+    discount_exception: ["HUMAN_WALKTHROUGH", "MOUNTED_CERTIFIED"],
+    accounting_period: ["HUMAN_WALKTHROUGH"],
+    refund: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
+
+    /* Payments: what you will actually need in front of you. */
+    payment_method_on_file: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    card_collection: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE"],
+    ach_processing: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE"],
+    ach_uncovered_obligation: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE"],
+    provider_return: ["DEFERRED_PROVIDER_DEPENDENT", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
+    provider_readiness: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
+
+    bank_setup_request: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    bank_setup_payer_authorization: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    bank_method_operator_projection: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE", "MOUNTED_CERTIFIED"],
+    bank_setup_visual_review: ["HUMAN_WALKTHROUGH"],
+
+    held_deposit_take_and_hold: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    held_deposit_apply: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    held_deposit_release: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    held_deposit_refund: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "MOUNTED_CERTIFIED"],
+    held_deposit_non_refundable: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE", "MOUNTED_CERTIFIED"],
+    held_deposit_card_rail_refund: ["DEFERRED_PROVIDER_DEPENDENT", "AUTOMATED_CERTIFIED"],
+
+    duplicate_charge_notice: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    financial_activity_language: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE", "MOUNTED_CERTIFIED"],
+
+    autopay_enrollment: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+    autopay_card_collection: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "READ_ONLY_EVIDENCE", "AUTOMATED_CERTIFIED"],
+    autopay_bank_processing: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "READ_ONLY_EVIDENCE", "AUTOMATED_CERTIFIED"],
+    autopay_failure: ["HUMAN_WALKTHROUGH", "REAL_STRIPE_TEST_ACT", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+    autopay_retry: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE", "AUTOMATED_CERTIFIED"],
+    autopay_pause: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+    autopay_resume: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+    autopay_revoke: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+    autopay_method_invalidated: ["HUMAN_WALKTHROUGH", "CONTROLLED_FIXTURE", "AUTOMATED_CERTIFIED"],
+
+    subsidy_processing: ["DEFERRED_PROVIDER_DEPENDENT"],
+});
+
+export function scenarioEvidence(key: string): readonly EvidenceClass[] {
+    return SCENARIO_EVIDENCE[key] ?? ["HUMAN_WALKTHROUGH"];
+}
+
+/**
+ * THE SENTENCE THAT KEEPS THIS HONEST.
+ *
+ * It is restated on the surface rather than only here, because the temptation it refuses is real:
+ * every Payments scenario below has a deterministic suite, a mounted proof, or a real Stripe act
+ * behind it, and none of that is a human acceptance.
+ */
+export const NO_AUTOMATIC_PASS =
+    "Certified is not accepted. A scenario with automated, mounted or real-provider evidence behind "
+    + "it still reads NOT RUN until you have driven it yourself. Supporting evidence tells you what "
+    + "to expect; it does not answer for you.";
+
+/**
+ * WHICH ACCOUNT A DIRECTOR MAY SPEND, AND WHICH THEY MAY ONLY READ.
+ *
+ * This lived in the W7 markdown, which means it lived somewhere the person walking the product was
+ * not looking. A fixture rule that is only in a document is a rule that gets broken by someone
+ * being helpful — and the two fixtures here are not interchangeable: one of them IS the evidence.
+ *
+ * Stated on the surface, above the walk, because the cost of learning it late is destroying a
+ * certification that cannot be re-created.
+ */
+export const FIXTURE_DOCTRINE: readonly { fixture: string; rule: string; why: string }[] = Object.freeze([
+    {
+        fixture: "Certhouse",
+        rule: "READ ONLY, unless a scenario explicitly says otherwise.",
+        why:
+            "Its W5 Autopay history is genuine human-authorized consent and real unattended Stripe TEST collections — it does not merely demonstrate the certification, it IS the certification. Re-creating it to see it again would destroy what it is evidence of.",
+    },
+    {
+        fixture: "Certopp",
+        rule: "Its Deposit, Available prepaid and payer-bank history is preserved. The bank method is READ ONLY.",
+        why:
+            "The bank account on it was authorized by a real payer through the real flow, with a real mandate. A second one proves nothing new and costs the one that exists. The deposit and prepaid position is what several scenarios read their starting figures from.",
+    },
+    {
+        fixture: "A disposable household you create",
+        rule: "Anything destructive, anything repeatable, and anything that would spoil the two above.",
+        why:
+            "Create it, spend it, abandon it. A scenario that needs to be run twice needs somewhere it can be run twice.",
+    },
+]);
+
+/**
+ * THE EVIDENCE BOUNDARIES THIS PACKET CARRIES INTO HUMAN QA.
+ *
+ * Each is a place where engineering stopped deliberately and said so, rather than a gap discovered
+ * later. They are stated here so the Director knows, before they start, which answers are already
+ * proven automatically and which are genuinely open.
+ */
+export const EVIDENCE_BOUNDARIES: readonly { key: string; scenarioKey: string; statement: string }[] = Object.freeze([
+    {
+        key: "DEPLOYED_ACH_COLLECTION_UNCOVERED",
+        scenarioKey: "ach_uncovered_obligation",
+        statement:
+            "A deployed bank collection has not been exercised against an obligation nothing covers. The controlled account held more available prepaid than it owed, and canonical collection correctly refused an unnecessary debit — the product being right, not a gap in it. The rail itself is certified by the live suites.",
+    },
+    {
+        key: "ACH_PROVIDER_RETURN",
+        scenarioKey: "provider_return",
+        statement:
+            "No provider-origin reversal exists on staging, and producing one means manufacturing a chargeback against a real provider account. That was declined. The semantics are certified deterministically and mounted; the human walkthrough is DEFERRED / PROVIDER-DEPENDENT, not FAIL.",
+    },
+    {
+        key: "CARD_RAIL_HELD_DEPOSIT_REFUND",
+        scenarioKey: "held_deposit_card_rail_refund",
+        statement:
+            "The cash rail's held-deposit refund is certified end to end on deployed staging. The provider rail is certified in code and unit proof only, because the controlled fixture's deposits are cash-rail and this programme gave it a bank method rather than a card.",
+    },
+    {
+        key: "DUPLICATE_CHARGE_NOTICE",
+        scenarioKey: "duplicate_charge_notice",
+        statement:
+            "The no-op notice is shipped and regression-bound. It has no deployed mounted proof: the automated attempt was refused on its own request envelope, which proves nothing either way.",
+    },
+    {
+        key: "PARTICIPANT_BANK_VISUAL",
+        scenarioKey: "bank_setup_visual_review",
+        statement:
+            "The payer page's Continue to your bank is midnight while the submit inside the provider's own field block is Bend Pine — two primaries on one journey. Deliberately NOT repaired before this walkthrough. The human decides whether it is acceptable.",
+    },
+]);
 
 export function scenarioProgram(key: string): ScenarioProgram | undefined {
     return SCENARIO_PROGRAM[key];
@@ -1815,16 +2493,25 @@ export const CORE_RUNNABLE_SCENARIOS = SCENARIOS.filter((s) => SCENARIO_PROGRAM[
  * These are NOT Core QA failures and must never be counted as one. Each names a capability whose
  * authority is real and proven, and whose operator surface is deliberately not in Core.
  */
-export const CORE_DEFERRALS = Object.freeze([
+export const CORE_DEFERRALS: readonly { key: string; statement: string; closedBy?: string }[] = Object.freeze([
 
     {
         key: "LEDGER_ROW_PROVENANCE_INSPECTION_DEFERRED",
         statement:
             "Canonical provenance exists for every reduction — the policy that decided it, the basis, the base it was taken on, whether a cap bound it — and the ledger states a concise preview of it beside the row. There is no deep row-inspection surface in Core that opens a single ledger row into its full decision record.",
     },
+    /*
+     * CLOSED BY PAYMENTS V1, and kept here with its closure rather than deleted.
+     *
+     * A deferral that vanishes leaves no record that it was ever accepted, and a reader comparing
+     * this list against the one the Core certification signed would find a missing entry and no
+     * explanation. The statement is what it was; the closure says what happened to it.
+     */
     {
         key: "DEPOSIT_OPERATOR_PRODUCTIZATION_GAP",
         statement:
             "The deposit policy type and the deposit model foundation exist and are configurable. The HELD DEPOSIT LIFECYCLE — taking a deposit, holding it, applying it and releasing it — belongs to Payments and has no operator surface in Core.",
+        closedBy:
+            "CLOSED. Payments V1 built the operator surface and it is deployed: take, hold, Apply, Release, Refund, the non-refundable refusal and completed Deposit history, all on the Financials account card. The scenarios that accept it are held_deposit_take_and_hold through held_deposit_card_rail_refund, and the card-rail refund is the one part still carried as a boundary.",
     },
 ]);

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-30
+supersedes: []
+---
+
 # Mission Control activation — screenshot manifest
 
 Default shell: **Mission Control** (`#/missions`)

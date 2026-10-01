@@ -3,7 +3,7 @@
 **Status:** **Sprint closed (Card 5 closeout — 2026-05-28)**  
 **Cards 0–4 + 2.5 + Gate 1A:** Done · **Card 5:** Closeout done · **Live ranking (`shadow_mode: false`):** Deferred until pilot checklist passes  
 **Date:** 2026-05-28  
-**Depends on:** [Waitlist Phase 2 architecture](waitlist_orchestration_phase2_architecture.md), [Child lifecycle closeout](completed/child_lifecycle_work_unit_convergence_closeout.md)
+**Depends on:** [Waitlist Phase 2 architecture](../later-phase/waitlist_orchestration_phase2_architecture.md), [Child lifecycle closeout](./child_lifecycle_work_unit_convergence_closeout.md)
 
 ---
 

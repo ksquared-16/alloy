@@ -88,6 +88,49 @@ test("j5 clear semantics", async ({ page }) => {
                 if (clearedAt != null && t > clearedAt + 800) break;
                 if (!sawReserved && t > 6000) break;
             }
+            /*
+             * RESOURCE TIMING FOR THE REAL MOUNTED REQUEST.
+             *
+             * Same performance.now timebase as the click origin and the diagnostic marks, so these
+             * land on one timeline without a new server mark. This is the authority for the arrival
+             * leg: a fresh-connection curl measures a different connection and a different runtime
+             * path, and was already discarded once for claiming ~952ms that the in-page carrier
+             * contradicts by an order of magnitude.
+             *
+             * responseStart is the decisive number. The carrier is the FIRST line on this stream and
+             * the server emits it at route+~363ms, so an early responseStart with a late patch means
+             * the bytes are being held somewhere after first byte -- buffering -- while a late
+             * responseStart means the wait is before the response begins at all.
+             */
+            let rt = null;
+            try {
+                /*
+                 * A Resource Timing entry is published when the response COMPLETES, and this stream
+                 * stays open well past the card clear — reading at clear time returned the entry from
+                 * the PAGE LOAD (startTime 4662 against a click at 19253), which is a different
+                 * request entirely. So wait for an entry that starts at or after this click, and
+                 * report absence rather than substituting the wrong one.
+                 */
+                const mine = () => performance.getEntriesByType("resource")
+                    .filter((e) => e.name.includes("/api/admin/view-models/drawer/opportunity/"))
+                    .filter((e) => e.startTime >= t0 - 50);
+                for (let i = 0; i < 120 && mine().length === 0; i += 1) {
+                    await new Promise((r) => setTimeout(r, 50));
+                }
+                const es = mine();
+                const e = es.length ? es[es.length - 1] : null;
+                if (e) rt = {
+                    name_has_phased: e.name.includes("phased"),
+                    after_click: true,
+                    startTime: Math.round(e.startTime),
+                    requestStart: Math.round(e.requestStart || 0),
+                    responseStart: Math.round(e.responseStart || 0),
+                    responseEnd: Math.round(e.responseEnd || 0),
+                    duration: Math.round(e.duration),
+                    transferSize: e.transferSize ?? null,
+                    protocol: e.nextHopProtocol ?? null,
+                };
+            } catch { /* absent timing is reported absent, never zero */ }
             const end = snap();
             /*
              * REGION B MARKS for this switch, plus the positive control. A missing mark is reported
@@ -99,6 +142,13 @@ test("j5 clear semantics", async ({ page }) => {
             const marks = td && subj_now ? (td.subjects || {})[subj_now] || null : null;
             return {
                 sha,
+                /*
+                 * The click origin on the SAME clock the diagnostic marks use. Without it the marks
+                 * (absolute performance.now) and the clear (click-relative) cannot be placed on one
+                 * timeline, and the legs between them cannot be computed at all.
+                 */
+                t0_abs: Math.round(t0),
+                rt,
                 observed: td ? td.observed : null,
                 marks,
                 subjectAtEnd: subj_now,

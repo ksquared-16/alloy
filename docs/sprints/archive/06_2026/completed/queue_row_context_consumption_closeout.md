@@ -8,7 +8,7 @@
 
 **Planning / architecture docs (canonical):**
 
-- [`docs/system/work-unit-surface-context-contract.md`](../../../system/work-unit-surface-context-contract.md) — developer contract, API attach, consumption table
+- [`docs/system/work-unit-surface-context-contract.md`](../../../../system/work-unit-surface-context-contract.md) — developer contract, API attach, consumption table
 - [`docs/sprints/archive/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../status_ownership_and_lifecycle_grain_expansion.md) — grain / ownership doctrine
 - [`docs/sprints/archive/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../entity_status_lifecycle_stage_and_location_scope_contract.md) — stage, location scope, placement on OCM
 - [`docs/sprints/archive/06_2026/enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — enrollment disposition vocabulary

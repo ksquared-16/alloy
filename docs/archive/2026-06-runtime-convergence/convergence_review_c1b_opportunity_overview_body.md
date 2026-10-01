@@ -9,7 +9,7 @@
 
 **Original verdict (9bcc688c): REJECTED**
 **Reason:** Gate 4 (fallback if layout **render** fails) is **not implemented**. There is **no React error boundary** anywhere in the drawer render ancestry, and the fallback is purely data-driven (fetch/resolve only). A render-phase exception in the layout body **escapes uncaught and crashes the drawer** instead of falling back to the VM overview body — the exact "exceptions escape render" risk this review must gate. For a production body-replacement cutover, this is a hard FAIL of the core safety gate.
-**Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · contracts [`adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md), [`drawer-view-model-runtime-contract.md`](../system/drawer-view-model-runtime-contract.md) · prior [`convergence_review_c1a_opportunity_shadow_mount.md`](./convergence_review_c1a_opportunity_shadow_mount.md).
+**Reviewer:** Convergence Review Authority · rubric `./convergence_review_rubric.md` · contracts [`adminv2-runtime-performance-doctrine.md`](../../system/adminv2-runtime-performance-doctrine.md), [`drawer-view-model-runtime-contract.md`](../../system/drawer-view-model-runtime-contract.md) · prior [`convergence_review_c1a_opportunity_shadow_mount.md`](./convergence_review_c1a_opportunity_shadow_mount.md).
 
 ---
 

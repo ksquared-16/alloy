@@ -80,13 +80,11 @@ const LEDGER: Readonly<Record<string, number>> = {
     "app/adminV2/settings/attention-sla-rules/page.tsx": 1,
     "app/adminV2/settings/kpis/KpiPlacementsSettingsClient.tsx": 4,
     "app/adminV2/settings/tours/availability/TourAvailabilitySettingsClient.tsx": 3,
-    "components/admin/AdminCollectPaymentModal.tsx": 1,
     "components/admin/agentLab/AgentConfigLabClient.tsx": 3,
     "components/admin/agentLab/AgentLabAssistantPanel.tsx": 1,
     "components/admin/AssociatedDocumentUploadModal.tsx": 2,
     "components/admin/communications/CommunicationPreferencesEditor.tsx": 1,
     "components/admin/DataTable.tsx": 1,
-    "components/admin/drawer/JobDrawerV2.tsx": 5,
     "components/admin/drawer/record/RecordDrawerStatusSelect.tsx": 1,
     "components/admin/entity/EntityDrawerOverview.tsx": 5,
     "components/admin/entity/OpportunityInquiryChildrenSection.tsx": 5,
@@ -119,7 +117,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/admin/opportunity/OpportunityRecordCreateWorkModal.tsx": 1,
     "components/admin/opportunity/SendFormToOpportunityModal.tsx": 1,
     "components/admin/OptionSetKeyPicker.tsx": 1,
-    "components/admin/quoteIntake/OpportunityQuoteIntakeSection.tsx": 1,
     "components/admin/RelatedRecordsTabs.tsx": 1,
     "components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx": 2,
     "components/admin/vmDrawer/VmOpportunityStatusControl.tsx": 1,
@@ -224,9 +221,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/settings/surfaces/WorkUnitHeaderSurfaceEditor.tsx": 5,
     "components/childcareOperational/ChangeOperationalPlacementModal.tsx": 2,
     "components/childcareOperational/ChangeOperationalScheduleModal.tsx": 1,
-    "components/cleaning/CleaningQuickQuoteForm.tsx": 6,
-    "components/cleaning/CleaningQuoteForm.tsx": 5,
-    "components/cleaning/SpecialtyCleaningQuoteForm.tsx": 4,
     "components/forms/admin/FormIntakeRuntimeOrchestrationPanel.tsx": 1,
     "components/forms/admin/FormLifecycleUsagePanel.tsx": 2,
     "components/forms/admin/FormOutcomeConfigPanel.tsx": 4,
@@ -310,6 +304,13 @@ describe("raw <select> adoption ledger", () => {
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
         // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
-        expect(ledgerTotal).toBe(418);
+        // Payments V1 · W6-A2: JobDrawerV2 deleted, 5 -> 0. It had NO importer at all and carried
+        // an "Add payment" control calling openCollectPayment(), which opened the modal W6-A1
+        // deleted - a dead affordance in an unreachable component. 400 -> 395.
+        // Payments V1 · W6-A1: AdminCollectPaymentModal deleted (0 JSX uses, 0 imports anywhere),
+        // 1 -> 0, so 401 -> 400. Independent of the conversions that brought it to 401; the number
+        // is the MEASURED sum of what the files now hold, not arithmetic on either side of the
+        // merge, because this ledger is one-way and a guessed total would let adoption drift back.
+        expect(ledgerTotal).toBe(395);
     });
 });

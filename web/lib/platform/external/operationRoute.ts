@@ -95,6 +95,33 @@ export function classifyDomainError(error: unknown): OperationRefusal | null {
     };
 }
 
+/**
+ * The coarse class for a refusal, derived from its status in ONE place.
+ *
+ * This was two ternaries, one in each of the route's two refusal branches, and both fell through to
+ * `invalid_request`. So a 404 — which means "no such resource is available to you", deliberately
+ * indistinguishable from "it exists but not for you" — was classed as though the CALLER had sent
+ * something malformed. The enum already carried `not_found` and the specification already documented
+ * it; only the runtime disagreed, and it disagreed on the one class a partner cannot correct by
+ * fixing their request.
+ *
+ * 422 stays `invalid_request` on purpose: the values really are the caller's to correct, and the
+ * `code` (`validation_failed`) is what distinguishes it from a 400. Deriving the class here means a
+ * new refusal status cannot quietly acquire the fallback class again.
+ */
+export const TYPE_FOR_STATUS: Record<number, "invalid_request" | "forbidden_scope" | "not_found" | "conflict"> = {
+    400: "invalid_request",
+    403: "forbidden_scope",
+    404: "not_found",
+    409: "conflict",
+    422: "invalid_request",
+};
+
+/** A refusal with no status is a 400, and a 400 is `invalid_request`. */
+function typeForStatus(status: number | undefined): "invalid_request" | "forbidden_scope" | "not_found" | "conflict" {
+    return (status === undefined ? undefined : TYPE_FOR_STATUS[status]) ?? "invalid_request";
+}
+
 export function externalOperationRoute<TResult>(def: OperationDefinition<TResult>) {
     return async function POST(request: NextRequest) {
         const startedAt = Date.now();
@@ -143,7 +170,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
         let budgetHeaders: Record<string, string> = {};
         const fail = (
             code: string,
-            type: "invalid_request" | "internal_error" | "forbidden_scope" | "conflict",
+            type: "invalid_request" | "internal_error" | "forbidden_scope" | "not_found" | "conflict",
             message: string,
             status?: number,
         ) =>
@@ -221,7 +248,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
             if (domain) {
                 return fail(
                     domain.code,
-                    domain.status === 409 ? "conflict" : "invalid_request",
+                    typeForStatus(domain.status),
                     domain.message,
                     domain.status,
                 );
@@ -236,7 +263,7 @@ export function externalOperationRoute<TResult>(def: OperationDefinition<TResult
 
         if (!outcome.ok) {
             const { code, message, status } = outcome.error;
-            return fail(code, status === 403 ? "forbidden_scope" : status === 409 ? "conflict" : "invalid_request", message, status);
+            return fail(code, typeForStatus(status), message, status);
         }
 
         const response = NextResponse.json(outcome.result, {

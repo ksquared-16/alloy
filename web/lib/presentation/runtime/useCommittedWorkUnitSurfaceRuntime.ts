@@ -321,17 +321,20 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 targetInputs,
                 surfaceLensIds,
             });
-            if (action.kind === "noop") return;
 
-            // Pill-strip Work View selection is ALWAYS a LENS move on the current Work Unit target.
-            // Never SURFACE-navigate to a label slug (`/work-unit/tours`, `/work-unit/waitlist`) —
-            // that remounts `[workUnitSlug]` and yields Tours count=1 / rows=0. Workspace entry
-            // (Process cards / Today's Work) remains the sole owner of true host SURFACE movement.
-            if (action.kind === "navigate") {
-                // Defensive: a view not present in lensSet (should not come from the pill strip).
-                if (moveToWorkUnitEntry(action.href, null, null, null)) return;
-            }
-
+            /*
+             * EVERY CLICK RECORDS — INCLUDING THE ONE THAT DOES NOTHING.
+             *
+             * This push sat AFTER the `noop` early return, so the only clicks that left a trace were
+             * the ones that already worked. Diagnosing the return-to-visited failure meant reasoning
+             * from the ABSENCE of entries, which happens to have been usable here only because those
+             * clicks did resolve `in-page`. A refused click is exactly the click a reader needs, so
+             * the record is written before the decision is acted on, and it now states the decision
+             * itself rather than implying it.
+             *
+             * Observability, not authority: nothing below branches on this, and it stays bounded.
+             */
+            const isNoop = action.kind === "noop";
             if (typeof window !== "undefined") {
                 const w = window as Window & {
                     __ALLOY_WV_CLICK_TRACE__?: Array<Record<string, unknown>>;
@@ -341,14 +344,27 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                     t: Date.now(),
                     intentWorkViewId: id,
                     actionKind: action.kind,
+                    noop: isNoop,
+                    attentionMoveAttempted: !isNoop && action.kind !== "navigate",
                     currentWorkViewId,
                     currentWorkUnitId,
                     attentionTarget: kernel.attention.get()?.target ?? null,
                     attentionLens: kernel.attention.get()?.lens ?? null,
+                    attentionVersion: kernel.attention.get()?.version ?? null,
                     surfaceLensIds,
                     href: action.kind === "navigate" ? action.href : null,
                 });
                 if (trace.length > 20) trace.splice(0, trace.length - 20);
+            }
+            if (isNoop) return;
+
+            // Pill-strip Work View selection is ALWAYS a LENS move on the current Work Unit target.
+            // Never SURFACE-navigate to a label slug (`/work-unit/tours`, `/work-unit/waitlist`) —
+            // that remounts `[workUnitSlug]` and yields Tours count=1 / rows=0. Workspace entry
+            // (Process cards / Today's Work) remains the sole owner of true host SURFACE movement.
+            if (action.kind === "navigate") {
+                // Defensive: a view not present in lensSet (should not come from the pill strip).
+                if (moveToWorkUnitEntry(action.href, null, null, null)) return;
             }
 
             kernel.attention.move({

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-09-29
+supersedes: []
+---
+
 # Alloy Developer Platform — Technical Package
 
 **Prepared for:** an integration partner's engineering team
@@ -53,7 +60,7 @@ are what they will keep open while building it.
 | Resource graph | `01` §4, `02` | §8–11 |
 | Pagination | `01` §6, `02` | §7 |
 | Incremental synchronization | `01` §6, `02` | §7 |
-| Archive / lifecycle semantics | `01` §7, `02` | §7, §17 |
+| Archive / lifecycle semantics | `01` §7, §9a, `02` | §8.1, §11a |
 | Idempotency | `01` §9, `02` | §14 |
 | Concurrency and retry | `01` §9, `02` | §14 |
 | Errors | `01` §10, `02` | §12 |

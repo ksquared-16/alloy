@@ -168,4 +168,4 @@ NODE_ENV=test npx tsx scripts/childGrainPhaseCEnrolledLaneVerify.ts
 ## Related
 
 - [`child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md) §13
-- [`work-unit-surface-context-contract.md`](../../system/work-unit-surface-context-contract.md)
+- [`work-unit-surface-context-contract.md`](../../../../system/work-unit-surface-context-contract.md)

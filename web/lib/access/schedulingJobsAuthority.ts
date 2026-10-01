@@ -1,31 +1,38 @@
 import { NextResponse } from "next/server";
 
 /**
- * SCHEDULES, JOBS AND THE MONEY THEY POST — what a caller may do, never what they are called.
+ * SCHEDULES AND JOBS — what a caller may do, never what they are called.
  *
  * Fourteen handlers asked `ctx.role !== "admin"`. Replacing that with one key per URL folder would
- * have been the obvious move and the wrong one, because four of the fourteen are not scheduling or
- * job operations at all. They post money:
+ * have been the obvious move and the wrong one, because authority follows the business consequence
+ * rather than the URL folder.
  *
- *   schedules/[id]/post-customer-payment   a cash receipt
- *   schedules/[id]/post-vendor-payout      a cash out
- *   schedules/[id]/post-completion         a GL journal entry
- *   jobs/[id]/charges                      a receivable charge, posted immediately
+ * ── THE MONEY FOUR, AND WHY `fin.post` IS GONE (Payments V1 · W6-A2) ──
  *
- * `scheduling.write` is labelled "Manage scheduling", and the migration that minted it defines
- * `billing.read` as a SEPARATE family in the same statement — the catalog's own vocabulary already
- * refuses to let scheduling mean money. So authority here follows the business consequence rather
- * than the URL folder, and the money four are owned by Financials even though they are served from
- * under `schedules/` and `jobs/`.
+ * Four of the fourteen posted money rather than scheduling anything — a cash receipt, a cash out, a
+ * GL journal entry and an immediately-posted receivable charge — served from under `schedules/` and
+ * `jobs/`. `fin.post` was minted for exactly them: `fin.write` is held by ops as well as admin, so
+ * reusing it would have handed ops four money operations it could not reach, and `fin.adjust` is
+ * scoped by its own description to corrections that REDUCE what a family owes. Neither was truthful,
+ * so a bounded posting key existed. That was a correct decision, not accidental fragmentation.
  *
- * ── WHY A NEW FINANCIALS KEY RATHER THAN AN EXISTING ONE ──
+ * All four are now deleted. Three had no caller anywhere; the fourth, `jobs/[id]/charges`, was
+ * reached only by `JobManualChargeForm`, which had no importer and was never rendered, so it went
+ * with the route. Canonical Payments owns these capabilities: a registered action, then a
+ * collection attempt, then the provider adapter, then canonical posting, then the Payment, then the
+ * allocation — and no route writes money at all.
  *
- * `fin.write` ("Manage financials") is held by `admin` AND `ops` and is already enforced elsewhere,
- * so reusing it would hand `ops` four money operations it cannot reach today — and removing it from
- * `ops` to compensate would revoke authority ops genuinely exercises. `fin.adjust` is admin-only but
- * its own description scopes it to "a manual credit, waiver, write-off or correction that REDUCES
- * what a family owes"; a receipt, a payout and a journal entry are none of those. Neither is
- * truthful, so `fin.post` exists — bounded to posting, implying nothing else in Financials.
+ * So `fin.post` is retired, because a permission no route enforces is, in this catalog's own words,
+ * "a control that changes nothing". W6-A1 deferred that retirement deliberately: it requires
+ * re-deriving pinned access-governance truth, which did not belong in a candidate about deleting
+ * routes.
+ *
+ * ── WHAT SURVIVES, AND WHY THIS MODULE DID NOT GO WITH IT ──
+ *
+ * `requireSchedulingJobsCapability` is NOT dead. Fifteen live routes enforce `scheduling.write` and
+ * `ops.jobs.write` through it — schedules, jobs, assignments, discounts. Deleting the helper
+ * alongside `fin.post` would strip their authority and re-open the role-title gate this module
+ * exists to have closed.
  *
  * ── THE TWO REUSED KEYS WERE ALREADY IN THE CATALOG, AND DEAD ──
  *
@@ -37,9 +44,8 @@ import { NextResponse } from "next/server";
  */
 export const SCHEDULING_WRITE = "scheduling.write" as const;
 export const OPS_JOBS_WRITE = "ops.jobs.write" as const;
-export const FIN_POST = "fin.post" as const;
 
-export type SchedulingJobsCapability = typeof SCHEDULING_WRITE | typeof OPS_JOBS_WRITE | typeof FIN_POST;
+export type SchedulingJobsCapability = typeof SCHEDULING_WRITE | typeof OPS_JOBS_WRITE;
 
 /** True when the caller's effective capabilities carry this authority. */
 export function hasSchedulingJobsCapability(
@@ -53,8 +59,8 @@ export function hasSchedulingJobsCapability(
  * The refusal for an operation the caller has no capability for.
  *
  * Returns `null` when authorized, so a handler reads as
- * `const denied = requireSchedulingJobsCapability(ctx, FIN_POST); if (denied) return denied;` — the
- * guard stays in front of the write and the capability is named at the point of use.
+ * `const denied = requireSchedulingJobsCapability(ctx, SCHEDULING_WRITE); if (denied) return denied;`
+ * — the guard stays in front of the write and the capability is named at the point of use.
  */
 export function requireSchedulingJobsCapability(
     ctx: { permissionKeys?: readonly string[] | null },

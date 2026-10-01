@@ -23,7 +23,7 @@
 
 import { randomUUID } from "crypto";
 
-import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
+import type { ActionEntityType, ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
 import { resolveActorPermissionGrants } from "@/lib/access/actorPermissionGrants";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { applyFinancialReductions } from "@/lib/financials/reductions/applyFinancialReductions";
@@ -44,6 +44,27 @@ import {
     type ManualReductionCategory,
 } from "@/lib/financials/reductions/manualReductionService";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * ── THE GRAINS AN ACCOUNT-MOUNTED FINANCIAL ACT IS INVOKED AT ───────────────────────────────
+ *
+ * `customer` is the account grain, and it is the one the Financials account card dispatches: a
+ * ledger, its charges and its adjustments belong to the HOUSEHOLD. It was missing here for the
+ * same reason it was missing from the payments and deposit families, and with the same
+ * consequence — `checkContext` refuses an undeclared grain before the action runs, so a click
+ * from the surface that offers the control reached a 400 instead of its authority.
+ *
+ * Only the acts this surface actually mounts are widened. An action that is not offered from an
+ * account is not given the grain just because its neighbours have it.
+ */
+const ACCOUNT_GRAIN_ENTITY_TYPES: readonly ActionEntityType[] = [
+    "customer",
+    "opportunity_customer_member",
+    "child",
+    "person",
+    "opportunity",
+];
+
 
 export const BILLING_APPLY_DISCOUNTS_ACTION_KEY = "billing.apply_discounts";
 export const BILLING_ADJUST_ACCOUNT_ACTION_KEY = "billing.adjust_account";
@@ -247,7 +268,7 @@ const adjustAccount: RegisteredAction = {
     actionKey: BILLING_ADJUST_ACCOUNT_ACTION_KEY,
     defaultLabel: "Adjust account",
     description: "Record a manual credit, waiver or write-off against a family's account, with a reason.",
-    supportedEntityTypes: ["child", "person", "opportunity_customer_member"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
@@ -362,7 +383,7 @@ const reverseAdjustment: RegisteredAction = {
     actionKey: BILLING_REVERSE_ADJUSTMENT_ACTION_KEY,
     defaultLabel: "Reverse adjustment",
     description: "Undo a manual reduction by appending its opposite. The original is left standing.",
-    supportedEntityTypes: ["child", "person", "opportunity_customer_member"],
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },

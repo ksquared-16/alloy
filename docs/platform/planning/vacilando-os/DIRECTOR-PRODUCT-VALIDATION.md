@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-24
+supersedes: []
+---
+
 # Director Product Validation — Real Conversation Redesign
 
 *Applying the seven product models to the seven real Director conversations in the product, to answer one question: does the model actually make Director behave like exceptional engineering counsel in the situations Vacilando already contains?*

@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-07-31
+supersedes: []
+---
+
 # Legacy GHL dispatch — decommissioning recommendation
 
 **Status:** recommendation only. Nothing here is authorized or executed.

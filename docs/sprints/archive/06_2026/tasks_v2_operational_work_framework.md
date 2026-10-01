@@ -10,9 +10,9 @@
 - [`completed/lifecycle_builder_hardening_closeout.md`](./completed/lifecycle_builder_hardening_closeout.md)
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
 - [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
-- [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md)
-- [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
-- [`needs_attention_v2_phase_0_implementation_plan.md`](./needs_attention_v2_phase_0_implementation_plan.md)
+- [`required_information_v2_operational_readiness_framework.md`](../../../archive/sprints-superseded/06_2026/operational-work-plans/required_information_v2_operational_readiness_framework.md)
+- [`needs_attention_v2_operating_model.md`](../../../archive/sprints-superseded/06_2026/operational-work-plans/needs_attention_v2_operating_model.md)
+- [`needs_attention_v2_phase_0_implementation_plan.md`](../../../archive/sprints-superseded/06_2026/operational-work-plans/needs_attention_v2_phase_0_implementation_plan.md)
 - [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) (§5 Task architecture — planning baseline)
 - [`05_2026/task_system_audit_v1.md`](../05_2026/task_system_audit_v1.md) (May 2026 runtime audit)
 
@@ -722,7 +722,7 @@ Not required for V2 Phase 0–2. Workflows can poll or react to attention until 
 
 ### 8.1 Locked doctrine (from Readiness framework §9.1)
 
-Per [`required_information_v2_operational_readiness_framework.md`](./required_information_v2_operational_readiness_framework.md):
+Per [`required_information_v2_operational_readiness_framework.md`](../../../archive/sprints-superseded/06_2026/operational-work-plans/required_information_v2_operational_readiness_framework.md):
 
 | Question | Answer |
 |----------|--------|
