@@ -75,6 +75,24 @@ export async function GET(request: NextRequest) {
                     authoredAtChild: arrangement ? arrangement.customerMemberId === member.customerMemberId : false,
                     effectiveStart: arrangement?.effectiveStart ?? null,
                     shares: (arrangement?.shares ?? []).map((share) => ({
+                        /*
+                         * ── THE PARTY'S ID, NOT ONLY THEIR NAME ──────────────────────────────
+                         *
+                         * This projected a name and dropped `responsiblePartyId`, which is right
+                         * for a row that prints a name and wrong for anything that has to ACT on
+                         * the arrangement. Add Charge inherits the standing arrangement by sending
+                         * its shares to `billing.configure_responsibility`, and that writer is
+                         * keyed on the party id — so with the id dropped every share failed the
+                         * card's "a share with no party is not a share this card may act on"
+                         * filter, the inheritance never fired, and a charge was created with no
+                         * allocation under a household that had one on record. That is the W7
+                         * defect, and it survived the first repair because the repair parsed a
+                         * field this route never emitted.
+                         *
+                         * Both projections carry it, because both describe the same arrangement
+                         * and a child-grain inheritance would meet the identical bug.
+                         */
+                        responsiblePartyId: share.responsiblePartyId,
                         name: share.name,
                         method: share.method,
                         amountCents: share.amountCents,
@@ -93,6 +111,8 @@ export async function GET(request: NextRequest) {
                 ? {
                       effectiveStart: household.effectiveStart,
                       shares: household.shares.map((share) => ({
+                          /* The id, for the same reason as above — this is the block Add Charge reads. */
+                          responsiblePartyId: share.responsiblePartyId,
                           name: share.name,
                           method: share.method,
                           amountCents: share.amountCents,

@@ -186,7 +186,7 @@ type Props = {
  * inherit the arrangement, which is what "divide it under the arrangement in force" already means
  * everywhere else in this surface.
  */
-function standingArrangementShares(body: unknown): Array<{
+export function standingArrangementShares(body: unknown): Array<{
     responsible_party_id: string;
     method: string;
     percent_basis_points: number | null;

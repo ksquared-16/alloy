@@ -56,6 +56,16 @@ type ChargeDetail = {
     invoiceDate: string | null;
     dueDate: string | null;
     postedAt: string | null;
+    /*
+     * PROVENANCE, from the canonical projection. `originDescription` is the resolver's own
+     * sentence and is NEVER composed here — the rule that bounds it (what the stored evidence can
+     * and cannot support) lives with the evidence, in `chargeOrigin`, not in a card.
+     */
+    createdAt?: string | null;
+    createdByName?: string | null;
+    postedByName?: string | null;
+    originDescription?: string | null;
+    correctionOfChargeId?: string | null;
     customerId: string | null;
     customerMemberId: string | null;
     householdName: string | null;
@@ -110,6 +120,19 @@ function money(cents: number, currency: string): string {
  */
 function day(value: string | null): string | null {
     return formatDisplayDate(value) || null;
+}
+
+/**
+ * A timestamp an operator can compare at a glance — the date they already read, plus the time of
+ * day. Two charges raised six days apart stop looking like one charge entered twice, which is the
+ * whole reason this is here rather than a date alone.
+ */
+function exactMoment(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const date = formatDisplayDate(iso.slice(0, 10)) ?? iso.slice(0, 10);
+    const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `${date} at ${time}`;
 }
 
 function Row(props: { label: string; value: string; strong?: boolean; muted?: boolean; testId?: string }) {
@@ -500,6 +523,51 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     {history.map((h) => (
                         <Row key={h.key} label={h.label} value={h.when ?? ""} muted testId="history" />
                     ))}
+                </>
+            ) : null}
+
+            {/*
+              * ── WHERE THIS CAME FROM ────────────────────────────────────────────────────────
+              *
+              * The question an operator asks of a charge they did not expect, and the one the
+              * Alvarez thread turned on. `originDescription` is the resolver's sentence, bounded by
+              * what is actually stored: a resolved human actor is named, an actorless charge says
+              * only what its template evidence supports, and nothing infers a scheduler from the
+              * absence of a person.
+              *
+              * The timestamp is exact, because "created at the same time" and "created six days
+              * apart" is precisely the distinction that makes two similar charges legible.
+              */}
+            {detail.originDescription || detail.createdAt ? (
+                <>
+                    <Group>Origin</Group>
+                    {detail.originDescription ? (
+                        /*
+                         * A resolved person is named under "Created by"; anything else states the
+                         * origin sentence as it stands. `originDescription` already says
+                         * "Created by <name>" in the first case, so repeating the prefix in the
+                         * label would print the words twice.
+                         */
+                        <Row
+                            label={detail.createdByName ? "Created by" : "Raised"}
+                            value={detail.createdByName ?? detail.originDescription}
+                            testId="origin"
+                        />
+                    ) : null}
+                    {detail.createdAt ? (
+                        <Row label="Created" value={exactMoment(detail.createdAt)} muted testId="created-at" />
+                    ) : null}
+                    {detail.postedAt ? (
+                        <Row
+                            label={detail.postedByName ? `Posted by ${detail.postedByName}` : "Posted"}
+                            value={exactMoment(detail.postedAt)}
+                            muted
+                            testId="posted-at"
+                        />
+                    ) : null}
+                    {detail.correctionOfChargeId ? (
+                        <Row label="Corrects" value="another charge on this account" muted testId="corrects" />
+                    ) : null}
                 </>
             ) : null}
 

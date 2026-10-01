@@ -1,3 +1,11 @@
 .push-request.generated.json
 .pr-request.generated.json
+.pr2-request.generated.json
+.pr3-request.generated.json
+.merge2-request.generated.json
 .restore-request.json
+.inheritance-census-request.json
+.due-census-request.json
+.origin-census-request.json
+.provenance-census-request.json
+.final-preservation-request.json

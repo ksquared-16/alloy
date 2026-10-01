@@ -1,0 +1,59 @@
+{
+  "scope": "household",
+  "mode": null,
+  "selects": [],
+  "inputs": [
+    {
+      "type": "search",
+      "placeholder": "Search…",
+      "value": "",
+      "id": "",
+      "name": ""
+    },
+    {
+      "type": "search",
+      "placeholder": "Search this view…",
+      "value": "",
+      "id": "",
+      "name": ""
+    },
+    {
+      "type": "search",
+      "placeholder": "Search household, child or contact",
+      "value": "",
+      "id": "",
+      "name": ""
+    },
+    {
+      "type": "text",
+      "placeholder": "Sep 30, 2026",
+      "value": "Oct 1, 2026",
+      "id": "",
+      "name": ""
+    },
+    {
+      "type": "number",
+      "placeholder": "Amount",
+      "value": "",
+      "id": "",
+      "name": ""
+    }
+  ],
+  "buttons": [
+    "9+",
+    "8",
+    "All locations ▾",
+    "QS",
+    "Actions (2) ▶",
+    "New 4",
+    "Active Pipeline 0",
+    "Registration 3",
+    "Waitlist 16",
+    "Tours 0",
+    "All 8",
+    "Enrolled children 2",
+    "Filters",
+    "▼ PRESCHOOL 1"
+  ],
+  "body": "RESPONSIBILITY Applies to Household — the whole account ▾ Nothing governs this scope yet — saving creates the first arrangement. Effective from Applies from this date onward. Money already paid is not moved. RESPONSIBLE PARTIES Ada CertfreePrimary contact Fixed amount ▾ Enter an amount for at least one responsible party. Preview Confirm Cancel"
+}

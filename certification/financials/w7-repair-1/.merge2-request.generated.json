@@ -1,0 +1,16 @@
+{
+  "action_key": "repository.merge_pull_request",
+  "reason_worker_cannot_execute": "This lane holds no GitHub credential; merges are performed only from the trusted host.",
+  "reason": "W7 Repair Batch 1 convergence. Carries: the mounted proof of #1379's three repairs on the deployed build; the firefly Node-20 fix picked up by integrating staging; the date control's emoji replaced with a drawn glyph; Due now states the organisation's own resolved date, an honest 'No due date', or NOT YET KNOWN instead of the hardcoded 'Configured policy'; and a Billing Period is derived as an interval rather than showing the invoice date under an interval's label. Service Date editability was traced and left alone as the canonical strategy, bound by tests. All required gates green on the prior head.",
+  "inputs": {
+    "repository": "ksquared-16/alloy",
+    "pullRequestNumber": 1382,
+    "targetBranch": "staging",
+    "expectedHeadSha": "217c344618b2e7ec80e89b87dfea62756745aefb",
+    "mergeMethod": "squash",
+    "promotion": {
+      "disposition": "PROMOTE_NOW",
+      "promote_now_reason": "Human QA W7 retest is blocked until these land: the Add command still tells the operator 'Configured policy' where the organisation configured none, and shows an invoice date where the business concept is a billing interval."
+    }
+  }
+}

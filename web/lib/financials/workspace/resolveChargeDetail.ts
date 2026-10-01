@@ -46,6 +46,12 @@ import type { CollectiblePosition } from "@/lib/financials/subsidy/collectiblePo
 import { billingPeriodLabel, placeInBillingPeriod } from "@/lib/financials/billingPeriod";
 import { CHARGE_CATEGORY_GL_MAPPING_KEY } from "@/lib/financials/chargeCategories";
 
+import {
+    classifyChargeOrigin,
+    describeChargeOrigin,
+    type ChargeOrigin,
+} from "@/lib/financials/workspace/chargeOrigin";
+import { operatorIdentity } from "@/lib/access/operatorAccountName";
 /** One payment that satisfied part of this charge, as the operator needs to read it. */
 export type ChargeDetailApplication = {
     paymentId: string;
@@ -84,6 +90,28 @@ export type ChargeDetail = {
     /** When payment is expected. Null where the organisation has configured no terms. */
     dueDate: string | null;
     postedAt: string | null;
+
+    /**
+     * ── PROVENANCE: WHERE THIS CAME FROM, AND NOT ONE WORD MORE ─────────────────────────────
+     *
+     * `origin` is classified from stored evidence only — see `chargeOrigin`, which carries the
+     * census that bounds it. `createdByName` is the canonical identity's answer and `null` is one
+     * of its real answers: an unknown name stays unknown rather than an address or an id standing
+     * in for a person.
+     *
+     * `correctionOfChargeId` is a RELATIONSHIP, not an origin: a human-authored correction is still
+     * the human's charge, so it is carried beside `origin` rather than inside it.
+     */
+    createdAt: string | null;
+    createdBy: string | null;
+    createdByName: string | null;
+    updatedAt: string | null;
+    postedBy: string | null;
+    postedByName: string | null;
+    correctionOfChargeId: string | null;
+    chargeTemplateId: string | null;
+    origin: ChargeOrigin;
+    originDescription: string;
 
     /** ATTRIBUTION — the child this is about, or null when it is genuinely the household's. */
     customerId: string | null;
@@ -184,7 +212,11 @@ export async function resolveChargeDetail(
         .select(
             "id, billable_source_type, billable_source_id, amount_cents, currency_code, status, "
             + "service_date, posted_at, description, charge_template_id, billable_on, occurs_on, due_date, created_at, "
-            + "charge_category, charge_type, metadata",
+            + "charge_category, charge_type, metadata, "
+            /* PROVENANCE. Read because Details must answer "where did this come from" from stored
+               evidence alone; the census that bounds what may be SAID from them is recorded in
+               `chargeOrigin`. */
+            + "created_by, updated_at, updated_by, posted_by, job_id, source_charge_id",
         )
         .eq("org_id", args.orgId)
         .eq("id", chargeId)
@@ -211,6 +243,13 @@ export async function resolveChargeDetail(
         charge_category: string | null;
         charge_type: string | null;
         metadata: Record<string, unknown> | null;
+        /* Provenance — read and typed together, so a column cannot be selected and then unreadable. */
+        created_by: string | null;
+        updated_at: string | null;
+        updated_by: string | null;
+        posted_by: string | null;
+        job_id: string | null;
+        source_charge_id: string | null;
     };
 
     /*
@@ -458,6 +497,45 @@ export async function resolveChargeDetail(
         }
     }
 
+    /*
+     * ── THE ACTORS, THROUGH THE CANONICAL IDENTITY AUTHORITY ────────────────────────────────
+     *
+     * `auth.admin.getUserById` is where an operator's display name actually lives — the same
+     * source the Users rail reads — and `operatorIdentity` is the projection of it. An unread or
+     * unnamed account yields `null`, which stays null: a surface says the name is unknown rather
+     * than printing an address or a uuid in a person's place.
+     *
+     * At most two ids, looked up once each, on a surface that is already one charge.
+     */
+    const actorNames = new Map<string, string>();
+    for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
+        try {
+            const { data } = await supabase.auth.admin.getUserById(actorId);
+            const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+            const name = operatorIdentity({
+                display_name:
+                    typeof meta.full_name === "string" ? meta.full_name
+                    : typeof meta.name === "string" ? meta.name
+                    : null,
+                email: data?.user?.email ?? null,
+            }).name;
+            if (name) actorNames.set(actorId, name);
+        } catch {
+            /* An unreadable account is an unknown name, which is already the default. */
+        }
+    }
+
+    const origin = classifyChargeOrigin({
+        createdBy: charge.created_by ?? null,
+        jobId: charge.job_id ?? null,
+        sourceChargeId: charge.source_charge_id ?? null,
+        chargeTemplateId: charge.charge_template_id ?? null,
+        metadataSource:
+            charge.metadata && typeof charge.metadata === "object"
+                ? ((charge.metadata as Record<string, unknown>).source as string | null) ?? null
+                : null,
+    });
+
     return {
         chargeId: charge.id,
         orgId: args.orgId,
@@ -477,6 +555,16 @@ export async function resolveChargeDetail(
         status: t(charge.status),
         serviceDate: charge.service_date,
         postedAt: charge.posted_at,
+        createdAt: charge.created_at ?? null,
+        createdBy: charge.created_by ?? null,
+        createdByName: actorNames.get(charge.created_by ?? "") ?? null,
+        updatedAt: charge.updated_at ?? null,
+        postedBy: charge.posted_by ?? null,
+        postedByName: actorNames.get(charge.posted_by ?? "") ?? null,
+        correctionOfChargeId: charge.source_charge_id ?? null,
+        chargeTemplateId: charge.charge_template_id ?? null,
+        origin,
+        originDescription: describeChargeOrigin(origin, actorNames.get(charge.created_by ?? "") ?? null),
         /*
          * ── FIVE DATES, FIVE FIELDS ──────────────────────────────────────────────────────────
          *
