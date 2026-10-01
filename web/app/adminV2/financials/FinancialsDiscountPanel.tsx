@@ -555,6 +555,33 @@ export default function FinancialsDiscountPanel({
                           * the other way round, grouped by policy, which is how the forecast
                           * answers and not how an operator asks.
                           */}
+                        {/*
+                          * ── A HOSTED SURFACE MUST NEVER BE SILENTLY BLANK ──────────────────
+                          *
+                          * Opened from the gear, this card mounts with `hostedOpen`, which renders
+                          * the manage surface and SKIPS the inline summary — where the loading and
+                          * error states live. The rows below are built by iterating POLICIES, so a
+                          * family with none produced no rows either. Three different ways to reach
+                          * a body containing nothing but Close, which is what the Director saw from
+                          * both Accounts and the Focus Panel.
+                          *
+                          * Each state now says which one it is. An empty discount position is a
+                          * real answer about this family; a read still in flight and a read that
+                          * failed are not, and none of the three may look like the others.
+                          */}
+                        {loading ? (
+                            <p className="alloy-os-depthcard__label" data-financials-discount-admin-state="loading">
+                                Reading discounts&hellip;
+                            </p>
+                        ) : error ? (
+                            <p className="text-[11px] text-alloy-ember" data-financials-discount-admin-state="error">
+                                {error}
+                            </p>
+                        ) : childRows.length === 0 ? (
+                            <p className="alloy-os-depthcard__label" data-financials-discount-admin-state="empty">
+                                No discount policies are configured for this family.
+                            </p>
+                        ) : null}
                         {childRows.map((child) => (
                             <div
                                 key={child.ocmId}
