@@ -28,6 +28,13 @@ Companion documents: [`alloy-platform-synthesis.md`](alloy-platform-synthesis.md
 
 ---
 
+> **Superseded in part by the Context Package (2026-10-01).** The tier design below is now also
+> published machine-readably as `alloy-context.v1` in [`package/`](package/README.md): the lane
+> registry is `package/vacilando-lanes.json`, the GPT tier lists are generated into
+> `package/gpt-project-sources.json`, and the staleness contract is
+> `package/recertification-triggers.json`. This document remains the prose rationale; the package is
+> what a consumer installs, and a validator keeps the two in agreement.
+
 ## 1. Treatments
 
 The vocabulary is defined in [`alloy-benchmark-context.md`](alloy-benchmark-context.md) §2 and is not
