@@ -151,7 +151,35 @@ export function AlloyDateInput({
                         setOpen((prev) => !prev);
                     }}
                 >
-                    <span aria-hidden>📅</span>
+                    {/*
+                      * ── A DRAWN GLYPH, NOT AN EMOJI ──────────────────────────────────────
+                      *
+                      * This was 📅. Measured across the 24 canonical workspace controls, exactly
+                      * two draw a control glyph as an emoji and this is one of them; every other
+                      * Alloy control draws none. An emoji renders in the platform's emoji font —
+                      * it is coloured by the font rather than by `currentColor`, its metrics differ
+                      * between macOS, Windows and Linux, and it cannot be toned with the control it
+                      * sits in. On the surface that commits money that is the one inconsistency a
+                      * reader notices.
+                      *
+                      * Drawn at 14px on a 16px box, stroked with `currentColor`, so it inherits the
+                      * field's own colour and the existing opacity rules keep working unchanged.
+                      */}
+                    <svg
+                        viewBox="0 0 16 16"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                    >
+                        <rect x="2" y="3.5" width="12" height="10.5" rx="1.5" />
+                        <path d="M2 6.75h12" />
+                        <path d="M5.5 2v2.5M10.5 2v2.5" />
+                    </svg>
                 </button>
             </div>
             {open && !disabled ? (

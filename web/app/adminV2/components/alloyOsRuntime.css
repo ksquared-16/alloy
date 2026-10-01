@@ -3940,7 +3940,12 @@ html[data-alloy-os-runtime-split="true"]
   cursor: pointer;
   padding: 4px 6px;
   line-height: 1;
-  font-size: 13px;
+  /* The glyph is drawn now, so the box is laid out rather than inherited from emoji metrics, and
+     it takes the field's own colour instead of the emoji font's. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
   opacity: 0.55;
 }
 .alloy-date-input__calendar:hover:not(:disabled) {
