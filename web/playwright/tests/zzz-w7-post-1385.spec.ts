@@ -21,7 +21,23 @@ test("the standing arrangement becomes the charge's allocation", async ({ page }
         if (!/actions\/execute/.test(r.url())) return;
         try {
             const b = JSON.parse(r.postData() ?? "{}") as Record<string, unknown>;
-            actions.push({ action: b.action_key ?? b.action, mode: b.mode });
+            const payload = (b.payload ?? {}) as Record<string, unknown>;
+            /*
+             * The ENTITY the action is invoked against, not just which action ran. The third defect
+             * was a registry refusal on entity type, so the grain the envelope states is itself
+             * part of the proof: it must say `customer` for a household charge, with the real
+             * account id — never a borrowed type that happens to be admitted.
+             */
+            actions.push({
+                action: b.action_key ?? b.action,
+                mode: b.mode,
+                entity_type: b.entity_type ?? null,
+                entity_id: b.entity_id ?? null,
+                payload_customer_id: payload.customer_id ?? null,
+                payload_charge_id: payload.charge_id ?? null,
+                payload_member_id: payload.customer_member_id ?? null,
+                shares: Array.isArray(payload.shares) ? JSON.stringify(payload.shares).slice(0, 200) : null,
+            });
         } catch { actions.push({ unparsed: true }); }
     });
     page.on("response", async (r) => {
@@ -84,4 +100,14 @@ test("the standing arrangement becomes the charge's allocation", async ({ page }
     expect(responses[0]?.affected_id, "the response carried the new charge id").toBeTruthy();
     expect(keys, "the follow-up that inherits the standing arrangement ACTUALLY executed")
         .toContain("billing.configure_responsibility");
+
+    /* G — the envelope states the ACTUAL financial grain, with the real account id. */
+    const follow = actions.find((a) => a.action === "billing.configure_responsibility");
+    expect(follow?.entity_type, "invoked against the customer grain, not a borrowed type").toBe("customer");
+    expect(follow?.entity_id, "with the real household/customer entity id").toBeTruthy();
+    expect(follow?.payload_member_id, "household grain leaves the member null").toBeFalsy();
+
+    /* I — and it SUCCEEDED, not merely ran. */
+    const followResponse = responses[1];
+    expect(followResponse?.ok, "the responsibility write succeeded").toBe(true);
 });
