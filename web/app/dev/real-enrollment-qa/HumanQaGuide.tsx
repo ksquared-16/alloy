@@ -62,8 +62,11 @@ const STEPS: readonly Step[] = [
     {
         gate: "H3",
         title: "Review what Alloy found",
-        lead: "Put your document beside what Alloy extracted, and read down it.",
-        doThis: ["Look through the questions Alloy found and tell us what feels wrong."],
+        lead: "Alloy shows you the form it built. Read down it beside your document.",
+        doThis: [
+            "Look through the form Alloy built and tell us what feels wrong.",
+            "Anything marked as needing your decision is highlighted — see whether you can tell what it is asking.",
+        ],
         noticing: [
             "Wording — does it say what the paper says?",
             "The kind of answer each question asks for.",
@@ -72,6 +75,8 @@ const STEPS: readonly Step[] = [
             "Signatures and things a parent agrees to.",
             "People who repeat — guardians, emergency contacts, children.",
             "Addresses.",
+            "Where Alloy says it already knows something — is that believable?",
+            "Any question you cannot tell why Alloy created.",
         ],
     },
     {

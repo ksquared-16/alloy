@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { classifyPublicRuntime, isHostedRuntime } from "@/lib/publicAppUrl";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { classifyPublicRuntime } from "@/lib/publicAppUrl";
 import { parseQaWalkthrough } from "@/lib/qa/parseQaWalkthrough";
 
 import HumanQaGuide from "./HumanQaGuide";
@@ -43,11 +44,27 @@ export const metadata = { title: "Real Enrollment QA" };
 
 export default async function RealEnrollmentQaPage() {
     /*
-     * GATED ON WHERE THIS IS RUNNING, NOT ON HOW IT WAS BUILT. The QA server is deliberately a
-     * production build, so a `NODE_ENV` check would 404 the one page it is meant to serve.
+     * WHERE IT IS RUNNING DECIDES, AND ON STAGING ALSO WHO IS LOOKING.
+     *
+     * Human QA needs a stable deployed build — a development server reloads the page under the reader
+     * whenever a file is saved, which makes it unusable for judging a product. So this now renders on
+     * deployed staging. It must never render on the customer production site, and on staging it must
+     * never render for participant or customer traffic, which has no operator session at all.
+     *
+     * Three outcomes, deliberately not two:
+     *   production      → not found, always. There is no flag that opens it.
+     *   hosted_preview  → an authenticated operator only; everyone else is sent to sign in.
+     *   local / agent   → as before. The tailnet already restricts who can reach the port.
      */
-    if (isHostedRuntime(classifyPublicRuntime())) {
+    const runtime = classifyPublicRuntime();
+    if (runtime === "production") {
         notFound();
+    }
+    if (runtime === "hosted_preview") {
+        const ctx = await getAdminContextCached();
+        if (!ctx.ok) {
+            redirect(ctx.status === 401 ? "/login" : "/unauthorized");
+        }
     }
 
     let markdown: string | null = null;

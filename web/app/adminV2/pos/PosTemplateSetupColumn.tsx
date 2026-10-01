@@ -41,6 +41,7 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
+import ProcessingFormMappingReview from "./ProcessingFormMappingReview";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
 import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
@@ -177,12 +178,17 @@ export default function PosTemplateSetupColumn({
     const [phase, setPhase] = useState<"review" | "generate">("review");
     // Configuration Discovery (FP16): concept-first review is the default entry; the detailed
     // field/question review is a drill-down. Operator decisions on proposals are held here.
-    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed" | "packet">("concepts");
+    /*
+     * "form" is the landing view: the document as the FORM it became. The concept queue counted the
+     * engine's own work and was never what an operator came here to read; it is still reachable from
+     * the form's footer, and the packet view still takes over when a case is a multi-source packet.
+     */
+    const [reviewMode, setReviewMode] = useState<"form" | "concepts" | "detailed" | "packet">("form");
     /**
      * A case that has been analysed as a packet IS a packet — land on it.
      *
-     * The analysis was always durable and only the VIEW was not: `reviewMode` starts at "concepts",
-     * so reopening this case rendered the single-document draft instead. On the real certification
+     * The analysis was always durable and only the VIEW was not: `reviewMode` starts at the
+     * single-document form view, so reopening a packet case rendered that instead. On the real certification
      * packet that meant a three-question handbook preview standing in for 180 destinations, and the
      * operator had no way to reach the analysis their tenant already held.
      */
@@ -1254,6 +1260,12 @@ export default function PosTemplateSetupColumn({
                         }
                     />
                 </div>
+            ) : reviewMode === "form" && draft && !created ? (
+                <ProcessingFormMappingReview
+                    draft={draft}
+                    sourceDocumentName={sourceFilenameEarly}
+                    onOpenAdvanced={() => setReviewMode(discovery ? "concepts" : "detailed")}
+                />
             ) : reviewMode === "concepts" && discovery && !created ? (
                 <ProcessingConceptReview
                     discovery={discovery}

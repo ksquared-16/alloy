@@ -57,6 +57,40 @@ What the product actually does:
    edit what it maps to.
 5. Promoting the draft creates a **draft Form** badged *From document*. It does not publish.
 
+## The import review surface
+
+After **Create a native form**, the landing view is the document **as the form it became** — sections,
+questions, answer shapes, repeatable groups, prose and signatures — with a short line saying how many
+destinations Alloy already knows and how many need a decision. Questions needing a decision are
+red-lined in place.
+
+Each question carries one of five states, in plain language: already known, suggested, needs your
+decision, kept with the form, or filled in by Alloy. Per-question source context ("Why is this here?")
+shows the words it came from and the page.
+
+The concept queue — concept counts, ownership decisions, configuration proposals — is still there,
+one link away under **Advanced extraction details**. It was the landing view and is now the second
+screen: it counts the engine's work, which is not what an operator opens the page to read.
+
+Conditional follow-ups are derived for display: a question beginning "If yes…" after a yes/no question
+is shown nested and marked detected; a softer "Please describe" is marked suggested so it gets checked.
+Nothing is invented after a question that is not yes/no. **Accepting a condition into the published
+form is not yet wired** — this slice makes the relationship visible, not durable.
+
+## Where human QA runs
+
+`/dev/real-enrollment-qa` renders on **deployed staging** for an authenticated operator, so QA happens
+on a stable build rather than a development server. Three outcomes, deliberately:
+
+| Runtime | Who sees it |
+| --- | --- |
+| production | nobody — not found, with no flag that opens it |
+| deployed staging | an authenticated operator; everyone else is sent to sign in |
+| local / agent slot | as before, behind the tailnet |
+
+Notes and the current step live in the browser, so they are per-origin: moving from the tailnet URL to
+staging starts a fresh pad.
+
 ## Known gaps
 
 - **UX FINDING — PAYMENT SHOULD LIKELY BE A JOURNEY STEP/STATE, NOT A DETACHED FOOTER/BLOCK.** The
