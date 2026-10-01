@@ -25,13 +25,11 @@ import { useEffect, useState } from "react";
 const STORAGE_KEY = "alloy.real-enrollment-qa.notes";
 
 const CATEGORIES = [
-    ["BLOCKER", "a family could not get through this"],
-    ["EXTRACTION", "what Alloy read out of the source document was wrong"],
-    ["FORM AUTHORING", "the draft could not be made into the Form you would publish"],
-    ["PRODUCT / UX", "it works, but it is not good enough"],
+    ["BLOCKER", "I could not get through this"],
+    ["UX", "it works, but it is not good enough"],
     ["CONFIGURATION", "the wrong thing was set up"],
-    ["RUNTIME DEFECT", "an error, a blank screen, something did not save"],
-    ["DATA / CONTENT", "wrong name, wrong child, bad wording, wrong amount"],
+    ["RUNTIME", "an error, a blank screen, something did not save"],
+    ["DATA", "wrong name, wrong wording, wrong amount"],
     ["QUESTION", "not sure whether that was intended"],
 ] as const;
 
@@ -86,7 +84,7 @@ export default function QaNotesPad() {
             className="fixed inset-x-2 bottom-2 z-40 max-h-[40vh] overflow-y-auto rounded-2xl border border-alloy-midnight/15 bg-white p-4 shadow-2xl sm:inset-x-auto sm:right-4 sm:bottom-4 sm:max-h-[80vh] sm:w-[380px]"
         >
             <div className="flex items-center justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-alloy-midnight">What you found</h2>
+                <h2 className="text-[15px] font-semibold text-alloy-midnight">What did you notice?</h2>
                 <button
                     type="button"
                     onClick={() => setOpen(false)}
@@ -98,8 +96,7 @@ export default function QaNotesPad() {
                 </button>
             </div>
             <p className="mt-1 text-[12px] leading-relaxed text-alloy-midnight/65">
-                Tag each note so taste and breakage do not get confused for each other. Kept in this browser as
-                you type.
+                Kept in this browser as you type, and still here after a reload.
             </p>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
