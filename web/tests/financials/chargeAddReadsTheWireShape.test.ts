@@ -1,65 +1,87 @@
 /**
- * THE CARD READS WHAT THE ROUTE ACTUALLY SENDS.
+ * THE ACTION ENVELOPE, BOUND AT BOTH ENDS.
  *
- * `/api/admin/actions/execute` reshapes the executor's answer before it crosses the network:
- *
- *     apiOk({ execution_result: result.actionResult.result.detail,
- *             affected_id:     result.actionResult.result.affectedId })
- *
- * The Add Charge commit read `json.result.affectedId` and `json.result.detail` — the executor's
- * INTERNAL shape, which never reaches the browser. Both were therefore always undefined, and two
- * things silently never ran:
- *
- *   · the follow-up that makes a charge inherit the standing arrangement — the W7 defect;
- *   · the idempotency check, which is why repeated clicks could each report success.
+ * `/api/admin/actions/execute` reshapes the executor's answer before it crosses the network. The
+ * browser sees the ROUTE's envelope; the executor's internal field names never reach it. Add Charge
+ * read the internal ones, so `createdChargeIds` was always empty, `applyChargeDecisions` returned
+ * on its first line, and two things silently never ran: the follow-up that makes a charge inherit
+ * the standing arrangement — the W7 defect — and the idempotency check, which is why repeated
+ * clicks could each report success while creating nothing.
  *
  * Captured verbatim from deployed staging (responsibility/charge-add-response.json):
  *
  *     {"ok":true,"data":{"execution_result":{"write_status":"created",…},
  *                        "affected_id":"77b02ec2-…"},"correlation_id":"…"}
  *
- * This is the second producer/consumer mismatch in one path, so both halves are bound together:
- * the route's transform and the card's read.
+ * ── WHY THIS TEST IS WRITTEN THE WAY IT IS ────────────────────────────────────────────────────
+ *
+ * The expected key names are DERIVED FROM THE ROUTE, never restated here. A test that hardcoded
+ * "affected_id" would keep passing if the route renamed it, which is the same shape of failure it
+ * exists to catch — and the previous guard did exactly the inverse, pinning the executor's
+ * `affectedId` and staying green for as long as the consumer was broken.
+ *
+ * So the contract fails from EITHER side: rename the envelope in the route and the consumer no
+ * longer reads what the route sends; change the consumer and it no longer reads what the route
+ * sends. Neither half can drift alone.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const read = (rel: string) => readFileSync(path.join(process.cwd(), rel), "utf8");
-const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/^\s*\/\/.*$/gm, "");
+const strip = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "").replace(/^\s*\/\/.*$/gm, "");
 
 const CARD = strip(read("components/admin/focusPanel/cards/FinancialsCard.tsx"));
 const ROUTE = strip(read("app/api/admin/actions/execute/route.ts"));
 
-describe("the route's wire shape", () => {
-    it("sends execution_result and affected_id, not the executor's field names", () => {
-        expect(ROUTE).toMatch(/execution_result: result\.actionResult\.result\.detail/);
-        expect(ROUTE).toMatch(/affected_id: result\.actionResult\.result\.affectedId/);
+/**
+ * The route's own transform, read out of the route: every `<wireKey>: …result.<executorKey>` pair
+ * inside the generic success envelope.
+ */
+function envelopeContract(): Array<{ wireKey: string; executorKey: string }> {
+    const pairs: Array<{ wireKey: string; executorKey: string }> = [];
+    const re = /(\w+):\s*result\.actionResult\.result\.(\w+)/g;
+    for (const m of ROUTE.matchAll(re)) pairs.push({ wireKey: m[1]!, executorKey: m[2]! });
+    return pairs;
+}
+
+describe("the route states an envelope", () => {
+    it("maps executor fields onto wire names", () => {
+        const pairs = envelopeContract();
+        expect(pairs.length, "the generic success envelope is findable").toBeGreaterThanOrEqual(2);
+        /* Sanity: the mapping is a RENAME, not a pass-through — which is the whole trap. */
+        expect(pairs.some((p) => p.wireKey !== p.executorKey)).toBe(true);
     });
 });
 
-describe("the Add Charge commit reads that shape", () => {
-    it("takes the created charge id from data.affected_id", () => {
-        expect(/String\(json\.data\?\.affected_id \?\? ""\)/.test(CARD)).toBe(true);
+describe("the Add Charge commit reads that envelope and nothing else", () => {
+    it("reads every wire key the route sends, under data", () => {
+        for (const { wireKey } of envelopeContract()) {
+            expect(
+                CARD.includes(`json.data?.${wireKey}`),
+                `the commit reads json.data.${wireKey}, which is what the route sends`,
+            ).toBe(true);
+        }
     });
 
-    it("takes the per-child detail from data.execution_result", () => {
-        expect(/const detail = json\.data\?\.execution_result \?\? null;/.test(CARD)).toBe(true);
-    });
-
-    it("no longer reads the executor's internal shape anywhere in the commit", () => {
+    it("reads no executor-internal name off the response", () => {
         /*
-         * `json.result.*` never crosses the network. If it reappears, the follow-up work stops
-         * running again and nothing else in the surface will say so — the charge is still created,
-         * which is exactly why this failed silently for so long.
+         * Derived from the route, not restated: whatever the executor calls its fields, the browser
+         * must not look for them on the wire. This is what was wrong, and naming the old spelling
+         * here would only catch the one mistake already made.
          */
-        expect(CARD).not.toMatch(/json\.result\?\.affectedId/);
-        expect(CARD).not.toMatch(/json\.result\?\.detail/);
+        for (const { executorKey } of envelopeContract()) {
+            expect(
+                CARD.includes(`json.result?.${executorKey}`),
+                `json.result.${executorKey} is the executor's shape and never crosses the network`,
+            ).toBe(false);
+        }
     });
 
-    it("feeds those ids to the follow-up that inherits responsibility", () => {
+    it("feeds the ids it reads to the follow-up that inherits responsibility", () => {
         expect(/await applyChargeDecisions\(createdChargeIds\)/.test(CARD)).toBe(true);
-        /* And the follow-up still refuses to run on an empty list, which is the honest guard. */
+        /* And the follow-up still refuses an empty list — the honest guard, not the bug. */
         expect(/if \(chargeIds\.length === 0\) return failures;/.test(CARD)).toBe(true);
     });
 });
