@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "topKeys": [
+    "customerId",
+    "household",
+    "positions"
+  ],
+  "householdPresent": true,
+  "shareCount": 1,
+  "firstShareKeys": [
+    "responsiblePartyId",
+    "name",
+    "method",
+    "amountCents",
+    "percentBasisPoints"
+  ],
+  "firstShare": "{\"responsiblePartyId\":\"fb4eb21b-ad0e-446b-bab1-5a426fd1846e\",\"name\":\"Ada Certfree\",\"method\":\"percentage\",\"amountCents\":null,\"percentBasisPoints\":10000}"
+}

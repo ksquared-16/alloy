@@ -55,6 +55,7 @@ export default function FinancialsDetailCard({
     onPayment,
     paymentUnavailableReason,
     onAddCharge,
+    onOpenCharge,
     onManagePayment,
     onMovePayment,
     onAddAdjustment,
@@ -208,6 +209,12 @@ export default function FinancialsDetailCard({
         onManageDiscount: () => void;
     } | null;
     onAddCharge?: () => void;
+    /*
+     * Opening a charge's record. A READ, so it is not routed through the command channel and
+     * widens no authority — the host pushes a detail surface, which is the same thing clicking a
+     * row does everywhere else in the product.
+     */
+    onOpenCharge?: (args: { chargeId: string; label: string }) => void;
     onManagePayment?: () => void;
     /** Correct WHICH obligation a receipt answered. Absent in the lab, where controls are inert. */
     onMovePayment?: (args: { paymentId: string; allocationId: string }) => void;
@@ -923,6 +930,7 @@ export default function FinancialsDetailCard({
                                 ledgerRowFromEntry(e, i, {
                                     onPostCharge, onReverseCharge, onAdjustCharge,
                                     onResolveResponsibility, onReallocateResponsibility,
+                                    onOpenCharge,
                                 }),
                             )}
                         />
@@ -1359,6 +1367,12 @@ function ledgerRowFromEntry(
         /* Who owes this obligation. Charge-grain, and a different question from the arrangement. */
         onResolveResponsibility?: (args: { chargeId: string; label: string }) => void;
         onReallocateResponsibility?: (args: { chargeId: string; label: string }) => void;
+        /*
+         * OPENING THE RECORD IS A READ. It is passed beside the commands rather than among them,
+         * and it is offered on any row that names a charge — eligibility for a WRITE says nothing
+         * about whether a charge can be looked at.
+         */
+        onOpenCharge?: (args: { chargeId: string; label: string }) => void;
     },
 ): FinancialsLedgerRowView {
     const post = e.chargeId && e.offersPost && actions.onPostCharge;
@@ -1383,7 +1397,11 @@ function ledgerRowFromEntry(
     });
     const resolveResp = responsibility.resolve && actions.onResolveResponsibility;
     const reallocateResp = responsibility.reallocate && actions.onReallocateResponsibility;
+    /* The row's business word, which is what the ledger already shows the operator. */
+    const label = e.type || "Charge";
+    const openable = e.chargeId && actions.onOpenCharge;
     return {
+        onOpen: openable ? () => actions.onOpenCharge!({ chargeId: e.chargeId!, label }) : undefined,
         key: e.chargeId || `${e.when}-${index}`,
         when: e.when,
         /*

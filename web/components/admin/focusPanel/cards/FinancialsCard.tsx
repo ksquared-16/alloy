@@ -70,6 +70,7 @@ import {
     rowInFinancialsSubjectScope,
 } from "@/lib/adminV2/runtime/focusPanel/financials/financialsRowScope";
 
+import FinancialsChargeDetail from "@/app/adminV2/financials/FinancialsChargeDetail";
 type Props = {
     model: FocusPanelCardModel;
     context: OperationalContext;
@@ -2594,12 +2595,33 @@ export default function FinancialsCard({
                     },
                 }),
             });
+            /*
+             * ── THE WIRE SHAPE, NOT THE EXECUTOR'S ──────────────────────────────────────────
+             *
+             * `/api/admin/actions/execute` reshapes what the action returns before it reaches the
+             * browser:
+             *
+             *     apiOk({ execution_result: result.actionResult.result.detail,
+             *             affected_id:     result.actionResult.result.affectedId })
+             *
+             * so the wire carries `data.execution_result` and `data.affected_id`. This read
+             * `json.result.affectedId` and `json.result.detail` — the executor's INTERNAL shape,
+             * which never crosses the network. Captured verbatim from deployed staging:
+             *
+             *     {"ok":true,"data":{"execution_result":{"write_status":"created",…},
+             *                        "affected_id":"77b02ec2-…"},"correlation_id":"…"}
+             *
+             * Both reads were therefore always undefined, and two things silently never ran: the
+             * follow-up that makes a charge inherit the standing arrangement — which is the W7
+             * defect — and the idempotency check, which is why four consecutive clicks could each
+             * report success while creating nothing.
+             */
             const json = (await res.json()) as {
                 ok?: boolean;
                 error?: string | { message?: string };
-                result?: {
-                    affectedId?: string | null;
-                    detail?: {
+                data?: {
+                    affected_id?: string | null;
+                    execution_result?: {
                         /*
                          * `write_status` is the difference between a charge that now exists because
                          * of this click and one that already existed. Reading only `charge_id` made
@@ -2631,10 +2653,10 @@ export default function FinancialsCard({
              * what the operator selected — and the follow-up work must run against the charges
              * that exist rather than the ones that were asked for.
              */
-            const detail = json.result?.detail ?? null;
+            const detail = json.data?.execution_result ?? null;
             const createdChargeIds = detail?.per_child
                 ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
-                : [String(json.result?.affectedId ?? "").trim()].filter(Boolean);
+                : [String(json.data?.affected_id ?? "").trim()].filter(Boolean);
 
             /*
              * ── A NO-OP IS NOT A WRITE ───────────────────────────────────────────────────────
@@ -4476,6 +4498,54 @@ export default function FinancialsCard({
      * `data-financials-detail-account` absent from the document and the ledger at zero rows.
      */
     const commandSurface = (() => {
+        /*
+         * ── THE CHARGE'S OWN RECORD, FROM EITHER HOST ───────────────────────────────────────
+         *
+         * One presentation, `FinancialsChargeDetail`, over one projection, `resolveChargeDetail`.
+         * The Accounts Charges lens already rendered it; this is the same component, so there is
+         * no second resolver and no surface-specific reading of a charge. Whichever host mounted
+         * this card, clicking a ledger row's name opens the identical record.
+         *
+         * It is collected with the commands because that is how this host renders anything above
+         * the floor — and in the workspace the floor stays beneath it, so the account the operator
+         * was reading does not disappear behind its own detail.
+         */
+        if (overlay === "charge_detail" && surface?.kind === "charge_detail") {
+            return (
+                <div
+                    className="alloy-os-financials"
+                    data-financials-card="true"
+                    data-financials-overlay="charge_detail"
+                    data-financials-charge-detail-for={surface.chargeId}
+                >
+                    <UniversalCard
+                        title={surface.label}
+                        insight=""
+                        iconName="Receipt"
+                        tier="work"
+                        archetype="status"
+                        modalClass="command"
+                        density="expanded"
+                        gridSpan="row"
+                        data-universal-card-key="charge_detail"
+                        footerAction={null}
+                    >
+                        <FinancialsChargeDetail chargeId={surface.chargeId} />
+                        <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            <button
+                                type="button"
+                                className="alloy-os-depthcard__close"
+                                data-financials-charge-detail-close="true"
+                                onClick={pop}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </UniversalCard>
+                </div>
+            );
+        }
+
 
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
@@ -5874,6 +5944,8 @@ export default function FinancialsCard({
                     onPayment={openSettle}
                     paymentUnavailableReason={paymentUnavailableReason}
                     onAddCharge={() => push({ kind: "add_charge" })}
+                    /* The same reusable Details, from whichever host renders this card. */
+                    onOpenCharge={({ chargeId, label }) => push({ kind: "charge_detail", chargeId, label })}
                     /*
                      * ── THE BAND IS THE CARD'S, NOT THE WRAPPER'S ────────────────────────────
                      *
@@ -6611,6 +6683,15 @@ export type FinancialsSurface =
     | { kind: "responsibility_admin" }
     | { kind: "discount_admin" }
     | { kind: "payments_admin" }
+    /*
+     * ── OPENING A CHARGE'S RECORD IS A READ ──────────────────────────────────────────────────
+     *
+     * It rides the same stack as the commands because that is how this host presents any surface
+     * above the floor — but it raises no action, needs no capability, and writes nothing. It is
+     * here rather than on the command channel precisely so that reading a record cannot be
+     * mistaken for, or widened into, authority to change one.
+     */
+    | { kind: "charge_detail"; chargeId: string; label: string }
     | { kind: "adjust_charge"; chargeId: string }
     | { kind: "reverse_charge"; chargeId: string; label: string }
     /*
