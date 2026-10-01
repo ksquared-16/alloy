@@ -201,9 +201,21 @@ describe("the command offers the decisions and the host applies them", () => {
 
 describe("orchestration runs against the charges that exist", () => {
     it("the follow-up work is keyed by the ids the create returned", () => {
+        /*
+         * The SPELLING here was the defect, not the intent. This pinned `affectedId`, which is the
+         * executor's internal field name; `/api/admin/actions/execute` reshapes the answer before
+         * it crosses the network and sends `data.affected_id` with `data.execution_result`. So the
+         * card read undefined on both, `createdChargeIds` was always empty, and the follow-up this
+         * test exists to protect silently never ran — while the test stayed green.
+         *
+         * Captured verbatim from deployed staging:
+         *   {"ok":true,"data":{"execution_result":{"write_status":"created",…},
+         *                      "affected_id":"77b02ec2-…"}}
+         */
         const card = code(CARD);
         expect(card, "multi-child reports per child").toContain("per_child");
-        expect(card, "single reports one").toContain("affectedId");
+        expect(card, "single reports one, at the key the WIRE uses").toContain("affected_id");
+        expect(card, "and not the executor's internal name").not.toMatch(/json\.result\?\.affectedId/);
         expect(card).toMatch(/applyChargeDecisions\(createdChargeIds\)/);
     });
 

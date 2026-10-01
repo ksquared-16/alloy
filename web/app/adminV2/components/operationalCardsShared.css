@@ -1546,6 +1546,30 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * The row's name, when the row has a record behind it. Styled as the identity it already is rather
+ * than as a link decoration — the affordance is the pointer and the hover rule, so a ledger does
+ * not turn into a column of blue text.
+ */
+.alloy-os-billingdetail__open {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.alloy-os-billingdetail__open:hover {
+  text-decoration: underline;
+}
+.alloy-os-billingdetail__open:focus-visible {
+  outline: 2px solid var(--alloy-bend-pine, #1f6f5c);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 /*
  * What a row still owes, under its own amount. Present only when money has been applied to the
  * charge — the read model's per-row figure, not a difference computed on screen.

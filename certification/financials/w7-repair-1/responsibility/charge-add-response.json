@@ -1,0 +1,11 @@
+[
+  {
+    "status": 200,
+    "topKeys": [
+      "ok",
+      "data",
+      "correlation_id"
+    ],
+    "body": "{\"ok\":true,\"data\":{\"execution_result\":{\"write_status\":\"created\",\"resolution_key\":\"tpl:field_trip:2026-10-04:7796a568-3b5f-4606-80f9-fee2dae2a419\",\"review_required\":false,\"posted\":true},\"affected_id\":\"77b02ec2-a49b-4157-974d-4c4cc044a72e\"},\"correlation_id\":\"0265c83b-84f7-46c3-89e5-a824c7941925\"}"
+  }
+]

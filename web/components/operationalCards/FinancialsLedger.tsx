@@ -112,6 +112,18 @@ export type FinancialsLedgerRowView = {
     tone?: FinancialsLedgerTone;
     /** Row-level transitions the read model has already decided this row qualifies for. */
     actions?: ReactNode;
+    /**
+     * ── OPENING THE RECORD IS A READ, NOT A COMMAND ──────────────────────────────────────────
+     *
+     * Supplied where the row names a canonical charge whose Details can be resolved. It is
+     * rendered as a NAMED control rather than another glyph in the actions track: that track is
+     * for the transitions this row may undergo, every one of them a write, and a read dressed as
+     * one of them would be the only icon there that changes nothing.
+     *
+     * Absent on rows that are not a charge — a payment receipt and a held lot are their own
+     * records and have their own surfaces.
+     */
+    onOpen?: () => void;
     /** Full provenance for a row whose reason does not fit the Description preview. */
     title?: string;
 };
@@ -241,7 +253,32 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
              */}
             <span className="alloy-os-billingdetail__rowactions">{row.actions ?? null}</span>
             <span className="alloy-os-billingdetail__when">{row.when}</span>
-            <span className="alloy-os-billingdetail__type">{row.type}</span>
+            {/*
+             * ── THE ROW'S NAME OPENS ITS RECORD ─────────────────────────────────────────────
+             *
+             * Not a sixth glyph in the actions track: every icon there means "this will change
+             * something", and opening a record changes nothing. Not a control in the description
+             * either — that cell truncates with an ellipsis and would clip it.
+             *
+             * The type IS the row's identity, so it carries the interaction, which is the ordinary
+             * "click the thing to open the thing" the rest of the product already uses. Rows that
+             * are not a charge get no handler and stay plain text.
+             */}
+            <span className="alloy-os-billingdetail__type">
+                {row.onOpen ? (
+                    <button
+                        type="button"
+                        className="alloy-os-billingdetail__open"
+                        data-financials-row-open={row.key}
+                        title={`Open the record for ${row.type}`}
+                        onClick={row.onOpen}
+                    >
+                        {row.type}
+                    </button>
+                ) : (
+                    row.type
+                )}
+            </span>
             <span className="alloy-os-billingdetail__subject">{row.child}</span>
             {/*
              * UNMAPPED IS A STATE, NOT A DASH. A charge with no GL account is a configuration fact
@@ -266,6 +303,11 @@ export function FinancialsLedgerRow({ row }: { row: FinancialsLedgerRowView }) {
                 ) : null}
             </span>
             <span className="alloy-os-billingdetail__status">{row.status}</span>
+            {/*
+             * The affordance is the word "Details", not a sixth icon. An operator should not have
+             * to hover a glyph to discover that a row has a record behind it, and the actions
+             * track's icons all mean "this will change something" — which this does not.
+             */}
             {/*
              * THREE OBLIGATION STATES, NONE OF THEM A BLANK.
              *
