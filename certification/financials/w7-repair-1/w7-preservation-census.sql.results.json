@@ -1,0 +1,140 @@
+{
+  "trusted_host_action_id": "tha_961c499f463ed4",
+  "query_hash": "d94562f9a7b1d1caa2993a8b6a391be44e66abaf487c81f3149cb2af2831d776",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T19:54:29.431Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_961c499f463ed4",
+    "query_hash": "d94562f9a7b1d1caa2993a8b6a391be44e66abaf487c81f3149cb2af2831d776",
+    "authorization_id": "grnt_aa1581d3bf734e9a",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T19:54:37.571Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "result": "fail",
+            "classification": "PRODUCT_DEFECT",
+            "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+            "environment": "staging",
+            "scenario_definition_version": "2026-09-30.1",
+            "has_observation": true,
+            "observation_chars": 122,
+            "recorded_at": "2026-10-01T17:25:54.802083+00:00"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "rows_total": 1,
+            "fail_rows": 1,
+            "pass_rows": 0,
+            "product_defect_rows": 1,
+            "distinct_revisions": 1,
+            "preserved": true
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "suite_key": "staffing_v1_human_qa",
+            "answered": 2,
+            "pass": 1,
+            "fail": 0,
+            "blocked": 1,
+            "not_run": 0
+          },
+          {
+            "suite_key": "core_financials_director_qa",
+            "answered": 4,
+            "pass": 0,
+            "fail": 1,
+            "blocked": 0,
+            "not_run": 3
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+            "rows": 2
+          },
+          {
+            "deployed_revision": "a78f1e3f7d717465838380a3fd5f654c2f2d7cbb",
+            "rows": 2
+          },
+          {
+            "deployed_revision": "8c57bc1b69b08906ab6040a2c8e907bbc303cb9b",
+            "rows": 1
+          },
+          {
+            "deployed_revision": "020d45fbe441e6a307b68c90c78716c868dc739a",
+            "rows": 1
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "scenario_key": "financial_subject",
+            "result": "not_run",
+            "classification": "none",
+            "deployed_revision": "8c57bc1b69b08906ab6040a2c8e907bbc303cb9b"
+          },
+          {
+            "scenario_key": "financial_subject",
+            "result": "not_run",
+            "classification": "none",
+            "deployed_revision": "020d45fbe441e6a307b68c90c78716c868dc739a"
+          },
+          {
+            "scenario_key": "plan_vs_actual",
+            "result": "blocked",
+            "classification": "FIXTURE_DRIFT",
+            "deployed_revision": "a78f1e3f7d717465838380a3fd5f654c2f2d7cbb"
+          },
+          {
+            "scenario_key": "financial_subject",
+            "result": "not_run",
+            "classification": "none",
+            "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be"
+          },
+          {
+            "scenario_key": "add_charge_honours_review_boundary",
+            "result": "fail",
+            "classification": "PRODUCT_DEFECT",
+            "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be"
+          }
+        ]
+      }
+    },
+    "row_count": 13
+  }
+}
