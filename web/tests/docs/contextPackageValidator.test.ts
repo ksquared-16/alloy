@@ -373,6 +373,106 @@ describe("lane boundaries are stated, not implied", () => {
     });
 });
 
+describe("prose cannot contradict the authoritative Tier 1 set", () => {
+    /*
+     * WHY THIS EXISTS, AND WHY THE REST OF THIS SUITE DID NOT CATCH IT.
+     *
+     * Everything above validates the package against itself: manifests against manifests, triggers
+     * against lanes, generated artifacts against their inputs. All of it passed while
+     * `alloy-benchmark-context.md` told readers in prose that the Tier 1 load set was four companion
+     * documents including `alloy-context-packages.md` — naming a five-file set wrongly in BOTH
+     * directions, since it also omitted the manifest itself and the glossary.
+     *
+     * Nothing failed, because no assertion crossed from JSON into prose. The defect surfaced only when
+     * a human installed the package into GPT Project Sources and the document disagreed with the
+     * manifest they were following. That is the whole class this binds: the machine-readable package
+     * was correct throughout, and the sentence a person actually reads was not.
+     *
+     * Blockquotes are stripped before the absence checks, because a dated correction note legitimately
+     * quotes the claim it is retracting — the same positional discipline the foundation synthesis
+     * guards use.
+     */
+    const TIER1_BASENAMES = () => pkg.foundation.map((f) => path.basename(f.path));
+
+    /** Prose with blockquote lines removed, so a correction note is not read as a live claim. */
+    const withoutCorrections = (rel: string) =>
+        read(rel)
+            .split("\n")
+            .filter((line) => !/^\s*>/.test(line))
+            .join("\n");
+
+    it("is not vacuous: the authoritative set is five known basenames", () => {
+        const names = TIER1_BASENAMES();
+        expect(names).toHaveLength(5);
+        expect(names).toContain("alloy-benchmark-context.md");
+        expect(names).toContain("glossary.md");
+        expect(names).not.toContain("alloy-context-packages.md");
+    });
+
+    it("the benchmark manifest enumerates exactly the five authoritative Tier 1 files", () => {
+        const manifest = withoutCorrections("docs/context/alloy-benchmark-context.md");
+        const idx = manifest.indexOf("Tier 1 load set is exactly five files");
+        expect(
+            idx,
+            "the benchmark manifest no longer enumerates the Tier 1 set. It is itself Tier 1, so a "
+                + "reader installing the package starts here; leaving the set implicit is what went wrong.",
+        ).toBeGreaterThan(-1);
+        const block = manifest.slice(idx, idx + 900);
+        for (const name of TIER1_BASENAMES()) {
+            expect(block, `the manifest's Tier 1 enumeration omits ${name}`).toContain(name);
+        }
+        expect(
+            block,
+            "the manifest's Tier 1 enumeration names alloy-context-packages.md, which is prose "
+                + "rationale and not a Tier 1 GPT source",
+        ).not.toContain("alloy-context-packages.md");
+    });
+
+    it("the context-packages rationale document agrees about its own exclusion", () => {
+        const doc = withoutCorrections("docs/context/alloy-context-packages.md");
+        const idx = doc.indexOf("TIER 1 — ALWAYS LOAD");
+        expect(idx, "the packages document no longer has a Tier 1 section").toBeGreaterThan(-1);
+        const block = doc.slice(idx, idx + 1200);
+        for (const name of TIER1_BASENAMES()) {
+            expect(block, `the packages document's Tier 1 table omits ${name}`).toContain(name);
+        }
+        expect(
+            block,
+            "the packages document now lists itself as Tier 1; it is the rationale for the tiering, "
+                + "not a member of it",
+        ).not.toContain("alloy-context-packages.md");
+    });
+
+    it("no context document claims a Tier 1 membership that the package denies", () => {
+        const CLAIM = /(?:are|is) the Tier 1 (?:load set|set|documents)|Tier 1 load set(?: is)?/gi;
+        const authoritative = new Set(TIER1_BASENAMES());
+        const offences: string[] = [];
+        for (const rel of [
+            "docs/context/alloy-benchmark-context.md",
+            "docs/context/alloy-context-packages.md",
+            "docs/context/alloy-platform-synthesis.md",
+            "docs/context/alloy-canonical-owner-map.md",
+            "docs/context/alloy-inference-contract.md",
+            `${PKG_DIR}/README.md`,
+            `${PKG_DIR}/gpt-installation.md`,
+        ]) {
+            const prose = withoutCorrections(rel);
+            for (const m of prose.matchAll(CLAIM)) {
+                const window = prose.slice(m.index ?? 0, (m.index ?? 0) + 700);
+                for (const named of window.matchAll(/([a-z0-9-]+\.md)/g)) {
+                    const name = named[1]!;
+                    if (!name.startsWith("alloy-") && name !== "glossary.md") continue;
+                    if (!authoritative.has(name)) offences.push(`${rel}: "${m[0]}" names ${name}`);
+                }
+            }
+        }
+        expect(
+            [...new Set(offences)],
+            `documents claim a Tier 1 set containing non-Tier-1 files:\n${[...new Set(offences)].join("\n")}`,
+        ).toEqual([]);
+    });
+});
+
 describe("the generated artifacts are current", () => {
     it("the builder reports no drift, so the committed manifests match their inputs", () => {
         /*

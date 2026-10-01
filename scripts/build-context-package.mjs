@@ -42,12 +42,21 @@ const pkg = readJson(`${PKG_DIR}/alloy-context-package.json`);
 const lanes = readJson(`${PKG_DIR}/vacilando-lanes.json`);
 const triggers = readJson(`${PKG_DIR}/recertification-triggers.json`);
 
-/** Git blob SHA for a tracked file, or null when untracked (a new document in the same commit). */
+/**
+ * Git blob SHA of the file AS IT IS ON DISK.
+ *
+ * This deliberately hashes the working tree rather than reading `HEAD:<path>`. The first version did
+ * the latter and was wrong in the one case that matters: a document changed in the same commit as the
+ * manifest records its PREVIOUS blob, so the distribution claims a SHA that is one commit stale
+ * exactly when the content has just moved — the opposite of drift detection. It also returned null
+ * for every new file, which read as "no SHA available" rather than "here is the blob it will have".
+ *
+ * `git hash-object` is content-addressed and needs no commit, so the recorded SHA is the blob the
+ * file already hashes to and will keep after commit.
+ */
 function blobSha(rel) {
     try {
-        // stdio pipe: an untracked file is expected here (a document added in this same commit),
-        // and git's "does not exist in HEAD" on stderr is noise, not an error.
-        return execFileSync("git", ["rev-parse", `HEAD:${rel}`], {
+        return execFileSync("git", ["hash-object", "--", rel], {
             cwd: ROOT,
             encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
