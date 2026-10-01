@@ -143,12 +143,28 @@ describe("THE GATE — focused Details owns its payment band", () => {
          * What must not exist is a bare `{paymentBandFor(...)}` sitting as a SIBLING of the Details
          * card, which is the shape the orphan had.
          */
-        const start = host.indexOf('if (overlay === "detail"');
-        expect(start, "the detail branch is findable").toBeGreaterThan(0);
-        const branch = host.slice(start, host.indexOf("\n    if (", start + 10));
-        expect(branch, "the detail branch renders no sibling band").not.toMatch(
-            /<\/FinancialsDetailCard>|\/>\s*\n[\s\S]{0,800}\{paymentBandFor\(true\)\}/,
-        );
+        /*
+         * The guard spelling moved when commands learned to render ABOVE the account floor rather
+         * than instead of it: being the floor is enough, so the branches are keyed off
+         * `detailFloorWanted` rather than off Details also being the top layer. `indexOf` on the
+         * old spelling returned -1, which this gate correctly refused to accept as "no sibling
+         * band found".
+         *
+         * BOTH floor branches are checked now, not just the first one `indexOf` happened to reach.
+         * The pending floor and the settled one each render the card, so each could grow the
+         * orphan, and scoping to one of them left the other unguarded.
+         */
+        const starts: number[] = [];
+        for (let i = host.indexOf("if (detailFloorWanted"); i >= 0; i = host.indexOf("if (detailFloorWanted", i + 1)) {
+            starts.push(i);
+        }
+        expect(starts.length, "both floor branches are findable").toBe(2);
+        for (const start of starts) {
+            const branch = host.slice(start, host.indexOf("\n    if (", start + 10));
+            expect(branch, "no floor branch renders a sibling band").not.toMatch(
+                /<\/FinancialsDetailCard>|\/>\s*\n[\s\S]{0,800}\{paymentBandFor\(true\)\}/,
+            );
+        }
     });
 
     it("renders the band inside the card, under an owned marker", () => {
