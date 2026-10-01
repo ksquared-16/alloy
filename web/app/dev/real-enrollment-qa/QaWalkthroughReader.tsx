@@ -26,33 +26,16 @@ function Inline({ parts }: { parts: QaInline[] }) {
     );
 }
 
-export default function QaWalkthroughReader({ blocks }: { blocks: QaBlock[] }) {
-    return (
-        <main className="min-h-screen bg-white">
-            {/* Kelly keeps this tab open beside Alloy, so the way back is always on screen. */}
-            <header className="sticky top-0 z-10 border-b border-alloy-midnight/10 bg-white/95 backdrop-blur">
-                <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-6 py-3">
-                    <span className="text-[13px] font-semibold text-alloy-midnight">Real Enrollment QA</span>
-                    <span className="rounded-full bg-alloy-ember/10 px-2 py-0.5 text-[11px] font-medium text-alloy-ember">
-                        QA build · not a customer page
-                    </span>
-                    <div className="ml-auto flex items-center gap-3">
-                        <a
-                            href="/workspace"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-[13px] font-medium text-white"
-                        >
-                            Open Alloy Workspace
-                        </a>
-                        <a href="#top" className="text-[13px] text-alloy-midnight/55 underline underline-offset-2">
-                            Back to top
-                        </a>
-                    </div>
-                </div>
-            </header>
-
-            <div id="top" className="mx-auto max-w-3xl px-6 pb-24 pt-6">
+/**
+ * `embedded` drops the page chrome.
+ *
+ * This reader used to BE the page, so it owned a sticky header and a full-height shell. It is now the
+ * technical appendix inside a disclosure on a page that has its own heading, and a second sticky
+ * header nested in a collapsed block is just furniture in the way.
+ */
+export default function QaWalkthroughReader({ blocks, embedded = false }: { blocks: QaBlock[]; embedded?: boolean }) {
+    const body = (
+        <div id="top" className={embedded ? "" : "mx-auto max-w-3xl px-6 pb-24 pt-6"}>
                 {blocks.map((b, i) => {
                     switch (b.kind) {
                         case "heading": {
@@ -193,7 +176,22 @@ export default function QaWalkthroughReader({ blocks }: { blocks: QaBlock[] }) {
                             );
                     }
                 })}
-            </div>
+        </div>
+    );
+
+    if (embedded) return body;
+    return (
+        <main className="min-h-screen bg-white">
+            {/* Kept for any standalone use: the way back stays on screen. */}
+            <header className="sticky top-0 z-10 border-b border-alloy-midnight/10 bg-white/95 backdrop-blur">
+                <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-6 py-3">
+                    <span className="text-[13px] font-semibold text-alloy-midnight">Real Enrollment QA</span>
+                    <a href="#top" className="ml-auto text-[13px] text-alloy-midnight/55 underline underline-offset-2">
+                        Back to top
+                    </a>
+                </div>
+            </header>
+            {body}
         </main>
     );
 }

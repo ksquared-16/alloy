@@ -6,22 +6,25 @@ import { notFound } from "next/navigation";
 import { classifyPublicRuntime, isHostedRuntime } from "@/lib/publicAppUrl";
 import { parseQaWalkthrough } from "@/lib/qa/parseQaWalkthrough";
 
-import H1SourceCard from "./H1SourceCard";
-import ParticipantJourneyCard from "./ParticipantJourneyCard";
+import HumanQaGuide from "./HumanQaGuide";
 import QaNotesPad from "./QaNotesPad";
 import QaWalkthroughReader from "./QaWalkthroughReader";
-import { readH1Readiness } from "./readH1Readiness";
-import { readRealEnrollmentQaJourney } from "./readQaJourney";
 
 /**
- * The Real Enrollment QA walkthrough, readable beside the product.
+ * The Real Enrollment human QA page.
  *
- * A QA script that exists only in the repository is not usable as a manual QA artifact — the person
- * running the certification cannot open it. This serves the SAME file the certification owns, so
- * editing the document changes what the operator reads and no second copy can drift.
+ * ## Simple on top, everything else behind a disclosure
  *
- * ONE document, named here. There is no path parameter, no directory listing and no way to ask this
- * route for any other file: the only argument it takes is the one on the next line.
+ * This page used to open with the whole lifecycle: eight gates, every expectation, the implementation
+ * history, three candidate source documents and an argument for which one to use. The person using it
+ * is testing a product. So the top of the page is one step, and the ledger, the gate states, the known
+ * gaps and the engineering walkthrough sit behind **Technical QA details**, collapsed.
+ *
+ * ## No preselected anything
+ *
+ * There is deliberately no "use this document" or "open Dax's journey" control. H1 exists to find out
+ * whether Alloy can accept the operator's OWN paperwork; handing over a document Alloy already knows
+ * about would answer a different question. The guide points at Processing and stops.
  */
 const WALKTHROUGH = join(
     process.cwd(),
@@ -33,86 +36,54 @@ const WALKTHROUGH = join(
     "KELLY-QA-WALKTHROUGH.md",
 );
 
-// The document is read per request so an edit shows up on refresh — this is a QA reader, not a
-// published page, and staleness here would be worse than the read.
+// Read per request so editing the document changes what the reader sees, with no second copy to drift.
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Enrollment V0.5 — human QA" };
+export const metadata = { title: "Real Enrollment QA" };
 
 export default async function RealEnrollmentQaPage() {
     /*
-     * GATED ON WHERE THIS IS RUNNING, NOT ON HOW IT WAS BUILT.
-     *
-     * The other `/dev` surfaces refuse when `NODE_ENV === "production"`, which reads as "not a
-     * customer environment" only while every non-customer environment happens to run `next dev`.
-     * That stopped being true: the QA server is deliberately a PRODUCTION BUILD, because dev mode's
-     * Fast Refresh was reloading the page under the person doing manual QA. So the one document the
-     * certification is run from 404ed on the only server it is meant to be read beside.
-     *
-     * `classifyPublicRuntime` already draws the line this page actually needs — a Vercel production
-     * or preview deployment is hosted and has real recipients; a managed agent slot or a developer
-     * machine is not — and it is the same classifier the public-origin rules trust for a decision
-     * with far more at stake. Reusing it beats inventing a QA flag that would then need its own
-     * doctrine about when it is safe to set.
+     * GATED ON WHERE THIS IS RUNNING, NOT ON HOW IT WAS BUILT. The QA server is deliberately a
+     * production build, so a `NODE_ENV` check would 404 the one page it is meant to serve.
      */
     if (isHostedRuntime(classifyPublicRuntime())) {
         notFound();
     }
 
-    let markdown: string;
+    let markdown: string | null = null;
     try {
         markdown = await readFile(WALKTHROUGH, "utf8");
     } catch {
-        // Say which document is missing rather than rendering an empty page.
-        return (
-            <main className="mx-auto max-w-3xl px-6 py-16">
-                <h1 className="text-xl font-semibold text-alloy-midnight">QA walkthrough unavailable</h1>
-                <p className="mt-3 text-sm text-alloy-midnight/70">
-                    The certification document could not be read from this checkout.
-                </p>
-            </main>
-        );
+        markdown = null;
     }
-
-    const [journey, h1] = await Promise.all([readRealEnrollmentQaJourney(), readH1Readiness()]);
 
     return (
         <>
-            {/*
-             * The one thing the document cannot carry: a journey that is still live when it is read.
-             * It sits above the script because Track A's first instruction is to open it. The notes
-             * dock is fixed to the viewport instead, so it does not scroll away mid-walkthrough.
-             */}
-            <div className="mx-auto max-w-3xl px-6 pt-10">
-                <H1SourceCard readiness={h1} />
-                <details className="my-8 rounded-2xl border border-alloy-midnight/12 bg-alloy-midnight/[0.02] p-5">
-                    <summary className="cursor-pointer text-[14px] font-semibold text-alloy-midnight">
-                        H4 · the participant journey — locked until H1 to H3 are done by hand
+            <main className="mx-auto max-w-2xl px-6 pb-28 pt-12">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
+                    Real Enrollment QA
+                </p>
+                <HumanQaGuide />
+
+                <details className="mt-12 rounded-2xl border border-alloy-midnight/12 bg-alloy-midnight/[0.02] p-4">
+                    <summary className="cursor-pointer text-[13px] font-semibold text-alloy-midnight/70">
+                        Technical QA details
                     </summary>
-                    <p className="mt-2 text-[13px] leading-relaxed text-alloy-midnight/70">
-                        This journey is real and still open. It is kept here because H4 will use it, not because it
-                        is where to begin: reaching it through H1, H2 and H3 is the point of the reset. Opening it
-                        changes nothing.
+                    <p className="mt-2 text-[12px] leading-relaxed text-alloy-midnight/60">
+                        You do not need any of this to do the QA. It is here so the engineering record and the
+                        human record stay in one place.
                     </p>
-                    <div className="mt-2">
-                {journey.ok ? (
-                    <ParticipantJourneyCard journey={journey.journey} />
-                ) : (
-                    <section className="my-8 rounded-2xl border border-alloy-ember/25 bg-alloy-ember/[0.06] p-5">
-                        <h2 className="text-[15px] font-semibold text-alloy-ember">The QA journey could not be read</h2>
-                        <p className="mt-1 text-[13px] leading-relaxed text-alloy-ember/90">{journey.reason}</p>
-                        <p className="mt-2 text-[13px] leading-relaxed text-alloy-midnight/70">
-                            Track B below does not depend on this and can still be read.
-                        </p>
-                    </section>
-                )}
+                    <div className="mt-4 text-[13px]">
+                        {markdown ? (
+                            <QaWalkthroughReader blocks={parseQaWalkthrough(markdown)} embedded />
+                        ) : (
+                            <p className="text-alloy-midnight/60">The technical appendix could not be read from this checkout.</p>
+                        )}
                     </div>
                 </details>
-            </div>
-            {/* Fixed to the viewport, so it is reachable from anywhere in the script rather than only
-                from the top of it. Rendered outside the column for that reason. */}
+            </main>
+            {/* Fixed to the viewport, so it is reachable from any step rather than only from the top. */}
             <QaNotesPad />
-            <QaWalkthroughReader blocks={parseQaWalkthrough(markdown)} />
         </>
     );
 }
