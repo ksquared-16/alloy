@@ -106,11 +106,11 @@ staging starts a fresh pad.
 
 ## Why the QA page may reload under you
 
-The QA server is meant to run as a **production build**, where nothing an engineer edits can reload the
-page. When it is running in **development** mode instead, Next's Fast Refresh reloads the page whenever
-a source file is saved — so editing the harness while it is open reloads it under the reader. That is
-the only known cause: the harness has no polling, no interval, no forced revalidation and no
-client-side navigation of its own.
+Human QA should now run on **deployed staging**, which is a production build and cannot reload under
+you. The local slot server is a fallback and is also running a production build again.
 
-The guide keeps your current step and your notes in the browser, so a reload costs a scroll position
-and nothing more.
+The reload only happens when that local server is started in **development** mode — then Next's Fast
+Refresh reloads the page whenever a source file is saved, so editing the harness while it is open
+reloads it under the reader. That is the only known cause: the harness has no polling, no interval, no
+forced revalidation and no client-side navigation of its own. The guide keeps your current step and
+your notes in the browser either way, so a reload costs a scroll position and nothing more.
