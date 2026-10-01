@@ -1,0 +1,13 @@
+{
+  "action_key": "database.read_census",
+  "artifact_refs": [
+    "certification/financials/w7-repair-1/charges-origin-evidence-census.sql"
+  ],
+  "reason_worker_cannot_execute": "This lane holds no hosted database credentials; the deployed population is reachable only from the trusted host.",
+  "reason": "W7 Repair Batch 1 \u00a711 (corrected) \u2014 the prior filing grouped by output position, and position 3 carried the aggregate. Decide what Details may truthfully say about origin, due date and billing period from stored evidence alone. Read-only.",
+  "inputs": {
+    "expectedQueryHash": "41ec5ff68d50658ace8317fcd733ad34b862064c66c7d46100966940fe6b07c1",
+    "databaseTarget": "alloy_deployed_primary",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/financials"
+  }
+}
