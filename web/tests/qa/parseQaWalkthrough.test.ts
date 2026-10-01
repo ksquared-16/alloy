@@ -27,62 +27,44 @@ const DOC = join(
 describe("the real document", () => {
     const blocks = parseQaWalkthrough(readFileSync(DOC, "utf8"));
 
-    it("keeps all eight human QA gates, in order", () => {
-        const gates = blocks
-            .filter((b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^H\d+ /.test(b.text))
-            .map((b) => b.text.split(" ")[0]);
+    it("records all eight human QA gates and their states", () => {
         /*
-         * The lifecycle is only tested from the beginning if every gate is on the page. H1 gets
-         * forgotten least — it is where the Director starts — and H6 to H8 get forgotten most, because
-         * nothing reaches them yet.
+         * The appendix is the engineering record now — the step-by-step guide is a component, not
+         * markdown. What has to survive here is the GATE TABLE: H6 to H8 are the ones that get
+         * forgotten, because nothing reaches them yet.
          */
-        expect(gates).toEqual(["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8"]);
+        const tables = blocks.filter((b): b is Extract<typeof b, { kind: "table" }> => b.kind === "table");
+        const gateTable = tables.find((t) => t.rows.some((r) => r[0] === "H1"));
+        expect(gateTable).toBeTruthy();
+        expect(gateTable!.rows.map((r) => r[0])).toEqual(["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8"]);
     });
 
-    it("starts at H1 rather than at the participant packet", () => {
-        const firstGate = blocks.find(
-            (b): b is Extract<typeof b, { kind: "heading" }> => b.kind === "heading" && /^H\d+ /.test(b.text),
-        );
-        expect(firstGate?.text.startsWith("H1")).toBe(true);
+    it("keeps the ten delivery items, with participant QA still open", () => {
+        const tables = blocks.filter((b): b is Extract<typeof b, { kind: "table" }> => b.kind === "table");
+        const ledger = tables.find((t) => t.rows.some((r) => r[1]?.includes("Admissions v12 authored")));
+        expect(ledger).toBeTruthy();
+        expect(ledger!.rows).toHaveLength(10);
+        expect(ledger!.rows.find((r) => r[0] === "6")?.[2]).toBe("NOT COMPLETE");
     });
 
-    it("scopes H1's steps to H1", () => {
-        const labels = blocks.filter((b) => b.kind === "step").map((b) => (b as { label: string }).label);
-        expect(labels.length).toBeGreaterThan(0);
-        // Gate-scoped labels say which gate they belong to, which is why the parser accepts them.
-        expect(labels.every((l) => /^H\d+[a-z]$/.test(l))).toBe(true);
-        expect(labels).toContain("H1a");
+    it("records the import path correction rather than the superseded claim alone", () => {
+        const prose = blocks
+            .filter((b) => b.kind === "paragraph" || b.kind === "note")
+            .map((b) => JSON.stringify(b))
+            .join(" ");
+        // The earlier pass called document import unsupported on the strength of one disabled control.
+        // The appendix has to carry the correction, not just the old sentence.
+        expect(prose).toContain("Processing");
+        expect(prose).toContain("too narrow");
     });
 
-    it("finds the numbered steps as steps, not prose", () => {
-        const steps = blocks.filter((b) => b.kind === "step");
-        // H1 is a real click-by-click gate, not a paragraph of intent.
-        expect(steps.length).toBeGreaterThan(5);
-        expect(
-            steps.every((s) => s.kind === "step" && /^(?:H\d+[a-z]|[A-G]\d+|0\.\d+)$/.test(s.label)),
-        ).toBe(true);
+    it("carries the payment UX finding forward unfixed", () => {
+        const all = blocks.map((b) => JSON.stringify(b)).join(" ");
+        expect(all).toContain("PAYMENT SHOULD LIKELY BE A JOURNEY STEP");
     });
 
-    it("every step is DO or EXPECT", () => {
-        const verbs = new Set(blocks.filter((b) => b.kind === "step").map((b) => (b as { verb: string }).verb));
-        expect([...verbs].sort()).toEqual(["DO", "EXPECT"]);
-    });
-
-    it("marks a STOP callout inside H1, where stopping too late costs the most", () => {
-        const gateStarts = blocks
-            .map((b, i) => ({ b, i }))
-            .filter(({ b }) => b.kind === "heading" && /^H\d+ /.test((b as { text: string }).text))
-            .map(({ i }) => i);
-        expect(gateStarts.length).toBe(8);
-        const h1 = blocks.slice(gateStarts[0], gateStarts[1]);
-        // H1 ends at a DRAFT. Publishing it over the live Admissions Packet is the one irreversible
-        // mistake available in this gate, so the stop has to be unmissable rather than prose.
-        expect(h1.filter((b) => b.kind === "note" && (b as { stop: boolean }).stop).length).toBeGreaterThan(0);
-    });
-
-    it("keeps the Configuration Health table", () => {
-        const tables = blocks.filter((b) => b.kind === "table");
-        expect(tables.length).toBeGreaterThan(0);
+    it("renders its tables as tables", () => {
+        expect(blocks.filter((b) => b.kind === "table").length).toBeGreaterThanOrEqual(2);
     });
 });
 
