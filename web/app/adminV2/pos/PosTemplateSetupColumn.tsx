@@ -25,6 +25,7 @@ import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/
 import { computePageMaps, pdfBboxToSvgRect, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import ProcessingPdfCanvas, { type PdfHighlightRegion } from "./ProcessingPdfCanvas";
+import { isTextSourcePreview } from "@/lib/pos/sourcePreviewContentType";
 import PendingManualFieldEditor from "./PendingManualFieldEditor";
 import {
     applyEscapeToCanvas,
@@ -434,8 +435,23 @@ export default function PosTemplateSetupColumn({
     // Show the source document itself whenever we have one. The SVG schematic remains the fallback
     // for text/OCR-derived drafts with no PDF, and for the draw-a-region mapping interaction, which
     // is built against that canvas.
+    /*
+     * A HOSTED FORM CAPTURE IS NOT A PDF.
+     *
+     * The picker accepts HTML and `hostedFormStructure` reads it better than any PDF heuristic, but the
+     * pane signed the stored bytes and handed them to pdf.js, which answered "Unexpected server
+     * response (400) while retrieving PDF … Admissions_Packet.html". Alloy accepted the file, so it owes
+     * the operator a readable view: text sources are framed from `source-preview`, which serves the SAME
+     * stored bytes under a `sandbox` CSP. The original upload is never converted or replaced.
+     */
+    const isTextSource = isTextSourcePreview(sourceFilenameEarly ?? null, null);
+    const sourcePreviewUrl = isTextSource && docId ? `/api/admin/documents/${docId}/source-preview` : null;
     const showDocumentCanvas =
-        leftView === "highlights" && !!pdfUrl && canvasState.mode !== "draw_region" && !pendingManualRegion;
+        !isTextSource &&
+        leftView === "highlights" &&
+        !!pdfUrl &&
+        canvasState.mode !== "draw_region" &&
+        !pendingManualRegion;
 
     // Sections that Configuration Discovery resolved to a RELATIONSHIP. Questions inside them are
     // collected through that relationship (the Person is created/linked at submission), so they are
@@ -1399,7 +1415,22 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
-                    {showDocumentCanvas ? (
+                    {sourcePreviewUrl ? (
+                        /*
+                         * Untrusted evidence, not an application. `sandbox` with no tokens refuses
+                         * scripts, forms, plugins and top-level navigation, and the response carries the
+                         * same restriction as a CSP so it holds regardless of this attribute.
+                         */
+                        <iframe
+                            key={sourcePreviewUrl}
+                            src={sourcePreviewUrl}
+                            sandbox=""
+                            referrerPolicy="no-referrer"
+                            title="Source document"
+                            data-qa-source-preview="text"
+                            className="h-full w-full border-0 bg-white"
+                        />
+                    ) : showDocumentCanvas ? (
                         // THE SOURCE DOCUMENT ITSELF, with the detected regions drawn over it.
                         // Deliberately NOT nested in ProcessingSourceDocumentViewport: that wrapper
                         // owns its own scroll container and applies a CSS `zoom`, which would both
@@ -1477,7 +1508,8 @@ export default function PosTemplateSetupColumn({
                                 className="w-full rounded border border-alloy-stone/22 bg-white"
                                 style={{ height: "72rem" }}
                             />
-                        ) : pdfErr ? (
+                        ) : pdfErr && !isTextSource ? (
+                            // A text source is framed, so a PDF-signing complaint about it is noise.
                             <div className="p-2 text-[11px] text-alloy-midnight/40">{pdfErr}</div>
                         ) : (
                             <div className="flex items-center p-2">
@@ -1645,18 +1677,14 @@ export default function PosTemplateSetupColumn({
                                 </button>
                             </>
                         ) : null}
-                        {!created ? (
-                            <button
-                                type="button"
-                                disabled={packetBusy || busy || creating}
-                                onClick={() => void handleAnalyzePacket()}
-                                className={WS_ACTION_SECONDARY}
-                                data-testid="processing-analyze-packet"
-                                title="Analyse every source attached to this case together"
-                            >
-                                {packetBusy ? "Analysing packet…" : packet ? "Re-analyse packet" : "Analyse as one packet"}
-                            </button>
-                        ) : null}
+                        {/*
+                          * "Analyse as one packet" used to sit here. Removing it from the intent chooser
+                          * was not enough — it remained as a second action asking an operator to
+                          * understand a second analysis mode in order to do the one thing they came to
+                          * do, which is turn their paperwork into a form. `handleAnalyzePacket` and the
+                          * `{"mode":"packet"}` route are untouched for callers that genuinely want packet
+                          * composition; it is simply not offered in the form-authoring workflow.
+                          */}
                         {created ? (
                             <button
                                 type="button"
