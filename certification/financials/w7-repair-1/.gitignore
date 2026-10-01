@@ -12,3 +12,4 @@
 .provenance-census-request.json
 .push-request.generated.json
 .restore-request.json
+.merge4-request.generated.json
