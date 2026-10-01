@@ -1,0 +1,22 @@
+{
+  "workspaceKeys": [
+    "department_id",
+    "work_unit_id",
+    "queue_definition",
+    "lifecycle_rail",
+    "stage_context",
+    "work_intent_runtime",
+    "stage_work_runtime",
+    "published_stage_inputs",
+    "stage_work",
+    "operational_projection"
+  ],
+  "projectionPresent": true,
+  "projectionIsNull": false,
+  "projectionKeys": [
+    "businessProcess",
+    "currentWork"
+  ],
+  "hasCardsKey": false,
+  "cardsValue": "KEY ABSENT"
+}

@@ -1158,16 +1158,34 @@ describe("F24 · a host without a projection still gets an account", () => {
      * Measured before the repair: body hydrated with 56 rows, summary still pending after 18
      * seconds, the card endpoint answering 200 throughout. The two states are different:
      * "the projection has not arrived yet" and "nobody is sending one" are not the same claim.
+     *
+     * ── AND THERE WAS A THIRD STATE, FOUND IN W7 ────────────────────────────────────────────
+     *
+     * This lock asked `context.operationalProjection != null`, which reads "a projection exists,
+     * so producers are coming". On the drawer-VM path that is false: `projectFocusPanelOperational`
+     * composes `{ businessProcess, currentWork }` and no `cards` key at all, so a projection
+     * existed, this test's predicate was satisfied, and the card waited forever for producers that
+     * were never going to run. Measured on deployed staging, four mounts of four — the card mounted
+     * at `empty="loading"` and issued ZERO requests, alongside Attendance and Health in the same
+     * state.
+     *
+     * So the intent of this lock is unchanged and its predicate is sharpened: provisioning is
+     * claimed only where a producer answer is ACTUALLY coming, which is what
+     * `hostRunsCardProducers` decides. The old regex would now pass on exactly the defect above.
      */
-    it("distinguishes a pending projection from a host that supplies none", () => {
+    it("distinguishes a pending projection from a host whose producers never run", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "provisioning is only claimed where a projection is actually coming").toMatch(
-            /provisioningAccount =\s*context\.operationalProjection != null/,
+        expect(card, "provisioning is only claimed where a producer answer is actually coming").toMatch(
+            /provisioningAccount =\s*(?:\/\*[\s\S]*?\*\/\s*)?hostRunsCardProducers\(context\.operationalProjection\)/,
         );
-        expect(card, "and a projection-less host bootstraps the card itself").toContain(
+        expect(
+            card,
+            "the host-level test is gone — it could not see the producerless path",
+        ).not.toMatch(/provisioningAccount =\s*context\.operationalProjection != null/);
+        expect(card, "and a host that runs no producers bootstraps the card itself").toContain(
             "hostSuppliesProjection",
         );
-        /* The Focus Panel path is untouched: it supplies the object, so the fallback never runs. */
+        /* The producer path is untouched: it states `cards`, so the fallback never runs there. */
         expect(card).toMatch(/if \(hostSuppliesProjection\) return;/);
     });
 
