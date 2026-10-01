@@ -1,0 +1,13 @@
+{
+  "action_key": "database.read_census",
+  "artifact_refs": [
+    "certification/financials/w7-repair-1/due-date-mechanism-census.sql"
+  ],
+  "reason_worker_cannot_execute": "This lane holds no hosted database credentials; the deployed population is reachable only from the trusted host.",
+  "reason": "W7 Repair Batch 1 \u00a74/\u00a78 \u2014 determine what separates the 37 charges carrying a due_date from the 88 that do not, and whether any canonical due-date policy store exists, before defining the truthful Due projection. Read-only.",
+  "inputs": {
+    "expectedQueryHash": "ae61cb6a060a423c741b5ddce79a2840448712942e05bf7fa0812593326f3015",
+    "databaseTarget": "alloy_deployed_primary",
+    "worktreePath": "/Users/vacilando/Code/alloy-worktrees/financials"
+  }
+}

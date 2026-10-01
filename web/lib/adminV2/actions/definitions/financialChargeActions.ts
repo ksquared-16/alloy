@@ -623,6 +623,19 @@ const addCharge: RegisteredAction = {
                 multi ? "Each child receives their own charge" : null,
                 intent.occursOn ? `Occurs ${intent.occursOn}` : null,
                 intent.billableOn ? `Billable ${intent.billableOn}` : null,
+                /*
+                 * ── THE DUE DATE THE PREVIEW ALREADY RESOLVED ───────────────────────────────
+                 *
+                 * `previewTemplateCharge` runs `dueDateForIntent` and sets `intent.dueDate` from
+                 * the organisation's own `due_date` policy — the SAME resolver the write uses. It
+                 * was computed here and then dropped on the floor, so the command had nothing to
+                 * show and said "Configured policy" whether or not any terms were configured.
+                 *
+                 * Reported, not recomputed: there is one due-date engine and this is not a second
+                 * one. A null `dueDate` means the organisation has stated no terms, and that stays
+                 * an ABSENT line rather than a fabricated date — the card says what absent means.
+                 */
+                intent.dueDate ? `Due ${intent.dueDate}` : null,
                 intent.lifecycleStatus === "scheduled" ? "Scheduled — a future billing context" : null,
             ].filter((v): v is string => Boolean(v));
             return { summary: `${intent.templateKey} ${amount}${multi ? " per child" : ""}`, changes };
