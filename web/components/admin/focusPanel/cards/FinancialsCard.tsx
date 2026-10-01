@@ -164,6 +164,55 @@ type Props = {
  * "2 responsible parties" when there are too many to name: the card has one line, and a truthful
  * count beats a truncated list of people.
  */
+/**
+ * THE STANDING ARRANGEMENT, AS SHARES THE DOMAIN CAN BE GIVEN.
+ *
+ * `summariseHouseholdArrangement` turns the same facts into a sentence for the operator. This
+ * returns them in the shape `billing.configure_responsibility` accepts, so a charge can be created
+ * UNDER the arrangement already in force rather than with no allocation at all.
+ *
+ * ── THE DEFECT THIS CLOSES ─────────────────────────────────────────────────────────────────────
+ *
+ * Add Charge wrote responsibility only when the operator opened the Charge-to editor and changed
+ * it (`chargeToChanging && chargeShares.length > 0`). An operator who read the preview — "Dana
+ * Alvarez 50% · Rosa Alvarez 50% · household responsibility" — had no reason to open an editor
+ * that already said the right thing, so nothing was written, and the posted charge carried no
+ * allocation. The ledger then said "Not allocated", which was TRUE of the charge and flatly
+ * contradicted what the operator had just been shown.
+ *
+ * Both statements were about different subjects: one the household's standing arrangement, the
+ * other this charge's allocation. The repair is not to relabel either — it is to make the charge
+ * inherit the arrangement, which is what "divide it under the arrangement in force" already means
+ * everywhere else in this surface.
+ */
+function standingArrangementShares(body: unknown): Array<{
+    responsible_party_id: string;
+    method: string;
+    percent_basis_points: number | null;
+    amount_cents: number | null;
+}> {
+    const household = (body as {
+        household?: {
+            shares?: Array<{
+                personId?: string | null;
+                responsiblePartyId?: string | null;
+                method?: string | null;
+                amountCents?: number | null;
+                percentBasisPoints?: number | null;
+            }>;
+        } | null;
+    } | null)?.household;
+    return (household?.shares ?? [])
+        .map((share) => ({
+            responsible_party_id: String(share.responsiblePartyId ?? share.personId ?? "").trim(),
+            method: String(share.method ?? ""),
+            percent_basis_points: share.method === "percentage" ? (share.percentBasisPoints ?? null) : null,
+            amount_cents: share.method === "fixed" ? (share.amountCents ?? null) : null,
+        }))
+        /* A share with no party is not a share this card may act on. */
+        .filter((share) => share.responsible_party_id.length > 0 && share.method.length > 0);
+}
+
 function summariseHouseholdArrangement(body: unknown): string {
     const household = (body as {
         household?: {
@@ -2417,24 +2466,34 @@ export default function FinancialsCard({
                 }
             };
 
+            /*
+             * THE ARRANGEMENT IN FORCE, when the operator has not departed from it. An override is
+             * still the operator's; this only stops a charge being created with no allocation under
+             * a household that has one on record.
+             */
+            const standingShares = standingArrangementShares(responsibilityPositionBody);
+
             for (const chargeId of chargeIds) {
-                if (chargeToChanging && chargeShares.length > 0) {
+                const applying = chargeToChanging && chargeShares.length > 0;
+                if (applying || standingShares.length > 0) {
                     /*
                      * THE SHARES ARE TRANSLATED, NOT COMPUTED. A percentage becomes basis points
                      * and an amount becomes cents because that is how the domain stores them; what
                      * a share is WORTH against this charge is the resolver's answer, and this card
                      * never asks itself that question.
                      */
-                    const shares = chargeShares
-                        .filter((share) => share.partyId.trim().length > 0)
-                        .map((share) => ({
-                            responsible_party_id: share.partyId,
-                            method: share.method,
-                            percent_basis_points:
-                                share.method === "percentage" ? Math.round(Number(share.value || 0) * 100) : null,
-                            amount_cents:
-                                share.method === "fixed" ? Math.round(Number(share.value || 0) * 100) : null,
-                        }));
+                    const shares = applying
+                        ? chargeShares
+                              .filter((share) => share.partyId.trim().length > 0)
+                              .map((share) => ({
+                                  responsible_party_id: share.partyId,
+                                  method: share.method,
+                                  percent_basis_points:
+                                      share.method === "percentage" ? Math.round(Number(share.value || 0) * 100) : null,
+                                  amount_cents:
+                                      share.method === "fixed" ? Math.round(Number(share.value || 0) * 100) : null,
+                              }))
+                        : standingShares;
                     const error = await run("billing.configure_responsibility", {
                         customer_id: customerId,
                         charge_id: chargeId,
@@ -2466,7 +2525,7 @@ export default function FinancialsCard({
             }
             return failures;
         },
-        [chargeDiscountChoice, chargeDiscountSuppresses, chargeInvocation, chargeShares, chargeToChanging, customerId, waiverReason],
+        [chargeDiscountChoice, chargeDiscountSuppresses, chargeInvocation, chargeShares, chargeToChanging, customerId, responsibilityPositionBody, waiverReason],
     );
 
     const commit = useCallback(async () => {
