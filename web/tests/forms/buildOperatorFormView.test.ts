@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOperatorFormView } from "@/lib/pos/formDraft/buildOperatorFormView";
+import type { FormViewQuestion, FormViewRepeatGroup } from "@/lib/pos/formDraft/buildOperatorFormView";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 
 type Draft = Parameters<typeof buildOperatorFormView>[0];
@@ -12,6 +13,18 @@ const draftOf = (over: Partial<Draft>): Draft =>
 
 const firstItem = (v: ReturnType<typeof buildOperatorFormView>) => v.sections[0]!.items[0]!;
 
+/* Narrow on the discriminant rather than casting, so a wrong item kind fails loudly and by name. */
+function question(v: ReturnType<typeof buildOperatorFormView>): FormViewQuestion {
+    const item = firstItem(v);
+    if (item.kind !== "question") throw new Error(`expected a question, got ${item.kind}`);
+    return item;
+}
+function group(v: ReturnType<typeof buildOperatorFormView>): FormViewRepeatGroup {
+    const item = firstItem(v);
+    if (item.kind !== "repeat_group") throw new Error(`expected a repeat group, got ${item.kind}`);
+    return item;
+}
+
 describe("what the operator is told about a destination", () => {
     it("says Alloy already knows it, in words, when the destination is certain", () => {
         const v = buildOperatorFormView(
@@ -20,10 +33,9 @@ describe("what the operator is told about a destination", () => {
                 fields: [field({ label: "Date of birth", type: "date", field_source: { entity_type: "customer_member", field_key: "date_of_birth" } })],
             }),
         );
-        const q = firstItem(v);
-        expect(q.kind).toBe("question");
+        const q = question(v);
         expect(q).toMatchObject({ mapping: "known", answerShape: "Date", decisionPrompt: null });
-        expect((q as { mappingText: string }).mappingText).toBe("Alloy already knows this — Date of birth for the child.");
+        expect(q.mappingText).toBe("Alloy already knows this — Date of birth for the child.");
         expect(v.knownCount).toBe(1);
     });
 
@@ -35,7 +47,7 @@ describe("what the operator is told about a destination", () => {
             }),
         );
         expect(firstItem(v)).toMatchObject({ mapping: "suggested" });
-        expect((firstItem(v) as { mappingText: string }).mappingText).toContain("Alloy thinks this is");
+        expect(question(v).mappingText).toContain("Alloy thinks this is");
     });
 
     it("red-lines a question it could not place, and says what to decide", () => {
@@ -65,7 +77,7 @@ describe("what the operator is told about a destination", () => {
             }),
         );
         expect(firstItem(v)).toMatchObject({ mapping: "derived" });
-        expect((firstItem(v) as { mappingText: string }).mappingText).toContain("not asked");
+        expect(question(v).mappingText).toContain("not asked");
     });
 
     it("never leaks the engine's own vocabulary into anything an operator READS", () => {
@@ -124,15 +136,14 @@ describe("conditional follow-ups", () => {
     it("nests an explicit 'If yes' under the question it depends on", () => {
         const v = pair("If yes, please describe the allergies");
         expect(v.sections[0]!.items).toHaveLength(1);
-        const q = firstItem(v) as { dependents: unknown[]; conditionConfidence: string; conditionTriggerLabel: string };
+        const q = question(v);
         expect(q.dependents).toHaveLength(1);
         expect(q.conditionConfidence).toBe("detected");
         expect(q.conditionTriggerLabel).toBe("Yes");
     });
 
     it("marks a softer follow-up as suggested so the operator checks it", () => {
-        const q = firstItem(pair("Please describe")) as { conditionConfidence: string };
-        expect(q.conditionConfidence).toBe("suggested");
+        expect(question(pair("Please describe")).conditionConfidence).toBe("suggested");
     });
 
     it("invents nothing after a question that is not yes/no", () => {
@@ -176,8 +187,7 @@ describe("repeated people become one repeatable group", () => {
             }),
         );
         expect(v.sections[0]!.items).toHaveLength(1);
-        const g = firstItem(v) as { kind: string; label: string; addLabel: string; reuseText: string; observedInSource: number };
-        expect(g.kind).toBe("repeat_group");
+        const g = group(v);
         expect(g.label).toBe("Parents / Guardians");
         expect(g.addLabel).toBe("Add parents / guardian");
         expect(g.reuseText).toContain("already knows");
@@ -226,7 +236,7 @@ describe("prose, signatures and source context", () => {
                 fields: [field({ evidence: "  Child's date of birth  ", page: 2, pdf_field_name: "dob_1" })],
             }),
         );
-        expect((firstItem(v) as { source: unknown }).source).toEqual({
+        expect(question(v).source).toEqual({
             excerpt: "Child's date of birth",
             page: 2,
             sourceFieldName: "dob_1",
