@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOperatorFormView } from "@/lib/pos/formDraft/buildOperatorFormView";
-import type { FormViewQuestion, FormViewRepeatGroup } from "@/lib/pos/formDraft/buildOperatorFormView";
+import type { FormViewAddress, FormViewQuestion, FormViewRepeatGroup } from "@/lib/pos/formDraft/buildOperatorFormView";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 
 type Draft = Parameters<typeof buildOperatorFormView>[0];
@@ -24,6 +24,13 @@ function group(v: ReturnType<typeof buildOperatorFormView>): FormViewRepeatGroup
     if (item.kind !== "repeat_group") throw new Error(`expected a repeat group, got ${item.kind}`);
     return item;
 }
+function addressItem(v: ReturnType<typeof buildOperatorFormView>): FormViewAddress {
+    const item = firstItem(v);
+    if (item.kind !== "address") throw new Error(`expected an address, got ${item.kind}`);
+    return item;
+}
+const addressLine = (id: string, label: string, key: string, over: Record<string, unknown> = {}) =>
+    field({ id, label, field_source: { entity_type: "person", field_key: key }, ...over });
 
 describe("what the operator is told about a destination", () => {
     it("says Alloy already knows it, in words, when the destination is certain", () => {
@@ -106,8 +113,17 @@ describe("what the operator is told about a destination", () => {
                 if (item.kind === "prose") readable.push(item.text);
                 else if (item.kind === "repeat_group") {
                     readable.push(item.label, item.addLabel, item.reuseText ?? "");
+                } else if (item.kind === "address") {
+                    readable.push(item.label, item.mappingText, item.decisionPrompt ?? "", ...item.lines.map((l) => l.label));
                 } else {
-                    readable.push(item.label, item.mappingText, item.decisionPrompt ?? "", item.answerShape);
+                    readable.push(
+                        item.label,
+                        item.mappingText,
+                        item.decisionPrompt ?? "",
+                        item.answerShape,
+                        item.requirednessText,
+                        item.absenceText ?? "",
+                    );
                 }
             }
         }
@@ -133,16 +149,21 @@ describe("conditional follow-ups", () => {
             }),
         );
 
-    it("nests an explicit 'If yes' under the question it depends on", () => {
+    it("nests an explicit 'If yes' but still only SUGGESTS it", () => {
+        /*
+         * Detection used to call an explicit "If yes" detected, which read as settled. Nothing the
+         * importer notices is settled: a form must not hide a question until an operator has agreed to
+         * hide it, so wording can only ever produce a suggestion. "accepted" comes off the draft.
+         */
         const v = pair("If yes, please describe the allergies");
         expect(v.sections[0]!.items).toHaveLength(1);
         const q = question(v);
         expect(q.dependents).toHaveLength(1);
-        expect(q.conditionConfidence).toBe("detected");
+        expect(q.conditionConfidence).toBe("suggested");
         expect(q.conditionTriggerLabel).toBe("Yes");
     });
 
-    it("marks a softer follow-up as suggested so the operator checks it", () => {
+    it("marks a softer follow-up as suggested too", () => {
         expect(question(pair("Please describe")).conditionConfidence).toBe("suggested");
     });
 
@@ -247,5 +268,162 @@ describe("prose, signatures and source context", () => {
         const v = buildOperatorFormView(draftOf({ title: "scan_001.pdf", generated_form_name: "Admissions Packet" }), "scan_001.pdf");
         expect(v.title).toBe("Admissions Packet");
         expect(v.sourceDocumentName).toBe("scan_001.pdf");
+    });
+});
+
+describe("an address is one thing, not five rows", () => {
+    const homeLines = [
+        addressLine("a1", "Home address line 1", "address_line1"),
+        addressLine("a2", "Home address line 2", "address_line2"),
+        addressLine("a3", "City", "city"),
+        addressLine("a4", "State", "state"),
+        addressLine("a5", "ZIP", "postal_code"),
+    ];
+
+    it("collapses consecutive postal lines into one concept with one mapping state", () => {
+        const v = buildOperatorFormView(
+            draftOf({ sections: [{ id: "s", title: "Where you live", field_ids: ["a1", "a2", "a3", "a4", "a5"] } as never], fields: homeLines }),
+        );
+        expect(v.sections[0]!.items).toHaveLength(1);
+        const addr = addressItem(v);
+        expect(addr.label).toBe("Home address");
+        expect(addr.lines.map((l) => l.label)).toEqual(["Home address line 1", "Home address line 2", "City", "State", "ZIP"]);
+        // One concept counts once, not five times.
+        expect(v.questionCount).toBe(1);
+    });
+
+    it("starts a second address when a postal line repeats", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["a1", "a3", "m1", "m3"] } as never],
+                fields: [
+                    addressLine("a1", "Home address line 1", "address_line1"),
+                    addressLine("a3", "City", "city"),
+                    addressLine("m1", "Mailing address line 1", "address_line1"),
+                    addressLine("m3", "City", "city"),
+                ],
+            }),
+        );
+        expect(v.sections[0]!.items).toHaveLength(2);
+        expect(v.sections[0]!.items.map((i) => (i.kind === "address" ? i.label : i.kind))).toEqual([
+            "Home address",
+            "Mailing address",
+        ]);
+    });
+
+    it("is required when any line is, and red-lines once when the owner is unknown", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["a1", "a3"] } as never],
+                fields: [
+                    field({ id: "a1", label: "Mailing address line 1", required: true, confidence: "low" }),
+                    field({ id: "a3", label: "City", confidence: "low" }),
+                ],
+            }),
+        );
+        // No destination at all, so these are plain questions — the concept only forms from postal
+        // destinations. This asserts the boundary rather than pretending it is an address.
+        expect(v.sections[0]!.items.every((i) => i.kind === "question")).toBe(true);
+    });
+
+    it("leaves a lone postal line as an ordinary question", () => {
+        const v = buildOperatorFormView(
+            draftOf({ sections: [{ id: "s", title: "s", field_ids: ["a3"] } as never], fields: [addressLine("a3", "City", "city")] }),
+        );
+        expect(firstItem(v).kind).toBe("question");
+    });
+});
+
+describe("requiredness and saying nothing", () => {
+    it("states required or optional in words", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["r", "o"] } as never],
+                fields: [field({ id: "r", label: "Date of birth", required: true }), field({ id: "o", label: "Allergies" })],
+            }),
+        );
+        const [req, opt] = v.sections[0]!.items as FormViewQuestion[];
+        expect(req!.requirednessText).toBe("Required");
+        expect(opt!.requirednessText).toBe("Optional");
+    });
+
+    it("says what the family may answer when the source offered a nothing-to-report choice", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["f"] } as never],
+                fields: [field({ label: "Allergies", options: ["No known allergies", "Peanuts"] })],
+            }),
+        );
+        expect(question(v).absenceText).toBe("The family can answer \u201cNo known allergies\u201d.");
+    });
+
+    it("invents the affordance for nothing, when the source never offered one", () => {
+        const v = buildOperatorFormView(
+            draftOf({ sections: [{ id: "s", title: "s", field_ids: ["f"] } as never], fields: [field({ label: "Allergies", options: ["Peanuts", "Dairy"] })] }),
+        );
+        expect(question(v).absenceText).toBeNull();
+    });
+
+    it("does not offer it on a required question, which has no nothing-to-report answer", () => {
+        const v = buildOperatorFormView(
+            draftOf({ sections: [{ id: "s", title: "s", field_ids: ["f"] } as never], fields: [field({ label: "Allergies", required: true, options: ["None"] })] }),
+        );
+        expect(question(v).absenceText).toBeNull();
+    });
+
+    it("does not mistake a choice that merely starts with 'non' for saying nothing", () => {
+        const v = buildOperatorFormView(
+            draftOf({ sections: [{ id: "s", title: "s", field_ids: ["f"] } as never], fields: [field({ label: "Gender", options: ["Nonbinary", "Female"] })] }),
+        );
+        expect(question(v).absenceText).toBeNull();
+    });
+});
+
+describe("accepted conditions versus suggestions", () => {
+    it("reads an ACCEPTED condition off the draft and names its trigger", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["q", "d"] } as never],
+                fields: [
+                    field({ id: "q", label: "Does the child have allergies?", type: "boolean" }),
+                    field({ id: "d", label: "Describe the allergies", visible_when: { field_id: "q", op: "eq", value: true } }),
+                ],
+            }),
+        );
+        const q = question(v);
+        expect(q.conditionConfidence).toBe("accepted");
+        expect(q.conditionTriggerLabel).toBe("Yes");
+        expect(q.dependents).toHaveLength(1);
+    });
+
+    it("nests an accepted condition under the field it NAMES, not whatever precedes it", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["gate", "unrelated", "dep"] } as never],
+                fields: [
+                    field({ id: "gate", label: "Any siblings?", type: "boolean" }),
+                    field({ id: "unrelated", label: "Favourite colour" }),
+                    field({ id: "dep", label: "How many?", visible_when: { field_id: "gate", op: "eq", value: true } }),
+                ],
+            }),
+        );
+        const items = v.sections[0]!.items as FormViewQuestion[];
+        expect(items).toHaveLength(2);
+        expect(items[0]!.id).toBe("gate");
+        expect(items[0]!.dependents.map((d) => d.id)).toEqual(["dep"]);
+        expect(items[1]!.id).toBe("unrelated");
+    });
+
+    it("never calls a detected relationship accepted — detection only suggests", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "s", field_ids: ["q", "d"] } as never],
+                fields: [
+                    field({ id: "q", label: "Does the child have allergies?", type: "boolean" }),
+                    field({ id: "d", label: "If yes, describe the allergies" }),
+                ],
+            }),
+        );
+        expect(question(v).conditionConfidence).toBe("suggested");
     });
 });

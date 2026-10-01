@@ -56,6 +56,14 @@ export type FormViewQuestion = {
     /** "Date", "Yes / No", "Upload", "Signature" — what the family will be asked for. */
     readonly answerShape: string;
     readonly required: boolean;
+    /** "Required" / "Optional", so the operator reads it rather than inferring it. */
+    readonly requirednessText: string;
+    /**
+     * What the family may say when the answer is nothing — "None", "No known allergies". Present only
+     * when the source actually offered such a choice; never invented, and never on a required question,
+     * which by definition has no nothing-to-report answer.
+     */
+    readonly absenceText: string | null;
     readonly mapping: MappingState;
     /** One plain sentence. Never engineering vocabulary. */
     readonly mappingText: string;
@@ -65,8 +73,11 @@ export type FormViewQuestion = {
     readonly source: SourceContext;
     /** Questions shown only when this one is answered a particular way. */
     readonly dependents: readonly FormViewQuestion[];
-    /** How sure the condition is, when there is one. */
-    readonly conditionConfidence: "detected" | "suggested" | null;
+    /**
+     * `accepted`  an operator accepted it and the published form will hide the follow-up.
+     * `suggested` the importer noticed it; nothing is hidden until somebody agrees.
+     */
+    readonly conditionConfidence: "accepted" | "suggested" | null;
     readonly conditionTriggerLabel: string | null;
 };
 
@@ -82,6 +93,20 @@ export type FormViewRepeatGroup = {
     readonly observedInSource: number | null;
 };
 
+export type FormViewAddress = {
+    readonly kind: "address";
+    readonly id: string;
+    /** "Home address" — the operator's name for the whole thing, not five line labels. */
+    readonly label: string;
+    /** The lines, in postal order, as the participant will see them inside one control. */
+    readonly lines: readonly { readonly id: string; readonly label: string }[];
+    readonly required: boolean;
+    readonly mapping: MappingState;
+    readonly mappingText: string;
+    readonly decisionPrompt: string | null;
+    readonly source: SourceContext;
+};
+
 export type FormViewProse = {
     readonly kind: "prose";
     readonly id: string;
@@ -89,7 +114,7 @@ export type FormViewProse = {
     readonly text: string;
 };
 
-export type FormViewItem = FormViewQuestion | FormViewRepeatGroup | FormViewProse;
+export type FormViewItem = FormViewQuestion | FormViewRepeatGroup | FormViewAddress | FormViewProse;
 
 export type FormViewSection = {
     readonly id: string;
@@ -198,6 +223,55 @@ function mappingFor(field: DraftFormField): { state: MappingState; text: string;
     };
 }
 
+/* ------------------------------------------------------------------ absence */
+
+/**
+ * A choice that means "nothing to report".
+ *
+ * Only read from choices the SOURCE declared. Paper that offers "None" is telling you a family can
+ * have nothing to say; paper that does not is not, and inventing the affordance would change what the
+ * document asks. Matched on whole choices rather than substrings so "No known allergies" counts and
+ * "Nonbinary" does not.
+ */
+const ABSENCE_CHOICE =
+    /^(none|n\/?a|not applicable|no known [a-z ]+|none known|none at (this )?time|no|we (do not|don'?t) have (one|any)|nothing)$/i;
+
+function absenceTextFor(field: DraftFormField): string | null {
+    if (field.required) return null;
+    const offered = (field.options ?? []).map((o) => o.trim()).filter(Boolean).find((o) => ABSENCE_CHOICE.test(o));
+    if (!offered) return null;
+    return `The family can answer \u201c${offered}\u201d.`;
+}
+
+/* ------------------------------------------------------------------ addresses */
+
+/** The postal pieces, in the order a person writes them. */
+const ADDRESS_LEAVES = ["address_line1", "address_line2", "city", "state", "postal_code"] as const;
+const ADDRESS_LEAF_SET = new Set<string>(ADDRESS_LEAVES);
+
+function addressLeafOf(field: DraftFormField): string | null {
+    const raw = field.field_source?.field_key;
+    const key = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    return key && ADDRESS_LEAF_SET.has(key) ? key : null;
+}
+
+/**
+ * "Home address" rather than "Address Line 1" and four more questions.
+ *
+ * An imported document yields the lines flat, because that is how the page is printed. Showing them
+ * that way asks the operator to recognise an address from five unrelated rows, and it is the single
+ * most common thing a reviewer said looked wrong. Consecutive lines that carry address destinations
+ * are one concept; the label comes from the first line's own wording with the postal part removed, so
+ * "Home address line 1" reads as "Home address" and nothing is invented.
+ */
+const ADDRESS_LABEL_TAIL = /\s*(address\s*)?(line\s*[12]|street.*|city|state|province|zip.*|postal.*)\s*$/i;
+
+function addressConceptLabel(firstLineLabel: string): string {
+    const stripped = firstLineLabel.replace(ADDRESS_LABEL_TAIL, "").trim();
+    if (!stripped) return "Address";
+    return /address$/i.test(stripped) ? stripped : `${stripped} address`;
+}
+
 /* ------------------------------------------------------------------ conditionals */
 
 /**
@@ -218,11 +292,22 @@ const SOFT_FOLLOW_UP = /^\s*(please\s+(describe|explain|list|specify)|if\s+(no|n
 function conditionFor(
     previous: DraftFormField | null,
     field: DraftFormField,
-): { confidence: "detected" | "suggested"; trigger: string } | null {
+): { confidence: "accepted" | "suggested"; trigger: string } | null {
+    /*
+     * An ACCEPTED condition is whatever the draft records, and it does not depend on wording or on
+     * what happens to sit above it — an operator agreed to it and the published form will honour it.
+     */
+    if (field.visible_when) {
+        const v = field.visible_when.value;
+        const trigger = v === true ? "Yes" : v === false ? "No" : v === null ? "nothing" : String(v);
+        return { confidence: "accepted", trigger };
+    }
+    // Everything else is only ever a SUGGESTION, and only after a yes/no question.
     if (!previous || previous.type !== "boolean") return null;
     if (field.type === "signature" || field.type === "file_ref") return null;
-    if (EXPLICIT_IF.test(field.label)) return { confidence: "detected", trigger: "Yes" };
-    if (SOFT_FOLLOW_UP.test(field.label)) return { confidence: "suggested", trigger: "Yes" };
+    if (EXPLICIT_IF.test(field.label) || SOFT_FOLLOW_UP.test(field.label)) {
+        return { confidence: "suggested", trigger: "Yes" };
+    }
     return null;
 }
 
@@ -244,6 +329,8 @@ function toQuestion(field: DraftFormField): FormViewQuestion {
         label: field.label,
         answerShape: answerShapeFor(field),
         required: Boolean(field.required),
+        requirednessText: field.required ? "Required" : "Optional",
+        absenceText: absenceTextFor(field),
         mapping: mapping.state,
         mappingText: mapping.text,
         decisionPrompt: mapping.prompt,
@@ -252,6 +339,24 @@ function toQuestion(field: DraftFormField): FormViewQuestion {
         dependents: [],
         conditionConfidence: null,
         conditionTriggerLabel: null,
+    };
+}
+
+function addressFor(lines: readonly DraftFormField[]): FormViewAddress {
+    const first = lines[0]!;
+    const mapping = mappingFor(first);
+    return {
+        kind: "address",
+        id: first.id,
+        label: addressConceptLabel(first.label),
+        lines: lines.map((l) => ({ id: l.id, label: l.label })),
+        // One address is required if any of its lines is: a street with an optional city is still an
+        // address the family must give.
+        required: lines.some((l) => Boolean(l.required)),
+        mapping: mapping.state,
+        mappingText: mapping.text,
+        decisionPrompt: mapping.prompt,
+        source: sourceContextFor(first),
     };
 }
 
@@ -323,9 +428,41 @@ export function buildOperatorFormView(
         if (prose) items.push({ kind: "prose", id: `${section.id}-prose`, text: prose });
 
         let previous: DraftFormField | null = null;
-        for (const fieldId of section.field_ids ?? []) {
-            const field = fieldsById.get(fieldId);
+        const sectionFieldIds = [...(section.field_ids ?? [])];
+        for (let fi = 0; fi < sectionFieldIds.length; fi += 1) {
+            const field = fieldsById.get(sectionFieldIds[fi]!);
             if (!field) continue;
+
+            /*
+             * An address is one thing. Gather the run of consecutive lines that carry postal
+             * destinations and emit a single concept, so the operator is never shown five unrelated
+             * rows and asked to recognise an address in them.
+             */
+            if (addressLeafOf(field) && !suppressed.has(field.id)) {
+                const run: DraftFormField[] = [field];
+                let seen = new Set<string>([addressLeafOf(field)!]);
+                while (fi + 1 < sectionFieldIds.length) {
+                    const next = fieldsById.get(sectionFieldIds[fi + 1]!);
+                    const leaf = next ? addressLeafOf(next) : null;
+                    // A repeated leaf starts a SECOND address rather than extending this one.
+                    if (!next || !leaf || seen.has(leaf) || suppressed.has(next.id)) break;
+                    run.push(next);
+                    seen.add(leaf);
+                    fi += 1;
+                }
+                if (run.length > 1) {
+                    const built = addressFor(run);
+                    items.push(built);
+                    questionCount += 1;
+                    if (built.mapping === "known") knownCount += 1;
+                    if (built.decisionPrompt && built.mapping === "needs_review") {
+                        needsReview.push({ id: built.id, label: built.label, prompt: built.decisionPrompt });
+                    }
+                    previous = null;
+                    continue;
+                }
+                // A lone line is just a question; fall through.
+            }
 
             if (suppressed.has(field.id)) {
                 // Emit the replacing group once, in the place its first member appeared.
@@ -357,9 +494,18 @@ export function buildOperatorFormView(
             }
 
             const condition = conditionFor(previous, field);
-            const lastItem = items[items.length - 1];
+            /*
+             * An accepted condition names its controlling field explicitly, so nest under THAT one
+             * rather than under whatever happens to precede it. A suggestion has no named field and
+             * can only attach to the question above it.
+             */
+            const namedId = field.visible_when?.field_id ?? null;
+            const lastItem = namedId
+                ? items.find((i) => i.kind === "question" && i.id === namedId) ?? items[items.length - 1]
+                : items[items.length - 1];
+            const lastIndex = namedId ? items.indexOf(lastItem as FormViewItem) : items.length - 1;
             if (condition && lastItem && lastItem.kind === "question") {
-                items[items.length - 1] = {
+                items[lastIndex] = {
                     ...lastItem,
                     dependents: [...lastItem.dependents, question],
                     conditionConfidence: condition.confidence,

@@ -42,6 +42,7 @@ import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
 import ProcessingFormMappingReview from "./ProcessingFormMappingReview";
+import { buildMappingChangePayload, type MappingChoice } from "@/lib/pos/formDraft/buildMappingChangePayload";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
 import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
@@ -961,6 +962,11 @@ export default function PosTemplateSetupColumn({
                         evidence: f.evidence,
                         ...(f.description ? { description: f.description } : {}),
                         ...(f.field_source ? { field_source: f.field_source } : {}),
+                        // Promotion posts its own field list; without this an accepted condition would
+                        // be dropped at exactly the moment it was supposed to become real.
+                        ...((f as { visible_when?: unknown }).visible_when
+                            ? { visible_when: (f as { visible_when?: unknown }).visible_when }
+                            : {}),
                     })),
                     section_dispositions: Object.entries(sectionInfo)
                         .filter(([, info]) => info.disposition !== "fields")
@@ -1265,6 +1271,46 @@ export default function PosTemplateSetupColumn({
                     draft={draft}
                     sourceDocumentName={sourceFilenameEarly}
                     onOpenAdvanced={() => setReviewMode(discovery ? "concepts" : "detailed")}
+                    onChangeMapping={async (fieldId, choice: MappingChoice) => {
+                        /*
+                         * The save route REBUILDS the draft from the fields it is posted, so a
+                         * one-field change has to post the whole set. `buildMappingChangePayload` is
+                         * that, and it refuses a field it cannot find rather than posting a list that
+                         * would drop it. The response is the rebuilt draft, so state comes from the
+                         * server rather than from an optimistic guess.
+                         */
+                        if (!caseId) return;
+                        const built = buildMappingChangePayload(draft, fieldId, choice);
+                        if (!built.ok) {
+                            setErr(
+                                built.reason === "unknown_field"
+                                    ? "That question is no longer on this draft — reload and try again."
+                                    : "There is nothing to save on this draft yet.",
+                            );
+                            return;
+                        }
+                        setErr(null);
+                        try {
+                            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+                                method: "POST",
+                                credentials: "same-origin",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify(built.payload),
+                            });
+                            const body = (await res.json().catch(() => ({}))) as {
+                                data?: { form_draft_preview?: unknown };
+                                form_draft_preview?: unknown;
+                                error?: string;
+                            };
+                            if (!res.ok) throw new Error(body.error || `Couldn't save that (${res.status})`);
+                            const next = (body.data?.form_draft_preview ?? body.form_draft_preview) as
+                                | typeof draft
+                                | undefined;
+                            if (next) setDraft(next);
+                        } catch (e) {
+                            setErr(e instanceof Error ? e.message : "Couldn't save that mapping.");
+                        }
+                    }}
                 />
             ) : reviewMode === "concepts" && discovery && !created ? (
                 <ProcessingConceptReview

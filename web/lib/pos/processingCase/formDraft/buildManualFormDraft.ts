@@ -32,6 +32,14 @@ export interface ManualFieldInput {
     field_source?: import("@/lib/forms/schema").FormFieldSource;
     /** Operator-visible note — e.g. unresolved-at-generate destination flag. */
     description?: string;
+    /**
+     * An ACCEPTED conditional relationship, carried through save.
+     *
+     * Save rebuilds the draft from the fields it is posted, so anything not on this input is dropped.
+     * A condition an operator accepted has to survive that rebuild or it would silently un-accept
+     * itself on the next save — which is worse than never having offered the feature.
+     */
+    visible_when?: import("@/lib/forms/schema").FormVisibilityCondition;
 }
 
 /** Operator-set intent for a section (by title), carried into the draft + emitted schema. */
@@ -88,6 +96,8 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
                 : {}),
             ...(f.field_source ? { field_source: f.field_source } : {}),
             ...(f.description ? { description: f.description } : {}),
+            // An accepted condition survives the rebuild; an absent one leaves the field always shown.
+            ...(f.visible_when ? { visible_when: f.visible_when } : {}),
         });
     }
 
