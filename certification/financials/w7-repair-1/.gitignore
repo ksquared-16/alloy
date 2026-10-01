@@ -3,6 +3,7 @@
 .inheritance-census-request.json
 .merge2-request.generated.json
 .merge3-request.generated.json
+.merge4-request.generated.json
 .origin-census-request.json
 .pr-request.generated.json
 .pr2-request.generated.json
@@ -12,4 +13,3 @@
 .provenance-census-request.json
 .push-request.generated.json
 .restore-request.json
-.merge4-request.generated.json
