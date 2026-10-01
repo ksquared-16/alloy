@@ -49,6 +49,7 @@ import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 import { ledgerLensOf } from "@/lib/financials/workspace/accountLenses";
 
+import { billingPeriodForDate } from "@/lib/financials/billingPeriod";
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
@@ -721,6 +722,13 @@ export function adaptAddChargeSpecimen(input: {
      * value is canonical; the FORMAT is storage's, so it is rendered as a date an operator reads
      * rather than as the ISO string the resolver happened to return.
      */
+    /*
+     * The same lookup as `line`, before the ISO is turned into a display date. The period
+     * derivation needs the canonical value, not the rendering of it.
+     */
+    const rawLine = (prefix: string): string | null =>
+        input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim() ?? null;
+
     const line = (prefix: string): string | null => {
         const raw =
             input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim()
@@ -797,8 +805,50 @@ export function adaptAddChargeSpecimen(input: {
          * labels-not-keys rule broken in the one place an operator is about to commit money.
          */
         serviceDate: line("occurs") ?? "Resolved at commit",
-        period: line("billable") ?? input.period,
-        due: "Configured policy",
+        /*
+         * ── A BILLING PERIOD IS AN INTERVAL; `billable_on` IS A DATE ────────────────────────
+         *
+         * This rendered `line("billable")` — the INVOICE DATE — under the label "Billing period",
+         * so the command showed "Oct 1, 2026" where the business concept is an interval. Measured
+         * mounted: one template read "Oct 1, 2026" (the billable date) and another "October 2026"
+         * (the account's period), because the first resolved a billable date and the second fell
+         * through. Two different kinds of answer under one label.
+         *
+         * `billingPeriodForDate` is the canonical derivation and is not a second one: it returns
+         * the period CONTAINING a date, labelled the way the rest of Financials labels periods —
+         * "October 2026" for a month, "Sep 15–21, 2026" for a shorter cadence. Deriving the period
+         * the charge actually lands in is also more correct than the account's current period,
+         * which is what the fallback gives and which is wrong for a scheduled future charge.
+         *
+         * No interval is invented: with no resolved billable date this still falls back to the
+         * account's own period label exactly as before.
+         */
+        period: (() => {
+            const billableIso = rawLine("billable");
+            return billableIso && /^\d{4}-\d{2}-\d{2}$/.test(billableIso)
+                ? billingPeriodForDate(billableIso).label
+                : input.period;
+        })(),
+        /*
+         * ── DUE: A DATE, AN HONEST ABSENCE, OR NOT YET KNOWN — NEVER A MECHANISM ────────────
+         *
+         * This was the literal string "Configured policy" on every charge, on a field the model
+         * documents as `charges.due_date`. Measured on deployed staging: `due_date` is populated on
+         * 37 of 125 rows — 33 of them AFTER `billable_on` — so the card was hiding a real date on
+         * the rows that had one and implying a policy on the 88 that did not.
+         *
+         * The organisation's `due_date` policy is the only authority, `resolveDueDate` is its only
+         * resolver, and `null` from it means "no terms stated" — deliberately, so that nothing
+         * defaults to a collections deadline nobody chose. So there are three answers and they are
+         * different:
+         *
+         *   · the preview resolved a date      → say the date
+         *   · the preview answered, no date    → no terms are configured; say so
+         *   · the preview has not answered yet → NOT YET KNOWN, which is an em dash here
+         */
+        due:
+            input.previewSummary == null ? "\u2014"
+            : (line("due") ?? "No due date"),
         overridden: null,
         chargeTo: input.template.responsibility,
         // Allocation renders ONLY when the split is authoritative. Alloy has no allocation store.

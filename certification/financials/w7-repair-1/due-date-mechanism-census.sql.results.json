@@ -1,0 +1,217 @@
+{
+  "trusted_host_action_id": "tha_c19acf27a9c3a4",
+  "query_hash": "ae61cb6a060a423c741b5ddce79a2840448712942e05bf7fa0812593326f3015",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T21:15:40.418Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c19acf27a9c3a4",
+    "query_hash": "ae61cb6a060a423c741b5ddce79a2840448712942e05bf7fa0812593326f3015",
+    "authorization_id": "grnt_6950de40415046af",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T21:15:46.952Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_type": "adjustment",
+            "source": "(null)",
+            "billable_source_type": "enrollment_agreement",
+            "has_template": false,
+            "rows": 4,
+            "due_set": 0,
+            "due_null": 4
+          },
+          {
+            "charge_type": "fee",
+            "source": "(null)",
+            "billable_source_type": "enrollment_agreement",
+            "has_template": false,
+            "rows": 4,
+            "due_set": 2,
+            "due_null": 2
+          },
+          {
+            "charge_type": "adjustment",
+            "source": "manual_reduction",
+            "billable_source_type": "enrollment_agreement",
+            "has_template": false,
+            "rows": 44,
+            "due_set": 0,
+            "due_null": 44
+          },
+          {
+            "charge_type": "fee",
+            "source": "(null)",
+            "billable_source_type": "customer",
+            "has_template": false,
+            "rows": 1,
+            "due_set": 0,
+            "due_null": 1
+          },
+          {
+            "charge_type": "adjustment",
+            "source": "financial_reduction",
+            "billable_source_type": "enrollment_agreement",
+            "has_template": false,
+            "rows": 7,
+            "due_set": 0,
+            "due_null": 7
+          },
+          {
+            "charge_type": "fee",
+            "source": "charge_template",
+            "billable_source_type": "enrollment_agreement",
+            "has_template": true,
+            "rows": 45,
+            "due_set": 31,
+            "due_null": 14
+          },
+          {
+            "charge_type": "fee",
+            "source": "charge_template",
+            "billable_source_type": "customer",
+            "has_template": true,
+            "rows": 20,
+            "due_set": 4,
+            "due_null": 16
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "offset_days": 0,
+            "charges": 2,
+            "charge_types": 1
+          },
+          {
+            "offset_days": 10,
+            "charges": 33,
+            "charge_types": 1
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_template_id": "27055d7e-72a3-441a-a4dd-ae01fbf1f421",
+            "rows": 10,
+            "due_set": 5,
+            "due_null": 5,
+            "mixed": true
+          },
+          {
+            "charge_template_id": "315d8b1d-9d1c-4613-97aa-22658a0cdb52",
+            "rows": 6,
+            "due_set": 1,
+            "due_null": 5,
+            "mixed": true
+          },
+          {
+            "charge_template_id": "9a4d0578-822b-4aee-af2d-e9bef48bf8d0",
+            "rows": 22,
+            "due_set": 21,
+            "due_null": 1,
+            "mixed": true
+          },
+          {
+            "charge_template_id": "c03e638e-0f3e-49f0-9d41-696276c8fa21",
+            "rows": 17,
+            "due_set": 5,
+            "due_null": 12,
+            "mixed": true
+          },
+          {
+            "charge_template_id": "1d037f10-b83b-4eb0-b4ce-620054b8ae2f",
+            "rows": 5,
+            "due_set": 0,
+            "due_null": 5,
+            "mixed": false
+          },
+          {
+            "charge_template_id": "e6f64079-681d-4d60-8be3-fac451edadb1",
+            "rows": 5,
+            "due_set": 3,
+            "due_null": 2,
+            "mixed": true
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "human_created": false,
+            "rows": 18,
+            "due_set": 10,
+            "due_null": 8
+          },
+          {
+            "human_created": true,
+            "rows": 107,
+            "due_set": 27,
+            "due_null": 80
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "jobs",
+            "column": "amount_due_cents",
+            "type": "integer"
+          },
+          {
+            "table": "operational_tasks",
+            "column": "due_at",
+            "type": "timestamp with time zone"
+          },
+          {
+            "table": "communication_threads",
+            "column": "sla_due_at",
+            "type": "timestamp with time zone"
+          },
+          {
+            "table": "scheduled_work",
+            "column": "next_due_at",
+            "type": "timestamp with time zone"
+          },
+          {
+            "table": "scheduled_work_occurrences",
+            "column": "due_at",
+            "type": "timestamp with time zone"
+          },
+          {
+            "table": "commercial_deposits",
+            "column": "due_timing",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "row_count": 23
+  }
+}

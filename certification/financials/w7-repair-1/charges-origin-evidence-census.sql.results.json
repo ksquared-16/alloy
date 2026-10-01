@@ -1,0 +1,125 @@
+{
+  "trusted_host_action_id": "tha_19368b870904f7",
+  "query_hash": "41ec5ff68d50658ace8317fcd733ad34b862064c66c7d46100966940fe6b07c1",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T20:47:15.410Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_19368b870904f7",
+    "query_hash": "41ec5ff68d50658ace8317fcd733ad34b862064c66c7d46100966940fe6b07c1",
+    "authorization_id": "grnt_f7baa6be8ad34dda",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T20:47:21.404Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": 125,
+            "schedule_id_set": 0,
+            "subscription_id_set": 0,
+            "charge_template_id_set": 65,
+            "due_date_set": 37,
+            "occurs_on_set": 65,
+            "billable_on_set": 65,
+            "posted_at_set": 90
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "source": "manual_reduction",
+            "charges": 44,
+            "created_by_set": 44,
+            "created_by_null": 0
+          },
+          {
+            "source": "financial_reduction",
+            "charges": 7,
+            "created_by_set": 7,
+            "created_by_null": 0
+          },
+          {
+            "source": "(null)",
+            "charges": 9,
+            "created_by_set": 9,
+            "created_by_null": 0
+          },
+          {
+            "source": "charge_template",
+            "charges": 65,
+            "created_by_set": 47,
+            "created_by_null": 18
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "source": "charge_template",
+            "charge_type": "fee",
+            "billable_source_type": "enrollment_agreement",
+            "schedule_id_set": false,
+            "subscription_id_set": false,
+            "charge_template_id_set": true,
+            "lifecycle_status": "scheduled",
+            "charges": 6
+          },
+          {
+            "source": "charge_template",
+            "charge_type": "fee",
+            "billable_source_type": "customer",
+            "schedule_id_set": false,
+            "subscription_id_set": false,
+            "charge_template_id_set": true,
+            "lifecycle_status": "draft",
+            "charges": 1
+          },
+          {
+            "source": "charge_template",
+            "charge_type": "fee",
+            "billable_source_type": "enrollment_agreement",
+            "schedule_id_set": false,
+            "subscription_id_set": false,
+            "charge_template_id_set": true,
+            "lifecycle_status": "draft",
+            "charges": 11
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": 125,
+            "due_date_set": 37,
+            "due_date_null": 88,
+            "due_null_but_billable_set": 30,
+            "due_equals_billable": 2,
+            "due_after_billable": 33
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}
