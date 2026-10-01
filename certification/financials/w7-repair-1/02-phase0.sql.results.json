@@ -1,0 +1,122 @@
+{
+  "trusted_host_action_id": "tha_fc77ec3578f9c6",
+  "query_hash": "b861d18bfeb9ed72098a3bd230fbaf4fa87612152a998717b4a2cdca80991166",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-01T17:38:29.882Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_fc77ec3578f9c6",
+    "query_hash": "b861d18bfeb9ed72098a3bd230fbaf4fa87612152a998717b4a2cdca80991166",
+    "authorization_id": "grnt_1c20ec8b338f40af",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-01T17:38:35.946Z",
+    "question_ids": [
+      "w7_results",
+      "alvarez_field_trip",
+      "alvarez_responsibility",
+      "field_trip_cardinality"
+    ],
+    "questions": {
+      "w7_results": {
+        "question_id": "w7_results",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": [
+              {
+                "scenario_key": "add_charge_honours_review_boundary",
+                "result": "fail",
+                "observation": "Failed -> add charge service date not properly setup. After adding charge the acocunts screen doesn't load (blank) screen.",
+                "expected_result": "service date should include a date picker, change the date icon to fit the alloy branding guide.",
+                "classification": "PRODUCT_DEFECT",
+                "evidence_reference": null,
+                "scenario_definition_version": "2026-09-30.1",
+                "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+                "tester_email": "kelly.kurzman@gmail.com",
+                "environment": "staging",
+                "started_at": null,
+                "completed_at": "2026-10-01 17:25:54.784+00"
+              },
+              {
+                "scenario_key": "financial_subject",
+                "result": "not_run",
+                "observation": "Harness certification: exercising the persistence path.",
+                "expected_result": null,
+                "classification": null,
+                "evidence_reference": null,
+                "scenario_definition_version": "2026-09-14.1",
+                "deployed_revision": "020d45fbe441e6a307b68c90c78716c868dc739a",
+                "tester_email": "qa-slot1-product@example.com",
+                "environment": "staging",
+                "started_at": null,
+                "completed_at": null
+              },
+              {
+                "scenario_key": "financial_subject",
+                "result": "not_run",
+                "observation": "Hosted harness certification.",
+                "expected_result": null,
+                "classification": null,
+                "evidence_reference": null,
+                "scenario_definition_version": "2026-09-14.1",
+                "deployed_revision": "8c57bc1b69b08906ab6040a2c8e907bbc303cb9b",
+                "tester_email": "qa-slot1-product@example.com",
+                "environment": "staging",
+                "started_at": null,
+                "completed_at": null
+              },
+              {
+                "scenario_key": "financial_subject",
+                "result": "not_run",
+                "observation": "Persistence certification: exercising the write path.",
+                "expected_result": null,
+                "classification": null,
+                "evidence_reference": null,
+                "scenario_definition_version": "2026-09-30.1",
+                "deployed_revision": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+                "tester_email": "qa-slot1-product@example.com",
+                "environment": "staging",
+                "started_at": null,
+                "completed_at": null
+              }
+            ]
+          }
+        ]
+      },
+      "alvarez_field_trip": {
+        "question_id": "alvarez_field_trip",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": null
+          }
+        ]
+      },
+      "alvarez_responsibility": {
+        "question_id": "alvarez_responsibility",
+        "row_count": null,
+        "rows": [
+          {
+            "rows": null
+          }
+        ]
+      },
+      "field_trip_cardinality": {
+        "question_id": "field_trip_cardinality",
+        "row_count": null,
+        "rows": [
+          {
+            "groups": null
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}
