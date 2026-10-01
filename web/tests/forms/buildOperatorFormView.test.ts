@@ -427,3 +427,45 @@ describe("accepted conditions versus suggestions", () => {
         expect(question(v).conditionConfidence).toBe("suggested");
     });
 });
+
+describe("a grid the importer did not interpret", () => {
+    it("warns on the section instead of drawing a table that was guessed", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [
+                    {
+                        id: "s",
+                        title: "Immunization Summary",
+                        static_text: "Vaccine | Dose 1 | Dose 2\nDTaP | 01/02 | 03/04\nMMR | 05/06 | 07/08",
+                        field_ids: ["f"],
+                    } as never,
+                ],
+                fields: [field({ label: "Parent signature", type: "signature" })],
+            }),
+        );
+        expect(v.sections[0]!.tableWarning).toContain("Table needs review");
+        expect(v.sections[0]!.tableWarning).toContain("rather than guessing its columns");
+    });
+
+    it("leaves ordinary instructions alone", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [
+                    { id: "s", title: "Child", static_text: "Please complete every section in ink.", field_ids: ["f"] } as never,
+                ],
+                fields: [field({ label: "Student name" })],
+            }),
+        );
+        expect(v.sections[0]!.tableWarning).toBeNull();
+    });
+
+    it("does not call a single delimited line a table", () => {
+        const v = buildOperatorFormView(
+            draftOf({
+                sections: [{ id: "s", title: "Child", static_text: "Name | Date | Signature", field_ids: ["f"] } as never],
+                fields: [field({ label: "Student name" })],
+            }),
+        );
+        expect(v.sections[0]!.tableWarning).toBeNull();
+    });
+});
