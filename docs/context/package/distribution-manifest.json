@@ -1,0 +1,354 @@
+{
+  "schema": "alloy.context-distribution.v1",
+  "package": "alloy-context.v1",
+  "schema_version": "1.0.0",
+  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_READY_FINANCIALS_PENDING",
+  "source_staging_sha": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+  "generated_by": "scripts/build-context-package.mjs",
+  "strategy": "path-manifest",
+  "strategy_note": "Paths and blob SHAs, not copies. A detached copy becomes a competing authority the moment the source moves.",
+  "files": [
+    {
+      "path": "docs/context/alloy-benchmark-context.md",
+      "tier": 1,
+      "blob_sha": "b237f57dca32cd63358a8efec4572ee3f5d9e056",
+      "exists": true
+    },
+    {
+      "path": "docs/context/alloy-canonical-owner-map.md",
+      "tier": 1,
+      "blob_sha": "41349b0e01e1741812ba85489e462f5ce959df8f",
+      "exists": true
+    },
+    {
+      "path": "docs/context/alloy-inference-contract.md",
+      "tier": 1,
+      "blob_sha": "b12a3cf632d78094759c103e85b00daf69a4ad6e",
+      "exists": true
+    },
+    {
+      "path": "docs/context/alloy-platform-synthesis.md",
+      "tier": 1,
+      "blob_sha": "87e65e4670334b61cc469579826abdc2b75b5f12",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/glossary.md",
+      "tier": 1,
+      "blob_sha": "8a6b750d006de5bf39e06987f0c87fc790654f4b",
+      "exists": true
+    },
+    {
+      "path": "docs/api/api-architecture.md",
+      "tier": 2,
+      "blob_sha": "5d04df63788ecaa51d1fa2e1551bcc21d9039bc1",
+      "exists": true
+    },
+    {
+      "path": "docs/api/README.md",
+      "tier": 2,
+      "blob_sha": "7793d7f836a8eb860ecfd910d6e9edb206ddc2fd",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/business-process-system.md",
+      "tier": 2,
+      "blob_sha": "c394cd3c4e22538afedf3706b3e38f5fec72b32e",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/effective-dated-assignment-doctrine.md",
+      "tier": 2,
+      "blob_sha": "0d0bf34cc50647f4f831a325bab4a399627d043c",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/operational-calculations.md",
+      "tier": 2,
+      "blob_sha": "11914954de155340e432ecaa88231390046164ee",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/placement-system.md",
+      "tier": 2,
+      "blob_sha": "762ead72dc23c943863569266bf3314a0ef8ae44",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/status-and-state-system.md",
+      "tier": 2,
+      "blob_sha": "b1c2e54ad46c2bca82a51e639564a2cfb83fba1b",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/foundation/architecture.md",
+      "tier": 2,
+      "blob_sha": "fdb69587d10270c884dbdf0146cd3705e4d6b1c3",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/configuration-publication-model.md",
+      "tier": 2,
+      "blob_sha": "1085b3cd62dce413fe9daa2ea354a08135b0c464",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/roles-and-permissions.md",
+      "tier": 2,
+      "blob_sha": "9e84689b917a4b60deebff95b06e5bcd5263d291",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/staff-coverage-authority.md",
+      "tier": 2,
+      "blob_sha": "ede92f9f14fbcbdd4036dc91ba4fc4116f566a44",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/attendance-system.md",
+      "tier": 2,
+      "blob_sha": "bd79b1fed0b30d4d72e4d074aafa07b018a03c85",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/commercial-configuration.md",
+      "tier": 2,
+      "blob_sha": "14fa4a778ccff3aa9f6694cffffd3e707e8a583f",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/communications-platform.md",
+      "tier": 2,
+      "blob_sha": "121d86b3f67145cff4531a7975ce57b890a716f0",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/financials-canonical-authorities.md",
+      "tier": 2,
+      "blob_sha": "655463fc297fbc7e526a57c99fb59db54a3dd2c3",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/trust/reasoning-runtime.md",
+      "tier": 2,
+      "blob_sha": "be4ac2ed05b2e372ceccab57d64482bbf4643282",
+      "exists": true
+    },
+    {
+      "path": "docs/system/routing-doctrine.md",
+      "tier": 2,
+      "blob_sha": "9cecfff88366822d07a9c80fad47f094c6ca4c31",
+      "exists": true
+    },
+    {
+      "path": "docs/api/api-response-contract.md",
+      "tier": 3,
+      "blob_sha": "4db466ab1a98029e91374504cadd4e5498063d29",
+      "exists": true
+    },
+    {
+      "path": "docs/api/developer-platform/external/alloy-developer-platform-specification.md",
+      "tier": 3,
+      "blob_sha": "558a3cf625f51d68c541c82e4200d6a20538f87e",
+      "exists": true
+    },
+    {
+      "path": "docs/api/openapi/alloy-public-api.v1.json",
+      "tier": 3,
+      "blob_sha": "14c553b58dc9feec4e3ec674a38533cb3b582982",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/analytics/metric-platform-doctrine.md",
+      "tier": 3,
+      "blob_sha": "d37b35720f2b067c184e8727aa4e015b8ca28b14",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/data/action-status-field-matrix.md",
+      "tier": 3,
+      "blob_sha": "2db4873365e764d64727b00f76c0c738f072977b",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/entity-model.md",
+      "tier": 3,
+      "blob_sha": "5d817973335ab95da069c60acb07fece0abbfd4d",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/operations-temporal-truth-certification.md",
+      "tier": 3,
+      "blob_sha": "ac4ff76352df380c7b4f41fe48f28fc251aba032",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/record-system.md",
+      "tier": 3,
+      "blob_sha": "9ae38f13def81d411839230f0a74937950282581",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/stage-membership-and-outcomes.md",
+      "tier": 3,
+      "blob_sha": "cdcec2f973740d6f52819746da078523b6c27b1a",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/core/work-view-membership-and-navigation.md",
+      "tier": 3,
+      "blob_sha": "fd7b365d1c8ad5e01df9a980b41046f7f1cc7e8c",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/assignment-time-authority.md",
+      "tier": 3,
+      "blob_sha": "2f70b0a874a15b5bb486de5a6f28140bc5ede226",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/assignments-authority-model-debt.md",
+      "tier": 3,
+      "blob_sha": "0b9e955c9ca80d9d89c875075f987452c9b68195",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/authentication-and-session-model.md",
+      "tier": 3,
+      "blob_sha": "212f6e4dda697e5ddd7bbc010397f61291e342ad",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/rls-authority-model-director-gate.md",
+      "tier": 3,
+      "blob_sha": "418bda331cd0d61344eed91e6688fbe1a45307e2",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/governance/time-aware-staffing-projection.md",
+      "tier": 3,
+      "blob_sha": "2db3a6c80d64a0b88fd52a8f16e91c0db82cf666",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/actions-and-workflows.md",
+      "tier": 3,
+      "blob_sha": "94cc81cd8c8dc080f7fb037da9554cf02a8f723d",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/business-process-execution-platform.md",
+      "tier": 3,
+      "blob_sha": "d755a57eaa9459a3096f6f17edc84cfe31e3432b",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/configuration-platform.md",
+      "tier": 3,
+      "blob_sha": "145459f7583cb441568e3b7e2c12064b908c34d2",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/modules/operational-intelligence-platform.md",
+      "tier": 3,
+      "blob_sha": "b7ea2300ba13432d0dc09f9399062641bb8c35f5",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/operator/queue-system.md",
+      "tier": 3,
+      "blob_sha": "073c2b3574a220d6044c9035ab7edfa01411e739",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/runtime/alloy-runtime-kernel.md",
+      "tier": 3,
+      "blob_sha": "1b4ec6b5c2780b16abad51561ace74bee55be5b0",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/runtime/runtime-implementation-authorization.md",
+      "tier": 3,
+      "blob_sha": "517c689c2d4b7020cbacef05e22d145ec1a0cd23",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/runtime/runtime-realization-architecture.md",
+      "tier": 3,
+      "blob_sha": "5090e704b5f0b6f1dfa228e0133a58ed806c43b0",
+      "exists": true
+    },
+    {
+      "path": "docs/platform/runtime/stage-work-view-queue-canonical-model.md",
+      "tier": 3,
+      "blob_sha": "454c42a0b833d92057e76fa26c9f0ed12106f7f0",
+      "exists": true
+    },
+    {
+      "path": "docs/system/configuration-system.md",
+      "tier": 3,
+      "blob_sha": "4e291a59d1ac715e94e2cd06f2df7fe9e74aa60b",
+      "exists": true
+    },
+    {
+      "path": "web/scripts/routeCapabilities.declared.json",
+      "tier": 3,
+      "blob_sha": "5ad08eee02f4ba83b777e97659f89b947f99968f",
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/context-resolution.md",
+      "tier": "contract",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/documentation-impact-contract.md",
+      "tier": "contract",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/gpt-installation.md",
+      "tier": "contract",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/vacilando-integration-spec.md",
+      "tier": "contract",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/README.md",
+      "tier": "contract",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/alloy-context-package.json",
+      "tier": "manifest",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/vacilando-lanes.json",
+      "tier": "manifest",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/recertification-triggers.json",
+      "tier": "manifest",
+      "blob_sha": null,
+      "exists": true
+    },
+    {
+      "path": "docs/context/package/gpt-project-sources.json",
+      "tier": "manifest",
+      "blob_sha": null,
+      "exists": true
+    }
+  ]
+}

@@ -1,0 +1,374 @@
+{
+  "schema": "alloy.recertification-triggers.v1",
+  "package": "alloy-context.v1",
+  "note": "Machine-readable form of the staleness contract in docs/context/alloy-canonical-owner-map.md section 2. A trigger's lane must exist in vacilando-lanes.json; the validator enforces that.",
+  "check_types": [
+    "path",
+    "source",
+    "migration",
+    "census",
+    "writer-census",
+    "registry",
+    "command-registry",
+    "generated-contract",
+    "doc",
+    "doc+rfc",
+    "schema+doc",
+    "source+env",
+    "migration+census",
+    "path+parity",
+    "git-log",
+    "age+git-log"
+  ],
+  "lane_triggers": [
+    {
+      "trigger_id": "api.new-public-operation",
+      "lane": "developer-platform-api",
+      "match": "a route file added or removed under web/app/api/v1/, or a method export added to one",
+      "check_type": "path+parity",
+      "full_recertification": false,
+      "required_guard": "web/tests/support/publicSurfaceInventory.ts",
+      "doc_owner": "docs/api/api-architecture.md"
+    },
+    {
+      "trigger_id": "api.scope-change",
+      "lane": "developer-platform-api",
+      "match": "a change to the grantable scope set in web/lib/platform/external/scopeCatalog.ts",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/support/publicSurfaceInventory.ts",
+      "doc_owner": "docs/api/api-architecture.md"
+    },
+    {
+      "trigger_id": "api.error-taxonomy-change",
+      "lane": "developer-platform-api",
+      "match": "a change to the public error taxonomy",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "web/tests/support/publicSurfaceInventory.ts",
+      "doc_owner": "docs/api/api-architecture.md"
+    },
+    {
+      "trigger_id": "runtime.new-foundational-runtime",
+      "lane": "runtime",
+      "match": "a tenth foundational runtime proposed or added",
+      "check_type": "doc+rfc",
+      "full_recertification": true,
+      "required_guard": "the runtime performance certification and presentation suites",
+      "doc_owner": "docs/platform/foundation/architecture.md"
+    },
+    {
+      "trigger_id": "runtime.presentation-contract-change",
+      "lane": "runtime",
+      "match": "a change to the presentation tree or the above-fold reveal contract",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "the presentation suites",
+      "doc_owner": "docs/platform/foundation/architecture.md"
+    },
+    {
+      "trigger_id": "bp.new-lifecycle-writer",
+      "lane": "business-process",
+      "match": "a new production writer of governed lifecycle state",
+      "check_type": "writer-census",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/lifecycleWriterCensus.test.ts",
+      "doc_owner": "docs/platform/core/business-process-system.md"
+    },
+    {
+      "trigger_id": "bp.patch-allowlist-change",
+      "lane": "business-process",
+      "match": "a change to ALLOWED_KEYS or PIPELINE_ONLY_KEYS in web/app/api/admin/opportunities/[id]/route.ts",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/businessProcessLifecycleWriters.test.ts",
+      "doc_owner": "docs/platform/core/business-process-system.md"
+    },
+    {
+      "trigger_id": "access.rpc-execute-grant",
+      "lane": "identity-access",
+      "match": "a migration granting EXECUTE on a mutating function to authenticated, anon or PUBLIC",
+      "check_type": "migration+census",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/identityAccessCertificationEvidence.test.ts",
+      "doc_owner": "docs/platform/governance/roles-and-permissions.md"
+    },
+    {
+      "trigger_id": "access.new-public-table",
+      "lane": "identity-access",
+      "match": "a new table in the public schema (a default privilege grants authenticated SELECT)",
+      "check_type": "migration",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/identityAccessCertificationEvidence.test.ts",
+      "doc_owner": "docs/platform/governance/roles-and-permissions.md"
+    },
+    {
+      "trigger_id": "access.capability-change",
+      "lane": "identity-access",
+      "match": "a capability added, removed or rebound in web/scripts/routeCapabilities.declared.json",
+      "check_type": "generated-contract",
+      "full_recertification": false,
+      "required_guard": "the route capability ratchet",
+      "doc_owner": "docs/platform/governance/roles-and-permissions.md"
+    },
+    {
+      "trigger_id": "ops.temporal-table-migration",
+      "lane": "operations-temporal",
+      "match": "a migration touching child_placements, schedule_assignments or employments",
+      "check_type": "migration",
+      "full_recertification": true,
+      "required_guard": "web/tests/access/temporalCardinalityAsymmetry.test.ts, web/tests/access/participationTemporalWriterCensus.test.ts",
+      "doc_owner": "docs/platform/core/effective-dated-assignment-doctrine.md"
+    },
+    {
+      "trigger_id": "ops.new-temporal-writer",
+      "lane": "operations-temporal",
+      "match": "a new production writer of child_placements or schedule_assignments",
+      "check_type": "writer-census",
+      "full_recertification": true,
+      "required_guard": "web/tests/access/participationTemporalWriterCensus.test.ts",
+      "doc_owner": "docs/platform/core/effective-dated-assignment-doctrine.md"
+    },
+    {
+      "trigger_id": "enrollment.supersession-change",
+      "lane": "enrollment-placement",
+      "match": "a change to placement supersession, site consistency or the candidate lifecycle",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "the placement live suites",
+      "doc_owner": "docs/platform/core/placement-system.md"
+    },
+    {
+      "trigger_id": "staff.single-operational-index",
+      "lane": "staff-scheduling",
+      "match": "a UNIQUE index constraining schedule_assignments by subject_type='staff'",
+      "check_type": "migration",
+      "full_recertification": true,
+      "required_guard": "web/tests/access/temporalCardinalityAsymmetry.test.ts",
+      "doc_owner": "docs/platform/governance/staff-coverage-authority.md"
+    },
+    {
+      "trigger_id": "staff.shift-model",
+      "lane": "staff-scheduling",
+      "match": "introduction of a shift model for staff supply",
+      "check_type": "schema+doc",
+      "full_recertification": true,
+      "required_guard": "web/tests/access/temporalCardinalityAsymmetry.test.ts",
+      "doc_owner": "docs/platform/governance/staff-coverage-authority.md"
+    },
+    {
+      "trigger_id": "attendance.new-producer",
+      "lane": "attendance",
+      "match": "a new producer of attendance events",
+      "check_type": "writer-census",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/attendanceCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/attendance-system.md"
+    },
+    {
+      "trigger_id": "attendance.kiosk-identity-change",
+      "lane": "attendance",
+      "match": "a change to kiosk identity resolution or person codes",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/attendanceCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/attendance-system.md"
+    },
+    {
+      "trigger_id": "subsidy.new-command",
+      "lane": "subsidy",
+      "match": "an eleventh command carrying the fin.subsidy capability",
+      "check_type": "command-registry",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/subsidyCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/financials-canonical-authorities.md"
+    },
+    {
+      "trigger_id": "subsidy.mounted-write-surface",
+      "lane": "subsidy",
+      "match": "a mounted HTTP write route for subsidy",
+      "check_type": "path",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/subsidyCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/financials-canonical-authorities.md"
+    },
+    {
+      "trigger_id": "subsidy.suppression-bounds-change",
+      "lane": "subsidy",
+      "match": "a change to the suppression bound (smallest of claimed, expected, outstanding) or to which claim states suppress",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/subsidyCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/financials-canonical-authorities.md"
+    },
+    {
+      "trigger_id": "commercial.new-catalog-table",
+      "lane": "commercial",
+      "match": "a new pricing, catalog or discount table",
+      "check_type": "migration",
+      "full_recertification": false,
+      "required_guard": "the commercial claim matrix",
+      "doc_owner": "docs/platform/modules/commercial-configuration.md"
+    },
+    {
+      "trigger_id": "oi.new-metric-key",
+      "lane": "operational-intelligence",
+      "match": "a new registered metric key",
+      "check_type": "registry",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/operationalIntelligenceWriteAuthority.test.ts",
+      "doc_owner": "docs/platform/core/operational-calculations.md"
+    },
+    {
+      "trigger_id": "oi.new-answer-consumer",
+      "lane": "operational-intelligence",
+      "match": "a new surface consuming Operational Answers",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/operationalIntelligenceWriteAuthority.test.ts",
+      "doc_owner": "docs/platform/core/operational-calculations.md"
+    },
+    {
+      "trigger_id": "comms.provider-change",
+      "lane": "communications",
+      "match": "a provider added, removed or swapped",
+      "check_type": "source+env",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/communicationsCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/communications-platform.md"
+    },
+    {
+      "trigger_id": "comms.attention-resolution-change",
+      "lane": "communications",
+      "match": "a change to what resolves an attention item",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/communicationsCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/modules/communications-platform.md"
+    },
+    {
+      "trigger_id": "config.new-lifecycle",
+      "lane": "configuration",
+      "match": "a fifth configuration lifecycle shape",
+      "check_type": "schema+doc",
+      "full_recertification": true,
+      "required_guard": "the Configuration certification record's measured counts",
+      "doc_owner": "docs/platform/governance/configuration-publication-model.md"
+    },
+    {
+      "trigger_id": "config.publication-chain-first-rows",
+      "lane": "configuration",
+      "match": "first rows in configuration_publications or distribution_targets/_runs — the chain moving from built to in use",
+      "check_type": "census",
+      "full_recertification": true,
+      "required_guard": "the Configuration certification record's measured counts",
+      "doc_owner": "docs/platform/governance/configuration-publication-model.md"
+    },
+    {
+      "trigger_id": "config.assist-separation-change",
+      "lane": "configuration",
+      "match": "a change to the three-stage config_assist generate/review/apply separation",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "the Configuration certification record",
+      "doc_owner": "docs/platform/governance/configuration-publication-model.md"
+    },
+    {
+      "trigger_id": "ai.new-provider",
+      "lane": "ai-bos",
+      "match": "a second provider adapter, or any adapter not speaking the OpenAI wire protocol",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/aiBosCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/trust/reasoning-runtime.md"
+    },
+    {
+      "trigger_id": "ai.capability-model-backing-change",
+      "lane": "ai-bos",
+      "match": "a Trust capability becoming model-backed, or ceasing to be",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "web/tests/docs/aiBosCertificationClaims.test.ts",
+      "doc_owner": "docs/platform/trust/reasoning-runtime.md"
+    },
+    {
+      "trigger_id": "ai.trust-purity-change",
+      "lane": "ai-bos",
+      "match": "fetch(, a provider SDK, a credential, or the substring openai appearing in lib/trust",
+      "check_type": "source",
+      "full_recertification": true,
+      "required_guard": "web/tests/trust/trustBoundary.test.ts",
+      "doc_owner": "docs/platform/trust/reasoning-runtime.md"
+    },
+    {
+      "trigger_id": "urls.redirect-or-rewrite-change",
+      "lane": "product-urls",
+      "match": "a change to redirects() or rewrites() in web/next.config.ts, or to web/lib/admin/canonicalAdminRoutes.ts",
+      "check_type": "source",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/foundationSynthesisClaims.test.ts",
+      "doc_owner": "docs/system/routing-doctrine.md"
+    },
+    {
+      "trigger_id": "financials.stability-gate",
+      "lane": "financials-payments",
+      "match": "ABSENCE of change: seven consecutive quiet days under web/lib/financials/payments. This is the only trigger in the registry that fires on stillness rather than on change.",
+      "check_type": "git-log",
+      "full_recertification": true,
+      "required_guard": "a full domain certification; none exists yet",
+      "doc_owner": "docs/platform/modules/financials-canonical-authorities.md"
+    }
+  ],
+  "universal_triggers": [
+    {
+      "trigger_id": "any.owner-document-change",
+      "lane": "*",
+      "match": "a lane DIRECT owner document changes",
+      "check_type": "doc",
+      "full_recertification": false,
+      "required_guard": "web/tests/docs/contextPackageValidator.test.ts",
+      "doc_owner": "docs/context/alloy-canonical-owner-map.md",
+      "note": "Fires on every lane whose DIRECT set includes the changed file."
+    },
+    {
+      "trigger_id": "any.new-mutation-writer",
+      "lane": "*",
+      "match": "a new production writer of a table a lane owns",
+      "check_type": "writer-census",
+      "full_recertification": true,
+      "required_guard": "the lane's writer census",
+      "doc_owner": "docs/context/alloy-canonical-owner-map.md",
+      "note": "The characteristic silent regression: a writer can be added without touching any document."
+    },
+    {
+      "trigger_id": "any.new-route-family",
+      "lane": "*",
+      "match": "a new route family under a path a lane owns",
+      "check_type": "path",
+      "full_recertification": false,
+      "required_guard": "the route capability ratchet",
+      "doc_owner": "docs/context/alloy-canonical-owner-map.md",
+      "note": ""
+    },
+    {
+      "trigger_id": "any.generated-contract-change",
+      "lane": "*",
+      "match": "a generated contract changes (OpenAPI, schema docs, declared route capabilities)",
+      "check_type": "generated-contract",
+      "full_recertification": false,
+      "required_guard": "the generator's parity suite",
+      "doc_owner": "docs/context/alloy-canonical-owner-map.md",
+      "note": "A generated copy never outranks its source; drift means the generator is stale."
+    },
+    {
+      "trigger_id": "any.record-age",
+      "lane": "*",
+      "match": "a certification record older than 90 days with material commit activity in its owned paths",
+      "check_type": "age+git-log",
+      "full_recertification": false,
+      "required_guard": "manual review",
+      "doc_owner": "docs/context/alloy-canonical-owner-map.md",
+      "note": ""
+    }
+  ]
+}

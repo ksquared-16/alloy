@@ -109,6 +109,7 @@ Then: **`platform/foundation/system-overview.md`**
 11c-ii. `context/alloy-canonical-owner-map.md` — **one concern, one owner**, plus the staleness / re-certification contract
 11c-iii. `context/alloy-inference-contract.md` — **safe and forbidden inference** (the AI guardrail)
 11c-iv. `context/alloy-context-packages.md` — **what to load**: GPT tiers and Vacilando ingestion classes
+11c-v. [`context/package/README.md`](context/package/README.md) — **Alloy Context Package `alloy-context.v1`**: the distributable AI context standard (GPT project sources + Vacilando lanes, lane registry, recertification triggers, context resolution and documentation-impact contracts)
 11d. [`platform/README.md`](platform/README.md) — **platform domain index** (the folder map, and the canonical owner inside each area)
 
 ### 3. Operator experience

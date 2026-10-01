@@ -1,0 +1,540 @@
+{
+  "schema": "alloy.gpt-project-sources.v1",
+  "package": "alloy-context.v1",
+  "generated_by": "scripts/build-context-package.mjs",
+  "note": "Derived from alloy-context-package.json (Tier 1) and vacilando-lanes.json (Tiers 2-3). Do not hand-edit; re-run the generator.",
+  "tier1_cap": 5,
+  "counts": {
+    "tier1": 5,
+    "tier2": 17,
+    "tier3": 26
+  },
+  "sources": [
+    {
+      "path": "docs/context/alloy-benchmark-context.md",
+      "tier": 1,
+      "domain": "global",
+      "authority_role": "certification record",
+      "load_condition": "always",
+      "volatility": "volatile",
+      "load_mode": "FETCH_LIVE",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/context/alloy-canonical-owner-map.md",
+      "tier": 1,
+      "domain": "global",
+      "authority_role": "routing authority — decides which document is authority for a concern",
+      "load_condition": "always",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/context/alloy-inference-contract.md",
+      "tier": 1,
+      "domain": "global",
+      "authority_role": "guardrail — binding on every run",
+      "load_condition": "always",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/context/alloy-platform-synthesis.md",
+      "tier": 1,
+      "domain": "global",
+      "authority_role": "synthesis — owns nothing; every section defers to a domain owner",
+      "load_condition": "always",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/governance/glossary.md",
+      "tier": 1,
+      "domain": "global",
+      "authority_role": "reference",
+      "load_condition": "always",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/api/api-architecture.md",
+      "tier": 2,
+      "domain": "developer-platform-api",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:developer-platform-api",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/api/README.md",
+      "tier": 2,
+      "domain": "developer-platform-api",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:developer-platform-api",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/core/business-process-system.md",
+      "tier": 2,
+      "domain": "business-process",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:business-process",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/core/effective-dated-assignment-doctrine.md",
+      "tier": 2,
+      "domain": "operations-temporal",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:operations-temporal",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/core/operational-calculations.md",
+      "tier": 2,
+      "domain": "operational-intelligence",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:operational-intelligence",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/core/placement-system.md",
+      "tier": 2,
+      "domain": "enrollment-placement",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:enrollment-placement",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/core/status-and-state-system.md",
+      "tier": 2,
+      "domain": "business-process",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:business-process",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/foundation/architecture.md",
+      "tier": 2,
+      "domain": "runtime, product-urls",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:runtime",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/governance/configuration-publication-model.md",
+      "tier": 2,
+      "domain": "configuration",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:configuration",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/governance/roles-and-permissions.md",
+      "tier": 2,
+      "domain": "identity-access",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:identity-access",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/governance/staff-coverage-authority.md",
+      "tier": 2,
+      "domain": "staff-scheduling",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:staff-scheduling",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/modules/attendance-system.md",
+      "tier": 2,
+      "domain": "attendance",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:attendance",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/modules/commercial-configuration.md",
+      "tier": 2,
+      "domain": "commercial",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:commercial",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/modules/communications-platform.md",
+      "tier": 2,
+      "domain": "communications",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:communications",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/modules/financials-canonical-authorities.md",
+      "tier": 2,
+      "domain": "subsidy",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:subsidy",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/platform/trust/reasoning-runtime.md",
+      "tier": 2,
+      "domain": "ai-bos",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:ai-bos",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/system/routing-doctrine.md",
+      "tier": 2,
+      "domain": "product-urls",
+      "authority_role": "canonical owner",
+      "load_condition": "lane:product-urls",
+      "volatility": "implementation-contract",
+      "load_mode": "EMBED",
+      "safe_for_default_context": true
+    },
+    {
+      "path": "docs/api/api-response-contract.md",
+      "tier": 3,
+      "domain": "developer-platform-api",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:developer-platform-api",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/api/developer-platform/external/alloy-developer-platform-specification.md",
+      "tier": 3,
+      "domain": "developer-platform-api",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:developer-platform-api",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/api/openapi/alloy-public-api.v1.json",
+      "tier": 3,
+      "domain": "developer-platform-api",
+      "authority_role": "generated contract",
+      "load_condition": "on-demand:developer-platform-api",
+      "volatility": "generated-spec",
+      "load_mode": "FETCH_LIVE",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/analytics/metric-platform-doctrine.md",
+      "tier": 3,
+      "domain": "operational-intelligence",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:operational-intelligence",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/data/action-status-field-matrix.md",
+      "tier": 3,
+      "domain": "business-process",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:business-process",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/entity-model.md",
+      "tier": 3,
+      "domain": "identity-access",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:identity-access",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/operations-temporal-truth-certification.md",
+      "tier": 3,
+      "domain": "enrollment-placement, operations-temporal",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:enrollment-placement",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/record-system.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:runtime",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/stage-membership-and-outcomes.md",
+      "tier": 3,
+      "domain": "business-process",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:business-process",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/core/work-view-membership-and-navigation.md",
+      "tier": 3,
+      "domain": "business-process",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:business-process",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/governance/assignment-time-authority.md",
+      "tier": 3,
+      "domain": "staff-scheduling",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:staff-scheduling",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/governance/assignments-authority-model-debt.md",
+      "tier": 3,
+      "domain": "staff-scheduling",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:staff-scheduling",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/governance/authentication-and-session-model.md",
+      "tier": 3,
+      "domain": "identity-access",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:identity-access",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/governance/rls-authority-model-director-gate.md",
+      "tier": 3,
+      "domain": "identity-access",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:identity-access",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/governance/time-aware-staffing-projection.md",
+      "tier": 3,
+      "domain": "staff-scheduling",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:staff-scheduling",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/modules/actions-and-workflows.md",
+      "tier": 3,
+      "domain": "business-process",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:business-process",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/modules/business-process-execution-platform.md",
+      "tier": 3,
+      "domain": "business-process",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:business-process",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/modules/configuration-platform.md",
+      "tier": 3,
+      "domain": "configuration",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:configuration",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/modules/operational-intelligence-platform.md",
+      "tier": 3,
+      "domain": "operational-intelligence",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:operational-intelligence",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/operator/queue-system.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:runtime",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/runtime/alloy-runtime-kernel.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:runtime",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/runtime/runtime-implementation-authorization.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "PLANNED_ONLY — intent, never implementation",
+      "load_condition": "explicit-planning-task-only",
+      "volatility": "planned",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/runtime/runtime-realization-architecture.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:runtime",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/platform/runtime/stage-work-view-queue-canonical-model.md",
+      "tier": 3,
+      "domain": "runtime",
+      "authority_role": "PLANNED_ONLY — intent, never implementation",
+      "load_condition": "explicit-planning-task-only",
+      "volatility": "planned",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "docs/system/configuration-system.md",
+      "tier": 3,
+      "domain": "configuration",
+      "authority_role": "reference owner",
+      "load_condition": "on-demand:configuration",
+      "volatility": "reference",
+      "load_mode": "REFERENCE_ONLY",
+      "safe_for_default_context": false
+    },
+    {
+      "path": "web/scripts/routeCapabilities.declared.json",
+      "tier": 3,
+      "domain": "identity-access",
+      "authority_role": "generated contract",
+      "load_condition": "on-demand:identity-access",
+      "volatility": "generated-spec",
+      "load_mode": "FETCH_LIVE",
+      "safe_for_default_context": false
+    }
+  ],
+  "exclude": [
+    {
+      "path": "docs/sprints/",
+      "reason": "execution history"
+    },
+    {
+      "path": "docs/archive/",
+      "reason": "superseded generations"
+    },
+    {
+      "path": "docs/platform/planning/",
+      "reason": "intent and proposals"
+    },
+    {
+      "path": "docs/audits/",
+      "reason": "point-in-time findings"
+    },
+    {
+      "path": "docs/product/",
+      "reason": "reviews and convergence notes"
+    },
+    {
+      "path": "docs/handoffs/",
+      "reason": "session handoffs"
+    },
+    {
+      "path": "docs/platform/milestones/",
+      "reason": "historical certifications"
+    },
+    {
+      "path": "docs/marketing/",
+      "reason": "not platform truth"
+    },
+    {
+      "path": "docs/platform/qa/",
+      "reason": "not platform truth"
+    },
+    {
+      "path": "docs/platform/rfcs/",
+      "reason": "proposals"
+    },
+    {
+      "path": "certification/",
+      "reason": "release evidence, not doctrine"
+    }
+  ]
+}
