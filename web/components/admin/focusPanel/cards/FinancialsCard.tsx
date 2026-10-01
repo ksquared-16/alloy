@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
+import { hostRunsCardProducers } from "@/lib/adminV2/runtime/focusPanel/hostRunsCardProducers";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { AccountLens } from "@/lib/financials/workspace/accountLenses";
@@ -1715,7 +1716,13 @@ export default function FinancialsCard({
      * "provisioning" is what kept the workspace summary pending forever.
      */
     const provisioningAccount =
-        context.operationalProjection != null
+        /*
+         * The same correction as the bootstrap gate, for the same reason: a path that runs no
+         * producers is not a path that is "still provisioning". Reading `operationalProjection
+         * != null` here kept the pending frame up forever on exactly the hosts whose producers
+         * are never going to run.
+         */
+        hostRunsCardProducers(context.operationalProjection)
         && (customerId != null || scopedMemberId != null)
         && provisioned == null;
 
@@ -1927,7 +1934,19 @@ export default function FinancialsCard({
      * bootstraps itself once per subject, which is what it did before the projection existed. The
      * Focus Panel is untouched: it supplies the object, so this never runs there.
      */
-    const hostSuppliesProjection = context.operationalProjection != null;
+    /*
+     * ── NOT "IS THERE A PROJECTION", BUT "DOES IT CARRY MINE" ────────────────────────────────
+     *
+     * This asked a HOST-level question on behalf of a card that fetches for itself, and the two
+     * came apart on the drawer-VM path: `projectFocusPanelOperational` composes
+     * `{ businessProcess, currentWork }` and no `cards` key at all, so the projection was present,
+     * this read true, BOTH effects below returned early, and the card pulsed forever having issued
+     * no request. Measured four mounts of four on deployed staging, with Enrollment, Household and
+     * Children hydrating beside it.
+     *
+     * `hostRunsCardProducers` carries the reasoning and the three states it separates.
+     */
+    const hostSuppliesProjection = hostRunsCardProducers(context.operationalProjection);
     useEffect(() => {
         if (hostSuppliesProjection) return;
         const key = customerId ?? scopedMemberId;
@@ -4447,6 +4466,17 @@ export default function FinancialsCard({
         </div>
     );
 
+    /*
+     * ── COMMANDS ARE COLLECTED, NOT RETURNED ────────────────────────────────────────────────
+     *
+     * Each command below used to `return` straight out of the component. In the Focus Panel that
+     * is right. In Financials → Accounts it is not: Details is the FLOOR of that host, the right
+     * pane IS the account, and returning the command alone left that pane blank. Measured mounted
+     * on deployed staging — opening Add from an account drew the command over an empty pane, with
+     * `data-financials-detail-account` absent from the document and the ledger at zero rows.
+     */
+    const commandSurface = (() => {
+
     if (overlay === "add_charge" && vm && reconciliation) {
         const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
         const selected =
@@ -5326,6 +5356,20 @@ export default function FinancialsCard({
         );
     }
 
+        return null;
+    })();
+
+    /*
+     * ── THE ACCOUNT'S OWN SURFACE, COLLECTED RATHER THAN RETURNED ───────────────────────────
+     *
+     * Where Details is the floor of the host, it is wanted whether or not it is the TOP layer —
+     * that is what being a floor means. Keyed off `overlay === "detail"` alone it rendered only
+     * while nothing sat above it, so every command emptied the pane behind itself.
+     */
+    const detailFloorWanted = detailsAreTheSurface || overlay === "detail";
+    const detailFloor = (() => {
+
+
     /*
      * ── ONE DETAILS SURFACE, AND IT IS THE FINAL ONE ────────────────────────────────────────────
      *
@@ -5373,7 +5417,7 @@ export default function FinancialsCard({
      * need account-specific authority that has not resolved, and an action that is visible before
      * its authority is an action that can be aimed at the wrong account.
      */
-    if (overlay === "detail" && detailsAreTheSurface && !(vm && reconciliation) && !deniedRead) {
+    if (detailFloorWanted && detailsAreTheSurface && !(vm && reconciliation) && !deniedRead) {
         return (
             <div
                 className="alloy-os-financials"
@@ -5411,7 +5455,7 @@ export default function FinancialsCard({
         );
     }
 
-    if (overlay === "detail" && vm && reconciliation) {
+    if (detailFloorWanted && vm && reconciliation) {
         return (
             <div
                 className="alloy-os-financials"
@@ -5866,6 +5910,36 @@ export default function FinancialsCard({
             </div>
         );
     }
+
+        return null;
+    })();
+
+    /*
+     * ── THE DISPATCH: A COMMAND IS A LAYER OVER THE ACCOUNT, NEVER INSTEAD OF IT ─────────────
+     *
+     * In the Focus Panel there is no floor — the resting surface is the compact card — so a
+     * command returns alone, exactly as it always did. In Financials → Accounts the right pane IS
+     * the account, so the floor renders beneath the command and the operator keeps the thing they
+     * are charging in front of them.
+     *
+     * `financialsSurfaceRole` above already distinguishes the two for the stylesheet: the layer
+     * pushed above the floor is the command and takes the scrim, the floor is not. It was written
+     * for this and was simply never given a floor to describe.
+     */
+    if (commandSurface) {
+        return detailsAreTheSurface && detailFloor ? (
+            <>
+                {detailFloor}
+                {commandSurface}
+            </>
+        ) : (
+            <>{commandSurface}</>
+        );
+    }
+    if (detailFloor) {
+        return <>{detailFloor}</>;
+    }
+
 
     if (!expanded && vm && reconciliation && !vm.unavailableReason) {
         const periodRows = vm.rows.filter(

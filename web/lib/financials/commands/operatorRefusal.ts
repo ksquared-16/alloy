@@ -53,6 +53,15 @@ const OPERATOR_COPY: Readonly<Record<string, string>> = Object.freeze({
     charge_not_owed: "Nothing is currently owed on this charge.",
     charge_unavailable: "This charge cannot be acted on right now.",
     not_writable: "This charge cannot be written as it stands.",
+    /*
+     * Reached when the resolver priced the charge and the answer was zero: `writeTemplateDraftCharge`
+     * requires `amountCents > 0`. The command now refuses this before the money, so an operator
+     * should not meet it there — but governed replays and the enrolment path still can, and the
+     * token read identically to a broken template.
+     */
+    amount_not_resolvable:
+        "This charge type resolves to no amount for this family, so there is nothing to charge. "
+        + "Choose another type, or correct the amount this one is configured with.",
     db_error: "The change could not be saved. Nothing was recorded.",
 });
 

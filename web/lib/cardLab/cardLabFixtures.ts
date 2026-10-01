@@ -678,6 +678,7 @@ export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
     template: CHARGE_TEMPLATES[0]!,
     subject: "Avery Johnson",
     amount: "$40.00",
+    previewGrossCents: 4000,
     serviceDate: "Sep 18, 2026",
     period: "September 2026",
     due: "Sep 30, 2026",

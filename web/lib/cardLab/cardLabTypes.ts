@@ -679,6 +679,15 @@ export type AddChargeSpecimen = {
      */
     /** The gross this charge is raised at. */
     previewGross: string | null;
+    /**
+     * The same gross in cents, so a caller can tell a RESOLVED ZERO from NOT YET RESOLVED.
+     * `previewGross` cannot carry that distinction: both read as an absent line.
+     *
+     * It matters because zero is the one resolved amount the domain refuses to write —
+     * `writeTemplateDraftCharge` requires `amountCents > 0` and answers `amount_not_resolvable`
+     * otherwise — so a command that knows the figure is zero knows the commit will be refused.
+     */
+    previewGrossCents: number | null;
     /** What the chosen discount takes off it, or null when no discount applies. */
     previewDiscountAmount: string | null;
     /** Gross less discount. */

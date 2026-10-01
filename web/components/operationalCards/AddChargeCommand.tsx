@@ -234,6 +234,8 @@ export default function AddChargeCommand({
 }) {
     const t = specimen.template;
     const amountLocked = t.amountStrategy !== "manual";
+    /* A RESOLVED zero. Null is "not resolved yet" and must never block the command. */
+    const resolvesToNothing = specimen.previewGrossCents === 0;
     /* The chosen policy, resolved once so the control and the preview line cannot name different ones. */
     const selectedDiscount =
         controls?.chargeDiscount?.selectedPolicyId
@@ -875,14 +877,37 @@ export default function AddChargeCommand({
              * the last child — and committing from it would have to invent a subject. Confirm is
              * unavailable instead, which is the refusal stated before the money rather than after.
              */}
+            {/*
+             * ── A CHARGE THAT RESOLVES TO NOTHING IS REFUSED BEFORE THE MONEY, NOT AFTER ──────
+             *
+             * `writeTemplateDraftCharge` requires `amountCents > 0` and otherwise answers
+             * `amount_not_resolvable`. Measured mounted on deployed staging: the command's first
+             * charge type resolved to $0.00, Add charge was offered as an ordinary enabled
+             * primary, and pressing it returned a 409 whose only explanation was that token.
+             *
+             * The resolver's own figure is already on the specimen, so the command can know this
+             * before the operator spends a gesture on it. This is the same rule the empty-target
+             * refusal below already follows: state the refusal in front of the button rather than
+             * behind it.
+             *
+             * ZERO ONLY. `previewGrossCents` is null while the preview is still resolving, and a
+             * command that blocked on NOT YET KNOWN would refuse every charge ever raised.
+             */}
+            {resolvesToNothing ? (
+                <p className="alloy-os-addcharge__draftnote" data-addcharge-blocked="resolves_to_nothing">
+                    {`${t.label} resolves to ${specimen.previewGross ?? "no amount"} for ${specimen.subject}, `
+                     + "so there is no charge to raise. Choose another charge type, or correct this one's amount."}
+                </p>
+            ) : null}
             <ActionRow>
                 <Action
                     primary
                     disabled={
-                        controls?.unifiedTarget
+                        resolvesToNothing
+                        || (controls?.unifiedTarget
                             ? !controls.unifiedTarget.householdSelected
                               && controls.unifiedTarget.selectedChildIds.length === 0
-                            : undefined
+                            : undefined)
                     }
                     data-addcharge-submit
                     onClick={controls?.onSubmit}

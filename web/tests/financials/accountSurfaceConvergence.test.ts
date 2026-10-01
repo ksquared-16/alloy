@@ -1158,16 +1158,34 @@ describe("F24 · a host without a projection still gets an account", () => {
      * Measured before the repair: body hydrated with 56 rows, summary still pending after 18
      * seconds, the card endpoint answering 200 throughout. The two states are different:
      * "the projection has not arrived yet" and "nobody is sending one" are not the same claim.
+     *
+     * ── AND THERE WAS A THIRD STATE, FOUND IN W7 ────────────────────────────────────────────
+     *
+     * This lock asked `context.operationalProjection != null`, which reads "a projection exists,
+     * so producers are coming". On the drawer-VM path that is false: `projectFocusPanelOperational`
+     * composes `{ businessProcess, currentWork }` and no `cards` key at all, so a projection
+     * existed, this test's predicate was satisfied, and the card waited forever for producers that
+     * were never going to run. Measured on deployed staging, four mounts of four — the card mounted
+     * at `empty="loading"` and issued ZERO requests, alongside Attendance and Health in the same
+     * state.
+     *
+     * So the intent of this lock is unchanged and its predicate is sharpened: provisioning is
+     * claimed only where a producer answer is ACTUALLY coming, which is what
+     * `hostRunsCardProducers` decides. The old regex would now pass on exactly the defect above.
      */
-    it("distinguishes a pending projection from a host that supplies none", () => {
+    it("distinguishes a pending projection from a host whose producers never run", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
-        expect(card, "provisioning is only claimed where a projection is actually coming").toMatch(
-            /provisioningAccount =\s*context\.operationalProjection != null/,
+        expect(card, "provisioning is only claimed where a producer answer is actually coming").toMatch(
+            /provisioningAccount =\s*(?:\/\*[\s\S]*?\*\/\s*)?hostRunsCardProducers\(context\.operationalProjection\)/,
         );
-        expect(card, "and a projection-less host bootstraps the card itself").toContain(
+        expect(
+            card,
+            "the host-level test is gone — it could not see the producerless path",
+        ).not.toMatch(/provisioningAccount =\s*context\.operationalProjection != null/);
+        expect(card, "and a host that runs no producers bootstraps the card itself").toContain(
             "hostSuppliesProjection",
         );
-        /* The Focus Panel path is untouched: it supplies the object, so the fallback never runs. */
+        /* The producer path is untouched: it states `cards`, so the fallback never runs there. */
         expect(card).toMatch(/if \(hostSuppliesProjection\) return;/);
     });
 
@@ -2008,7 +2026,10 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
          * must stay singular is the COMPONENT: both states are the same product surface, so they
          * cannot drift into two Details the way the workspace once grew a second ledger.
          */
-        const branches = card.match(/if \(overlay === "detail"[^)]*\)/g) ?? [];
+        /* Renamed to `detailFloorWanted` when commands learned to render ABOVE the floor rather
+           than instead of it; counting the old spelling here would have counted zero. */
+        const branches = card.match(/if \(detailFloorWanted[^)]*\)/g) ?? [];
+        expect(branches.length, "both Details branches are still found").toBe(2);
         expect(branches.length, "a pending Details branch and a settled one").toBeLessThanOrEqual(2);
         expect(card, "and both render the canonical surface").toContain("<FinancialsDetailCard");
         for (const forbidden of ["PendingFinancialsDetailCard", "AccountsFinancialsLoadingCard", "FinancialsAccountWorkspaceDetail"]) {
@@ -2019,7 +2040,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
     it("C · unresolved money is reserved, never a zero and never the last account's figure", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the reserved evidence states every figure as an em dash").toContain("hydratingFinancialsEvidence()");
         expect(upto, "and declares itself hydrating so the surface says it is reading").toContain("hydrating");
         expect(upto, "no figure may be composed here at all").not.toMatch(/\$\d|toFixed\(|formatMoney|moneyExact/);
@@ -2033,7 +2054,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
          */
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "ledgerPending holds the region instead of drawing rows").toContain("ledgerPending");
         expect(upto, "and no periods are supplied for it to draw").toMatch(/periods=\{\[\]\}/);
 
@@ -2049,7 +2070,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
     it("F/G · no stale administration truth, and no command bound to an unresolved account", () => {
         const card = code("components/admin/focusPanel/cards/FinancialsCard.tsx");
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the relationship row waits rather than restating the last account's").toContain("loading: true");
         for (const live of ["onPayment=", "onAddCharge=", "onPostCharge=", "onReverseCharge=", "onAdjustCharge=", "onApplyPayment=", "onMovePayment=", "onResolveResponsibility=", "onReallocateResponsibility="]) {
             expect(upto, `${live} must not be wired before this account's authority resolves`).not.toContain(live);
@@ -2073,7 +2094,7 @@ describe("F44 · no FALSE Details during progressive settlement", () => {
             "both branches ask financialsSurfaceRole",
         ).toBeGreaterThanOrEqual(2);
         const pending = card.slice(card.indexOf("detailsAreTheSurface && !(vm && reconciliation)"));
-        const upto = pending.slice(0, pending.indexOf('if (overlay === "detail" && vm && reconciliation)'));
+        const upto = pending.slice(0, pending.indexOf('if (detailFloorWanted && vm && reconciliation)'));
         expect(upto, "the pending floor introduces no modal or scrim of its own").not.toMatch(/backdrop|scrim|modalClass/i);
     });
 
