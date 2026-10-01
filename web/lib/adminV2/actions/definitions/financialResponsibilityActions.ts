@@ -101,7 +101,35 @@ const configureResponsibility: RegisteredAction = {
     actionKey: BILLING_CONFIGURE_RESPONSIBILITY_ACTION_KEY,
     defaultLabel: "Configure responsibility",
     description: "Record which named parties contractually bear a family's obligations, from a date.",
-    supportedEntityTypes: ["child", "person", "opportunity_customer_member", "opportunity"],
+    /*
+     * ── HOUSEHOLD GRAIN IS A RESPONSIBILITY GRAIN, NOT AN ABSENCE OF ONE ─────────────────────
+     *
+     * `customer` was missing, and a household-grain charge therefore could not be given a
+     * responsible party at all: Add Charge's follow-up reached this action against the customer
+     * the charge is billed to and was refused by the registry before its payload was read —
+     * "does not support entity type customer" — so the charge posted owed by nobody while the
+     * account had a standing arrangement on record. Measured on deployed staging across three
+     * attempts.
+     *
+     * The authority already defines both grains. `financial_responsibility_arrangements` carries
+     * `customer_id` ALWAYS and `customer_member_id` NULLABLE, and a null member is deliberately
+     * the household scope — the service matches prior arrangements on that null exactly as it
+     * matches a member id. The doctrine also separates the FINANCIAL SUBJECT (what the charge is
+     * for) from the RESPONSIBLE PARTY (who owes it), and a household charge is owed by people.
+     *
+     * Admitting it changes resolution in no way, which was checked before it was added: `execute`
+     * takes `customer_id`, `customer_member_id` and `charge_id` from the PAYLOAD and reads
+     * `invocation` only to echo entityType/entityId back in the result. The writer performs no
+     * member, child or person lookup. So `customer` states the actual financial grain rather than
+     * borrowing one of the types already admitted.
+     *
+     * It takes the SHARED constant rather than a corrected copy of its own list. That list was the
+     * only hand-written one in this file, and its neighbours — resolve and reallocate, the other
+     * responsibility acts mounted from an account — already used `ACCOUNT_GRAIN_ENTITY_TYPES`,
+     * which has carried `customer` all along. One definition cannot drift from itself, and the
+     * drift is what this was.
+     */
+    supportedEntityTypes: ACCOUNT_GRAIN_ENTITY_TYPES,
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: false, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },

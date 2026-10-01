@@ -1,0 +1,29 @@
+{
+  "actions": [
+    {
+      "action": "charge.add",
+      "mode": "execute"
+    },
+    {
+      "action": "billing.configure_responsibility",
+      "mode": "execute"
+    }
+  ],
+  "responses": [
+    {
+      "ok": true,
+      "affected_id": "859f1614-0898-4991-82c1-a2055207fb43",
+      "execution_result": "{\"write_status\":\"created\",\"resolution_key\":\"tpl:field_trip:2026-10-05:7796a568-3b5f-4606-80f9-fee2dae2a419\",\"review_required\":false,\"posted\":true}"
+    },
+    {
+      "ok": false,
+      "affected_id": null,
+      "execution_result": "null"
+    }
+  ],
+  "after": {
+    "error": "The charge was created, but one step did not complete: responsibility for this charge — Action \"billing.configure_responsibility\" does not support entity type \"customer\".",
+    "notAllocated": false,
+    "detail": "FINANCIALS October 2026 CURRENT BALANCE $0.00 DUE $0.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00 No discount Manage payments → Payment Add All 5 Charges 5 Credits & adjustments 0 Funding 0 Payments 0 LEDGER NOVEMBER 2026 Balance $200.00 UPCOMING PAYMENT No payment method on file Take or record payment →"
+  }
+}
