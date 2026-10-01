@@ -42,8 +42,9 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
-import ProcessingFormMappingReview from "./ProcessingFormMappingReview";
+import ProcessingSourceFormCanvas from "./ProcessingSourceFormCanvas";
 import { buildMappingChangePayload, type MappingChoice } from "@/lib/pos/formDraft/buildMappingChangePayload";
+import { planCreateFieldFromSource } from "@/lib/pos/formDraft/createFieldFromSource";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
 import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
@@ -446,6 +447,47 @@ export default function PosTemplateSetupColumn({
      */
     const isTextSource = isTextSourcePreview(sourceFilenameEarly ?? null, null);
     const sourcePreviewUrl = isTextSource && docId ? `/api/admin/documents/${docId}/source-preview` : null;
+    /**
+     * Save one mapping decision.
+     *
+     * The save route REBUILDS the draft from the fields it is posted, so a one-field change has to post
+     * the whole set — `buildMappingChangePayload` does that, and refuses a field it cannot find rather
+     * than posting a list that would silently drop it. The response is the rebuilt draft, so what the
+     * operator sees next comes from the server rather than from an optimistic guess, and survives a
+     * reload because it was actually stored.
+     */
+    const applyMappingChoice = async (fieldId: string, choice: MappingChoice): Promise<void> => {
+        if (!caseId || !draft) return;
+        const built = buildMappingChangePayload(draft, fieldId, choice);
+        if (!built.ok) {
+            setErr(
+                built.reason === "unknown_field"
+                    ? "That question is no longer on this draft — reload and try again."
+                    : "There is nothing to save on this draft yet.",
+            );
+            return;
+        }
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(built.payload),
+            });
+            const body = (await res.json().catch(() => ({}))) as {
+                data?: { form_draft_preview?: unknown };
+                form_draft_preview?: unknown;
+                error?: string;
+            };
+            if (!res.ok) throw new Error(body.error || `Couldn't save that (${res.status})`);
+            const next = (body.data?.form_draft_preview ?? body.form_draft_preview) as typeof draft | undefined;
+            if (next) setDraft(next);
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn't save that mapping.");
+        }
+    };
+
     const showDocumentCanvas =
         !isTextSource &&
         leftView === "highlights" &&
@@ -1283,49 +1325,58 @@ export default function PosTemplateSetupColumn({
                     />
                 </div>
             ) : reviewMode === "form" && draft && !created ? (
-                <ProcessingFormMappingReview
+                <ProcessingSourceFormCanvas
                     draft={draft}
                     sourceDocumentName={sourceFilenameEarly}
+                    sourcePreviewUrl={sourcePreviewUrl}
                     onOpenAdvanced={() => setReviewMode(discovery ? "concepts" : "detailed")}
                     onChangeMapping={async (fieldId, choice: MappingChoice) => {
+                        await applyMappingChoice(fieldId, choice);
+                    }}
+                    onCreateFieldAndMap={async (fieldId, name, entity, fieldType) => {
                         /*
-                         * The save route REBUILDS the draft from the fields it is posted, so a
-                         * one-field change has to post the whole set. `buildMappingChangePayload` is
-                         * that, and it refuses a field it cannot find rather than posting a list that
-                         * would drop it. The response is the rebuilt draft, so state comes from the
-                         * server rather than from an optimistic guess.
+                         * Two steps, in this order: make the destination through the canonical
+                         * configuration API, then point the question at it. If the field cannot be
+                         * created the mapping is NOT saved, so the operator never ends up with a
+                         * question aimed at a field that does not exist.
                          */
-                        if (!caseId) return;
-                        const built = buildMappingChangePayload(draft, fieldId, choice);
-                        if (!built.ok) {
+                        const field = draft.fields?.find((f) => f.id === fieldId);
+                        const plan = planCreateFieldFromSource({
+                            label: name,
+                            entityType: entity,
+                            fieldType,
+                            ...(field?.options ? { options: field.options } : {}),
+                        });
+                        if (!plan.ok) {
                             setErr(
-                                built.reason === "unknown_field"
-                                    ? "That question is no longer on this draft — reload and try again."
-                                    : "There is nothing to save on this draft yet.",
+                                plan.reason === "unusable_name"
+                                    ? "Give the field a name with some letters or numbers in it."
+                                    : "Alloy cannot store that answer type yet.",
                             );
                             return;
                         }
                         setErr(null);
                         try {
-                            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+                            const res = await fetch("/api/admin/field-definitions", {
                                 method: "POST",
                                 credentials: "same-origin",
                                 headers: { "content-type": "application/json" },
-                                body: JSON.stringify(built.payload),
+                                body: JSON.stringify(plan.request),
                             });
-                            const body = (await res.json().catch(() => ({}))) as {
-                                data?: { form_draft_preview?: unknown };
-                                form_draft_preview?: unknown;
-                                error?: string;
-                            };
-                            if (!res.ok) throw new Error(body.error || `Couldn't save that (${res.status})`);
-                            const next = (body.data?.form_draft_preview ?? body.form_draft_preview) as
-                                | typeof draft
-                                | undefined;
-                            if (next) setDraft(next);
+                            /*
+                             * 409 means a field of that name already exists on that entity — which is
+                             * the destination the operator asked for. Mapping to it is the correct
+                             * outcome, not an error to show them.
+                             */
+                            if (!res.ok && res.status !== 409) {
+                                const body = (await res.json().catch(() => ({}))) as { error?: string };
+                                throw new Error(body.error || `Couldn't create that field (${res.status})`);
+                            }
                         } catch (e) {
-                            setErr(e instanceof Error ? e.message : "Couldn't save that mapping.");
+                            setErr(e instanceof Error ? e.message : "Couldn't create that field.");
+                            return;
                         }
+                        await applyMappingChoice(fieldId, plan.choice);
                     }}
                 />
             ) : reviewMode === "concepts" && discovery && !created ? (

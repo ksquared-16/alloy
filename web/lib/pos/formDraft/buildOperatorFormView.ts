@@ -49,12 +49,26 @@ export type SourceContext = {
     readonly sourceFieldName: string | null;
 };
 
+/** The affordance to draw, so the canvas looks like the page the operator uploaded. */
+export type ControlKind =
+    | "text"
+    | "textarea"
+    | "date"
+    | "number"
+    | "choice"
+    | "multichoice"
+    | "boolean"
+    | "upload"
+    | "signature";
+
 export type FormViewQuestion = {
     readonly kind: "question";
     readonly id: string;
     readonly label: string;
     /** "Date", "Yes / No", "Upload", "Signature" — what the family will be asked for. */
     readonly answerShape: string;
+    /** Which control to draw on the canvas, so it reads as the page it came from. */
+    readonly control: ControlKind;
     readonly required: boolean;
     /** "Required" / "Optional", so the operator reads it rather than inferring it. */
     readonly requirednessText: string;
@@ -120,6 +134,15 @@ export type FormViewSection = {
     readonly id: string;
     readonly title: string;
     readonly items: readonly FormViewItem[];
+    /**
+     * Set when the section's kept text still looks like a grid Alloy did not interpret.
+     *
+     * A table Alloy DID understand is already a repeatable group, with its rows as instances. A grid it
+     * did not understand has no construct behind it, and drawing one anyway would invent columns the
+     * document never had. So the honest output is a warning on the section: the operator is told the
+     * grid is still raw, rather than shown a plausible-looking table that is wrong.
+     */
+    readonly tableWarning: string | null;
 };
 
 export type OperatorFormView = {
@@ -145,6 +168,44 @@ const ANSWER_SHAPE: Record<string, string> = {
     file_ref: "Upload",
     signature: "Signature",
 };
+
+/**
+ * The control a source field becomes.
+ *
+ * Drawn so the canvas reads as the document: a long-answer question gets a box with room in it, a
+ * choice gets radio dots, a yes/no gets two of them. The source said which it was; reproducing that is
+ * most of what makes an operator recognise their own form.
+ */
+function controlKindFor(field: { type: string; options?: readonly string[]; label?: string }): ControlKind {
+    if (field.type === "signature") return "signature";
+    if (field.type === "file_ref") return "upload";
+    if (field.type === "boolean") return "boolean";
+    if (field.type === "date") return "date";
+    if (field.type === "number") return "number";
+    if (field.type === "multiselect") return "multichoice";
+    if (field.options?.length) return field.type === "multiselect" ? "multichoice" : "choice";
+    // "Describe…", "Explain…", "List…" want room; a name does not.
+    if (/\b(describe|explain|details?|list|notes?|comments?|reason)\b/i.test(field.label ?? "")) return "textarea";
+    return "text";
+}
+
+/** The canonical field type to offer when an operator creates a destination from a source field. */
+export function suggestedFieldTypeFor(control: ControlKind): "text" | "number" | "date" | "boolean" | "select" | "multiselect" {
+    switch (control) {
+        case "date":
+            return "date";
+        case "number":
+            return "number";
+        case "boolean":
+            return "boolean";
+        case "choice":
+            return "select";
+        case "multichoice":
+            return "multiselect";
+        default:
+            return "text";
+    }
+}
 
 function answerShapeFor(field: { type: string; options?: readonly string[] }): string {
     if (field.options?.length && (field.type === "text" || field.type === "select")) return "Choice";
@@ -311,6 +372,24 @@ function conditionFor(
     return null;
 }
 
+/* ------------------------------------------------------------------ tables */
+
+/**
+ * Does the kept text read as a grid rather than a paragraph?
+ *
+ * Two or more lines that each split into three or more cells on a pipe, a tab, or a run of spaces is
+ * what a table looks like once its formatting is gone. This is a detector for "there is a grid here
+ * nobody interpreted", not an attempt to read the grid.
+ */
+function looksTabular(text: string): boolean {
+    const rows = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => line.split(/\s*\|\s*|\t+|\s{3,}/).filter(Boolean).length >= 3);
+    return rows.length >= 2;
+}
+
 /* ------------------------------------------------------------------ building */
 
 function sourceContextFor(field: DraftFormField): SourceContext {
@@ -328,6 +407,7 @@ function toQuestion(field: DraftFormField): FormViewQuestion {
         id: field.id,
         label: field.label,
         answerShape: answerShapeFor(field),
+        control: controlKindFor(field),
         required: Boolean(field.required),
         requirednessText: field.required ? "Required" : "Optional",
         absenceText: absenceTextFor(field),
@@ -517,7 +597,14 @@ export function buildOperatorFormView(
             previous = field;
         }
 
-        if (items.length) sections.push({ id: section.id, title: section.title, items });
+        if (items.length) {
+            sections.push({
+                id: section.id,
+                title: section.title,
+                items,
+                tableWarning: looksTabular(prose) ? "Table needs review \u2014 Alloy kept this grid as text rather than guessing its columns." : null,
+            });
+        }
     }
 
     // A group whose members never appeared in a section still belongs on the form.
@@ -528,7 +615,7 @@ export function buildOperatorFormView(
             questionCount += 1;
             if (q.mapping === "known") knownCount += 1;
         }
-        sections.push({ id: `collection-${group.id}`, title: built.label, items: [built] });
+        sections.push({ id: `collection-${group.id}`, title: built.label, items: [built], tableWarning: null });
     }
 
     return {
