@@ -13,3 +13,5 @@
 .provenance-census-request.json
 .push-request.generated.json
 .restore-request.json
+.merge5-request.generated.json
+.pr6-request.generated.json
