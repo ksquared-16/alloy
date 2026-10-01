@@ -62,10 +62,11 @@ const STEPS: readonly Step[] = [
     {
         gate: "H3",
         title: "Review what Alloy found",
-        lead: "Alloy shows you the form it built. Read down it beside your document.",
+        lead: "Alloy shows you your own form back, with what it understood marked on it. Read down it beside your document.",
         doThis: [
-            "Look through the form Alloy built and tell us what feels wrong.",
-            "Anything marked as needing your decision is highlighted — see whether you can tell what it is asking.",
+            "Check that this looks like the form you uploaded — same headings, same questions, same order.",
+            "Anything Alloy could not place is marked on the field itself. See whether you can tell what it is asking.",
+            "Use the filters along the top to pick out just the ones that need you.",
         ],
         noticing: [
             "Wording — does it say what the paper says?",
@@ -83,7 +84,10 @@ const STEPS: readonly Step[] = [
         gate: "H4",
         title: "Fix what it got wrong",
         lead: "Correct anything that is not right, using Alloy's own controls.",
-        doThis: ["Make the corrections you would want to make before showing this to a family."],
+        doThis: [
+            "Make the corrections you would want to make before showing this to a family.",
+            "On a field Alloy could not place, use Map it — and + Create field if Alloy has nowhere to keep that answer yet.",
+        ],
         noticing: [
             "Could you fix it, or only see that it was wrong?",
             "Did a correction stick?",
