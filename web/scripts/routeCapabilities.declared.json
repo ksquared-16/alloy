@@ -1805,6 +1805,13 @@
         "helper": "assertDocumentAccess"
       }
     },
+    "app/api/admin/documents/[id]/source-preview/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess"
+      }
+    },
     "app/api/admin/documents/entity-options/route.ts": {
       "GET": {
         "status": "pending"
