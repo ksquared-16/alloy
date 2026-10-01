@@ -33,6 +33,8 @@
     "local-dev:runtime-paths": "bash scripts/local-dev/alloy-runtime-paths",
     "local-dev:cert-leak-report": "bash scripts/local-dev/alloy-cert-leak-report",
     "local-dev:test:ai-health": "bash scripts/local-dev/tests/test-ai-health.sh",
+    "context:package": "node scripts/build-context-package.mjs",
+    "context:package:check": "node scripts/build-context-package.mjs --check",
     "docs:lint": "node scripts/docs-lint.mjs",
     "docs:lint:ci": "node scripts/docs-lint.mjs --ci --base origin/staging",
     "docs:lint:baseline": "node scripts/docs-lint.mjs --write-baseline",

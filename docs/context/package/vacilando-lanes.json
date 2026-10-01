@@ -1,0 +1,1060 @@
+{
+  "schema": "alloy.vacilando-lanes.v1",
+  "package": "alloy-context.v1",
+  "generated_from": "docs/context/alloy-canonical-owner-map.md + docs/context/alloy-benchmark-context.md",
+  "note": "Hand-authored source of distribution truth. web/tests/docs/contextPackageValidator.test.ts binds it to the certified documents; it is not generated and must not be regenerated from prose.",
+  "cross_lane_rule": {
+    "statement": "A task that materially affects more than one lane picks exactly ONE primary mutation lane.",
+    "steps": [
+      "identify every affected lane",
+      "choose one primary mutation lane and record it",
+      "load secondary lane DIRECT context read-only",
+      "fire recertification checks for every affected lane",
+      "never open duplicate competing work in a secondary lane"
+    ]
+  },
+  "lanes": [
+    {
+      "id": "developer-platform-api",
+      "display_name": "Developer Platform / API",
+      "status": "certified",
+      "domain": "Developer Platform / API",
+      "purpose": "The external partner contract and the internal admin API, kept apart.",
+      "owns": [
+        "the /api/v1 public surface and its contract",
+        "the public scope catalog and error taxonomy",
+        "the /api/admin response envelope",
+        "OpenAPI publication parity"
+      ],
+      "does_not_own": [
+        "the domain semantics behind any endpoint — those belong to the domain lane",
+        "authentication and session mechanics (identity-access)",
+        "outbound partner event delivery, which does not exist"
+      ],
+      "direct": [
+        "docs/api/api-architecture.md",
+        "docs/api/README.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/api/api-response-contract.md",
+        "docs/api/developer-platform/external/alloy-developer-platform-specification.md"
+      ],
+      "generated": [
+        "docs/api/openapi/alloy-public-api.v1.json"
+      ],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/api/api-documentation-audit.md",
+        "docs/api/developer-platform/product/"
+      ],
+      "safe": [
+        "Alloy has two APIs and they share no contract",
+        "the public surface is closed: 18 paths, no generic PUT/PATCH/DELETE",
+        "Attendance is public; Financials and Communications are not"
+      ],
+      "forbidden": [
+        "that an /api/admin behaviour applies to /api/v1 or the reverse",
+        "that a public operation exists because an internal one does",
+        "that the generated partner package is a second source of truth",
+        "that Alloy has no partner API — it is versioned and certified"
+      ],
+      "evidence": [
+        "web/app/api/v1/",
+        "web/app/api/v1/oauth/token/route.ts",
+        "web/tests/support/publicSurfaceInventory.ts"
+      ],
+      "triggers": [
+        "api.new-public-operation",
+        "api.scope-change",
+        "api.error-taxonomy-change"
+      ],
+      "related": [
+        "identity-access",
+        "attendance"
+      ],
+      "task_routing_hints": [
+        "API",
+        "integration",
+        "partner",
+        "endpoint",
+        "OpenAPI",
+        "scope",
+        "token",
+        "webhook"
+      ]
+    },
+    {
+      "id": "runtime",
+      "display_name": "Runtime",
+      "status": "certified",
+      "domain": "Runtime",
+      "purpose": "The foundational runtimes that interpret configuration and render the operator plane.",
+      "owns": [
+        "the nine foundational runtimes",
+        "the presentation tree and reveal contract",
+        "resolver-backed record detail",
+        "workspace and Focus Panel composition"
+      ],
+      "does_not_own": [
+        "product URLs and redirects (see the product-urls shared concern)",
+        "what a stage or status MEANS (business-process)",
+        "configuration authoring (configuration)"
+      ],
+      "direct": [
+        "docs/platform/foundation/architecture.md"
+      ],
+      "shared": [
+        "product-urls"
+      ],
+      "reference": [
+        "docs/platform/runtime/alloy-runtime-kernel.md",
+        "docs/platform/runtime/runtime-realization-architecture.md",
+        "docs/platform/operator/queue-system.md",
+        "docs/platform/core/record-system.md"
+      ],
+      "generated": [],
+      "planned_only": [
+        "docs/platform/runtime/runtime-implementation-authorization.md",
+        "docs/platform/runtime/stage-work-view-queue-canonical-model.md"
+      ],
+      "exclude_history": [
+        "docs/platform/milestones/"
+      ],
+      "safe": [
+        "authoritative record detail comes from the resolver-backed entity GET, never a queue preview",
+        "Work Views, Queues and lane badges are projections",
+        "runtime construction is frozen; a new foundational runtime requires an RFC"
+      ],
+      "forbidden": [
+        "that a queue page is a cohort or a badge count is a fact",
+        "that the two still-proposed runtime documents are authority",
+        "that an empty surface means no data exists"
+      ],
+      "evidence": [
+        "web/lib/presentation/",
+        "web/next.config.ts"
+      ],
+      "triggers": [
+        "runtime.new-foundational-runtime",
+        "runtime.presentation-contract-change"
+      ],
+      "related": [
+        "business-process",
+        "configuration"
+      ],
+      "task_routing_hints": [
+        "runtime",
+        "workspace",
+        "readiness",
+        "Focus Panel",
+        "presentation",
+        "reveal",
+        "surface host",
+        "drawer"
+      ]
+    },
+    {
+      "id": "business-process",
+      "display_name": "Business Process",
+      "status": "certified",
+      "domain": "Business Process",
+      "purpose": "Process position and governed disposition: stage, status, outcome, work.",
+      "owns": [
+        "Organization to Business Process to Stage to Record hierarchy",
+        "persisted stage as process position",
+        "governed Status and status_definitions",
+        "stage outcomes and work instantiation",
+        "actions and workflow effects"
+      ],
+      "does_not_own": [
+        "effective-dated operational truth (operations-temporal)",
+        "who may perform an action (identity-access)",
+        "the queue rendering (runtime)"
+      ],
+      "direct": [
+        "docs/platform/core/business-process-system.md",
+        "docs/platform/core/status-and-state-system.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/modules/business-process-execution-platform.md",
+        "docs/platform/core/stage-membership-and-outcomes.md",
+        "docs/platform/core/work-view-membership-and-navigation.md",
+        "docs/platform/modules/actions-and-workflows.md",
+        "docs/platform/core/data/action-status-field-matrix.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/"
+      ],
+      "safe": [
+        "persisted Stage is process position",
+        "Status does not define Stage",
+        "lane membership is stage AND status"
+      ],
+      "forbidden": [
+        "that Status defines or derives Stage",
+        "that a filtered queue page is a cohort",
+        "that an authored status_key is anything more than a disposition"
+      ],
+      "evidence": [
+        "web/app/api/admin/opportunities/[id]/route.ts",
+        "web/tests/docs/lifecycleWriterCensus.test.ts"
+      ],
+      "triggers": [
+        "bp.new-lifecycle-writer",
+        "bp.patch-allowlist-change"
+      ],
+      "related": [
+        "runtime",
+        "enrollment-placement",
+        "operational-intelligence"
+      ],
+      "task_routing_hints": [
+        "status",
+        "stage",
+        "outcome",
+        "process",
+        "lifecycle",
+        "work item",
+        "queue membership",
+        "transition"
+      ]
+    },
+    {
+      "id": "identity-access",
+      "display_name": "Identity / Access",
+      "status": "certified",
+      "domain": "Identity / Access",
+      "purpose": "Who someone is, and what they may do. Capability authorization and tenant isolation.",
+      "owns": [
+        "Person as canonical human identity",
+        "roles, capabilities and route authorization",
+        "RLS tenant isolation",
+        "authentication and session model"
+      ],
+      "does_not_own": [
+        "what a domain action MEANS once authorized",
+        "the public API token exchange contract (developer-platform-api)"
+      ],
+      "direct": [
+        "docs/platform/governance/roles-and-permissions.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/governance/authentication-and-session-model.md",
+        "docs/platform/governance/rls-authority-model-director-gate.md",
+        "docs/platform/core/entity-model.md"
+      ],
+      "generated": [
+        "web/scripts/routeCapabilities.declared.json"
+      ],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/platform/planning/"
+      ],
+      "safe": [
+        "RLS owns tenant isolation; route capabilities authorize product actions",
+        "Person is canonical identity; contacts is compatibility only",
+        "email does not define Person identity"
+      ],
+      "forbidden": [
+        "that a route with no capability call is ungated — authority may live in a service, handler library, registered action or token boundary",
+        "that a table grant with no admitting policy is permissive; absence is not a wildcard",
+        "that a capability's name implies its scope"
+      ],
+      "evidence": [
+        "web/scripts/routeCapabilities.declared.json",
+        "supabase/migrations/",
+        "web/tests/docs/identityAccessCertificationEvidence.test.ts"
+      ],
+      "triggers": [
+        "access.rpc-execute-grant",
+        "access.new-public-table",
+        "access.capability-change"
+      ],
+      "related": [
+        "developer-platform-api",
+        "configuration"
+      ],
+      "task_routing_hints": [
+        "role",
+        "permission",
+        "capability",
+        "RLS",
+        "access",
+        "policy",
+        "session",
+        "auth",
+        "tenant",
+        "org scoping"
+      ]
+    },
+    {
+      "id": "enrollment-placement",
+      "display_name": "Enrollment / Placement",
+      "status": "certified",
+      "domain": "Enrollment / Placement",
+      "purpose": "Placement candidates, enrollment agreements, and where a child is placed.",
+      "owns": [
+        "the placement candidate lifecycle",
+        "enrollment agreements and their site consistency",
+        "placement supersession as a product behaviour"
+      ],
+      "does_not_own": [
+        "the temporal mechanics of supersession (operations-temporal)",
+        "attendance observation (attendance)",
+        "money (subsidy / commercial / financials)"
+      ],
+      "direct": [
+        "docs/platform/core/placement-system.md"
+      ],
+      "shared": [
+        "operations-temporal"
+      ],
+      "reference": [
+        "docs/platform/core/operations-temporal-truth-certification.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/"
+      ],
+      "safe": [
+        "a placement allows at most one operational row per agreement",
+        "a future-dated placement change closes the present one immediately",
+        "a cancelled row is retained, not deleted"
+      ],
+      "forbidden": [
+        "that a cross-site move is represented — it is not, deliberately",
+        "that latest row means active row",
+        "that a correction path exists because an edit form does"
+      ],
+      "evidence": [
+        "web/lib/childcareOperational/childPlacementService.ts",
+        "web/tests/access/live/participationOperationalChange.live.test.ts"
+      ],
+      "triggers": [
+        "ops.temporal-table-migration",
+        "enrollment.supersession-change"
+      ],
+      "related": [
+        "operations-temporal",
+        "staff-scheduling",
+        "attendance",
+        "business-process"
+      ],
+      "task_routing_hints": [
+        "placement",
+        "candidate",
+        "enrollment",
+        "agreement",
+        "room",
+        "waitlist",
+        "offer",
+        "child placement"
+      ]
+    },
+    {
+      "id": "staff-scheduling",
+      "display_name": "Staff / Scheduling",
+      "status": "certified",
+      "domain": "Staff / Scheduling",
+      "purpose": "Employment, staff assignment and coverage expectation.",
+      "owns": [
+        "employment records and staff subject identity",
+        "staff assignment eligibility and coverage authority",
+        "time-aware staffing projection"
+      ],
+      "does_not_own": [
+        "attendance observation — schedule is expectation, not observation",
+        "the temporal mechanics (operations-temporal)",
+        "child placement (enrollment-placement)"
+      ],
+      "direct": [
+        "docs/platform/governance/staff-coverage-authority.md"
+      ],
+      "shared": [
+        "operations-temporal"
+      ],
+      "reference": [
+        "docs/platform/governance/time-aware-staffing-projection.md",
+        "docs/platform/governance/assignment-time-authority.md",
+        "docs/platform/governance/assignments-authority-model-debt.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/"
+      ],
+      "safe": [
+        "staff primary assignments are overlap-governed only",
+        "a staff member may hold a current and a future-dated primary assignment at once",
+        "schedule is expectation; Attendance is observation",
+        "staff supply is schedule_assignments with subject_type='staff' — there is no shift model"
+      ],
+      "forbidden": [
+        "that one cardinality rule covers every effective-dated table",
+        "that Scheduling is Attendance truth",
+        "that a shift model exists"
+      ],
+      "evidence": [
+        "web/lib/operationalAssignments/setPrimaryOperationalAssignment.ts",
+        "web/tests/access/temporalCardinalityAsymmetry.test.ts"
+      ],
+      "triggers": [
+        "ops.temporal-table-migration",
+        "staff.single-operational-index",
+        "staff.shift-model"
+      ],
+      "related": [
+        "operations-temporal",
+        "enrollment-placement",
+        "attendance"
+      ],
+      "task_routing_hints": [
+        "staff",
+        "employment",
+        "schedule",
+        "assignment",
+        "coverage",
+        "staffing",
+        "shift",
+        "ratio"
+      ]
+    },
+    {
+      "id": "attendance",
+      "display_name": "Attendance",
+      "status": "certified",
+      "domain": "Attendance",
+      "purpose": "Observed presence: immutable attendance facts and their producers.",
+      "owns": [
+        "attendance events and their immutability",
+        "kiosk producers and person codes",
+        "the attendance capability pair"
+      ],
+      "does_not_own": [
+        "expected presence — that is staff-scheduling and enrollment-placement",
+        "billing consequences of attendance (financials, pending)"
+      ],
+      "direct": [
+        "docs/platform/modules/attendance-system.md"
+      ],
+      "shared": [
+        "operations-temporal"
+      ],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "certification/kiosk/"
+      ],
+      "safe": [
+        "Attendance is observation, not expectation",
+        "attendance facts are immutable",
+        "attendance is permission-gated, not flag-gated",
+        "attendance is exposed on the public API"
+      ],
+      "forbidden": [
+        "that a schedule implies an attendance record",
+        "that an attendance fact may be edited in place",
+        "that kiosk identity is the same as operator identity"
+      ],
+      "evidence": [
+        "web/app/kiosk/",
+        "web/tests/docs/attendanceCertificationClaims.test.ts"
+      ],
+      "triggers": [
+        "attendance.new-producer",
+        "attendance.kiosk-identity-change"
+      ],
+      "related": [
+        "staff-scheduling",
+        "enrollment-placement",
+        "operational-intelligence"
+      ],
+      "task_routing_hints": [
+        "attendance",
+        "check-in",
+        "check-out",
+        "kiosk",
+        "present",
+        "absence",
+        "person code"
+      ]
+    },
+    {
+      "id": "subsidy",
+      "display_name": "Subsidy",
+      "status": "certified",
+      "domain": "Subsidy",
+      "purpose": "Collection suppression from third-party funding. Derived, never stored.",
+      "owns": [
+        "subsidy claims and their lifecycle",
+        "the suppression calculation and its bounds",
+        "the fin.subsidy capability family"
+      ],
+      "does_not_own": [
+        "obligation, reduction, responsibility or payment — subsidy changes none of them",
+        "payment collection mechanics (financials, pending)",
+        "pricing (commercial)"
+      ],
+      "direct": [
+        "docs/platform/modules/financials-canonical-authorities.md"
+      ],
+      "shared": [],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "certification/financials/"
+      ],
+      "safe": [
+        "subsidy suppresses collection and is derived, never stored",
+        "only a SUBMITTED claim suppresses",
+        "suppression is bounded by the smallest of claimed, expected and outstanding",
+        "there is no mounted HTTP write surface — subsidy is command-dispatched"
+      ],
+      "forbidden": [
+        "that subsidy is a payment",
+        "that an authorization or draft claim suppresses collection",
+        "that a shortfall raises what the family owes"
+      ],
+      "evidence": [
+        "web/lib/financials/",
+        "web/tests/docs/subsidyCertificationClaims.test.ts"
+      ],
+      "triggers": [
+        "subsidy.new-command",
+        "subsidy.mounted-write-surface",
+        "subsidy.suppression-bounds-change"
+      ],
+      "related": [
+        "commercial",
+        "financials-payments"
+      ],
+      "task_routing_hints": [
+        "subsidy",
+        "claim",
+        "suppression",
+        "funding",
+        "voucher",
+        "third-party payer"
+      ]
+    },
+    {
+      "id": "commercial",
+      "display_name": "Commercial",
+      "status": "certified",
+      "domain": "Commercial",
+      "purpose": "Pricing intent: catalog, rates, policies, accounting configuration.",
+      "owns": [
+        "the product and rate catalog",
+        "fees, add-ons, deposits and discount programs",
+        "pricing policies and the simulator",
+        "revenue categories and accounting configuration"
+      ],
+      "does_not_own": [
+        "the obligation its pricing produces — Commercial owns intent only",
+        "payment collection (financials, pending)",
+        "subsidy suppression (subsidy)"
+      ],
+      "direct": [
+        "docs/platform/modules/commercial-configuration.md"
+      ],
+      "shared": [],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "certification/financials/"
+      ],
+      "safe": [
+        "Commercial owns pricing intent, not the resulting obligation",
+        "childcare tuition lives in commercial_tuition_rates, not the retired pricing_* vertical"
+      ],
+      "forbidden": [
+        "that a quote is an obligation",
+        "that Commercial owns the obligation its pricing produces",
+        "that the pricing_* tables describe childcare tuition — they administer the retired Jobs/Booking vertical"
+      ],
+      "evidence": [
+        "web/lib/financials/",
+        "supabase/migrations/"
+      ],
+      "triggers": [
+        "commercial.new-catalog-table"
+      ],
+      "related": [
+        "subsidy",
+        "financials-payments",
+        "configuration"
+      ],
+      "task_routing_hints": [
+        "pricing",
+        "rate",
+        "tuition",
+        "discount",
+        "policy",
+        "catalog",
+        "fee",
+        "add-on",
+        "deposit",
+        "simulator"
+      ]
+    },
+    {
+      "id": "operational-intelligence",
+      "display_name": "Operational Intelligence",
+      "status": "certified",
+      "domain": "Operational Intelligence",
+      "purpose": "Deterministic derivation: metrics, calculations and Answers.",
+      "owns": [
+        "registered metric keys and the metric platform",
+        "operational calculations",
+        "Answer production and its consumer surfaces"
+      ],
+      "does_not_own": [
+        "acting on an answer — an OI reading authorizes nothing",
+        "model-backed reasoning (ai-bos)",
+        "the underlying domain facts"
+      ],
+      "direct": [
+        "docs/platform/core/operational-calculations.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/modules/operational-intelligence-platform.md",
+        "docs/platform/analytics/metric-platform-doctrine.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/platform/planning/"
+      ],
+      "safe": [
+        "an OI answer is a reading, not an action",
+        "intelligence is not a catch-all for every derived datum — four output families exist and differ by authored versus derived",
+        "OI confers no mutation authority"
+      ],
+      "forbidden": [
+        "that an OI recommendation is an action",
+        "that a derived datum is authored truth",
+        "that asking a question authors a record"
+      ],
+      "evidence": [
+        "web/lib/presentation/runtime/useOperationalAnswers.ts",
+        "web/tests/docs/operationalIntelligenceWriteAuthority.test.ts"
+      ],
+      "triggers": [
+        "oi.new-metric-key",
+        "oi.new-answer-consumer"
+      ],
+      "related": [
+        "business-process",
+        "attendance",
+        "ai-bos"
+      ],
+      "task_routing_hints": [
+        "metric",
+        "calculation",
+        "answer",
+        "insight",
+        "KPI",
+        "operational expectation",
+        "projection",
+        "dashboard"
+      ]
+    },
+    {
+      "id": "communications",
+      "display_name": "Communications",
+      "status": "certified",
+      "domain": "Communications",
+      "purpose": "What the organization meant to send, and what a provider did with it.",
+      "owns": [
+        "the canonical enqueue path and send intent",
+        "message threads and operator triage",
+        "provider webhook ingestion"
+      ],
+      "does_not_own": [
+        "provider delivery state as business truth",
+        "attention resolution semantics beyond triage",
+        "identity resolution of inbound senders (identity-access, processing)"
+      ],
+      "direct": [
+        "docs/platform/modules/communications-platform.md"
+      ],
+      "shared": [],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/"
+      ],
+      "safe": [
+        "Alloy owns intent; the provider owns transport",
+        "provider delivery state is not business truth",
+        "only operator triage resolves an attention item"
+      ],
+      "forbidden": [
+        "that a reply clears attention",
+        "that a delivered or bounced webhook resolves operator work",
+        "that a named provider is in use because a document mentions it"
+      ],
+      "evidence": [
+        "web/lib/communications/",
+        "web/tests/docs/communicationsCertificationClaims.test.ts"
+      ],
+      "triggers": [
+        "comms.provider-change",
+        "comms.attention-resolution-change"
+      ],
+      "related": [
+        "identity-access",
+        "business-process"
+      ],
+      "task_routing_hints": [
+        "message",
+        "email",
+        "SMS",
+        "send",
+        "reply",
+        "thread",
+        "inbox",
+        "provider",
+        "delivery",
+        "attention"
+      ]
+    },
+    {
+      "id": "configuration",
+      "display_name": "Configuration",
+      "status": "certified",
+      "domain": "Configuration",
+      "purpose": "Org-authored intent, and the four distinct lifecycles that publish it.",
+      "owns": [
+        "the four configuration lifecycles and their asymmetry",
+        "entity layouts and their append-only rule",
+        "business process drafts and revisions",
+        "the Programs publish-and-distribute chain",
+        "the three-stage config_assist separation"
+      ],
+      "does_not_own": [
+        "runtime execution of configuration (runtime)",
+        "product URLs (product-urls shared concern)",
+        "what a capability authorizes (identity-access)"
+      ],
+      "direct": [
+        "docs/platform/governance/configuration-publication-model.md"
+      ],
+      "shared": [
+        "product-urls"
+      ],
+      "reference": [
+        "docs/platform/modules/configuration-platform.md",
+        "docs/system/configuration-system.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/platform/planning/"
+      ],
+      "safe": [
+        "configuration expresses intent; the runtime owns execution",
+        "entity_layouts is append-only — republish, never edit or delete",
+        "four distinct configuration lifecycles exist, not one",
+        "the Programs publication chain is built with zero rows"
+      ],
+      "forbidden": [
+        "that configuration is uniformly versioned — three of the four lifecycles are not",
+        "that JSON can create or weaken an invariant",
+        "that the Programs publication chain is in use",
+        "that a config_assist proposal carries mutation authority"
+      ],
+      "evidence": [
+        "web/lib/agent/configLayoutAssist/configurationProposalApiHelpers.ts",
+        "web/app/adminV2/settings/"
+      ],
+      "triggers": [
+        "config.new-lifecycle",
+        "config.publication-chain-first-rows",
+        "config.assist-separation-change"
+      ],
+      "related": [
+        "runtime",
+        "identity-access",
+        "commercial"
+      ],
+      "task_routing_hints": [
+        "settings",
+        "configuration",
+        "publication",
+        "layout",
+        "field",
+        "draft",
+        "revision",
+        "distribute",
+        "program catalog",
+        "option set"
+      ]
+    },
+    {
+      "id": "ai-bos",
+      "display_name": "AI / BOS",
+      "status": "certified",
+      "domain": "AI / BOS",
+      "purpose": "Model-backed reasoning behind the Trust boundary, and what it may not do.",
+      "owns": [
+        "the Trust boundary and provider port",
+        "the one OpenAI-wire-protocol adapter",
+        "Trust capability authorization",
+        "BOS command sessions"
+      ],
+      "does_not_own": [
+        "mutation authority — applying a proposal takes the domain's capability",
+        "deterministic derivation (operational-intelligence)",
+        "autonomous agent behaviour, which does not exist"
+      ],
+      "direct": [
+        "docs/platform/trust/reasoning-runtime.md"
+      ],
+      "shared": [],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "docs/sprints/"
+      ],
+      "safe": [
+        "AI reasoning confers no mutation authority",
+        "two of four Trust capabilities reach a model; two are deterministic",
+        "the live gate is credential presence plus org policy, not a boolean flag",
+        "lib/trust contains no fetch, no SDK and no credential"
+      ],
+      "forbidden": [
+        "that every /api/admin/ai/* route invokes a model",
+        "that a configurable base URL means multi-provider support",
+        "that autonomous agents are current behaviour",
+        "that AI reasoning authorizes a mutation"
+      ],
+      "evidence": [
+        "web/lib/ai/trust/openAiCompatibleProviderAdapter.ts",
+        "web/lib/ai/aiEnrichmentEnv.ts",
+        "web/tests/docs/aiBosCertificationClaims.test.ts"
+      ],
+      "triggers": [
+        "ai.new-provider",
+        "ai.capability-model-backing-change",
+        "ai.trust-purity-change"
+      ],
+      "related": [
+        "operational-intelligence",
+        "configuration",
+        "identity-access"
+      ],
+      "task_routing_hints": [
+        "AI",
+        "model",
+        "prompt",
+        "provider",
+        "OpenAI",
+        "trust",
+        "reasoning",
+        "enrichment",
+        "assist",
+        "BOS",
+        "agent"
+      ]
+    }
+  ],
+  "shared_context_packages": [
+    {
+      "id": "operations-temporal",
+      "display_name": "Operations temporal truth",
+      "status": "certified-shared",
+      "domain": "Operations temporal truth",
+      "purpose": "The one law for effective-dated operational truth. A shared dependency, never a mutation lane of its own.",
+      "owns": [
+        "truth intervals, supersession, cancellation and correction",
+        "the transaction-owning primitive apply_participation_operational_change",
+        "cardinality mechanisms and their deliberate asymmetry"
+      ],
+      "does_not_own": [
+        "any domain's product decisions — it owns mechanics only",
+        "eligibility, authorization or event emission"
+      ],
+      "direct": [
+        "docs/platform/core/effective-dated-assignment-doctrine.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/core/operations-temporal-truth-certification.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [],
+      "safe": [
+        "effective-dated truth supersedes rather than overwrites",
+        "cardinality is NOT uniform: placements and child primary assignments are single-operational; staff is overlap-governed only",
+        "no correction path is implemented, deliberately",
+        "the primitive emits no events — the calling service does, after commit"
+      ],
+      "forbidden": [
+        "that one cardinality rule covers every table",
+        "that latest row means active row",
+        "that a date makes a record effective-dated — only a bounded interval of asserted truth does"
+      ],
+      "evidence": [
+        "web/lib/childcareOperational/participationOperationalChange.ts",
+        "supabase/migrations/",
+        "web/tests/access/temporalCardinalityAsymmetry.test.ts"
+      ],
+      "triggers": [
+        "ops.temporal-table-migration",
+        "ops.new-temporal-writer"
+      ],
+      "related": [
+        "enrollment-placement",
+        "staff-scheduling",
+        "attendance"
+      ],
+      "task_routing_hints": [
+        "effective date",
+        "supersede",
+        "truth interval",
+        "end date",
+        "cancel",
+        "temporal",
+        "historical truth"
+      ],
+      "consumers": [
+        "enrollment-placement",
+        "staff-scheduling",
+        "attendance"
+      ]
+    },
+    {
+      "id": "product-urls",
+      "display_name": "Product URLs and routing",
+      "status": "certified-shared",
+      "domain": "Platform spine",
+      "purpose": "Browser URL contract, redirects and rewrites. Shared because three lanes link into it.",
+      "owns": [
+        "the three canonical bases and their redirects",
+        "the rewrite mapping onto the implementation tree",
+        "drawer URL behaviour"
+      ],
+      "does_not_own": [
+        "what any surface does once routed"
+      ],
+      "direct": [
+        "docs/system/routing-doctrine.md"
+      ],
+      "shared": [],
+      "reference": [
+        "docs/platform/foundation/architecture.md"
+      ],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [],
+      "safe": [
+        "/organization is the configuration landing",
+        "/settings/* holds settings sub-surfaces",
+        "/admin/* remains canonical as a prefix for non-settings modules",
+        "all three bases are rewritten onto web/app/adminV2/**"
+      ],
+      "forbidden": [
+        "that the configuration control plane is /admin/settings",
+        "that a URL path matches its filesystem path"
+      ],
+      "evidence": [
+        "web/next.config.ts",
+        "web/lib/admin/canonicalAdminRoutes.ts"
+      ],
+      "triggers": [
+        "urls.redirect-or-rewrite-change"
+      ],
+      "related": [
+        "runtime",
+        "configuration"
+      ],
+      "task_routing_hints": [
+        "URL",
+        "route",
+        "redirect",
+        "rewrite",
+        "navigation path",
+        "href"
+      ],
+      "consumers": [
+        "runtime",
+        "configuration"
+      ]
+    }
+  ],
+  "pending_lanes": [
+    {
+      "id": "financials-payments",
+      "display_name": "Financials / Payments",
+      "status": "PENDING_DISABLED",
+      "domain": "Financials / Payments",
+      "pending_reason": "seven-day Payments stability gate",
+      "purpose": "Money movement: obligation, collection, refund, reversal, ledger. NOT certified; provides no DIRECT context.",
+      "owns": [
+        "(when certified) obligation, collection, refund, reversal and the financial journal"
+      ],
+      "does_not_own": [
+        "subsidy suppression — certified separately in the subsidy lane",
+        "pricing intent — certified separately in the commercial lane"
+      ],
+      "direct": [],
+      "shared": [],
+      "reference": [],
+      "generated": [],
+      "planned_only": [],
+      "exclude_history": [
+        "certification/financials/"
+      ],
+      "safe": [],
+      "forbidden": [
+        "that current payment semantics may be inferred from existing Payments or Billing documents",
+        "that this lane may supply DIRECT context while PENDING_DISABLED",
+        "that Financials is certified because Subsidy and Commercial are"
+      ],
+      "evidence": [
+        "web/lib/financials/payments/"
+      ],
+      "triggers": [
+        "financials.stability-gate"
+      ],
+      "related": [
+        "subsidy",
+        "commercial"
+      ],
+      "task_routing_hints": [
+        "payment",
+        "refund",
+        "ledger",
+        "charge",
+        "invoice",
+        "collection",
+        "reversal",
+        "autopay",
+        "Stripe",
+        "deposit",
+        "journal"
+      ],
+      "while_pending": [
+        "context is NOT certified for this lane",
+        "fetch implementation and live evidence instead of loading doctrine",
+        "do not infer current payment semantics from stale documents",
+        "lane certification is required before this becomes standard AI context",
+        "the stable boundaries that MAY be relied on: subsidy is collection suppression (certified), Commercial owns pricing intent only (certified)"
+      ]
+    }
+  ]
+}

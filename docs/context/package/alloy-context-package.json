@@ -1,0 +1,176 @@
+{
+  "schema": "alloy.context-package.v1",
+  "package_id": "alloy-context.v1",
+  "schema_version": "1.0.0",
+  "package_status": "ALLOY_CONTEXT_PACKAGE_V1_READY_FINANCIALS_PENDING",
+  "certified_date": "2026-10-01",
+  "source_staging_sha": "ea596e6152358d1d2be80f676955f2f8a3ae39be",
+  "benchmark_manifest_version": "V2",
+  "identity_note": "Package identity is (package_id, schema_version), NOT the generation date. Re-generating on a later date without a content change does not produce a new package. Financials certification should yield alloy-context.v1.1 — a compatible revision — unless including it requires a schema change, in which case v2.",
+  "tier1_cap": 5,
+  "tier1_cap_note": "Tier 1 is capped at five documents. Raising the cap is a ratified decision, not an editorial one: the validator fails if the foundation set grows without this number changing in the same commit.",
+  "certified_domains": [
+    "Developer Platform / API",
+    "Runtime",
+    "Business Process",
+    "Identity / Access",
+    "Operations temporal truth",
+    "Enrollment / Placement",
+    "Staff / Scheduling",
+    "Attendance",
+    "Subsidy",
+    "Commercial",
+    "Operational Intelligence",
+    "Communications",
+    "Configuration",
+    "AI / BOS"
+  ],
+  "pending_domains": [
+    {
+      "domain": "Financials / Payments",
+      "lane": "financials-payments",
+      "status": "PENDING_DISABLED",
+      "reason": "seven-day Payments stability gate",
+      "measured": {
+        "last_semantic_change": "75c1a016c",
+        "date": "2026-09-30",
+        "days_quiet_at_generation": 1,
+        "required_quiet_days": 7,
+        "path": "web/lib/financials/payments"
+      }
+    }
+  ],
+  "foundation": [
+    {
+      "path": "docs/context/alloy-platform-synthesis.md",
+      "role": "the current platform in one document",
+      "authority": "synthesis — owns nothing; every section defers to a domain owner",
+      "why_global": "it is the only document that describes the whole implemented platform at once, so it is what stops a lane-scoped agent reasoning from a partial model",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "staleness_trigger": "any domain certification state change; a change to the core model, authority layering or canonical URL bases"
+    },
+    {
+      "path": "docs/context/alloy-inference-contract.md",
+      "role": "17 safe and 37 forbidden inferences",
+      "authority": "guardrail — binding on every run",
+      "why_global": "the forbidden list is the accumulated record of mistakes actually made against this codebase; without it an agent repeats them",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "staleness_trigger": "a new certified safe inference; any newly documented wrong inference"
+    },
+    {
+      "path": "docs/context/alloy-canonical-owner-map.md",
+      "role": "one concern, one owner, plus the staleness contract",
+      "authority": "routing authority — decides which document is authority for a concern",
+      "why_global": "it turns Tier 2 selection into a lookup instead of a guess, and names the deliberate non-owners",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "staleness_trigger": "an owner change; a concern gaining a second claimant; a domain certified or de-certified"
+    },
+    {
+      "path": "docs/context/alloy-benchmark-context.md",
+      "role": "per-domain certification manifest and the status scoreboard",
+      "authority": "certification record",
+      "why_global": "it is where certification state and per-domain debt live; an agent must know what is NOT certified",
+      "volatility": "volatile",
+      "load_mode": "FETCH_LIVE",
+      "staleness_trigger": "every domain certification wave; any manifest version bump"
+    },
+    {
+      "path": "docs/platform/governance/glossary.md",
+      "role": "shared vocabulary",
+      "authority": "reference",
+      "why_global": "cheap, and prevents term drift between operator language and schema language",
+      "volatility": "static-doctrine",
+      "load_mode": "EMBED",
+      "staleness_trigger": "a new governed vocabulary term"
+    }
+  ],
+  "lane_packages": {
+    "manifest": "docs/context/package/vacilando-lanes.json",
+    "schema": "alloy.vacilando-lanes.v1",
+    "certified_lanes": 13,
+    "pending_lanes": 1
+  },
+  "shared_context_packages": [
+    "operations-temporal",
+    "product-urls"
+  ],
+  "gpt_sources": {
+    "manifest": "docs/context/package/gpt-project-sources.json",
+    "schema": "alloy.gpt-project-sources.v1"
+  },
+  "recertification": {
+    "manifest": "docs/context/package/recertification-triggers.json",
+    "schema": "alloy.recertification-triggers.v1"
+  },
+  "contracts": {
+    "context_resolution": "docs/context/package/context-resolution.md",
+    "documentation_impact": "docs/context/package/documentation-impact-contract.md",
+    "gpt_installation": "docs/context/package/gpt-installation.md",
+    "vacilando_integration": "docs/context/package/vacilando-integration-spec.md",
+    "readme": "docs/context/package/README.md"
+  },
+  "excluded_trees": [
+    {
+      "path": "docs/sprints/",
+      "reason": "execution history"
+    },
+    {
+      "path": "docs/archive/",
+      "reason": "superseded generations"
+    },
+    {
+      "path": "docs/platform/planning/",
+      "reason": "intent and proposals"
+    },
+    {
+      "path": "docs/audits/",
+      "reason": "point-in-time findings"
+    },
+    {
+      "path": "docs/product/",
+      "reason": "reviews and convergence notes"
+    },
+    {
+      "path": "docs/handoffs/",
+      "reason": "session handoffs"
+    },
+    {
+      "path": "docs/platform/milestones/",
+      "reason": "historical certifications"
+    },
+    {
+      "path": "docs/marketing/",
+      "reason": "not platform truth"
+    },
+    {
+      "path": "docs/platform/qa/",
+      "reason": "not platform truth"
+    },
+    {
+      "path": "docs/platform/rfcs/",
+      "reason": "proposals"
+    },
+    {
+      "path": "certification/",
+      "reason": "release evidence, not doctrine"
+    }
+  ],
+  "update_triggers": [
+    "any lane recertification trigger firing (see recertification-triggers.json)",
+    "a domain moving between certified and pending",
+    "a Tier 1 document changing, being added or being removed",
+    "a canonical owner changing for any concern",
+    "the benchmark manifest version changing",
+    "a new excluded tree",
+    "a document changing volatility class — which happens whenever measured counts are added to static doctrine"
+  ],
+  "validator": "web/tests/docs/contextPackageValidator.test.ts",
+  "distribution": {
+    "builder": "scripts/build-context-package.mjs",
+    "manifest": "docs/context/package/distribution-manifest.json",
+    "output": "dist/alloy-context-v1/ (gitignored build output)"
+  }
+}
