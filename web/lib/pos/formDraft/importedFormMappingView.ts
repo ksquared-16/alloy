@@ -70,30 +70,79 @@ export function resolveImportedFormMappings(
 
 export type MappingCounts = Record<MappingAttention, number>;
 
-export function mappingCounts(mappings: ReadonlyMap<string, FieldMapping>): MappingCounts {
+/**
+ * The number beside each chip, counted with the SAME rule the filter uses.
+ *
+ * Counting source questions only would have put 12 beside "Mapped" and then shown thirteen things,
+ * because a collection or address group is a placement too. A count that disagrees with its own filter
+ * is worse than no count.
+ */
+export function mappingCounts(schema: FormSchemaV1, mappings: ReadonlyMap<string, FieldMapping>): MappingCounts {
     const counts: MappingCounts = { all: 0, mapped: 0, needs_mapping: 0, suggested: 0, form_only: 0 };
-    for (const m of mappings.values()) {
+    for (const field of schema.fields) {
+        if (field.type === "text_block") continue;
         counts.all += 1;
-        if (m.state === "mapped") counts.mapped += 1;
-        else if (m.state === "needs_mapping") counts.needs_mapping += 1;
-        else if (m.state === "suggested") counts.suggested += 1;
-        else counts.form_only += 1;
+        for (const filter of ["mapped", "needs_mapping", "suggested", "form_only"] as const) {
+            if (groupMatches(field, filter) || matchesAttention(mappings.get(field.id)?.state, filter)) {
+                counts[filter] += 1;
+            }
+        }
     }
     return counts;
 }
 
-/** Field ids to de-emphasise under the chosen filter. Membership never changes — only emphasis. */
-export function dimmedFieldIds(
+/**
+ * The form as the chosen filter shows it.
+ *
+ * Filtering is an AUTHORING VIEW, not a mutation. The draft is untouched and this returns a projection
+ * of the schema, so "Mapped → All" restores the complete form exactly because nothing was ever removed
+ * from it — the previous dimming model was replaced because a dimmed field is still something the
+ * operator has to read past when they asked to see six fields out of ninety.
+ *
+ * Section and group rules follow from the same idea: an empty section shell tells the operator nothing
+ * and makes the form look damaged, so a section with no surviving field is not rendered. A group is a
+ * single concept, so it survives as a whole when it matches — a half-shown address is not an address.
+ */
+export function filterSchemaForAttention(
     schema: FormSchemaV1,
     mappings: ReadonlyMap<string, FieldMapping>,
     filter: MappingAttention,
-): ReadonlySet<string> {
-    const dimmed = new Set<string>();
-    if (filter === "all") return dimmed;
+): FormSchemaV1 {
+    if (filter === "all") return schema;
+
+    const keep = new Set<string>();
     for (const field of schema.fields) {
-        if (!matchesAttention(mappings.get(field.id)?.state, filter)) dimmed.add(field.id);
+        if (groupMatches(field, filter)) {
+            keep.add(field.id);
+            continue;
+        }
+        if (matchesAttention(mappings.get(field.id)?.state, filter)) keep.add(field.id);
     }
-    return dimmed;
+
+    const sections = schema.sections
+        .map((section) => ({ ...section, field_ids: section.field_ids.filter((id) => keep.has(id)) }))
+        .filter((section) => section.field_ids.length > 0);
+
+    return {
+        ...schema,
+        sections,
+        // Field order is preserved: a filter reorders nothing, it only narrows.
+        fields: schema.fields.filter((f) => keep.has(f.id)),
+    };
+}
+
+/**
+ * Whether a group concept belongs in the filtered view.
+ *
+ * A group is not a source question with a destination of its own — it IS the destination. A collection
+ * or address binding is a canonical placement, so such a group reads as mapped; a plain group holds
+ * answers with nowhere canonical to go, so it reads as kept-with-the-form. Text blocks are prose the
+ * family reads and are never a mapping decision, so they appear only under All.
+ */
+function groupMatches(field: FormField, filter: MappingAttention): boolean {
+    if (field.type !== "group") return false;
+    const bound = Boolean(field.collection_binding || field.address_binding);
+    return bound ? filter === "mapped" : filter === "form_only";
 }
 
 /** The overlay states, in the shape the shared canvas takes. */
@@ -103,17 +152,41 @@ export function canvasMappingStates(mappings: ReadonlyMap<string, FieldMapping>)
     return out;
 }
 
-/** The round-trippable properties of one schema field, for the whole-draft save. */
-export function editFromSchemaField(field: FormField): {
+/**
+ * One schema field's round-trippable properties, and whether it is safe to save yet.
+ *
+ * The Studio inspector builds a destination in two steps: choosing the record writes
+ * `{entity_type, field_key: "custom"}`, and choosing the field replaces the key. That intermediate is
+ * NOT a decision — there is nothing canonical to store — so saving it posts no destination, the server
+ * answers "form field only", and the readback contradicts the operator mid-sentence. `custom` and
+ * `unmapped` therefore mean "still choosing": keep them on screen, keep them out of the payload.
+ *
+ * An ABSENT `field_source` is different, and it is a real decision: the operator picked "Form field
+ * only". That saves, and it must persist, which is why it is reported as a destination of `null` rather
+ * than as something to skip.
+ */
+export type SchemaFieldEdit = {
     readonly label: string;
     readonly required: boolean;
     readonly field_source: { readonly entity_type: string; readonly field_key: string } | null;
-} {
+};
+
+const PLACEHOLDER_KEYS = new Set(["custom", "unmapped", ""]);
+
+export function editFromSchemaField(field: FormField): SchemaFieldEdit {
     const source = field.field_source;
-    const usable = source?.entity_type && source?.field_key && source.field_key !== "custom" && source.field_key !== "unmapped";
+    const key = source?.field_key ?? "";
+    const settled = Boolean(source?.entity_type) && !PLACEHOLDER_KEYS.has(key);
     return {
         label: field.label,
         required: Boolean(field.required),
-        field_source: usable ? { entity_type: source!.entity_type, field_key: source!.field_key } : null,
+        field_source: settled ? { entity_type: source!.entity_type, field_key: key } : null,
     };
+}
+
+/** True while the operator has named a record but not yet the field on it. */
+export function isDestinationStillBeingChosen(field: FormField): boolean {
+    const source = field.field_source;
+    if (!source?.entity_type) return false;
+    return PLACEHOLDER_KEYS.has(source.field_key ?? "");
 }
