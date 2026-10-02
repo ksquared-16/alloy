@@ -2212,6 +2212,18 @@
         "reason": "Ordinary Financial CONFIGURATION. It decides what an organization charges and how, so it takes the Financials write key rather than organization context - portal admission is not financial authority. Was reachable by any portal-admitted principal before this slice."
       }
     },
+    "app/api/admin/financials/billing-periods/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "fin.read",
+        "helper": "assertFinancialsReadAllowed"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "fin.write",
+        "helper": "assertFinancialsWriteAllowed"
+      }
+    },
     "app/api/admin/financials/accounting-calendar/route.ts": {
       "GET": {
         "status": "declared",
