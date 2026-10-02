@@ -1,0 +1,96 @@
+# §14 CI EXECUTION PROOF — Financials economic-writer regression
+#
+# This is not the workflow file. This is the step's own stdout, taken from the required
+# check that actually ran on the candidate.
+#
+#   candidate      2eaaad38909dc5af193bb88bf8f4e4647c1058f0
+#   pull request   ksquared-16/alloy#1395
+#   required check Prebuild gates (route capabilities)   (branch-protected context)
+#   step name      Financials economic-writer regression
+#   job            https://github.com/ksquared-16/alloy/actions/runs/37072413124/job/111054677682
+#   captured       2026-10-02T22:30Z
+#
+# The outcome line below is the whole point: 62 test files, 779 tests, 0 failures, 13.21s.
+# A workflow file containing the step proves only that it was written; this log proves the
+# runner invoked `npm run test:financials-economic-writers` and the suite went green on the
+# exact SHA being promoted.
+#
+2026-10-02T22:26:37.8270646Z ##[group]Run npm run test:financials-economic-writers
+2026-10-02T22:26:37.8271126Z npm run test:financials-economic-writers
+2026-10-02T22:26:37.8340097Z shell: /usr/bin/bash -e {0}
+2026-10-02T22:26:37.8340385Z ##[endgroup]
+2026-10-02T22:26:37.9376990Z 
+2026-10-02T22:26:37.9377751Z > web@0.1.0 test:financials-economic-writers
+2026-10-02T22:26:37.9388658Z > vitest run tests/financials/childcareChargeService.test.ts tests/financials/chargeLifecycleService.test.ts tests/financials/financialChargeActions.test.ts tests/financials/chargeResolution tests/financials/tuitionGeneration tests/financials/generatedBillingAutoPost.test.ts tests/operationalConsumption/consumptionService.test.ts tests/operationalConsumption/attendanceConsumptionService.test.ts tests/operationalConsumption/scheduleConsumptionService.test.ts tests/operationalConsumption/correctionConsumption.test.ts tests/operationalConsumption/correctionChains.test.ts tests/operationalConsumption/reversalConsumption.test.ts tests/operationalConsumption/twoDistinctCorrections.test.ts tests/operationalConsumption/supersessionReplay.test.ts tests/operationalConsumption/reconcileRpcAtomicity.test.ts tests/operationalConsumption/obligationReviewService.test.ts tests/financials/reductions tests/financials/reductionProvenance.test.ts tests/financials/assignmentDiscountForecast.test.ts tests/financials/customerBillingCalendar.test.ts tests/financials/customerBillingPeriodMaterialization.test.ts tests/financials/billingPeriodGenerations.test.ts tests/financials/payments tests/financials/economicWriterRegressionManifest.test.ts
+2026-10-02T22:26:37.9397498Z 
+2026-10-02T22:26:38.2733932Z 
+2026-10-02T22:26:38.2738541Z  RUN  v4.1.2 /home/runner/work/alloy/alloy/web
+2026-10-02T22:26:38.2739206Z 
+2026-10-02T22:26:39.2990508Z  ✓ tests/financials/payments/autopayHandler.test.ts (25 tests) 22ms
+2026-10-02T22:26:39.4147099Z  ✓ tests/financials/payments/payerAuthorizedBankSetup.test.ts (33 tests) 35ms
+2026-10-02T22:26:39.5470954Z  ✓ tests/financials/payments/heldFundsApplyAtomic.test.ts (22 tests) 38ms
+2026-10-02T22:26:39.6195797Z  ✓ tests/financials/financialChargeActions.test.ts (19 tests) 76ms
+2026-10-02T22:26:39.6321274Z  ✓ tests/financials/payments/paymentSubjectModel.test.ts (23 tests) 32ms
+2026-10-02T22:26:39.8020627Z  ✓ tests/financials/generatedBillingAutoPost.test.ts (25 tests) 41ms
+2026-10-02T22:26:39.9461426Z  ✓ tests/financials/billingPeriodGenerations.test.ts (16 tests) 51ms
+2026-10-02T22:26:39.9706367Z  ✓ tests/financials/payments/reversalOriginProjection.test.ts (11 tests) 41ms
+2026-10-02T22:26:40.1400889Z  ✓ tests/financials/childcareChargeService.test.ts (14 tests) 126ms
+2026-10-02T22:26:40.1496399Z  ✓ tests/financials/payments/autopayArrangement.test.ts (19 tests) 19ms
+2026-10-02T22:26:40.3929783Z  ✓ tests/financials/reductions/exceptionForecastLedgerChain.test.ts (14 tests) 40ms
+2026-10-02T22:26:40.5544189Z  ✓ tests/financials/payments/ordinaryRefundFunding.test.ts (11 tests) 162ms
+2026-10-02T22:26:40.6559111Z  ✓ tests/financials/payments/preW7FindingsConvergence.test.ts (28 tests) 49ms
+2026-10-02T22:26:40.7756281Z  ✓ tests/financials/customerBillingCalendar.test.ts (18 tests) 15ms
+2026-10-02T22:26:40.9805449Z  ✓ tests/financials/reductions/exceptionLifecycle.test.ts (23 tests) 16ms
+2026-10-02T22:26:41.4387654Z  ✓ tests/operationalConsumption/scheduleConsumptionService.test.ts (11 tests) 152ms
+2026-10-02T22:26:41.6352674Z  ✓ tests/operationalConsumption/obligationReviewService.test.ts (11 tests) 273ms
+2026-10-02T22:26:41.8486192Z  ✓ tests/financials/payments/heldFundsRefund.test.ts (18 tests) 28ms
+2026-10-02T22:26:41.9570520Z  ✓ tests/operationalConsumption/correctionConsumption.test.ts (5 tests) 133ms
+2026-10-02T22:26:42.0225855Z  ✓ tests/financials/chargeResolution/draftChargeResolutionService.test.ts (10 tests) 108ms
+2026-10-02T22:26:42.2034699Z  ✓ tests/financials/reductions/resolveFinancialReductions.test.ts (18 tests) 36ms
+2026-10-02T22:26:42.2275143Z  ✓ tests/financials/reductionProvenance.test.ts (19 tests) 16ms
+2026-10-02T22:26:42.3090876Z  ✓ tests/operationalConsumption/attendanceConsumptionService.test.ts (8 tests) 142ms
+2026-10-02T22:26:42.4141277Z  ✓ tests/financials/tuitionGeneration/resolveTuitionRecurrence.test.ts (15 tests) 11ms
+2026-10-02T22:26:42.4721109Z  ✓ tests/financials/payments/heldLotRefundLeavesApplicationsAlone.test.ts (7 tests) 58ms
+2026-10-02T22:26:42.5280335Z  ✓ tests/financials/chargeResolution/resolveDraftCharges.test.ts (18 tests) 11ms
+2026-10-02T22:26:42.6316373Z  ✓ tests/financials/payments/autopayCollectible.test.ts (12 tests) 17ms
+2026-10-02T22:26:42.7445438Z  ✓ tests/financials/payments/stripeElementsPresentation.test.ts (14 tests) 20ms
+2026-10-02T22:26:42.7530628Z  ✓ tests/financials/chargeLifecycleService.test.ts (10 tests) 55ms
+2026-10-02T22:26:42.8336709Z  ✓ tests/financials/assignmentDiscountForecast.test.ts (13 tests) 15ms
+2026-10-02T22:26:42.9330624Z  ✓ tests/financials/payments/autopayAuthorization.test.ts (21 tests) 18ms
+2026-10-02T22:26:43.1062221Z  ✓ tests/operationalConsumption/consumptionService.test.ts (7 tests) 43ms
+2026-10-02T22:26:43.1737183Z  ✓ tests/financials/payments/billingPostalCode.test.ts (18 tests) 18ms
+2026-10-02T22:26:43.5582406Z  ✓ tests/financials/reductions/financialReductionActions.test.ts (20 tests) 12ms
+2026-10-02T22:26:44.7274918Z  ✓ tests/financials/chargeResolution/financialChargePreviewRoute.test.ts (7 tests) 20ms
+2026-10-02T22:26:44.9331991Z  ✓ tests/financials/reductions/exceptionSurfaceContract.test.ts (12 tests) 9ms
+2026-10-02T22:26:45.1299971Z  ✓ tests/financials/payments/paymentsProviderChapterContract.test.ts (17 tests) 10ms
+2026-10-02T22:26:45.2279894Z  ✓ tests/financials/chargeResolution/previewDraftCharge.test.ts (4 tests) 26ms
+2026-10-02T22:26:45.3335113Z  ✓ tests/financials/payments/paymentsConfigurationHealth.test.ts (10 tests) 12ms
+2026-10-02T22:26:45.4533791Z  ✓ tests/financials/payments/heldMoneyIsNotApplicable.test.ts (3 tests) 32ms
+2026-10-02T22:26:45.5129939Z  ✓ tests/financials/payments/stripePublishableKey.test.ts (9 tests) 13ms
+2026-10-02T22:26:45.6865635Z  ✓ tests/financials/reductions/policyReductionAuthority.test.ts (9 tests) 14ms
+2026-10-02T22:26:45.9267651Z  ✓ tests/financials/payments/storedMethodSelection.test.ts (15 tests) 46ms
+2026-10-02T22:26:45.9353529Z  ✓ tests/financials/tuitionGeneration/billingGenerateTuitionAction.test.ts (11 tests) 13ms
+2026-10-02T22:26:46.1516170Z  ✓ tests/financials/payments/providerReadinessAttention.test.ts (10 tests) 10ms
+2026-10-02T22:26:46.3615467Z  ✓ tests/financials/customerBillingPeriodMaterialization.test.ts (11 tests) 10ms
+2026-10-02T22:26:47.0980313Z  ✓ tests/financials/payments/storedMethodProjection.test.ts (11 tests) 14ms
+2026-10-02T22:26:47.5466556Z  ✓ tests/operationalConsumption/correctionChains.test.ts (3 tests) 116ms
+2026-10-02T22:26:47.7570567Z  ✓ tests/financials/payments/paymentsProductionMounts.test.ts (6 tests) 32ms
+2026-10-02T22:26:47.9696061Z  ✓ tests/financials/payments/executeEnvelopeDetail.test.ts (4 tests) 6ms
+2026-10-02T22:26:48.2775289Z  ✓ tests/financials/tuitionGeneration/periodKeyFilter.test.ts (3 tests) 21ms
+2026-10-02T22:26:48.6560803Z  ✓ tests/financials/payments/paymentsCommandKeysRegistered.test.ts (4 tests) 9ms
+2026-10-02T22:26:51.1713170Z  ✓ tests/financials/reductions/commercialPolicyExceptionAction.test.ts (17 tests) 17ms
+2026-10-02T22:26:51.1760723Z  ✓ tests/financials/payments/accountGrainActionDispatch.test.ts (17 tests) 12ms
+2026-10-02T22:26:51.3606891Z  ✓ tests/financials/payments/autopaySubsidisedCharge.test.ts (6 tests) 8ms
+2026-10-02T22:26:51.3790503Z  ✓ tests/financials/payments/accountSurfaceGrainCensus.test.ts (18 tests) 33ms
+2026-10-02T22:26:51.5249349Z  ✓ tests/financials/economicWriterRegressionManifest.test.ts (4 tests) 5ms
+2026-10-02T22:26:51.5613804Z  ✓ tests/operationalConsumption/reconcileRpcAtomicity.test.ts (2 tests) 74ms
+2026-10-02T22:26:51.6163687Z  ✓ tests/financials/payments/refundBelongsToItsReceipt.test.ts (6 tests) 29ms
+2026-10-02T22:26:51.9281226Z  ✓ tests/operationalConsumption/twoDistinctCorrections.test.ts (1 test) 92ms
+2026-10-02T22:26:51.9368142Z  ✓ tests/operationalConsumption/supersessionReplay.test.ts (2 tests) 72ms
+2026-10-02T22:26:51.9795341Z  ✓ tests/operationalConsumption/reversalConsumption.test.ts (1 test) 35ms
+2026-10-02T22:26:51.9861543Z 
+2026-10-02T22:26:51.9868659Z  Test Files  62 passed (62)
+2026-10-02T22:26:51.9871213Z       Tests  779 passed (779)
+2026-10-02T22:26:51.9871911Z    Start at  22:26:38
+2026-10-02T22:26:51.9873494Z    Duration  13.21s (transform 9.60s, setup 0ms, import 25.62s, tests 2.72s, environment 946ms)
+2026-10-02T22:26:51.9875074Z 

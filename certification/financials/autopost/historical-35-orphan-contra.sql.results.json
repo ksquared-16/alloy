@@ -1,0 +1,264 @@
+{
+  "trusted_host_action_id": "tha_20489f03ed6a89",
+  "query_hash": "594d5d6cf556cbc27c2702a1c600b011fb522319154901a18217fb214ae43b18",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T22:55:03.791Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_20489f03ed6a89",
+    "query_hash": "594d5d6cf556cbc27c2702a1c600b011fb522319154901a18217fb214ae43b18",
+    "authorization_id": "grnt_f33bc9536bd640f4",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T22:55:10.087Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "drafts": 6,
+            "cents": -4024,
+            "with_explaining_application": 6,
+            "reduced_by_an_application": 0,
+            "with_obligation": 0
+          },
+          {
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "drafts": 7,
+            "cents": -27750,
+            "with_explaining_application": 7,
+            "reduced_by_an_application": 0,
+            "with_obligation": 0
+          },
+          {
+            "charge_type": "fee",
+            "charge_category": "late_pickup",
+            "source": "charge_template",
+            "drafts": 1,
+            "cents": 2500,
+            "with_explaining_application": 0,
+            "reduced_by_an_application": 0,
+            "with_obligation": 0
+          },
+          {
+            "charge_type": "fee",
+            "charge_category": "one_time",
+            "source": "charge_template",
+            "drafts": 1,
+            "cents": 4000,
+            "with_explaining_application": 0,
+            "reduced_by_an_application": 0,
+            "with_obligation": 0
+          },
+          {
+            "charge_type": "fee",
+            "charge_category": "tuition",
+            "source": "charge_template",
+            "drafts": 20,
+            "cents": 510500,
+            "with_explaining_application": 0,
+            "reduced_by_an_application": 5,
+            "with_obligation": 20
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "b2f3de78-831d-4903-a714-d73dc573da9a",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -1234,
+            "created_at": "2026-09-13T12:21:31.19392+00:00",
+            "reduces_charge_id": null,
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "28f933c1-6716-4d7d-aa34-3416af7dab47",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -1234,
+            "created_at": "2026-09-13T12:21:46.645318+00:00",
+            "reduces_charge_id": null,
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "2b9b90ea-32ce-4b0a-ae3b-a2e073b7d35c",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -4000,
+            "created_at": "2026-09-18T16:41:30.651423+00:00",
+            "reduces_charge_id": "afe85059-1e5a-48c6-b527-4a2183e0c2ca",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "462d8dfb-3b38-459b-a45f-caf50dc510f6",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -1,
+            "created_at": "2026-09-13T12:28:49.184915+00:00",
+            "reduces_charge_id": null,
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "617d6a9b-92d2-4504-ab33-d751e7934352",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -1,
+            "created_at": "2026-09-13T12:30:15.42321+00:00",
+            "reduces_charge_id": null,
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "26b91a27-9ced-42f9-a1aa-7a19cba04c09",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -777,
+            "created_at": "2026-09-14T11:13:39.902328+00:00",
+            "reduces_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "9a882511-7bf6-40ed-82f6-3513c1801bd7",
+            "charge_type": "adjustment",
+            "charge_category": "credit",
+            "source": "manual_reduction",
+            "amount_cents": -777,
+            "created_at": "2026-09-14T11:14:10.093701+00:00",
+            "reduces_charge_id": "ef6c388f-8a7f-432d-9113-765669c9a962",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "5df4fc36-7b23-49b0-9975-d73f11b4536d",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -1850,
+            "created_at": "2026-09-19T03:04:38.909542+00:00",
+            "reduces_charge_id": "ef44f450-277d-478d-9ef5-be6fd10c7d90",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "6d0af343-735e-4c5f-86f0-8297f798ebd8",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -1850,
+            "created_at": "2026-09-19T03:04:39.146626+00:00",
+            "reduces_charge_id": "c40a88bc-3158-4602-9a0f-cd4f1e5b4885",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "017b6d2b-34c9-431e-afd7-a28e555b1dd3",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -1850,
+            "created_at": "2026-09-19T03:04:39.338966+00:00",
+            "reduces_charge_id": "ee2ae873-0836-4c9e-921a-bc231de87def",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "f101da5e-067c-46df-a1c9-81751c95758f",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -14500,
+            "created_at": "2026-09-19T03:04:39.523252+00:00",
+            "reduces_charge_id": "18e860f9-8ce5-4645-9283-ca3ebcb9a4a9",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "bd840904-a409-4001-909f-08d939cc51dd",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -1850,
+            "created_at": "2026-09-19T03:04:39.710652+00:00",
+            "reduces_charge_id": "37bb5395-bcd6-4030-b70a-d5c380fa8da1",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          },
+          {
+            "charge_id": "8b2f0960-9c65-4649-abaa-50206a41f26b",
+            "charge_type": "adjustment",
+            "charge_category": "discount",
+            "source": "financial_reduction",
+            "amount_cents": -1850,
+            "created_at": "2026-09-19T03:04:39.906241+00:00",
+            "reduces_charge_id": "aa0f6855-7ba8-4c8b-a48d-505103357f72",
+            "explaining_applications": 1,
+            "is_orphan_contra": false
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "total_drafts": 35,
+            "total_cents": 485226,
+            "orphan_contra_charges": 0,
+            "orphan_contra_cents": 0,
+            "gross_drafts": 35,
+            "gross_cents": 485226
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "status": "draft",
+            "adjustment_charges_from_a_reduction_source": 13,
+            "without_explaining_application": 0
+          },
+          {
+            "status": "posted",
+            "adjustment_charges_from_a_reduction_source": 38,
+            "without_explaining_application": 0
+          }
+        ]
+      }
+    },
+    "row_count": 21
+  }
+}
