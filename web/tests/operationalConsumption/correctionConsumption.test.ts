@@ -7,6 +7,7 @@ import {
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
     type OperationalEnrollmentMockStore,
+    withCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 /**
@@ -33,7 +34,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         orgId: ORG_ID, agreementId: AGREEMENT,
         rates: [{ basis: "drop_in", cadenceKey: "daily", rateCents: 9000 }, { basis: "hourly", cadenceKey: "hourly", rateCents: 1500 }],
     });
-    const store = createOperationalEnrollmentMockStore({
+    const store = createOperationalEnrollmentMockStore(withCanonicalBillingChain({
         financial_charge_templates: [
             tmpl({ id: "tpl-late", template_key: "late_pickup", label: "Late Pickup", charge_category: "late_pickup", amount_strategy: "fixed", amount_cents: 2500, occurs_on_strategy: "event_date", billable_on_strategy: "immediate", review_required: true }),
             tmpl({ id: "tpl-hourly", template_key: "hourly_care", label: "Hourly Care", charge_category: "tuition", amount_strategy: "rate_derived", occurs_on_strategy: "event_date", billable_on_strategy: "immediate", review_required: false }),
@@ -48,7 +49,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         financial_policies: [{ id: "pol-rev", org_id: ORG_ID, scope_type: "org", policy_type: "posting_review", value: { required: false }, is_active: true, effective_start: "2026-01-01", effective_end: null, metadata: {} }],
         ...commercial,
         ...over,
-    });
+    }));
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 function att(over: Partial<OperationalFactDto>): OperationalFactDto {

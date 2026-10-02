@@ -1,0 +1,252 @@
+{
+  "trusted_host_action_id": "tha_f4f5331146d3dd",
+  "query_hash": "150820f418e7be96b8501fca943b7431b57037496ba529a62f92adbbbe4f8ac4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T18:06:18.014Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_f4f5331146d3dd",
+    "query_hash": "150820f418e7be96b8501fca943b7431b57037496ba529a62f92adbbbe4f8ac4",
+    "authorization_id": "grnt_7e367a5e5c914873",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T18:06:23.685Z",
+    "question_ids": [
+      "q1",
+      "q10",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6",
+      "q7",
+      "q8",
+      "q9"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "column": "billing_period_id",
+            "type": "uuid",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "table": "financial_reduction_applications",
+            "column": "billing_period_id",
+            "type": "uuid",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "table": "charges",
+            "column": "legacy_billing_period_key",
+            "type": "text",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "table": "charges",
+            "column": "billing_period_generation",
+            "type": "text",
+            "nullable": "NO",
+            "default": "'not_applicable'::text"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "column": "legacy_billing_period_key",
+            "type": "text",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "table": "financial_reduction_applications",
+            "column": "billing_period_generation",
+            "type": "text",
+            "nullable": "NO",
+            "default": null
+          }
+        ]
+      },
+      "q10": {
+        "question_id": "q10",
+        "row_count": null,
+        "rows": [
+          {
+            "payments_with_period_column": 0,
+            "allocations_with_period_column": 0,
+            "obligations_with_period_id": 0
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_generation_chk",
+            "validated": true,
+            "definition": "CHECK ((billing_period_generation = ANY (ARRAY['legacy'::text, 'canonical'::text, 'not_applicable'::text])))"
+          },
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_id_fkey",
+            "validated": true,
+            "definition": "FOREIGN KEY (billing_period_id) REFERENCES financial_billing_periods(id) ON DELETE RESTRICT"
+          },
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_shape_chk",
+            "validated": true,
+            "definition": "CHECK ((((billing_period_generation = 'legacy'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NOT NULL)) OR ((billing_period_generation = 'canonical'::text) AND (billing_period_id IS NOT NULL)) OR ((billing_period_generation = 'not_applicable'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NULL))))"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "constraint": "fin_reduction_billing_period_generation_chk",
+            "validated": true,
+            "definition": "CHECK ((billing_period_generation = ANY (ARRAY['legacy'::text, 'canonical'::text])))"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "constraint": "fin_reduction_billing_period_shape_chk",
+            "validated": true,
+            "definition": "CHECK ((((billing_period_generation = 'legacy'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NOT NULL)) OR ((billing_period_generation = 'canonical'::text) AND (billing_period_id IS NOT NULL))))"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "constraint": "financial_reduction_applications_billing_period_id_fkey",
+            "validated": true,
+            "definition": "FOREIGN KEY (billing_period_id) REFERENCES financial_billing_periods(id) ON DELETE RESTRICT"
+          },
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_childcare_chk",
+            "validated": true,
+            "definition": "CHECK (((billable_source_type IS NULL) OR (NOT (billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text]))) OR (billing_period_generation <> 'not_applicable'::text)))"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "financial_reduction_applications",
+            "trigger": "trg_enforce_reduction_billing_period_immutability"
+          },
+          {
+            "table": "charges",
+            "trigger": "trg_enforce_charge_billing_period_immutability"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "constraint": "financial_billing_periods_no_overlap",
+            "definition": "EXCLUDE USING gist (customer_id WITH =, daterange(starts_on, ends_on, '[]'::text) WITH &&)",
+            "validated": true
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_generation": "legacy",
+            "charges": 132,
+            "with_period_id": 0,
+            "with_legacy_key": 132,
+            "childcare": 132
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_rows_total": 12,
+            "rows_referenced_by_a_legacy_charge": 0,
+            "legacy_charges_carrying_a_period_id": 0
+          }
+        ]
+      },
+      "q7": {
+        "question_id": "q7",
+        "row_count": null,
+        "rows": [
+          {
+            "legacy_billing_period_key": "2026-09",
+            "charges": 110,
+            "customers": 14,
+            "all_null_period_id": true
+          },
+          {
+            "legacy_billing_period_key": "2026-10",
+            "charges": 8,
+            "customers": 6,
+            "all_null_period_id": true
+          },
+          {
+            "legacy_billing_period_key": "2026-11",
+            "charges": 9,
+            "customers": 3,
+            "all_null_period_id": true
+          },
+          {
+            "legacy_billing_period_key": "2026-08",
+            "charges": 4,
+            "customers": 3,
+            "all_null_period_id": true
+          },
+          {
+            "legacy_billing_period_key": "2026-12",
+            "charges": 1,
+            "customers": 1,
+            "all_null_period_id": true
+          }
+        ]
+      },
+      "q8": {
+        "question_id": "q8",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "legacy_charges_in_2026_12": 0,
+            "canonical_periods_still_held": 2,
+            "any_legacy_charge_bound_to_one": 0
+          }
+        ]
+      },
+      "q9": {
+        "question_id": "q9",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_generation": "legacy",
+            "reductions": 51,
+            "with_legacy_key": 51,
+            "with_period_id": 0,
+            "legacy_keys_match_period_key": 51
+          }
+        ]
+      }
+    },
+    "row_count": 26
+  }
+}

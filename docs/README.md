@@ -192,6 +192,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Implementation patterns | `platform/governance/implementation-patterns.md` |
 | Deployment | `platform/governance/deployment-and-environments.md` |
 | Testing | `platform/governance/testing-and-quality.md` |
+| Financials economic-writer regression | `platform/governance/financials-economic-writer-regression.md` — the one command before promoting a slice that touches a shared Financials economic writer |
 
 ### 6. Roadmap & history
 
