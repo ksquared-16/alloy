@@ -20,6 +20,12 @@ import {
 } from "@/lib/forms/processingFormBuilderLibrary";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import {
+    conditionTriggerOf,
+    conditionValueOf,
+    eligibleConditionTriggers,
+    setFieldVisibility,
+} from "@/lib/forms/formBuilderSchema";
+import {
     AlloyCheckbox,
     AlloyFieldLabel,
     AlloyInspectorDivider,
@@ -346,6 +352,104 @@ export default function ProcessingFormQuestionInspector({
                                 </p>
                             </details>
                         ) : null}
+                    </AlloyInspectorGroup>
+                </>
+            ) : null}
+
+            {field.type !== "text_block" ? (
+                <>
+                    <AlloyInspectorDivider />
+                    {/*
+                      * THE CONDITION, in business language.
+                      *
+                      * The capability persisted and the participant runtime honoured it; there was simply
+                      * nowhere to see or set it while authoring. An operator needs three facts — which
+                      * question controls this one, which answer reveals it, and that this question is
+                      * conditional at all — and none of them is `visibility`, a field id or a clause.
+                      */}
+                    <AlloyInspectorGroup title="Show this question when…">
+                        {(() => {
+                            const triggers = eligibleConditionTriggers(schema, field.id);
+                            const currentTrigger = conditionTriggerOf(field);
+                            const currentValue = conditionValueOf(field);
+                            const selected = triggers.find((t) => t.id === currentTrigger) ?? null;
+
+                            if (triggers.length === 0 && !currentTrigger) {
+                                return (
+                                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
+                                        Add a Yes / No or a multiple-choice question to this form and you can make this
+                                        one depend on the answer.
+                                    </p>
+                                );
+                            }
+                            return (
+                                <>
+                                    <div data-inspector-condition-question>
+                                        <AlloyFieldLabel>Question</AlloyFieldLabel>
+                                        <AlloySelect
+                                            value={currentTrigger ?? ""}
+                                            onChange={(triggerFieldId) =>
+                                                mutate((sch) => {
+                                                    if (!triggerFieldId) return setFieldVisibility(sch, field.id, null);
+                                                    const t = eligibleConditionTriggers(sch, field.id).find((x) => x.id === triggerFieldId);
+                                                    const first = t?.answers[0]?.value ?? true;
+                                                    return setFieldVisibility(sch, field.id, { triggerFieldId, value: first });
+                                                })
+                                            }
+                                            placeholder="Always ask this question"
+                                            options={triggers.map((t) => ({ value: t.id, label: t.label }))}
+                                            disabled={!editable}
+                                            testId="form-builder-condition-question"
+                                        />
+                                    </div>
+                                    {currentTrigger && selected ? (
+                                        <div data-inspector-condition-answer>
+                                            <AlloyFieldLabel>Answer</AlloyFieldLabel>
+                                            <AlloySelect
+                                                value={
+                                                    currentValue === true
+                                                        ? "true"
+                                                        : currentValue === false
+                                                          ? "false"
+                                                          : String(currentValue ?? "")
+                                                }
+                                                onChange={(raw) =>
+                                                    mutate((sch) =>
+                                                        setFieldVisibility(sch, field.id, {
+                                                            triggerFieldId: currentTrigger,
+                                                            value: raw === "true" ? true : raw === "false" ? false : raw,
+                                                        })
+                                                    )
+                                                }
+                                                options={selected.answers.map((a) => ({
+                                                    value: typeof a.value === "boolean" ? String(a.value) : a.value,
+                                                    label: a.label,
+                                                }))}
+                                                disabled={!editable}
+                                                testId="form-builder-condition-answer"
+                                            />
+                                        </div>
+                                    ) : null}
+                                    {currentTrigger ? (
+                                        <>
+                                            <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
+                                                Families who answer differently are never shown this question.
+                                            </p>
+                                            {editable ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => mutate((sch) => setFieldVisibility(sch, field.id, null))}
+                                                    data-inspector-condition-clear
+                                                    className="text-[11px] font-medium text-alloy-midnight/55 underline underline-offset-2"
+                                                >
+                                                    Always ask this question
+                                                </button>
+                                            ) : null}
+                                        </>
+                                    ) : null}
+                                </>
+                            );
+                        })()}
                     </AlloyInspectorGroup>
                 </>
             ) : null}

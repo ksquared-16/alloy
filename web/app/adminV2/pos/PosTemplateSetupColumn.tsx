@@ -456,9 +456,12 @@ export default function PosTemplateSetupColumn({
      * its page and region provenance) and applies the edits on top. The response is the rebuilt draft,
      * so what the operator sees next came from the server and survives a reload.
      */
-    const saveDraftFieldEdits = async (edits: ReadonlyMap<string, DraftFieldEdit>): Promise<void> => {
+    const saveDraftFieldEdits = async (
+        edits: ReadonlyMap<string, DraftFieldEdit>,
+        omitFieldIds: ReadonlySet<string> = new Set(),
+    ): Promise<void> => {
         if (!caseId || !draft) return;
-        const built = buildDraftSavePayload(draft, edits);
+        const built = buildDraftSavePayload(draft, edits, omitFieldIds);
         if (!built.ok) {
             setErr(
                 built.reason === "unknown_field"
@@ -1331,6 +1334,10 @@ export default function PosTemplateSetupColumn({
                     sourcePreviewUrl={sourcePreviewUrl}
                     onSaveFieldEdits={async (edits) => {
                         await saveDraftFieldEdits(edits);
+                    }}
+                    onRemoveFields={async (fieldIds) => {
+                        // An explicit removal the operator asked for, through the same whole-draft save.
+                        await saveDraftFieldEdits(new Map(), new Set(fieldIds));
                     }}
                     onCreateFieldAndMap={async (fieldId, name, entity, fieldType) => {
                         /*

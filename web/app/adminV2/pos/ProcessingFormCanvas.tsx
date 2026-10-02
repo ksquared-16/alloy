@@ -5,6 +5,24 @@ import { useMemo } from "react";
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { groupFieldsIntoRows, rowCapacityRemaining, fieldLayoutFlexClass, layoutWidthFromField } from "@/lib/forms/formRowComposition";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
+import { conditionTriggerOf, conditionValueOf } from "@/lib/forms/formBuilderSchema";
+
+/**
+ * "Only asked when …" — the condition, said on the form.
+ *
+ * A conditional question was real to a family and invisible to the operator: the runtime hid it, the
+ * schema carried it, and this canvas never mentioned it. So an operator could not tell which question
+ * was conditional, which question controlled it, or which answer revealed it — and had no way to notice
+ * a condition that was wrong.
+ */
+function conditionSentence(field: FormField, labelOf: (id: string) => string | null): string | null {
+    const trigger = conditionTriggerOf(field);
+    if (!trigger) return null;
+    const value = conditionValueOf(field);
+    const answer = value === true ? "Yes" : value === false ? "No" : value === null ? "nothing" : String(value);
+    const label = labelOf(trigger);
+    return label ? `Only asked when “${label}” is ${answer}` : `Only asked when an earlier answer is ${answer}`;
+}
 
 /**
  * The mapping overlay.
@@ -255,6 +273,7 @@ function QuestionBlock({
     mappingState,
     showMapping,
     dimmed,
+    conditionText,
 }: {
     field: FormField;
     selected: boolean;
@@ -262,6 +281,7 @@ function QuestionBlock({
     mappingState?: CanvasMappingState;
     showMapping?: boolean;
     dimmed?: boolean;
+    conditionText?: string | null;
     onSelect: () => void;
     onDragStart?: () => void;
     onDragOver?: (e: React.DragEvent) => void;
@@ -312,6 +332,8 @@ function QuestionBlock({
                     ? "border-alloy-bend-pine/45 bg-alloy-bend-pine/[0.08] ring-[3px] ring-alloy-bend-pine/25"
                     : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25 hover:shadow-sm",
                 overlay ? MAPPING_EDGE[overlay] : null,
+                // Visibly a dependent: a condition is a relationship, and an indent reads as one.
+                conditionText ? "ml-5 border-l-2 border-l-alloy-bend-pine/30" : null,
                 // A filter changes emphasis, never membership: the question stays exactly where it is.
                 dimmed ? "opacity-40" : null
             )}
@@ -358,6 +380,15 @@ function QuestionBlock({
                     aria-hidden
                 />
             )}
+            {conditionText ? (
+                <p
+                    className="mt-1.5 flex items-start gap-1 text-[10px] font-semibold text-alloy-bend-pine"
+                    data-canvas-field-condition={field.id}
+                >
+                    <span aria-hidden>└─</span>
+                    <span>{conditionText}</span>
+                </p>
+            ) : null}
             <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
                     {field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
@@ -605,6 +636,7 @@ export default function ProcessingFormCanvas({
                                                         ) : (
                                                         <QuestionBlock
                                                             field={field}
+                                                            conditionText={conditionSentence(field, (id) => fieldById.get(id)?.label ?? null)}
                                                             mappingState={mapping?.byFieldId.get(fid)}
                                                             showMapping={mapping?.show ?? false}
                                                             dimmed={mapping?.dimFieldIds?.has(fid) ?? false}

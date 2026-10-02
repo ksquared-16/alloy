@@ -119,6 +119,16 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         form_coverage_supported: true,
     },
     {
+        rule_id: "child:gender",
+        entity: "child",
+        field_key: "gender",
+        value_source: "customer_member_profile",
+        customer_member_field: "gender",
+        form_capture_keys: ["child_gender", "Child gender", "Gender", "gender"],
+        runtime_enforced: false,
+        form_coverage_supported: true,
+    },
+    {
         rule_id: "child:age_group",
         entity: "child",
         field_key: "age_group",
