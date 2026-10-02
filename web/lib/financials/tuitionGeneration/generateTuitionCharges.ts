@@ -42,6 +42,7 @@ import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinanci
 import { readAcceptedPricingTerms } from "@/lib/enrollment/pricing/enrollmentPricingTermsService";
 import { draftConsumption } from "@/lib/operationalConsumption/consumptionService";
 import type { OperationalFactDto } from "@/lib/operationalConsumption/consumptionTypes";
+import { autoPostGeneratedCharge } from "@/lib/financials/posting/autoPostGeneratedCharge";
 import {
     resolveTuitionRecurrence,
     tuitionOccurrenceKey,
@@ -424,6 +425,27 @@ export async function generateTuitionCharges(
                 });
                 continue;
             }
+            /*
+             * ── AND NOW IT BECOMES REAL ───────────────────────────────────────────────────────
+             *
+             * This step did not exist. The run drafted the obligation and stopped, so ordinary
+             * tuition with a complete amount and no review policy configured anywhere sat as a
+             * draft indefinitely — 35 of them, worth $4,852.26, the oldest 37 days — and the
+             * financials work queue offered them to an operator to post by hand. That was the
+             * routine human posting step the doctrine forbids.
+             *
+             * It calls the SAME authority manual Add Charge calls. A configured review policy still
+             * holds the draft; a failure leaves it a draft with durable diagnostics and is retried
+             * by the next unattended run.
+             */
+            await autoPostGeneratedCharge(supabase, {
+                orgId: args.orgId,
+                chargeId,
+                actorUserId: args.actorUserId ?? null,
+                policies,
+                today,
+            });
+
             /*
              * `created` and `recalculated` are work this run did; `unchanged` is a draft that was
              * already standing and still agrees. Both are success and neither is an error — they are

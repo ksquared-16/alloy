@@ -73,13 +73,30 @@ export type OperationalEnrollmentMockStore = {
     role_permission_grants: Row[];
 };
 
+/**
+ * THE BILLING CHAIN IS PART OF THE DEFAULT STORE, because since S2 it is part of the CONTRACT.
+ *
+ * Every childcare charge write resolves its own commercial period server-side — subject, household,
+ * the household's calendar, the period — so a double that omits any link makes the binder refuse,
+ * correctly. S2 seeded this per-suite in the four suites its own regression covered, and that
+ * regression did not reach `tests/operationalConsumption`: 64 tests across 17 suites were left red,
+ * and no CI gate caught it because no required check runs the general test suite.
+ *
+ * Defaulting it is the fix that cannot be missed again. A suite that genuinely needs an account with
+ * no agreement still overrides these keys explicitly, which is both possible and visible.
+ */
+function defaultBillingChain(): Partial<OperationalEnrollmentMockStore> {
+    return seedCanonicalBillingChain();
+}
+
 export function createOperationalEnrollmentMockStore(
     seed?: Partial<OperationalEnrollmentMockStore>
 ): OperationalEnrollmentMockStore {
+    const chain = defaultBillingChain();
     return {
         user_roles: seed?.user_roles ?? [],
         role_permission_grants: seed?.role_permission_grants ?? [],
-        child_enrollment_agreements: seed?.child_enrollment_agreements ?? [],
+        child_enrollment_agreements: seed?.child_enrollment_agreements ?? chain.child_enrollment_agreements ?? [],
         child_placements: seed?.child_placements ?? [],
         schedule_patterns: seed?.schedule_patterns ?? [],
         schedule_assignments: seed?.schedule_assignments ?? [],
@@ -94,7 +111,7 @@ export function createOperationalEnrollmentMockStore(
         childcare_schedule_rules: seed?.childcare_schedule_rules ?? [],
         financial_services: seed?.financial_services ?? [],
         financial_charge_templates: seed?.financial_charge_templates ?? [],
-        financial_policies: seed?.financial_policies ?? [],
+        financial_policies: seed?.financial_policies ?? chain.financial_policies ?? [],
         consumption_event_types: seed?.consumption_event_types ?? [],
         consumption_events: seed?.consumption_events ?? [],
         resolved_obligations: seed?.resolved_obligations ?? [],
@@ -103,7 +120,7 @@ export function createOperationalEnrollmentMockStore(
         location_program_categories: seed?.location_program_categories ?? [],
         persons: seed?.persons ?? [],
         employments: seed?.employments ?? [],
-        customer_members: seed?.customer_members ?? [],
+        customer_members: seed?.customer_members ?? chain.customer_members ?? [],
         opportunities: seed?.opportunities ?? [],
         opportunity_customer_members: seed?.opportunity_customer_members ?? [],
         org_settings: seed?.org_settings ?? [],

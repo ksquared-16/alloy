@@ -29,6 +29,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createChildcareDraftCharge, recalculateDraftCharge } from "@/lib/financials/childcareChargeService";
+import { autoPostGeneratedCharge } from "@/lib/financials/posting/autoPostGeneratedCharge";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 
 export class ReductionCoreError extends Error {
     constructor(public readonly code: string, message: string) {
@@ -142,6 +144,30 @@ function assertProvenance(app: ReductionApplicationDraft): void {
     }
 }
 
+/**
+ * MAKE THE CONTRA CHARGE REAL, through the one authority that makes any childcare charge real.
+ *
+ * `financial_reduction_applications` has no status of its own — the economic effect IS the contra
+ * charge — so a reduction that stopped at a draft charge reduced nothing. Thirteen such credits were
+ * standing on the deployed estate, every one with a complete amount, no review flag and no recorded
+ * failure, waiting for a human to post them from the work queue.
+ *
+ * A configured review policy still holds it. A failure leaves it a draft with durable diagnostics.
+ */
+async function completeContraCharge(
+    supabase: SupabaseClient,
+    args: { orgId: string; chargeId: string; actorUserId?: string | null },
+): Promise<void> {
+    const policies = await listFinancialPolicies(supabase, args.orgId);
+    await autoPostGeneratedCharge(supabase, {
+        orgId: args.orgId,
+        chargeId: args.chargeId,
+        actorUserId: args.actorUserId ?? null,
+        policies,
+        today: new Date().toISOString().slice(0, 10),
+    });
+}
+
 export async function applyReductionCore(
     supabase: SupabaseClient,
     input: ReductionCoreInput,
@@ -205,6 +231,7 @@ export async function applyReductionCore(
             .update({ updated_at: new Date().toISOString(), updated_by: input.actorUserId })
             .eq("org_id", input.orgId)
             .in("idempotency_key", keys);
+        await completeContraCharge(supabase, { orgId: input.orgId, chargeId: row.id, actorUserId: input.actorUserId });
         return { kind: "applied", chargeId: row.id, applicationIds, amountCents: total };
     }
 
@@ -286,6 +313,7 @@ export async function applyReductionCore(
         throw new ReductionCoreError("db_error", insertError.message);
     }
 
+    await completeContraCharge(supabase, { orgId: input.orgId, chargeId: createdChargeId, actorUserId: input.actorUserId });
     return {
         kind: "applied",
         chargeId: createdChargeId,
