@@ -135,9 +135,24 @@ describe("finding 5 — Payment says why, or it acts", () => {
 
 describe("finding 6 — a duplicate charge says what actually happened", () => {
     it("the host decides on write_status, not on the presence of an id", () => {
+        /*
+         * The INTENT is unchanged and now reaches further. This pinned the two literal
+         * comparisons; the host states the same vocabulary once, as a set, and — importantly —
+         * applies it to the IDS rather than only to the notice.
+         *
+         * That mattered: `charge.add` answers `skipped_posted` carrying the EXISTING charge's id,
+         * and taking that id as created let a duplicate click silently give a historical charge a
+         * new responsibility arrangement. Observed on deployed staging. Deciding the notice on
+         * write_status while deciding the FOLLOW-UP on the id was exactly the gap.
+         */
         const host = read(HOST);
         expect(host).toContain("const wroteSomething");
-        expect(host).toMatch(/write_status === "created"[\s\S]{0,60}write_status === "recalculated"/);
+        expect(host, "the write vocabulary is stated once").toMatch(
+            /const WROTE = new Set\(\["created", "recalculated"\]\);/,
+        );
+        expect(host, "and it gates the ids the follow-up runs against").toMatch(
+            /WROTE\.has\(wroteStatus\) \? answeredChargeIds : \[\]/,
+        );
     });
 
     it("and tells the operator nothing was created", () => {

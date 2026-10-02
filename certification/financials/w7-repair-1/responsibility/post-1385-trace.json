@@ -2,28 +2,40 @@
   "actions": [
     {
       "action": "charge.add",
-      "mode": "execute"
+      "mode": "execute",
+      "entity_type": "customer",
+      "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "payload_customer_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "payload_charge_id": null,
+      "payload_member_id": null,
+      "shares": null
     },
     {
       "action": "billing.configure_responsibility",
-      "mode": "execute"
+      "mode": "execute",
+      "entity_type": "customer",
+      "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "payload_customer_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+      "payload_charge_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+      "payload_member_id": null,
+      "shares": "[{\"responsible_party_id\":\"fb4eb21b-ad0e-446b-bab1-5a426fd1846e\",\"method\":\"percentage\",\"percent_basis_points\":10000,\"amount_cents\":null}]"
     }
   ],
   "responses": [
     {
       "ok": true,
-      "affected_id": "859f1614-0898-4991-82c1-a2055207fb43",
-      "execution_result": "{\"write_status\":\"created\",\"resolution_key\":\"tpl:field_trip:2026-10-05:7796a568-3b5f-4606-80f9-fee2dae2a419\",\"review_required\":false,\"posted\":true}"
+      "affected_id": "3fb7c297-c8d3-44ce-a760-5a939ff85fd3",
+      "execution_result": "{\"write_status\":\"created\",\"resolution_key\":\"tpl:field_trip:2026-10-06:7796a568-3b5f-4606-80f9-fee2dae2a419\",\"review_required\":false,\"posted\":true}"
     },
     {
-      "ok": false,
-      "affected_id": null,
-      "execution_result": "null"
+      "ok": true,
+      "affected_id": "a0918a88-0bf7-4e1d-aa2d-59dcdb78384b",
+      "execution_result": "{\"arrangement_id\":\"a0918a88-0bf7-4e1d-aa2d-59dcdb78384b\",\"superseded_id\":null,\"shares\":1}"
     }
   ],
   "after": {
-    "error": "The charge was created, but one step did not complete: responsibility for this charge — Action \"billing.configure_responsibility\" does not support entity type \"customer\".",
+    "error": null,
     "notAllocated": false,
-    "detail": "FINANCIALS October 2026 CURRENT BALANCE $0.00 DUE $0.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00 No discount Manage payments → Payment Add All 5 Charges 5 Credits & adjustments 0 Funding 0 Payments 0 LEDGER NOVEMBER 2026 Balance $200.00 UPCOMING PAYMENT No payment method on file Take or record payment →"
+    "detail": "FINANCIALS October 2026 CURRENT BALANCE $0.00 DUE $0.00 PAST DUE None RESPONSIBILITY $0.00 PAID $0.00 No discount Manage payments → Payment Add All 6 Charges 6 Credits & adjustments 0 Funding 0 Payments 0 LEDGER NOVEMBER 2026 Balance $240.00 UPCOMING PAYMENT No payment method on file Take or record payment →"
   }
 }
