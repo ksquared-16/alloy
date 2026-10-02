@@ -61,6 +61,11 @@ export async function POST(request: NextRequest) {
                 locationId: body.location_id != null ? String(body.location_id) : null,
                 serviceId: body.service_id != null ? String(body.service_id) : null,
                 ratePlanId: body.rate_plan_id != null ? String(body.rate_plan_id) : null,
+                /*
+                 * The ACCOUNT scope. Without it the `customer` scope the schema admits would be
+                 * unauthorable — a scope nothing can write is a scope that does not exist.
+                 */
+                customerId: body.customer_id != null ? String(body.customer_id) : null,
                 policyType: String(body.policy_type ?? ""),
                 label: body.label != null ? String(body.label) : null,
                 description: body.description != null ? String(body.description) : null,
