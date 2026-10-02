@@ -1,0 +1,554 @@
+{
+  "trusted_host_action_id": "tha_79690be400f64b",
+  "query_hash": "e3640f3a21de85a3fc32f40e4e942ddfef562174ac4290d4160d4ef2c7be8fed",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T22:42:05.682Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_79690be400f64b",
+    "query_hash": "e3640f3a21de85a3fc32f40e4e942ddfef562174ac4290d4160d4ef2c7be8fed",
+    "authorization_id": "grnt_d21707d5a3494083",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T22:42:11.603Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "enrollment_agreement_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "weekly",
+            "standing_posted_charges": 7,
+            "existing_reductions": 3
+          },
+          {
+            "enrollment_agreement_id": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "weekly",
+            "standing_posted_charges": 39,
+            "existing_reductions": 42
+          },
+          {
+            "enrollment_agreement_id": "fd000000-0000-4000-8000-0000000a0001",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0001",
+            "customer_member_id": "fd000000-0000-4000-8000-0000000d0001",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 1,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "fd000000-0000-4000-8000-0000000a0002",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "customer_member_id": "fd000000-0000-4000-8000-0000000d0002",
+            "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadence": "weekly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "fd000000-0000-4000-8000-0000000a0003",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "customer_member_id": "fd000000-0000-4000-8000-0000000d0003",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "fd000000-0000-4000-8000-0000000a0004",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "customer_member_id": "fd000000-0000-4000-8000-0000000d0004",
+            "site_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "weekly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "e408fa51-7261-43c4-8e60-555d17fc9888",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 2,
+            "existing_reductions": 5
+          },
+          {
+            "enrollment_agreement_id": "fa3767f8-3391-4655-b3a0-b7d461dae574",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "customer_member_id": "46105cd4-6030-417d-a7cb-faf409071c0d",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 1,
+            "existing_reductions": 1
+          },
+          {
+            "enrollment_agreement_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "customer_member_id": "7ebf342f-b43d-4547-9c8a-43c0a96391ae",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": false,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 3,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "e5a7471e-73f3-4e8d-b677-1b76cd274e28",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "c80b2cdb-245b-47e0-bd39-6b61d9430a92",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "570ef2e5-d236-4edd-9465-64dee41b18df",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "c8d9efa0-3292-47c3-978a-baec5c39122c",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "a09eceb9-6e8f-41b6-8d7b-8d3f5bce261b",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "customer_member_id": "25b9b4d3-d0d9-4ff7-904a-692436db5b3f",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 1,
+            "has_customer_calendar": true,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "013a6fe7-e187-4c4e-a0a7-23259ff682f5",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": false,
+            "location_calendar_cadence": "monthly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          },
+          {
+            "enrollment_agreement_id": "7e12949e-39ae-47c3-b091-0edb94c47089",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "status": "active",
+            "location_count_for_customer": 2,
+            "has_customer_calendar": false,
+            "location_calendar_cadence": "weekly",
+            "standing_posted_charges": 0,
+            "existing_reductions": 0
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "a53659a6-244e-49b2-b8c5-0840fdb7e475",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+            "charge_type": "fee",
+            "charge_category": "consumable_fee",
+            "amount_cents": 1800,
+            "service_date": "2026-09-25",
+            "billable_on": "2026-10-02",
+            "generation": "legacy",
+            "legacy_period_key": "2026-10",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "867b46fc-943e-405b-a555-422e54a1e891",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+            "charge_type": "fee",
+            "charge_category": "consumable_fee",
+            "amount_cents": 1800,
+            "service_date": "2026-09-18",
+            "billable_on": "2026-09-25",
+            "generation": "legacy",
+            "legacy_period_key": "2026-09",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "92c7aa0e-0c21-410e-a1fa-4fac4947ced3",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+            "charge_type": "fee",
+            "charge_category": "late_pickup",
+            "amount_cents": 2500,
+            "service_date": "2026-09-30",
+            "billable_on": "2026-09-30",
+            "generation": "legacy",
+            "legacy_period_key": "2026-09",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "051ebacd-41e2-4677-ad60-9e6ea8d1b490",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+            "charge_type": "fee",
+            "charge_category": "fee",
+            "amount_cents": 7500,
+            "service_date": "2026-09-30",
+            "billable_on": "2026-09-30",
+            "generation": "legacy",
+            "legacy_period_key": "2026-09",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "01583e68-873c-4020-8f04-3005f6bf4c5e",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "9134bf85-e00f-4bc6-8917-a02cda58395f",
+            "charge_type": "fee",
+            "charge_category": "consumable_fee",
+            "amount_cents": 1800,
+            "service_date": "2026-09-30",
+            "billable_on": "2026-10-07",
+            "generation": "legacy",
+            "legacy_period_key": "2026-10",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "34d1fd8c-bdab-4a82-9fcc-83068c90f711",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "6f409c2d-2227-48e7-a365-f2c12fc2d929",
+            "charge_type": "fee",
+            "charge_category": "one_time",
+            "amount_cents": 4000,
+            "service_date": "2026-09-18",
+            "billable_on": "2026-10-01",
+            "generation": "legacy",
+            "legacy_period_key": "2026-10",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "fd000000-0000-4000-8000-0000000a0001",
+            "charge_type": "fee",
+            "charge_category": "one_time",
+            "amount_cents": 4000,
+            "service_date": "2026-10-31",
+            "billable_on": "2026-11-01",
+            "generation": "legacy",
+            "legacy_period_key": "2026-11",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "99c3d9d0-3652-4dbf-97c0-a8d7eb944702",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "43ef5615-11c8-4ea9-96ce-5002a4664fd1",
+            "charge_type": "fee",
+            "charge_category": "fee",
+            "amount_cents": 7500,
+            "service_date": "2026-09-30",
+            "billable_on": "2026-09-30",
+            "generation": "legacy",
+            "legacy_period_key": "2026-09",
+            "billing_period_id": null,
+            "service_id": null
+          },
+          {
+            "charge_id": "1bfb2795-58dd-4c84-a04c-212917150ab9",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "enrollment_agreement_id": "4e3aa47e-b9c8-4a56-92a7-4885ed0a7dba",
+            "charge_type": "fee",
+            "charge_category": "one_time",
+            "amount_cents": 4000,
+            "service_date": "2026-09-18",
+            "billable_on": "2026-10-01",
+            "generation": "legacy",
+            "legacy_period_key": "2026-10",
+            "billing_period_id": null,
+            "service_id": null
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "policy_id": "99f9511b-487d-431f-bce3-01e71d359b6e",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "is_active": true,
+            "value_keys": [
+              "offset_days",
+              "strategy"
+            ]
+          },
+          {
+            "policy_id": "71d6b7ed-7e05-4833-876a-8ea06ccdf1ca",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "is_active": true,
+            "value_keys": [
+              "offset_days",
+              "strategy"
+            ]
+          },
+          {
+            "policy_id": "9fd72758-8ba6-4bee-983e-1a7396a83b2d",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "policy_type": "due_date",
+            "scope_type": "org",
+            "is_active": true,
+            "value_keys": [
+              "offset_days",
+              "strategy"
+            ]
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_id": "2143972e-3d57-423c-ac99-37fe9027134a",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2026-11",
+            "starts_on": "2026-11-01",
+            "ends_on": "2026-11-30",
+            "status": "open",
+            "cadence": "monthly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2026-12",
+            "starts_on": "2026-12-01",
+            "ends_on": "2026-12-31",
+            "status": "open",
+            "cadence": "monthly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "e17d6123-e08f-4425-89bf-02eb0a10514d",
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "period_key": "2026-11",
+            "starts_on": "2026-11-01",
+            "ends_on": "2026-11-30",
+            "status": "open",
+            "cadence": "monthly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "99f90f97-eb3a-4d7b-ba85-ff9a76e23051",
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "period_key": "2026-12",
+            "starts_on": "2026-12-01",
+            "ends_on": "2026-12-31",
+            "status": "open",
+            "cadence": "monthly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "d185bdbd-b8d3-48ba-9232-dc6e960c6926",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-09~2026-11-15",
+            "starts_on": "2026-11-09",
+            "ends_on": "2026-11-15",
+            "status": "open",
+            "cadence": "weekly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "b250c752-ccd2-47dc-831e-d5206c30b3b4",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-16~2026-11-22",
+            "starts_on": "2026-11-16",
+            "ends_on": "2026-11-22",
+            "status": "open",
+            "cadence": "weekly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "c895dccc-88d0-4fc9-be40-b6579fbed545",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-09~2026-11-22",
+            "starts_on": "2026-11-09",
+            "ends_on": "2026-11-22",
+            "status": "open",
+            "cadence": "biweekly",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "e7cac412-b1a1-443d-8ae6-631405a5ab47",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-23~2026-12-06",
+            "starts_on": "2026-11-23",
+            "ends_on": "2026-12-06",
+            "status": "open",
+            "cadence": "biweekly",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "944f6050-a659-4f33-ab5a-134c85c4ea9e",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "period_key": "2026-11-12~2026-11-12",
+            "starts_on": "2026-11-12",
+            "ends_on": "2026-11-12",
+            "status": "open",
+            "cadence": "daily",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "36338ff1-ea01-47ba-b056-4259fefc6f60",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "period_key": "2026-11-13~2026-11-13",
+            "starts_on": "2026-11-13",
+            "ends_on": "2026-11-13",
+            "status": "open",
+            "cadence": "daily",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "ad5230e0-ed54-440a-a77e-55b2f30eefce",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "period_key": "2026-01-05~2027-01-04",
+            "starts_on": "2026-01-05",
+            "ends_on": "2027-01-04",
+            "status": "open",
+            "cadence": "annual",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "545dbcff-2899-46f9-b7f2-2812f9264c79",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "period_key": "2027-01-05~2028-01-04",
+            "starts_on": "2027-01-05",
+            "ends_on": "2028-01-04",
+            "status": "open",
+            "cadence": "annual",
+            "calendar_scope": "customer"
+          },
+          {
+            "billing_period_id": "528b6db6-909b-48be-9fb5-5b32c94ca686",
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2027-01",
+            "starts_on": "2027-01-01",
+            "ends_on": "2027-01-31",
+            "status": "open",
+            "cadence": "monthly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "d2200c6c-9062-4791-a331-42c12ea5cc87",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-30~2026-12-06",
+            "starts_on": "2026-11-30",
+            "ends_on": "2026-12-06",
+            "status": "open",
+            "cadence": "weekly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "ee2b9745-730a-4cfa-aedc-7e8fef46eaeb",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-12-07~2026-12-13",
+            "starts_on": "2026-12-07",
+            "ends_on": "2026-12-13",
+            "status": "open",
+            "cadence": "weekly",
+            "calendar_scope": "location"
+          },
+          {
+            "billing_period_id": "0afd5963-855e-48bc-b71b-0437c5c90420",
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-12-07~2026-12-20",
+            "starts_on": "2026-12-07",
+            "ends_on": "2026-12-20",
+            "status": "open",
+            "cadence": "biweekly",
+            "calendar_scope": "customer"
+          }
+        ]
+      }
+    },
+    "row_count": 42
+  }
+}
