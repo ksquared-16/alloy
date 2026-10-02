@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { safeParseFormSchema } from "@/lib/forms/schema";
@@ -8,8 +8,9 @@ import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draf
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import {
     canvasMappingStates,
-    dimmedFieldIds,
     editFromSchemaField,
+    filterSchemaForAttention,
+    isDestinationStillBeingChosen,
     MAPPING_ATTENTION_FILTERS,
     mappingCounts,
     resolveImportedFormMappings,
@@ -18,7 +19,7 @@ import {
 import { suggestedFieldTypeForFormField } from "@/lib/pos/formDraft/createFieldFromSource";
 import { absenceTextFor, suggestedConditionsFor } from "@/lib/pos/formDraft/importedFormAnnotations";
 import { tableReviewNoticesFor } from "@/lib/pos/formDraft/tabularSourceSections";
-import ProcessingFormCanvas from "./ProcessingFormCanvas";
+import ProcessingFormCanvas, { MAPPING_STATE_CHIP, type CanvasMappingState } from "./ProcessingFormCanvas";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 
 /**
@@ -71,7 +72,29 @@ export default function ProcessingImportedFormStudio({
         return parsed.success ? parsed.data : null;
     }, [draft]);
     const [schema, setSchema] = useState<FormSchemaV1 | null>(derived);
-    useEffect(() => setSchema(derived), [derived]);
+
+    /*
+     * THE FORM-ONLY REVERT BUG LIVED HERE.
+     *
+     * Re-seeding the editor from the draft on every draft change looks harmless and is not. Saving is a
+     * round trip: the surface posts the whole draft, the server REBUILDS it and hands it back, the draft
+     * prop changes, and this re-seed then replaced whatever the operator had just chosen with the
+     * server's version of it. For a destination that was still half-chosen — the Studio inspector writes
+     * `field_key: "custom"` the moment you pick the record and before you pick the field — the server had
+     * nothing to store, so it answered "form field only", and the operator watched their choice snap back.
+     *
+     * So the editor is re-seeded only when the draft's SHAPE changes: a different set of fields or
+     * sections, which is the one case where keeping local state would show a form that no longer exists.
+     * A rebuild that returns the same shape leaves the operator's in-progress work alone.
+     */
+    const seededShape = useRef<string | null>(null);
+    useEffect(() => {
+        if (!derived) return;
+        const shape = `${derived.fields.map((f) => f.id).join(",")}|${derived.sections.map((x) => x.id).join(",")}`;
+        if (seededShape.current === shape) return;
+        seededShape.current = shape;
+        setSchema(derived);
+    }, [derived]);
 
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
@@ -83,9 +106,16 @@ export default function ProcessingImportedFormStudio({
     const [busy, setBusy] = useState(false);
 
     const mappings = useMemo(() => (schema ? resolveImportedFormMappings(schema, draft) : new Map()), [schema, draft]);
-    const counts = useMemo(() => mappingCounts(mappings), [mappings]);
-    const dimmed = useMemo(() => (schema ? dimmedFieldIds(schema, mappings, attention) : new Set<string>()), [schema, mappings, attention]);
+    const counts = useMemo(() => (schema ? mappingCounts(schema, mappings) : null), [schema, mappings]);
     const states = useMemo(() => canvasMappingStates(mappings), [mappings]);
+    /*
+     * What the operator currently sees. The complete form stays in `schema` and in the stored draft, so
+     * returning to All restores it exactly — there is nothing to restore, because nothing was removed.
+     */
+    const visibleSchema = useMemo(
+        () => (schema ? filterSchemaForAttention(schema, mappings, attention) : null),
+        [schema, mappings, attention],
+    );
     /*
      * Where the source had a grid Alloy could not represent. Computed from the draft's own kept text, so
      * it is independent of the mapping overlay and of the attention filter — an operator who switches
@@ -127,10 +157,16 @@ export default function ProcessingImportedFormStudio({
         const next = fn(schema);
         setSchema(next);
         if (!onSaveFieldEdits) return;
+        /*
+         * A field whose destination is half-chosen is left out of the payload entirely — not posted as
+         * "no destination", which is what used to throw the operator's choice away on the readback. Its
+         * previously saved state stays on the server until the choice is finished.
+         */
         const edits = new Map<string, ReturnType<typeof editFromSchemaField>>();
         for (const field of next.fields) {
             if (field.type === "group" || field.type === "text_block") continue;
             if (!(draft.fields ?? []).some((f) => f.id === field.id)) continue;
+            if (isDestinationStillBeingChosen(field)) continue;
             edits.set(field.id, editFromSchemaField(field));
         }
         setSaveErr(null);
@@ -189,15 +225,31 @@ export default function ProcessingImportedFormStudio({
                                 data-qa-attention-filter={f.id}
                                 className={`min-h-[26px] rounded-full px-2.5 text-[11.5px] font-medium ${
                                     attention === f.id
-                                        ? "bg-alloy-midnight text-white"
+                                        ? f.id === "all"
+                                            ? "bg-alloy-midnight-forge text-white"
+                                            : MAPPING_STATE_CHIP[f.id as CanvasMappingState]
                                         : "border border-alloy-midnight/15 text-alloy-midnight/70"
                                 }`}
                             >
                                 {f.label}
-                                <span className="ml-1 tabular-nums opacity-60">{counts[f.id]}</span>
+                                <span className="ml-1 tabular-nums opacity-70">{counts?.[f.id] ?? 0}</span>
                             </button>
                         ))}
                     </div>
+                ) : null}
+                {attention !== "all" && visibleSchema && schema ? (
+                    <p className="mt-1.5 text-[11px] text-alloy-midnight/50" data-qa-filter-note="true">
+                        Showing {visibleSchema.fields.length} of {schema.fields.length} — the rest of the form is
+                        still there.{" "}
+                        <button
+                            type="button"
+                            onClick={() => setAttention("all")}
+                            className="font-medium text-alloy-bend-pine underline underline-offset-2"
+                            data-qa-filter-clear="true"
+                        >
+                            Show the whole form
+                        </button>
+                    </p>
                 ) : null}
                 {saveErr ? <p className="mt-1.5 text-[11.5px] text-alloy-ember">{saveErr}</p> : null}
             </header>
@@ -206,7 +258,7 @@ export default function ProcessingImportedFormStudio({
                 <div className="min-h-0 overflow-y-auto px-3 py-3">
                     {/* The Studio canvas. Not a copy of it — the component manual forms render. */}
                     <ProcessingFormCanvas
-                        schema={schema}
+                        schema={visibleSchema ?? schema}
                         selectedFieldId={selectedFieldId}
                         selectedSectionId={selectedSectionId}
                         editable
@@ -217,7 +269,7 @@ export default function ProcessingImportedFormStudio({
                         onSelectSection={setSelectedSectionId}
                         onAddQuestion={() => {}}
                         onAddSection={() => {}}
-                        mapping={{ byFieldId: states, show: showMapping, dimFieldIds: dimmed }}
+                        mapping={{ byFieldId: states, show: showMapping }}
                         sectionNotices={sectionNotices}
                     />
                 </div>
@@ -331,22 +383,39 @@ export default function ProcessingImportedFormStudio({
             </div>
 
             {originalOpen && sourcePreviewUrl ? (
-                <div className="fixed inset-0 z-50 flex" role="dialog" aria-label="Original document" data-qa-original-drawer="true">
-                    <button
-                        type="button"
-                        aria-label="Close original"
-                        onClick={() => setOriginalOpen(false)}
-                        className="flex-1 bg-alloy-midnight/30"
-                    />
-                    <div className="flex h-full w-full max-w-xl flex-col bg-white shadow-2xl">
-                        <header className="flex items-center justify-between border-b border-alloy-midnight/10 px-3 py-2">
-                            <p className="text-[13px] font-semibold text-alloy-midnight">
-                                {sourceDocumentName || "Original document"}
-                            </p>
+                /*
+                 * A CENTRED OVERLAY, NOT A RIGHT-HAND RAIL.
+                 *
+                 * The rail was 576px wide and the uploaded page is laid out for a desktop viewport, so the
+                 * document arrived clipped on the right and pushed off-centre — the operator was fighting
+                 * the drawer to read their own form. This fills the viewport with a comfortable gutter and
+                 * centres the frame, and the sandboxed frame keeps its own scrolling so a long or wide
+                 * document stays reachable at its natural proportions rather than being squeezed.
+                 *
+                 * It is an overlay, so the form underneath keeps its scroll position, its selected field
+                 * and every unsaved mapping decision; closing restores exactly what was there.
+                 */
+                <div
+                    className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-alloy-midnight/45 p-4 sm:p-8"
+                    role="dialog"
+                    aria-label="Original document"
+                    data-qa-original-drawer="true"
+                >
+                    <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+                        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-midnight/10 px-4 py-2.5">
+                            <div className="min-w-0">
+                                <p className="truncate text-[13px] font-semibold text-alloy-midnight">
+                                    {sourceDocumentName || "Original document"}
+                                </p>
+                                <p className="text-[11px] text-alloy-midnight/45">
+                                    Your uploaded file, for reference. The form is where you make changes.
+                                </p>
+                            </div>
                             <button
                                 type="button"
                                 onClick={() => setOriginalOpen(false)}
-                                className="text-[12px] text-alloy-midnight/55 underline"
+                                data-qa-original-close="true"
+                                className="shrink-0 rounded-lg border border-alloy-midnight/15 px-2.5 py-1 text-[12px] font-medium text-alloy-midnight/70"
                             >
                                 Close
                             </button>
@@ -358,9 +427,16 @@ export default function ProcessingImportedFormStudio({
                             referrerPolicy="no-referrer"
                             title="Original document"
                             data-qa-original-frame="true"
-                            className="min-h-0 flex-1 border-0"
+                            className="min-h-0 w-full flex-1 border-0 bg-white"
                         />
                     </div>
+                    {/* Clicking outside closes, and sits BELOW the panel so it never covers the document. */}
+                    <button
+                        type="button"
+                        aria-label="Close original"
+                        onClick={() => setOriginalOpen(false)}
+                        className="absolute inset-0 -z-10 cursor-default"
+                    />
                 </div>
             ) : null}
         </div>

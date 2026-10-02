@@ -26,21 +26,43 @@ export type CanvasMappingOverlay = {
     readonly dimFieldIds?: ReadonlySet<string>;
 };
 
-/* Restrained on purpose: a left edge and a faint wash, not a fill. Bend Pine settles, ember asks. */
+/*
+ * Restrained on purpose: a left edge and a faint wash, not a fill.
+ *
+ * Every colour here is an existing Alloy token doing the job it already means, because a mapping
+ * overlay that invents its own palette stops reading as Alloy. Bend Pine (#00A283) is the product's
+ * active/success/selected accent, so it carries SETTLED. Ember is the error/attention token, so it
+ * carries the red line. Gold is the palette's advisory colour, which is exactly what a suggestion is —
+ * proposed and not yet agreed. Midnight is the structural anchor, not a state, and using it as the
+ * mapped signal was simply wrong: it read as black and said nothing.
+ *
+ * Derived is positive but secondary — Alloy filling a value in is a good outcome, and it is not the
+ * same achievement as placing a family's answer on a record — so it takes Bend Pine at lower weight
+ * rather than a neutral it would share with "kept with the form".
+ */
 const MAPPING_EDGE: Record<CanvasMappingState, string> = {
     mapped: "border-l-[3px] border-l-alloy-bend-pine/70 bg-alloy-bend-pine/[0.035]",
     needs_mapping: "border-l-[3px] border-l-alloy-ember/70 bg-alloy-ember/[0.04]",
-    suggested: "border-l-[3px] border-l-alloy-midnight/35 bg-alloy-midnight/[0.02]",
-    form_only: "border-l-[3px] border-l-alloy-stone/40",
-    derived: "border-l-[3px] border-l-alloy-stone/40",
+    suggested: "border-l-[3px] border-l-alloy-gold bg-alloy-gold/[0.10]",
+    form_only: "border-l-[3px] border-l-alloy-stone",
+    derived: "border-l-[3px] border-l-alloy-bend-pine/35 bg-alloy-bend-pine/[0.02]",
 };
 
 const MAPPING_WORD: Record<CanvasMappingState, { readonly text: string; readonly className: string }> = {
     mapped: { text: "Mapped", className: "text-alloy-bend-pine" },
     needs_mapping: { text: "Needs mapping", className: "text-alloy-ember" },
-    suggested: { text: "Suggested", className: "text-alloy-midnight/55" },
-    form_only: { text: "Kept with the form", className: "text-alloy-midnight/40" },
-    derived: { text: "Filled in by Alloy", className: "text-alloy-midnight/40" },
+    suggested: { text: "Suggested", className: "text-alloy-gold-dark" },
+    form_only: { text: "Kept with the form", className: "text-alloy-muted" },
+    derived: { text: "Filled in by Alloy", className: "text-alloy-bend-pine/70" },
+};
+
+/** The same state colours, for a control that selects a state (the attention chips). */
+export const MAPPING_STATE_CHIP: Record<CanvasMappingState, string> = {
+    mapped: "bg-alloy-bend-pine text-white",
+    needs_mapping: "bg-alloy-ember text-white",
+    suggested: "bg-alloy-gold-dark text-white",
+    form_only: "bg-alloy-muted text-white",
+    derived: "bg-alloy-bend-pine/70 text-white",
 };
 
 export type CanvasDropTarget = {

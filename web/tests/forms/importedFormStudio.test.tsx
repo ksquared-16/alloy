@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import ProcessingImportedFormStudio from "@/app/adminV2/pos/ProcessingImportedFormStudio";
 import {
-    dimmedFieldIds,
+    filterSchemaForAttention,
     mappingCounts,
     matchesAttention,
     resolveImportedFormMappings,
@@ -141,52 +141,75 @@ describe("mapping is visible on the form and can be switched off", () => {
         }
     });
 
-    it("leaves every field undimmed before a filter is chosen", () => {
+    it("shows the whole form before a filter is chosen", () => {
         const html = render();
-        expect(html).toContain('data-canvas-field-dimmed="false"');
-        expect(html).not.toContain('data-canvas-field-dimmed="true"');
+        for (const id of ["dob", "allergies", "describe", "nick"]) {
+            expect(html, id).toContain(`data-testid="form-canvas-question-${id}"`);
+        }
     });
 });
 
-describe("filters change emphasis, never membership", () => {
-    const schema = safeParseFormSchema(draftFormToFormSchemaV1(draft));
+describe("filters change what is shown, and nothing else", () => {
+    const parsed = safeParseFormSchema(draftFormToFormSchemaV1(draft));
 
-    it("keeps every field on the form under every filter", () => {
-        expect(schema.success).toBe(true);
-        if (!schema.success) return;
-        const mappings = resolveImportedFormMappings(schema.data, draft);
+    it("narrows the rendered form to the matching fields", () => {
+        expect(parsed.success).toBe(true);
+        if (!parsed.success) return;
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        const needs = filterSchemaForAttention(parsed.data, mappings, "needs_mapping");
+        expect(needs.fields.map((f) => f.id)).toEqual(["nick"]);
+        expect(needs.fields.some((f) => f.id === "dob")).toBe(false);
+    });
+
+    it("hides a section with nothing left in it rather than leaving an empty shell", () => {
+        if (!parsed.success) return;
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        const mapped = filterSchemaForAttention(parsed.data, mappings, "mapped");
+        for (const section of mapped.sections) expect(section.field_ids.length).toBeGreaterThan(0);
+    });
+
+    it("restores the complete form exactly when the operator returns to All", () => {
+        if (!parsed.success) return;
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        filterSchemaForAttention(parsed.data, mappings, "needs_mapping");
+        const back = filterSchemaForAttention(parsed.data, mappings, "all");
+        // Identity, not a reconstruction: All returns the same object it was given.
+        expect(back).toBe(parsed.data);
+    });
+
+    it("mutates nothing — the source schema is untouched by filtering", () => {
+        if (!parsed.success) return;
+        const before = JSON.stringify(parsed.data);
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        for (const f of MAPPING_ATTENTION_FILTERS) filterSchemaForAttention(parsed.data, mappings, f.id);
+        expect(JSON.stringify(parsed.data)).toBe(before);
+    });
+
+    it("preserves field order within a filtered view", () => {
+        if (!parsed.success) return;
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        const all = parsed.data.fields.map((f) => f.id);
+        const formOnly = filterSchemaForAttention(parsed.data, mappings, "form_only").fields.map((f) => f.id);
+        expect(formOnly).toEqual(all.filter((id) => formOnly.includes(id)));
+    });
+
+    it("counts with the same rule the filter uses", () => {
+        if (!parsed.success) return;
+        const mappings = resolveImportedFormMappings(parsed.data, draft);
+        const counts = mappingCounts(parsed.data, mappings);
         for (const f of MAPPING_ATTENTION_FILTERS) {
-            const dimmed = dimmedFieldIds(schema.data, mappings, f.id);
-            // Dimming is the whole mechanism: the field count never changes.
-            expect(schema.data.fields.length).toBeGreaterThan(0);
-            expect(dimmed.size).toBeLessThan(schema.data.fields.length + 1);
+            if (f.id === "all") continue;
+            expect(filterSchemaForAttention(parsed.data, mappings, f.id).fields.length, f.id).toBe(counts[f.id]);
         }
-    });
-
-    it("dims the non-matching fields when an attention filter is chosen", () => {
-        if (!schema.success) return;
-        const mappings = resolveImportedFormMappings(schema.data, draft);
-        const dimmed = dimmedFieldIds(schema.data, mappings, "needs_mapping");
-        expect(dimmed.has("dob")).toBe(true);
-        expect(dimmed.has("nick")).toBe(false);
-    });
-
-    it("counts each state, and treats derived answers as form-only", () => {
-        if (!schema.success) return;
-        const counts = mappingCounts(resolveImportedFormMappings(schema.data, draft));
-        expect(counts.mapped).toBeGreaterThan(0);
-        expect(counts.needs_mapping).toBe(1);
-        expect(counts.all).toBe(counts.mapped + counts.needs_mapping + counts.suggested + counts.form_only);
         expect(matchesAttention("derived", "form_only")).toBe(true);
     });
 });
 
-describe("the original stays reachable, and stays reference material", () => {
+describe("the source stays reachable, and stays reference material", () => {
     it("offers View original as a secondary action, not a peer tab", () => {
         const html = render();
         expect(html).toContain('data-qa-view-original="true"');
         expect(html).toContain("View original");
-        // No Source tab competing with the form, and the drawer is closed until asked for.
         expect(html).not.toContain("<iframe");
     });
 
@@ -235,11 +258,6 @@ describe("the operator is never sent back to the extraction world", () => {
 });
 
 describe("the shared canvas draws a group as one concept", () => {
-    /*
-     * Driven through the Studio canvas with a schema built by hand, because the point under test is the
-     * canvas's own group rendering — the thing that previously turned a repeatable collection and a
-     * structured address back into a flat row.
-     */
     const schema: FormSchemaV1 = {
         schema_version: 1,
         title: "Packet",
@@ -289,7 +307,6 @@ describe("the shared canvas draws a group as one concept", () => {
         expect(html).toContain("Parents / Guardians");
         expect(html).toContain('data-canvas-group-child="g_first"');
         expect(html).toContain("+ Add another");
-        // Not three unrelated questions.
         expect(html).not.toContain("Parent 2");
     });
 
@@ -297,11 +314,29 @@ describe("the shared canvas draws a group as one concept", () => {
         expect(html).toContain('data-canvas-group-kind="address"');
         expect(html).toContain("Home address");
         expect(html).toContain('data-canvas-group-child="city"');
-        // An address is one thing, so it gets no add control.
         expect(html).not.toContain('data-testid="form-canvas-add-another-home"');
     });
 
     it("carries the mapping overlay onto the group itself", () => {
         expect(html).toContain('data-testid="form-canvas-mapping-guardians"');
+    });
+
+    it("filters a group by whether it has a canonical placement, and keeps it whole", () => {
+        /*
+         * A group's placement is its binding: the address group carries address_binding and so reads as
+         * Mapped, while a repeatable with no collection binding is a form structure with nowhere
+         * canonical to go and reads as kept-with-the-form. Either way it survives as ONE concept —
+         * a half-shown address is not an address.
+         */
+        const mapped = filterSchemaForAttention(schema, new Map(), "mapped");
+        expect(mapped.fields.map((f) => f.id)).toEqual(["home"]);
+        expect(mapped.fields.every((f) => f.type === "group" && f.fields.length === 2)).toBe(true);
+
+        const formOnly = filterSchemaForAttention(schema, new Map(), "form_only");
+        expect(formOnly.fields.map((f) => f.id)).toEqual(["guardians"]);
+        expect(formOnly.fields[0]!.type === "group" && formOnly.fields[0]!.fields.length).toBe(2);
+
+        // Neither is a question awaiting a destination.
+        expect(filterSchemaForAttention(schema, new Map(), "needs_mapping").fields).toEqual([]);
     });
 });

@@ -16,6 +16,7 @@ import type { DocumentStructureCandidate, StructureFieldType } from "../structur
 import type { DraftFormField, DraftFormFieldType, DraftFormSection, StoredFormDraftPreview } from "./types";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
 import { safeImportMappings } from "@/lib/pos/formDraft/resolveFieldMapping";
+import { isDocumentPlumbingField, plumbingWarning } from "@/lib/pos/formDraft/documentPlumbingFields";
 
 export const FORM_DRAFT_GENERATOR_VERSION = "fp12.0";
 
@@ -74,11 +75,21 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
     const sections: DraftFormSection[] = [];
     let fieldCounter = 0;
     let choiceFlagged = false;
+    const plumbingDropped: string[] = [];
 
     input.structure.sections.forEach((sec, si) => {
         const sectionId = slugId("section", si + 1);
         const fieldIds: string[] = [];
         for (const f of sec.fields) {
+            /*
+             * The page's own plumbing is not one of its questions. A control the reader could find no
+             * label for, whose entire prompt is its own machine name, is how the page works — asking a
+             * family to fill in an email subject line is not something the document ever asked.
+             */
+            if (isDocumentPlumbingField(f)) {
+                plumbingDropped.push(f.label.trim());
+                continue;
+            }
             fieldCounter += 1;
             const id = slugId("field", fieldCounter);
             const declaredOptions = f.options?.filter((o) => o.trim().length > 0) ?? [];
@@ -124,6 +135,9 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
     if (fields.length === 0) {
         warnings.push("No fields were drafted — the document had no detectable labelled prompts.");
     }
+    // Never silent: a control left out is reported, so the operator can disagree.
+    const plumbingNote = plumbingWarning(plumbingDropped);
+    if (plumbingNote) warnings.push(plumbingNote);
 
     /*
      * APPLY THE MAPPINGS ALLOY CAN ALREADY MAKE SAFELY.
