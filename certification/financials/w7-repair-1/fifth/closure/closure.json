@@ -1,0 +1,71 @@
+[
+  {
+    "proof": "accounts",
+    "ledger": {
+      "rowFound": true,
+      "state": "named",
+      "text": "Ada Certfree",
+      "allResponsibilityCells": [
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        },
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        },
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        },
+        {
+          "state": "named",
+          "text": "Ada Certfree"
+        },
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        },
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        },
+        {
+          "state": "not-allocated",
+          "text": "Not allocated"
+        }
+      ]
+    },
+    "openerCount": 1,
+    "details": {
+      "label": "Field trip",
+      "attribution": "Household",
+      "attributionState": "household",
+      "status": "posted",
+      "rows": {
+        "Billing period": "November 2026",
+        "Invoice date": "Nov 1, 2026",
+        "Due date": "Nov 11, 2026",
+        "Accounting period": "October 2026 · Open",
+        "GL account": "4090 · Other Income",
+        "Gross charge": "$40.00",
+        "Net obligation": "$40.00",
+        "Ada Certfree": "$40.00",
+        "Charge is for": "Oct 7, 2026",
+        "Posted": "Oct 2, 2026 at 5:41 PM",
+        "Raised": "Created by a person whose name is not on file",
+        "Created": "Oct 2, 2026 at 5:41 PM",
+        "Outstanding": "$40.00"
+      },
+      "uuidCount": 0,
+      "text": "ONE_TIME Field trip Household Posted · Service Oct 7, 2026 · Posted Oct 2, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → RESPONSIBILITY ARRANGEMENT Ada Certfree 100% Expected funding — none. Manage expected funding → RESPONSIBILITY Ada Certfree $40.00 HISTORY Charge is for Oct 7, 2026 Posted Oct 2, 2026 ORIGIN Raised Created by a person whose name is not on file Created Oct 2, 2026 at 5:41 PM Posted Oct 2, 2026 at 5:41 PM COLLECTION Outstanding $40.00 Close"
+    }
+  },
+  {
+    "proof": "focus",
+    "openers": 89,
+    "hasTarget": 0,
+    "commands": 0,
+    "details": null
+  }
+]

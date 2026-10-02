@@ -1,0 +1,185 @@
+[
+  {
+    "proof": "alvarez",
+    "stage": "child_grain",
+    "commands": 0,
+    "readings": {
+      "child_grain": {
+        "label": "Field trip",
+        "attribution": "Ana Alvarez · Alvarez Household (demo)",
+        "attributionState": "child",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "Charge is for": "Oct 31, 2026",
+          "Posted": "Oct 1, 2026 at 10:24 AM",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Oct 1, 2026 at 10:24 AM",
+          "Outstanding": "$40.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Ana Alvarez · Alvarez Household (demo) Posted · Service Oct 31, 2026 · Posted Oct 1, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → HISTORY Charge is for Oct 31, 2026 Posted Oct 1, 2026 ORIGIN Raised Created by a person whose name is not on file Cre",
+        "renderedFor": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+        "matchesRequested": true
+      },
+      "household_grain": {
+        "label": "Field trip",
+        "attribution": "Household",
+        "attributionState": "household",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "cash · Sep 25, 2026": "$10.00",
+          "Charge is for": "Oct 9, 2026",
+          "Posted": "Sep 25, 2026 at 4:19 PM",
+          "$10.00 applied · cash": "Sep 25, 2026",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Sep 25, 2026 at 4:19 PM",
+          "Outstanding": "$20.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Household Posted · Service Oct 9, 2026 · Posted Sep 25, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → APPLIED PAYMENTS cash · Sep 25, 2026 $10.00 cash · Sep 25, 2026 $10.00 HISTORY Charge is for Oct 9, 2026 Posted Sep 25, 2026 $10.00 applied · cash",
+        "renderedFor": "d66432ef-07b8-472f-9031-958fff1a4af2",
+        "matchesRequested": true
+      }
+    }
+  },
+  {
+    "proof": "alvarez",
+    "stage": "household_grain",
+    "commands": 0,
+    "readings": {
+      "child_grain": {
+        "label": "Field trip",
+        "attribution": "Ana Alvarez · Alvarez Household (demo)",
+        "attributionState": "child",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "Charge is for": "Oct 31, 2026",
+          "Posted": "Oct 1, 2026 at 10:24 AM",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Oct 1, 2026 at 10:24 AM",
+          "Outstanding": "$40.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Ana Alvarez · Alvarez Household (demo) Posted · Service Oct 31, 2026 · Posted Oct 1, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → HISTORY Charge is for Oct 31, 2026 Posted Oct 1, 2026 ORIGIN Raised Created by a person whose name is not on file Cre",
+        "renderedFor": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+        "matchesRequested": true
+      },
+      "household_grain": {
+        "label": "Field trip",
+        "attribution": "Household",
+        "attributionState": "household",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "cash · Sep 25, 2026": "$10.00",
+          "Charge is for": "Oct 9, 2026",
+          "Posted": "Sep 25, 2026 at 4:19 PM",
+          "$10.00 applied · cash": "Sep 25, 2026",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Sep 25, 2026 at 4:19 PM",
+          "Outstanding": "$20.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Household Posted · Service Oct 9, 2026 · Posted Sep 25, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → APPLIED PAYMENTS cash · Sep 25, 2026 $10.00 cash · Sep 25, 2026 $10.00 HISTORY Charge is for Oct 9, 2026 Posted Sep 25, 2026 $10.00 applied · cash",
+        "renderedFor": "d66432ef-07b8-472f-9031-958fff1a4af2",
+        "matchesRequested": true
+      }
+    }
+  },
+  {
+    "proof": "alvarez",
+    "reachable": true,
+    "commands": 0,
+    "readings": {
+      "child_grain": {
+        "label": "Field trip",
+        "attribution": "Ana Alvarez · Alvarez Household (demo)",
+        "attributionState": "child",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "Charge is for": "Oct 31, 2026",
+          "Posted": "Oct 1, 2026 at 10:24 AM",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Oct 1, 2026 at 10:24 AM",
+          "Outstanding": "$40.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Ana Alvarez · Alvarez Household (demo) Posted · Service Oct 31, 2026 · Posted Oct 1, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → HISTORY Charge is for Oct 31, 2026 Posted Oct 1, 2026 ORIGIN Raised Created by a person whose name is not on file Cre",
+        "renderedFor": "a8c9460a-3d32-4259-b100-02ad593e6ea7",
+        "matchesRequested": true
+      },
+      "household_grain": {
+        "label": "Field trip",
+        "attribution": "Household",
+        "attributionState": "household",
+        "rows": {
+          "Billing period": "November 2026",
+          "Invoice date": "Nov 1, 2026",
+          "Due date": "Nov 11, 2026",
+          "Accounting period": "October 2026 · Open",
+          "GL account": "4090 · Other Income",
+          "Gross charge": "$40.00",
+          "Net obligation": "$40.00",
+          "Dana Alvarez": "50%",
+          "Rosa Alvarez": "50%",
+          "cash · Sep 25, 2026": "$10.00",
+          "Charge is for": "Oct 9, 2026",
+          "Posted": "Sep 25, 2026 at 4:19 PM",
+          "$10.00 applied · cash": "Sep 25, 2026",
+          "Raised": "Created by a person whose name is not on file",
+          "Created": "Sep 25, 2026 at 4:19 PM",
+          "Outstanding": "$20.00"
+        },
+        "uuidsInBody": 0,
+        "forbidden": [],
+        "text": "ONE_TIME Field trip Household Posted · Service Oct 9, 2026 · Posted Sep 25, 2026 POSTING Billing period November 2026 Invoice date Nov 1, 2026 Due date Nov 11, 2026 Accounting period October 2026 · Open GL account 4090 · Other Income AMOUNT Gross charge $40.00 Net obligation $40.00 Manage responsibility → 2 responsible parties from Oct 7, 2026. This posted charge is not divided under it. RESPONSIBILITY ARRANGEMENT Dana Alvarez 50% Expected funding — none. Manage expected funding → Rosa Alvarez 50% Expected funding — none. Manage expected funding → APPLIED PAYMENTS cash · Sep 25, 2026 $10.00 cash · Sep 25, 2026 $10.00 HISTORY Charge is for Oct 9, 2026 Posted Sep 25, 2026 $10.00 applied · cash",
+        "renderedFor": "d66432ef-07b8-472f-9031-958fff1a4af2",
+        "matchesRequested": true
+      }
+    }
+  }
+]

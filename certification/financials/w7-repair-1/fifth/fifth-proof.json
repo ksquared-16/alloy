@@ -1,0 +1,66 @@
+[
+  {
+    "part": "B-repeat",
+    "acts": [
+      {
+        "action": "charge.add",
+        "entity_type": "customer",
+        "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "charge_id": null,
+        "shares": null
+      },
+      {
+        "action": "charge.add",
+        "entity_type": "customer",
+        "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "charge_id": null,
+        "shares": null
+      },
+      {
+        "action": "charge.add",
+        "entity_type": "customer",
+        "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "charge_id": null,
+        "shares": null
+      },
+      {
+        "action": "charge.add",
+        "entity_type": "customer",
+        "entity_id": "7796a568-3b5f-4606-80f9-fee2dae2a419",
+        "charge_id": null,
+        "shares": null
+      }
+    ],
+    "responses": [
+      {
+        "ok": true,
+        "affected_id": null,
+        "write_status": null,
+        "detail": "{\"mode\":\"preview\",\"eligibility\":{\"eligible\":true,\"blockers\":[],\"availableTransitions\":[],\"requiredInputs\":[]},\"preview\":{\"summary\":\"waived_fee_1790630157816 $0.00\",\"changes\":[\"Appl"
+      },
+      {
+        "ok": true,
+        "affected_id": null,
+        "write_status": null,
+        "detail": "{\"mode\":\"preview\",\"eligibility\":{\"eligible\":true,\"blockers\":[],\"availableTransitions\":[],\"requiredInputs\":[]},\"preview\":{\"summary\":\"missing_event_date\",\"changes\":[]}}"
+      },
+      {
+        "ok": true,
+        "affected_id": null,
+        "write_status": null,
+        "detail": "{\"mode\":\"preview\",\"eligibility\":{\"eligible\":true,\"blockers\":[],\"availableTransitions\":[],\"requiredInputs\":[]},\"preview\":{\"summary\":\"field_trip $40.00\",\"changes\":[\"Applies to · this"
+      },
+      {
+        "ok": true,
+        "affected_id": "6ccb9225-8c21-4fb4-b414-9b6a1afb993a",
+        "write_status": "skipped_posted",
+        "detail": "{\"write_status\":\"skipped_posted\",\"resolution_key\":\"tpl:field_trip:2026-10-07:7796a568-3b5f-4606-80f9-fee2dae2a419\",\"review_required\":false,\"posted\":false}"
+      }
+    ],
+    "after": {
+      "charges": "7",
+      "notice": null,
+      "error": null
+    }
+  }
+]

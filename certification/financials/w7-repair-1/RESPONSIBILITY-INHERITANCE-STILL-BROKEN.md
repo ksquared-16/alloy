@@ -1,3 +1,8 @@
+> **SUPERSEDED 2026-10-02 by `FIFTH-PROOF-RESULT.md`.** The finding below was true of deployed
+> `9a16cf6c` and is kept as the record of it. On `a0dd92a8c` the charge reaches durable
+> allocations: `billing.resolve_responsibility` executes and the store holds one allocation of
+> 4000c for the new charge. Nothing here was edited; this banner was added.
+
 # RESPONSIBILITY_INHERITANCE_STILL_BROKEN
 
 Third decisive attempt, on deployed **`ca2711db691fe6ac14f9aee2b0972556cd79af7f`** (#1385).

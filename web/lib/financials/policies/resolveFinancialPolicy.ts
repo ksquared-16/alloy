@@ -1,8 +1,9 @@
 /**
  * Financial Policy resolution (Commercial Model, Slice C) — pure, recomputable.
  *
- * Most-specific-wins over the scope hierarchy Org -> Location -> Service ->
- * Rate Plan (Agreement is a future dimension), then latest effective_start.
+ * Most-specific-wins over the scope hierarchy Org -> Location -> Service -> Rate Plan -> Customer,
+ * then latest effective_start. Customer is the ACCOUNT dimension and sits last deliberately: an
+ * explicit account answer beats any inherited default.
  * Returns the resolved policy + its source scope + a clear missing/fallback
  * state. Pure functions only — no DB, no IO, no posting.
  *
@@ -22,9 +23,16 @@ export type PolicyResolutionContext = {
     locationId?: string | null;
     serviceId?: string | null;
     ratePlanId?: string | null;
+    /*
+     * The ACCOUNT, which is a different dimension from the three above: they narrow by what is
+     * sold, this narrows by whose account it is. Most specific, because an explicit account answer
+     * must beat an inherited default — a household attending two locations has no one default.
+     */
+    customerId?: string | null;
 };
 
 const SCOPE_SPECIFICITY: Record<FinancialPolicyScopeType, number> = {
+    customer: 5,
     rate_plan: 4,
     service: 3,
     location: 2,
@@ -41,6 +49,8 @@ function matchesContext(policy: FinancialPolicyRow, context: PolicyResolutionCon
             return !!policy.service_id && policy.service_id === context.serviceId;
         case "rate_plan":
             return !!policy.rate_plan_id && policy.rate_plan_id === context.ratePlanId;
+        case "customer":
+            return !!policy.customer_id && policy.customer_id === context.customerId;
         default:
             return false;
     }

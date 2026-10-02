@@ -8,9 +8,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { writeFileSync, mkdirSync } from "node:fs";
 const STORAGE = "/Users/vacilando/.local/state/alloy-dev/gateway/auth/deployed/alloy_staging_web/storage-state.json";
-const OUT = "../certification/financials/w7-repair-1/closure";
+const OUT = "../certification/financials/w7-repair-1/fifth/closure";
 const ENTRY = "/workspace/work-unit/enrolled-children";
-const CHARGE = "3fb7c297-c8d3-44ce-a760-5a939ff85fd3";
+const CHARGE = "6ccb9225-8c21-4fb4-b414-9b6a1afb993a"; // the FIFTH-proof charge: created, configured, and RESOLVED
 test.use({ storageState: STORAGE, baseURL: "https://staging.workwithalloy.com", viewport: { width: 1440, height: 900 } });
 test.describe.configure({ mode: "serial" });
 test.setTimeout(1_800_000);
