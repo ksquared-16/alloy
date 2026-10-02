@@ -56,3 +56,24 @@ export function plumbingWarning(labels: readonly string[]): string | null {
         named.length === 1 ? "this is" : "these are"
     } how the page handles itself, not ${named.length === 1 ? "a question" : "questions"} for a family.`;
 }
+
+
+/**
+ * Plumbing already sitting on a persisted draft.
+ *
+ * A draft created before the importer learned this rule still carries the control, and the rule cannot
+ * reach backwards. Hiding it on the canvas would be a lie about what the form contains, and rewriting
+ * the draft silently would be worse — an operator may have edited around it. So the surface NAMES what
+ * it found and offers removal; this is only the finding half.
+ */
+export function plumbingFieldsOnDraft(
+    fields: readonly PlumbingCandidate[] & readonly { readonly id?: string }[],
+): ReadonlyArray<{ readonly id: string; readonly label: string }> {
+    const out: Array<{ id: string; label: string }> = [];
+    for (const field of fields) {
+        const id = (field as { id?: string }).id;
+        if (!id) continue;
+        if (isDocumentPlumbingField(field)) out.push({ id, label: field.label.trim() });
+    }
+    return out;
+}

@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import ProcessingFormCanvas from "@/app/adminV2/pos/ProcessingFormCanvas";
-import { isDocumentPlumbingField, plumbingWarning } from "@/lib/pos/formDraft/documentPlumbingFields";
+import { isDocumentPlumbingField, plumbingFieldsOnDraft, plumbingWarning } from "@/lib/pos/formDraft/documentPlumbingFields";
+import { buildDraftSavePayload } from "@/lib/pos/formDraft/buildDraftSavePayload";
 import { buildFormDraftFromStructure } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 
@@ -232,5 +233,67 @@ describe("manually authored forms are untouched", () => {
     it("leaves every system field the Studio library offers in place", () => {
         const library = web("lib/forms/processingFormFieldLibrary.ts");
         expect(library).not.toContain("isDocumentPlumbingField");
+    });
+});
+
+
+describe("the attention filters speak the same colour language as the form", () => {
+    const studio = web("app/adminV2/pos/ProcessingImportedFormStudio.tsx");
+    const canvasSource = web("app/adminV2/pos/ProcessingFormCanvas.tsx");
+
+    it("dresses a selected filter in the colour of the state it selects", () => {
+        // The chip table is the canvas's own state table, so a filter can never drift from the field.
+        expect(studio).toContain("MAPPING_STATE_CHIP[f.id as CanvasMappingState]");
+        const chips = canvasSource.slice(canvasSource.indexOf("MAPPING_STATE_CHIP"));
+        expect(chips.slice(0, 400)).toContain("bg-alloy-bend-pine text-white");
+        expect(chips.slice(0, 400)).toContain("bg-alloy-ember text-white");
+        expect(chips.slice(0, 400)).toContain("bg-alloy-gold-dark text-white");
+        expect(chips.slice(0, 400)).toContain("bg-alloy-muted text-white");
+    });
+
+    it("gives All the ordinary primary control treatment, not a navy slab", () => {
+        const all = studio.slice(studio.indexOf('f.id === "all"'), studio.indexOf('f.id === "all"') + 300);
+        expect(all).toContain("bg-alloy-bend-pine text-white");
+        expect(all).not.toContain("alloy-midnight-forge");
+        expect(all).not.toContain("bg-alloy-midnight text-white");
+    });
+
+    it("leaves an unselected filter quiet", () => {
+        expect(studio).toContain("border border-alloy-midnight/15 text-alloy-midnight/70");
+    });
+});
+
+describe("plumbing already on a persisted draft", () => {
+    it("is found on the draft, not hidden on the canvas", () => {
+        const found = plumbingFieldsOnDraft([
+            { id: "field_1", label: "subject_line", confidence: "low", evidence: "hosted_form:form:subject_line" },
+            { id: "field_2", label: "Parent email", confidence: "high", evidence: "hosted_form:form:parent_email" },
+        ]);
+        expect(found).toEqual([{ id: "field_1", label: "subject_line" }]);
+    });
+
+    it("is named to the operator with an explicit removal, never removed silently", () => {
+        const studio = web("app/adminV2/pos/ProcessingImportedFormStudio.tsx");
+        expect(studio).toContain("data-qa-plumbing-notice");
+        expect(studio).toContain("data-qa-plumbing-remove");
+        expect(studio).toContain("Remove");
+        // Removal happens only through the operator's own click.
+        expect(studio).toContain("onRemoveFields");
+    });
+
+    it("omits fields from the whole-draft save only when explicitly asked", () => {
+        const payload = web("lib/pos/formDraft/buildDraftSavePayload.ts");
+        expect(payload).toContain("omitFieldIds: ReadonlySet<string> = new Set()");
+        expect(payload).toContain("Never populated automatically.");
+    });
+
+    it("refuses to empty a draft entirely", () => {
+        const draft = {
+            title: "t",
+            generated_form_name: null,
+            sections: [{ id: "s1", title: "S", field_ids: ["f1"] }],
+            fields: [{ id: "f1", label: "Only question", type: "text", required: false, confidence: "high" }],
+        } as never;
+        expect(buildDraftSavePayload(draft, new Map(), new Set(["f1"]))).toEqual({ ok: false, reason: "no_fields" });
     });
 });

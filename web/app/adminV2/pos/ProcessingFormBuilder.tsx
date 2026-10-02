@@ -190,11 +190,24 @@ export default function ProcessingFormBuilder({
                     `/api/admin/forms/${encodeURIComponent(formId)}/lifecycle-coverage`,
                     { credentials: "include" }
                 );
-                if (!res.ok || cancelled) return;
-                const json = (await res.json()) as {
-                    data?: { field_library?: ProcessingLibraryGroupOffer[] };
-                };
-                if (!cancelled) setFieldLibrary(json.data?.field_library ?? null);
+                if (cancelled) return;
+                if (res.ok) {
+                    const json = (await res.json()) as { data?: { field_library?: ProcessingLibraryGroupOffer[] } };
+                    const library = json.data?.field_library ?? null;
+                    if (!cancelled && library?.length) {
+                        setFieldLibrary(library);
+                        return;
+                    }
+                }
+                /*
+                 * A form with no lifecycle usage yet answers with no library, and the picker then fell
+                 * back to 17 curated entries — so a destination that exists in the catalog could not be
+                 * chosen. The org-scoped route serves the same authority without needing a form.
+                 */
+                const orgRes = await fetch("/api/admin/forms/field-library", { credentials: "include" });
+                if (!orgRes.ok || cancelled) return;
+                const orgJson = (await orgRes.json()) as { data?: { field_library?: ProcessingLibraryGroupOffer[] } };
+                if (!cancelled) setFieldLibrary(orgJson.data?.field_library ?? null);
             } catch {
                 /* keep the curated fallback */
             }

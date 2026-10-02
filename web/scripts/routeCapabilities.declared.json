@@ -2538,6 +2538,14 @@
         "helper": "assertFinancialsReadAllowed"
       }
     },
+    "app/api/admin/forms/field-library/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "forms.author",
+        "helper": "requireFormsCapability",
+        "reason": "The canonical destination catalog an authoring surface offers under \"Store answer in\". Choosing where a question's answer is stored is form authoring, so it carries the same authority as the rest of form design; it reads only the caller's own organization field definitions."
+      }
+    },
     "app/api/admin/forms/[formId]/archive/route.ts": {
       "POST": {
         "status": "declared",

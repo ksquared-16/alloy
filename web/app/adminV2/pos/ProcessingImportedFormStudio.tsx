@@ -6,6 +6,7 @@ import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
+import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import {
     canvasMappingStates,
     editFromSchemaField,
@@ -19,6 +20,7 @@ import {
 import { suggestedFieldTypeForFormField } from "@/lib/pos/formDraft/createFieldFromSource";
 import { absenceTextFor, suggestedConditionsFor } from "@/lib/pos/formDraft/importedFormAnnotations";
 import { tableReviewNoticesFor } from "@/lib/pos/formDraft/tabularSourceSections";
+import { plumbingFieldsOnDraft } from "@/lib/pos/formDraft/documentPlumbingFields";
 import ProcessingFormCanvas, { MAPPING_STATE_CHIP, type CanvasMappingState } from "./ProcessingFormCanvas";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 
@@ -51,6 +53,7 @@ export default function ProcessingImportedFormStudio({
     sourcePreviewUrl,
     onSaveFieldEdits,
     onCreateFieldAndMap,
+    onRemoveFields,
 }: {
     draft: StoredFormDraftPreview;
     sourceDocumentName?: string | null;
@@ -62,6 +65,8 @@ export default function ProcessingImportedFormStudio({
      */
     onSaveFieldEdits?: (edits: ReadonlyMap<string, { label: string; required: boolean; field_source: { entity_type: string; field_key: string } | null }>) => Promise<void> | void;
     onCreateFieldAndMap?: (fieldId: string, name: string, entity: string, fieldType: string) => Promise<void> | void;
+    /** Explicit operator removal. Never called on its own — only from the notice the operator sees. */
+    onRemoveFields?: (fieldIds: readonly string[]) => Promise<void> | void;
 }) {
     /*
      * The draft is the stored truth; the schema is what Studio edits. Re-deriving on every draft change
@@ -103,6 +108,29 @@ export default function ProcessingImportedFormStudio({
     const [originalOpen, setOriginalOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [saveErr, setSaveErr] = useState<string | null>(null);
+    /*
+     * The canonical destination catalog. The shared inspector falls back to a 17-entry curated list when
+     * it has none, which is why "Child → Gender" was missing on an imported form: the form-scoped
+     * lifecycle-coverage route needs a form id, and an imported draft has none until it is created. The
+     * org-scoped route serves the SAME library, so both surfaces read one authority.
+     */
+    const [fieldLibrary, setFieldLibrary] = useState<ProcessingLibraryGroupOffer[] | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch("/api/admin/forms/field-library", { credentials: "include" });
+                if (!res.ok || cancelled) return;
+                const json = (await res.json()) as { data?: { field_library?: ProcessingLibraryGroupOffer[] } };
+                if (!cancelled) setFieldLibrary(json.data?.field_library ?? null);
+            } catch {
+                /* The inspector still offers the curated list; it says less, it does not break. */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
     const [busy, setBusy] = useState(false);
 
     const mappings = useMemo(() => (schema ? resolveImportedFormMappings(schema, draft) : new Map()), [schema, draft]);
@@ -123,6 +151,12 @@ export default function ProcessingImportedFormStudio({
      * table here I have not handled".
      */
     const sectionNotices = useMemo(() => tableReviewNoticesFor(draft), [draft]);
+    /*
+     * Plumbing a pre-fix import left behind. The importer no longer drafts these, but the rule cannot
+     * reach a draft that already exists — so the surface names what it found and offers removal rather
+     * than hiding it on the canvas or rewriting the draft without being asked.
+     */
+    const plumbing = useMemo(() => plumbingFieldsOnDraft(draft.fields ?? []), [draft.fields]);
 
     const selectedField: FormField | null = useMemo(
         () => schema?.fields.find((f) => f.id === selectedFieldId) ?? null,
@@ -225,8 +259,14 @@ export default function ProcessingImportedFormStudio({
                                 data-qa-attention-filter={f.id}
                                 className={`min-h-[26px] rounded-full px-2.5 text-[11.5px] font-medium ${
                                     attention === f.id
-                                        ? f.id === "all"
-                                            ? "bg-alloy-midnight-forge text-white"
+                                        ? /*
+                                           * A selected filter wears the colour of the state it selects, so the row
+                                           * says "these are the ones that need you" rather than merely "this button
+                                           * is pressed". All is the only one with no state of its own, so it takes
+                                           * the ordinary primary control treatment.
+                                           */
+                                          f.id === "all"
+                                            ? "bg-alloy-bend-pine text-white"
                                             : MAPPING_STATE_CHIP[f.id as CanvasMappingState]
                                         : "border border-alloy-midnight/15 text-alloy-midnight/70"
                                 }`}
@@ -248,6 +288,25 @@ export default function ProcessingImportedFormStudio({
                             data-qa-filter-clear="true"
                         >
                             Show the whole form
+                        </button>
+                    </p>
+                ) : null}
+                {plumbing.length && onRemoveFields ? (
+                    <p
+                        className="mt-1.5 rounded-md bg-alloy-gold/[0.12] px-2.5 py-1.5 text-[11.5px] text-alloy-midnight/75"
+                        data-qa-plumbing-notice="true"
+                    >
+                        {plumbing.map((f) => f.label).join(", ")}{" "}
+                        {plumbing.length === 1 ? "is" : "are"} how the page handles itself, not{" "}
+                        {plumbing.length === 1 ? "a question" : "questions"} for a family. This form was imported before
+                        Alloy learned to leave {plumbing.length === 1 ? "it" : "them"} out.{" "}
+                        <button
+                            type="button"
+                            onClick={() => void onRemoveFields(plumbing.map((f) => f.id))}
+                            data-qa-plumbing-remove="true"
+                            className="font-medium text-alloy-bend-pine underline underline-offset-2"
+                        >
+                            Remove {plumbing.length === 1 ? "it" : "them"} from the form
                         </button>
                     </p>
                 ) : null}
@@ -372,6 +431,7 @@ export default function ProcessingImportedFormStudio({
                                 editable
                                 mutate={mutate}
                                 onRemove={() => setSelectedFieldId(null)}
+                                fieldLibrary={fieldLibrary}
                             />
                         </>
                     ) : (
