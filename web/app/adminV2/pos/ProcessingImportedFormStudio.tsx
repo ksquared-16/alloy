@@ -17,6 +17,7 @@ import {
 } from "@/lib/pos/formDraft/importedFormMappingView";
 import { suggestedFieldTypeForFormField } from "@/lib/pos/formDraft/createFieldFromSource";
 import { absenceTextFor, suggestedConditionsFor } from "@/lib/pos/formDraft/importedFormAnnotations";
+import { tableReviewNoticesFor } from "@/lib/pos/formDraft/tabularSourceSections";
 import ProcessingFormCanvas from "./ProcessingFormCanvas";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
 
@@ -85,6 +86,13 @@ export default function ProcessingImportedFormStudio({
     const counts = useMemo(() => mappingCounts(mappings), [mappings]);
     const dimmed = useMemo(() => (schema ? dimmedFieldIds(schema, mappings, attention) : new Set<string>()), [schema, mappings, attention]);
     const states = useMemo(() => canvasMappingStates(mappings), [mappings]);
+    /*
+     * Where the source had a grid Alloy could not represent. Computed from the draft's own kept text, so
+     * it is independent of the mapping overlay and of the attention filter — an operator who switches
+     * mapping off is asking "how does my form look?", and the answer still has to include "there is a
+     * table here I have not handled".
+     */
+    const sectionNotices = useMemo(() => tableReviewNoticesFor(draft), [draft]);
 
     const selectedField: FormField | null = useMemo(
         () => schema?.fields.find((f) => f.id === selectedFieldId) ?? null,
@@ -210,6 +218,7 @@ export default function ProcessingImportedFormStudio({
                         onAddQuestion={() => {}}
                         onAddSection={() => {}}
                         mapping={{ byFieldId: states, show: showMapping, dimFieldIds: dimmed }}
+                        sectionNotices={sectionNotices}
                     />
                 </div>
 
