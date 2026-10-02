@@ -105,3 +105,43 @@ operator is *told* is a legibility question for a later W7 scenario.
 
 Focus Panel: 89 openable ledger rows, **0 requests to `/api/admin/actions/execute`** while opening.
 Reading a record remains reading.
+
+## §8 Alvarez legibility — the pair states its grain and explains nothing
+
+The two $40.00 "Field trip" charges on Alvarez Household that read as a duplicate pair were opened in
+turn. `data-financials-charge-detail-for` confirms which record rendered each time, so this is not a
+claim about which row was clicked.
+
+| | `a8c9460a` | `d66432ef` |
+| --- | --- | --- |
+| attribution | **Ana Alvarez · Alvarez Household (demo)** | **Household** |
+| `attributionState` | `child` | `household` |
+| Charge is for | Oct 31, 2026 | Oct 9, 2026 |
+| Posted | Oct 1, 2026 at 10:24 AM | Sep 25, 2026 at 4:19 PM |
+| Outstanding | $40.00 | $20.00, after a $10.00 cash payment |
+
+Four differences an operator can see without being told anything about the data model. The pair reads
+as two charges because the surface states WHO each one is attributed to, which is the grain.
+
+Neither reading contains a "Not duplicate" badge. Neither contains an engineering explanation: the
+probe searched both bodies for `Not duplicate`, `not a duplicate`, `billable_source`,
+`enrollment_agreement`, `customer grain`, `grain`, `read model`, `projection` and `canonical`, and
+found **none** of them. `uuidsInBody` is **0** on both. Opening both dispatched **0** commands.
+
+Both still read "2 responsible parties from Oct 7, 2026. This posted charge is not divided under it."
+— which is true of them, and which is why the repair did not touch them. The Alvarez rows were not
+mutated.
+
+## §7/§9 cross-surface parity, stated precisely
+
+Accounts opened the fifth-proof charge and rendered the full presentation (7 openable rows after
+expanding the collapsed period). The Focus Panel is scoped to its focused work-unit, so its ledger is
+a different cohort — 4 periods, 133 rows, 89 openable — and it opened a Certhouse charge rather than a
+Certfree one. That is the hosting boundary doing its job, not a parity failure: the same
+`FinancialsChargeDetail` rendered there at full fidelity, with `attributionState: "child"`
+("Certb Certhouse · Certhouse Family"), a draft's honest "Due date: No configured terms" and
+"Accounting period: Not posted to a period yet", zero UUIDs, and the undivided line
+"This charge is not divided under it yet."
+
+**Opening a record dispatched 0 requests to `/api/admin/actions/execute` in every host measured.**
+Reading stays reading.
