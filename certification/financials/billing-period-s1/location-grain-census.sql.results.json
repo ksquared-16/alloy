@@ -1,0 +1,89 @@
+{
+  "trusted_host_action_id": "tha_08ba2098e5097a",
+  "query_hash": "0cf16532c9099ac68ad8249231a60d84106a0d5b4bb9890410d199f0bc922390",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T15:45:12.980Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_08ba2098e5097a",
+    "query_hash": "0cf16532c9099ac68ad8249231a60d84106a0d5b4bb9890410d199f0bc922390",
+    "authorization_id": "grnt_c7e0dac6aa8c4027",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T15:45:18.961Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "billable_source_type": "customer",
+            "charges": 28,
+            "posted": 28,
+            "orgs": 1
+          },
+          {
+            "billable_source_type": "enrollment_agreement",
+            "charges": 104,
+            "posted": 69,
+            "orgs": 1
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "households_with_agreements": 10,
+            "households_spanning_multiple_locations": 3,
+            "max_locations_on_one_household": 2
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "locationless_charges_on_multi_location_households": 3
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "reductions": 51,
+            "without_enrollment_agreement": 0,
+            "without_agreement_and_without_member": 0
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "orgs": 1,
+            "distinct_site_locations_in_use": 3
+          }
+        ]
+      }
+    },
+    "row_count": 6
+  }
+}
