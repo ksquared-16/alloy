@@ -202,7 +202,11 @@ function inclusiveDays(startYmd: string, endYmd: string): number {
     return Math.round((b - a) / 86_400_000) + 1;
 }
 
-function addDaysYmd(ymd: string, days: number): string {
+/*
+ * Exported so the period MATERIALISER can ask for the day after a period ends without copying this
+ * arithmetic. Three lines duplicated is three lines that can disagree about a leap year.
+ */
+export function addDaysYmd(ymd: string, days: number): string {
     return new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
