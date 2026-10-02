@@ -84,6 +84,7 @@ describe("the postal lines become one address with components", () => {
     it("gives the GROUP the address binding — whose address it is", () => {
         if (!schema.success) return;
         const group = schema.data.fields.find((f) => f.type === "group")!;
+        if (group.type !== "group") throw new Error(`expected a group, got ${group.type}`);
         expect(group.address_binding).toEqual({ subject: "person", role: "home" });
     });
 
@@ -146,7 +147,9 @@ describe("the importer invents nothing", () => {
             0,
         );
         expect(run).not.toBeNull();
-        expect(run!.group.address_binding).toBeUndefined();
+        const group = run!.group;
+        if (group.type !== "group") throw new Error(`expected a group, got ${group.type}`);
+        expect(group.address_binding).toBeUndefined();
     });
 });
 
