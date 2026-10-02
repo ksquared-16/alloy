@@ -47,6 +47,7 @@ type ScopeColumns = {
     location_id: string | null;
     service_id: string | null;
     rate_plan_id: string | null;
+    customer_id: string | null;
 };
 
 export type PolicyScopeInput = {
@@ -54,6 +55,7 @@ export type PolicyScopeInput = {
     locationId?: string | null;
     serviceId?: string | null;
     ratePlanId?: string | null;
+    customerId?: string | null;
 };
 
 function buildScope(input: PolicyScopeInput): ScopeColumns {
@@ -64,16 +66,24 @@ function buildScope(input: PolicyScopeInput): ScopeColumns {
     const location = trimOrNull(input.locationId);
     const service = trimOrNull(input.serviceId);
     const ratePlan = trimOrNull(input.ratePlanId);
+    const customer = trimOrNull(input.customerId);
+    /*
+     * Every branch names its own target and nulls the rest, which is the shape the database enforces
+     * in `financial_policies_scope_shape`. The `customer` row is the ACCOUNT scope: it answers which
+     * commercial calendar governs a combined account, and asserts nothing about a location.
+     */
     const shape: Record<FinancialPolicyScopeType, ScopeColumns> = {
-        org: { scope_type: "org", location_id: null, service_id: null, rate_plan_id: null },
-        location: { scope_type: "location", location_id: location, service_id: null, rate_plan_id: null },
-        service: { scope_type: "service", location_id: null, service_id: service, rate_plan_id: null },
-        rate_plan: { scope_type: "rate_plan", location_id: null, service_id: null, rate_plan_id: ratePlan },
+        org: { scope_type: "org", location_id: null, service_id: null, rate_plan_id: null, customer_id: null },
+        location: { scope_type: "location", location_id: location, service_id: null, rate_plan_id: null, customer_id: null },
+        service: { scope_type: "service", location_id: null, service_id: service, rate_plan_id: null, customer_id: null },
+        rate_plan: { scope_type: "rate_plan", location_id: null, service_id: null, rate_plan_id: ratePlan, customer_id: null },
+        customer: { scope_type: "customer", location_id: null, service_id: null, rate_plan_id: null, customer_id: customer },
     };
     const cols = shape[scopeType];
     if (scopeType === "location" && !cols.location_id) fail("invalid_input", "location scope requires a location");
     if (scopeType === "service" && !cols.service_id) fail("invalid_input", "service scope requires a service");
     if (scopeType === "rate_plan" && !cols.rate_plan_id) fail("invalid_input", "rate_plan scope requires a rate plan");
+    if (scopeType === "customer" && !cols.customer_id) fail("invalid_input", "customer scope requires a customer");
     return cols;
 }
 

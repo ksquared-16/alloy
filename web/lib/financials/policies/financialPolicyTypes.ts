@@ -11,7 +11,13 @@
 
 import type { ConfigRuleEffectiveColumns } from "@/lib/childcareOperational/config/configRuleTypes";
 
-export const FINANCIAL_POLICY_SCOPE_TYPES = ["org", "location", "service", "rate_plan"] as const;
+/*
+ * `customer` is the ACCOUNT scope, and it is a different dimension from the three that precede it.
+ * org/location/service/rate_plan narrow by what is being SOLD; customer narrows by WHOSE ACCOUNT it
+ * is. It is most-specific because an explicit account-level answer must beat an inherited default —
+ * a household whose children attend two locations has no single location to inherit from.
+ */
+export const FINANCIAL_POLICY_SCOPE_TYPES = ["org", "location", "service", "rate_plan", "customer"] as const;
 export type FinancialPolicyScopeType = (typeof FINANCIAL_POLICY_SCOPE_TYPES)[number];
 
 export const POLICY_SCOPE_LABEL: Record<FinancialPolicyScopeType, string> = {
@@ -19,13 +25,14 @@ export const POLICY_SCOPE_LABEL: Record<FinancialPolicyScopeType, string> = {
     location: "Location",
     service: "Service",
     rate_plan: "Rate Plan",
+    customer: "This account",
 };
 
 /** A typed value field for a policy type. `control` drives the UI input. */
 export type PolicyValueField = {
     key: string;
     label: string;
-    control: "select" | "number" | "money" | "yesno";
+    control: "select" | "number" | "money" | "yesno" | "date";
     options?: { value: string; label: string }[];
     /** Suffix shown in display (e.g. "days"). */
     suffix?: string;
@@ -65,6 +72,22 @@ export const FINANCIAL_POLICY_TYPES = [
      * terms, and recurring generation had no rule to follow.
      */
     "due_date",
+    /*
+     * THE CUSTOMER'S COMMERCIAL BILLING CALENDAR — cadence, and the anchor the anchor-sensitive
+     * cadences tile from.
+     *
+     * Deliberately NOT `billing_cadence`, which looks like the obvious seat and is not available:
+     * `billing_cadence` is consumed by `consumptionService`, so authoring location-scoped rows there
+     * to configure billing periods would change tuition generation as a side effect. This type is
+     * consumed by the billing-period authority alone.
+     *
+     * Its cadence vocabulary is `BillingCadence` from `billingPeriod.ts` — the authority that
+     * actually tiles periods — and NOT the older `CADENCES` menu that `billing_cadence` offers. The
+     * two disagree: `CADENCES` offers `semi_monthly` and `term`, which nothing can tile, and omits
+     * `daily` and `annual`, which `billingPeriod.ts` supports. A calendar that could be configured
+     * to a cadence the period authority cannot produce would be configuration that fails at use.
+     */
+    "billing_calendar",
 ] as const;
 export type FinancialPolicyType = (typeof FINANCIAL_POLICY_TYPES)[number];
 
@@ -129,6 +152,18 @@ const CADENCES = [
     { value: "biweekly", label: "Biweekly" },
     { value: "weekly", label: "Weekly" },
     { value: "term", label: "Term" },
+];
+
+/*
+ * The cadences the PERIOD authority can actually tile. Mirror of `BillingCadence` in
+ * `web/lib/financials/billingPeriod.ts`; `isPeriodBillableCadence` there is the runtime guard.
+ */
+const BILLING_CALENDAR_CADENCES = [
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "biweekly", label: "Biweekly" },
+    { value: "monthly", label: "Monthly" },
+    { value: "annual", label: "Annual" },
 ];
 
 /**
@@ -224,6 +259,16 @@ export const POLICY_TYPE_REGISTRY: Record<FinancialPolicyType, PolicyTypeDef> = 
             { key: "offset_days", label: "Offset", control: "number", suffix: "days" },
         ],
     },
+    billing_calendar: {
+        key: "billing_calendar",
+        label: "Billing calendar",
+        description:
+            "The commercial period this account is billed for. Monthly is the calendar month and needs no anchor; every other cadence tiles from the anchor date.",
+        fields: [
+            { key: "cadence", label: "Cadence", control: "select", options: BILLING_CALENDAR_CADENCES },
+            { key: "anchor_on", label: "Anchor", control: "date" },
+        ],
+    },
     posting_review: {
         key: "posting_review",
         label: "Posting review",
@@ -270,6 +315,7 @@ export type FinancialPolicyRow = ConfigRuleEffectiveColumns & {
     location_id: string | null;
     service_id: string | null;
     rate_plan_id: string | null;
+    customer_id: string | null;
     policy_type: FinancialPolicyType;
     label: string | null;
     description: string | null;
@@ -308,6 +354,21 @@ export function validatePolicyValue(
                 return { ok: false, error: { code: "invalid_input", message: `${field.label} must be a non-negative integer` } };
             }
             out[field.key] = n;
+        } else if (field.control === "date") {
+            /*
+             * Monthly is anchor-free by construction, so an absent anchor is a legitimate value
+             * rather than a missing one — the database says the same thing in
+             * `financial_billing_periods_anchor_shape_chk`. What is refused is a value that is
+             * present and not a date, which would otherwise have reached the yesno branch below
+             * and been silently coerced to `false`.
+             */
+            if (v == null || v === "") {
+                out[field.key] = null;
+            } else if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) {
+                out[field.key] = v.trim();
+            } else {
+                return { ok: false, error: { code: "invalid_input", message: `${field.label} must be a date (YYYY-MM-DD)` } };
+            }
         } else {
             out[field.key] = v === true || v === "true" || v === "yes";
         }
