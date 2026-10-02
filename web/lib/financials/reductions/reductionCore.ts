@@ -248,6 +248,29 @@ export async function applyReductionCore(
         metadata: input.charge.metadata ?? {},
     } as never);
     const createdChargeId = (created as { id: string }).id;
+    /*
+     * ONE ECONOMIC EVENT, ONE COMMERCIAL-PERIOD ANSWER.
+     *
+     * `createChildcareDraftCharge` already resolved this reduction's period through the S2 binder —
+     * server-side, from the reduction's OWN declared date — and returned the resolved columns on the
+     * row. Taking them from there is the only way the application row and the contra charge it
+     * explains cannot disagree: a second resolution could land differently if a period were
+     * materialised, or the date rolled, between the two calls.
+     *
+     * The source charge is PROVENANCE, not the period authority. A prospective correction that
+     * references a closed November charge but is itself dated December therefore binds to December,
+     * which is what S5 requires and what no constraint forbids.
+     */
+    /*
+     * PROJECTED EXPLICITLY, never spread from the row. `created as {...}` would be a compile-time
+     * claim only: at runtime the object is the WHOLE charge row, and spreading it put `billable_on`,
+     * `status` and every other charge column into this insert.
+     */
+    const createdBinding = {
+        billing_period_id: created.billing_period_id,
+        legacy_billing_period_key: created.legacy_billing_period_key,
+        billing_period_generation: created.billing_period_generation,
+    };
 
     const now = new Date().toISOString();
     const rows = input.applications.map((app) => ({
@@ -271,14 +294,16 @@ export async function applyReductionCore(
          * credit — failed the constraint. It was invisible because the suites that exercise this
          * path live under `tests/operationalConsumption`, outside the regression envelope S2 ran.
          *
-         * An ordinary reduction belongs to the same commercial period as the charge it reduces, so
-         * it mirrors that membership. Nothing CONSTRAINS it to: the reduction owns its own period
-         * precisely so a prospective correction can later sit in an open December while pointing at
-         * a closed November.
+         * The first repair satisfied the constraint by writing `legacy` outright. That cleared the
+         * refusal but left ONE event straddling TWO generations — a legacy-key application explaining
+         * a canonical-id contra charge — and it was also unsound on its own terms:
+         * `fin_reduction_billing_period_shape_chk` requires a legacy row to carry a non-null key, so
+         * a reduction with no period key would have failed the shape check instead of the NOT NULL.
+         *
+         * Both are answered by not deciding here at all. The binding is the one the S2 binder
+         * already resolved for this reduction's contra charge, carried across verbatim.
          */
-        billing_period_id: null,
-        billing_period_generation: "legacy",
-        legacy_billing_period_key: input.subject.periodKey ?? null,
+        ...createdBinding,
         period_start: input.subject.periodStart ?? null,
         period_end: input.subject.periodEnd ?? null,
         basis: app.basis ?? null,

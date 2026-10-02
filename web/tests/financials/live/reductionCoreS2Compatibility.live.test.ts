@@ -15,8 +15,9 @@
  * Three things are proven here, and the third is the one that matters:
  *
  *   1. the write succeeds at all (no NOT NULL violation);
- *   2. `billing_period_generation` is populated truthfully, and its period key is the one the
- *      customer's own calendar produces rather than a month cut off a date;
+ *   2. `billing_period_generation` is populated truthfully — CANONICAL for a household with a
+ *      canonical calendar, agreeing with the contra charge it explains, and labelled with the key
+ *      the customer's own calendar produces rather than a month cut off a date;
  *   3. THE DATABASE REALLY WOULD HAVE REFUSED THE OLD SHAPE. At the end of the first case, the
  *      same insert with the column omitted is attempted directly against the charge the real write
  *      just created, and must fail 23502 naming `billing_period_generation` — otherwise this suite
@@ -168,19 +169,23 @@ describeLive("reductionCore under S2 — a real write into a real post-S2 databa
 
         /* (1) populated at all — this is the NOT NULL the broken writer violated. */
         expect(row.billing_period_generation).not.toBeNull();
-        /* (2) populated TRUTHFULLY: legacy representation, with the key the account's calendar gives. */
-        expect(row.billing_period_generation).toBe("legacy");
-        expect(row.legacy_billing_period_key).toBe(EXPECTED_PERIOD_KEY);
-        expect(row.period_key).toBe(EXPECTED_PERIOD_KEY);
         /*
-         * A legacy-generation row carries no canonical period id. The pair is the whole point of the
-         * two-generation design: the generation column says which representation to read, and a null
-         * id on a legacy row is meaningful rather than missing.
+         * (2) populated TRUTHFULLY, and that means CANONICAL for a household that has a canonical
+         * calendar. The first repair wrote `legacy` outright, which satisfied the constraint and
+         * left one economic event straddling two generations. The binding now comes from the S2
+         * binder via the contra charge, so a new reduction answers the period question the same way
+         * every other new economic fact on this spine does.
          */
-        expect(row.billing_period_id).toBeNull();
+        expect(row.billing_period_generation).toBe("canonical");
+        expect(row.billing_period_id).toBeTruthy();
+        expect(row.legacy_billing_period_key).toBeNull();
 
-        /* The period key is the calendar's, not a month sliced off the effective date. */
-        expect(row.legacy_billing_period_key).not.toBe(EFFECTIVE.slice(0, 7));
+        /*
+         * The human-facing period label is still the one the household's WEEKLY calendar produces,
+         * not a month sliced off the effective date — the bug that made every account look monthly.
+         */
+        expect(row.period_key).toBe(EXPECTED_PERIOD_KEY);
+        expect(row.period_key).not.toBe(EFFECTIVE.slice(0, 7));
 
         /*
          * THE CONTROL, run here because it needs the charge the real write just created.
@@ -235,7 +240,7 @@ describeLive("reductionCore under S2 — a real write into a real post-S2 databa
         /* One application, one amount, and the generation still right after the second call. */
         expect(data).toHaveLength(1);
         expect((data![0] as { amount_cents: number }).amount_cents).toBe(2_500);
-        expect((data![0] as { billing_period_generation: string }).billing_period_generation).toBe("legacy");
+        expect((data![0] as { billing_period_generation: string }).billing_period_generation).toBe("canonical");
 
         /*
          * And ONE contra charge. Counted off this run's own agreement — the measure that matters is
@@ -260,7 +265,13 @@ describeLive("reductionCore under S2 — a real write into a real post-S2 databa
          */
         const { data } = await db
             .from("charges")
-            .select("id, charge_type, charge_category, billable_source_type, billing_period_generation, legacy_billing_period_key, status")
+            /*
+             * `billing_period_id` must be IN this projection. It was omitted once, and
+             * `expect(...).not.toBeNull()` passed on the resulting `undefined` — a dropped select
+             * column false-greens every null-check written that way, so the assertions below use
+             * `toBeTruthy` / `toBeNull` against values this select really returns.
+             */
+            .select("id, charge_type, charge_category, billable_source_type, billing_period_generation, billing_period_id, legacy_billing_period_key, status")
             .eq("org_id", ORG)
             .eq("billable_source_id", AGREEMENT);
 
@@ -270,21 +281,24 @@ describeLive("reductionCore under S2 — a real write into a real post-S2 databa
         expect(charge.billing_period_generation).not.toBeNull();
         expect(charge.billing_period_generation).not.toBe("not_applicable");
 
-        /*
-         * THE TWO ROWS CARRY DIFFERENT GENERATIONS, AND THAT IS MEASURED HERE RATHER THAN ASSUMED.
-         *
-         * The contra charge goes through `createChildcareDraftCharge`, so the S2 binder resolves it
-         * CANONICALLY: a real `billing_period_id` and no legacy key. The application row that
-         * explains it is written `legacy`, carrying the period KEY instead. Both satisfy their own
-         * guards — the charge satisfies `charges_billing_period_childcare_chk`, the application
-         * satisfies its NOT NULL — and the repair had to clear both with one write.
-         *
-         * The asymmetry is recorded, not endorsed: a reduction application is not canonically bound
-         * even for a household that has a canonical calendar. That is a question for the slice that
-         * owns commercial finalization, not something to quietly change inside a production repair.
-         */
         expect(charge.billing_period_generation).toBe("canonical");
-        expect(charge.billing_period_id).not.toBeNull();
+        expect(charge.billing_period_id).toBeTruthy();
         expect(charge.legacy_billing_period_key).toBeNull();
+
+        /*
+         * AND THE TWO ROWS AGREE. This is the assertion that would have caught the asymmetry the
+         * first repair introduced, so it is stated as an equality between the stored rows rather
+         * than as two independent expectations that happen to match.
+         */
+        const { data: apps } = await db
+            .from("financial_reduction_applications")
+            .select("billing_period_id, billing_period_generation, legacy_billing_period_key")
+            .eq("org_id", ORG)
+            .eq("charge_id", charge.id as string);
+        expect(apps).toHaveLength(1);
+        const app = apps![0] as Record<string, unknown>;
+        expect(app.billing_period_generation).toBe(charge.billing_period_generation);
+        expect(app.billing_period_id).toBe(charge.billing_period_id);
+        expect(app.legacy_billing_period_key).toBe(charge.legacy_billing_period_key);
     });
 });
