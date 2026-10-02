@@ -94,18 +94,26 @@ UPDATE public.charges c
    AND c.billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text]);
 
 -- -----------------------------------------------------------------------------
--- 3. THE CHILDCARE SPINE CANNOT BE `not_applicable`
+-- 3. THE CHILDCARE CHECK IS NOT HERE — IT IS MIGRATION B, AND THE REASON IS ORDERING
 --
--- This is what stops a new childcare charge from quietly arriving with no commercial period. It is
--- added AFTER the backfill so existing history satisfies it by having been frozen, not by exception.
+-- `charges_billing_period_childcare_chk` is what stops a childcare charge arriving with no
+-- commercial period, and it CANNOT ship in this migration. The incompatibility is two-sided:
+--
+--   * this migration first, old writers still serving -> every childcare insert omits the new
+--     columns, takes the `not_applicable` default, and the CHECK would refuse it. Charge creation
+--     breaks until the deploy lands.
+--   * new writers first, this migration not yet applied -> the writers name three columns that do
+--     not exist yet. Charge creation breaks until the migration lands.
+--
+-- So neither half is safe alone, and the safe sequence is expand, deploy, contract:
+--
+--   1. apply THIS migration (additive; old writers keep working, childcare rows take the default)
+--   2. let the new writers deploy (they now populate the columns)
+--   3. apply 20261116120000, which adds the CHECK and converts anything the window produced
+--
+-- Documented here rather than in a runbook because the next person to add a constraint to this
+-- table needs to meet this reasoning at the table, not in a wiki.
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.charges DROP CONSTRAINT IF EXISTS charges_billing_period_childcare_chk;
-ALTER TABLE public.charges
-    ADD CONSTRAINT charges_billing_period_childcare_chk CHECK (
-        billable_source_type IS NULL
-        OR NOT (billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text]))
-        OR billing_period_generation <> 'not_applicable'
-    );
 
 CREATE INDEX IF NOT EXISTS idx_charges_billing_period
     ON public.charges (billing_period_id) WHERE billing_period_id IS NOT NULL;

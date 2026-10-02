@@ -49,6 +49,12 @@ const migration = () =>
         resolve(__dirname, "../../../supabase/migrations/20261115120000_billing_period_generations.sql"),
         "utf8",
     );
+/* The CONTRACT half. Split from the expand so neither writer generation is ever broken. */
+const guardMigration = () =>
+    readFileSync(
+        resolve(__dirname, "../../../supabase/migrations/20261116120000_billing_period_childcare_guard.sql"),
+        "utf8",
+    );
 
 function chain(extra: Record<string, unknown> = {}) {
     const store = createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain(), ...extra });
@@ -216,9 +222,23 @@ describe("the migration freezes membership, and leaves one thing deliberately un
         expect(sql).toContain("CHECK (billing_period_generation = ANY (ARRAY['legacy'::text, 'canonical'::text]))");
     });
 
-    it("forbids a childcare charge from taking the not_applicable default", () => {
-        expect(sql).toContain("charges_billing_period_childcare_chk");
-        expect(sql).toContain("billing_period_generation <> 'not_applicable'");
+    it("forbids a childcare charge from taking the not_applicable default — in the CONTRACT half", () => {
+        const guard = guardMigration();
+        expect(guard).toContain("charges_billing_period_childcare_chk");
+        expect(guard).toContain("billing_period_generation <> 'not_applicable'");
+
+        /*
+         * And it must NOT be in the expand half. Shipping it there breaks childcare charge creation
+         * for as long as the old writers are still serving, which is the window the split exists to
+         * remove — proven on a real database: with the expand applied and this withheld, an old
+         * writer's childcare insert succeeds.
+         */
+        expect(sql, "the expand half must not carry the constraint").not.toContain(
+            "ADD CONSTRAINT charges_billing_period_childcare_chk");
+
+        /* The contract converts anything the window produced rather than failing on it. */
+        expect(guard).toContain("SET billing_period_generation = 'legacy'");
+        expect(guard).toContain("coalesce(c.billable_on, c.occurs_on, c.service_date, c.created_at::date)");
     });
 
     it("refuses to move membership, on both tables, in the database", () => {
