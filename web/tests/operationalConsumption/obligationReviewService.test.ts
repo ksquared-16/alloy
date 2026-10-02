@@ -12,6 +12,7 @@ import {
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
     type OperationalEnrollmentMockStore,
+    withCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 const TODAY = "2026-06-29";
@@ -36,7 +37,7 @@ function eventTypes() {
     ];
 }
 function setup(over?: Partial<OperationalEnrollmentMockStore>) {
-    const store = createOperationalEnrollmentMockStore({
+    const store = createOperationalEnrollmentMockStore(withCanonicalBillingChain({
         financial_charge_templates: [
             tmpl({ id: "tpl-late", template_key: "late_pickup", label: "Late Pickup", charge_category: "late_pickup", amount_strategy: "fixed", amount_cents: 2500, occurs_on_strategy: "event_date", billable_on_strategy: "immediate", review_required: true }),
             tmpl({ id: "tpl-dropin", template_key: "drop_in", label: "Drop-In", charge_category: "tuition", amount_strategy: "rate_derived", occurs_on_strategy: "event_date", billable_on_strategy: "immediate", review_required: false }),
@@ -47,7 +48,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         child_enrollment_agreements: [{ id: AGREEMENT, org_id: ORG_ID, site_location_id: SITE, status: "active", start_date: "2026-01-01", customer_member_id: "mem-1" }],
         financial_policies: [{ id: "pol-rev", org_id: ORG_ID, scope_type: "org", policy_type: "posting_review", value: { required: false }, is_active: true, effective_start: "2026-01-01", effective_end: null, metadata: {} }],
         ...over,
-    });
+    }));
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 

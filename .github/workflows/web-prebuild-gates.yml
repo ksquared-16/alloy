@@ -75,6 +75,17 @@ jobs:
       # No npm dependencies: these are plain `node --test` modules that import
       # from scripts/local-dev/lib directly, which is why this runs from the
       # repository root rather than `web`.
+      # ── WHY THIS IS A REQUIRED GATE ─────────────────────────────────────────────────────────
+      # S1 and S2 changed charge and reduction authorities that Financials SHARES with
+      # operationalConsumption, and both slices were certified against tests/financials/** alone.
+      # The cost was 63 failing tests on the deployed commit, including a NOT NULL violation that
+      # broke every reduction written through reductionCore. No required check caught it, because no
+      # required check runs the general test suite — and making every test required is the wrong
+      # trade. This is the bounded middle: one manifest, ~6s, over the known consumers of those
+      # authorities, so a PR cannot merge while one of them is structurally incompatible.
+      - name: Financials economic-writer regression
+        run: npm run test:financials-economic-writers
+
       - name: Governed action contract (registered ⇒ mode + dispatch + executor)
         working-directory: .
         run: node --test scripts/local-dev/tests/development-governed-action-contract.test.mjs

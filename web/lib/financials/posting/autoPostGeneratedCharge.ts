@@ -251,9 +251,29 @@ export async function autoPostGeneratedCharge(
             actorUserId: args.actorUserId ?? null,
         });
         /*
+         * ── THE OBLIGATION CONVERGES, AND ONLY NOW ───────────────────────────────────────────
+         *
+         * After the authority RETURNED, never before it was called. An obligation marked posted on
+         * the strength of an attempt would claim real money that a failure then did not create, and
+         * the deployed census already found the opposite drift: 21 obligations sitting `drafted`,
+         * one of them holding a charge that was already posted.
+         *
+         * `review_status` is deliberately untouched. It answers whether anyone reviewed this, and
+         * automatic posting is not review — writing `reviewed` here would record a review that
+         * never happened and justify skipping a real one later.
+         */
+        await supabase
+            .from("resolved_obligations")
+            .update({ status: "posted", updated_at: new Date().toISOString() })
+            .eq("org_id", args.orgId)
+            .eq("draft_charge_id", args.chargeId)
+            .in("status", ["drafted", "previewed"]);
+
+        /*
          * `post_gate` is cleared on success rather than set to "posted": `status` already says
          * posted, and a second field saying the same thing is a second answer that can drift.
          */
+        /* A charge that posted on retry must not keep looking failed. */
         if (metadata["post_gate"] != null || metadata["post_attempt"] != null) {
             const cleaned = { ...metadata };
             delete cleaned["post_gate"];

@@ -265,6 +265,20 @@ export async function applyReductionCore(
         customer_member_id: input.subject.customerMemberId ?? null,
         enrollment_agreement_id: input.subject.enrollmentAgreementId,
         period_key: input.subject.periodKey ?? null,
+        /*
+         * S2 made `billing_period_generation` NOT NULL and this insert never set it, so every
+         * reduction written through the SHARED authority — vacation credit, policy reduction, manual
+         * credit — failed the constraint. It was invisible because the suites that exercise this
+         * path live under `tests/operationalConsumption`, outside the regression envelope S2 ran.
+         *
+         * An ordinary reduction belongs to the same commercial period as the charge it reduces, so
+         * it mirrors that membership. Nothing CONSTRAINS it to: the reduction owns its own period
+         * precisely so a prospective correction can later sit in an open December while pointing at
+         * a closed November.
+         */
+        billing_period_id: null,
+        billing_period_generation: "legacy",
+        legacy_billing_period_key: input.subject.periodKey ?? null,
         period_start: input.subject.periodStart ?? null,
         period_end: input.subject.periodEnd ?? null,
         basis: app.basis ?? null,

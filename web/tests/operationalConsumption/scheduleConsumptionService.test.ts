@@ -7,6 +7,7 @@ import {
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
     type OperationalEnrollmentMockStore,
+    withCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 const TODAY = "2026-06-29";
@@ -78,7 +79,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
             { basis: "drop_in", cadenceKey: "daily", rateCents: 9000 },
         ],
     });
-    const store = createOperationalEnrollmentMockStore({
+    const store = createOperationalEnrollmentMockStore(withCanonicalBillingChain({
         financial_charge_templates: [tuitionTemplate(), dropInTemplate()],
         childcare_rate_plans: [ratePlan()],
         childcare_rate_rules: rateRules(),
@@ -87,7 +88,7 @@ function setup(over?: Partial<OperationalEnrollmentMockStore>) {
         financial_policies: policies(),
         ...commercial,
         ...over,
-    });
+    }));
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 

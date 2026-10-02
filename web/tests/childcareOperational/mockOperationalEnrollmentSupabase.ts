@@ -89,6 +89,54 @@ function defaultBillingChain(): Partial<OperationalEnrollmentMockStore> {
     return seedCanonicalBillingChain();
 }
 
+/**
+ * MERGE the canonical billing chain INTO a suite's own fixture, instead of replacing it.
+ *
+ * `seedCanonicalBillingChain()` only helps a suite that seeds none of these keys, because a seeded
+ * key wins. Most operationalConsumption suites DO seed their own agreement — with
+ * `customer_member_id` and no `customer_id` — and their own `financial_policies`, which overrode the
+ * default calendar. Both omissions make the S2 binder refuse, correctly.
+ *
+ * So this keeps every row the suite authored and adds only what the production contract now
+ * requires: a household each seeded agreement can reach, and a billing calendar for it. A suite
+ * that deliberately wants an unreachable household still gets one by passing `customer_members: []`
+ * after this, which is explicit rather than accidental.
+ */
+export function withCanonicalBillingChain(
+    seed: Partial<OperationalEnrollmentMockStore>,
+): Partial<OperationalEnrollmentMockStore> {
+    const chain = seedCanonicalBillingChain();
+    const agreements = seed.child_enrollment_agreements ?? chain.child_enrollment_agreements ?? [];
+
+    /* Every seeded agreement must reach a household — through its own column or through a member. */
+    const members = [...(seed.customer_members ?? chain.customer_members ?? [])];
+    for (const a of agreements) {
+        const memberId = (a as Row).customer_member_id as string | undefined;
+        const hasCustomer = (a as Row).customer_id != null;
+        if (hasCustomer || !memberId) continue;
+        if (!members.some((m) => m.id === memberId)) {
+            members.push({ id: memberId, org_id: ORG_ID, customer_id: BILLING_CUSTOMER_ID, person_id: "person-1" });
+        }
+    }
+
+    /*
+     * A billing calendar must exist. Appended rather than substituted, so a suite's own
+     * `posting_review` policy keeps governing review while the calendar answers the period question.
+     */
+    const policies = [...(seed.financial_policies ?? [])];
+    if (!policies.some((p) => p.policy_type === "billing_calendar")) {
+        policies.push(...((chain.financial_policies ?? []) as Row[]));
+    }
+
+    return {
+        ...seed,
+        child_enrollment_agreements: agreements,
+        customer_members: members,
+        financial_policies: policies,
+        financial_billing_periods: seed.financial_billing_periods ?? [],
+    };
+}
+
 export function createOperationalEnrollmentMockStore(
     seed?: Partial<OperationalEnrollmentMockStore>
 ): OperationalEnrollmentMockStore {

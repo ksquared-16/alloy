@@ -102,8 +102,13 @@ describe("the generated paths now reach the canonical posting authority", () => 
     it("adds no second posting implementation", () => {
         const a = code("lib/financials/posting/autoPostGeneratedCharge.ts");
         expect(a, "the one act that makes a childcare charge owed").toContain("postChildcareCharge");
-        /* It must not write a posted status itself — that belongs to the authority it calls. */
-        expect(a, "no hand-rolled posting").not.toMatch(/status:\s*"posted"/);
+        /*
+         * It must not post a CHARGE itself — that belongs to the authority it calls. It DOES write
+         * `status: "posted"` to `resolved_obligations`, which is the convergence, so the assertion
+         * is about the charges table rather than the literal.
+         */
+        expect(a, "no hand-rolled charge posting").not.toMatch(/from\("charges"\)[\s\S]{0,200}status:\s*"posted"/);
+        expect(a, "the obligation convergence is the only posted write").toContain('from("resolved_obligations")');
     });
 
     it("manual Add Charge is untouched — it was already correct", () => {
@@ -168,6 +173,35 @@ describe("a failed post is durable, and distinguishable from never attempted", (
         /* The classification is what turns an invisible stall into operator work. */
         const a = code("lib/financials/posting/autoPostGeneratedCharge.ts");
         expect(a).toContain("attention_required: !retryable || attempts >= MAX_POST_ATTEMPTS");
+    });
+});
+
+describe("the obligation converges only after the authority returned", () => {
+    it("writes status posted to resolved_obligations, and never touches review_status", () => {
+        const a = code("lib/financials/posting/autoPostGeneratedCharge.ts");
+        expect(a).toContain('from("resolved_obligations")');
+        expect(a).toContain('status: "posted"');
+        /*
+         * Automatic posting is NOT review. Writing `reviewed` here would record a review that never
+         * happened, and then justify skipping a real one.
+         */
+        expect(a, "review_status must stay truthful").not.toContain("review_status");
+    });
+
+    it("converges from drafted/previewed only, so it cannot resurrect a superseded obligation", () => {
+        const a = code("lib/financials/posting/autoPostGeneratedCharge.ts");
+        expect(a).toContain('.in("status", ["drafted", "previewed"])');
+    });
+
+    it("the convergence sits AFTER the post call, not before it", () => {
+        const a = code("lib/financials/posting/autoPostGeneratedCharge.ts");
+        const post = a.indexOf("await postChildcareCharge");
+        const converge = a.indexOf('from("resolved_obligations")\n            .update');
+        const conv2 = a.indexOf('.update({ status: "posted"');
+        expect(post, "the authority is called").toBeGreaterThan(-1);
+        expect(conv2, "the convergence exists").toBeGreaterThan(-1);
+        expect(conv2, "an obligation marked posted before the post would claim money a failure never made")
+            .toBeGreaterThan(post);
     });
 });
 
