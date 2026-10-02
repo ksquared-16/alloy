@@ -374,6 +374,7 @@ export default function ProcessingFormCanvas({
     onDragFieldDrop,
     onSectionDragOver,
     mapping,
+    sectionNotices,
 }: {
     schema: FormSchemaV1;
     selectedFieldId: string | null;
@@ -393,6 +394,12 @@ export default function ProcessingFormCanvas({
     onSectionDragOver?: (sectionId: string) => void;
     /** Imported forms only. Absent for a hand-built form, which has no mapping to overlay. */
     mapping?: CanvasMappingOverlay | null;
+    /**
+     * Section-level warnings, keyed by section id — currently "there is a grid here Alloy could not
+     * represent". Deliberately NOT part of the mapping overlay: this one says what the form is missing,
+     * so it must not disappear when an operator turns mapping colours off or filters their attention.
+     */
+    sectionNotices?: ReadonlyMap<string, string> | null;
 }) {
     const fieldById = useMemo(() => {
         const map = new Map<string, FormField>();
@@ -459,6 +466,15 @@ export default function ProcessingFormCanvas({
                                 </button>
                             ) : null}
                         </header>
+                        {sectionNotices?.get(section.id) ? (
+                            <p
+                                data-canvas-section-notice={section.id}
+                                className="mx-3.5 mt-2.5 flex items-start gap-1.5 rounded-md border border-alloy-ember/25 bg-alloy-ember/[0.07] px-2.5 py-1.5 text-[11px] leading-snug text-alloy-ember"
+                            >
+                                <span aria-hidden>⚠</span>
+                                <span>{sectionNotices.get(section.id)}</span>
+                            </p>
+                        ) : null}
                         {!collapsed ? (
                             <div
                                 className="space-y-3 p-3.5"
