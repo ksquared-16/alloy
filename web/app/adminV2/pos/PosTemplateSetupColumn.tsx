@@ -43,7 +43,7 @@ import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
 import ProcessingImportedFormStudio from "./ProcessingImportedFormStudio";
-import { buildDraftSavePayload, type DraftFieldEdit } from "@/lib/pos/formDraft/buildDraftSavePayload";
+import { buildDraftSavePayload, buildDraftSavePayloadFromSchema, type DraftFieldEdit } from "@/lib/pos/formDraft/buildDraftSavePayload";
 import { planCreateFieldFromSource } from "@/lib/pos/formDraft/createFieldFromSource";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
@@ -462,6 +462,20 @@ export default function PosTemplateSetupColumn({
     ): Promise<void> => {
         if (!caseId || !draft) return;
         const built = buildDraftSavePayload(draft, edits, omitFieldIds);
+        if (!built.ok) {
+            setErr(
+                built.reason === "unknown_field"
+                    ? "That question is no longer on this draft — reload and try again."
+                    : "There is nothing to save on this draft yet.",
+            );
+            return;
+        }
+        await postDraftPayload(built);
+    };
+
+    /** The one place a rebuilt draft is posted and adopted, so both save paths behave identically. */
+    const postDraftPayload = async (built: ReturnType<typeof buildDraftSavePayload>): Promise<void> => {
+        if (!caseId || !draft) return;
         if (!built.ok) {
             setErr(
                 built.reason === "unknown_field"
@@ -1334,6 +1348,10 @@ export default function PosTemplateSetupColumn({
                     sourcePreviewUrl={sourcePreviewUrl}
                     onSaveFieldEdits={async (edits) => {
                         await saveDraftFieldEdits(edits);
+                    }}
+                    onSaveSchema={async (schema) => {
+                        // The operator changed the form's shape; the schema says what it now contains.
+                        await postDraftPayload(buildDraftSavePayloadFromSchema(draft, schema));
                     }}
                     onRemoveFields={async (fieldIds) => {
                         // An explicit removal the operator asked for, through the same whole-draft save.

@@ -36,6 +36,7 @@ export type DraftSaveField = {
     readonly evidence?: string;
     readonly field_source?: { readonly entity_type: string; readonly field_key: string; readonly shared_value_key?: string };
     readonly visible_when?: FormVisibilityCondition;
+    readonly layout_width?: "full" | "half" | "third" | "quarter";
 };
 
 export type DraftSavePayload = {
@@ -53,6 +54,7 @@ export type DraftFieldEdit = {
     readonly field_source?: { readonly entity_type: string; readonly field_key: string } | null;
     readonly options?: readonly string[];
     readonly visible_when?: FormVisibilityCondition | null;
+    readonly layout_width?: "full" | "half" | "third" | "quarter";
 };
 
 export type DraftSaveResult =
@@ -74,6 +76,7 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
     const source = edit?.field_source === undefined ? field.field_source : edit.field_source;
     const condition = edit?.visible_when === undefined ? field.visible_when : edit.visible_when;
     const options = edit?.options ?? field.options;
+    const width = edit?.layout_width ?? field.layout_width;
     return {
         label: edit?.label ?? field.label,
         type: field.type,
@@ -97,6 +100,7 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
               }
             : {}),
         ...(condition ? { visible_when: condition } : {}),
+        ...(width && width !== "full" ? { layout_width: width } : {}),
     };
 }
 
@@ -147,4 +151,103 @@ export function buildMappingChangePayload(
     destination: { readonly entity_type: string; readonly field_key: string } | null,
 ): DraftSaveResult {
     return buildDraftSavePayload(draft, new Map([[fieldId, { field_source: destination }]]));
+}
+
+
+/**
+ * Saving a form whose STRUCTURE the operator changed, not just its properties.
+ *
+ * The per-field edit path assumes every form field is still a draft field, which stops being true the
+ * moment an operator splits "Parent/Guardian #1 Name" into two questions: the parts have ids the draft
+ * has never seen, so a per-field save silently skipped them and the split did not survive. The same is
+ * true of an address group, which is one form field standing for several draft fields.
+ *
+ * So when the structure has moved, the SCHEMA is the authority for what the form contains and the draft
+ * is the authority for where each question came from. Every schema field is walked in order — a group
+ * contributing its children, because the draft model is flat — and provenance is carried across by id
+ * for anything the draft still recognises. A part the operator just created has no provenance to carry,
+ * which is correct: it came from them, not from the page.
+ */
+export function buildDraftSavePayloadFromSchema(
+    draft: DraftShape,
+    schema: {
+        readonly title?: string;
+        readonly sections: readonly { readonly id: string; readonly title?: string; readonly field_ids: readonly string[] }[];
+        readonly fields: readonly {
+            readonly id: string;
+            readonly type: string;
+            readonly label: string;
+            readonly required?: boolean;
+            readonly layout_width?: "full" | "half" | "third" | "quarter";
+            readonly field_source?: { readonly entity_type: string; readonly field_key: string; readonly shared_value_key?: string };
+            readonly visibility?: { readonly all?: readonly FormVisibilityCondition[] };
+            readonly static_options?: readonly { readonly value: string; readonly label: string }[];
+            readonly fields?: readonly unknown[];
+        }[];
+    },
+): DraftSaveResult {
+    const draftById = new Map((draft.fields ?? []).map((f) => [f.id, f]));
+    const sectionTitleByFieldId = new Map<string, string>();
+    for (const section of schema.sections) {
+        for (const id of section.field_ids) sectionTitleByFieldId.set(id, section.title ?? "Form fields");
+    }
+    const byId = new Map(schema.fields.map((f) => [f.id, f]));
+
+    const out: DraftSaveField[] = [];
+    const emit = (field: (typeof schema.fields)[number], sectionTitle: string): void => {
+        // Prose the family reads is not a question; the draft keeps it as section text, not a field.
+        if (field.type === "text_block") return;
+        if (field.type === "group" && Array.isArray(field.fields)) {
+            for (const child of field.fields as (typeof schema.fields)[number][]) emit(child, sectionTitle);
+            return;
+        }
+        const source = draftById.get(field.id);
+        const clause = field.visibility?.all?.[0];
+        const options = field.static_options?.length
+            ? field.static_options.map((o) => o.label)
+            : source?.options;
+        out.push({
+            label: field.label,
+            type: field.type,
+            required: Boolean(field.required),
+            ...(sectionTitle ? { section: sectionTitle } : {}),
+            ...(source?.description ? { description: source.description } : {}),
+            ...(options?.length ? { options: [...options] } : {}),
+            ...(source?.pdf_field_name ? { pdf_field_name: source.pdf_field_name } : {}),
+            ...(typeof source?.page === "number" ? { page: source.page } : {}),
+            ...(source?.bbox ? { bbox: source.bbox } : {}),
+            ...(source?.evidence ? { evidence: source.evidence } : {}),
+            ...(field.field_source?.entity_type && field.field_source?.field_key && field.field_source.field_key !== "custom" && field.field_source.field_key !== "unmapped"
+                ? {
+                      field_source: {
+                          entity_type: field.field_source.entity_type,
+                          field_key: field.field_source.field_key,
+                          ...(field.field_source.shared_value_key ? { shared_value_key: field.field_source.shared_value_key } : {}),
+                      },
+                  }
+                : {}),
+            ...(clause ? { visible_when: clause } : {}),
+            ...(field.layout_width && field.layout_width !== "full" ? { layout_width: field.layout_width } : {}),
+        });
+    };
+
+    for (const section of schema.sections) {
+        for (const id of section.field_ids) {
+            const field = byId.get(id);
+            if (field) emit(field, section.title ?? "Form fields");
+        }
+    }
+
+    if (!out.length) return { ok: false, reason: "no_fields" };
+    return {
+        ok: true,
+        payload: {
+            title: draft.title,
+            form_name: (draft.generated_form_name ?? "").trim() || null,
+            fields: out,
+            section_dispositions: (draft.sections ?? [])
+                .filter((s) => typeof s.disposition === "string")
+                .map((s) => ({ id: s.id, disposition: String(s.disposition) })),
+        },
+    };
 }

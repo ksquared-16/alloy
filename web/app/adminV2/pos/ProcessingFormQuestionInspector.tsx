@@ -23,7 +23,10 @@ import {
     conditionTriggerOf,
     conditionValueOf,
     eligibleConditionTriggers,
+    nameCompositionParts,
     setFieldVisibility,
+    splitFieldIntoParts,
+    suggestsNameComposition,
 } from "@/lib/forms/formBuilderSchema";
 import {
     AlloyCheckbox,
@@ -276,6 +279,32 @@ export default function ProcessingFormQuestionInspector({
                 )}
             </AlloyInspectorGroup>
 
+            {editable && suggestsNameComposition(field) ? (
+                <>
+                    <AlloyInspectorDivider />
+                    {/*
+                      * A page prints a person's name on one rule; the record keeps a first and a last
+                      * name. Offered, never applied on the operator's behalf — the document was explicit
+                      * and this is a change to what families are asked.
+                      */}
+                    <AlloyInspectorGroup title="This looks like one person's full name">
+                        <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+                            Alloy can ask for it as two questions instead, side by side, so each part can be
+                            stored on its own.
+                        </p>
+                        <AlloySecondaryButton
+                            onClick={() => mutate((sch) => splitFieldIntoParts(sch, field.id, nameCompositionParts(field)))}
+                            testId="form-builder-split-field"
+                        >
+                            Split into first and last name
+                        </AlloySecondaryButton>
+                        <p className="text-[10px] leading-snug text-alloy-midnight/45">
+                            This replaces the question, so families are not asked for the name twice.
+                        </p>
+                    </AlloyInspectorGroup>
+                </>
+            ) : null}
+
             {field.type !== "text_block" ? (
                 <>
                     <AlloyInspectorDivider />
@@ -432,6 +461,17 @@ export default function ProcessingFormQuestionInspector({
                                     ) : null}
                                     {currentTrigger ? (
                                         <>
+                                            <p
+                                                className="rounded-md bg-alloy-bend-pine/[0.08] px-2.5 py-1.5 text-[11.5px] font-medium text-alloy-bend-pine"
+                                                data-inspector-condition-sentence
+                                            >
+                                                Only asked when “{selected?.label ?? "that question"}” is{" "}
+                                                {selected?.answers.find(
+                                                    (a) =>
+                                                        (typeof a.value === "boolean" ? String(a.value) : a.value) ===
+                                                        (currentValue === true ? "true" : currentValue === false ? "false" : String(currentValue ?? "")),
+                                                )?.label ?? String(currentValue)}
+                                            </p>
                                             <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
                                                 Families who answer differently are never shown this question.
                                             </p>
