@@ -1,0 +1,120 @@
+{
+  "trusted_host_action_id": "tha_0dc8ea5817cd15",
+  "query_hash": "56db099b85cfa9df706f23308c05ded5176af44f88bdce22290d7c34af13bf84",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T18:16:48.086Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_0dc8ea5817cd15",
+    "query_hash": "56db099b85cfa9df706f23308c05ded5176af44f88bdce22290d7c34af13bf84",
+    "authorization_id": "grnt_88ec9bed23a74b02",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T18:16:54.025Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "clock": {
+              "id": "singleton",
+              "wake_count": 3154,
+              "last_summary": {
+                "claimed": 0,
+                "completed": 0,
+                "retry_scheduled": 0,
+                "terminally_failed": 0,
+                "unregistered_handler": 0
+              },
+              "last_wake_at": "2026-10-02T18:15:00.536926+00:00",
+              "first_wake_at": "2026-09-21T19:25:02.705591+00:00",
+              "last_worker_id": "worker-bba17b83"
+            }
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "schedules": 3,
+            "enabled": 3,
+            "distinct_kinds": 0
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "occurrences": 20,
+            "earliest": "2026-09-21T19:25:01.565485+00:00",
+            "latest": "2026-10-02T03:15:00.568686+00:00",
+            "created_last_24h": 2,
+            "created_last_1h": 0,
+            "distinct_minutes_last_24h": 2
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "attempts": 20,
+            "earliest": "2026-09-21T19:25:02.150319+00:00",
+            "latest": "2026-10-02T03:15:00.945824+00:00",
+            "last_24h": 2,
+            "last_1h": 0,
+            "minutes_since_latest": 901.9
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "gap_minutes": 1245,
+            "times_observed": 1
+          },
+          {
+            "gap_minutes": 195,
+            "times_observed": 2
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "work_kind": null,
+            "attempts": 20,
+            "outcomes": [
+              null
+            ],
+            "latest": "2026-10-02T03:15:00.945824+00:00"
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}
