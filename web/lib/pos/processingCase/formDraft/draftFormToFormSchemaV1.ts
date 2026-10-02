@@ -16,6 +16,7 @@ import {
     UNRESOLVED_AT_GENERATE_EVIDENCE,
 } from "./questionResolutionModel";
 import type { SectionDisposition } from "./sectionDisposition";
+import { addressComponentOf, collapseAddressRun } from "./importedAddressGroups";
 
 /** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
 function mapDraftField(f: DraftFormField): FormField {
@@ -170,14 +171,35 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
             disposition === "fields" || disposition === "signature" || disposition === "upload" || disposition === "generated";
         const detectedInSection: FormField[] = [];
         if (keepsDetectedFields) {
+            /*
+             * An address is ONE concept with components, not five questions.
+             *
+             * The source prints "Address Line 1 / City / State / ZIP" as separate rules because that is
+             * how paper works; shipping them that way made the household's address five unrelated facts
+             * and asked the operator to recognise an address from five unrelated rows. The run is
+             * collapsed into an address-bound group whose CHILDREN keep their own destinations, so the
+             * group says whose address it is and each component still maps to itself.
+             */
+            const ordered: FormField[] = [];
             for (const fid of s.field_ids) {
                 const mapped = detectedById.get(fid);
                 if (mapped) {
-                    outFields.push(mapped);
-                    ids.push(mapped.id);
+                    ordered.push(mapped);
                     usedIds.add(fid);
-                    detectedInSection.push(mapped);
                 }
+            }
+            for (let i = 0; i < ordered.length; i += 1) {
+                const run = addressComponentOf(ordered[i]!.field_source) ? collapseAddressRun(ordered, i) : null;
+                if (run) {
+                    outFields.push(run.group);
+                    ids.push(run.group.id);
+                    detectedInSection.push(run.group);
+                    i = run.indices[run.indices.length - 1]!;
+                    continue;
+                }
+                outFields.push(ordered[i]!);
+                ids.push(ordered[i]!.id);
+                detectedInSection.push(ordered[i]!);
             }
         } else {
             // Static/acknowledgement sections drop field prompts (they were prose, not inputs).

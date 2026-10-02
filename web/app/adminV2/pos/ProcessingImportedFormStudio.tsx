@@ -7,6 +7,7 @@ import { safeParseFormSchema } from "@/lib/forms/schema";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
+import type { SchemaFieldEdit } from "@/lib/pos/formDraft/importedFormMappingView";
 import {
     canvasMappingStates,
     editFromSchemaField,
@@ -52,6 +53,7 @@ export default function ProcessingImportedFormStudio({
     sourceDocumentName,
     sourcePreviewUrl,
     onSaveFieldEdits,
+    onSaveSchema,
     onCreateFieldAndMap,
     onRemoveFields,
 }: {
@@ -63,7 +65,12 @@ export default function ProcessingImportedFormStudio({
      * Persist through the WHOLE-DRAFT contract. The surface hands over every edited field, because the
      * save route rebuilds the draft from what it is given and a partial post deletes the rest.
      */
-    onSaveFieldEdits?: (edits: ReadonlyMap<string, { label: string; required: boolean; field_source: { entity_type: string; field_key: string } | null }>) => Promise<void> | void;
+    onSaveFieldEdits?: (edits: ReadonlyMap<string, SchemaFieldEdit>) => Promise<void> | void;
+    /**
+     * Save when the operator changed the form's SHAPE — split a question, or anything else that leaves a
+     * field the draft has never seen. The schema becomes the authority for what the form contains.
+     */
+    onSaveSchema?: (schema: FormSchemaV1) => Promise<void> | void;
     onCreateFieldAndMap?: (fieldId: string, name: string, entity: string, fieldType: string) => Promise<void> | void;
     /** Explicit operator removal. Never called on its own — only from the notice the operator sees. */
     onRemoveFields?: (fieldIds: readonly string[]) => Promise<void> | void;
@@ -190,6 +197,23 @@ export default function ProcessingImportedFormStudio({
     const mutate = (fn: (s: FormSchemaV1) => FormSchemaV1): void => {
         const next = fn(schema);
         setSchema(next);
+
+        /*
+         * A structural change cannot be expressed as per-field edits: a split leaves parts the draft has
+         * never seen, so the per-field path would skip them and the operator's work would vanish on the
+         * next read. When the field set moves, the whole schema is posted instead.
+         */
+        const before = new Set(schema.fields.map((f) => f.id));
+        const after = next.fields.map((f) => f.id);
+        const structural = after.length !== before.size || after.some((id) => !before.has(id));
+        if (structural && onSaveSchema) {
+            setSaveErr(null);
+            void Promise.resolve(onSaveSchema(next)).catch((e: unknown) =>
+                setSaveErr(e instanceof Error ? e.message : "Couldn't save that change."),
+            );
+            return;
+        }
+
         if (!onSaveFieldEdits) return;
         /*
          * A field whose destination is half-chosen is left out of the payload entirely — not posted as

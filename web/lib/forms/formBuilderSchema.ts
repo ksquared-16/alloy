@@ -8,7 +8,7 @@
  * route, and previews it with the existing FormEngineRenderer. No I/O.
  */
 
-import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 import type { SystemFieldRegistryEntry } from "@/lib/forms/systemFieldRegistry";
 
@@ -312,4 +312,132 @@ export function setFieldVisibility(
         } as FormField;
     });
     return { ...schema, fields };
+}
+
+
+/* ------------------------------------------------------------------ field composition */
+
+/**
+ * ONE SOURCE CONCEPT BECOMING SEVERAL FORM FIELDS.
+ *
+ * A page prints "Parent/Guardian #1 Name" on one rule, and the record stores a first name and a last
+ * name. Those are not in conflict — the paper is a layout and the record is a structure — but a single
+ * text field can only ever satisfy one of them, so a guardian's name arrived as one blob that had to be
+ * re-split by hand later, badly, for anyone with a two-word surname.
+ *
+ * This is the general mechanism rather than a "split name" button: a field is replaced, in place, by the
+ * fields it is really made of. Each part is an ordinary Studio field with its own answer type, width and
+ * destination, so a part maps to exactly one canonical field and nothing maps twice. The same mechanism
+ * serves any composite a source prints on one line.
+ *
+ * The original is REPLACED, not kept alongside, because two questions asking for the same answer is the
+ * duplicate an operator would have to notice and delete. An operator who wants it back adds a question;
+ * the source evidence itself is untouched on the draft either way.
+ */
+export type FieldPart = {
+    readonly label: string;
+    /** Defaults to the original's type when absent — a name splits into text, a date would not split. */
+    readonly type?: "text" | "number" | "date";
+    readonly layout_width?: FormFieldLayoutWidth;
+    /** The canonical destination for THIS part. Absent leaves it for the operator to choose. */
+    readonly field_source?: FormFieldSource;
+    readonly required?: boolean;
+};
+
+/**
+ * Replace one field with its parts, keeping its place in the section.
+ *
+ * Refused — returning the schema untouched — when the field is absent, when it is a group (a group is
+ * already a composition), or when fewer than two parts are offered, because "splitting" into one field
+ * is a rename and should be done as one.
+ */
+export function splitFieldIntoParts(schema: FormSchemaV1, fieldId: string, parts: readonly FieldPart[]): FormSchemaV1 {
+    const original = schema.fields.find((f) => f.id === fieldId);
+    if (!original || original.type === "group" || parts.length < 2) return schema;
+
+    const made: FormField[] = parts.map((part, index) => {
+        const base = {
+            id: `${fieldId}__${index + 1}`,
+            label: part.label,
+            required: part.required ?? original.required,
+            /*
+             * No source provenance is copied here, and that is deliberate: `page`/`bbox` are DRAFT
+             * properties the published schema does not accept, so writing them would make the form
+             * unsaveable. Provenance is re-attached on save from the draft field the part descends from.
+             */
+            ...(part.layout_width && part.layout_width !== "full" ? { layout_width: part.layout_width } : {}),
+            ...(part.field_source ? { field_source: part.field_source } : {}),
+        };
+        const type = part.type ?? (original.type === "text" ? "text" : "text");
+        return { ...base, type } as FormField;
+    });
+
+    const at = schema.fields.findIndex((f) => f.id === fieldId);
+    const fields = [...schema.fields.slice(0, at), ...made, ...schema.fields.slice(at + 1)];
+    const sections = schema.sections.map((section) => {
+        const i = section.field_ids.indexOf(fieldId);
+        if (i < 0) return section;
+        return {
+            ...section,
+            field_ids: [...section.field_ids.slice(0, i), ...made.map((f) => f.id), ...section.field_ids.slice(i + 1)],
+        };
+    });
+
+    /*
+     * A condition that pointed at the field being replaced has lost its trigger. Clearing it means the
+     * dependent question is always asked, rather than evaluating against a field that no longer exists
+     * and disappearing from the family's form.
+     */
+    const repaired = fields.map((f) => (conditionTriggerOf(f) === fieldId ? withoutVisibility(f) : f));
+    return { ...schema, fields: repaired, sections };
+}
+
+/** A person's name printed on one rule: the one composition the importer proposes on its own. */
+const PERSON_NAME_LABEL =
+    /^(?!.*\b(full\s*name|name\s+as\s+it\s+appears|legal\s+name)\b)(?=.*\bname\b).*$/i;
+
+const EXPLICIT_SINGLE_FIELD = /\b(full\s*name|name\s+as\s+it\s+appears|legal\s+name|first\s+name|last\s+name|surname|given\s+name)\b/i;
+
+/**
+ * Should Alloy OFFER to split this question into a first and last name?
+ *
+ * Offered, never applied: §"do NOT silently split every arbitrary Name field". A label that is already
+ * explicit about being one field, or already about one part of a name, is left alone — the document was
+ * clear and the operator did not ask. Only a text question survives: a date called "Name of event" is
+ * not a person.
+ */
+export function suggestsNameComposition(field: Pick<FormField, "type" | "label">): boolean {
+    if (field.type !== "text") return false;
+    const label = field.label.trim();
+    if (!label || EXPLICIT_SINGLE_FIELD.test(label)) return false;
+    return PERSON_NAME_LABEL.test(label);
+}
+
+/**
+ * The first/last parts to offer for a person-name question.
+ *
+ * Half and half, so the rendered form puts them on one row the way a form asks for a name. The
+ * destinations are left for the operator unless the original carried one, because guessing which record
+ * a name belongs to is the mapping decision, not the composition decision.
+ */
+export function nameCompositionParts(field: Pick<FormField, "label" | "required" | "field_source">): readonly FieldPart[] {
+    const entity = field.field_source?.entity_type;
+    const prefix = field.label.replace(/\s*name\s*:?\s*$/i, "").trim();
+    const name = (part: string) => (prefix ? `${prefix} ${part}` : part);
+    return [
+        {
+            label: name("first name"),
+            type: "text",
+            layout_width: "half",
+            required: field.required,
+            ...(entity ? { field_source: { entity_type: entity, field_key: "first_name" } } : {}),
+        },
+        {
+            label: name("last name"),
+            type: "text",
+            layout_width: "half",
+            required: field.required,
+            ...(entity ? { field_source: { entity_type: entity, field_key: "last_name" } } : {}),
+        },
+    ];
 }
