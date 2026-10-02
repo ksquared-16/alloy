@@ -76,7 +76,13 @@ test("the standing arrangement becomes the charge's allocation", async ({ page }
     await page.locator("[role='option'], [data-alloy-select-option]").filter({ hasText: /Field trip/ }).first().click({ timeout: 20_000 });
     await page.waitForTimeout(8_000);
     const d = page.locator("[data-addcharge-event-date] input").first();
-    await d.fill("Oct 5, 2026"); await d.press("Tab");
+    /*
+     * A DATE NOT USED BEFORE. `charge.add` is idempotent on
+     * `tpl:<template>:<occurs_on>:<customer>`, so reusing a date answers `skipped_posted` with the
+     * EXISTING charge's id — which is correct behaviour and was mistaken for a new write once.
+     * Oct 1-5 are spent on earlier attempts.
+     */
+    await d.fill("Oct 6, 2026"); await d.press("Tab");
     await page.waitForTimeout(11_000);
 
     actions.length = 0; responses.length = 0;
