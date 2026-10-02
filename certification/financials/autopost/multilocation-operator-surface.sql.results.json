@@ -1,0 +1,105 @@
+{
+  "trusted_host_action_id": "tha_7406b403fe64aa",
+  "query_hash": "d710acd91ee1f754761001957f81171c79dd3cf02eaa42cc040e08505208147e",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T23:36:58.506Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_7406b403fe64aa",
+    "query_hash": "d710acd91ee1f754761001957f81171c79dd3cf02eaa42cc040e08505208147e",
+    "authorization_id": "grnt_af36527aeab0409b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T23:37:03.620Z",
+    "question_ids": [
+      "q1",
+      "q2"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "4c805bef-38f4-428b-ada7-a779fd3b4584",
+            "status": "canceled",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "weekly",
+            "has_customer_calendar": false
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "6ef0134c-ca5f-4730-b22e-c5ce66f36106",
+            "status": "voided",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "weekly",
+            "has_customer_calendar": false
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "7d3f8ef6-880b-4afc-b7cd-68fd62657d92",
+            "status": "voided",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "weekly",
+            "has_customer_calendar": false
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "013a6fe7-e187-4c4e-a0a7-23259ff682f5",
+            "status": "active",
+            "site_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "monthly",
+            "has_customer_calendar": false
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "10fc8c6f-1a77-48d0-9208-9d983a1e566c",
+            "status": "voided",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "weekly",
+            "has_customer_calendar": false
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "agreement_id": "7e12949e-39ae-47c3-b091-0edb94c47089",
+            "status": "active",
+            "site_location_id": "e9ed1883-d6a5-463d-bda0-b765e15c6214",
+            "customer_member_id": "a227e460-f43c-410c-89de-40b957d87cae",
+            "person_id": null,
+            "location_calendar_cadence": "weekly",
+            "has_customer_calendar": false
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "canonical_periods": 0,
+            "customer_calendars": 0,
+            "charges": 0,
+            "reductions": 0
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

@@ -81,6 +81,18 @@ export type ChargeRow = {
     metadata: Record<string, unknown>;
     created_at: string;
     updated_at: string;
+    /**
+     * The household's commercial period, as S2 persists it. `billing_period_generation` says which
+     * of the other two to read: `canonical` carries a real `billing_period_id`, `legacy` carries a
+     * `legacy_billing_period_key`, and `not_applicable` carries neither (off-spine money).
+     *
+     * Declared here because this service reads `*` and `createChildcareDraftCharge` RETURNS the
+     * resolved binding — callers that need one economic event to have one period answer read it off
+     * the returned row rather than resolving it a second time.
+     */
+    billing_period_id: string | null;
+    legacy_billing_period_key: string | null;
+    billing_period_generation: string;
     /** Actor attribution. `posted_by` is the actor of the authoritative money transition. */
     created_by: string | null;
     updated_by: string | null;
