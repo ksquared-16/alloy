@@ -1,0 +1,254 @@
+{
+  "before": {
+    "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "on_date": "2026-12-10",
+    "active_location_ids": [
+      "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    ],
+    "calendar": {
+      "kind": "resolved",
+      "cadence": "monthly",
+      "anchorOn": null,
+      "scope": "location",
+      "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+      "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "snapshot": {
+        "cadence": "monthly",
+        "anchor_on": null
+      }
+    },
+    "periods": [
+      {
+        "id": "2143972e-3d57-423c-ac99-37fe9027134a",
+        "period_key": "2026-11",
+        "cadence": "monthly",
+        "starts_on": "2026-11-01",
+        "ends_on": "2026-11-30",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+        "period_key": "2026-12",
+        "cadence": "monthly",
+        "starts_on": "2026-12-01",
+        "ends_on": "2026-12-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "528b6db6-909b-48be-9fb5-5b32c94ca686",
+        "period_key": "2027-01",
+        "cadence": "monthly",
+        "starts_on": "2027-01-01",
+        "ends_on": "2027-01-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      }
+    ]
+  },
+  "policy_b": {
+    "policy": {
+      "id": "e984c03b-fa8d-45d2-9aa5-0acdf08b9625",
+      "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "scope_type": "customer",
+      "location_id": null,
+      "service_id": null,
+      "rate_plan_id": null,
+      "policy_type": "billing_calendar",
+      "label": "S2 proof \u2014 configuration B, future-effective",
+      "description": null,
+      "value": {
+        "cadence": "weekly",
+        "anchor_on": "2027-03-01"
+      },
+      "is_active": true,
+      "effective_start": "2027-03-01",
+      "effective_end": null,
+      "source_key": "config",
+      "metadata": {},
+      "created_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+      "updated_by": "a92a0f18-6efb-40d0-b74f-52708e96fb03",
+      "created_at": "2026-10-02T18:10:14.336779+00:00",
+      "updated_at": "2026-10-02T18:10:14.336779+00:00",
+      "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4"
+    }
+  },
+  "after": {
+    "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "on_date": "2026-12-10",
+    "active_location_ids": [
+      "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    ],
+    "calendar": {
+      "kind": "resolved",
+      "cadence": "monthly",
+      "anchorOn": null,
+      "scope": "location",
+      "policyId": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+      "sourceLocationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+      "snapshot": {
+        "cadence": "monthly",
+        "anchor_on": null
+      }
+    },
+    "periods": [
+      {
+        "id": "2143972e-3d57-423c-ac99-37fe9027134a",
+        "period_key": "2026-11",
+        "cadence": "monthly",
+        "starts_on": "2026-11-01",
+        "ends_on": "2026-11-30",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+        "period_key": "2026-12",
+        "cadence": "monthly",
+        "starts_on": "2026-12-01",
+        "ends_on": "2026-12-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "528b6db6-909b-48be-9fb5-5b32c94ca686",
+        "period_key": "2027-01",
+        "cadence": "monthly",
+        "starts_on": "2027-01-01",
+        "ends_on": "2027-01-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      }
+    ]
+  },
+  "future": {
+    "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+    "on_date": "2027-03-10",
+    "active_location_ids": [
+      "1a5644a7-45c4-413b-9021-5f556118b6e2"
+    ],
+    "calendar": {
+      "kind": "resolved",
+      "cadence": "weekly",
+      "anchorOn": "2027-03-01",
+      "scope": "customer",
+      "policyId": "e984c03b-fa8d-45d2-9aa5-0acdf08b9625",
+      "sourceLocationId": null,
+      "snapshot": {
+        "cadence": "weekly",
+        "anchor_on": "2027-03-01"
+      }
+    },
+    "periods": [
+      {
+        "id": "2143972e-3d57-423c-ac99-37fe9027134a",
+        "period_key": "2026-11",
+        "cadence": "monthly",
+        "starts_on": "2026-11-01",
+        "ends_on": "2026-11-30",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+        "period_key": "2026-12",
+        "cadence": "monthly",
+        "starts_on": "2026-12-01",
+        "ends_on": "2026-12-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      },
+      {
+        "id": "528b6db6-909b-48be-9fb5-5b32c94ca686",
+        "period_key": "2027-01",
+        "cadence": "monthly",
+        "starts_on": "2027-01-01",
+        "ends_on": "2027-01-31",
+        "anchor_on": null,
+        "status": "open",
+        "closed_at": null,
+        "close_actor": null,
+        "calendar_scope": "location",
+        "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+        "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "calendar_snapshot": {
+          "cadence": "monthly",
+          "anchor_on": null
+        }
+      }
+    ]
+  }
+}

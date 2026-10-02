@@ -1,0 +1,211 @@
+{
+  "trusted_host_action_id": "tha_8b944a1ac45b36",
+  "query_hash": "12b132834e4a6f0f2a21374e974edee35a95ce633a4ca527577e66772ad29184",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T18:09:18.052Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_8b944a1ac45b36",
+    "query_hash": "12b132834e4a6f0f2a21374e974edee35a95ce633a4ca527577e66772ad29184",
+    "authorization_id": "grnt_20d5776e621b4636",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T18:09:24.095Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "charge_id": "a57b8725-1402-42ff-a078-427305b2129b",
+            "generation": "canonical",
+            "legacy_key": null,
+            "billing_period_id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+            "period_key": "2026-12",
+            "period_span": "2026-12-01..2026-12-31",
+            "cadence": "monthly",
+            "calendar_scope": "location",
+            "period_customer": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "charge_source_type": "customer",
+            "charge_source_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "date_inside_period": true
+          },
+          {
+            "charge_id": "974ef27e-2dc2-430c-b3e5-9f8225e4b945",
+            "generation": "canonical",
+            "legacy_key": null,
+            "billing_period_id": "626cc776-5bf5-4ca8-98a2-4432e85ade59",
+            "period_key": "2026-12",
+            "period_span": "2026-12-01..2026-12-31",
+            "cadence": "monthly",
+            "calendar_scope": "location",
+            "period_customer": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "charge_source_type": "customer",
+            "charge_source_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "service_date": "2026-11-24",
+            "billable_on": "2026-12-01",
+            "date_inside_period": true
+          },
+          {
+            "charge_id": "540b87f6-4d79-472c-acaa-c7361de78a38",
+            "generation": "canonical",
+            "legacy_key": null,
+            "billing_period_id": "d2200c6c-9062-4791-a331-42c12ea5cc87",
+            "period_key": "2026-11-30~2026-12-06",
+            "period_span": "2026-11-30..2026-12-06",
+            "cadence": "weekly",
+            "calendar_scope": "location",
+            "period_customer": "fd000000-0000-4000-8000-0000000c0002",
+            "charge_source_type": "customer",
+            "charge_source_id": "fd000000-0000-4000-8000-0000000c0002",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "date_inside_period": true
+          },
+          {
+            "charge_id": "3685fc71-fe9b-4990-af07-53ff28f28a92",
+            "generation": "canonical",
+            "legacy_key": null,
+            "billing_period_id": "e7cac412-b1a1-443d-8ae6-631405a5ab47",
+            "period_key": "2026-11-23~2026-12-06",
+            "period_span": "2026-11-23..2026-12-06",
+            "cadence": "biweekly",
+            "calendar_scope": "customer",
+            "period_customer": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "charge_source_type": "customer",
+            "charge_source_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "service_date": "2026-11-18",
+            "billable_on": "2026-12-01",
+            "date_inside_period": true
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "generation": "legacy",
+            "charges": 132,
+            "with_period_id": 0,
+            "with_legacy_key": 132
+          },
+          {
+            "generation": "canonical",
+            "charges": 4,
+            "with_period_id": 4,
+            "with_legacy_key": 0
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-23~2026-12-06",
+            "cadence": "biweekly",
+            "status": "open",
+            "charges_bound": 1,
+            "gross_cents": 4000,
+            "all_same_period": true
+          },
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2026-12",
+            "cadence": "monthly",
+            "status": "open",
+            "charges_bound": 2,
+            "gross_cents": 8000,
+            "all_same_period": true
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-30~2026-12-06",
+            "cadence": "weekly",
+            "status": "open",
+            "charges_bound": 1,
+            "gross_cents": 4000,
+            "all_same_period": true
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "canonical_charges": 0,
+            "any_charge_dated_2026_11_18": 0,
+            "periods_held": 0
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "payment_id": "030a86b8-1402-424d-88d7-29cb9fc14425",
+            "allocations": 6,
+            "distinct_charge_generations": 1,
+            "distinct_billing_periods": 0,
+            "spans_more_than_one_period": false
+          },
+          {
+            "payment_id": "41d0e63d-540a-4e28-aca4-682c022790e9",
+            "allocations": 7,
+            "distinct_charge_generations": 1,
+            "distinct_billing_periods": 0,
+            "spans_more_than_one_period": false
+          },
+          {
+            "payment_id": "7ca91075-1b80-4584-a722-c769d5241ff8",
+            "allocations": 2,
+            "distinct_charge_generations": 1,
+            "distinct_billing_periods": 0,
+            "spans_more_than_one_period": false
+          },
+          {
+            "payment_id": "e80715c4-8b4d-4181-a816-8656ba7b2e4f",
+            "allocations": 32,
+            "distinct_charge_generations": 1,
+            "distinct_billing_periods": 0,
+            "spans_more_than_one_period": false
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "entries": 235,
+            "attributed": 94,
+            "no_calendar": 141,
+            "with_accounting_period": 94,
+            "journal_has_billing_period_id_column": 0
+          }
+        ]
+      }
+    },
+    "row_count": 15
+  }
+}
