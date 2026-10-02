@@ -6,6 +6,43 @@ import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { groupFieldsIntoRows, rowCapacityRemaining, fieldLayoutFlexClass, layoutWidthFromField } from "@/lib/forms/formRowComposition";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 
+/**
+ * The mapping overlay.
+ *
+ * An imported form carries something a hand-built one does not: Alloy's own understanding of where each
+ * answer belongs. That belongs ON the form — an operator should be able to look at their own document
+ * and see what has been handled — but it must not become the form's design. So it is an overlay the
+ * canvas draws when asked: a left edge and one small word per field, in the existing tokens, over the
+ * same canvas manual forms use. With `show` false the form looks exactly like any other Studio form
+ * while the mapping data stays untouched.
+ */
+export type CanvasMappingState = "mapped" | "suggested" | "needs_mapping" | "form_only" | "derived";
+
+export type CanvasMappingOverlay = {
+    readonly byFieldId: ReadonlyMap<string, CanvasMappingState>;
+    /** Operator's "Show mapping" switch. False = a normal Studio form. */
+    readonly show: boolean;
+    /** Fields outside the current attention filter. De-emphasised, never removed. */
+    readonly dimFieldIds?: ReadonlySet<string>;
+};
+
+/* Restrained on purpose: a left edge and a faint wash, not a fill. Bend Pine settles, ember asks. */
+const MAPPING_EDGE: Record<CanvasMappingState, string> = {
+    mapped: "border-l-[3px] border-l-alloy-bend-pine/70 bg-alloy-bend-pine/[0.035]",
+    needs_mapping: "border-l-[3px] border-l-alloy-ember/70 bg-alloy-ember/[0.04]",
+    suggested: "border-l-[3px] border-l-alloy-midnight/35 bg-alloy-midnight/[0.02]",
+    form_only: "border-l-[3px] border-l-alloy-stone/40",
+    derived: "border-l-[3px] border-l-alloy-stone/40",
+};
+
+const MAPPING_WORD: Record<CanvasMappingState, { readonly text: string; readonly className: string }> = {
+    mapped: { text: "Mapped", className: "text-alloy-bend-pine" },
+    needs_mapping: { text: "Needs mapping", className: "text-alloy-ember" },
+    suggested: { text: "Suggested", className: "text-alloy-midnight/55" },
+    form_only: { text: "Kept with the form", className: "text-alloy-midnight/40" },
+    derived: { text: "Filled in by Alloy", className: "text-alloy-midnight/40" },
+};
+
 export type CanvasDropTarget = {
     sectionId: string;
     fieldId: string | null;
@@ -57,6 +94,101 @@ const TYPE_LABELS: Record<string, string> = {
     file_ref: "File upload",
 };
 
+
+/**
+ * A group stays ONE thing on the canvas.
+ *
+ * The schema already knows the difference between five postal lines and five questions, and between a
+ * repeatable guardian and "Parent 1 / Parent 2 / Parent 3" — `address_binding` and `collection_binding`
+ * say so. Drawing a group as a plain row threw that away and put the operator back in front of the flat
+ * list the grouping exists to remove, so the canvas renders the concept: its own frame, its children
+ * inside it, and the add control for a repeatable one.
+ */
+function GroupBlock({
+    field,
+    selected,
+    onSelect,
+    mappingState,
+    showMapping,
+    dimmed,
+}: {
+    field: FormField & { type: "group" };
+    selected: boolean;
+    onSelect: () => void;
+    mappingState?: CanvasMappingState;
+    showMapping?: boolean;
+    dimmed?: boolean;
+}) {
+    const overlay = showMapping && mappingState ? mappingState : null;
+    const repeatable = Boolean(field.repeat || field.collection_binding);
+    const address = Boolean(field.address_binding);
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            data-canvas-field
+            data-canvas-group={field.id}
+            data-canvas-group-kind={address ? "address" : repeatable ? "repeat" : "plain"}
+            data-canvas-field-selected={selected ? true : undefined}
+            data-canvas-field-mapping={mappingState ?? undefined}
+            data-canvas-field-dimmed={dimmed ? "true" : "false"}
+            data-testid={`form-canvas-group-${field.id}`}
+            onClick={(e) => {
+                e.stopPropagation();
+                onSelect();
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    onSelect();
+                }
+            }}
+            className={clsx(
+                "relative min-w-0 flex-1 rounded-[10px] border px-3 py-2.5 transition-all duration-150",
+                selected
+                    ? "border-alloy-bend-pine/45 bg-alloy-bend-pine/[0.06] ring-[3px] ring-alloy-bend-pine/25"
+                    : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25",
+                overlay ? MAPPING_EDGE[overlay] : null,
+                dimmed ? "opacity-40" : null
+            )}
+        >
+            <div className="flex flex-wrap items-baseline gap-x-2">
+                <p className="text-[11px] font-semibold text-alloy-midnight">
+                    {field.label}
+                    {field.required ? <span className="text-alloy-ember"> *</span> : null}
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {address ? "Address" : repeatable ? "Repeats" : "Group"}
+                </p>
+                {overlay ? (
+                    <p
+                        className={clsx("text-[9px] font-semibold uppercase tracking-wide", MAPPING_WORD[overlay].className)}
+                        data-testid={`form-canvas-mapping-${field.id}`}
+                    >
+                        {MAPPING_WORD[overlay].text}
+                    </p>
+                ) : null}
+            </div>
+            <div className="mt-2 space-y-1.5 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.05] p-2">
+                {field.fields.map((child) => (
+                    <div key={child.id} data-canvas-group-child={child.id}>
+                        <p className="text-[10px] font-medium text-alloy-midnight/70">
+                            {child.label}
+                            {child.required ? <span className="text-alloy-ember"> *</span> : null}
+                        </p>
+                        <div className="mt-0.5 h-6 rounded-md border border-alloy-stone/20 bg-white" aria-hidden />
+                    </div>
+                ))}
+            </div>
+            {repeatable ? (
+                <p className="mt-1.5 text-[10px] font-semibold text-alloy-bend-pine" data-testid={`form-canvas-add-another-${field.id}`}>
+                    + Add another
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 function resolveDropZone(e: React.DragEvent): { position: "before" | "after"; rowIntent: "same-line" | "new-line" } {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relY = (e.clientY - rect.top) / rect.height;
@@ -98,10 +230,16 @@ function QuestionBlock({
     dropSameLineAfter,
     dropNewLineBefore,
     dropNewLineAfter,
+    mappingState,
+    showMapping,
+    dimmed,
 }: {
     field: FormField;
     selected: boolean;
     editable: boolean;
+    mappingState?: CanvasMappingState;
+    showMapping?: boolean;
+    dimmed?: boolean;
     onSelect: () => void;
     onDragStart?: () => void;
     onDragOver?: (e: React.DragEvent) => void;
@@ -111,6 +249,7 @@ function QuestionBlock({
     dropNewLineBefore?: boolean;
     dropNewLineAfter?: boolean;
 }) {
+    const overlay = showMapping && mappingState ? mappingState : null;
     const isMultiline = field.type === "text" && "multiline" in field && field.multiline;
     const isTextBlock = field.type === "text_block";
     return (
@@ -120,6 +259,8 @@ function QuestionBlock({
             draggable={editable}
             data-canvas-field
             data-canvas-field-selected={selected ? true : undefined}
+            data-canvas-field-mapping={mappingState ?? undefined}
+            data-canvas-field-dimmed={dimmed ? "true" : "false"}
             data-testid={`form-canvas-question-${field.id}`}
             onClick={(e) => {
                 e.stopPropagation();
@@ -147,7 +288,10 @@ function QuestionBlock({
                 "group relative min-w-0 flex-1 rounded-[10px] border px-3 py-2.5 pl-5 transition-all duration-150",
                 selected
                     ? "border-alloy-bend-pine/45 bg-alloy-bend-pine/[0.08] ring-[3px] ring-alloy-bend-pine/25"
-                    : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25 hover:shadow-sm"
+                    : "border-alloy-stone/25 bg-white hover:border-alloy-bend-pine/25 hover:shadow-sm",
+                overlay ? MAPPING_EDGE[overlay] : null,
+                // A filter changes emphasis, never membership: the question stays exactly where it is.
+                dimmed ? "opacity-40" : null
             )}
         >
             {editable ? (
@@ -192,9 +336,22 @@ function QuestionBlock({
                     aria-hidden
                 />
             )}
-            <p className="mt-1.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
-                {field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
-            </p>
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {field.type === "text" && isMultiline ? "Long text" : TYPE_LABELS[field.type] ?? field.type}
+                </p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
+                    {field.required ? "Required" : "Optional"}
+                </p>
+                {overlay ? (
+                    <p
+                        className={clsx("text-[9px] font-semibold uppercase tracking-wide", MAPPING_WORD[overlay].className)}
+                        data-testid={`form-canvas-mapping-${field.id}`}
+                    >
+                        {MAPPING_WORD[overlay].text}
+                    </p>
+                ) : null}
+            </div>
         </div>
     );
 }
@@ -216,6 +373,7 @@ export default function ProcessingFormCanvas({
     onDragFieldOver,
     onDragFieldDrop,
     onSectionDragOver,
+    mapping,
 }: {
     schema: FormSchemaV1;
     selectedFieldId: string | null;
@@ -233,6 +391,8 @@ export default function ProcessingFormCanvas({
     onDragFieldOver?: (target: CanvasDropTarget) => void;
     onDragFieldDrop?: () => void;
     onSectionDragOver?: (sectionId: string) => void;
+    /** Imported forms only. Absent for a hand-built form, which has no mapping to overlay. */
+    mapping?: CanvasMappingOverlay | null;
 }) {
     const fieldById = useMemo(() => {
         const map = new Map<string, FormField>();
@@ -395,8 +555,21 @@ export default function ProcessingFormCanvas({
                                                         key={fid}
                                                         className={clsx("relative transition-[flex-basis] duration-150", fieldLayoutFlexClass(width))}
                                                     >
+                                                        {field.type === "group" ? (
+                                                            <GroupBlock
+                                                                field={field}
+                                                                selected={selectedFieldId === fid}
+                                                                onSelect={() => onSelectField(fid)}
+                                                                mappingState={mapping?.byFieldId.get(fid)}
+                                                                showMapping={mapping?.show ?? false}
+                                                                dimmed={mapping?.dimFieldIds?.has(fid) ?? false}
+                                                            />
+                                                        ) : (
                                                         <QuestionBlock
                                                             field={field}
+                                                            mappingState={mapping?.byFieldId.get(fid)}
+                                                            showMapping={mapping?.show ?? false}
+                                                            dimmed={mapping?.dimFieldIds?.has(fid) ?? false}
                                                             selected={selectedFieldId === fid}
                                                             editable={editable}
                                                             onSelect={() => onSelectField(fid)}
@@ -417,6 +590,7 @@ export default function ProcessingFormCanvas({
                                                             dropNewLineBefore={isTarget && dropTarget.rowIntent === "new-line" && dropTarget.position === "before"}
                                                             dropNewLineAfter={isTarget && dropTarget.rowIntent === "new-line" && dropTarget.position === "after"}
                                                         />
+                                                        )}
                                                     </div>
                                                 );
                                             })}

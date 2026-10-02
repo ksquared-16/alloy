@@ -42,8 +42,8 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
-import ProcessingSourceFormCanvas from "./ProcessingSourceFormCanvas";
-import { buildMappingChangePayload, type MappingChoice } from "@/lib/pos/formDraft/buildMappingChangePayload";
+import ProcessingImportedFormStudio from "./ProcessingImportedFormStudio";
+import { buildDraftSavePayload, type DraftFieldEdit } from "@/lib/pos/formDraft/buildDraftSavePayload";
 import { planCreateFieldFromSource } from "@/lib/pos/formDraft/createFieldFromSource";
 import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
 import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
@@ -448,17 +448,17 @@ export default function PosTemplateSetupColumn({
     const isTextSource = isTextSourcePreview(sourceFilenameEarly ?? null, null);
     const sourcePreviewUrl = isTextSource && docId ? `/api/admin/documents/${docId}/source-preview` : null;
     /**
-     * Save one mapping decision.
+     * Save the operator's field edits through the WHOLE-DRAFT contract.
      *
-     * The save route REBUILDS the draft from the fields it is posted, so a one-field change has to post
-     * the whole set — `buildMappingChangePayload` does that, and refuses a field it cannot find rather
-     * than posting a list that would silently drop it. The response is the rebuilt draft, so what the
-     * operator sees next comes from the server rather than from an optimistic guess, and survives a
-     * reload because it was actually stored.
+     * The save route does not patch — it REBUILDS the draft from the fields it is handed, so a payload
+     * that names only what changed deletes everything it does not name. `buildDraftSavePayload` carries
+     * every round-trippable property of every field (its section, its accepted condition, its choices,
+     * its page and region provenance) and applies the edits on top. The response is the rebuilt draft,
+     * so what the operator sees next came from the server and survives a reload.
      */
-    const applyMappingChoice = async (fieldId: string, choice: MappingChoice): Promise<void> => {
+    const saveDraftFieldEdits = async (edits: ReadonlyMap<string, DraftFieldEdit>): Promise<void> => {
         if (!caseId || !draft) return;
-        const built = buildMappingChangePayload(draft, fieldId, choice);
+        const built = buildDraftSavePayload(draft, edits);
         if (!built.ok) {
             setErr(
                 built.reason === "unknown_field"
@@ -484,7 +484,7 @@ export default function PosTemplateSetupColumn({
             const next = (body.data?.form_draft_preview ?? body.form_draft_preview) as typeof draft | undefined;
             if (next) setDraft(next);
         } catch (e) {
-            setErr(e instanceof Error ? e.message : "Couldn't save that mapping.");
+            setErr(e instanceof Error ? e.message : "Couldn't save that change.");
         }
     };
 
@@ -1325,13 +1325,12 @@ export default function PosTemplateSetupColumn({
                     />
                 </div>
             ) : reviewMode === "form" && draft && !created ? (
-                <ProcessingSourceFormCanvas
+                <ProcessingImportedFormStudio
                     draft={draft}
                     sourceDocumentName={sourceFilenameEarly}
                     sourcePreviewUrl={sourcePreviewUrl}
-                    onOpenAdvanced={() => setReviewMode(discovery ? "concepts" : "detailed")}
-                    onChangeMapping={async (fieldId, choice: MappingChoice) => {
-                        await applyMappingChoice(fieldId, choice);
+                    onSaveFieldEdits={async (edits) => {
+                        await saveDraftFieldEdits(edits);
                     }}
                     onCreateFieldAndMap={async (fieldId, name, entity, fieldType) => {
                         /*
@@ -1376,7 +1375,9 @@ export default function PosTemplateSetupColumn({
                             setErr(e instanceof Error ? e.message : "Couldn't create that field.");
                             return;
                         }
-                        await applyMappingChoice(fieldId, plan.choice);
+                        await saveDraftFieldEdits(
+                            new Map([[fieldId, { field_source: plan.choice.destination }]]),
+                        );
                     }}
                 />
             ) : reviewMode === "concepts" && discovery && !created ? (

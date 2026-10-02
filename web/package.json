@@ -148,5 +148,8 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
