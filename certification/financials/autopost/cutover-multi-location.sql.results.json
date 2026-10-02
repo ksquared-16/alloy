@@ -1,0 +1,125 @@
+{
+  "trusted_host_action_id": "tha_7960e1824efcd8",
+  "query_hash": "536c4726898d713e4b42fc9a11462ba4ebc4d9b48177c28bd9d7a53ce102c786",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T21:46:46.476Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_7960e1824efcd8",
+    "query_hash": "536c4726898d713e4b42fc9a11462ba4ebc4d9b48177c28bd9d7a53ce102c786",
+    "authorization_id": "grnt_529219a306af4cbc",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T21:46:52.693Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "location_count": 2,
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+            ],
+            "live_agreements": 4,
+            "has_explicit_customer_calendar": true,
+            "location_calendars": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2=monthly",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214=weekly"
+            ]
+          },
+          {
+            "customer_id": "50b19065-51fd-41e4-83c9-07ba787759f0",
+            "location_count": 2,
+            "location_ids": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214"
+            ],
+            "live_agreements": 2,
+            "has_explicit_customer_calendar": false,
+            "location_calendars": [
+              "1a5644a7-45c4-413b-9021-5f556118b6e2=monthly",
+              "e9ed1883-d6a5-463d-bda0-b765e15c6214=weekly"
+            ]
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "legacy_charges": 90,
+            "distinct_legacy_keys": 4,
+            "all_monthly_shaped": true,
+            "non_monthly_keys": 0,
+            "keys": [
+              "2026-08",
+              "2026-09",
+              "2026-10",
+              "2026-12",
+              null
+            ],
+            "canonical_charges": 1
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-09~2026-11-22",
+            "cadence": "biweekly",
+            "calendar_scope": "customer",
+            "status": "open"
+          },
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-23~2026-12-06",
+            "cadence": "biweekly",
+            "calendar_scope": "customer",
+            "status": "open"
+          },
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-12-07~2026-12-20",
+            "cadence": "biweekly",
+            "calendar_scope": "customer",
+            "status": "open"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "draft_charges": 35,
+            "gross_cents": 485226,
+            "all_legacy": true,
+            "any_with_period_id": false,
+            "any_with_post_attempt": false,
+            "ids_digest": "089dc7fce7a12f4d18cbf5203f4a6b82"
+          }
+        ]
+      }
+    },
+    "row_count": 7
+  }
+}

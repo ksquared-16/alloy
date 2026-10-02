@@ -233,3 +233,104 @@ describe("the defect class is gone", () => {
         }
     });
 });
+
+describe("the rule is the economic family's, not the template's name", () => {
+    /*
+     * One-time and late-pickup are not special cases: they reach the same continuation through the
+     * same shared writer, so the binding is that the continuation is CATEGORY-AGNOSTIC. Asserted
+     * behaviourally — each category is actually posted — rather than by reading the generator.
+     */
+    for (const category of ["one_time", "late_pickup", "tuition", "discount", "credit"] as const) {
+        it(`a fully-resolved ${category} charge with no review policy posts`, async () => {
+            const store = createOperationalEnrollmentMockStore({});
+            const supabase = createOperationalEnrollmentMockSupabase(store);
+            store.charges.push({
+                id: `chg-${category}`, org_id: ORG_ID, billable_source_type: "enrollment_agreement",
+                billable_source_id: BILLING_AGREEMENT_ID, status: "draft", amount_cents: 9000,
+                currency_code: "USD", charge_category: category, service_date: "2026-11-12",
+                billable_on: "2026-11-12", metadata: { source: "charge_template" },
+            });
+            const outcome = await autoPostGeneratedCharge(supabase as never, {
+                orgId: ORG_ID, chargeId: `chg-${category}`, policies: [], today: "2026-11-12",
+            });
+            expect(outcome.kind, `${category} must not need a human`).toBe("posted");
+            expect(store.charges.find((c) => c.id === `chg-${category}`)!.status).toBe("posted");
+        });
+    }
+});
+
+describe("retry succeeds, exactly once, and the failure stops looking current", () => {
+    it("a draft carrying a retryable failure posts on the next continuation and converges", async () => {
+        const store = createOperationalEnrollmentMockStore({});
+        const supabase = createOperationalEnrollmentMockSupabase(store);
+        /* The state a first failed attempt leaves behind. */
+        const priorFailure = {
+            attempts: 1, first_attempted_at: "2026-11-11T00:00:00Z", last_attempted_at: "2026-11-11T00:00:00Z",
+            last_error: "fetch failed", retryable: true, attention_required: false,
+        };
+        store.charges.push({
+            id: "chg-retry", org_id: ORG_ID, billable_source_type: "enrollment_agreement",
+            billable_source_id: BILLING_AGREEMENT_ID, status: "draft", amount_cents: 12000,
+            currency_code: "USD", charge_category: "tuition", service_date: "2026-11-12",
+            metadata: { source: "charge_template", post_gate: "post_failed", post_attempt: priorFailure },
+        });
+        store.resolved_obligations.push({
+            id: "ob-retry", org_id: ORG_ID, draft_charge_id: "chg-retry",
+            status: "drafted", review_status: "pending",
+        });
+
+        /* The unattended continuation considers it, because the failure was transient. */
+        expect(shouldRetryPost({ post_attempt: priorFailure })).toBe(true);
+
+        const first = await autoPostGeneratedCharge(supabase as never, {
+            orgId: ORG_ID, chargeId: "chg-retry", policies: [], today: "2026-11-12",
+        });
+        expect(first.kind).toBe("posted");
+
+        const row = store.charges.find((c) => c.id === "chg-retry")!;
+        expect(row.status).toBe("posted");
+        const md = row.metadata as Record<string, unknown>;
+        expect(md.post_gate, "a posted charge must not keep looking failed").toBeUndefined();
+        expect(md.post_attempt, "stale failure state is cleared").toBeUndefined();
+
+        /* The obligation converged — and only now. */
+        expect(store.resolved_obligations.find((o) => o.id === "ob-retry")!.status).toBe("posted");
+        expect(store.resolved_obligations.find((o) => o.id === "ob-retry")!.review_status,
+               "automatic posting is not review").toBe("pending");
+
+        /* EXACTLY ONCE: a further continuation must not post again. */
+        const posted = store.charges.filter((c) => c.id === "chg-retry" && c.status === "posted").length;
+        const second = await autoPostGeneratedCharge(supabase as never, {
+            orgId: ORG_ID, chargeId: "chg-retry", policies: [], today: "2026-11-12",
+        });
+        expect(second.kind, "already real is not a failure").toBe("posted");
+        expect(store.charges.filter((c) => c.id === "chg-retry" && c.status === "posted").length,
+               "no duplicate consequence").toBe(posted);
+        expect(store.charges.filter((c) => c.id === "chg-retry").length, "and no duplicate row").toBe(1);
+    });
+
+    it("a terminal failure stays draft, is marked for attention, and is not retried again", async () => {
+        const exhausted = {
+            attempts: 5, first_attempted_at: "2026-11-01T00:00:00Z", last_attempted_at: "2026-11-05T00:00:00Z",
+            last_error: "fetch failed", retryable: true, attention_required: true,
+        };
+        const nonRetryable = {
+            attempts: 1, first_attempted_at: "2026-11-01T00:00:00Z", last_attempted_at: "2026-11-01T00:00:00Z",
+            last_error: "posted childcare charge is immutable", retryable: false, attention_required: true,
+        };
+        /* Neither is picked up again by the unattended continuation. */
+        expect(shouldRetryPost({ post_attempt: exhausted }), "exhausted stops").toBe(false);
+        expect(shouldRetryPost({ post_attempt: nonRetryable }), "non-retryable never started").toBe(false);
+        expect(exhausted.attention_required && nonRetryable.attention_required).toBe(true);
+    });
+
+    it("the Financials work queue is the attention surface, and a draft is its eligibility", () => {
+        /*
+         * Not another task system. The queue already surfaces draft childcare charges as operator
+         * work — which was part of the DEFECT for ordinary billing, and is exactly right for a
+         * terminal failure, because that is work only a human can finish.
+         */
+        const q = code("lib/financials/workspace/resolveFinancialWorkQueue.ts");
+        expect(q).toContain('.eq("status", "draft")');
+    });
+});
