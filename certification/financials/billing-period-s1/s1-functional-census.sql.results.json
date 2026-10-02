@@ -1,0 +1,363 @@
+{
+  "trusted_host_action_id": "tha_9e5711e955565b",
+  "query_hash": "6dd8cec541cd144c1653fc66df255b3205fd6e33dfb669c0531702c13d6b97de",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T17:02:12.532Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9e5711e955565b",
+    "query_hash": "6dd8cec541cd144c1653fc66df255b3205fd6e33dfb669c0531702c13d6b97de",
+    "authorization_id": "grnt_a86c5a3abd904d76",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T17:02:18.601Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2026-11",
+            "cadence": "monthly",
+            "starts_on": "2026-11-01",
+            "ends_on": "2026-11-30",
+            "days": 30,
+            "anchor_on": null,
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+            "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "calendar_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            }
+          },
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "period_key": "2026-12",
+            "cadence": "monthly",
+            "starts_on": "2026-12-01",
+            "ends_on": "2026-12-31",
+            "days": 31,
+            "anchor_on": null,
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+            "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "calendar_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            }
+          },
+          {
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "period_key": "2026-11",
+            "cadence": "monthly",
+            "starts_on": "2026-11-01",
+            "ends_on": "2026-11-30",
+            "days": 30,
+            "anchor_on": null,
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+            "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "calendar_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            }
+          },
+          {
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "period_key": "2026-12",
+            "cadence": "monthly",
+            "starts_on": "2026-12-01",
+            "ends_on": "2026-12-31",
+            "days": 31,
+            "anchor_on": null,
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "7582fe97-eabc-4d3a-b5e8-1dbbc0c9f509",
+            "calendar_source_location_id": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+            "calendar_snapshot": {
+              "cadence": "monthly",
+              "anchor_on": null
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-09~2026-11-15",
+            "cadence": "weekly",
+            "starts_on": "2026-11-09",
+            "ends_on": "2026-11-15",
+            "days": 7,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "32e75049-c9b8-42be-ab44-392e9fe912c6",
+            "calendar_source_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "calendar_snapshot": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0002",
+            "period_key": "2026-11-16~2026-11-22",
+            "cadence": "weekly",
+            "starts_on": "2026-11-16",
+            "ends_on": "2026-11-22",
+            "days": 7,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "location",
+            "calendar_policy_id": "32e75049-c9b8-42be-ab44-392e9fe912c6",
+            "calendar_source_location_id": "ae34d822-60ef-4f82-81eb-8f3513059627",
+            "calendar_snapshot": {
+              "cadence": "weekly",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-09~2026-11-22",
+            "cadence": "biweekly",
+            "starts_on": "2026-11-09",
+            "ends_on": "2026-11-22",
+            "days": 14,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "0272bcf5-9168-4545-8672-e1caa8028afd",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "period_key": "2026-11-23~2026-12-06",
+            "cadence": "biweekly",
+            "starts_on": "2026-11-23",
+            "ends_on": "2026-12-06",
+            "days": 14,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "0272bcf5-9168-4545-8672-e1caa8028afd",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "biweekly",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "period_key": "2026-11-12~2026-11-12",
+            "cadence": "daily",
+            "starts_on": "2026-11-12",
+            "ends_on": "2026-11-12",
+            "days": 1,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "d322a255-7941-48d0-b262-68068b660be5",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "period_key": "2026-11-13~2026-11-13",
+            "cadence": "daily",
+            "starts_on": "2026-11-13",
+            "ends_on": "2026-11-13",
+            "days": 1,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "d322a255-7941-48d0-b262-68068b660be5",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "period_key": "2026-01-05~2027-01-04",
+            "cadence": "annual",
+            "starts_on": "2026-01-05",
+            "ends_on": "2027-01-04",
+            "days": 365,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "c4fa1265-15b1-49e1-a5b0-0402b99043ab",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "annual",
+              "anchor_on": "2026-01-05"
+            }
+          },
+          {
+            "customer_id": "fd000000-0000-4000-8000-0000000c0004",
+            "period_key": "2027-01-05~2028-01-04",
+            "cadence": "annual",
+            "starts_on": "2027-01-05",
+            "ends_on": "2028-01-04",
+            "days": 365,
+            "anchor_on": "2026-01-05",
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "calendar_scope": "customer",
+            "calendar_policy_id": "c4fa1265-15b1-49e1-a5b0-0402b99043ab",
+            "calendar_source_location_id": null,
+            "calendar_snapshot": {
+              "cadence": "annual",
+              "anchor_on": "2026-01-05"
+            }
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "customers_with_periods": 6,
+            "periods_total": 12,
+            "distinct_cadences": 5,
+            "all_open": true,
+            "none_closed": true
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "e1c9afe0-5e8d-4077-904d-bb8e748a4fd4",
+            "agreement_start_dates": [
+              "2026-09-08",
+              "2026-09-15",
+              "2026-09-22"
+            ],
+            "distinct_starts": 3,
+            "site_locations": 1
+          },
+          {
+            "customer_id": "fcaa839f-6960-4b09-b663-b247b99ea9d9",
+            "agreement_start_dates": [
+              "2026-09-01"
+            ],
+            "distinct_starts": 1,
+            "site_locations": 1
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "inbound_foreign_keys_to_billing_periods": 0,
+            "referencing_tables": []
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "billing_period_columns": 0
+          },
+          {
+            "table": "financial_journal_entries",
+            "billing_period_columns": 1
+          },
+          {
+            "table": "financial_reduction_applications",
+            "billing_period_columns": 0
+          },
+          {
+            "table": "payment_allocations",
+            "billing_period_columns": 0
+          },
+          {
+            "table": "payments",
+            "billing_period_columns": 0
+          },
+          {
+            "table": "resolved_obligations",
+            "billing_period_columns": 0
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "policy_type": "billing_calendar",
+            "rows": 6,
+            "scopes": [
+              "customer",
+              "location"
+            ]
+          },
+          {
+            "policy_type": "due_date",
+            "rows": 3,
+            "scopes": [
+              "org"
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 24
+  }
+}

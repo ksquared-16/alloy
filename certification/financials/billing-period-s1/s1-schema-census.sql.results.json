@@ -1,0 +1,383 @@
+{
+  "trusted_host_action_id": "tha_1e8f13eb428a2d",
+  "query_hash": "2088f1f04932fd76ded9e48c94f8640462a1a1a5dff8e1d6ac065c03886ade72",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T16:53:41.465Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_1e8f13eb428a2d",
+    "query_hash": "2088f1f04932fd76ded9e48c94f8640462a1a1a5dff8e1d6ac065c03886ade72",
+    "authorization_id": "grnt_a3f2ada398c14d85",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T16:53:46.655Z",
+    "question_ids": [
+      "q1",
+      "q10",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6",
+      "q7",
+      "q8",
+      "q9"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id_exists": 1,
+            "customer_id_type": "uuid",
+            "customer_id_nullable": "YES"
+          }
+        ]
+      },
+      "q10": {
+        "question_id": "q10",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "enforce_financial_billing_period_immutability",
+            "freezes_bounds": true,
+            "refuses_reopen": true,
+            "checks_starts_on": true,
+            "checks_ends_on": true,
+            "checks_period_key": true,
+            "checks_cadence": true
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "constraint": "financial_policies_policy_type_check",
+            "admits_customer": false,
+            "admits_billing_calendar": true,
+            "admits_due_date": true,
+            "admits_billing_cadence": true,
+            "admits_posting_review": true,
+            "admits_vacation_credit": true,
+            "definition": "CHECK ((policy_type = ANY (ARRAY['proration'::text, 'billing_cadence'::text, 'grace_period'::text, 'late_fee'::text, 'nsf_fee'::text, 'deposit'::text, 'refund'::text, 'vacation_credit'::text, 'withdrawal'::text, 'write_off'::text, 'adjustment_approval'::text, 'draft_expiration'::text, 'posting_review'::text, 'due_date'::text, 'billing_calendar'::text])))"
+          },
+          {
+            "constraint": "financial_policies_scope_type_check",
+            "admits_customer": true,
+            "admits_billing_calendar": false,
+            "admits_due_date": false,
+            "admits_billing_cadence": false,
+            "admits_posting_review": false,
+            "admits_vacation_credit": false,
+            "definition": "CHECK ((scope_type = ANY (ARRAY['org'::text, 'location'::text, 'service'::text, 'rate_plan'::text, 'customer'::text])))"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "constraint": "financial_policies_scope_shape",
+            "validated": true,
+            "covers_org": true,
+            "covers_location": true,
+            "covers_service": true,
+            "covers_rate_plan": true,
+            "covers_customer": true,
+            "definition": "CHECK ((((scope_type = 'org'::text) AND (location_id IS NULL) AND (service_id IS NULL) AND (rate_plan_id IS NULL) AND (customer_id IS NULL)) OR ((scope_type = 'location'::text) AND (location_id IS NOT NULL) AND (service_id IS NULL) AND (rate_plan_id IS NULL) AND (customer_id IS NULL)) OR ((scope_type = 'service'::text) AND (service_id IS NOT NULL) AND (location_id IS NULL) AND (rate_plan_id IS NULL) AND (customer_id IS NULL)) OR ((scope_type = 'rate_plan'::text) AND (rate_plan_id IS NOT NULL) AND (location_id IS NULL) AND (service_id IS NULL) AND (customer_id IS NULL)) OR ((scope_type = 'customer'::text) AND (customer_id IS NOT NULL) AND (location_id IS NULL) AND (service_id IS NULL) AND (rate_plan_id IS NULL))))"
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "function": "validate_financial_policy_scope",
+            "mentions_customer_id": true,
+            "raises_customer_mismatch": true,
+            "raises_customer_not_found": true,
+            "trigger_count": 1
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "index": "idx_financial_policies_org_customer",
+            "definition": "CREATE INDEX idx_financial_policies_org_customer ON public.financial_policies USING btree (org_id, customer_id) WHERE (customer_id IS NOT NULL)"
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "column": "ends_on",
+            "type": "date",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "anchor_on",
+            "type": "date",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "status",
+            "type": "text",
+            "nullable": "NO",
+            "default": "'open'::text"
+          },
+          {
+            "column": "closed_at",
+            "type": "timestamp with time zone",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "closed_by",
+            "type": "uuid",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "close_actor",
+            "type": "text",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "calendar_policy_id",
+            "type": "uuid",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "calendar_source_location_id",
+            "type": "uuid",
+            "nullable": "YES",
+            "default": null
+          },
+          {
+            "column": "calendar_snapshot",
+            "type": "jsonb",
+            "nullable": "NO",
+            "default": "'{}'::jsonb"
+          },
+          {
+            "column": "metadata",
+            "type": "jsonb",
+            "nullable": "NO",
+            "default": "'{}'::jsonb"
+          },
+          {
+            "column": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": "NO",
+            "default": "now()"
+          },
+          {
+            "column": "updated_at",
+            "type": "timestamp with time zone",
+            "nullable": "NO",
+            "default": "now()"
+          },
+          {
+            "column": "calendar_scope",
+            "type": "text",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "id",
+            "type": "uuid",
+            "nullable": "NO",
+            "default": "gen_random_uuid()"
+          },
+          {
+            "column": "org_id",
+            "type": "uuid",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "customer_id",
+            "type": "uuid",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "period_key",
+            "type": "text",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "cadence",
+            "type": "text",
+            "nullable": "NO",
+            "default": null
+          },
+          {
+            "column": "starts_on",
+            "type": "date",
+            "nullable": "NO",
+            "default": null
+          }
+        ]
+      },
+      "q7": {
+        "question_id": "q7",
+        "row_count": null,
+        "rows": [
+          {
+            "constraint": "financial_billing_periods_anchor_shape_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((((cadence = 'monthly'::text) AND (anchor_on IS NULL)) OR ((cadence <> 'monthly'::text) AND (anchor_on IS NOT NULL))))"
+          },
+          {
+            "constraint": "financial_billing_periods_calendar_policy_id_fkey",
+            "type": "foreign_key",
+            "validated": true,
+            "definition": "FOREIGN KEY (calendar_policy_id) REFERENCES financial_policies(id) ON DELETE RESTRICT"
+          },
+          {
+            "constraint": "financial_billing_periods_calendar_scope_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((calendar_scope = ANY (ARRAY['customer'::text, 'location'::text, 'org'::text])))"
+          },
+          {
+            "constraint": "financial_billing_periods_calendar_shape_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((((calendar_scope = 'location'::text) AND (calendar_source_location_id IS NOT NULL)) OR ((calendar_scope <> 'location'::text) AND (calendar_source_location_id IS NULL))))"
+          },
+          {
+            "constraint": "financial_billing_periods_calendar_source_location_id_fkey",
+            "type": "foreign_key",
+            "validated": true,
+            "definition": "FOREIGN KEY (calendar_source_location_id) REFERENCES locations(id) ON DELETE RESTRICT"
+          },
+          {
+            "constraint": "financial_billing_periods_close_actor_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK (((close_actor IS NULL) OR (close_actor = ANY (ARRAY['operator'::text, 'system'::text]))))"
+          },
+          {
+            "constraint": "financial_billing_periods_close_actor_shape_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK (((close_actor IS NULL) OR ((close_actor = 'operator'::text) AND (closed_by IS NOT NULL)) OR ((close_actor = 'system'::text) AND (closed_by IS NULL))))"
+          },
+          {
+            "constraint": "financial_billing_periods_close_shape_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((((status = 'open'::text) AND (closed_at IS NULL) AND (closed_by IS NULL) AND (close_actor IS NULL)) OR ((status = 'closed'::text) AND (closed_at IS NOT NULL) AND (close_actor IS NOT NULL))))"
+          },
+          {
+            "constraint": "financial_billing_periods_customer_id_fkey",
+            "type": "foreign_key",
+            "validated": true,
+            "definition": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT"
+          },
+          {
+            "constraint": "financial_billing_periods_customer_key_uq",
+            "type": "unique",
+            "validated": true,
+            "definition": "UNIQUE (org_id, customer_id, period_key)"
+          },
+          {
+            "constraint": "financial_billing_periods_key_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((btrim(period_key) <> ''::text))"
+          },
+          {
+            "constraint": "financial_billing_periods_no_overlap",
+            "type": "exclude",
+            "validated": true,
+            "definition": "EXCLUDE USING gist (customer_id WITH =, daterange(starts_on, ends_on, '[]'::text) WITH &&)"
+          },
+          {
+            "constraint": "financial_billing_periods_org_id_fkey",
+            "type": "foreign_key",
+            "validated": true,
+            "definition": "FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT"
+          },
+          {
+            "constraint": "financial_billing_periods_pkey",
+            "type": "primary_key",
+            "validated": true,
+            "definition": "PRIMARY KEY (id)"
+          },
+          {
+            "constraint": "financial_billing_periods_span_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((ends_on >= starts_on))"
+          },
+          {
+            "constraint": "financial_billing_periods_status_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))"
+          },
+          {
+            "constraint": "financial_billing_periods_cadence_chk",
+            "type": "check",
+            "validated": true,
+            "definition": "CHECK ((cadence = ANY (ARRAY['daily'::text, 'weekly'::text, 'biweekly'::text, 'monthly'::text, 'annual'::text])))"
+          }
+        ]
+      },
+      "q8": {
+        "question_id": "q8",
+        "row_count": null,
+        "rows": [
+          {
+            "rls_enabled": true,
+            "rls_forced": false,
+            "policies": 2,
+            "policy_names": [
+              "financial_billing_periods_org_select",
+              "financial_billing_periods_service"
+            ]
+          }
+        ]
+      },
+      "q9": {
+        "question_id": "q9",
+        "row_count": null,
+        "rows": [
+          {
+            "trigger": "trg_enforce_financial_billing_period_immutability",
+            "definition": "CREATE TRIGGER trg_enforce_financial_billing_period_immutability BEFORE UPDATE ON public.financial_billing_periods FOR EACH ROW EXECUTE FUNCTION enforce_financial_billing_period_immutability()"
+          },
+          {
+            "trigger": "trg_validate_financial_billing_period_scope",
+            "definition": "CREATE TRIGGER trg_validate_financial_billing_period_scope BEFORE INSERT OR UPDATE ON public.financial_billing_periods FOR EACH ROW EXECUTE FUNCTION validate_financial_billing_period_scope()"
+          }
+        ]
+      }
+    },
+    "row_count": 46
+  }
+}

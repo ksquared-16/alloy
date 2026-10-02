@@ -37,6 +37,7 @@ export type OperationalEnrollmentMockStore = {
     consumption_event_types: Row[];
     consumption_events: Row[];
     resolved_obligations: Row[];
+    financial_billing_periods: Row[];
     locations: Row[];
     location_program_categories: Row[];
     persons: Row[];
@@ -97,6 +98,7 @@ export function createOperationalEnrollmentMockStore(
         consumption_event_types: seed?.consumption_event_types ?? [],
         consumption_events: seed?.consumption_events ?? [],
         resolved_obligations: seed?.resolved_obligations ?? [],
+        financial_billing_periods: seed?.financial_billing_periods ?? [],
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         persons: seed?.persons ?? [],
@@ -461,7 +463,7 @@ function emulateReconcileConsumptionCorrection(
     }
 }
 
-type Filter = { col: string; op: "eq" | "neq" | "in" | "is"; value: unknown };
+type Filter = { col: string; op: "eq" | "neq" | "in" | "is" | "lte" | "gte"; value: unknown };
 
 function applyFilters(rows: Row[], filters: Filter[]): Row[] {
     return rows.filter((row) => {
@@ -475,6 +477,13 @@ function applyFilters(rows: Row[], filters: Filter[]): Row[] {
              */
             if (f.op === "is" && f.value === null && row[f.col] != null) return false;
             if (f.op === "is" && f.value !== null && row[f.col] !== f.value) return false;
+            /*
+             * Date-range containment, which is how a period is found: `starts_on <= d <= ends_on`.
+             * Compared as strings deliberately — every date here is `YYYY-MM-DD`, which sorts
+             * lexicographically, and that is exactly how the real column compares.
+             */
+            if (f.op === "lte" && !(String(row[f.col]) <= String(f.value))) return false;
+            if (f.op === "gte" && !(String(row[f.col]) >= String(f.value))) return false;
             if (f.op === "in") {
                 const set = f.value as unknown[];
                 if (!set.includes(row[f.col])) return false;
@@ -592,6 +601,16 @@ export function createOperationalEnrollmentMockSupabase(
 
         chain.in = vi.fn((col: string, value: unknown[]) => {
             filters.push({ col, op: "in", value });
+            return chain;
+        });
+
+        chain.lte = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "lte", value });
+            return chain;
+        });
+
+        chain.gte = vi.fn((col: string, value: unknown) => {
+            filters.push({ col, op: "gte", value });
             return chain;
         });
 
@@ -1006,6 +1025,83 @@ export const UNIT_ID = "unit-1";
 export const MEMBER_ID = "member-1";
 export const PROGRAM_ID = "program-1";
 export const PATTERN_ID = "pattern-1";
+
+export const BILLING_AGREEMENT_ID = "agr-1";
+export const BILLING_CUSTOMER_ID = "cust-1";
+
+/**
+ * THE CANONICAL BILLING CHAIN A CHARGE WRITER NOW WALKS.
+ *
+ * Since S2 every childcare charge resolves its own commercial period server-side:
+ *
+ *   charge subject -> agreement -> household -> the household's billing calendar -> the period
+ *
+ * A double that omits any link makes the binder refuse — correctly, because a charge that reaches no
+ * household genuinely has no commercial period. So this seeds the whole chain rather than letting a
+ * suite stub past it, and the production contract stays the thing under test.
+ *
+ * Spread into a store seed: `createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain() })`.
+ */
+export function seedCanonicalBillingChain(): Partial<OperationalEnrollmentMockStore> {
+    return {
+        child_enrollment_agreements: [
+            {
+                id: BILLING_AGREEMENT_ID,
+                org_id: ORG_ID,
+                customer_member_id: MEMBER_ID,
+                customer_id: BILLING_CUSTOMER_ID,
+                site_location_id: SITE_ID,
+                status: "active",
+                start_date: "2026-01-01",
+                end_date: null,
+            },
+        ],
+        customer_members: [
+            { id: MEMBER_ID, org_id: ORG_ID, customer_id: BILLING_CUSTOMER_ID, person_id: "person-1" },
+        ],
+        locations: [{ id: SITE_ID, org_id: ORG_ID, label: "Main Campus", location_type: "site" }],
+        /*
+         * TWO SCOPES, because both paths are real. A location default covers an enrolled child's
+         * agreement-grain charge; the ORG floor covers a pre-enrolment household, which has no
+         * agreement and therefore no location to inherit from. Without the floor such a household
+         * resolves `unconfigured` and the writer correctly refuses — which is right in production
+         * and wrong in a fixture meant to exercise the happy path.
+         */
+        financial_policies: [
+            {
+                id: "pol-billing-calendar-org",
+                org_id: ORG_ID,
+                scope_type: "org",
+                location_id: null,
+                service_id: null,
+                rate_plan_id: null,
+                customer_id: null,
+                policy_type: "billing_calendar",
+                value: { cadence: "monthly", anchor_on: null },
+                is_active: true,
+                effective_start: "2026-01-01",
+                effective_end: null,
+                metadata: {},
+            },
+            {
+                id: "pol-billing-calendar",
+                org_id: ORG_ID,
+                scope_type: "location",
+                location_id: SITE_ID,
+                service_id: null,
+                rate_plan_id: null,
+                customer_id: null,
+                policy_type: "billing_calendar",
+                value: { cadence: "monthly", anchor_on: null },
+                is_active: true,
+                effective_start: "2026-01-01",
+                effective_end: null,
+                metadata: {},
+            },
+        ],
+        financial_billing_periods: [],
+    };
+}
 
 export function seedOperationalEnrollmentFixtures(): OperationalEnrollmentMockStore {
     return createOperationalEnrollmentMockStore({

@@ -12,6 +12,7 @@ import {
     createOperationalEnrollmentMockSupabase,
     financialAuthority,
     ORG_ID,
+    seedCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 /**
@@ -135,6 +136,7 @@ describe("charge.add — the subject the resolver is handed", () => {
     /** `enrolled: false` is the pre-enrolment family — a household, children, and no agreement. */
     function setup(opts: { enrolled: boolean }) {
         const store = createOperationalEnrollmentMockStore({
+            ...seedCanonicalBillingChain(),
             ...financialAuthority(FULL_CHARGE_AUTHORITY),
             financial_charge_templates: [template()],
             child_enrollment_agreements: opts.enrolled
@@ -244,6 +246,7 @@ describe("charge.add — the subject the resolver is handed", () => {
      */
     it("never matches an agreement by an opportunity's id", async () => {
         const store = createOperationalEnrollmentMockStore({
+            ...seedCanonicalBillingChain(),
             ...financialAuthority(FULL_CHARGE_AUTHORITY),
             financial_charge_templates: [template()],
             child_enrollment_agreements: [
@@ -339,6 +342,7 @@ describe("the charge lifecycle refuses server-side without the capability", () =
 
     function storeWith(permissions: readonly string[]) {
         const store = createOperationalEnrollmentMockStore({
+            ...seedCanonicalBillingChain(),
             ...financialAuthority(permissions),
             financial_charge_templates: [
                 {
@@ -439,7 +443,7 @@ describe("the charge lifecycle refuses server-side without the capability", () =
      * fails CLOSED — including this one, where there is no membership row at all.
      */
     it("refuses when the caller cannot be identified at all", async () => {
-        const store = createOperationalEnrollmentMockStore({});
+        const store = createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain() });
         const result = await action(CHARGE_POST_ACTION_KEY).execute({
             supabase: createOperationalEnrollmentMockSupabase(store),
             ctx: { orgId: ORG_ID, userId: null } as never,

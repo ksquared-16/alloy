@@ -4,7 +4,8 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
-import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { billingPeriodFromKey, legacyMonthlyPeriodKey } from "@/lib/financials/billingPeriod";
+import { currentAndNextPeriods, resolveCustomerCalendar } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import {
     REDUCTION_KINDS,
     resolveFinancialReductions,
@@ -67,8 +68,27 @@ export async function GET(request: NextRequest) {
     if (!categoryKey) return NextResponse.json({ error: "category_key is required" }, { status: 400 });
 
     try {
-        /* The month the charge lands in — the same grain reductions resolve at. */
-        const period = billingPeriodBounds(serviceDate.slice(0, 7));
+        /*
+         * THE ACCOUNT'S OWN COMMERCIAL PERIOD, not the calendar month the service date falls in.
+         *
+         * This used to cut a month off the service date, which decided a weekly household's discount
+         * eligibility window by a grain that household is not billed on — and then handed the
+         * resulting `YYYY-MM` to a parser that refused anything else, which is how the route came to
+         * answer 500 for every weekly assignment. The window is now the period the household's
+         * calendar actually produces.
+         *
+         * The legacy monthly reading remains the fallback for an account the canonical calendar does
+         * not govern. That is history's grain, and it is named rather than derived in passing.
+         */
+        const calendar = await resolveCustomerCalendar(supabase, {
+            orgId: ctx.orgId,
+            customerId,
+            onDate: serviceDate,
+        });
+        const period =
+            calendar.kind === "resolved"
+                ? currentAndNextPeriods(calendar, serviceDate).current
+                : billingPeriodFromKey(legacyMonthlyPeriodKey(serviceDate));
         const all = await readPolicies({ supabase, orgId: ctx.orgId } as never);
         const policies: ReductionPolicy[] = all
             .filter((p) => p.isActive)
@@ -131,7 +151,7 @@ export async function GET(request: NextRequest) {
                 amountCents: Number.isFinite(amountCents) && amountCents > 0 ? Math.round(amountCents) : 0,
                 currencyCode: "USD",
                 categoryKey,
-                periodKey: period.start.slice(0, 7),
+                periodKey: period.key, // the resolved period's OWN identity, not a month re-derived from its start
             },
             policies,
             facts,

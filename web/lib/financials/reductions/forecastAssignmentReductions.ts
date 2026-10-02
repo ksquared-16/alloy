@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
-import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
 import {
@@ -97,7 +97,7 @@ export async function forecastAssignmentReductions(
         return { ...base, outcomes: [{ kind: "unavailable", reason: "no_accepted_gross" }], totalCents: 0, netCents: args.grossCents };
     }
 
-    const period = billingPeriodBounds(args.periodKey);
+    const period = billingPeriodFromKey(args.periodKey);
     const allPolicies = await readPolicies({ supabase, orgId: args.orgId } as never);
     /* The same window the application path uses — a policy not yet effective is not a forecast. */
     const active = allPolicies.filter(

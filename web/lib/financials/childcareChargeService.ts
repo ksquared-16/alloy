@@ -43,6 +43,7 @@ import {
 } from "@/lib/financials/billableSource";
 import type { ChargeIntent } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
 import { placeInBillingPeriod } from "@/lib/financials/billingPeriod";
+import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
 import {
     chargeCorrectedEntry,
     chargeEffectiveOn,
@@ -279,6 +280,16 @@ export async function createChildcareDraftCharge(
             job_id: null,
             billable_source_type: BILLABLE_SOURCE_ENROLLMENT,
             billable_source_id: agreementId,
+            /*
+             * The household's commercial period, resolved SERVER-SIDE from the charge's own declared
+             * date. The caller owns the economics; it does not get to choose the period.
+             */
+            ...(await resolveChargeBillingPeriodBinding(supabase, {
+                orgId: input.orgId,
+                billableSourceType: BILLABLE_SOURCE_ENROLLMENT,
+                billableSourceId: agreementId,
+                placementDate: input.serviceDate ?? now.slice(0, 10),
+            })),
             source_charge_id: null,
             charge_type: trimOrNull(input.chargeType) ?? "service",
             charge_category: input.chargeCategory,
@@ -560,6 +571,18 @@ export async function createChildcareCorrection(
             // the household, never re-pinned onto an agreement it never belonged to.
             billable_source_type: source.billable_source_type,
             billable_source_id: source.billable_source_id,
+            /*
+             * Resolved from the correction's own declared date, not inherited from the source. In S2
+             * that lands it in the source's period because it copies the source's dates; nothing
+             * CONSTRAINS it to, which is deliberate — a prospective correction must later be able to
+             * sit in an open December while pointing at a closed November.
+             */
+            ...(await resolveChargeBillingPeriodBinding(supabase, {
+                orgId: input.orgId,
+                billableSourceType: source.billable_source_type,
+                billableSourceId: source.billable_source_id,
+                placementDate: source.service_date ?? new Date().toISOString().slice(0, 10),
+            })),
             source_charge_id: source.id,
             charge_type: source.charge_type,
             charge_category: category,

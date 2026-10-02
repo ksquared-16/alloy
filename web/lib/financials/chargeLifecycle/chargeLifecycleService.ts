@@ -23,6 +23,7 @@ import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicy
 import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
 import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
 import {
     resolveChargeFromTemplate,
     type ChargeIntent,
@@ -377,6 +378,21 @@ export async function writeTemplateDraftCharge(
             // agreement; a pre-enrolment family writes against the household.
             billable_source_type: source.type,
             billable_source_id: source.id,
+            /*
+             * The household's commercial period. `billable_on` is preferred over `occurs_on` for the
+             * same reason the period is derived from it everywhere else: it is the date that decides
+             * which cycle bills the charge.
+             */
+            ...(await resolveChargeBillingPeriodBinding(supabase, {
+                orgId,
+                billableSourceType: source.type,
+                billableSourceId: source.id,
+                /*
+                 * Both declared dates are nullable. Today is the last resort and the honest one —
+                 * the same final step the historical backfill used when a row declared nothing.
+                 */
+                placementDate: intent.billableOn ?? intent.occursOn ?? new Date().toISOString().slice(0, 10),
+            })),
             charge_type: "fee",
             charge_category: intent.chargeCategory,
             status: "draft",

@@ -9,6 +9,7 @@ import {
     readExceptionHistory,
 } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
+import { billingPeriodForDate } from "@/lib/financials/billingPeriod";
 
 /**
  * WHAT DISCOUNTS ARE EXPECTED TO APPLY TO ONE COMMERCIAL RELATIONSHIP.
@@ -103,8 +104,18 @@ export async function readAssignmentDiscountPosition(
         },
         new Date().toISOString().slice(0, 10),
     );
-    const periodKey = (periods?.current.start ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
-    const periodStartForExceptions = periods?.current.start ?? `${periodKey}-01`;
+    /*
+     * The resolved period's OWN key and OWN start. Cutting the first seven characters off a start
+     * date manufactured a monthly identity for a weekly or biweekly account — a period label that
+     * no persisted period carries, which is what made the discount route answer 500 for them.
+     *
+     * Both values come from one period so they cannot describe different intervals: an interval key
+     * has no `-01` to append, and composing a start date from a key only ever worked monthly.
+     */
+    const fallbackPeriod = billingPeriodForDate(new Date().toISOString().slice(0, 10));
+    const period = periods?.current ?? fallbackPeriod;
+    const periodKey = period.key;
+    const periodStartForExceptions = period.start;
 
     /*
      * ── THREE INDEPENDENT QUESTIONS, ASKED TOGETHER ──────────────────────────────────────────

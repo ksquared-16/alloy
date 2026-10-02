@@ -130,23 +130,34 @@ describe("the reasons are the domain's", () => {
     });
 });
 
-describe("the forecast asks about a month, because reductions are monthly", () => {
-    it("derives a YYYY-MM key even from a weekly commercial period", () => {
+describe("the forecast asks about the account's OWN period, not a month cut off a date", () => {
+    it("uses the commercial period's own key, and never slices a month out of its start date", () => {
         /*
-         * MEASURED: the route answered 500 "period_key must be YYYY-MM" for every weekly
-         * assignment. `billingPeriodBounds` takes a month, and reductions resolve per calendar
-         * month by the same doctrine that keeps `placeInBillingPeriod` monthly by default — while
-         * a weekly assignment's current commercial period is `2026-09-15~2026-09-21`.
+         * REVERSED DELIBERATELY — this test previously asserted the opposite, and recorded why:
+         * "the route answered 500 `period_key must be YYYY-MM` for every weekly assignment". That
+         * 500 was the defect. The test locked in the WORKAROUND — slice a month off the period's
+         * start date — which made a weekly account's discounts resolve against `2026-09`, a period
+         * key no persisted period carries, while its real commercial period was
+         * `2026-09-15~2026-09-21`.
+         *
+         * `billingPeriodFromKey` reads both shapes, so there is nothing left to accommodate. The
+         * key now comes from the resolved period itself.
          */
         const r = src(READER);
-        expect(r).toContain('periods?.current.start');
-        expect(r).toContain('.slice(0, 7)');
-        expect(r, "never the interval key").not.toMatch(/periods\?\.current\.key/);
+        /*
+         * Asserted by INTENT rather than by one spelling: the reader must take the resolved period's
+         * own key, and must not compose a period identity by cutting characters off a date. Pinning
+         * the exact expression is how a source-text lock starts failing on a clean refactor.
+         */
+        expect(r, "reads the resolved current period").toContain("periods?.current");
+        expect(r, "takes the period's own identity").toMatch(/period\.key|current\.key/);
+        expect(r, "no month cut out of a date").not.toMatch(/slice\(0,\s*7\)/);
+        expect(r, "no start date composed from a key").not.toMatch(/\$\{periodKey\}-01/);
     });
 
     it("that month is the one the application path will use", () => {
         const apply = src("lib/financials/reductions/applyFinancialReductions.ts");
-        expect(apply).toContain("billingPeriodBounds(periodKey)");
-        expect(src(FORECAST)).toContain("billingPeriodBounds(args.periodKey)");
+        expect(apply).toContain("billingPeriodFromKey(periodKey)");
+        expect(src(FORECAST)).toContain("billingPeriodFromKey(args.periodKey)");
     });
 });
