@@ -3,6 +3,7 @@ import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
     type OperationalEnrollmentMockStore,
+    seedCanonicalBillingChain,
 } from "@/tests/childcareOperational/mockOperationalEnrollmentSupabase";
 import { resolveDraftChargeForAgreementPeriod } from "@/lib/financials/chargeResolution/draftChargeResolutionService";
 
@@ -28,6 +29,7 @@ function seed(opts: SeedOpts = {}): OperationalEnrollmentMockStore {
         { id: "rule-full-day", schedule_basis: "full_day", rate_basis: "monthly", amount_cents: 120000 },
     ];
     return createOperationalEnrollmentMockStore({
+        ...seedCanonicalBillingChain(),
         child_enrollment_agreements: [
             {
                 id: AGREEMENT,

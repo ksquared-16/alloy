@@ -8,6 +8,7 @@ import {
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
     type OperationalEnrollmentMockStore,
+    seedCanonicalBillingChain,
 } from "../childcareOperational/mockOperationalEnrollmentSupabase";
 
 const TODAY = "2026-06-29";
@@ -41,7 +42,7 @@ function fixedTemplate(over: Record<string, unknown> = {}) {
 }
 
 function setup(seed?: Partial<OperationalEnrollmentMockStore>) {
-    const store = createOperationalEnrollmentMockStore({ financial_charge_templates: [fixedTemplate()], ...seed });
+    const store = createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain(), financial_charge_templates: [fixedTemplate()], ...seed });
     return { store, supabase: createOperationalEnrollmentMockSupabase(store) };
 }
 

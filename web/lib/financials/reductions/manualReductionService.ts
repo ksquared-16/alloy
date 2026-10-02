@@ -29,6 +29,7 @@ import { applyReductionCore, ReductionCoreError } from "@/lib/financials/reducti
 import { resolveChargeCustomerId } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
 import { resolveCustomerCalendar } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import { currentAndNextPeriods } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import { legacyMonthlyPeriodKey } from "@/lib/financials/billingPeriod";
 
 /** The categories a manual reduction may post through — all code-owned taxonomy. */
 export const MANUAL_REDUCTION_CATEGORIES = ["credit", "adjustment", "discount"] as const;
@@ -301,7 +302,7 @@ async function resolveManualReductionPeriodKey(
     supabase: SupabaseClient,
     input: ManualReductionInput,
 ): Promise<string> {
-    const legacyMonth = input.effectiveDate.slice(0, 7);
+    const legacyMonth = legacyMonthlyPeriodKey(input.effectiveDate);
     try {
         const customerId =
             input.customerId

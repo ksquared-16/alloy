@@ -3,6 +3,7 @@ import {
     createOperationalEnrollmentMockStore,
     createOperationalEnrollmentMockSupabase,
     ORG_ID,
+    seedCanonicalBillingChain,
 } from "@/tests/childcareOperational/mockOperationalEnrollmentSupabase";
 import {
     createChildcareCorrection,
@@ -16,7 +17,7 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 const AGREEMENT_ID = "agr-1";
 
 function setup(seedCharges: Record<string, unknown>[] = []) {
-    const store = createOperationalEnrollmentMockStore({ charges: seedCharges });
+    const store = createOperationalEnrollmentMockStore({ ...seedCanonicalBillingChain(), charges: seedCharges });
     const supabase = createOperationalEnrollmentMockSupabase(store);
     return { store, supabase };
 }

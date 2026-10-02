@@ -400,6 +400,18 @@ export function acceptedTermBillingPeriods(
 }
 
 /** The period a given day falls in. */
+/**
+ * THE LEGACY MONTHLY LABEL for a date — the period identity Alloy used before the canonical
+ * customer calendar existed.
+ *
+ * Named, exported and used by name so that no caller derives a period identity by cutting
+ * characters off a date in passing. This is HISTORY'S reading, never an authority for a canonical
+ * row: a canonical row's identity comes from its persisted period.
+ */
+export function legacyMonthlyPeriodKey(ymd: string): BillingPeriodKey {
+    return ymd.slice(0, 7);
+}
+
 export function billingPeriodForDate(ymd: string): BillingPeriod {
     return billingPeriodFromKey(ymd.slice(0, 7));
 }
