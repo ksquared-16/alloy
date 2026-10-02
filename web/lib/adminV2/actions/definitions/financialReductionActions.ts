@@ -35,7 +35,7 @@ import {
     assignPolicyToRelationship,
     endPolicyAssignment,
 } from "@/lib/financials/reductions/commercialPolicyAssignmentService";
-import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import {
     MANUAL_REDUCTION_CATEGORIES,
     ManualReductionError,
@@ -178,7 +178,7 @@ const applyDiscounts: RegisteredAction = {
      */
     async buildPreview({ supabase, ctx, payload }) {
         const periodKey = t(payload?.period_key);
-        const period = billingPeriodBounds(periodKey);
+        const period = billingPeriodFromKey(periodKey);
         const policies = await readPolicies({ supabase, orgId: ctx.orgId } as never);
         const inForce = policies.filter(
             (p) =>

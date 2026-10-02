@@ -22,7 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
-import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import { createChildcareDraftCharge, recalculateDraftCharge } from "@/lib/financials/childcareChargeService";
 import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
 import { resolveHouseholdEligibility } from "@/lib/financials/reductions/resolveReductionEligibility";
@@ -62,6 +62,8 @@ type GrossChargeRow = {
     status: string;
     service_date: string | null;
     billable_on: string | null;
+    /* The charge's commercial membership, so an ordinary reduction can mirror it. */
+    billing_period_id: string | null;
 };
 
 export async function applyFinancialReductions(
@@ -89,7 +91,7 @@ export async function applyFinancialReductions(
 ): Promise<ReductionRunResult> {
     const dryRun = args.mode === "preview";
     const periodKey = args.periodKey.trim();
-    const period = billingPeriodBounds(periodKey);
+    const period = billingPeriodFromKey(periodKey);
 
     // The org's winning-eligible policies. `readPolicies` is Commercial's reader, not a second one.
     const allPolicies = await readPolicies({ supabase, orgId: args.orgId } as never);
@@ -104,7 +106,7 @@ export async function applyFinancialReductions(
     // ── THE GROSS THIS PERIOD PRODUCED ──────────────────────────────────────────────────────
     const { data: chargeRows, error: chargeError } = await supabase
         .from("charges")
-        .select("id, billable_source_id, amount_cents, currency_code, charge_category, status, service_date, billable_on")
+        .select("id, billable_source_id, amount_cents, currency_code, charge_category, status, service_date, billable_on, billing_period_id")
         .eq("org_id", args.orgId)
         .eq("billable_source_type", "enrollment_agreement")
         .eq("charge_category", "tuition")
@@ -398,6 +400,15 @@ async function persistReductions(
             period_key: args.periodKey,
             period_start: args.period.start,
             period_end: args.period.end,
+            /*
+             * An ordinary reduction belongs to the same commercial period as the charge it reduces,
+             * so it mirrors that charge's membership and generation. Nothing CONSTRAINS it to —
+             * `financial_reduction_applications` owns its own period precisely so a prospective
+             * correction can later sit in an open December while pointing at a closed November.
+             */
+            billing_period_id: args.charge.billing_period_id ?? null,
+            billing_period_generation: args.charge.billing_period_id ? "canonical" : "legacy",
+            legacy_billing_period_key: args.charge.billing_period_id ? null : args.periodKey,
             basis: r.basis,
             basis_value: r.basisValue,
             basis_amount_cents: r.basisAmountCents,

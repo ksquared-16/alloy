@@ -26,6 +26,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { applyReductionCore, ReductionCoreError } from "@/lib/financials/reductions/reductionCore";
+import { resolveChargeCustomerId } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
+import { resolveCustomerCalendar } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import { currentAndNextPeriods } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 
 /** The categories a manual reduction may post through — all code-owned taxonomy. */
 export const MANUAL_REDUCTION_CATEGORIES = ["credit", "adjustment", "discount"] as const;
@@ -146,6 +149,17 @@ export async function applyManualReduction(
     }
     await assertWithinObligation(supabase, input);
 
+    /*
+     * THE PERIOD KEY IS THE ACCOUNT'S, NOT A MONTH CUT OFF A DATE.
+     *
+     * This used to be `input.effectiveDate.slice(0, 7)`, which manufactured a MONTHLY identity for
+     * every account — including one billing weekly, whose persisted periods carry keys of the shape
+     * `2026-11-09~2026-11-15` and never `2026-11`. The key is now the one the customer's canonical
+     * calendar actually produces for that date, so a reduction's period label matches a period that
+     * exists. An explicitly supplied key still wins; the caller may know better.
+     */
+    const resolvedPeriodKey = input.periodKey ?? (await resolveManualReductionPeriodKey(supabase, input));
+
     try {
         const result = await applyReductionCore(supabase, {
             orgId: input.orgId,
@@ -155,7 +169,7 @@ export async function applyManualReduction(
                 customerId: input.customerId ?? null,
                 customerMemberId: input.customerMemberId ?? null,
                 sourceChargeId: input.sourceChargeId ?? null,
-                periodKey: input.periodKey ?? input.effectiveDate.slice(0, 7),
+                periodKey: resolvedPeriodKey,
             },
             charge: {
                 chargeCategory: input.chargeCategory,
@@ -274,4 +288,38 @@ export async function reverseManualReduction(
         .eq("id", original.id);
 
     return reversal;
+}
+
+/**
+ * The period key the account's own calendar gives this date.
+ *
+ * Falls back to the calendar month ONLY when the account has no usable calendar — which is the
+ * legacy interpretation, and the honest answer for an account the canonical calendar does not yet
+ * govern. It does not invent a cadence, and it never reads a location or a term anchor.
+ */
+async function resolveManualReductionPeriodKey(
+    supabase: SupabaseClient,
+    input: ManualReductionInput,
+): Promise<string> {
+    const legacyMonth = input.effectiveDate.slice(0, 7);
+    try {
+        const customerId =
+            input.customerId
+            ?? (await resolveChargeCustomerId(supabase, {
+                orgId: input.orgId,
+                billableSourceType: "enrollment_agreement",
+                billableSourceId: input.enrollmentAgreementId,
+            }));
+        if (!customerId) return legacyMonth;
+        const calendar = await resolveCustomerCalendar(supabase, {
+            orgId: input.orgId,
+            customerId,
+            onDate: input.effectiveDate,
+        });
+        if (calendar.kind !== "resolved") return legacyMonth;
+        return currentAndNextPeriods(calendar, input.effectiveDate).current.key;
+    } catch {
+        /* A reduction must not fail because a calendar lookup did; history's reading still applies. */
+        return legacyMonth;
+    }
 }

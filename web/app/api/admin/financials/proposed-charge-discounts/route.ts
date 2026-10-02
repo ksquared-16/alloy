@@ -4,7 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { readPolicies } from "@/lib/commercial/execution/export/readCommercialConfig";
 import { assertFinancialsReadAllowed } from "@/lib/financials/financialsPermissions";
 import { readExcludedPolicyIds } from "@/lib/financials/reductions/commercialPolicyExceptionService";
-import { billingPeriodBounds } from "@/lib/financials/reductions/reductionPeriod";
+import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import {
     REDUCTION_KINDS,
     resolveFinancialReductions,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     try {
         /* The month the charge lands in — the same grain reductions resolve at. */
-        const period = billingPeriodBounds(serviceDate.slice(0, 7));
+        const period = billingPeriodFromKey(serviceDate.slice(0, 7));
         const all = await readPolicies({ supabase, orgId: ctx.orgId } as never);
         const policies: ReductionPolicy[] = all
             .filter((p) => p.isActive)
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
                 amountCents: Number.isFinite(amountCents) && amountCents > 0 ? Math.round(amountCents) : 0,
                 currencyCode: "USD",
                 categoryKey,
-                periodKey: period.start.slice(0, 7),
+                periodKey: period.key, // the resolved period's OWN identity, not a month re-derived from its start
             },
             policies,
             facts,
