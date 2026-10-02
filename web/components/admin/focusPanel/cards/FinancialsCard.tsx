@@ -2521,7 +2521,35 @@ export default function FinancialsCard({
                         effective_start: new Date().toISOString().slice(0, 10),
                         shares,
                     });
-                    if (error) failures.push(`responsibility for this charge — ${error}`);
+                    if (error) {
+                        failures.push(`responsibility for this charge — ${error}`);
+                    } else {
+                        /*
+                         * ── CONFIGURING WHO OWES IT IS NOT DIVIDING IT ──────────────────────
+                         *
+                         * `billing.configure_responsibility` writes the arrangement and its
+                         * shares: who WOULD bear this charge. Dividing the posted net into
+                         * allocations is a different canonical act, and until it runs the ledger
+                         * truthfully reads "Not allocated" and Details truthfully says "This
+                         * posted charge is not divided under it" — measured on deployed staging
+                         * with the arrangement correctly in place.
+                         *
+                         * That is a valid intermediate state and a poor terminal one: the operator
+                         * reviewed "Ada Certfree 100%" and pressed Add charge. So the workflow
+                         * sequences the EXISTING authority rather than folding allocation into
+                         * either of the other two acts — three governed, independently auditable
+                         * writes, in the order the domain states them.
+                         *
+                         * Only after configure SUCCEEDS. Dividing a charge under an arrangement
+                         * that was not saved would divide it under the wrong answer.
+                         */
+                        const divideError = await run("billing.resolve_responsibility", {
+                            charge_id: chargeId,
+                        });
+                        if (divideError) {
+                            failures.push(`dividing this charge under its responsibility — ${divideError}`);
+                        }
+                    }
                 }
 
                 /*
@@ -2628,6 +2656,8 @@ export default function FinancialsCard({
                          * an idempotent duplicate indistinguishable from a new write — the card
                          * closed and reported success for a `skipped_posted` that created nothing.
                          */
+                        /* The single/household path states its own write status here; per_child states one each. */
+                        write_status?: string | null;
                         per_child?: Array<{ charge_id?: string | null; error?: string | null; write_status?: string | null }>;
                         charges_failed?: number;
                     } | null;
@@ -2654,9 +2684,29 @@ export default function FinancialsCard({
              * that exist rather than the ones that were asked for.
              */
             const detail = json.data?.execution_result ?? null;
-            const createdChargeIds = detail?.per_child
+            /*
+             * ── FOLLOW-UP BELONGS TO CHARGES THIS SUBMISSION ACTUALLY WROTE ─────────────────
+             *
+             * `charge.add` is idempotent and answers `skipped_posted` carrying the EXISTING
+             * charge's id. Taking that id as "created" meant a duplicate click could reconfigure
+             * and re-divide responsibility on a historical charge that nobody touched — which
+             * happened: a repeat submission silently gave an older charge a new arrangement,
+             * observed on deployed staging.
+             *
+             * So the write status gates the id, not merely the notice. Only a charge this
+             * submission created or recalculated is eligible for the responsibility follow-up.
+             */
+            const WROTE = new Set(["created", "recalculated"]);
+            const wroteStatus = (detail?.write_status ?? "").trim();
+            const answeredChargeIds = detail?.per_child
                 ? detail.per_child.map((r) => (r.charge_id ?? "").trim()).filter(Boolean)
                 : [String(json.data?.affected_id ?? "").trim()].filter(Boolean);
+            const createdChargeIds = detail?.per_child
+                ? detail.per_child
+                      .filter((r) => WROTE.has((r.write_status ?? "").trim()))
+                      .map((r) => (r.charge_id ?? "").trim())
+                      .filter(Boolean)
+                : WROTE.has(wroteStatus) ? answeredChargeIds : [];
 
             /*
              * ── A NO-OP IS NOT A WRITE ───────────────────────────────────────────────────────
@@ -2671,10 +2721,12 @@ export default function FinancialsCard({
              * with `write_status: "skipped_posted"` and the same `affected_id`, and the surface
              * reported success every time.
              */
-            const wroteSomething = detail?.per_child
-                ? detail.per_child.some((r) => r.write_status === "created" || r.write_status === "recalculated")
-                : createdChargeIds.length > 0;
-            if (detail?.per_child?.length && !wroteSomething) {
+            const wroteSomething = createdChargeIds.length > 0;
+            /*
+             * Fired for the household path as well. It used to require `per_child`, so a single
+             * idempotent charge reported success and the operator believed they had created one.
+             */
+            if (!wroteSomething && answeredChargeIds.length > 0) {
                 setPending(null);
                 resetChargeDecisions();
                 resetStack();
@@ -2682,7 +2734,7 @@ export default function FinancialsCard({
                 setChargeNote("");
                 setChargeEventDate("");
                 setCommandNotice(
-                    createdChargeIds.length === 1
+                    answeredChargeIds.length === 1
                         ? "That charge already exists on this account. Nothing new was created."
                         : "Those charges already exist on this account. Nothing new was created.",
                 );
