@@ -39,6 +39,27 @@ const readDetails = (page: Page) => page.evaluate(() => {
     };
 });
 
+/**
+ * Ledger periods arrive COLLAPSED, so `[data-financials-row-open]` is legitimately absent until they
+ * are opened. Reading zero before expanding is reading absence as an answer.
+ */
+async function expandLedgerPeriods(page: Page) {
+    const toggles = page.locator("[data-financials-period-toggle]");
+    const n = await toggles.count();
+    for (let i = 0; i < n; i++) {
+        const t = toggles.nth(i);
+        if ((await t.getAttribute("aria-expanded")) === "false") {
+            await t.click({ timeout: 15_000 }).catch(() => undefined);
+            await page.waitForTimeout(1_500);
+        }
+    }
+    await page.waitForTimeout(4_000);
+    log(`  ledger periods: ${n}, rows: ${await page.locator("[data-financials-ledger-row]").count()}`);
+}
+
+/** The fifth-proof charge — created, configured and RESOLVED. Parity is only parity on ONE record. */
+const CHARGE = "6ccb9225-8c21-4fb4-b414-9b6a1afb993a";
+
 async function reachAccounts(page: Page) {
     for (let a = 1; a <= 2; a++) {
         await page.goto(ENTRY, { waitUntil: "domcontentloaded" });
@@ -55,7 +76,8 @@ async function reachAccounts(page: Page) {
 
 /** Open the first ledger row that offers the Details affordance, and say which charge it was. */
 async function openFirstRowDetails(page: Page) {
-    const opener = page.locator("[data-financials-row-open]").first();
+    const named = page.locator(`[data-financials-row-open="${CHARGE}"]`).first();
+    const opener = (await named.count()) > 0 ? named : page.locator("[data-financials-row-open]").first();
     const count = await opener.count();
     if (count === 0) return null;
     const chargeId = await opener.getAttribute("data-financials-row-open");
@@ -71,6 +93,7 @@ test("A · Accounts opens the shared Details", async ({ page }) => {
             .find((r) => /certfree/i.test((r as HTMLElement).innerText))?.getAttribute("data-financials-account-row") ?? null);
     await page.locator(`[data-financials-account-row="${id}"]`).first().click({ timeout: 30_000 });
     await page.waitForTimeout(12_000);
+    await expandLedgerPeriods(page);
     const openers = await page.locator("[data-financials-row-open]").count();
     log(`ACCOUNTS: rows offering Details = ${openers}`);
     const chargeId = await openFirstRowDetails(page);
@@ -95,6 +118,7 @@ test("B · the Focus Panel opens the SAME Details, and parity holds", async ({ p
     }
     await nav.click({ timeout: 25_000 });
     await page.waitForTimeout(12_000);
+    await expandLedgerPeriods(page);
     const openers = await page.locator("[data-financials-row-open]").count();
     const chargeId = await openFirstRowDetails(page);
     const details = await readDetails(page);
