@@ -1,0 +1,261 @@
+{
+  "trusted_host_action_id": "tha_9bbe70fd14b340",
+  "query_hash": "c9b52ad0d0af47c5e3adb50f22165004785157e664193d33afae59e53ea307da",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-02T17:10:12.862Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_9bbe70fd14b340",
+    "query_hash": "c9b52ad0d0af47c5e3adb50f22165004785157e664193d33afae59e53ea307da",
+    "authorization_id": "grnt_ed1896b0943345f9",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-02T17:10:18.066Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6",
+      "q7",
+      "q8",
+      "q9"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "has_customer_id": false,
+            "has_charge_id": false,
+            "has_billable_source": true,
+            "has_billing_period_id": false,
+            "period_text_columns": [],
+            "date_columns": [
+              "service_date",
+              "due_date",
+              "occurs_on",
+              "billable_on"
+            ],
+            "total_columns": 28
+          },
+          {
+            "table": "financial_journal_entries",
+            "has_customer_id": true,
+            "has_charge_id": false,
+            "has_billable_source": true,
+            "has_billing_period_id": false,
+            "period_text_columns": [
+              "billing_period_key"
+            ],
+            "date_columns": [
+              "effective_on"
+            ],
+            "total_columns": 23
+          },
+          {
+            "table": "financial_reduction_applications",
+            "has_customer_id": true,
+            "has_charge_id": true,
+            "has_billable_source": false,
+            "has_billing_period_id": false,
+            "period_text_columns": [
+              "period_key",
+              "period_start",
+              "period_end"
+            ],
+            "date_columns": [],
+            "total_columns": 31
+          },
+          {
+            "table": "financial_responsibility_allocations",
+            "has_customer_id": false,
+            "has_charge_id": true,
+            "has_billable_source": false,
+            "has_billing_period_id": false,
+            "period_text_columns": [
+              "period_key"
+            ],
+            "date_columns": [
+              "service_date"
+            ],
+            "total_columns": 26
+          },
+          {
+            "table": "payment_allocations",
+            "has_customer_id": false,
+            "has_charge_id": true,
+            "has_billable_source": false,
+            "has_billing_period_id": false,
+            "period_text_columns": [],
+            "date_columns": [],
+            "total_columns": 18
+          },
+          {
+            "table": "payments",
+            "has_customer_id": true,
+            "has_charge_id": false,
+            "has_billable_source": true,
+            "has_billing_period_id": false,
+            "period_text_columns": [],
+            "date_columns": [],
+            "total_columns": 34
+          },
+          {
+            "table": "resolved_obligations",
+            "has_customer_id": false,
+            "has_charge_id": false,
+            "has_billable_source": false,
+            "has_billing_period_id": false,
+            "period_text_columns": [
+              "period_end",
+              "period_start"
+            ],
+            "date_columns": [
+              "billable_on",
+              "occurs_on"
+            ],
+            "total_columns": 28
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "rows": 132
+          },
+          {
+            "table": "financial_reduction_applications",
+            "rows": 51
+          },
+          {
+            "table": "resolved_obligations",
+            "rows": 21
+          },
+          {
+            "table": "financial_journal_entries",
+            "rows": 231
+          },
+          {
+            "table": "payments",
+            "rows": 28
+          },
+          {
+            "table": "payment_allocations",
+            "rows": 68
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "billable_source_type": "customer",
+            "charges": 28,
+            "customer_resolved": 28,
+            "customer_unresolved": 0
+          },
+          {
+            "billable_source_type": "enrollment_agreement",
+            "charges": 104,
+            "customer_resolved": 104,
+            "customer_unresolved": 0
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "basis": "billable_on",
+            "charges": 72,
+            "declared": true
+          },
+          {
+            "basis": "service_date",
+            "charges": 60,
+            "declared": true
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "charges_with_a_customer": 132,
+            "distinct_customers": 6,
+            "distinct_legacy_periods_needed": 13,
+            "earliest_month": "2026-08",
+            "latest_month": "2026-12"
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "customer_id": "29944d3e-8267-45b7-8dcb-7405060e2573",
+            "legacy_month": "2026-12",
+            "legacy_start": "2026-12-01",
+            "legacy_end": "2026-12-31",
+            "collides_with_period_key": "2026-11-23~2026-12-06",
+            "collides_cadence": "biweekly",
+            "collides_span": "2026-11-23..2026-12-06",
+            "charges_in_that_month": 1
+          }
+        ]
+      },
+      "q7": {
+        "question_id": "q7",
+        "row_count": null,
+        "rows": [
+          {
+            "legacy_periods_colliding_with_canonical": 1
+          }
+        ]
+      },
+      "q8": {
+        "question_id": "q8",
+        "row_count": null,
+        "rows": [
+          {
+            "journal_entries_with_a_billing_period_key": 95,
+            "journal_entries_total": 231,
+            "distinct_billing_period_keys": 4,
+            "non_monthly_shaped_keys": 0
+          }
+        ]
+      },
+      "q9": {
+        "question_id": "q9",
+        "row_count": null,
+        "rows": [
+          {
+            "reductions": 51,
+            "with_customer_id": 7,
+            "with_charge_id": 51,
+            "with_period_key": 51,
+            "non_monthly_period_keys": 0,
+            "distinct_period_keys": 1
+          }
+        ]
+      }
+    },
+    "row_count": 22
+  }
+}
