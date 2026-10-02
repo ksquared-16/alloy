@@ -85,6 +85,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     }
                     return {};
                 })(),
+                /*
+                 * A question's own choices. Rebuilt drafts take their field list from this payload, so
+                 * omitting the choices turns every select into free text — which is how an imported
+                 * "Yes / No / Sometimes" lost its answers on an unrelated mapping change.
+                 */
+                ...(() => {
+                    const raw = (f as { options?: unknown }).options;
+                    if (!Array.isArray(raw)) return {};
+                    const options = raw
+                        .filter((o): o is string => typeof o === "string")
+                        .map((o) => o.trim())
+                        .filter(Boolean);
+                    return options.length ? { options } : {};
+                })(),
             };
         })
         .filter((f) => f.label.trim().length > 0);

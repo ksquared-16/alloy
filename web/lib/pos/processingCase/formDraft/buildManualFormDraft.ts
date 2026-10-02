@@ -40,6 +40,14 @@ export interface ManualFieldInput {
      * itself on the next save — which is worse than never having offered the feature.
      */
     visible_when?: import("@/lib/forms/schema").FormVisibilityCondition;
+    /**
+     * The choices the question offers.
+     *
+     * Save rebuilds the draft from what it is posted, so a choice list that is not on this input is
+     * gone — and a select with no choices is not a select. An imported "Yes / No / Sometimes" question
+     * silently became a free-text box the first time anyone changed an unrelated mapping.
+     */
+    options?: readonly string[];
 }
 
 /** Operator-set intent for a section (by title), carried into the draft + emitted schema. */
@@ -98,6 +106,7 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             ...(f.description ? { description: f.description } : {}),
             // An accepted condition survives the rebuild; an absent one leaves the field always shown.
             ...(f.visible_when ? { visible_when: f.visible_when } : {}),
+            ...(f.options?.length ? { options: f.options.map((o) => String(o)) } : {}),
         });
     }
 

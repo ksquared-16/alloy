@@ -15,6 +15,7 @@
 import type { DocumentStructureCandidate, StructureFieldType } from "../structure/types";
 import type { DraftFormField, DraftFormFieldType, DraftFormSection, StoredFormDraftPreview } from "./types";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
+import { safeImportMappings } from "@/lib/pos/formDraft/resolveFieldMapping";
 
 export const FORM_DRAFT_GENERATOR_VERSION = "fp12.0";
 
@@ -122,6 +123,28 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
 
     if (fields.length === 0) {
         warnings.push("No fields were drafted — the document had no detectable labelled prompts.");
+    }
+
+    /*
+     * APPLY THE MAPPINGS ALLOY CAN ALREADY MAKE SAFELY.
+     *
+     * Until now detection and binding were separate: the resolver knew perfectly well that "Child's
+     * Date of Birth" is the child's date of birth, and said so only inside concept review. An operator
+     * who never opened that queue was handed a form where nothing was mapped and asked to place every
+     * field by hand — which is the opposite of what importing a document is for.
+     *
+     * So the draft is born with the destinations the existing resolver can establish safely, and with
+     * nothing else. An uncertain destination stays a suggestion the operator can see and accept; it is
+     * NOT written here. @see resolveFieldMapping — the safety law lives there, once.
+     */
+    const sectionTitleByFieldId = new Map<string, string>();
+    for (const section of sections) {
+        for (const id of section.field_ids) sectionTitleByFieldId.set(id, section.title);
+    }
+    const applied = safeImportMappings(fields, sectionTitleByFieldId);
+    for (const field of fields) {
+        const destination = applied.get(field.id);
+        if (destination) field.field_source = destination;
     }
 
     const text = (input.extractedText ?? "").trim();
