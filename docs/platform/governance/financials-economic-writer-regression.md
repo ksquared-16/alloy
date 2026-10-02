@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-10-02
+supersedes: []
+---
+
 # Financials economic-writer regression
 
 One command, before promoting any slice that touches a shared Financials economic writer:
