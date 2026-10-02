@@ -10,7 +10,7 @@
  * It is a projection, not a second resolver — every state comes from `resolveFieldMapping`.
  */
 
-import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormSchemaV1, FormVisibilityCondition } from "@/lib/forms/schema";
 import type { DraftFormField, StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import { resolveFieldMapping, type FieldMapping, type FieldMappingState } from "./resolveFieldMapping";
 
@@ -169,6 +169,14 @@ export type SchemaFieldEdit = {
     readonly label: string;
     readonly required: boolean;
     readonly field_source: { readonly entity_type: string; readonly field_key: string } | null;
+    /**
+     * The condition as the operator has it now — `null` meaning "always ask this question".
+     *
+     * Carried explicitly rather than left to the draft's own copy, because the inspector can now author
+     * and CLEAR a condition. Falling back to the stored value would have made clearing one impossible:
+     * the save would have put it straight back.
+     */
+    readonly visible_when: FormVisibilityCondition | null;
 };
 
 const PLACEHOLDER_KEYS = new Set(["custom", "unmapped", ""]);
@@ -177,10 +185,12 @@ export function editFromSchemaField(field: FormField): SchemaFieldEdit {
     const source = field.field_source;
     const key = source?.field_key ?? "";
     const settled = Boolean(source?.entity_type) && !PLACEHOLDER_KEYS.has(key);
+    const clause = field.visibility?.all?.[0] ?? null;
     return {
         label: field.label,
         required: Boolean(field.required),
         field_source: settled ? { entity_type: source!.entity_type, field_key: key } : null,
+        visible_when: clause ? { field_id: clause.field_id, op: clause.op, value: clause.value } : null,
     };
 }
 

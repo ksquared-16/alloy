@@ -65,6 +65,19 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
         runtime_enforced: false,
     },
     {
+        /*
+         * A child's gender was a destination the platform could already WRITE — `customer_member_field`
+         * has declared it all along — and one the picker could never OFFER, because the catalog had no
+         * rule for it. So "Child → Gender" was absent from every authoring surface while the storage sat
+         * there waiting. Added as a catalog rule rather than as a special case in the picker, so every
+         * consumer of the field authority gains it at once.
+         */
+        rule_id: "child:gender",
+        entity: "child",
+        field_label: "Gender",
+        runtime_enforced: false,
+    },
+    {
         rule_id: "child:age_group",
         entity: "child",
         field_label: "Age Group",

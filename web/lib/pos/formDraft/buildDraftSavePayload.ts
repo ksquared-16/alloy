@@ -110,12 +110,21 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
 export function buildDraftSavePayload(
     draft: DraftShape,
     edits: ReadonlyMap<string, DraftFieldEdit> = new Map(),
+    /**
+     * Questions to leave off the rebuilt draft entirely.
+     *
+     * Only ever used for an explicit operator removal — the save route rebuilds from what it is given,
+     * so an omission here is a deletion. Never populated automatically.
+     */
+    omitFieldIds: ReadonlySet<string> = new Set(),
 ): DraftSaveResult {
-    const fields = draft.fields ?? [];
-    if (!fields.length) return { ok: false, reason: "no_fields" };
+    const all = draft.fields ?? [];
+    if (!all.length) return { ok: false, reason: "no_fields" };
     for (const id of edits.keys()) {
-        if (!fields.some((f) => f.id === id)) return { ok: false, reason: "unknown_field" };
+        if (!all.some((f) => f.id === id)) return { ok: false, reason: "unknown_field" };
     }
+    const fields = all.filter((f) => !omitFieldIds.has(f.id));
+    if (!fields.length) return { ok: false, reason: "no_fields" };
     const titles = sectionTitleByFieldId(draft);
     return {
         ok: true,
