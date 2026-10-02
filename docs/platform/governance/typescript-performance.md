@@ -97,7 +97,7 @@ Both configs set explicit, gitignored build-info files:
 
 ## Node version parity
 
-CI and local development target **Node 20**, declared in `web/.nvmrc`.
+CI, local development and Vercel target **Node 22**: `web/.nvmrc` for CI and local tools, `engines.node` (`22.x`) in `web/package.json` for Vercel, which ignores `.nvmrc`. Vercel deprecated Node 20 on 2026-10-01.
 
 ```bash
 cd web && nvm use   # or fnm/mise equivalent
