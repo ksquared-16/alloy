@@ -13,7 +13,8 @@
  * naming rules be tested without a server.
  */
 
-import type { MappingChoice } from "./buildMappingChangePayload";
+import type { FormField } from "@/lib/forms/schema";
+import type { MappingChoice } from "./buildDraftSavePayload.types";
 
 /** Matches the API's own `FIELD_KEY_REGEX`. Kept here so an invalid key is caught before the request. */
 const FIELD_KEY = /^[a-z0-9_]{2,64}$/;
@@ -95,4 +96,28 @@ export function planCreateFieldFromSource(input: {
             destination: { entity_type: input.entityType, field_key },
         },
     };
+}
+
+
+/**
+ * The canonical field type to offer for a question as it stands on the form.
+ *
+ * Taken from the control the operator is looking at rather than from the source bytes, because by the
+ * time they press Create field the control is what they have agreed the question is.
+ */
+export function suggestedFieldTypeForFormField(field: FormField): "text" | "number" | "date" | "boolean" | "select" | "multiselect" {
+    switch (field.type) {
+        case "number":
+            return "number";
+        case "date":
+            return "date";
+        case "boolean":
+            return "boolean";
+        case "select":
+            return "select";
+        case "multiselect":
+            return "multiselect";
+        default:
+            return "text";
+    }
 }
