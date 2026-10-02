@@ -48,6 +48,14 @@ export interface ManualFieldInput {
      * silently became a free-text box the first time anyone changed an unrelated mapping.
      */
     options?: readonly string[];
+    /**
+     * How wide the question sits on its row — the thing that puts First name beside Last name.
+     *
+     * The canvas already rows fields by width and the published schema already carries it, so the only
+     * missing link was this one: a width the operator set was dropped by the rebuild, snapped both
+     * fields back to full width, and made side-by-side look unavailable rather than unsaved.
+     */
+    layout_width?: "full" | "half" | "third" | "quarter";
 }
 
 /** Operator-set intent for a section (by title), carried into the draft + emitted schema. */
@@ -107,6 +115,7 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             // An accepted condition survives the rebuild; an absent one leaves the field always shown.
             ...(f.visible_when ? { visible_when: f.visible_when } : {}),
             ...(f.options?.length ? { options: f.options.map((o) => String(o)) } : {}),
+            ...(f.layout_width && f.layout_width !== "full" ? { layout_width: f.layout_width } : {}),
         });
     }
 

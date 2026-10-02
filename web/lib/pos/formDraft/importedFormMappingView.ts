@@ -177,6 +177,8 @@ export type SchemaFieldEdit = {
      * the save would have put it straight back.
      */
     readonly visible_when: FormVisibilityCondition | null;
+    /** The width the operator set in the shared inspector, so side-by-side survives the save. */
+    readonly layout_width: "full" | "half" | "third" | "quarter";
 };
 
 const PLACEHOLDER_KEYS = new Set(["custom", "unmapped", ""]);
@@ -191,6 +193,7 @@ export function editFromSchemaField(field: FormField): SchemaFieldEdit {
         required: Boolean(field.required),
         field_source: settled ? { entity_type: source!.entity_type, field_key: key } : null,
         visible_when: clause ? { field_id: clause.field_id, op: clause.op, value: clause.value } : null,
+        layout_width: field.layout_width ?? "full",
     };
 }
 

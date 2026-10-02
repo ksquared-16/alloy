@@ -90,6 +90,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                  * omitting the choices turns every select into free text — which is how an imported
                  * "Yes / No / Sometimes" lost its answers on an unrelated mapping change.
                  */
+                /*
+                 * The width the operator chose. Dropped before, so First name / Last name snapped back
+                 * to their own rows on the next save and side-by-side read as a feature that did not work.
+                 */
+                ...(() => {
+                    const raw = (f as { layout_width?: unknown }).layout_width;
+                    const w: ManualFieldInput["layout_width"] =
+                        raw === "half" ? "half" : raw === "third" ? "third" : raw === "quarter" ? "quarter" : raw === "full" ? "full" : undefined;
+                    return w ? { layout_width: w } : {};
+                })(),
                 ...(() => {
                     const raw = (f as { options?: unknown }).options;
                     if (!Array.isArray(raw)) return {};
