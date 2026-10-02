@@ -67,13 +67,12 @@ export function plumbingWarning(labels: readonly string[]): string | null {
  * it found and offers removal; this is only the finding half.
  */
 export function plumbingFieldsOnDraft(
-    fields: readonly PlumbingCandidate[] & readonly { readonly id?: string }[],
+    fields: readonly (PlumbingCandidate & { readonly id?: string })[],
 ): ReadonlyArray<{ readonly id: string; readonly label: string }> {
     const out: Array<{ id: string; label: string }> = [];
     for (const field of fields) {
-        const id = (field as { id?: string }).id;
-        if (!id) continue;
-        if (isDocumentPlumbingField(field)) out.push({ id, label: field.label.trim() });
+        if (!field.id) continue;
+        if (isDocumentPlumbingField(field)) out.push({ id: field.id, label: field.label.trim() });
     }
     return out;
 }
