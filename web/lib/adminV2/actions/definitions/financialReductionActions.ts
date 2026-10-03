@@ -37,6 +37,7 @@ import {
 } from "@/lib/financials/reductions/commercialPolicyAssignmentService";
 import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
 import { billingPeriodBindingHttpAnswer } from "@/lib/financials/billingPeriods/billingPeriodBindingHttp";
+import { previewProspectiveCorrection } from "@/lib/financials/corrections/prospectiveCorrection";
 import {
     MANUAL_REDUCTION_CATEGORIES,
     ManualReductionError,
@@ -312,15 +313,48 @@ const adjustAccount: RegisteredAction = {
         };
     },
 
-    /** The operator's own numbers, read back before they commit them. */
-    async buildPreview({ payload }) {
+    /**
+     * WHAT WILL HAPPEN, resolved the way execute resolves it.
+     *
+     * This used to be arithmetic on the submitted payload: it restated the operator's own number
+     * and could not say which commercial period the adjustment would land in, nor that the period
+     * was closed, nor what historical fact was being corrected. An operator could therefore preview
+     * something that execute then refused.
+     *
+     * It now calls the canonical resolver, which shares the calendar authority with the binder and
+     * reaches the same verdict — including the closed-destination refusal — without writing
+     * anything. A refusal is surfaced as the preview itself, in the operator's language, rather
+     * than thrown: being told why the action is unavailable is more useful than an empty preview.
+     */
+    async buildPreview({ supabase, ctx, payload }) {
         const amount = Number(payload?.amount_cents);
-        const direction = Number.isFinite(amount) && amount < 0 ? "reduces" : "increases";
-        const money = Number.isFinite(amount) ? `$${(Math.abs(amount) / 100).toFixed(2)}` : "an unstated amount";
-        return {
-            summary: `${t(payload?.charge_category) || "credit"} of ${money} — ${direction} what the family owes.`,
-            changes: [`Effective ${t(payload?.effective_date) || "—"}`, `Reason: ${t(payload?.reason) || "—"}`],
-        };
+        if (!Number.isInteger(amount) || amount === 0) {
+            return {
+                summary: "A reduction needs a whole, non-zero amount in cents.",
+                changes: [],
+            };
+        }
+        try {
+            const preview = await previewProspectiveCorrection(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                enrollmentAgreementId: t(payload?.enrollment_agreement_id),
+                customerId: t(payload?.customer_id) || null,
+                amountCents: amount,
+                effectiveDate: t(payload?.effective_date),
+                sourceChargeId: t(payload?.source_charge_id) || null,
+            });
+            return {
+                summary: preview.summary,
+                changes: [...preview.changes, `Reason: ${t(payload?.reason) || "—"}`],
+            };
+        } catch (err) {
+            /* The same mapping the route boundary uses, so the words match what execute would say. */
+            const binding = billingPeriodBindingHttpAnswer(err);
+            return {
+                summary: binding?.message ?? "This adjustment cannot be previewed yet.",
+                changes: [`Effective ${t(payload?.effective_date) || "—"}`],
+            };
+        }
     },
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {

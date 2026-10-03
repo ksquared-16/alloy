@@ -2,10 +2,10 @@
 
 **Classification: `IMPLEMENTED_AWAITING_REAL_CLOCK_CERTIFICATION`.**
 
-Everything is implemented, bound and falsified. One obligation remains and it is a *waiting*
-obligation, not a missing one: Phase 22 requires a real scheduled close observed end to end, and the
-clock cannot reach a boundary that does not exist yet on the deployed estate. The reasoning is in
-§11 below, stated precisely rather than rounded up.
+Everything is implemented, bound, falsified, merged (`95dc556fe`) and its migration applied. One
+obligation remains and it is a *waiting* obligation, not a missing one: Phase 22 requires a real
+scheduled close observed end to end, and the deployed estate currently has **nothing eligible to
+close** — measured, not assumed. The figures are in the Phase 22 section below.
 
 ---
 
@@ -245,23 +245,32 @@ re-running.
 
 ---
 
-## Phase 22 — why the real clock has not certified yet
+## Phase 22 — measured, not predicted: registered, running, nothing yet eligible
 
-The chain is built and registered. What is missing is a boundary for it to find:
+The candidate is merged (`95dc556fe`) and migration `20261118120000` is applied to staging. The
+chain's state was then **measured** on deployed (`phase22-clock-chain.sql`), separating three
+answers that mean different things:
 
-1. the handler must be **deployed** — this candidate is not merged yet;
-2. the migration must be **applied** to staging;
-3. an **elapsed OPEN canonical period** must exist on the deployed estate. Every deployed canonical
-   period is dated 2026-11 or later, and today is 2026-10-03. **Nothing has elapsed**, so the clock
-   would wake, find nothing, and complete as a healthy no-op — which proves the chain runs but not a
-   close transition.
+| | measured on deployed |
+|---|---|
+| **REGISTERED** | yes — `financials.billing_period_close.evaluate`, org `93667019…`, **daily**, active, next due `2026-10-04T04:00Z` |
+| **WOKEN** | not yet — no occurrence exists, because the first due time is ~27 hours away |
+| **TRANSITIONED** | 0 periods, `close_actor = 'system'` count 0 |
+| clock health | last wake **141 seconds** before the census, 3,235 wakes, worker `worker-9de4cf04` |
 
-Creating an elapsed period means writing a charge dated in the past on a synthetic fixture, which is
-a money write into the deployed estate — refused by this session's real-world-transaction guard, the
-same block carried as evidence debt from the previous run. Not worked around.
+**And the reason nothing transitioned is the honest one, not a defect:** `open_and_elapsed` is
+**0**. The deployed estate holds 16 canonical periods, all open, and the earliest ends
+**2026-11-12** against a current date of **2026-10-03**. There is nothing eligible to close. A
+handler that closed something here would be the bug.
+
+Creating an elapsed period means writing a charge dated in the past on a synthetic fixture — a money
+write into the deployed estate, refused by this session's real-world-transaction guard, the same
+block carried as evidence debt from the previous run. Not worked around.
 
 So the terminal proof waits on a real boundary, exactly as Phase 22 anticipates. Nothing is faked and
-no occurrence was manufactured.
+no occurrence was manufactured. **The next eligible moment is `2026-11-13`**, when the earliest open
+period has elapsed and the 04:00Z wake will find it — or sooner, if an authorised write creates a
+synthetic household with a past period.
 
 ---
 
