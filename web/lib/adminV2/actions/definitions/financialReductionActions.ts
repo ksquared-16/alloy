@@ -36,6 +36,7 @@ import {
     endPolicyAssignment,
 } from "@/lib/financials/reductions/commercialPolicyAssignmentService";
 import { billingPeriodFromKey } from "@/lib/financials/billingPeriod";
+import { billingPeriodBindingHttpAnswer } from "@/lib/financials/billingPeriods/billingPeriodBindingHttp";
 import {
     MANUAL_REDUCTION_CATEGORIES,
     ManualReductionError,
@@ -367,6 +368,26 @@ const adjustAccount: RegisteredAction = {
                 },
             };
         } catch (err) {
+            /*
+             * CONVERGED ON THE ONE BILLING-PERIOD MAPPING rather than keeping a second error model.
+             *
+             * This catch already returned usable business language, because it forwards the thrown
+             * message and the binder's sentences are written for operators. What it got wrong was
+             * the SHAPE: a configuration conflict answered 400 with the generic
+             * `adjustment_failed`, and an infrastructure read failure answered 400 while forwarding
+             * a raw database string. Both now take the same status and the same stable code as
+             * every other boundary that can see this error.
+             */
+            const binding = billingPeriodBindingHttpAnswer(err);
+            if (binding) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: binding.status,
+                    error: binding.message,
+                    blockers: [{ code: binding.code, message: binding.message }],
+                };
+            }
             const code = err instanceof ManualReductionError ? err.code : "adjustment_failed";
             return {
                 ok: false,

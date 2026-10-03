@@ -12,3 +12,5 @@
 export const BILLING_PERIODIC_HANDLER_KEY = "financials.periodic_billing.evaluate";
 export const CHARGE_AGING_HANDLER_KEY = "financials.charge_aging.evaluate";
 export const AUTOPAY_HANDLER_KEY = "payments.autopay.evaluate";
+/** Commercial finalization: discovers elapsed open customer billing periods and closes them. */
+export const BILLING_PERIOD_CLOSE_HANDLER_KEY = "financials.billing_period_close.evaluate";

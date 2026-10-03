@@ -1,18 +1,20 @@
 import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
+import { evaluateBillingPeriodCloseOccurrence } from "@/lib/financials/billingPeriods/billingPeriodCloseHandler";
 import { evaluatePeriodicBillingOccurrence } from "@/lib/financials/periodicBilling/periodicBillingHandler";
 import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
 import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
 import {
     AUTOPAY_HANDLER_KEY,
+    BILLING_PERIOD_CLOSE_HANDLER_KEY,
     BILLING_PERIODIC_HANDLER_KEY,
     CHARGE_AGING_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
- * THE THREE V1 CONSUMERS, registered at the same boundary.
+ * THE V1 CONSUMERS, registered at the same boundary.
  *
- * The point of certifying three is that ONE runtime serves them. Everything above
+ * The point of certifying several is that ONE runtime serves them all. Everything above
  * this file is generic; everything a domain means begins inside its handler.
  *
  * ── WHAT THESE HANDLERS DO AND DO NOT DO IN V1 ──
@@ -40,11 +42,12 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 /* Declared in a leaf module so a domain can name its key without importing this one. */
 export {
     BILLING_PERIODIC_HANDLER_KEY,
+    BILLING_PERIOD_CLOSE_HANDLER_KEY,
     CHARGE_AGING_HANDLER_KEY,
     AUTOPAY_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 
-/** Shared shape so the three read alike and differ only where they must. */
+/** Shared shape so the remaining stub reads like the real ones. */
 function evaluated(domain: string, ctx: ScheduledWorkContext): ScheduledWorkOutcome {
     return {
         kind: "completed",
@@ -94,6 +97,22 @@ export function registerScheduledWorkConsumers(): void {
      */
     registerScheduledWorkHandler(AUTOPAY_HANDLER_KEY, async (ctx) =>
         evaluateAutopayOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * COMMERCIAL CLOSE IS PRODUCTIZED, and it is the third domain to cross this boundary with a
+     * real body — which is the point of the boundary rather than a coincidence twice over.
+     *
+     * It calls the SAME `closeBillingPeriod` service an operator action calls. The only difference
+     * is `close_actor: "system"`, and that difference is a parameter rather than a second
+     * implementation, so finality cannot acquire two sets of rules.
+     *
+     * The client is built HERE so the handler stays injectable: its tests drive it with a fake
+     * client and a fixed operating day, and nothing about it needs the service-role environment to
+     * be readable.
+     */
+    registerScheduledWorkHandler(BILLING_PERIOD_CLOSE_HANDLER_KEY, async (ctx) =>
+        evaluateBillingPeriodCloseOccurrence(ctx, { supabase: createAdminClient() }),
     );
 }
 

@@ -110,8 +110,21 @@ export function shouldRetryPost(metadata: Record<string, unknown> | null | undef
 }
 
 /**
- * THE GUARD POINT. Today it only refuses nothing; it exists so commercial close has one place to
- * bind, covering the first attempt and every retry alike.
+ * THE GUARD SEAM, AND WHERE COMMERCIAL CLOSE ACTUALLY BOUND.
+ *
+ * This existed so close would have one place to refuse a post, covering the first attempt and
+ * every retry alike. Close went somewhere strictly better: `postChildcareCharge` itself, the
+ * posting authority. Binding there covers EVERY caller — this repair, an operator action, a
+ * generation run — rather than only the callers who remember to ask this function first, and it
+ * reads the period the draft actually carries instead of trusting a hint passed in.
+ *
+ * The retry path needs nothing of its own as a result. A closed-period refusal comes back as a
+ * conflict whose message contains "closed", `isRetryablePostFailure` classifies it PERMANENT, and
+ * the draft stops retrying an illegal post and becomes attention work — which is exactly the
+ * behaviour §11 asks for, arrived at without a second guard that could disagree with the first.
+ *
+ * Kept as a seam because a cheap pre-flight that avoids a doomed attempt may still be worth having;
+ * it must never become the ONLY check, because a caller can skip it and the authority cannot.
  */
 export function postAttemptAllowed(_charge: { billing_period_id?: string | null }): { ok: true } {
     return { ok: true };
