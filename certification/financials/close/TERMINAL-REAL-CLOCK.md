@@ -84,3 +84,25 @@ At or after **`2026-10-04T04:00:00Z`**, collect from durable evidence:
 If the period becomes eligible, the clock stays healthy, and **no close occurrence appears**, the
 terminal proof FAILS per §14/§15 and the failed link is named. That judgement cannot be made yet
 because the boundary has not arrived — declaring either outcome now would be fabricating it.
+
+## The collection is pre-staged, so the next run is one governed action
+
+`phase3-real-clock-collection.sql` is committed and validated. It asks for every identifier §8
+requires — schedule, occurrence, due timestamp, claim, lease, attempt id, worker id, outcome and
+diagnostic — plus the §9 attribution, the §10 snapshot comparison, the §11 continuity ladder (with
+gap arithmetic), the §12 exactly-once counts, and the §14 clock control.
+
+```
+artifact : certification/financials/close/phase3-real-clock-collection.sql
+sha256   : ed2e4631b10620be5c44439ba7cbdd1f63a5bc74001fb17a4907e6297052a284
+target   : alloy_deployed_primary
+run at   : 2026-10-04T04:00:00Z or later
+```
+
+Expected on success: `close_occurrences_total >= 1` with an attempt whose diagnostic names
+`closed_count: 1` and period `59f50689…`; that period `closed` with `close_actor = system` and
+`closed_by` NULL; its bounds still `2026-10-03`; `d93a6a6f…` still open with a zero gap.
+
+If instead the occurrence exists and the period stayed open, or no occurrence appears while
+`clock_wake_count` is still advancing, that is the **`REAL_CLOCK_FAILED`** case and q2/q5 together
+name which link broke.
