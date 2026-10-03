@@ -1,0 +1,320 @@
+{
+  "trusted_host_action_id": "tha_91e69fb5f4a1ac",
+  "query_hash": "e07ab71959759b73221ab41fd2ead75db8eb7e091d796d216a453073b4f089d6",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-03T00:05:41.494Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_91e69fb5f4a1ac",
+    "query_hash": "e07ab71959759b73221ab41fd2ead75db8eb7e091d796d216a453073b4f089d6",
+    "authorization_id": "grnt_3e01620ff3f74844",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-03T00:05:46.924Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5",
+      "q6"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_childcare_chk",
+            "definition": "CHECK (((billable_source_type IS NULL) OR (NOT (billable_source_type = ANY (ARRAY['enrollment_agreement'::text, 'customer'::text]))) OR (billing_period_generation <> 'not_applicable'::text)))"
+          },
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_generation_chk",
+            "definition": "CHECK ((billing_period_generation = ANY (ARRAY['legacy'::text, 'canonical'::text, 'not_applicable'::text])))"
+          },
+          {
+            "table": "charges",
+            "constraint": "charges_billing_period_shape_chk",
+            "definition": "CHECK ((((billing_period_generation = 'legacy'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NOT NULL)) OR ((billing_period_generation = 'canonical'::text) AND (billing_period_id IS NOT NULL)) OR ((billing_period_generation = 'not_applicable'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NULL))))"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "constraint": "fin_reduction_billing_period_generation_chk",
+            "definition": "CHECK ((billing_period_generation = ANY (ARRAY['legacy'::text, 'canonical'::text])))"
+          },
+          {
+            "table": "financial_reduction_applications",
+            "constraint": "fin_reduction_billing_period_shape_chk",
+            "definition": "CHECK ((((billing_period_generation = 'legacy'::text) AND (billing_period_id IS NULL) AND (legacy_billing_period_key IS NOT NULL)) OR ((billing_period_generation = 'canonical'::text) AND (billing_period_id IS NOT NULL))))"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "applications_total": 51,
+            "generation_agrees": 51,
+            "period_id_agrees": 51,
+            "legacy_key_agrees": 51,
+            "fully_coherent": 51,
+            "app_generations": [
+              {
+                "gen": "legacy",
+                "n": 51
+              }
+            ],
+            "newest_application_at": "2026-09-19T03:04:39.972873+00:00"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "applications_with_a_source_charge": 40,
+            "period_differs_from_source": 9,
+            "cross_period_examples": [
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              },
+              {
+                "application_period_key": "2026-09",
+                "source_period_key": "2026-08"
+              }
+            ]
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "first_wake_at": "2026-09-21T19:25:02.705591+00:00",
+            "last_wake_at": "2026-10-03T00:05:00.871629+00:00",
+            "wake_count": 3224,
+            "last_worker_id": "worker-b6b28151",
+            "seconds_since_last_wake": 46
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "scheduled_work_id": "f5d1b0c3-dede-41de-9964-11e95d5f032b",
+            "handler_key": "financials.periodic_billing.evaluate",
+            "recurrence_kind": "one_time",
+            "interval_seconds": null,
+            "is_active": true,
+            "next_due_at": null,
+            "seconds_until_due": null,
+            "occurrences": 1,
+            "occurrences_by_status": [
+              {
+                "status": "completed",
+                "n": 1
+              }
+            ],
+            "latest_completed_at": "2026-09-21T19:25:01.302+00:00"
+          },
+          {
+            "scheduled_work_id": "5925c0ec-e5c3-4ec4-9b3a-bf6daa8c160a",
+            "handler_key": "financials.periodic_billing.evaluate",
+            "recurrence_kind": "daily",
+            "interval_seconds": null,
+            "is_active": true,
+            "next_due_at": "2026-10-03T03:14:06.759+00:00",
+            "seconds_until_due": 11300,
+            "occurrences": 15,
+            "occurrences_by_status": [
+              {
+                "status": "completed",
+                "n": 15
+              }
+            ],
+            "latest_completed_at": "2026-10-02T03:15:00.218+00:00"
+          },
+          {
+            "scheduled_work_id": "77759009-7b12-4dd1-ab6c-d79506072cf1",
+            "handler_key": "payments.autopay.evaluate",
+            "recurrence_kind": "daily",
+            "interval_seconds": null,
+            "is_active": true,
+            "next_due_at": "2026-10-04T00:00:00+00:00",
+            "seconds_until_due": 86054,
+            "occurrences": 5,
+            "occurrences_by_status": [
+              {
+                "status": "completed",
+                "n": 5
+              }
+            ],
+            "latest_completed_at": "2026-10-03T00:00:00.217+00:00"
+          }
+        ]
+      },
+      "q6": {
+        "question_id": "q6",
+        "row_count": null,
+        "rows": [
+          {
+            "occurrence_id": "e43d814e-81ae-4c6c-a8df-abf3583ba6a5",
+            "handler_key": "financials.periodic_billing.evaluate",
+            "due_at": "2026-09-30T03:14:06.759+00:00",
+            "status": "completed",
+            "claimed_by": "worker-a8262adb",
+            "attempt_count": 1,
+            "completed_at": "2026-09-30T03:15:00.422+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-a8262adb",
+                "started_at": "2026-09-30T03:15:01.017004+00:00",
+                "finished_at": "2026-09-30T03:15:01.368+00:00",
+                "outcome": "completed"
+              }
+            ]
+          },
+          {
+            "occurrence_id": "5ba456d4-d5d1-4a51-9780-638a688832f8",
+            "handler_key": "payments.autopay.evaluate",
+            "due_at": "2026-10-01T00:00:00+00:00",
+            "status": "completed",
+            "claimed_by": "worker-d67920c2",
+            "attempt_count": 1,
+            "completed_at": "2026-10-01T00:00:00.337+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-d67920c2",
+                "started_at": "2026-10-01T00:00:01.058551+00:00",
+                "finished_at": "2026-10-01T00:00:03.347+00:00",
+                "outcome": "completed"
+              }
+            ]
+          },
+          {
+            "occurrence_id": "f07e2b1b-cc6c-4dd2-9b72-53b2998e3c7b",
+            "handler_key": "financials.periodic_billing.evaluate",
+            "due_at": "2026-10-01T03:14:06.759+00:00",
+            "status": "completed",
+            "claimed_by": "worker-e3d31428",
+            "attempt_count": 1,
+            "completed_at": "2026-10-01T03:15:00.191+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-e3d31428",
+                "started_at": "2026-10-01T03:15:00.881221+00:00",
+                "finished_at": "2026-10-01T03:15:01.42+00:00",
+                "outcome": "completed"
+              }
+            ]
+          },
+          {
+            "occurrence_id": "a7c2edf5-1452-4114-a8c9-cec14b47a68d",
+            "handler_key": "payments.autopay.evaluate",
+            "due_at": "2026-10-02T00:00:00+00:00",
+            "status": "completed",
+            "claimed_by": "worker-0a155679",
+            "attempt_count": 1,
+            "completed_at": "2026-10-02T00:00:00.2+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-0a155679",
+                "started_at": "2026-10-02T00:00:00.880082+00:00",
+                "finished_at": "2026-10-02T00:00:03.942+00:00",
+                "outcome": "completed"
+              }
+            ]
+          },
+          {
+            "occurrence_id": "410e2f0a-3d5f-4fcf-86bd-fd93d4b8d1fc",
+            "handler_key": "financials.periodic_billing.evaluate",
+            "due_at": "2026-10-02T03:14:06.759+00:00",
+            "status": "completed",
+            "claimed_by": "worker-ee706d5f",
+            "attempt_count": 1,
+            "completed_at": "2026-10-02T03:15:00.218+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-ee706d5f",
+                "started_at": "2026-10-02T03:15:00.945824+00:00",
+                "finished_at": "2026-10-02T03:15:01.487+00:00",
+                "outcome": "completed"
+              }
+            ]
+          },
+          {
+            "occurrence_id": "505e2bbf-ab55-4c66-9e8e-82c478e6e817",
+            "handler_key": "payments.autopay.evaluate",
+            "due_at": "2026-10-03T00:00:00+00:00",
+            "status": "completed",
+            "claimed_by": "worker-446c4c16",
+            "attempt_count": 1,
+            "completed_at": "2026-10-03T00:00:00.217+00:00",
+            "failure_reason": null,
+            "attempts": [
+              {
+                "attempt_number": 1,
+                "worker_id": "worker-446c4c16",
+                "started_at": "2026-10-03T00:00:01.258616+00:00",
+                "finished_at": "2026-10-03T00:00:03.768+00:00",
+                "outcome": "completed"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 17
+  }
+}

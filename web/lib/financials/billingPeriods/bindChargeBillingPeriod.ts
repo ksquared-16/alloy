@@ -167,19 +167,52 @@ export async function resolveChargeBillingPeriodBinding(
      */
     const { data, error } = await supabase
         .from("financial_billing_periods")
-        .select("id, period_key, starts_on, ends_on")
+        .select("id, period_key, starts_on, ends_on, status")
         .eq("org_id", args.orgId)
         .eq("customer_id", customerId)
         .lte("starts_on", args.placementDate)
         .gte("ends_on", args.placementDate)
         .maybeSingle();
     if (error) throw new BillingPeriodBindingError("period_read_failed", error.message, { customerId });
-    const period = data as { id: string } | null;
+    const period = data as { id: string; period_key: string; status: string } | null;
     if (!period) {
         throw new BillingPeriodBindingError(
             "period_not_materialized",
             "The household's billing calendar produced no period covering this charge's date.",
             { customerId, placementDate: args.placementDate, calendar: outcome.calendar },
+        );
+    }
+
+    /*
+     * ── COMMERCIAL FINALITY, ENFORCED AT THE ONE PLACE THAT RESOLVES A PERIOD ──
+     *
+     * A closed period is finished. New economics do not go into it, and the refusal happens HERE,
+     * before the caller writes anything, because this is the only function that turns a customer
+     * and a date into a period id — so there is no second path for a writer to reach a closed
+     * period through.
+     *
+     * The four tempting alternatives are all refused by doing it this way:
+     *   * writing then reversing leaves two economic facts in a period that was supposed to be
+     *     final, and a reversal is a decision, not a cleanup;
+     *   * moving the charge to the next open period silently re-dates the family's money;
+     *   * falling back to a legacy key turns the historical compatibility path into an escape hatch
+     *     around finality, which is exactly what S2 refused to let it become;
+     *   * using "the current open period" quietly answers a different question than the one the
+     *     charge's own date asked.
+     *
+     * S5 owns the legitimate answer — a prospective correction in a later open period, pointing at
+     * this one as provenance. This refusal is what makes that the only answer.
+     */
+    if (period.status === "closed") {
+        throw new BillingPeriodBindingError(
+            "billing_period_closed",
+            "This billing period is closed. New charges cannot be added to it.",
+            {
+                customerId,
+                billingPeriodId: period.id,
+                periodKey: period.period_key,
+                placementDate: args.placementDate,
+            },
         );
     }
 

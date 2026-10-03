@@ -240,7 +240,14 @@ async function loadCharge(
     const { data, error } = await supabase
         .from("charges")
         .select(
-            "id, org_id, job_id, source_charge_id, billable_source_type, billable_source_id, charge_type, charge_category, status, currency_code, amount_cents, service_date, due_date, posted_at, voided_at, description, metadata, created_at, updated_at, created_by, updated_by, posted_by"
+            /*
+             * `billing_period_id` and its two companions MUST be here. The closed-period post guard
+             * below reads `charge.billing_period_id`, and an omitted column arrives as `undefined`
+             * rather than as an error — so leaving them out does not fail, it silently disables the
+             * guard. A live run caught exactly that: a draft posted into a closed period because
+             * this list was one column short.
+             */
+            "id, org_id, job_id, source_charge_id, billable_source_type, billable_source_id, charge_type, charge_category, status, currency_code, amount_cents, service_date, due_date, posted_at, voided_at, description, metadata, created_at, updated_at, created_by, updated_by, posted_by, billing_period_id, legacy_billing_period_key, billing_period_generation"
         )
         .eq("org_id", orgId)
         .eq("id", chargeId)
@@ -411,6 +418,53 @@ export async function postChildcareCharge(
             journal: await recordChargePostedEntry(supabase, charge, input.actorUserId ?? null),
         };
     }
+
+    /*
+     * ── A CLOSED PERIOD REFUSES THE POST, NOT JUST THE CREATION ──
+     *
+     * The creation guard in `bindChargeBillingPeriod` is necessary and NOT sufficient, because
+     * posting is an UPDATE of a row that already exists. A draft created while November was open
+     * carries November's `billing_period_id` forever; nothing about the later post re-resolves a
+     * period, so without this read the draft would post into a closed period weeks after
+     * finalization and move money the period had already reported as final.
+     *
+     * This is the second of the two guards finality needs, and they are deliberately at different
+     * boundaries: one refuses a NEW economic fact entering a closed period, this one refuses an
+     * EXISTING draft becoming owed inside one.
+     *
+     * The draft is PRESERVED. It is not voided, not re-dated, not moved to an open period — S5 owns
+     * prospective remediation, and a draft that cannot post is attention work, not litter. Automatic
+     * retry reaches this same refusal, which is how a POST_FAILED draft whose period closed stops
+     * retrying an illegal post instead of hammering it until its attempt budget runs out.
+     *
+     * Legacy drafts are untouched: `billing_period_id` is null for them, so they are outside
+     * canonical close semantics entirely and this guard never fires.
+     */
+    if (charge.billing_period_id) {
+        const { data: periodRow, error: periodError } = await supabase
+            .from("financial_billing_periods")
+            .select("id, period_key, status")
+            .eq("org_id", input.orgId)
+            .eq("id", charge.billing_period_id)
+            .maybeSingle();
+        if (periodError) {
+            throw new OperationalEnrollmentServiceError("db_error", periodError.message);
+        }
+        const period = periodRow as { id: string; period_key: string; status: string } | null;
+        if (period && period.status === "closed") {
+            throw new OperationalEnrollmentServiceError(
+                "conflict",
+                "This charge belongs to a billing period that is closed, so it cannot be posted. Record it in a later open period instead.",
+                {
+                    chargeId: charge.id,
+                    billingPeriodId: period.id,
+                    periodKey: period.period_key,
+                    billingPeriodStatus: period.status,
+                },
+            );
+        }
+    }
+
     const now = new Date().toISOString();
     const { data, error } = await supabase
         .from("charges")
