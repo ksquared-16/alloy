@@ -71,6 +71,8 @@ function ids(tag: string): Household {
 
 const MONTHLY = ids("0");
 const WEEKLY = ids("1");
+/* The 50b19065 topology, reproduced synthetically: two locations, no account calendar. */
+const AMBIGUOUS = ids("2");
 
 describeLive("S5 — a correction belongs to its own period, its source to history", () => {
     let db: SupabaseClient;
@@ -150,7 +152,7 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
     });
 
     afterAll(async () => {
-        for (const h of [MONTHLY, WEEKLY]) {
+        for (const h of [MONTHLY, WEEKLY, AMBIGUOUS, ids("3")]) {
             await db.from("financial_reduction_applications").delete().eq("org_id", ORG).eq("customer_id", h.customer);
             await db.from("charges").delete().eq("org_id", ORG).eq("billable_source_id", h.agreement).eq("status", "draft");
         }
@@ -460,6 +462,167 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
         expect(after.amount_cents).toBe(50_000);
         expect(after.billing_period_generation).toBe("legacy");
         expect(after.billing_period_id).toBeNull();
+    });
+
+    it("§29 — an UNCONFIGURED multi-location household REFUSES a correction, in business language", async () => {
+        /*
+         * Customer 50b19065 on deployed is multi-location with no account calendar, and the
+         * Director left it deliberately unconfigured: period-bound economics must refuse until an
+         * authorised operator chooses its calendar. That customer is NOT touched here — this
+         * reproduces its topology on a synthetic household, which is the same proof without
+         * mutating a household that is itself a standing decision.
+         */
+        const second = `${AMBIGUOUS.location.slice(0, -1)}2`;
+        const secondAgreement = `${AMBIGUOUS.agreement.slice(0, -1)}2`;
+        const seed = async (table: string, row: Record<string, unknown>) => {
+            const { error } = await db.from(table).upsert(row);
+            expect(error, `seeding ${table}: ${error?.message ?? ""}`).toBeNull();
+        };
+        await seed("customers", {
+            id: AMBIGUOUS.customer, org_id: ORG, name: `S5 ambiguous ${RUN}`, customer_type: "household",
+        });
+        for (const [locId, label] of [[AMBIGUOUS.location, "A"], [second, "B"]] as const) {
+            await seed("locations", {
+                id: locId, org_id: ORG, customer_id: AMBIGUOUS.customer,
+                label: `S5 ambiguous site ${label} ${RUN}`, location_type: "site", is_active: true,
+            });
+        }
+        await seed("persons", { id: AMBIGUOUS.person, org_id: ORG, first_name: "S5", last_name: "Ambiguous" });
+        await seed("customer_members", {
+            id: AMBIGUOUS.member, org_id: ORG, customer_id: AMBIGUOUS.customer, person_id: AMBIGUOUS.person,
+            display_name: "S5 Ambiguous", relationship: "child", is_active: true,
+        });
+        /* Two ACTIVE agreements at two different locations, and NO customer calendar policy. */
+        await seed("child_enrollment_agreements", {
+            id: AMBIGUOUS.agreement, org_id: ORG, customer_id: AMBIGUOUS.customer,
+            customer_member_id: AMBIGUOUS.member, person_id: AMBIGUOUS.person,
+            site_location_id: AMBIGUOUS.location, status: "active", start_date: "2026-01-01",
+        });
+        await seed("child_enrollment_agreements", {
+            id: secondAgreement, org_id: ORG, customer_id: AMBIGUOUS.customer,
+            customer_member_id: AMBIGUOUS.member, person_id: AMBIGUOUS.person,
+            site_location_id: second, status: "active", start_date: "2026-01-01",
+        });
+
+        let thrown: unknown = null;
+        try {
+            await resolveProspectiveCorrection(db, {
+                orgId: ORG, enrollmentAgreementId: AMBIGUOUS.agreement,
+                customerId: AMBIGUOUS.customer, amountCents: -1_000, effectiveDate: "2026-12-10",
+            });
+        } catch (e) { thrown = e; }
+
+        expect(thrown, "an unconfigured household must refuse").not.toBeNull();
+        const message = String((thrown as Error).message);
+        /* Operator-resolvable language, naming what to do — not internal vocabulary. */
+        expect(message).toMatch(/billing calendar/i);
+        expect(message.toLowerCase()).not.toContain("internal");
+        expect(message.toLowerCase()).not.toContain("constraint");
+        expect(message.toLowerCase()).not.toContain("pgrst");
+        /* And the canonical code, so the route boundary answers 409 rather than 500. */
+        expect((thrown as { code?: string }).code).toBe("billing_calendar_ambiguous");
+
+        /* Nothing was created for the household the refusal protects. */
+        const { data: periods } = await db
+            .from("financial_billing_periods").select("id")
+            .eq("org_id", ORG).eq("customer_id", AMBIGUOUS.customer);
+        expect(periods ?? []).toHaveLength(0);
+    });
+
+    it("§29 — a LEGACY MONTHLY source corrects into a BIWEEKLY canonical period", async () => {
+        /*
+         * The 29944d3e topology: legacy monthly history, explicit biweekly canonical future. It is
+         * the sharpest statement of source-vs-economic-period independence, because the two truths
+         * do not even share a CADENCE — a monthly key on one side, a biweekly period id on the
+         * other. Proven on a synthetic household; 29944d3e itself is untouched.
+         */
+        const BIWEEKLY = ids("3");
+        const seed = async (table: string, row: Record<string, unknown>) => {
+            const { error } = await db.from(table).upsert(row);
+            expect(error, `seeding ${table}: ${error?.message ?? ""}`).toBeNull();
+        };
+        await seed("customers", { id: BIWEEKLY.customer, org_id: ORG, name: `S5 biweekly ${RUN}`, customer_type: "household" });
+        await seed("locations", {
+            id: BIWEEKLY.location, org_id: ORG, customer_id: BIWEEKLY.customer,
+            label: `S5 biweekly site ${RUN}`, location_type: "site", is_active: true,
+        });
+        await seed("persons", { id: BIWEEKLY.person, org_id: ORG, first_name: "S5", last_name: "Biweekly" });
+        await seed("customer_members", {
+            id: BIWEEKLY.member, org_id: ORG, customer_id: BIWEEKLY.customer, person_id: BIWEEKLY.person,
+            display_name: "S5 Biweekly", relationship: "child", is_active: true,
+        });
+        await seed("child_enrollment_agreements", {
+            id: BIWEEKLY.agreement, org_id: ORG, customer_id: BIWEEKLY.customer,
+            customer_member_id: BIWEEKLY.member, person_id: BIWEEKLY.person,
+            site_location_id: BIWEEKLY.location, status: "active", start_date: "2026-01-01",
+        });
+        await seed("financial_policies", {
+            id: BIWEEKLY.policy, org_id: ORG, scope_type: "customer", customer_id: BIWEEKLY.customer,
+            location_id: null, policy_type: "billing_calendar", is_active: true,
+            effective_start: "2026-01-01", effective_end: null,
+            value: { cadence: "biweekly", anchor_on: "2026-01-05" },
+        });
+
+        /* LEGACY MONTHLY history: a monthly key, no canonical period row. */
+        const legacyMonthly = {
+            id: randomUUID(),
+            org_id: ORG,
+            billable_source_type: "enrollment_agreement",
+            billable_source_id: BIWEEKLY.agreement,
+            charge_type: "service",
+            charge_category: "tuition",
+            status: "posted",
+            currency_code: "USD",
+            amount_cents: 80_000,
+            service_date: "2026-07-01",
+            description: "July tuition, billed monthly before the account moved to biweekly",
+            metadata: { source: "s5_biweekly_proof" },
+            billing_period_generation: "legacy",
+            legacy_billing_period_key: "2026-07",
+            billing_period_id: null,
+            posted_at: new Date().toISOString(),
+            created_by: ACTOR,
+            updated_by: ACTOR,
+            updated_at: new Date().toISOString(),
+        };
+        const { error: legacyError } = await db.from("charges").insert(legacyMonthly);
+        expect(legacyError, `seeding the legacy monthly source: ${legacyError?.message ?? ""}`).toBeNull();
+
+        const preview = await previewProspectiveCorrection(db, {
+            orgId: ORG, enrollmentAgreementId: BIWEEKLY.agreement, customerId: BIWEEKLY.customer,
+            amountCents: -4_000, effectiveDate: "2026-12-10", sourceChargeId: legacyMonthly.id,
+        });
+
+        /* SOURCE: a monthly key, legacy, no period row. */
+        expect(preview.resolution.source?.generation).toBe("legacy");
+        expect(preview.resolution.source?.periodLabel).toBe("2026-07");
+        expect(preview.resolution.source?.billingPeriodId).toBeNull();
+        /* DESTINATION: a BIWEEKLY canonical period — a different cadence entirely. */
+        expect(preview.resolution.destination.periodKey).toMatch(/^\d{4}-\d{2}-\d{2}~\d{4}-\d{2}-\d{2}$/);
+        expect(preview.resolution.destination.status).toBe("open");
+
+        await applyManualReduction(db, {
+            orgId: ORG, enrollmentAgreementId: BIWEEKLY.agreement, customerId: BIWEEKLY.customer,
+            customerMemberId: BIWEEKLY.member, chargeCategory: "credit", amountCents: -4_000,
+            currencyCode: "USD", reason: "July was overstated", effectiveDate: "2026-12-10",
+            sourceChargeId: legacyMonthly.id, actorUserId: ACTOR,
+            idempotencyKey: `s5-${RUN}-monthly-to-biweekly`,
+        });
+
+        const app = await readApplication(db, `s5-${RUN}-monthly-to-biweekly`);
+        expect(app.source_charge_id).toBe(legacyMonthly.id);
+        expect(app.billing_period_generation).toBe("canonical");
+        const landed = await readPeriod(db, app.billing_period_id!);
+        expect(landed.period_key).toBe(preview.resolution.destination.periodKey);
+
+        /* The legacy monthly source is untouched, and no canonical July was invented. */
+        const after = await readCharge(db, legacyMonthly.id);
+        expect(after.amount_cents).toBe(80_000);
+        expect(after.billing_period_id).toBeNull();
+        const { data: july } = await db
+            .from("financial_billing_periods").select("id")
+            .eq("org_id", ORG).eq("customer_id", BIWEEKLY.customer).eq("period_key", "2026-07");
+        expect(july ?? []).toHaveLength(0);
     });
 
     it("CROSS-CADENCE: a weekly household corrects into a weekly period, with no YYYY-MM anywhere", async () => {
