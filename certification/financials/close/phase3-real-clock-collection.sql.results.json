@@ -1,0 +1,240 @@
+{
+  "trusted_host_action_id": "tha_d04d188a981473",
+  "query_hash": "ed2e4631b10620be5c44439ba7cbdd1f63a5bc74001fb17a4907e6297052a284",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-04T09:53:55.077Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_d04d188a981473",
+    "query_hash": "ed2e4631b10620be5c44439ba7cbdd1f63a5bc74001fb17a4907e6297052a284",
+    "authorization_id": "grnt_3f7d381395144971",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-04T09:54:01.040Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "billing_period_id": "59f50689-030f-4c91-a38e-57a3a62b6279",
+            "period_key": "2026-10-03~2026-10-03",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "cadence": "daily",
+            "starts_on": "2026-10-03",
+            "ends_on": "2026-10-03",
+            "anchor_on": "2026-01-05",
+            "calendar_scope": "customer",
+            "calendar_policy_id": "d322a255-7941-48d0-b262-68068b660be5",
+            "calendar_snapshot": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            },
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "closed_by": null,
+            "closed_by_is_null": true,
+            "updated_at": "2026-10-03T02:22:49.179554+00:00",
+            "db_now": "2026-10-04T09:54:00.319729+00:00",
+            "db_current_date": "2026-10-04"
+          },
+          {
+            "billing_period_id": "d93a6a6f-2ea3-45ed-b878-b5549c518772",
+            "period_key": "2026-10-04~2026-10-04",
+            "customer_id": "fd000000-0000-4000-8000-0000000c0003",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "cadence": "daily",
+            "starts_on": "2026-10-04",
+            "ends_on": "2026-10-04",
+            "anchor_on": "2026-01-05",
+            "calendar_scope": "customer",
+            "calendar_policy_id": "d322a255-7941-48d0-b262-68068b660be5",
+            "calendar_snapshot": {
+              "cadence": "daily",
+              "anchor_on": "2026-01-05"
+            },
+            "status": "open",
+            "closed_at": null,
+            "close_actor": null,
+            "closed_by": null,
+            "closed_by_is_null": true,
+            "updated_at": "2026-10-03T02:22:49.179554+00:00",
+            "db_now": "2026-10-04T09:54:00.319729+00:00",
+            "db_current_date": "2026-10-04"
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "occurrence_id": "5e9c35a3-3ac4-4b84-bb99-0463a2e0d291",
+            "scheduled_work_id": "2edf2559-d500-4edc-a96c-501c383315de",
+            "handler_key": "financials.billing_period_close.evaluate",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "due_at": "2026-10-04T04:00:00+00:00",
+            "status": "completed",
+            "claimed_by": "worker-73da426b",
+            "claim_token_present": false,
+            "lease_expires_at": null,
+            "attempt_count": 1,
+            "completed_at": "2026-10-04T04:00:00.57+00:00",
+            "failure_reason": null,
+            "created_at": "2026-10-04T04:00:00.639487+00:00",
+            "attempts": [
+              {
+                "attempt_id": "a820fddd-33ef-45f3-98fa-5a6756a12c08",
+                "attempt_number": 1,
+                "worker_id": "worker-73da426b",
+                "started_at": "2026-10-04T04:00:01.109535+00:00",
+                "finished_at": "2026-10-04T04:00:01.366+00:00",
+                "outcome": "completed",
+                "diagnostic": {
+                  "lease": "applied",
+                  "limit": 100,
+                  "closed": [],
+                  "domain": "billing_period_close",
+                  "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+                  "reason": "no billing period has finished its interval",
+                  "attempt": 1,
+                  "refused": [],
+                  "worker_id": "worker-73da426b",
+                  "closed_count": 0,
+                  "evaluated_for": "2026-10-03",
+                  "already_closed": [],
+                  "eligible_found": 0
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "close_occurrences_total": 1,
+            "close_attempts_total": 1,
+            "closed_by_system": 0,
+            "closed_by_operator": 0,
+            "schedule_next_due_at": "2026-10-05T04:00:00+00:00",
+            "schedule_is_active": true
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "period_key": "2026-11-12~2026-11-12",
+            "starts_on": "2026-11-12",
+            "ends_on": "2026-11-12",
+            "status": "open",
+            "close_actor": null,
+            "days_in_period": 1,
+            "gap_days_before_next": 0
+          },
+          {
+            "period_key": "2026-11-13~2026-11-13",
+            "starts_on": "2026-11-13",
+            "ends_on": "2026-11-13",
+            "status": "open",
+            "close_actor": null,
+            "days_in_period": 1,
+            "gap_days_before_next": null
+          },
+          {
+            "period_key": "2026-10-03~2026-10-03",
+            "starts_on": "2026-10-03",
+            "ends_on": "2026-10-03",
+            "status": "open",
+            "close_actor": null,
+            "days_in_period": 1,
+            "gap_days_before_next": 0
+          },
+          {
+            "period_key": "2026-10-04~2026-10-04",
+            "starts_on": "2026-10-04",
+            "ends_on": "2026-10-04",
+            "status": "open",
+            "close_actor": null,
+            "days_in_period": 1,
+            "gap_days_before_next": 38
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "clock_last_wake_at": "2026-10-04T09:50:00.443589+00:00",
+            "clock_wake_count": 3629,
+            "clock_last_worker_id": "worker-62a1e5fd",
+            "seconds_since_last_wake": 240,
+            "recent_occurrences_any_handler": [
+              {
+                "handler_key": "financials.billing_period_close.evaluate",
+                "due_at": "2026-10-04T04:00:00+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-10-04T03:14:06.759+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "payments.autopay.evaluate",
+                "due_at": "2026-10-04T00:00:00+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-10-03T03:14:06.759+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "payments.autopay.evaluate",
+                "due_at": "2026-10-03T00:00:00+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-10-02T03:14:06.759+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "payments.autopay.evaluate",
+                "due_at": "2026-10-02T00:00:00+00:00",
+                "status": "completed"
+              },
+              {
+                "handler_key": "financials.periodic_billing.evaluate",
+                "due_at": "2026-10-01T03:14:06.759+00:00",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "row_count": 9
+  }
+}
