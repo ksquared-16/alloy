@@ -37,6 +37,7 @@ export type DraftSaveField = {
     readonly field_source?: { readonly entity_type: string; readonly field_key: string; readonly shared_value_key?: string };
     readonly visible_when?: FormVisibilityCondition;
     readonly layout_width?: "full" | "half" | "third" | "quarter";
+    readonly confidence?: "high" | "medium" | "low";
 };
 
 export type DraftSavePayload = {
@@ -77,6 +78,8 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
     const condition = edit?.visible_when === undefined ? field.visible_when : edit.visible_when;
     const options = edit?.options ?? field.options;
     const width = edit?.layout_width ?? field.layout_width;
+    // Never edited by an operator — it is what the importer concluded, and it must survive the rebuild.
+    const confidence = field.confidence;
     return {
         label: edit?.label ?? field.label,
         type: field.type,
@@ -101,6 +104,7 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
             : {}),
         ...(condition ? { visible_when: condition } : {}),
         ...(width && width !== "full" ? { layout_width: width } : {}),
+        ...(confidence ? { confidence } : {}),
     };
 }
 
@@ -228,6 +232,7 @@ export function buildDraftSavePayloadFromSchema(
                 : {}),
             ...(clause ? { visible_when: clause } : {}),
             ...(field.layout_width && field.layout_width !== "full" ? { layout_width: field.layout_width } : {}),
+            ...(source?.confidence ? { confidence: source.confidence } : {}),
         });
     };
 
