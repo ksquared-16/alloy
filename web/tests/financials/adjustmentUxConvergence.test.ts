@@ -469,18 +469,37 @@ describe("the due-date authority can express the account dimension", () => {
     });
 
     /**
-     * ── AND THE GENERATED-BILLING PATH IS DELIBERATELY LEFT ALONE ────────────────────────────
+     * ── AND THE GENERATED PATH SUPPLIES IT TOO, AS OF THE W7 CONVERGENCE SLICE ───────────────
      *
-     * `chargeLifecycleService` has the same omission, so account-scoped due-date terms are dead on
-     * the generated path too. Supplying it there would START applying terms that currently resolve
-     * to nothing — a real behaviour change to generated billing, which is not an Adjustment-slice
-     * decision. It is reported as a bounded finding instead, and this assertion records that the
-     * omission is known rather than overlooked.
+     * This assertion previously recorded the OPPOSITE: that `chargeLifecycleService` still omitted
+     * the account dimension, deliberately left as a named finding because supplying it would start
+     * applying terms that had been resolving to nothing — a behaviour change to generated billing,
+     * and not an Adjustment-slice decision to take.
+     *
+     * The Director took it. The invariant is now that one economic subject under one policy
+     * configuration resolves ONE due date whoever wrote the charge, so a split between the
+     * correction path and the generated path is exactly the defect to catch.
      */
-    it("chargeLifecycleService still omits it — a named finding, not an oversight", () => {
+    it("the generated path narrows by the same scope the correction path does", () => {
         const lifecycle = code("lib/financials/chargeLifecycle/chargeLifecycleService.ts");
         const at = lifecycle.indexOf("function dueDateForIntent");
         expect(at).toBeGreaterThan(-1);
-        expect(lifecycle.slice(at, at + 500)).not.toMatch(/customerId/);
+        const fn = lifecycle.slice(at, at + 900);
+        expect(fn).toMatch(/customerId: scope\.customerId/);
+        expect(fn).toMatch(/locationId: scope\.locationId/);
+        /* Through the one shared resolver, not a second idea of what the subject is. */
+        expect(lifecycle).toMatch(/resolveFinancialPolicyScope/);
+    });
+
+    /**
+     * THE SCOPE READ IS NOT UNCONDITIONAL. `previewTemplateCharge` runs once per consumption fact,
+     * so resolving the subject on every generated charge would add a round trip in order to narrow
+     * against dimensions most organisations never scope by. The policies are already in hand, so
+     * the question is free — and when no rule names an account or a site, the read is skipped.
+     */
+    it("and is skipped when no due-date rule narrows by account or site", () => {
+        const lifecycle = code("lib/financials/chargeLifecycle/chargeLifecycleService.ts");
+        expect(lifecycle).toMatch(/policyScopeNarrowingNeeded\(policies, "due_date"\)/);
+        expect(lifecycle).toMatch(/EMPTY_FINANCIAL_POLICY_SCOPE/);
     });
 });

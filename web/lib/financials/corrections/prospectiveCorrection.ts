@@ -58,6 +58,11 @@ import {
 } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import {
+    EMPTY_FINANCIAL_POLICY_SCOPE,
+    policyScopeNarrowingNeeded,
+    resolveFinancialPolicyScope,
+} from "@/lib/financials/policies/resolveFinancialPolicyScope";
 import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
 import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
 import { directionFromSignedCents, type AdjustmentDirection } from "@/lib/financials/corrections/correctionIntent";
@@ -208,6 +213,8 @@ export async function resolveCorrectionDueDate(
         serviceId?: string | null;
         /** The account, so an account-scoped rule beats an inherited default. */
         customerId?: string | null;
+        /** The site, so a location-scoped rule resolves here exactly as it does for a generated charge. */
+        locationId?: string | null;
     },
 ): Promise<CorrectionDueDate> {
     if (directionFromSignedCents(args.amountCents) === "reduce") {
@@ -224,6 +231,7 @@ export async function resolveCorrectionDueDate(
         periodStart: args.periodStartsOn,
         serviceId: args.serviceId ?? null,
         customerId: args.customerId ?? null,
+        locationId: args.locationId ?? null,
     });
     return { applicable: true, dueDate: resolved.dueDate, strategy: resolved.strategy, reason: resolved.reason };
 }
@@ -480,12 +488,26 @@ export async function resolveProspectiveCorrection(
         customerId,
         customerMemberId: (input.customerMemberId ?? "").trim() || null,
     });
+    /*
+     * THE SAME SCOPE THE GENERATED PATH RESOLVES, by the same authority — so the invariant holds:
+     * one economic subject under one policy configuration answers one due date, whoever wrote the
+     * charge. Resolved only when a rule actually narrows by account or site.
+     */
+    const scope = policyScopeNarrowingNeeded(await listFinancialPolicies(supabase, orgId), "due_date")
+        ? await resolveFinancialPolicyScope(supabase, {
+              orgId,
+              billableSourceType: "enrollment_agreement",
+              billableSourceId: input.enrollmentAgreementId,
+          })
+        : EMPTY_FINANCIAL_POLICY_SCOPE;
     const due = await resolveCorrectionDueDate(supabase, {
         orgId,
         amountCents: input.amountCents,
         effectiveDate: input.effectiveDate,
         periodStartsOn: destination.startsOn,
+        /* The binder already resolved the account; the scope read supplies the site. */
         customerId,
+        locationId: scope.locationId,
     });
 
     return {

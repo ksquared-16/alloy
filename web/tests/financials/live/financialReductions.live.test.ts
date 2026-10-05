@@ -10,6 +10,7 @@
  * this thread exists to prevent is not "the discount was wrong", it is "the tuition quietly became
  * a different number and nobody can say what the family agreed to".
  */
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -58,6 +59,11 @@ const ORG = "00000000-0000-4000-8000-000000000001";
 const OTHER_ORG = "00000000-0000-4000-8000-0000000000ff";
 const ACTOR = "00000000-0000-4000-8000-0000000000aa";
 const R = "7a000000-0000-4000-8000-";
+/*
+ * RUN-UNIQUE IDENTITY for everything this suite creates. Short, because it only has to distinguish
+ * concurrent or successive runs on one shared cert tenant from each other.
+ */
+const RUN = randomUUID().slice(0, 8);
 const POLICY_SIBLING = `${R}00000000d001`;
 const POLICY_DISCOUNT = `${R}00000000d002`;
 const POLICY_WAIVER = `${R}00000000d003`;
@@ -139,12 +145,29 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
         return result;
     }
 
+    /*
+     * ── SCOPED TO THIS RUN'S HOUSEHOLD, not merely to the period ──────────────────────────────
+     *
+     * The period scope below already records one round of this lesson. The remaining half is the
+     * SUBJECT: these read every tuition charge in the org, so a POSTED charge left by an earlier
+     * run counted toward this run's assertions — and `clearTuition` cannot remove it, because a
+     * posted childcare charge can be neither deleted while its applications exist nor voided in
+     * place. That immutability is deliberate, so the only durable answer is to stop reading other
+     * runs' rows rather than to try harder to delete them.
+     *
+     * `kids` holds this run's agreements, and every charge this suite causes hangs off one of them.
+     */
+    function runAgreementIds(): string[] {
+        return kids.map((k) => k.agreementId);
+    }
+
     async function grossCharges(periodKey = PERIOD) {
         const { data } = await supabase
             .from("charges")
             .select("id, amount_cents, status, billable_source_id, service_date")
             .eq("org_id", ORG)
             .eq("charge_category", "tuition")
+            .in("billable_source_id", runAgreementIds())
             .eq("service_date", `${periodKey}-01`);
         return (data ?? []) as Array<{ id: string; amount_cents: number; status: string; billable_source_id: string; service_date: string }>;
     }
@@ -160,6 +183,7 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             .select("id, amount_cents, status, charge_category, billable_source_id, service_date, metadata")
             .eq("org_id", ORG)
             .in("charge_category", ["discount", "credit", "adjustment"])
+            .in("billable_source_id", runAgreementIds())
             .eq("service_date", `${periodKey}-01`)
             .order("created_at");
         return (data ?? []) as Array<Record<string, unknown>>;
@@ -184,15 +208,84 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
     }
 
     beforeAll(async () => {
-        // A household that actually has two children, chosen from the tenant rather than invented.
-        const { data: memberRows } = await supabase
-            .from("customer_members")
-            .select("id, customer_id")
-            .eq("org_id", ORG)
-            .eq("customer_id", "00000000-0000-4000-8000-100000000001");
-        const members = ((memberRows ?? []) as Array<{ id: string; customer_id: string }>).sort((a, b) => (a.id < b.id ? -1 : 1));
-        expect(members.length, "the representative tenant must have a two-child household").toBeGreaterThanOrEqual(2);
-        customerId = members[0]!.customer_id;
+        /*
+         * ── THIS SUITE OWNS ITS HOUSEHOLD NOW ────────────────────────────────────────────────
+         *
+         * It used to BORROW the tenant's representative two-child household — "chosen from the
+         * tenant rather than invented" — and that is why it spent weeks failing at `beforeAll` with
+         * 25 of 32 tests skipped.
+         *
+         * Measured on the shared cert tenant: that household had grown a SECOND member, seeded by
+         * `financialsWorkspaceProductization.live`, holding an active agreement at a different
+         * campus. So the household legitimately attended two locations, and the canonical binder
+         * correctly refused to bill it — "this household attends more than one location and has no
+         * billing calendar of its own". Nothing was broken; the fixture had simply stopped being
+         * the shape this suite assumed.
+         *
+         * The old seed hid that by deleting every agreement for the child and site before
+         * inserting its own, which quietly destroyed the other suite's fixture — and stopped
+         * working the moment a posted charge's foreign key held one of those rows, because posted
+         * money is immutable by design.
+         *
+         * A RUN-unique id would not have helped: the uniqueness is the BUSINESS KEY
+         * `(org, member, site)`, so a fresh id for the same child and campus collides identically.
+         *
+         * So the household itself is run-unique. Nothing is borrowed except read-only shape, no
+         * other suite's fixture is touched, nothing is deleted, and no foreign key is weakened.
+         * Two suites can now run in either order, or at the same time.
+         */
+        const { data: siteSeedRows } = await supabase.from("locations").select("id").eq("org_id", ORG).limit(1);
+        const seedSite = ((siteSeedRows ?? [])[0] as { id: string } | undefined)?.id ?? "";
+        expect(seedSite, "the tenant must have at least one location").toBeTruthy();
+
+        const { data: customerRow, error: customerError } = await supabase
+            .from("customers")
+            .insert({ org_id: ORG, name: `Reductions Cert ${RUN}`, customer_type: "household" })
+            .select("id")
+            .single();
+        expect(customerError, customerError?.message).toBeNull();
+        customerId = (customerRow as { id: string }).id;
+
+        const members: Array<{ id: string; customer_id: string }> = [];
+        for (const label of ["A", "B"]) {
+            const { data: memberRow, error: memberError } = await supabase
+                .from("customer_members")
+                .insert({
+                    org_id: ORG,
+                    customer_id: customerId,
+                    display_name: `Reductions ${label} ${RUN}`,
+                    relationship: "child",
+                    is_active: true,
+                })
+                .select("id, customer_id")
+                .single();
+            expect(memberError, memberError?.message).toBeNull();
+            members.push(memberRow as { id: string; customer_id: string });
+        }
+        expect(members.length, "this suite seeds a two-child household").toBe(2);
+
+        /*
+         * ── AND ITS BILLING CALENDAR ─────────────────────────────────────────────────────────
+         *
+         * S1 made the commercial calendar a precondition for billing anything: without one the
+         * canonical binder refuses, correctly, because there is no commercial period to bill into.
+         * The borrowed household used to inherit the tenant seed's calendar, which is the last
+         * thing this suite was silently depending on.
+         *
+         * Monthly with no anchor is the ordinary case and the one every assertion here assumes.
+         * `clearPolicies` only touches `commercial_policies`, so this survives every test.
+         */
+        const { error: calendarError } = await supabase.from("financial_policies").insert({
+            org_id: ORG,
+            scope_type: "customer",
+            customer_id: customerId,
+            policy_type: "billing_calendar",
+            is_active: true,
+            effective_start: "2026-01-01",
+            effective_end: null,
+            value: { cadence: "monthly", anchor_on: null },
+        });
+        expect(calendarError, calendarError?.message).toBeNull();
 
         const { data: siteRows } = await supabase.from("locations").select("id").eq("org_id", ORG).limit(1);
         siteLocationId = ((siteRows ?? [])[0] as { id: string }).id;
@@ -213,68 +306,123 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
          * nothing in the seed exercises a multi-child household, so nothing in the platform had ever
          * been run against one.
          */
-        const { data: firstOcmRows } = await supabase
+        /*
+         * THE ASSIGNMENT SHAPE IS BORROWED READ-ONLY, the rows are this suite's own.
+         *
+         * A sibling discount needs two assigned children on one enquiry, which is what a family
+         * asking about two children looks like. The tenant's own assignment supplies the shape —
+         * which opportunity, which location, which schedule and programme — and nothing about it is
+         * modified. Both assignments below belong to this run.
+         */
+        const { data: shapeRows, error: shapeError } = await supabase
             .from("opportunity_customer_members")
             .select("id, opportunity_id, location_id, schedule_type, program_category_id")
             .eq("org_id", ORG)
-            .eq("customer_member_id", members[0]!.id)
+            .not("opportunity_id", "is", null)
             .limit(1);
-        const firstOcm = (firstOcmRows ?? [])[0] as
+        expect(shapeError, shapeError?.message).toBeNull();
+        const firstOcm = (shapeRows ?? [])[0] as
             | { id: string; opportunity_id: string; location_id: string | null; schedule_type: string | null; program_category_id: string | null }
             | undefined;
-        expect(firstOcm, "the household's first child must have an assignment").toBeTruthy();
+        expect(firstOcm, "the tenant must have at least one assignment to borrow a shape from").toBeTruthy();
+
+        /*
+         * THE ENQUIRY IS THIS HOUSEHOLD'S OWN. `enforce_opportunities_work_unit_same_org` has a
+         * sibling guard on assignment: an `opportunity_customer_members` row is refused unless the
+         * child's household matches the opportunity's. Borrowing another family's enquiry is
+         * therefore not merely untidy, it is refused — correctly, since an assignment names which
+         * family asked about which child.
+         */
+        const { data: oppRow, error: oppError } = await supabase
+            .from("opportunities")
+            .insert({ org_id: ORG, customer_id: customerId, status_key: "open", stage_key: "lead" })
+            .select("id")
+            .single();
+        expect(oppError, oppError?.message).toBeNull();
+        const opportunityId = (oppRow as { id: string }).id;
 
         for (const [index, member] of members.slice(0, 2).entries()) {
-            const { data: ocmRows } = await supabase
+            const { data: ocmRow, error: ocmError } = await supabase
                 .from("opportunity_customer_members")
-                .select("id")
-                .eq("org_id", ORG)
-                .eq("customer_member_id", member.id)
-                .limit(1);
-            let ocmId = ((ocmRows ?? [])[0] as { id: string } | undefined)?.id;
-            if (!ocmId) {
-                ocmId = `${R}00000000e00${index + 1}`;
-                const { error: ocmError } = await supabase.from("opportunity_customer_members").insert({
-                    id: ocmId,
+                .insert({
                     org_id: ORG,
-                    opportunity_id: firstOcm!.opportunity_id,
+                    opportunity_id: opportunityId,
                     customer_member_id: member.id,
                     schedule_type: firstOcm!.schedule_type ?? "full_time",
                     location_id: firstOcm!.location_id,
                     program_category_id: firstOcm!.program_category_id,
-                    metadata: { seed: "cert_reductions" },
-                });
-                expect(ocmError, ocmError?.message).toBeNull();
-            }
+                    metadata: { seed: "cert_reductions", run: RUN },
+                })
+                .select("id")
+                .single();
+            expect(ocmError, ocmError?.message).toBeNull();
+            const ocmId = (ocmRow as { id: string }).id;
 
-            const agreementId = `${R}00000000a00${index + 1}`;
-            const termId = `${R}00000000b00${index + 1}`;
+            const termId = `${R}${RUN}b00${index + 1}`;
             /*
-             * The uniqueness this collides with is (org, member, site) — not the id. Deleting only
-             * this suite's own id leaves an agreement created under ANOTHER id for the same child
-             * and site in place, and the insert below then fails on a constraint the seed never
-             * names. A run that died before its cleanup is enough to cause it, and the shared cert
-             * tenant makes that ordinary rather than rare.
+             * ── ENSURE, DO NOT DELETE-AND-RECREATE ───────────────────────────────────────────
+             *
+             * The uniqueness here is `(org_id, customer_member_id, site_location_id)` — the
+             * BUSINESS KEY, not the id. So this suite used to delete by that key and then insert
+             * its own id, and it failed at `beforeAll` on the shared cert tenant: 25 of 32 tests
+             * skipped, for weeks.
+             *
+             * Two reasons it failed, and only the second is obvious:
+             *
+             *   · the delete's error was never checked, so when it failed the seed carried on and
+             *     the insert hit a constraint the seed never names;
+             *   · the delete CANNOT succeed once any posted charge references the agreement as its
+             *     `billable_source_id`. Posted money is immutable by design, so the FK genuinely
+             *     holds the row — and a run that posted a charge before dying leaves residue no
+             *     amount of retrying will clear.
+             *
+             * A RUN-unique id would not have helped either: a new id for the same child and site
+             * collides on exactly the same business key.
+             *
+             * So the agreement is ENSURED instead. An existing one for this child and site is
+             * ADOPTED by its own id and brought into the shape this suite needs; only when there is
+             * none is one inserted. Nothing is deleted, no FK is weakened, and no other tenant's
+             * economics are touched — which is what §9 asks for. Every error is now checked, so a
+             * real failure says so instead of surfacing later as a duplicate key.
              */
-            await supabase
+            const startDate = index === 0 ? "2026-01-01" : "2026-06-01";
+            const { data: existingAgreementRows, error: existingAgreementError } = await supabase
                 .from("child_enrollment_agreements")
-                .delete()
+                .select("id")
                 .eq("org_id", ORG)
                 .eq("customer_member_id", member.id)
-                .eq("site_location_id", siteLocationId);
-            await supabase.from("child_enrollment_agreements").delete().eq("id", agreementId);
-            const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
-                id: agreementId,
-                org_id: ORG,
-                customer_member_id: member.id,
-                customer_id: customerId,
-                site_location_id: siteLocationId,
-                opportunity_customer_member_id: ocmId,
-                status: "active",
-                // Distinct starts, so the sibling ranking is decided by enrolment order, not by luck.
-                start_date: index === 0 ? "2026-01-01" : "2026-06-01",
-            });
-            expect(agreementError, agreementError?.message).toBeNull();
+                .eq("site_location_id", siteLocationId)
+                .limit(1);
+            expect(existingAgreementError, existingAgreementError?.message).toBeNull();
+            const adopted = ((existingAgreementRows ?? [])[0] as { id: string } | undefined)?.id ?? null;
+            const agreementId = adopted ?? `${R}${RUN}a00${index + 1}`;
+
+            if (adopted) {
+                const { error: updateError } = await supabase
+                    .from("child_enrollment_agreements")
+                    .update({
+                        customer_id: customerId,
+                        opportunity_customer_member_id: ocmId,
+                        status: "active",
+                        /* Distinct starts, so sibling ranking is decided by enrolment order, not luck. */
+                        start_date: startDate,
+                    })
+                    .eq("org_id", ORG)
+                    .eq("id", adopted);
+                expect(updateError, updateError?.message).toBeNull();
+            } else {
+                const { error: agreementError } = await supabase.from("child_enrollment_agreements").insert({
+                    id: agreementId,
+                    org_id: ORG,
+                    customer_member_id: member.id,
+                    customer_id: customerId,
+                    site_location_id: siteLocationId,
+                    opportunity_customer_member_id: ocmId,
+                    status: "active",
+                    start_date: startDate,
+                });
+                expect(agreementError, agreementError?.message).toBeNull();
+            }
 
             const { error: termError } = await supabase.from("enrollment_pricing_terms").insert({
                 id: termId,
@@ -300,9 +448,25 @@ describeLive("financial reductions — discounts, credits and adjustments, live"
             kids.push({ ocmId: ocmId as string, memberId: member.id, agreementId, termId });
         }
 
-        const { data: personRows } = await supabase
-            .from("customer_persons").select("person_id").eq("org_id", ORG).eq("customer_id", customerId).limit(1);
-        personId = ((personRows ?? [])[0] as { person_id: string } | undefined)?.person_id ?? "";
+        /*
+         * THE HOUSEHOLD'S ADULT, for the staff-discount case — this run's own, like everything else
+         * it owns. Previously read off the borrowed household, which is why it inherited whatever
+         * employment state another suite had left on that person.
+         */
+        const { data: personRow, error: personError } = await supabase
+            .from("persons")
+            .insert({ org_id: ORG, first_name: "Reductions", last_name: `Cert ${RUN}` })
+            .select("id")
+            .single();
+        expect(personError, personError?.message).toBeNull();
+        personId = (personRow as { id: string }).id;
+        const { error: linkError } = await supabase.from("customer_persons").insert({
+            org_id: ORG,
+            customer_id: customerId,
+            person_id: personId,
+            role_type: "parent",
+        });
+        expect(linkError, linkError?.message).toBeNull();
     }, 120_000);
 
     afterAll(async () => {

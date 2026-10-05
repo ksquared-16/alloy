@@ -21,6 +21,12 @@ import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/op
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
+import {
+    EMPTY_FINANCIAL_POLICY_SCOPE,
+    policyScopeNarrowingNeeded,
+    resolveFinancialPolicyScope,
+    type FinancialPolicyScope,
+} from "@/lib/financials/policies/resolveFinancialPolicyScope";
 import type { FinancialPolicyRow } from "@/lib/financials/policies/financialPolicyTypes";
 import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
@@ -137,12 +143,24 @@ function dueDateForIntent(
     template: { service_id: string | null },
     intent: { billableOn: string | null; occursOn: string | null },
     servicePeriodStart: string | null,
+    /*
+     * ── THE SUBJECT'S OWN SCOPE, WHICH THIS PATH USED TO WITHHOLD ─────────────────────────────
+     *
+     * This passed `serviceId` alone. So an organisation could configure due-date terms for ONE
+     * ACCOUNT, or for ONE SITE, and a generated or manually added charge would resolve the org
+     * default while a prospective correction against the very same family resolved the account's —
+     * the same economic subject answering two different due dates depending on which writer created
+     * the charge. That is the inconsistency this slice exists to remove.
+     */
+    scope: FinancialPolicyScope,
 ): string | null {
     return resolveDueDate(policies, {
         invoiceDate: intent.billableOn,
         /* The commercial period this obligation sits in — the caller's when it named one. */
         periodStart: servicePeriodStart ?? intent.occursOn ?? null,
         serviceId: template.service_id,
+        customerId: scope.customerId,
+        locationId: scope.locationId,
     }).dueDate;
 }
 
@@ -211,7 +229,22 @@ export async function previewTemplateCharge(
      * narrows from null to a real date — an unconfigured tenant keeps today's behaviour exactly.
      */
     if (intent.eligible) {
-        const due = dueDateForIntent(policies, template, intent, args.servicePeriodStart ?? null);
+        /*
+         * RESOLVED ONLY WHEN IT CAN CHANGE THE ANSWER. `previewTemplateCharge` runs once per
+         * consumption fact, so reading the subject's account and site unconditionally would add a
+         * round trip to every generated charge in a batch in order to narrow against dimensions
+         * most organisations never scope by. The policies are already in hand, so the question
+         * "does any due-date rule here name an account or a site?" is free — and when the answer is
+         * no, the scope cannot affect the outcome and the read is skipped.
+         */
+        const scope = source && policyScopeNarrowingNeeded(policies, "due_date")
+            ? await resolveFinancialPolicyScope(supabase, {
+                  orgId,
+                  billableSourceType: source.type,
+                  billableSourceId: source.id,
+              })
+            : EMPTY_FINANCIAL_POLICY_SCOPE;
+        const due = dueDateForIntent(policies, template, intent, args.servicePeriodStart ?? null, scope);
         if (due) intent.dueDate = due;
     }
 

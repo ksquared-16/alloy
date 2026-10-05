@@ -31,6 +31,7 @@ import { resolveCustomerCalendar } from "@/lib/financials/billingPeriods/custome
 import { currentAndNextPeriods } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import { legacyMonthlyPeriodKey } from "@/lib/financials/billingPeriod";
 import { resolveCorrectionDueDate } from "@/lib/financials/corrections/prospectiveCorrection";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 
 /** The categories a manual reduction may post through — all code-owned taxonomy. */
 export const MANUAL_REDUCTION_CATEGORIES = ["credit", "adjustment", "discount"] as const;
@@ -278,7 +279,20 @@ export async function reverseManualReduction(
         throw new ManualReductionError("invalid_input", "The original reduction has no billable source to reverse against.");
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    /*
+     * ── THE DATE A REVERSAL IS DECIDED IS THE ORGANISATION'S TODAY, NOT UTC'S ─────────────────
+     *
+     * Reversing a correction is an economic decision taken NOW, so it is dated now — that part was
+     * already right. What was wrong is whose "now": `new Date().toISOString().slice(0, 10)` is the
+     * UTC calendar date, which for an organisation west of UTC is already TOMORROW through the
+     * whole local working afternoon. A reversal decided at 4pm in Los Angeles was dated the next
+     * day, and near a period boundary that is the difference between landing in this commercial
+     * period and the next one.
+     *
+     * The canonical binder still decides which period that date belongs to, and commercial finality
+     * still refuses a closed destination. This only makes the date the binder is given the true one.
+     */
+    const today = await fetchOrgBusinessDate(supabase, input.orgId);
     const reversal = await applyManualReduction(supabase, {
         orgId: input.orgId,
         enrollmentAgreementId: original.enrollment_agreement_id,

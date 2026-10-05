@@ -35,7 +35,27 @@
  * and this must be bumped whenever a scenario's meaning changes. Adding a scenario counts; fixing a
  * typo does not.
  */
-export const CATALOG_VERSION = "2026-09-30.1";
+/*
+ * 2026-10-05.1 — the Billing Period programme reached the walkthrough.
+ *
+ * Bumped because scenario MEANINGS changed, which is exactly what this version is for:
+ *
+ *   · `adjustment_draft` no longer instructs a "Type → Credit" control. That control was removed
+ *     because it decided the direction behind the operator's back; the question is now which way
+ *     the balance moves, and by how much.
+ *   · `reduction_zero_bound` and `adjustment_post` follow the rebuilt command.
+ *   · `reverse_adjustment` now asks which period the reversal lands in — a reversal is a decision
+ *     taken today, and finalized history does not move.
+ *   · `charge_detail_attribution` covers the Correction block and "Correct this charge".
+ *   · `cross_surface_consistency` exercises Accounts/Focus Panel command parity.
+ *   · `reload_switch_viewport` covers the repaired command surface at phone width.
+ *   · `BILLING_PERIOD_IS_DERIVED` said there was no billing-period table and no billing-period
+ *     setting. There are both now, and a period can be finalized.
+ *
+ * Previous answers remain readable and remain answers to the previous questions; they do not carry
+ * over, which is the whole point of versioning them.
+ */
+export const CATALOG_VERSION = "2026-10-05.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -192,8 +212,8 @@ export const MONEY_INVARIANTS = Object.freeze({
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
-    BILLING_PERIOD_IS_DERIVED: "A billing period is DERIVED from the date a charge is billable on — `billable_on`, then `occurs_on`, `service_date`, `created_at`. There is no billing-period table and no billing-period setting: the period is a consequence of the charge, and a row with no usable date is reported as unplaced rather than swept into the current month.",
-    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact. A CLOSED period does not refuse the entry: it DEFERS it to the earliest later open period and records the date it was deferred from, so the work is never lost and the closed books are never reopened. The write is refused only when there is no later open period to carry it \u2014 a calendar that has run out, not a closed month.",
+    BILLING_PERIOD_IS_DERIVED: "A billing period is the customer-facing commercial interval a charge belongs to. It comes from the account's billing calendar — monthly, weekly or biweekly — so two families on different calendars can have different periods covering the same day, and a charge lands in the period its own date falls in. While a period is OPEN its economics can still change. Once it is CLOSED the period is finished: nothing new is added to it and nothing in it is rewritten, and a later correction is recorded in the next open period while still pointing back at what it corrects. A row with no usable date is reported as unplaced rather than swept into the current month.",
+    ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "The accounting period is the bookkeeping interval, and it is a DIFFERENT fact from the billing period — a different calendar, a different authority, and it closes on its own schedule. A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact. A CLOSED period does not refuse the entry: it DEFERS it to the earliest later open period and records the date it was deferred from, so the work is never lost and the closed books are never reopened. The write is refused only when there is no later open period to carry it \u2014 a calendar that has run out, not a closed month.",
     REVIEW_IS_CONFIGURED_NOT_ASSUMED: "Whether a new charge waits for review is the tenant's configured answer \u2014 the posting_review Financial Policy, OR a charge template that marks itself review_required \u2014 not a property of having used a manual command. An organization that has configured no review boundary must not be made to confirm the same intent twice.",
     ACCEPTED_PRICE_IS_GROSS: "The amount a family accepted is the gross obligation. A charge template describes HOW tuition posts — its category, its GL account, when it occurs and when it is billable — and has no second opinion about WHAT THIS CHILD AGREED TO PAY. A generated obligation carrying the template's configured figure instead of the accepted one is billing a number nobody agreed to.",
     PREVIEW_IS_THE_OPERATION: "A preview is a promise about the act that follows it. The billing frequency and the period an operator previewed are the billing frequency and the period Confirm runs, and the money a preview states is the money the run produces.",
@@ -271,9 +291,12 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "Confirm from the totals, not from the wording, that drafting moved no money.",
         whyItMatters:
             "This is the claim the preview makes to the operator. If the totals disagree with it, the product is telling an operator one thing and doing another — which is worse than either being wrong alone. The law is unchanged by the review decision: a draft is still not owed. What changed is how a draft ARRIVES — from a generated or tuition run, or from a manual Add on an organization that configured a review boundary. Where no boundary is configured there is no draft to inspect, the precondition is unmet, and this scenario is not runnable. That is the correct outcome, not a skipped test.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect — generated, or manual under a configured review boundary" }],
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect — an EXCEPTIONAL state: review-required, post-failed, or another explicitly unresolved case. Ordinary generated billing posts itself and leaves no draft." }],
         navigate: ["Return to the account pane."],
-        doThis: ["Compare what is owed with the figure you noted before drafting."],
+        doThis: [
+            "Compare what is owed with the figure you noted before drafting.",
+            "If a draft is present that you did NOT create, do not go looking for why. Staging carries drafts from superseded runs; they are residue, not a finding. Compare the figures and move on.",
+        ],
         expectChanges: [],
         expectUnchanged: ["Outstanding.", "Collectible now.", "Gross charges posted."],
         invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
@@ -287,7 +310,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "Commit the draft and watch the obligation appear, once and for the right amount.",
         whyItMatters:
             "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once. Posting is also the ONLY authoritative money write, whoever asks for it: the review boundary decides whether an operator is asked to press this a second time, never whether posting is what makes the obligation real.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — generated, or manual under a configured review boundary" }],
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — the one YOU created under a configured review boundary, not a pre-existing one. Ordinary generated billing posts itself." }],
         navigate: ["Charges tab → Awaiting posting → the draft you created."],
         doThis: ["Post the draft.", "Return to the account."],
         expectChanges: ["The charge leaves Awaiting posting.", "It appears as posted.", "Gross and what is owed each rise by exactly the charge amount."],
@@ -305,11 +328,22 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "A charge nobody can attribute is a charge nobody can defend. An operator answering a parent on the phone needs to say which child it was for and when.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "a posted charge to open" }],
         navigate: ["Open the posted charge from the account ledger or the Charges tab."],
-        doThis: ["Read the amount, the service date, the lifecycle and the attribution."],
+        doThis: [
+            "Read the amount, the service date, the lifecycle and the attribution.",
+            "Read the Posting block: Billing period and Accounting period are two separate facts.",
+            "Find 'Correct this charge' and click it. The Adjustment command should open with this charge already chosen — you should not have to go and find it again.",
+            "Close that without confirming, then open a charge that IS a correction (one you recorded earlier). It should carry a Correction block saying what changed, which way, what it corrects, whether that period is finalized, and why.",
+        ],
         expectChanges: [],
         expectUnchanged: ["Every figure matches what the account list showed for the same charge."],
         invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
-        failSymptoms: ["A different amount from the account list.", "A missing date.", "Attribution to another child or another household."],
+        failSymptoms: [
+            "A different amount from the account list.",
+            "A missing date.",
+            "Attribution to another child or another household.",
+            "'Correct this charge' opening an empty Adjustment that has not chosen this charge.",
+            "A correction's detail showing identifiers instead of what changed and why.",
+        ],
     }),
     S({
         key: "manage_responsibility",
@@ -378,18 +412,32 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "adjustment_draft",
         order: 10,
-        title: "A credit is drafted against a named obligation",
+        title: "Lowering what a family owes, and saying why",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Record a manual credit and confirm it names what it reduces and moves nothing yet.",
+        purpose: "Record a correction that reduces what a family owes, and confirm it moves nothing yet.",
         whyItMatters:
-            "A credit is a financial correction someone decided to make. It must say which obligation it applies to, and like a charge it must not take effect until it is posted.",
+            "This is somebody deciding, by hand, that a family owes less. It has to say why, it has to be possible to explain a year later, and like a charge it must not take effect until it is posted. You are never asked whether this is a 'credit' or an 'adjustment', and never asked for a positive or negative number — you say which way the balance moves and by how much.",
         requires: [{ kind: "account_state", check: "has_obligation_with_room_to_reduce", describe: "an obligation that still has something left to reduce" }],
         navigate: ["From the account pane, click Add.", "Switch the mode to Adjustment."],
-        doThis: ["Against charge → choose the obligation.", "Type → Credit — lowers what the family owes.", "Enter Amount, Reason and Effective date.", "Confirm."],
+        doThis: [
+            "What needs to change → Reduce what the family owes.",
+            "Reduce by → the amount, as a plain positive figure.",
+            "What this is about → choose the obligation this corrects. Leaving it on 'The account as a whole — not one charge' is a legitimate answer, not an unfinished form.",
+            "Effective date → read what it already says before changing anything. It should be TODAY for this organization, not the date of the charge you are correcting.",
+            "Reason → say why. It is required.",
+            "Preview, read it, then Confirm.",
+        ],
         expectChanges: ["The adjustment is listed, reading Recorded — lowers what is owed once posted."],
         expectUnchanged: ["What is owed."],
         invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
-        failSymptoms: ["The balance drops on creation.", "The adjustment attaches to the wrong obligation, or to none."],
+        failSymptoms: [
+            "The balance drops on creation.",
+            "The adjustment attaches to the wrong obligation.",
+            "Being asked for a 'Type', or for a credit-versus-adjustment choice — that control was removed because it decided the direction behind your back.",
+            "Choosing Reduce and seeing the preview describe an increase, or the reverse.",
+            "The effective date defaulting to the corrected charge's date, or to a date that is not today here.",
+            "Preview being unavailable because no obligation was chosen — an account-level correction is allowed.",
+        ],
     }),
     S({
         key: "adjustment_post",
@@ -400,9 +448,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "This is the same two-step rule as a charge, applied to money going the other way. It is also where the account view and the collections view have to keep telling the same story.",
         requires: [{ kind: "scenario_passed", scenarioKey: "adjustment_draft" }],
-        navigate: ["Post the adjustment the same way you posted the charge."],
-        doThis: ["Post it.", "Read the account totals.", "Read Collectible now."],
-        expectChanges: ["The obligation falls by exactly the credit."],
+        navigate: ["Charges tab → Awaiting posting → the adjustment you just recorded."],
+        doThis: [
+            "Post it, the same way you posted the charge.",
+            "Read the account totals.",
+            "Read Collectible now.",
+        ],
+        expectChanges: ["The obligation falls by exactly the amount you entered."],
         expectUnchanged: ["Payments received.", "The named responsible adult."],
         invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
         failSymptoms: ["The two surfaces disagree.", "The reduction lands twice."],
@@ -416,28 +468,53 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         whyItMatters:
             "An obligation reduced past zero would mean the business owes the family money it never received. The floor is what keeps a credit from silently becoming a debt.",
         requires: [{ kind: "account_state", check: "has_posted_reduction", describe: "an obligation already reduced to nothing" }],
-        navigate: ["Add → Adjustment, against the obligation you just reduced to zero."],
-        doThis: ["Attempt a further credit of one cent.", "Read the refusal.", "Re-read the account."],
+        navigate: ["Add → Adjustment."],
+        doThis: [
+            "What needs to change → Reduce what the family owes.",
+            "What this is about → the obligation you just reduced to zero.",
+            "Reduce by → 0.01.",
+            "Give a reason, then Preview.",
+            "Read the refusal, and re-read the account.",
+        ],
         expectChanges: [],
         expectUnchanged: ["The obligation stays at zero.", "The account position is untouched."],
         invariant: MONEY_INVARIANTS.REDUCTION_FLOOR,
-        failSymptoms: ["It succeeds.", "The obligation goes negative.", "The refusal talks about permissions instead of the obligation."],
+        failSymptoms: [
+            "It succeeds.",
+            "The obligation goes negative.",
+            "The refusal talks about permissions instead of the obligation.",
+            "The refusal names a database table or a column instead of the money.",
+        ],
     }),
     S({
         key: "reverse_adjustment",
         order: 13,
-        title: "Reversing a credit restores the obligation",
+        title: "Reversing a correction restores the obligation, without rewriting history",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Undo the credit and confirm the original stays visible while the money comes back.",
+        purpose: "Undo the correction and confirm the original stays visible while the money comes back.",
         whyItMatters:
-            "Financial history is never edited away. Undoing a decision means recording the opposite decision beside it, so a year later somebody can still see what was done and why.",
+            "Financial history is never edited away. Undoing a decision means recording the opposite decision beside it, so a year later somebody can still see what was done and why. The reversal is a decision taken TODAY — so it belongs to today's commercial period, even when the thing it undoes belongs to a period that has since been finalized.",
         requires: [{ kind: "scenario_passed", scenarioKey: "adjustment_post" }],
         navigate: ["On the adjustment row, click Reverse adjustment →."],
-        doThis: ["Give a reason and confirm.", "Post the reversal — it drafts, exactly as the credit did.", "Try Reverse adjustment on the same original again."],
+        doThis: [
+            "Give a reason and confirm.",
+            "Post the reversal — it drafts, exactly as the correction did.",
+            "Open the reversal and read which commercial period it says it is in.",
+            "Try Reverse adjustment on the same original again.",
+        ],
         expectChanges: ["The original is marked Reversed.", "An opposite entry is appended, marked Reversal.", "The obligation is restored."],
-        expectUnchanged: ["The original credit is still listed with its reason."],
+        expectUnchanged: [
+            "The original correction is still listed with its reason.",
+            "The period the ORIGINAL belongs to — reversing it does not move it, and does not reopen a finalized period.",
+        ],
         invariant: MONEY_INVARIANTS.POSTED_MONEY_IS_IMMUTABLE,
-        failSymptoms: ["The original disappears or is edited.", "The obligation does not come back.", "A second reversal succeeds and credits the family twice."],
+        failSymptoms: [
+            "The original disappears or is edited.",
+            "The obligation does not come back.",
+            "A second reversal succeeds and credits the family twice.",
+            "The reversal says it belongs to the original's period rather than to the current one.",
+            "A finalized period's figures change.",
+        ],
     }),
     S({
         key: "payment_receipt",
@@ -600,11 +677,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Collapse a period and expand it again. The rows must come back in the columns they left in.",
             "Read a row whose amount is negative — a credit or a refund — beside one that is positive. You should be able to tell what each IS without relying on colour: the sign carries direction, and colour is reserved for state such as past due or unapplied money.",
             "Open an account and watch the header load. A metric must never appear as a label above an empty space that could be read as a zero.",
+            "COMMAND PARITY: open Add → Adjustment from Financials → Accounts, and then from the Focus Panel on the same household. The same controls, in the same order, with the same words — 'What needs to change', 'What this is about', the same effective-date default, the same preview sentences and the same refusals. The two hosts may legitimately list different families; what must not differ is the command.",
         ],
         expectChanges: [],
         expectUnchanged: [
             "With no subsidy in play, what the account says is owed equals what Collections says is collectible.",
             "The ledger's columns, whichever lens is selected and whichever surface it is read on.",
+            "The Adjustment command itself, opened from Accounts or from the Focus Panel.",
         ],
         invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
         failSymptoms: [
@@ -626,11 +705,28 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "One family's numbers appearing under another family's name is the worst class of bug in this product. Operators also work on phones, and a control that cannot be reached cannot be used.",
         requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "an account to navigate" }],
         navigate: ["Cold-reload on the account.", "Switch to another household in Accounts.", "Switch back.", "Resize to roughly 390 x 844."],
-        doThis: ["Reload and reopen.", "Switch away and back.", "At phone width, reach the tabs, the charge controls, the payment controls, Move/Apply, Responsibility and Expected funding."],
+        doThis: [
+            "Reload and reopen.",
+            "Switch away and back.",
+            "At phone width, reach the tabs, the charge controls, the payment controls, Move/Apply, Responsibility and Expected funding.",
+            "At phone width open Add → Charge, then switch the mode to Adjustment. Both should sit in the SAME command card: one card, one border, one scrolling area. Neither should draw a second bordered panel inside the first, and neither should let the surface behind it show through its edge.",
+            "Still at phone width, read the Adjustment command down to the bottom. Preview, Confirm and Cancel should be reachable without hunting.",
+        ],
         expectChanges: [],
-        expectUnchanged: ["The account rebuilds identically.", "The other household shows only its own money.", "The page does not scroll sideways."],
+        expectUnchanged: [
+            "The account rebuilds identically.",
+            "The other household shows only its own money.",
+            "The page does not scroll sideways.",
+            "Add → Charge and Add → Adjustment present as the same kind of card, at every width.",
+        ],
         invariant: MONEY_INVARIANTS.FAILED_READ_IS_NOT_ZERO,
-        failSymptoms: ["Another family's figures or named parties appearing.", "The page sliding left to right.", "A control off-screen and unreachable."],
+        failSymptoms: [
+            "Another family's figures or named parties appearing.",
+            "The page sliding left to right.",
+            "A control off-screen and unreachable.",
+            "A card inside a card — a second bordered panel within the command, or the card behind showing through the command's edge.",
+            "Two scrollbars inside one command.",
+        ],
     }),
     S({
         key: "overview_smoke",
@@ -676,11 +772,20 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "A discount comes from how the business prices things — a sibling rate, a staff rate, a promotion someone configured. An adjustment is a human deciding to correct one family's bill. Confusing them makes pricing policy look like a favour, and a favour look like policy.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation that can carry a reduction" }],
         navigate: ["Look at where discounts are authored in the organization's financial configuration, then at Add → Adjustment on the account."],
-        doThis: ["Identify a reduction that came from authored pricing.", "Identify a reduction that a person recorded by hand.", "Note how each is labelled on the account."],
+        doThis: [
+            "Identify a reduction that came from authored pricing.",
+            "Identify a reduction that a person recorded by hand.",
+            "Note how each is labelled on the account, and open each one's detail.",
+            "A hand-recorded one should carry a reason somebody typed and a named person who recorded it. An authored one should point at the policy that produced it.",
+        ],
         expectChanges: [],
         expectUnchanged: ["The two are distinguishable on the account without reading code."],
         invariant: MONEY_INVARIANTS.POSTED_MONEY_IS_IMMUTABLE,
-        failSymptoms: ["The two appear interchangeable.", "A manual credit presented as a pricing discount, or the reverse."],
+        failSymptoms: [
+            "The two appear interchangeable.",
+            "A manual correction presented as a pricing discount, or the reverse.",
+            "A hand-recorded reduction with no reason and no author.",
+        ],
     }),
     S({
         key: "multi_child_attribution",
@@ -2437,6 +2542,12 @@ export const FIXTURE_DOCTRINE: readonly { fixture: string; rule: string; why: st
         rule: "Anything destructive, anything repeatable, and anything that would spoil the two above.",
         why:
             "Create it, spend it, abandon it. A scenario that needs to be run twice needs somewhere it can be run twice.",
+    },
+    {
+        fixture: "Everything else on staging",
+        rule: "Not protected. Old staging activity you did not create is not evidence and does not need preserving.",
+        why:
+            "Only the two fixtures above are protected, and each is protected because a NAMED scenario reads its current state — not because it is old. Staging also carries ordinary residue: drafts from superseded runs, households seeded by engineering, figures from builds that no longer exist. None of it is production history, none of it is yours to curate, and you are not expected to reconcile it. If something looks wrong on a household no scenario names, note it and move on rather than investigating it as a defect.",
     },
 ]);
 
