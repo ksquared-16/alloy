@@ -80,7 +80,7 @@ function makeDb(args: {
                 }
                 return { data: matches(row) ? { ...(row as object) } : row, error: null };
             },
-            single: async () => api.maybeSingle!(),
+            single: async () => (api.maybeSingle as () => Promise<unknown>)(),
             then: undefined,
         };
         /*
@@ -89,7 +89,7 @@ function makeDb(args: {
          * thenable and resolves the same way.
          */
         (api as { then?: unknown }).then = (resolve: (v: unknown) => unknown) =>
-            Promise.resolve(api.maybeSingle!()).then(resolve);
+            Promise.resolve((api.maybeSingle as () => Promise<unknown>)()).then(resolve);
         return api;
     }
 

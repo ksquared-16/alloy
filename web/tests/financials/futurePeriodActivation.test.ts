@@ -107,7 +107,7 @@ function makeDb(seed: { charges: Row[]; periods: Row[]; policies?: Row[]; obliga
                 const hit = apply();
                 return { data: hit.length ? { ...hit[0] } : null, error: null };
             },
-            single: async () => api.maybeSingle!(),
+            single: async () => (api.maybeSingle as () => Promise<unknown>)(),
         };
         (api as { then?: unknown }).then = (resolve: (v: unknown) => unknown) => {
             const hit = apply();
