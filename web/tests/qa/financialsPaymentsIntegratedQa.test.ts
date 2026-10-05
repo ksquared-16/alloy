@@ -260,10 +260,28 @@ describe("the QA surface's own chrome", () => {
 /* ── WHICH ACCOUNT MAY BE SPENT ───────────────────────────────────────────────────────────── */
 
 describe("the fixture doctrine is on the surface, not only in a document", () => {
-    it("names all three", () => {
+    it("names the two protected fixtures, the disposable one, and everything else", () => {
         expect(FIXTURE_DOCTRINE.map((f) => f.fixture)).toEqual([
-            "Certhouse", "Certopp", "A disposable household you create",
+            "Certhouse", "Certopp", "A disposable household you create", "Everything else on staging",
         ]);
+    });
+
+    /**
+     * ── THE FOURTH RULE EXISTS BECAUSE OLD STAGING DATA IS NOT EVIDENCE ──────────────────────
+     *
+     * A fixture is protected when a NAMED scenario reads its current state, not because it is old.
+     * Without saying so, the first three rules read as "be careful with everything", and a Director
+     * who treats arbitrary staging residue as production history spends the walkthrough
+     * reconciling figures nobody is asserting — the same confusion that made the historical draft
+     * charges look like product debt rather than sandbox residue.
+     */
+    it("says plainly that unnamed staging history is not protected and not the Director's to reconcile", () => {
+        const f = FIXTURE_DOCTRINE.find((x) => x.fixture === "Everything else on staging")!;
+        expect(f.rule).toMatch(/[Nn]ot protected/);
+        expect(f.why).toMatch(/production history/i);
+        expect(f.why).toMatch(/note it and move on/i);
+        /* And it must say WHY the other two are protected, so "protected" does not read as "old". */
+        expect(f.why).toMatch(/named scenario reads its current state/i);
     });
 
     it("says Certhouse is read-only, and why that is not pedantry", () => {
