@@ -54,6 +54,13 @@ type Probe = {
     floor: Box;
     scrollersInsideCommand: number | null;
     liftedAboveCommand: Array<{ cls: string; z: string }> | null;
+    controls: Record<string, "absent" | {
+        x: number; y: number; w: number; h: number;
+        insideViewport: boolean; belowFold: boolean; bg: string; color: string;
+    }>;
+    horizontalOverflow: boolean;
+    emojiInBand: boolean | null;
+    bandText: string | null;
 };
 
 /** Geometry and the properties that decide it — read in one evaluate so nothing can shift between. */
@@ -99,6 +106,42 @@ const PROBE = `(() => {
                       && el.scrollHeight > el.clientHeight + 1;
               }).length
             : null,
+        controls: (() => {
+            const vw = window.innerWidth, vh = window.innerHeight;
+            const ids = [
+                "adjustment-direction", "adjustment-amount", "adjustment-source-charge",
+                "adjustment-agreement", "adjustment-reason", "adjustment-effective-date",
+                "adjustment-preview-button", "adjustment-confirm", "adjustment-cancel",
+                "adjustment-category",
+            ];
+            const out = {};
+            for (const id of ids) {
+                /* Concatenation: PROBE is itself a template literal, so no backticks in here. */
+                const el = document.querySelector('[data-testid="' + id + '"]');
+                if (!el) { out[id] = "absent"; continue; }
+                const r = el.getBoundingClientRect();
+                const cs = getComputedStyle(el);
+                out[id] = {
+                    x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
+                    insideViewport: r.left >= -1 && r.right <= vw + 1 && r.width > 0 && r.height > 0,
+                    belowFold: r.top > vh,
+                    bg: cs.backgroundColor, color: cs.color,
+                };
+            }
+            return out;
+        })(),
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        emojiInBand: (() => {
+            const band = document.querySelector('[data-testid="adjustment-panel"]');
+            if (!band) return null;
+            /* Built in the browser so the escapes survive the outer literal. */
+            const emoji = new RegExp("[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]", "u");
+            return emoji.test(band.innerText || "");
+        })(),
+        bandText: (() => {
+            const band = document.querySelector('[data-testid="adjustment-panel"]');
+            return band ? (band.innerText || "").replace(/\s+/g, " ").slice(0, 600) : null;
+        })(),
         /* Is anything painting ABOVE the command card's own layer? */
         liftedAboveCommand: card
             ? Array.from(card.querySelectorAll('*')).filter((el) => {
