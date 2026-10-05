@@ -313,7 +313,13 @@ describe("the preview explains the consequence, not the implementation", () => {
         /* What the operator is shown is composed only in the preview builder. */
         const preview = resolver.slice(resolver.indexOf("export async function previewProspectiveCorrection"));
         expect(preview).not.toMatch(/billingPeriodId|prospective|S5|legacy_billing_period_key/);
-        expect(preview).toMatch(/Recorded in \$\{resolution\.destination\.periodKey\}/);
+        /*
+         * AND NO RAW CADENCE KEY. §8 forbids an internal key where a business label exists, so the
+         * period reaches the sentence through `billingPeriodLabel` — "December 2026", not
+         * "2026-12". Interpolating `periodKey` directly is exactly the regression this catches.
+         */
+        expect(preview).toMatch(/Recorded in \$\{billingPeriodLabel\(resolution\.destination\.periodKey\)\}/);
+        expect(preview).not.toMatch(/Recorded in \$\{resolution\.destination\.periodKey\}/);
     });
 
     it("says a finalized period stays unchanged rather than only naming it", () => {

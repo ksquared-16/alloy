@@ -56,6 +56,7 @@ import {
     currentAndNextPeriods,
     resolveCustomerCalendar,
 } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import { billingPeriodLabel } from "@/lib/financials/billingPeriod";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
 import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
 import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
@@ -327,7 +328,15 @@ async function loadSourceFact(
         );
     }
 
-    let periodLabel = row.legacy_billing_period_key;
+    /*
+     * ── A LABEL, NOT A KEY ───────────────────────────────────────────────────────────────────
+     *
+     * §8: no internal cadence keys where a business label exists. `2026-11` is storage; "November
+     * 2026" is what an operator calls it. `billingPeriodLabel` is the canonical conversion and
+     * handles both shapes — a weekly key `2026-11-09~2026-11-15` becomes its interval label, and a
+     * key it does not recognise comes back unchanged rather than being mangled.
+     */
+    let periodLabel = row.legacy_billing_period_key ? billingPeriodLabel(row.legacy_billing_period_key) : null;
     let periodStatus: string | null = null;
     if (row.billing_period_id) {
         const { data: periodRow } = await supabase
@@ -338,7 +347,7 @@ async function loadSourceFact(
             .maybeSingle();
         const period = periodRow as { period_key: string; status: string } | null;
         if (period) {
-            periodLabel = period.period_key;
+            periodLabel = billingPeriodLabel(period.period_key);
             periodStatus = period.status;
         }
     }
@@ -454,7 +463,8 @@ export async function resolveProspectiveCorrection(
     if (destination.status === "closed") {
         throw new BillingPeriodBindingError(
             "billing_period_closed",
-            `That billing period (${destination.periodKey}) is closed, so a correction cannot be recorded into it. Choose an effective date in an open period.`,
+            /* The refusal names the period the operator would recognise, for the same reason the preview does. */
+            `That billing period (${billingPeriodLabel(destination.periodKey)}) is closed, so a correction cannot be recorded into it. Choose an effective date in an open period.`,
             { customerId, billingPeriodId: destination.billingPeriodId, periodKey: destination.periodKey },
         );
     }
@@ -537,8 +547,13 @@ export async function previewProspectiveCorrection(
         }
     }
 
+    /*
+     * THE DESTINATION BY ITS BUSINESS NAME, with its bounds beside it. The label alone is enough
+     * for a monthly account and ambiguous for a weekly one, so the dates stay — they are the
+     * period's own bounds, not a second opinion about which period it is.
+     */
     changes.push(
-        `Recorded in ${resolution.destination.periodKey}`
+        `Recorded in ${billingPeriodLabel(resolution.destination.periodKey)}`
         + ` (${resolution.destination.startsOn} to ${resolution.destination.endsOn})`
         + (resolution.destination.willBeCreated ? ", which will be opened" : ""),
     );

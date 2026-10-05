@@ -172,7 +172,14 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
         expect(preview.summary).toBe("Reduces what the family owes by $25.00");
         const text = preview.changes.join(" | ");
         expect(text).toContain("November late pickup");
-        expect(text).toContain("2026-11");
+        /*
+         * THE BUSINESS NAME, NOT THE STORAGE KEY. §8: no internal cadence keys in a preview where a
+         * business label exists. `2026-11` is how the period is stored; "November 2026" is what an
+         * operator calls it, and `billingPeriodLabel` is the canonical conversion both sentences
+         * now go through. Asserting the key here would lock in the thing §8 forbids.
+         */
+        expect(text).toContain("November 2026");
+        expect(text).not.toContain("2026-11 ");
         /*
          * ── THE WORDING CHANGED DELIBERATELY IN THE ADJUSTMENT UX SLICE ───────────────────────
          *
@@ -181,8 +188,8 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
          * said to be unchanged, and the destination says "Recorded in" rather than "Applies to" —
          * because "applies to" reads like the correction reaching into that period.
          */
-        expect(text).toContain("2026-11 is finalized, and nothing in it changes");
-        expect(text).toContain("Recorded in 2026-12");
+        expect(text).toContain("November 2026 is finalized, and nothing in it changes");
+        expect(text).toContain("Recorded in December 2026");
 
         /* The resolution is explicit about the two truths. */
         expect(preview.resolution.destination.periodKey).toBe("2026-12");
@@ -274,7 +281,8 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
                 effectiveDate: "2026-11-15",
                 sourceChargeId: novemberFeeId,
             }),
-        ).rejects.toThrow(/2026-11.*is closed/);
+            /* The refusal names the period the operator would recognise, like every other sentence. */
+        ).rejects.toThrow(/November 2026.*is closed/);
 
         await expect(
             applyManualReduction(db, {
@@ -436,9 +444,14 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
             amountCents: -3_000, effectiveDate: "2026-12-08", sourceChargeId: legacySource.id,
         });
 
-        /* Provenance reads the legacy KEY, and reports no status because there is no period row. */
+        /*
+         * Provenance reads the legacy KEY and LABELS it, and reports no status because there is no
+         * period row. §12: a legacy source is presented as history an operator recognises, not as
+         * a storage key they have to decode — and still without materialising a fake canonical
+         * period to give it one.
+         */
         expect(preview.resolution.source?.generation).toBe("legacy");
-        expect(preview.resolution.source?.periodLabel).toBe("2026-08");
+        expect(preview.resolution.source?.periodLabel).toBe("August 2026");
         expect(preview.resolution.source?.billingPeriodId).toBeNull();
         expect(preview.resolution.source?.periodStatus).toBeNull();
         expect(preview.resolution.sourceIsFinalized).toBe(false);
@@ -603,7 +616,7 @@ describeLive("S5 — a correction belongs to its own period, its source to histo
 
         /* SOURCE: a monthly key, legacy, no period row. */
         expect(preview.resolution.source?.generation).toBe("legacy");
-        expect(preview.resolution.source?.periodLabel).toBe("2026-07");
+        expect(preview.resolution.source?.periodLabel).toBe("July 2026");
         expect(preview.resolution.source?.billingPeriodId).toBeNull();
         /* DESTINATION: a BIWEEKLY canonical period — a different cadence entirely. */
         expect(preview.resolution.destination.periodKey).toMatch(/^\d{4}-\d{2}-\d{2}~\d{4}-\d{2}-\d{2}$/);
