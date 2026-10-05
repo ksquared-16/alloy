@@ -87,6 +87,7 @@ describe("W7-F003C — the responsibility amount field keeps focus while it is t
                     customerMemberId={null}
                     parties={[{ personId: PARTY_A, name: "Dana Alvarez" }]}
                     hostedOpen
+                    onCommitted={() => {}}
                 />,
             );
         });
@@ -164,6 +165,7 @@ describe("W7-F003A — eligible is not the same as responsible", () => {
                     customerMemberId={null}
                     parties={[{ personId: PARTY_A, name: "Dana Alvarez" }]}
                     hostedOpen
+                    onCommitted={() => {}}
                 />,
             );
         });
