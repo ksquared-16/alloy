@@ -291,9 +291,12 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "Confirm from the totals, not from the wording, that drafting moved no money.",
         whyItMatters:
             "This is the claim the preview makes to the operator. If the totals disagree with it, the product is telling an operator one thing and doing another — which is worse than either being wrong alone. The law is unchanged by the review decision: a draft is still not owed. What changed is how a draft ARRIVES — from a generated or tuition run, or from a manual Add on an organization that configured a review boundary. Where no boundary is configured there is no draft to inspect, the precondition is unmet, and this scenario is not runnable. That is the correct outcome, not a skipped test.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect — generated, or manual under a configured review boundary" }],
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft charge exists to inspect — an EXCEPTIONAL state: review-required, post-failed, or another explicitly unresolved case. Ordinary generated billing posts itself and leaves no draft." }],
         navigate: ["Return to the account pane."],
-        doThis: ["Compare what is owed with the figure you noted before drafting."],
+        doThis: [
+            "Compare what is owed with the figure you noted before drafting.",
+            "If a draft is present that you did NOT create, do not go looking for why. Staging carries drafts from superseded runs; they are residue, not a finding. Compare the figures and move on.",
+        ],
         expectChanges: [],
         expectUnchanged: ["Outstanding.", "Collectible now.", "Gross charges posted."],
         invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
@@ -307,7 +310,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         purpose: "Commit the draft and watch the obligation appear, once and for the right amount.",
         whyItMatters:
             "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once. Posting is also the ONLY authoritative money write, whoever asks for it: the review boundary decides whether an operator is asked to press this a second time, never whether posting is what makes the obligation real.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — generated, or manual under a configured review boundary" }],
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — the one YOU created under a configured review boundary, not a pre-existing one. Ordinary generated billing posts itself." }],
         navigate: ["Charges tab → Awaiting posting → the draft you created."],
         doThis: ["Post the draft.", "Return to the account."],
         expectChanges: ["The charge leaves Awaiting posting.", "It appears as posted.", "Gross and what is owed each rise by exactly the charge amount."],
