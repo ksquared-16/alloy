@@ -52,6 +52,7 @@ import {
     type ChargeOrigin,
 } from "@/lib/financials/workspace/chargeOrigin";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
+import { resolveLinkedPersonId } from "@/lib/access/linkedPersonIdentity";
 import {
     directionFromSignedCents,
     type AdjustmentDirection,
@@ -563,20 +564,71 @@ export async function resolveChargeDetail(
      */
     const actorNames = new Map<string, string>();
     for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
+        let name: string | null = null;
+        /*
+         * ── THE PERSON THIS OPERATOR IS, BEFORE THE ACCOUNT THEY SIGN IN WITH ─────────────────
+         *
+         * `user_person_links` is the canonical bridge from an authenticated user to the human they
+         * are, created explicitly by an operator — it is not an email guess, and the module that
+         * owns it is emphatic that identity is never inferred. `persons` is where that human's real
+         * first and last name live.
+         *
+         * This was never consulted. The only source read was the auth account's `user_metadata`,
+         * so an operator whose account carries no `full_name` rendered as "Created by a person
+         * whose name is not on file" — on a FINANCIAL AUDIT LINE — while their actual name sat one
+         * join away. W7-F002: the identity was available and we were reading the wrong place.
+         *
+         * The link is preferred over the account's own display name because it is the stronger
+         * claim: a person record is canonical human identity that an operator deliberately bound to
+         * this login, whereas `user_metadata` is whatever the account happened to be created with.
+         */
         try {
-            const { data } = await supabase.auth.admin.getUserById(actorId);
-            const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
-            const name = operatorIdentity({
-                display_name:
-                    typeof meta.full_name === "string" ? meta.full_name
-                    : typeof meta.name === "string" ? meta.name
-                    : null,
-                email: data?.user?.email ?? null,
-            }).name;
-            if (name) actorNames.set(actorId, name);
+            const linked = await resolveLinkedPersonId(supabase, args.orgId, actorId);
+            if (linked.personId) {
+                const { data: personRow } = await supabase
+                    .from("persons")
+                    .select("full_name, first_name, last_name")
+                    .eq("org_id", args.orgId)
+                    .eq("id", linked.personId)
+                    .maybeSingle();
+                const person = personRow as
+                    | { full_name: string | null; first_name: string | null; last_name: string | null }
+                    | null;
+                if (person) {
+                    name =
+                        operatorIdentity({ display_name: person.full_name, email: null }).name
+                        ?? operatorIdentity({
+                            display_name: [person.first_name, person.last_name].filter(Boolean).join(" "),
+                            email: null,
+                        }).name;
+                }
+            }
         } catch {
-            /* An unreadable account is an unknown name, which is already the default. */
+            /* An unreadable link is not a named person; fall through to the account below. */
         }
+
+        /*
+         * The account's own display name, which is what this read before and remains correct for an
+         * operator who has no person link yet. Still no email fallback: an unknown name stays
+         * unknown rather than printing an address in a person's place.
+         */
+        if (!name) {
+            try {
+                const { data } = await supabase.auth.admin.getUserById(actorId);
+                const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+                name = operatorIdentity({
+                    display_name:
+                        typeof meta.full_name === "string" ? meta.full_name
+                        : typeof meta.name === "string" ? meta.name
+                        : null,
+                    email: data?.user?.email ?? null,
+                }).name;
+            } catch {
+                /* An unreadable account is an unknown name, which is already the default. */
+            }
+        }
+
+        if (name) actorNames.set(actorId, name);
     }
 
     /*

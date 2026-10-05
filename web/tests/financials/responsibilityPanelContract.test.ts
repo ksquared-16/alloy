@@ -87,7 +87,29 @@ describe("the Manage Responsibility panel", () => {
         const confirm = panel.slice(panel.indexOf('data-financials-responsibility-confirm') - 600,
                                     panel.indexOf('data-financials-responsibility-confirm'));
         expect(confirm, "Confirm is guarded at all").toMatch(/disabled=\{/);
-        expect(confirm, "nothing is committed that has not been previewed").toContain("!preview");
+
+        /*
+         * ── THE RULE MOVED ONE INDIRECTION AWAY, AND IS STRICTLY STRONGER FOR IT ─────────────
+         *
+         * This asserted the literal `!preview` beside the button. W7-F003D found that a disabled
+         * Confirm with no stated reason is unacceptable in a financial workflow — measured on
+         * deployed, the Director saw `confirmDisabled: true` with no reconciliation message and no
+         * visible requirement anywhere, because the only unmet condition was the unpreviewed one
+         * and nothing said so.
+         *
+         * So the conditions now resolve to a NAMED reason, and the button derives its disabled
+         * state from that reason. The guarantee this lock exists for is unchanged — nothing is
+         * committed that has not been previewed — and it is now impossible to add a blocking
+         * condition without also giving the operator a sentence for it.
+         *
+         * The lock follows the rule rather than the spelling, which is what its own note above
+         * already said it should do.
+         */
+        expect(confirm, "the button derives from the stated reason").toContain("confirmBlocker !== null");
+        expect(panel, "nothing is committed that has not been previewed").toMatch(/!preview\s*\n?\s*\?/);
+        expect(panel, "and the unmet requirement is shown to the operator").toContain(
+            "data-financials-responsibility-confirm-blocker",
+        );
         expect(confirm, "and not while a call is in flight").toContain("busy !== null");
     });
 });

@@ -167,6 +167,24 @@ function Row(props: { label: string; value: string; strong?: boolean; muted?: bo
     );
 }
 
+/**
+ * ── RELATED FACTS AT THE SAME VISUAL LEVEL ───────────────────────────────────────────────────
+ *
+ * W7-F002: the detail was thirty label/value lines down a single column, so reading one charge
+ * meant travelling the whole screen, and facts that belong together — the two periods, the three
+ * dates, the GL account — were separated by nothing but their order.
+ *
+ * `Pair` lays its rows two to a line above phone width and collapses back to one column when there
+ * is no room. Nothing is removed and nothing is abbreviated: the same `Row` renders inside it, so
+ * every fact keeps its label, its value and its testId, and the block occupies half the height.
+ *
+ * Groups that are genuinely a LIST — applied payments, responsibility shares, expected funding —
+ * stay a list. Turning a variable-length list into columns makes it harder to scan, not easier.
+ */
+function Pair(props: { children: React.ReactNode }) {
+    return <span className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">{props.children}</span>;
+}
+
 function Group(props: { children: React.ReactNode }) {
     return (
         <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{props.children}</p>
@@ -405,67 +423,70 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
             ) : null}
 
             <Group>Posting</Group>
-            <Row
-                label="Billing period"
-                value={detail.billingPeriodLabel ?? "Unplaced"}
-                testId="billing-period"
-            />
-            {/*
-              * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
-              * when the obligation was issued; the due date is when payment is expected and is
-              * blank for an organisation that has configured no terms — which is a real answer,
-              * not a missing one, so it is stated rather than hidden.
-              */}
-            <Row
-                label="Invoice date"
-                value={formatDisplayDate(detail.invoiceDate) || "—"}
-                muted={!detail.invoiceDate}
-                testId="invoice-date"
-            />
-            <Row
-                label="Due date"
-                value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
-                muted={!detail.dueDate}
-                testId="due-date"
-            />
-            <Row
-                label="Accounting period"
-                value={
-                    detail.accountingPeriod
-                        ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
-                              detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
-                          }`
-                        : "Not posted to a period yet"
-                }
-                muted={!detail.accountingPeriod}
-                testId="accounting-period"
-            />
-            {/*
-              * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
-              *
-              * Closing a period does not refuse the money effective in it — the entry is
-              * attributed to the next open period instead. Shown alone, an October attribution on
-              * a September charge is indistinguishable from a charge that was always October's.
-              * The trigger records where it came from; this says so, so the operator can tell a
-              * deferral from an ordinary posting without reading the journal.
-              */}
-            {detail.accountingDeferredFrom ? (
+            {/* The periods, the dates and the GL account read as one block — see `Pair`. */}
+            <Pair>
                 <Row
-                    label="Deferred from"
-                    value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
-                    testId="accounting-deferred-from"
+                    label="Billing period"
+                    value={detail.billingPeriodLabel ?? "Unplaced"}
+                    testId="billing-period"
                 />
-            ) : null}
-            <Row
-                label="GL account"
-                value={
-                    detail.glAccount
-                        ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
-                        : "Unmapped"
-                }
-                muted={!detail.glAccount}
-                testId="gl-account"
-            />
+                {/*
+                  * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
+                  * when the obligation was issued; the due date is when payment is expected and is
+                  * blank for an organisation that has configured no terms — which is a real answer,
+                  * not a missing one, so it is stated rather than hidden.
+                  */}
+                <Row
+                    label="Invoice date"
+                    value={formatDisplayDate(detail.invoiceDate) || "—"}
+                    muted={!detail.invoiceDate}
+                    testId="invoice-date"
+                />
+                <Row
+                    label="Due date"
+                    value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
+                    muted={!detail.dueDate}
+                    testId="due-date"
+                />
+                <Row
+                    label="Accounting period"
+                    value={
+                        detail.accountingPeriod
+                            ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
+                                  detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
+                              }`
+                            : "Not posted to a period yet"
+                    }
+                    muted={!detail.accountingPeriod}
+                    testId="accounting-period"
+                />
+                {/*
+                  * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
+                  *
+                  * Closing a period does not refuse the money effective in it — the entry is
+                  * attributed to the next open period instead. Shown alone, an October attribution on
+                  * a September charge is indistinguishable from a charge that was always October's.
+                  * The trigger records where it came from; this says so, so the operator can tell a
+                  * deferral from an ordinary posting without reading the journal.
+                  */}
+                {detail.accountingDeferredFrom ? (
+                    <Row
+                        label="Deferred from"
+                        value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
+                        testId="accounting-deferred-from"
+                    />
+                ) : null}
+                <Row
+                    label="GL account"
+                    value={
+                        detail.glAccount
+                            ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
+                            : "Unmapped"
+                    }
+                    muted={!detail.glAccount}
+                    testId="gl-account"
+                />
+            </Pair>
 
             {e ? (
                 <>
