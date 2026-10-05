@@ -256,7 +256,17 @@ describe("THE GATE — the due-date policy actually runs (§7E)", () => {
         const svc = readFileSync(join(process.cwd(), "lib/financials/chargeLifecycle/chargeLifecycleService.ts"), "utf8");
         const insertAt = svc.indexOf("        .insert({");
         expect(insertAt, "the create insert is findable").toBeGreaterThan(0);
-        expect(svc.slice(insertAt, insertAt + 1400), "the create writes it").toContain("due_date: intent.dueDate");
+        /*
+         * BOUNDED BY THE INSERT, NOT BY A CHARACTER COUNT.
+         *
+         * This read a fixed 1,400-character window and silently stopped reaching the column as the
+         * insert's payload grew — so the assertion failed for a reason that had nothing to do with
+         * the thing it guards. Slicing to the end of the insert call means the window tracks the
+         * code instead of needing to be re-tuned every time a field is added.
+         */
+        const insertEnd = svc.indexOf("\n        })", insertAt);
+        expect(insertEnd, "the create insert's end is findable").toBeGreaterThan(insertAt);
+        expect(svc.slice(insertAt, insertEnd), "the create writes it").toContain("due_date: intent.dueDate");
         expect(svc, "and a recalculated draft re-dates it").toMatch(/update\(\{[\s\S]{0,600}due_date: intent\.dueDate/);
     });
 });
