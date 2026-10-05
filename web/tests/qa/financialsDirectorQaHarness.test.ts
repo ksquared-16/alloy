@@ -245,8 +245,13 @@ describe("scenario readiness", () => {
          * Asserted only so a scenario cannot be QUIETLY dropped: losing one is a capability nobody
          * is asked to accept. Raising it when scenarios are deliberately added is correct
          * maintenance; lowering it needs a reason written beside it.
+         *
+         * 61 after W7 slice 1: `future_period_charge` and `awaiting_posting_says_why`, both added
+         * because the Director's F001 decision made a charge's billing period part of its lifecycle.
+         * Neither replaces anything — `post_charge` stayed, rewritten so it no longer asks for an
+         * ordinary draft to be manufactured and posted by hand.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(59);
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(61);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

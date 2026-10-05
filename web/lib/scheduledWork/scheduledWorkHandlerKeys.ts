@@ -14,3 +14,12 @@ export const CHARGE_AGING_HANDLER_KEY = "financials.charge_aging.evaluate";
 export const AUTOPAY_HANDLER_KEY = "payments.autopay.evaluate";
 /** Commercial finalization: discovers elapsed open customer billing periods and closes them. */
 export const BILLING_PERIOD_CLOSE_HANDLER_KEY = "financials.billing_period_close.evaluate";
+/**
+ * The other end of the same calendar: posts drafts whose billing period has now BEGUN.
+ *
+ * Close looks backwards at periods that have ended; this looks forwards at periods that have
+ * started. Deliberately a separate key rather than a second responsibility on the close handler —
+ * they fire for different reasons, fail for different reasons, and an operator reading a failed
+ * occurrence needs to know which calendar edge was being evaluated.
+ */
+export const FUTURE_PERIOD_ACTIVATION_HANDLER_KEY = "financials.future_period_charge.activate";

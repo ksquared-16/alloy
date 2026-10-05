@@ -44,6 +44,12 @@ import {
 import type { ChargeIntent } from "@/lib/financials/chargeLifecycle/resolveChargeFromTemplate";
 import { placeInBillingPeriod } from "@/lib/financials/billingPeriod";
 import { resolveChargeBillingPeriodBinding } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
+import {
+    PERIOD_NOT_STARTED_GATE,
+    billingPeriodHasBegun,
+    periodNotStartedRefusal,
+} from "@/lib/financials/posting/postingPeriodGate";
 import {
     chargeCorrectedEntry,
     chargeEffectiveOn,
@@ -393,6 +399,52 @@ export type PostChildcareChargeResult = {
 };
 
 /**
+ * Record on the draft WHY it is waiting, without disturbing anything else it carries.
+ *
+ * Read-modify-write on `metadata` rather than a jsonb merge in SQL, for the same reason
+ * `recordAttempt` does it next door: the row's provenance — `resolution_key`, `source`,
+ * `review_required` — is what makes the draft diagnosable, and replacing the object would lose it.
+ *
+ * `status = 'draft'` is in the predicate so a charge somebody posted in the meantime is not
+ * relabelled as waiting. A failure here is deliberately swallowed: the gate's job is to refuse the
+ * post, and losing the explanatory label must not turn a correct refusal into an error the operator
+ * reads as a fault. The refusal itself carries the same facts.
+ */
+async function markDraftAwaitingItsPeriod(
+    supabase: SupabaseClient,
+    charge: ChargeRow,
+    facts: { periodKey: string; periodStartsOn: string; businessDate: string },
+): Promise<void> {
+    const metadata = { ...((charge.metadata ?? {}) as Record<string, unknown>) };
+    if (
+        metadata["post_gate"] === PERIOD_NOT_STARTED_GATE
+        && metadata["post_not_before"] === facts.periodStartsOn
+    ) {
+        return; // already labelled, and labelled with the same date
+    }
+    try {
+        await supabase
+            .from("charges")
+            .update({
+                metadata: {
+                    ...metadata,
+                    post_gate: PERIOD_NOT_STARTED_GATE,
+                    /* The date the activation handler and the operator surface both read. */
+                    post_not_before: facts.periodStartsOn,
+                    post_gate_period_key: facts.periodKey,
+                    post_gate_observed_on: facts.businessDate,
+                },
+                updated_at: new Date().toISOString(),
+            })
+            .eq("org_id", charge.org_id)
+            .eq("id", charge.id)
+            .eq("status", "draft");
+    } catch {
+        /* See above: the label is an aid, the refusal is the authority. */
+    }
+}
+
+/**
  * Post a DRAFT childcare charge (draft -> posted). After this it is immutable.
  *
  * ── POSTING IS IDEMPOTENT ──
@@ -407,7 +459,21 @@ export type PostChildcareChargeResult = {
  */
 export async function postChildcareCharge(
     supabase: SupabaseClient,
-    input: { orgId: string; chargeId: string; actorUserId?: string | null }
+    input: {
+        orgId: string;
+        chargeId: string;
+        actorUserId?: string | null;
+        /**
+         * The organisation's business date, when the caller already resolved it.
+         *
+         * Supplied by the scheduled activation handler — which resolves one date per occurrence and
+         * then posts many charges against it — and by tests that drive a fixed day. Omitted by every
+         * ordinary caller, and then this resolves it itself: the gate must not depend on a caller
+         * remembering to pass the right calendar, which is precisely the mistake that made the
+         * Financials card read receivables in UTC.
+         */
+        businessDateYmd?: string | null;
+    }
 ): Promise<PostChildcareChargeResult> {
     const charge = await loadCharge(supabase, input.orgId, input.chargeId);
     assertChildcareCharge(charge);
@@ -443,14 +509,17 @@ export async function postChildcareCharge(
     if (charge.billing_period_id) {
         const { data: periodRow, error: periodError } = await supabase
             .from("financial_billing_periods")
-            .select("id, period_key, status")
+            /* `starts_on` is read on the same trip as `status`: both guards ask about the same row. */
+            .select("id, period_key, status, starts_on")
             .eq("org_id", input.orgId)
             .eq("id", charge.billing_period_id)
             .maybeSingle();
         if (periodError) {
             throw new OperationalEnrollmentServiceError("db_error", periodError.message);
         }
-        const period = periodRow as { id: string; period_key: string; status: string } | null;
+        const period = periodRow as
+            | { id: string; period_key: string; status: string; starts_on: string | null }
+            | null;
         if (period && period.status === "closed") {
             throw new OperationalEnrollmentServiceError(
                 "conflict",
@@ -462,6 +531,38 @@ export async function postChildcareCharge(
                     billingPeriodStatus: period.status,
                 },
             );
+        }
+
+        /*
+         * ── AND A PERIOD THAT HAS NOT BEGUN REFUSES IT TOO ──
+         *
+         * The third guard at this boundary, and the mirror of the one above: close refuses a charge
+         * entering a period that is FINISHED, this refuses one becoming owed in a period that has
+         * not STARTED. Both are calendar facts about the same row, so they are read on one trip and
+         * decided in one place.
+         *
+         * The draft is PRESERVED and, unlike a closed-period refusal, it is not attention work:
+         * nothing is wrong, the date simply has not arrived. So the draft is MARKED with why it is
+         * waiting before the refusal is thrown. Marking here rather than in each caller is the whole
+         * point of putting the gate in the authority — `charge.add`, `charge.add` for a sibling
+         * group, the generated-billing auto-post path and an operator's explicit Post all reach this
+         * line, and each one would otherwise have to remember to classify the draft identically.
+         *
+         * `financials.future_period_charge.activate` is what clears it, by calling back into this
+         * same function on the day the period begins.
+         */
+        const businessDate = (input.businessDateYmd ?? "").trim()
+            || (await fetchOrgBusinessDate(supabase, input.orgId));
+        if (!billingPeriodHasBegun({ periodStartsOn: period?.starts_on, businessDate })) {
+            const facts = {
+                chargeId: charge.id,
+                billingPeriodId: period!.id,
+                periodKey: period!.period_key,
+                periodStartsOn: String(period!.starts_on),
+                businessDate,
+            };
+            await markDraftAwaitingItsPeriod(supabase, charge, facts);
+            throw periodNotStartedRefusal(facts);
         }
     }
 

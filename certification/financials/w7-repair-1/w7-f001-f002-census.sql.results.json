@@ -1,0 +1,90 @@
+{
+  "trusted_host_action_id": "tha_c9ed62f57e013c",
+  "query_hash": "1e67c0675816280ed13d88df6d2050749619c6d057c236b5c6000ab53a85dfb4",
+  "status": "executed",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-10-05T20:32:17.384Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_c9ed62f57e013c",
+    "query_hash": "1e67c0675816280ed13d88df6d2050749619c6d057c236b5c6000ab53a85dfb4",
+    "authorization_id": "grnt_feac32011a94453b",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "blocker": null
+  },
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-10-05T20:32:23.028Z",
+    "question_ids": [
+      "q1",
+      "q2",
+      "q3",
+      "q4",
+      "q5"
+    ],
+    "questions": {
+      "q1": {
+        "question_id": "q1",
+        "row_count": null,
+        "rows": [
+          {
+            "posting_review_policies": 0,
+            "active": 0,
+            "scopes": null
+          }
+        ]
+      },
+      "q2": {
+        "question_id": "q2",
+        "row_count": null,
+        "rows": [
+          {
+            "draft_charges": 35,
+            "post_gate_posted": 0,
+            "post_gate_review_required": 0,
+            "post_gate_post_failed": 0,
+            "never_attempted": 35,
+            "oldest_created_at": "2026-08-26T19:28:02.198908+00:00"
+          }
+        ]
+      },
+      "q3": {
+        "question_id": "q3",
+        "row_count": null,
+        "rows": [
+          {
+            "posted_in_future_period": 4,
+            "draft_in_future_period": 0,
+            "posted_in_started_period": 1,
+            "charges_bound_to_a_period": 5
+          }
+        ]
+      },
+      "q4": {
+        "question_id": "q4",
+        "row_count": null,
+        "rows": [
+          {
+            "distinct_charge_creators": 4,
+            "with_active_person_link": 0,
+            "link_resolves_to_named_person": 0,
+            "charges_with_no_creator": 18
+          }
+        ]
+      },
+      "q5": {
+        "question_id": "q5",
+        "row_count": null,
+        "rows": [
+          {
+            "total_charges": 137,
+            "distinct_creators": 4,
+            "active_user_person_links": 0
+          }
+        ]
+      }
+    },
+    "row_count": 5
+  }
+}

@@ -65,6 +65,17 @@ type ChargeDetail = {
     createdByName?: string | null;
     postedByName?: string | null;
     originDescription?: string | null;
+    /**
+     * The unmet identity requirement for the creating operator, in one sentence (W7-F002).
+     *
+     * Null when there is nothing to say — a named operator, or a charge with no human actor. When
+     * it is present, the audit line still shows whatever name it has and this says, beside it, that
+     * the attribution does not rest on a recorded identity and where that is fixed.
+     */
+    createdByIdentityGap?: string | null;
+    createdByIdentityStatus?: string | null;
+    /** Why this charge is still a draft, when it is one (W7-F001). */
+    awaiting?: { key: string; label: string; explanation: string; operatorActionable: boolean } | null;
     correctionOfChargeId?: string | null;
     customerId: string | null;
     customerMemberId: string | null;
@@ -165,6 +176,24 @@ function Row(props: { label: string; value: string; strong?: boolean; muted?: bo
             <span className="shrink-0 tabular-nums">{props.value}</span>
         </span>
     );
+}
+
+/**
+ * ── RELATED FACTS AT THE SAME VISUAL LEVEL ───────────────────────────────────────────────────
+ *
+ * W7-F002: the detail was thirty label/value lines down a single column, so reading one charge
+ * meant travelling the whole screen, and facts that belong together — the two periods, the three
+ * dates, the GL account — were separated by nothing but their order.
+ *
+ * `Pair` lays its rows two to a line above phone width and collapses back to one column when there
+ * is no room. Nothing is removed and nothing is abbreviated: the same `Row` renders inside it, so
+ * every fact keeps its label, its value and its testId, and the block occupies half the height.
+ *
+ * Groups that are genuinely a LIST — applied payments, responsibility shares, expected funding —
+ * stay a list. Turning a variable-length list into columns makes it harder to scan, not easier.
+ */
+function Pair(props: { children: React.ReactNode }) {
+    return <span className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">{props.children}</span>;
 }
 
 function Group(props: { children: React.ReactNode }) {
@@ -404,68 +433,98 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 </>
             ) : null}
 
-            <Group>Posting</Group>
-            <Row
-                label="Billing period"
-                value={detail.billingPeriodLabel ?? "Unplaced"}
-                testId="billing-period"
-            />
             {/*
-              * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
-              * when the obligation was issued; the due date is when payment is expected and is
-              * blank for an organisation that has configured no terms — which is a real answer,
-              * not a missing one, so it is stated rather than hidden.
-              */}
-            <Row
-                label="Invoice date"
-                value={formatDisplayDate(detail.invoiceDate) || "—"}
-                muted={!detail.invoiceDate}
-                testId="invoice-date"
-            />
-            <Row
-                label="Due date"
-                value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
-                muted={!detail.dueDate}
-                testId="due-date"
-            />
-            <Row
-                label="Accounting period"
-                value={
-                    detail.accountingPeriod
-                        ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
-                              detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
-                          }`
-                        : "Not posted to a period yet"
-                }
-                muted={!detail.accountingPeriod}
-                testId="accounting-period"
-            />
-            {/*
-              * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
+              * ── WHY THIS IS STILL A DRAFT, BEFORE ANY OF THE DATES ───────────────────────────
               *
-              * Closing a period does not refuse the money effective in it — the entry is
-              * attributed to the next open period instead. Shown alone, an October attribution on
-              * a September charge is indistinguishable from a charge that was always October's.
-              * The trigger records where it came from; this says so, so the operator can tell a
-              * deferral from an ordinary posting without reading the journal.
+              * An operator who opens a draft is asking one question, and it is this one. Four
+              * unrelated situations share `status = 'draft'` and only some of them are anybody's
+              * work — a charge for next month is waiting for the first of the month, not for a
+              * person. Saying which, in a full sentence, is what stops the Charges tab reading as a
+              * list of tasks.
+              *
+              * Only a failure is toned as a problem. The rest are statements of fact.
               */}
-            {detail.accountingDeferredFrom ? (
-                <Row
-                    label="Deferred from"
-                    value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
-                    testId="accounting-deferred-from"
-                />
+            {detail.awaiting ? (
+                <>
+                    <Group>Not posted yet</Group>
+                    <p
+                        className={`px-3 pb-2 text-[11px] leading-snug ${
+                            detail.awaiting.key === "post_failed"
+                                ? "text-alloy-ember"
+                                : "text-alloy-midnight/60"
+                        }`}
+                        data-financials-charge-awaiting={detail.awaiting.key}
+                    >
+                        {detail.awaiting.explanation}
+                    </p>
+                </>
             ) : null}
-            <Row
-                label="GL account"
-                value={
-                    detail.glAccount
-                        ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
-                        : "Unmapped"
-                }
-                muted={!detail.glAccount}
-                testId="gl-account"
-            />
+
+            <Group>Posting</Group>
+            {/* The periods, the dates and the GL account read as one block — see `Pair`. */}
+            <Pair>
+                <Row
+                    label="Billing period"
+                    value={detail.billingPeriodLabel ?? "Unplaced"}
+                    testId="billing-period"
+                />
+                {/*
+                  * INVOICE AND DUE, BESIDE THE PERIODS AND NEVER FOLDED INTO THEM. The invoice date is
+                  * when the obligation was issued; the due date is when payment is expected and is
+                  * blank for an organisation that has configured no terms — which is a real answer,
+                  * not a missing one, so it is stated rather than hidden.
+                  */}
+                <Row
+                    label="Invoice date"
+                    value={formatDisplayDate(detail.invoiceDate) || "—"}
+                    muted={!detail.invoiceDate}
+                    testId="invoice-date"
+                />
+                <Row
+                    label="Due date"
+                    value={detail.dueDate ? formatDisplayDate(detail.dueDate) : "No configured terms"}
+                    muted={!detail.dueDate}
+                    testId="due-date"
+                />
+                <Row
+                    label="Accounting period"
+                    value={
+                        detail.accountingPeriod
+                            ? `${detail.accountingPeriod.label ?? detail.accountingPeriod.key} · ${
+                                  detail.accountingPeriod.status === "closed" ? "Closed" : "Open"
+                              }`
+                            : "Not posted to a period yet"
+                    }
+                    muted={!detail.accountingPeriod}
+                    testId="accounting-period"
+                />
+                {/*
+                  * A DEFERRAL IS NOT AN ORDINARY POSTING, AND MUST NOT READ LIKE ONE.
+                  *
+                  * Closing a period does not refuse the money effective in it — the entry is
+                  * attributed to the next open period instead. Shown alone, an October attribution on
+                  * a September charge is indistinguishable from a charge that was always October's.
+                  * The trigger records where it came from; this says so, so the operator can tell a
+                  * deferral from an ordinary posting without reading the journal.
+                  */}
+                {detail.accountingDeferredFrom ? (
+                    <Row
+                        label="Deferred from"
+                        value={`${formatDisplayDate(detail.accountingDeferredFrom)} · that period was closed`}
+                        testId="accounting-deferred-from"
+                    />
+                ) : null}
+                <Row
+                    label="GL account"
+                    value={
+                        detail.glAccount
+                            ? `${detail.glAccount.code}${detail.glAccount.name ? ` · ${detail.glAccount.name}` : ""}`
+                            : "Unmapped"
+                    }
+                    muted={!detail.glAccount}
+                    testId="gl-account"
+                />
+            </Pair>
 
             {e ? (
                 <>
@@ -686,6 +745,24 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     ) : null}
                     {detail.correctionOfChargeId ? (
                         <Row label="Corrects" value="another charge on this account" muted testId="corrects" />
+                    ) : null}
+                    {/*
+                      * ── THE ATTRIBUTION IS INCOMPLETE, AND SAYS SO (W7-F002) ─────────────────
+                      *
+                      * Not an error, and deliberately not styled as one: nothing failed and the
+                      * charge is correct. What is missing is the recorded link between the account
+                      * that acted and the human it belongs to, and the sentence names where that is
+                      * closed. It renders even when a name IS shown from the weaker source, because
+                      * the requirement is about the data and not about whether the screen managed
+                      * to find something to print.
+                      */}
+                    {detail.createdByIdentityGap ? (
+                        <p
+                            className="px-3 pb-2 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-financials-charge-actor-identity-gap={detail.createdByIdentityStatus ?? "unmet"}
+                        >
+                            {detail.createdByIdentityGap}
+                        </p>
                     ) : null}
                 </>
             ) : null}

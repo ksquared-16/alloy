@@ -53,6 +53,15 @@ import {
 } from "@/lib/financials/workspace/chargeOrigin";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
 import {
+    awaitingPostingReason,
+    type AwaitingPostingReason,
+} from "@/lib/financials/posting/awaitingPostingReason";
+import {
+    financialActorIdentityGap,
+    resolveFinancialActorIdentity,
+    type FinancialActorIdentity,
+} from "@/lib/financials/identity/financialActorIdentity";
+import {
     directionFromSignedCents,
     type AdjustmentDirection,
 } from "@/lib/financials/corrections/correctionIntent";
@@ -112,6 +121,23 @@ export type ChargeDetail = {
     updatedAt: string | null;
     postedBy: string | null;
     postedByName: string | null;
+    /**
+     * WHETHER THE AUDIT TRAIL CAN NAME WHO CREATED THIS, and if not, why.
+     *
+     * Separate from `createdByName` on purpose. A name may be present from the weaker source (the
+     * auth account's own display name) while the identity requirement is unmet, and a financial
+     * surface must be able to say both things at once.
+     */
+    createdByIdentityStatus: FinancialActorIdentity["status"];
+    /** The unmet requirement in one sentence, naming where it is closed. Null when there is none. */
+    createdByIdentityGap: string | null;
+    /**
+     * WHY this charge is still a draft, when it is one (W7-F001).
+     *
+     * Null for anything that is not a draft. The same classifier the work queue uses, so a row and
+     * the panel it opens cannot describe one charge differently.
+     */
+    awaiting: AwaitingPostingReason | null;
     correctionOfChargeId: string | null;
     chargeTemplateId: string | null;
     origin: ChargeOrigin;
@@ -562,21 +588,55 @@ export async function resolveChargeDetail(
      * At most two ids, looked up once each, on a surface that is already one charge.
      */
     const actorNames = new Map<string, string>();
+    /*
+     * ── AND WHETHER THE LEDGER IS ENTITLED TO A NAME AT ALL (W7-F002) ─────────────────────────
+     *
+     * The name and the REQUIREMENT are two different answers and the panel needs both. An operator
+     * whose auth account happens to carry a `full_name` renders with a name, and the tenant still
+     * has not met the requirement — the attribution rests on whatever the account was created with
+     * rather than on a recorded decision about who this login is. Reporting only the name would
+     * close the gap on screen while leaving it open in the data, which is the shape of defect that
+     * produced F002 in the first place.
+     */
+    const actorIdentities = new Map<string, FinancialActorIdentity>();
     for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
-        try {
-            const { data } = await supabase.auth.admin.getUserById(actorId);
-            const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
-            const name = operatorIdentity({
-                display_name:
-                    typeof meta.full_name === "string" ? meta.full_name
-                    : typeof meta.name === "string" ? meta.name
-                    : null,
-                email: data?.user?.email ?? null,
-            }).name;
-            if (name) actorNames.set(actorId, name);
-        } catch {
-            /* An unreadable account is an unknown name, which is already the default. */
+        /*
+         * ── THE PERSON THIS OPERATOR IS, BEFORE THE ACCOUNT THEY SIGN IN WITH ─────────────────
+         *
+         * `resolveFinancialActorIdentity` is the one statement of the requirement: the canonical
+         * bridge `user_person_links` → `persons` → a human name, with no email anywhere in it. This
+         * surface used to read the auth account's `user_metadata` and nothing else, so an operator
+         * whose account carried no `full_name` rendered as "Created by a person whose name is not
+         * on file" on a FINANCIAL AUDIT LINE while their actual name sat one join away.
+         */
+        const identity = await resolveFinancialActorIdentity(supabase, { orgId: args.orgId, actorUserId: actorId });
+        actorIdentities.set(actorId, identity);
+        let name: string | null = identity.name;
+
+        /*
+         * The account's own display name, for DISPLAY only. A weak name beats no name on a screen,
+         * and it is what this read did before. It does NOT satisfy the requirement and deliberately
+         * does not touch `identity.requirementMet`, so the gap stays visible beside it. Still no
+         * email fallback: an unknown name stays unknown rather than printing an address in a
+         * person's place.
+         */
+        if (!name) {
+            try {
+                const { data } = await supabase.auth.admin.getUserById(actorId);
+                const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+                name = operatorIdentity({
+                    display_name:
+                        typeof meta.full_name === "string" ? meta.full_name
+                        : typeof meta.name === "string" ? meta.name
+                        : null,
+                    email: data?.user?.email ?? null,
+                }).name;
+            } catch {
+                /* An unreadable account is an unknown name, which is already the default. */
+            }
         }
+
+        if (name) actorNames.set(actorId, name);
     }
 
     /*
@@ -727,6 +787,13 @@ export async function resolveChargeDetail(
         createdAt: charge.created_at ?? null,
         createdBy: charge.created_by ?? null,
         createdByName: actorNames.get(charge.created_by ?? "") ?? null,
+        awaiting: charge.status === "draft" ? awaitingPostingReason(charge.metadata) : null,
+        createdByIdentityStatus:
+            actorIdentities.get(charge.created_by ?? "")?.status ?? "no_actor",
+        createdByIdentityGap: financialActorIdentityGap(
+            actorIdentities.get(charge.created_by ?? "")
+            ?? { status: "no_actor", name: null, personId: null, requirementMet: false },
+        ),
         updatedAt: charge.updated_at ?? null,
         postedBy: charge.posted_by ?? null,
         postedByName: actorNames.get(charge.posted_by ?? "") ?? null,

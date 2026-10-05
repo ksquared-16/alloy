@@ -1,3 +1,19 @@
+-- RE-MEASURED 2026-10-05T22 for W7 slice 1. The merge of PR #1404 was refused
+-- `hosted_migration_behind` naming 20261119120000, while the apply of that same
+-- version was refused `production_precondition_refused` because hosted parity
+-- already reported PASS. The disagreement was not about the database: the
+-- previous reading of THIS artifact was taken at 13:53, before 20261119120000
+-- reached the deployed primary, and the gate reads the artifact rather than the
+-- database. A dedicated repair census (w7-close-schedule-time-ledger-repair-census)
+-- then read the live primary and found the version PRESENT, the ledger head at
+-- 20261119120000 and the total at 515 — schema and ledger both current, and no
+-- gap for a repair to close either.
+--
+-- So this file is re-measured rather than a repair being filed. Its BYTES have to
+-- differ for that to be possible at all: `database.read_census` dedupes within a
+-- run on the sha256 of the query, which is the reader defect documented below,
+-- and this note is the sanctioned way around it until that reader is repaired.
+--
 -- Read-only census: the hosted migration ledger's VERSION IDENTITIES.
 -- RE-MEASURED after the W4 merge: the apply was refused production_precondition_refused, which in
 -- W3 meant the promotion pipeline had already applied it. Verifying rather than assuming.
