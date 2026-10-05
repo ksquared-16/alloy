@@ -30,6 +30,7 @@ import { resolveChargeCustomerId } from "@/lib/financials/billingPeriods/bindCha
 import { resolveCustomerCalendar } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import { currentAndNextPeriods } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
 import { legacyMonthlyPeriodKey } from "@/lib/financials/billingPeriod";
+import { resolveCorrectionDueDate } from "@/lib/financials/corrections/prospectiveCorrection";
 
 /** The categories a manual reduction may post through — all code-owned taxonomy. */
 export const MANUAL_REDUCTION_CATEGORIES = ["credit", "adjustment", "discount"] as const;
@@ -159,7 +160,33 @@ export async function applyManualReduction(
      * calendar actually produces for that date, so a reduction's period label matches a period that
      * exists. An explicitly supplied key still wins; the caller may know better.
      */
-    const resolvedPeriodKey = input.periodKey ?? (await resolveManualReductionPeriodKey(supabase, input));
+    const resolvedPeriod = await resolveManualReductionPeriod(supabase, input);
+    const resolvedPeriodKey = input.periodKey ?? resolvedPeriod.key;
+
+    /*
+     * ── WHEN AN INCREASE IS DUE ───────────────────────────────────────────────────────────────
+     *
+     * A manual adjustment that RAISES what a family owes is a collectible obligation like any
+     * other, and it was being written with `due_date: null` unconditionally — the reduction path
+     * never called the due-date authority at all. A tenant could configure terms, raise $25 through
+     * this surface, and have that $25 carry no deadline while every generated charge carried one.
+     *
+     * It resolves through `resolveCorrectionDueDate`, the SAME function the preview calls, so the
+     * date an operator was shown is the date the row carries. The inputs are this correction's own
+     * dates — never the source charge's, which is §14's prohibition and would hand the family a
+     * deadline that had already passed.
+     *
+     * A REDUCTION IS GIVEN NONE, and that is the function's own first branch rather than a
+     * condition here: nothing is being collected, so there is no date to miss. `null` from a
+     * configured-nothing tenant also stays null — exactly today's behaviour for every other
+     * charge, because a collections consequence nobody configured is one nobody chose.
+     */
+    const due = await resolveCorrectionDueDate(supabase, {
+        orgId: input.orgId,
+        amountCents: input.amountCents,
+        effectiveDate: input.effectiveDate,
+        periodStartsOn: resolvedPeriod.startsOn,
+    });
 
     try {
         const result = await applyReductionCore(supabase, {
@@ -176,6 +203,7 @@ export async function applyManualReduction(
                 chargeCategory: input.chargeCategory,
                 description: input.chargeCategory,
                 serviceDate: input.effectiveDate,
+                dueDate: due.dueDate,
                 currencyCode: input.currencyCode ?? "USD",
                 metadata: {
                     source: "manual_reduction",
@@ -259,7 +287,23 @@ export async function reverseManualReduction(
         currencyCode: original.currency_code,
         reason,
         effectiveDate: today,
-        periodKey: original.period_key,
+        /*
+         * ── THE REVERSAL RESOLVES ITS OWN PERIOD. THIS USED TO BE `original.period_key`. ──────
+         *
+         * The reversal is correctly dated TODAY — it is prospective economics, which is what §17
+         * requires — and then it was handed the original's period key, which is the one input that
+         * puts it back into the period it is dated out of. A credit raised in a now-finalized
+         * November and reversed in December was written as a December charge carrying a November
+         * period key: the canonical `billing_period_id` was right, because the S2 binder resolves
+         * that from the charge's own date, and the STATED period contradicted it. Every surface
+         * that reads `period_key` therefore showed the reversal inside closed history, which is
+         * precisely the appearance of rewriting the past that commercial finality exists to make
+         * impossible.
+         *
+         * Omitting it lets `resolveManualReductionPeriod` answer from the reversal's own effective
+         * date, through the account's own calendar — the same resolution any other prospective
+         * correction gets. The original row is still untouched; that was never the problem.
+         */
         /*
          * THE OBLIGATION THE ORIGINAL REDUCED — not the credit's own charge.
          *
@@ -298,10 +342,10 @@ export async function reverseManualReduction(
  * legacy interpretation, and the honest answer for an account the canonical calendar does not yet
  * govern. It does not invent a cadence, and it never reads a location or a term anchor.
  */
-async function resolveManualReductionPeriodKey(
+async function resolveManualReductionPeriod(
     supabase: SupabaseClient,
     input: ManualReductionInput,
-): Promise<string> {
+): Promise<{ key: string; startsOn: string | null }> {
     const legacyMonth = legacyMonthlyPeriodKey(input.effectiveDate);
     try {
         const customerId =
@@ -311,16 +355,27 @@ async function resolveManualReductionPeriodKey(
                 billableSourceType: "enrollment_agreement",
                 billableSourceId: input.enrollmentAgreementId,
             }));
-        if (!customerId) return legacyMonth;
+        if (!customerId) return { key: legacyMonth, startsOn: null };
         const calendar = await resolveCustomerCalendar(supabase, {
             orgId: input.orgId,
             customerId,
             onDate: input.effectiveDate,
         });
-        if (calendar.kind !== "resolved") return legacyMonth;
-        return currentAndNextPeriods(calendar, input.effectiveDate).current.key;
+        if (calendar.kind !== "resolved") return { key: legacyMonth, startsOn: null };
+        const { current } = currentAndNextPeriods(calendar, input.effectiveDate);
+        /*
+         * THE PERIOD'S START IS RETURNED ALONGSIDE ITS KEY because the due-date policy's two
+         * period-anchored strategies need it, and re-deriving it from the key would mean parsing a
+         * label — the one shape a weekly account's `2026-11-09~2026-11-15` key makes look easy and
+         * a monthly account's `2026-11` makes impossible.
+         *
+         * `null` where the calendar could not speak: the legacy month is a usable KEY but it is not
+         * evidence of a commercial period, so it supplies no anchor. A period-anchored due-date
+         * rule then resolves to no date rather than to a date cut off a fallback.
+         */
+        return { key: current.key, startsOn: current.start };
     } catch {
         /* A reduction must not fail because a calendar lookup did; history's reading still applies. */
-        return legacyMonth;
+        return { key: legacyMonth, startsOn: null };
     }
 }

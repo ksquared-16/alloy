@@ -56,6 +56,10 @@ import {
     currentAndNextPeriods,
     resolveCustomerCalendar,
 } from "@/lib/financials/billingPeriods/customerBillingPeriodService";
+import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { resolveDueDate } from "@/lib/financials/policies/resolveDueDate";
+import { readAccountArrangement } from "@/lib/financials/responsibility/readAccountArrangement";
+import { directionFromSignedCents, type AdjustmentDirection } from "@/lib/financials/corrections/correctionIntent";
 
 /** What the correction does to the family's position, said rather than signed. */
 export type CorrectionDirection = "reduces" | "increases";
@@ -70,6 +74,14 @@ export type ProspectiveCorrectionInput = {
     effectiveDate: string;
     /** The historical fact being corrected. May belong to a closed period, or to legacy history. */
     sourceChargeId?: string | null;
+    /**
+     * The child this correction is about, when it is about one.
+     *
+     * Responsibility has two canonical grains and `readAccountArrangement` answers a DIFFERENT
+     * question for each — most specific wins. Omitting it asks strictly about the household, which
+     * is the right question for an account-level correction and the wrong one for a child's.
+     */
+    customerMemberId?: string | null;
 };
 
 export type CorrectionSourceFact = {
@@ -99,6 +111,40 @@ export type CorrectionDestination = {
     willBeCreated: boolean;
 };
 
+/**
+ * WHO BEARS THE NEW ECONOMICS — the canonical arrangement's answer, not the source's allocations.
+ *
+ * `kind` is the distinction an operator needs and a null arrangement cannot make on its own:
+ *
+ *   `household`    no arrangement is in force, so the household bears it. A TRUE answer, and the
+ *                  ordinary one — most accounts have never needed a division.
+ *   `arrangement`  an arrangement is in force and these are its shares.
+ *
+ * There is no third state here, because an arrangement that cannot be READ is not reported as a
+ * shape — it is refused before anything is written. See `resolveProspectiveCorrection`.
+ */
+export type CorrectionResponsibility = {
+    kind: "household" | "arrangement";
+    /** The operator-facing sentence. Never an id, never a share method keyword. */
+    sentence: string;
+    parties: Array<{ name: string; method: string | null; amountCents: number | null; percentBasisPoints: number | null }>;
+};
+
+/**
+ * WHEN THE NEW MONEY IS DUE — only ever asked for an INCREASE.
+ *
+ * A reduction creates no collections consequence, so it is given no due date and this is
+ * `applicable: false`. For an increase, `dueDate` is the organisation's configured terms applied to
+ * the correction's OWN dates, and `null` means the organisation has stated no terms — which is
+ * "No due date", never "due today".
+ */
+export type CorrectionDueDate = {
+    applicable: boolean;
+    dueDate: string | null;
+    strategy: string | null;
+    reason: "resolved" | "no_policy" | "missing_input" | "unknown_strategy" | "not_applicable";
+};
+
 export type ProspectiveCorrectionResolution = {
     direction: CorrectionDirection;
     amountCents: number;
@@ -108,6 +154,10 @@ export type ProspectiveCorrectionResolution = {
     destination: CorrectionDestination;
     /** True when the source's period is closed, which is the principal S5 case rather than a problem. */
     sourceIsFinalized: boolean;
+    /** The operator intent this signed amount represents, stated so no surface re-derives it. */
+    intent: AdjustmentDirection;
+    responsibility: CorrectionResponsibility;
+    due: CorrectionDueDate;
 };
 
 export function correctionDirection(amountCents: number): CorrectionDirection {
@@ -126,6 +176,125 @@ export function correctionDirectionSentence(amountCents: number): string {
     return correctionDirection(amountCents) === "reduces"
         ? `Reduces what the family owes by ${money(amountCents)}`
         : `Increases what the family owes by ${money(amountCents)}`;
+}
+
+/**
+ * ── ONE DUE-DATE ANSWER, SHARED BY PREVIEW AND EXECUTE ───────────────────────────────────────
+ *
+ * §14's requirement is not "show a due date" — it is that the due date an operator is SHOWN is the
+ * one the write will carry. Those are two code paths, so they can only agree by sharing this
+ * function rather than each calling `resolveDueDate` with its own idea of the inputs.
+ *
+ * The inputs are the correction's OWN dates, never the source's. Inheriting a closed November
+ * charge's due date onto a December correction would hand the family a deadline that had already
+ * passed before the money was recorded.
+ *
+ *   invoiceDate   the correction's effective date — when this obligation is issued.
+ *   periodStart   the destination commercial period's start, for the two period-anchored
+ *                 strategies.
+ *
+ * A REDUCTION IS NEVER GIVEN ONE. Nothing is being collected, so there is no date to miss, and
+ * fabricating one would put a collections consequence on money moving the other way.
+ */
+export async function resolveCorrectionDueDate(
+    supabase: SupabaseClient,
+    args: {
+        orgId: string;
+        /** SIGNED. The sign is what decides whether a due date is applicable at all. */
+        amountCents: number;
+        effectiveDate: string;
+        periodStartsOn: string | null;
+        serviceId?: string | null;
+    },
+): Promise<CorrectionDueDate> {
+    if (directionFromSignedCents(args.amountCents) === "reduce") {
+        return { applicable: false, dueDate: null, strategy: null, reason: "not_applicable" };
+    }
+    /*
+     * A POLICY READ FAILURE IS NOT "NO TERMS". `listFinancialPolicies` throws on a database error,
+     * and swallowing that would turn an unreachable table into a confident "No due date" — the
+     * same class of lie as an empty ledger standing in for a failed read. It propagates.
+     */
+    const policies = await listFinancialPolicies(supabase, args.orgId);
+    const resolved = resolveDueDate(policies, {
+        invoiceDate: args.effectiveDate,
+        periodStart: args.periodStartsOn,
+        serviceId: args.serviceId ?? null,
+    });
+    return { applicable: true, dueDate: resolved.dueDate, strategy: resolved.strategy, reason: resolved.reason };
+}
+
+/** How a share was stated, in words. The operator never reads `remainder` or basis points. */
+function shareSentence(share: {
+    name: string;
+    method: string | null;
+    amountCents: number | null;
+    percentBasisPoints: number | null;
+}): string {
+    if (share.method === "percentage" && share.percentBasisPoints != null) {
+        return `${share.name} ${(share.percentBasisPoints / 100).toFixed(share.percentBasisPoints % 100 === 0 ? 0 : 2)}%`;
+    }
+    if (share.method === "fixed" && share.amountCents != null) {
+        return `${share.name} ${money(share.amountCents)}`;
+    }
+    if (share.method === "remainder") return `${share.name} (whatever is left)`;
+    return share.name;
+}
+
+/**
+ * ── WHO BEARS IT, FROM THE CANONICAL ARRANGEMENT ─────────────────────────────────────────────
+ *
+ * §13 forbids two things and this does neither: it does not copy the source charge's allocations
+ * (those answer "who owed THAT obligation", which is a different question and may have been
+ * decided by an arrangement since superseded), and it does not mutate historical responsibility.
+ *
+ * `readAccountArrangement` FAILS CLOSED on a read error — its own comment records why: "there is no
+ * arrangement" is a claim an operator acts on. So a thrown read becomes a refusal here rather than
+ * a confident "the household bears it", which is §13's "refuse before write with operator
+ * language".
+ */
+async function resolveCorrectionResponsibility(
+    supabase: SupabaseClient,
+    args: { orgId: string; customerId: string; customerMemberId: string | null },
+): Promise<CorrectionResponsibility> {
+    let arrangement: Awaited<ReturnType<typeof readAccountArrangement>>;
+    try {
+        arrangement = await readAccountArrangement(supabase, {
+            orgId: args.orgId,
+            customerId: args.customerId,
+            customerMemberId: args.customerMemberId,
+        });
+    } catch {
+        throw new BillingPeriodBindingError(
+            "responsibility_unresolved",
+            "Who is responsible for this account could not be read, so this correction cannot say who would owe it. Try again in a moment.",
+            { customerId: args.customerId },
+        );
+    }
+
+    const shares = (arrangement?.shares ?? []).map((share) => ({
+        name: share.name,
+        method: share.method,
+        amountCents: share.amountCents,
+        percentBasisPoints: share.percentBasisPoints,
+    }));
+
+    /*
+     * AN ARRANGEMENT WITH NO SHARES IS THE HOUSEHOLD'S, not an arrangement with nothing in it. The
+     * row exists but divides nothing, so the honest sentence is the household one.
+     */
+    if (shares.length === 0) {
+        return {
+            kind: "household",
+            sentence: "The household owes this, by the standing arrangement.",
+            parties: [],
+        };
+    }
+    return {
+        kind: "arrangement",
+        sentence: `Owed by ${shares.map(shareSentence).join(", ")}, by the standing arrangement.`,
+        parties: shares,
+    };
 }
 
 async function loadSourceFact(
@@ -289,14 +458,33 @@ export async function resolveProspectiveCorrection(
 
     const source = sourceChargeId ? await loadSourceFact(supabase, orgId, sourceChargeId) : null;
 
+    /*
+     * RESPONSIBILITY AND THE DUE DATE ARE RESOLVED AFTER THE DESTINATION, not beside it: both are
+     * answers ABOUT the destination period, and the due date takes its period anchor from it.
+     */
+    const responsibility = await resolveCorrectionResponsibility(supabase, {
+        orgId,
+        customerId,
+        customerMemberId: (input.customerMemberId ?? "").trim() || null,
+    });
+    const due = await resolveCorrectionDueDate(supabase, {
+        orgId,
+        amountCents: input.amountCents,
+        effectiveDate: input.effectiveDate,
+        periodStartsOn: destination.startsOn,
+    });
+
     return {
         direction: correctionDirection(input.amountCents),
+        intent: directionFromSignedCents(input.amountCents),
         amountCents: input.amountCents,
         magnitudeCents: Math.abs(input.amountCents),
         source,
         destination,
         /* A closed source is the POINT of S5, not an obstacle. Reported, never refused. */
         sourceIsFinalized: source?.periodStatus === "closed",
+        responsibility,
+        due,
     };
 }
 
@@ -322,19 +510,45 @@ export async function previewProspectiveCorrection(
         const what = s.description?.trim() || s.chargeCategory || "a charge";
         changes.push(`Corrects: ${what} of ${money(s.amountCents)}${s.serviceDate ? ` from ${s.serviceDate}` : ""}`);
         if (s.periodLabel) {
+            /*
+             * ── FINALIZED HISTORY IS NAMED, AND SAID TO BE UNCHANGED ─────────────────────────
+             *
+             * §8's requirement for a closed source is that the preview shows where the correction
+             * IS recorded without implying the historical period changed. So the two facts are
+             * stated as one pair of sentences: that period is finalized and stays as it is, and
+             * this correction is recorded in the open one below.
+             */
             changes.push(
-                `That charge belongs to ${s.periodLabel}`
-                + (s.periodStatus === "closed" ? ", which is closed and stays unchanged" : ""),
+                s.periodStatus === "closed"
+                    ? `${s.periodLabel} is finalized, and nothing in it changes`
+                    : `That charge belongs to ${s.periodLabel}`,
             );
+        } else if (s.generation === "legacy") {
+            /*
+             * A LEGACY SOURCE WITH NO LABEL AT ALL. §12: the operator must be able to correct it
+             * without being taught that it has no canonical billing period. So the absence is
+             * stated as a fact about the record's age, not as a missing field.
+             */
+            changes.push("That charge predates the account's commercial periods");
         }
     }
 
     changes.push(
-        `Applies to ${resolution.destination.periodKey}`
+        `Recorded in ${resolution.destination.periodKey}`
         + ` (${resolution.destination.startsOn} to ${resolution.destination.endsOn})`
         + (resolution.destination.willBeCreated ? ", which will be opened" : ""),
     );
     changes.push(`Effective ${input.effectiveDate}`);
+    changes.push(resolution.responsibility.sentence);
+
+    /*
+     * THE DUE DATE, ONLY WHERE THERE IS ONE TO STATE. "No due date" is said out loud for an
+     * increase, because an operator raising what a family owes needs to know whether a deadline
+     * was attached — silence there reads as "there is one and I did not see it".
+     */
+    if (resolution.due.applicable) {
+        changes.push(resolution.due.dueDate ? `Due ${resolution.due.dueDate}` : "No due date");
+    }
 
     return {
         summary: correctionDirectionSentence(resolution.amountCents),
