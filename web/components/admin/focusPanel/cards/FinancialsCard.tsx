@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
+import { executeDetailFrom } from "@/lib/adminV2/actions/executeEnvelope";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
 import {
     ADJUSTMENT_DIRECTIONS,
@@ -1212,16 +1213,15 @@ export default function FinancialsCard({
      * What `/api/admin/actions/execute` answers. `detail` is the registered action's own result
      * payload, so the fields below are only the ones this card reads — not a claim about its shape.
      */
+    /*
+     * What `/api/admin/actions/execute` answers. The envelope's interior is read through
+     * `executeDetailFrom` rather than typed here, because the depth differs by route and encoding
+     * one guess in a type is how a surface ends up reading past the answer it was given.
+     */
     type ActionExecuteAnswer = {
         ok?: boolean;
         error?: string | { message?: string };
-        /*
-         * `execution_result` IS the registered action's `result.detail`, not a wrapper around it —
-         * the route emits `execution_result: result.actionResult.result.detail` directly. Reading
-         * `execution_result.detail` would therefore be undefined forever, which is the precise
-         * shape of a false green: an idempotency notice that silently never fires.
-         */
-        data?: { execution_result?: Record<string, unknown> | null };
+        data?: { execution_result?: unknown };
     };
 
     const runAction = useCallback(
@@ -1696,8 +1696,18 @@ export default function FinancialsCard({
              *
              * This is a TRUE OUTCOME, not a failure: it goes to the notice, never to the error.
              */
-            const detail = (result?.data?.execution_result ?? null) as { idempotent?: boolean } | null;
-            if (detail?.idempotent === true) {
+            /*
+             * READ THROUGH THE CANONICAL ENVELOPE READER, not by hand.
+             *
+             * This route emits `execution_result: result.actionResult.result.detail` DIRECTLY, so
+             * `execution_result.detail` is undefined forever — a notice that silently never fires,
+             * which is the exact shape of a false green. Three Payments modules had already been
+             * caught one level too deep on this same envelope. `executeDetailFrom` encodes the
+             * rule — prefer a nested `detail` where a route genuinely nests one, otherwise treat
+             * `execution_result` as the detail — so no surface has to know which kind this is.
+             */
+            const detail = executeDetailFrom(result) as { idempotent?: boolean };
+            if (detail.idempotent === true) {
                 setAdjustNotice(
                     adjustDirection === "reduce"
                         ? "This credit was already recorded, so nothing new was created. The family has been credited once."

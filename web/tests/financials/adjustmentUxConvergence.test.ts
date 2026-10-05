@@ -262,14 +262,20 @@ describe("idempotency is correct AND communicated", () => {
          * fires, which is the exact shape of a false green.
          */
         const card = code(CARD);
-        expect(card).toMatch(/result\?\.data\?\.execution_result \?\? null/);
+        /*
+         * AND IT GOES THROUGH THE CANONICAL READER. Hand-rolling the path is how three Payments
+         * modules ended up one level too deep on this same envelope; `executeDetailFrom` prefers a
+         * nested `detail` where a route nests one and otherwise treats `execution_result` as the
+         * detail, so no surface has to know which kind it is talking to.
+         */
+        expect(card).toMatch(/executeDetailFrom\(result\)/);
         expect(card).not.toMatch(/execution_result\?\.detail/);
-        expect(card).toMatch(/detail\?\.idempotent === true/);
+        expect(card).toMatch(/detail\.idempotent === true/);
     });
 
     it("a repeat is a notice, never an error", () => {
         const card = code(CARD);
-        const at = card.indexOf("detail?.idempotent === true");
+        const at = card.indexOf("detail.idempotent === true");
         const branch = card.slice(at, at + 600);
         expect(branch).toMatch(/setAdjustNotice/);
         expect(branch).not.toMatch(/setAdjustError/);
