@@ -205,6 +205,8 @@ export async function resolveCorrectionDueDate(
         effectiveDate: string;
         periodStartsOn: string | null;
         serviceId?: string | null;
+        /** The account, so an account-scoped rule beats an inherited default. */
+        customerId?: string | null;
     },
 ): Promise<CorrectionDueDate> {
     if (directionFromSignedCents(args.amountCents) === "reduce") {
@@ -220,6 +222,7 @@ export async function resolveCorrectionDueDate(
         invoiceDate: args.effectiveDate,
         periodStart: args.periodStartsOn,
         serviceId: args.serviceId ?? null,
+        customerId: args.customerId ?? null,
     });
     return { applicable: true, dueDate: resolved.dueDate, strategy: resolved.strategy, reason: resolved.reason };
 }
@@ -472,6 +475,7 @@ export async function resolveProspectiveCorrection(
         amountCents: input.amountCents,
         effectiveDate: input.effectiveDate,
         periodStartsOn: destination.startsOn,
+        customerId,
     });
 
     return {

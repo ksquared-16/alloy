@@ -68,7 +68,19 @@ export function directionFromSignedCents(amountCents: number): AdjustmentDirecti
  */
 export function parseAdjustmentMagnitudeCents(entered: string): number | null {
     const cleaned = (entered ?? "").replace(/[$,\s]/g, "");
-    if (cleaned === "" || /[^0-9.]/.test(cleaned)) return null;
+    /*
+     * ── THE WHOLE STRING MUST BE ONE AMOUNT, not merely start with one ────────────────────────
+     *
+     * A character-class filter is not enough, and the suite caught it: `2.5.1` contains only
+     * digits and dots, so it passed, and `Number.parseFloat` stopped at the second dot and
+     * returned 2.5 — a mistyped amount becoming $2.50 of real money with no sign anything was
+     * wrong. `parseFloat`'s prefix behaviour is the hazard here, so the shape is matched in full
+     * before any number is read.
+     *
+     * At most two decimal places, because cents are the unit. `25.005` is not a hair under
+     * 25.01 — it is an amount nobody can pay, and rounding it silently would decide for them.
+     */
+    if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
     const value = Number.parseFloat(cleaned);
     if (!Number.isFinite(value) || value <= 0) return null;
     const cents = Math.round(value * 100);

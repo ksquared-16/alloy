@@ -4,6 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { readFinancialsCardVm } from "@/lib/adminV2/runtime/focusPanel/financials/financialsCardRead";
 import { financialsSurfaceRole } from "@/lib/financials/workspace/financialsSurfaceRole";
+import {
+    ADJUSTMENT_DIRECTIONS,
+    adjustmentDirectionLabel,
+    parseAdjustmentMagnitudeCents,
+    type AdjustmentDirection,
+} from "@/lib/financials/corrections/correctionIntent";
 import { hostRunsCardProducers } from "@/lib/adminV2/runtime/focusPanel/hostRunsCardProducers";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
@@ -1056,8 +1062,19 @@ export default function FinancialsCard({
     const [adjustAgreementId, setAdjustAgreementId] = useState("");
     /* WHICH OBLIGATION this reduces. A credit that names nothing reduces nothing — see below. */
     const [adjustSourceChargeId, setAdjustSourceChargeId] = useState("");
-    const [adjustCategory, setAdjustCategory] = useState<"credit" | "adjustment">("credit");
-    const [adjustDirection, setAdjustDirection] = useState<"decrease" | "increase">("decrease");
+    /*
+     * ── ONE DECISION: WHICH WAY DOES THE FAMILY'S BALANCE MOVE ──────────────────────────────
+     *
+     * This was two controls — a "Type" of `credit` or `adjustment`, and a direction shown only for
+     * `adjustment` — encoding one decision twice. They disagreed about which half won: the sign
+     * was `category === "adjustment" && direction === "increase"`, so choosing `credit` and then
+     * `increase` produced a REDUCTION and discarded the direction the operator had just stated.
+     *
+     * The category is now derived by the canonical conversion, not asked for. It was never the
+     * operator's question — a reduction IS a credit — and asking it taught them the storage
+     * taxonomy before they could give money back.
+     */
+    const [adjustDirection, setAdjustDirection] = useState<AdjustmentDirection>("reduce");
     const [adjustAmount, setAdjustAmount] = useState("");
     const [adjustReason, setAdjustReason] = useState("");
     const [adjustEffectiveDate, setAdjustEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -1191,6 +1208,22 @@ export default function FinancialsCard({
         }
     }, [actionEntity, movePending, moveReason, running]);
 
+    /*
+     * What `/api/admin/actions/execute` answers. `detail` is the registered action's own result
+     * payload, so the fields below are only the ones this card reads — not a claim about its shape.
+     */
+    type ActionExecuteAnswer = {
+        ok?: boolean;
+        error?: string | { message?: string };
+        /*
+         * `execution_result` IS the registered action's `result.detail`, not a wrapper around it —
+         * the route emits `execution_result: result.actionResult.result.detail` directly. Reading
+         * `execution_result.detail` would therefore be undefined forever, which is the precise
+         * shape of a false green: an idempotency notice that silently never fires.
+         */
+        data?: { execution_result?: Record<string, unknown> | null };
+    };
+
     const runAction = useCallback(
         async (actionKey: string, payload: Record<string, unknown>) => {
             const res = await fetch("/api/admin/actions/execute", {
@@ -1205,11 +1238,23 @@ export default function FinancialsCard({
                     payload,
                 }),
             });
-            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            /*
+             * ── THE RESULT IS RETURNED, NOT DISCARDED ──────────────────────────────────────────
+             *
+             * This read the body only to decide whether to throw, and dropped everything else. So
+             * a caller could not distinguish the two TRUE successes an idempotent command has:
+             * "I wrote this" and "this was already recorded and I wrote nothing". §18 requires the
+             * surface to be able to say which, and the service has always answered it — the answer
+             * simply had nowhere to go.
+             *
+             * Callers that do not care keep ignoring it; a refusal still throws exactly as before.
+             */
+            const json = (await res.json()) as ActionExecuteAnswer;
             if (!json?.ok) {
                 const err = typeof json?.error === "string" ? json.error : json?.error?.message;
                 throw new Error(err || "The action was refused.");
             }
+            return json;
         },
         [actionEntity],
     );
@@ -1312,14 +1357,16 @@ export default function FinancialsCard({
      * control and cannot be used to raise one. An ADJUSTMENT is the category that goes either way,
      * and it must say which out loud.
      */
-    const adjustSignedCents = useCallback((): number | null => {
-        const entered = Number.parseFloat(adjustAmount.replace(/[$,\s]/g, ""));
-        if (!Number.isFinite(entered) || entered <= 0) return null;
-        const cents = Math.round(entered * 100);
-        if (cents === 0) return null;
-        const raises = adjustCategory === "adjustment" && adjustDirection === "increase";
-        return raises ? cents : -cents;
-    }, [adjustAmount, adjustCategory, adjustDirection]);
+    /*
+     * THE ABSOLUTE AMOUNT, PARSED BY THE CANONICAL PARSER. It never gains a sign here: the
+     * direction and the magnitude travel to the action as what the operator stated, and the one
+     * canonical conversion turns them into signed cents server-side. A component that signed them
+     * would be a second place for the convention to be read backwards.
+     */
+    const adjustMagnitudeCents = useCallback(
+        (): number | null => parseAdjustmentMagnitudeCents(adjustAmount),
+        [adjustAmount],
+    );
 
     const closeAdjustPanels = useCallback(() => {
         setAdjustOpen(false);
@@ -1338,6 +1385,19 @@ export default function FinancialsCard({
     const adjustableSubjects = useMemo(
         () => (vm?.subjects ?? []).filter((sub) => sub.agreementId),
         [vm],
+    );
+
+    /*
+     * THE GRAIN RESPONSIBILITY IS ASKED AT, derived from the enrolment already chosen rather than
+     * held as a second piece of state that could fall out of step with it.
+     *
+     * `readAccountArrangement` answers a DIFFERENT question for the household and for a child —
+     * most specific wins — so a preview that omits the child tells an operator correcting one
+     * child's charge that the household bears it while a child-scoped arrangement governs.
+     */
+    const adjustMemberId = useMemo(
+        () => adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId ?? "",
+        [adjustAgreementId, adjustableSubjects],
     );
 
     /**
@@ -1560,8 +1620,8 @@ export default function FinancialsCard({
 
     /** The preview is the ACTION's. Nothing about the consequence is reconstructed here. */
     const previewAdjustment = useCallback(async () => {
-        const amountCents = adjustSignedCents();
-        if (!adjustOpen || running || amountCents === null) return;
+        const magnitudeCents = adjustMagnitudeCents();
+        if (!adjustOpen || running || magnitudeCents === null) return;
         setRunning(true);
         setAdjustError(null);
         try {
@@ -1575,9 +1635,17 @@ export default function FinancialsCard({
                     mode: "preview",
                     payload: {
                         enrollment_agreement_id: adjustAgreementId,
-                        source_charge_id: adjustSourceChargeId,
-                        charge_category: adjustCategory,
-                        amount_cents: amountCents,
+                        /* Empty is a TRUE answer: an account-level adjustment corrects no one charge. */
+                        source_charge_id: adjustSourceChargeId || null,
+                        /*
+                         * THE INTENT SHAPE. Direction plus a positive magnitude; the action's
+                         * normalizer owns the sign and derives the category. `charge_category` is
+                         * deliberately not sent — sending it would restore the conflict.
+                         */
+                        direction: adjustDirection,
+                        magnitude_cents: magnitudeCents,
+                        /* The grain responsibility is asked at, so a child's arrangement governs. */
+                        customer_member_id: adjustMemberId || null,
                         reason: adjustReason,
                         effective_date: adjustEffectiveDate,
                     },
@@ -1600,31 +1668,52 @@ export default function FinancialsCard({
         } finally {
             setRunning(false);
         }
-    }, [actionEntity, adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustReason, adjustSignedCents, adjustSourceChargeId, running]);
+    }, [actionEntity, adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustReason, adjustSourceChargeId, running]);
 
     const confirmAdjustment = useCallback(async () => {
-        const amountCents = adjustSignedCents();
-        if (!adjustOpen || running || !adjustPreview || amountCents === null) return;
+        const magnitudeCents = adjustMagnitudeCents();
+        if (!adjustOpen || running || !adjustPreview || magnitudeCents === null) return;
         setRunning(true);
         setAdjustError(null);
         try {
-            await runAction("billing.adjust_account", {
+            const result = await runAction("billing.adjust_account", {
                 enrollment_agreement_id: adjustAgreementId,
-                source_charge_id: adjustSourceChargeId,
-                charge_category: adjustCategory,
-                amount_cents: amountCents,
+                source_charge_id: adjustSourceChargeId || null,
+                direction: adjustDirection,
+                magnitude_cents: magnitudeCents,
+                customer_member_id: adjustMemberId || null,
                 reason: adjustReason,
                 effective_date: adjustEffectiveDate,
             });
             /*
-             * The action writes a DRAFT charge. What the family owes has not moved yet, and saying
-             * it had would be the one thing this panel must never do.
+             * ── A REPEAT SUBMIT IS ONE CREDIT, AND THE OPERATOR IS TOLD SO ──────────────────
+             *
+             * §18. The service has always answered this honestly — `idempotent` says it found the
+             * reduction already recorded and wrote nothing — and every caller discarded it, so a
+             * double submit reported "Recorded" twice and an operator had no way to tell whether
+             * they had just credited the family again. That is the Add Charge defect this slice is
+             * forbidden to repeat.
+             *
+             * This is a TRUE OUTCOME, not a failure: it goes to the notice, never to the error.
              */
-            setAdjustNotice(
-                amountCents < 0
-                    ? "Recorded as a draft credit. It lowers what the family owes once it is posted."
-                    : "Recorded as a draft adjustment. It raises what the family owes once it is posted.",
-            );
+            const detail = (result?.data?.execution_result ?? null) as { idempotent?: boolean } | null;
+            if (detail?.idempotent === true) {
+                setAdjustNotice(
+                    adjustDirection === "reduce"
+                        ? "This credit was already recorded, so nothing new was created. The family has been credited once."
+                        : "This adjustment was already recorded, so nothing new was created. The account has been adjusted once.",
+                );
+            } else {
+                /*
+                 * The action writes a DRAFT charge. What the family owes has not moved yet, and
+                 * saying it had would be the one thing this panel must never do.
+                 */
+                setAdjustNotice(
+                    adjustDirection === "reduce"
+                        ? "Recorded as a draft credit. It lowers what the family owes once it is posted."
+                        : "Recorded as a draft adjustment. It raises what the family owes once it is posted.",
+                );
+            }
             closeAdjustPanels();
         } catch (e) {
             setAdjustError(e instanceof Error ? e.message : String(e));
@@ -1632,7 +1721,7 @@ export default function FinancialsCard({
             setRunning(false);
             await load();
         }
-    }, [adjustAgreementId, adjustCategory, adjustEffectiveDate, adjustOpen, adjustPreview, adjustReason, adjustSignedCents, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
+    }, [adjustAgreementId, adjustDirection, adjustEffectiveDate, adjustMagnitudeCents, adjustMemberId, adjustOpen, adjustPreview, adjustReason, adjustSourceChargeId, closeAdjustPanels, load, runAction, running]);
 
     const previewReversal = useCallback(async () => {
         if (!reversePending || running) return;
@@ -3414,12 +3503,29 @@ export default function FinancialsCard({
                                 }}
                             />
                         </div>
+                        {/*
+                          * ── BOTH TRUTHFUL CASES, AND NEITHER PRETENDING TO BE THE OTHER ────────
+                          *
+                          * §5. The canonical reduction authority genuinely supports an adjustment
+                          * that names no source charge — `source_charge_id` is nullable and 40
+                          * deployed applications prove both shapes — so forcing every account
+                          * adjustment to nominate one historical charge would make the operator
+                          * invent a provenance the decision does not have.
+                          *
+                          * This control was REQUIRED: Preview stayed disabled until a charge was
+                          * chosen. It is now optional, and the empty answer is stated as a
+                          * decision ("The account as a whole") rather than left as a blank that
+                          * reads like an unfinished form.
+                          *
+                          * Raised from a row — `openAdjustForCharge` — it arrives already bound,
+                          * which is the other half of §5 and needs no second surface.
+                          */}
                         <div className="alloy-os-fdetail__movefield">
-                            <span>Against charge</span>
+                            <span>What this is about</span>
                             <AlloySelect
                                 testId="adjustment-source-charge"
-                                aria-label="Against charge"
-                                placeholder="Choose the charge this is about…"
+                                aria-label="What this is about"
+                                placeholder="The account as a whole — not one charge"
                                 value={adjustSourceChargeId}
                                 options={adjustableCharges.map((r) => ({
                                     value: r.chargeId,
@@ -3437,50 +3543,39 @@ export default function FinancialsCard({
                                 }}
                             />
                         </div>
+                        {/*
+                          * ── THE ONE DECISION, AND IT IS ALWAYS ASKED ───────────────────────────
+                          *
+                          * This replaces a "Type" select (credit / adjustment) plus a direction
+                          * shown only for `adjustment`. Two controls for one decision, and they
+                          * disagreed: the sign was `category === "adjustment" && direction ===
+                          * "increase"`, so credit + increase produced a reduction and threw the
+                          * stated direction away.
+                          *
+                          * The operator says which way the family's balance moves. Nothing here
+                          * mentions a credit, an adjustment, or a sign — the canonical conversion
+                          * derives the category, and the amount below is always absolute.
+                          */}
                         <label className="alloy-os-fdetail__movefield">
-                            <span>Type</span>
-                            {/*
-                              * Two categories, not three. `discount` exists in the vocabulary but
-                              * is owned by authored policy — a manual one would land in the same
-                              * bucket as a configured one and nothing on the card could tell an
-                              * operator which was policy and which was somebody's decision.
-                              */}
+                            <span>What needs to change</span>
                             <AlloySelect
-                                testId="adjustment-category"
-                                aria-label="Type"
+                                testId="adjustment-direction"
+                                aria-label="What needs to change"
                                 allowEmpty={false}
-                                value={adjustCategory}
-                                options={[
-                                    { value: "credit", label: "Credit — lowers what the family owes" },
-                                    { value: "adjustment", label: "Adjustment — either direction" },
-                                ]}
+                                value={adjustDirection}
+                                options={ADJUSTMENT_DIRECTIONS.map((direction) => ({
+                                    value: direction,
+                                    label: adjustmentDirectionLabel(direction),
+                                }))}
                                 onChange={(next) => {
-                                    setAdjustCategory(next as "credit" | "adjustment");
+                                    setAdjustDirection(next as AdjustmentDirection);
                                     setAdjustPreview(null);
                                 }}
                             />
                         </label>
-                        {adjustCategory === "adjustment" ? (
-                            <label className="alloy-os-fdetail__movefield">
-                                <span>Direction</span>
-                                <AlloySelect
-                                    testId="adjustment-direction"
-                                    aria-label="Direction"
-                                    allowEmpty={false}
-                                    value={adjustDirection}
-                                    options={[
-                                        { value: "decrease", label: "Lower what the family owes" },
-                                        { value: "increase", label: "Raise what the family owes" },
-                                    ]}
-                                    onChange={(next) => {
-                                        setAdjustDirection(next as "decrease" | "increase");
-                                        setAdjustPreview(null);
-                                    }}
-                                />
-                            </label>
-                        ) : null}
                         <label className="alloy-os-fdetail__movefield">
-                            <span>Amount</span>
+                            {/* The label carries the direction, so the figure cannot be read the wrong way. */}
+                            <span>{adjustDirection === "reduce" ? "Reduce by" : "Increase by"}</span>
                             <input
                                 data-testid="adjustment-amount"
                                 inputMode="decimal"
@@ -3548,7 +3643,12 @@ export default function FinancialsCard({
                             <button
                                 type="button"
                                 data-testid="adjustment-preview-button"
-                                disabled={running || !adjustReason.trim() || !adjustAgreementId || !adjustSourceChargeId}
+                                /*
+                                 * NO LONGER GATED ON A SOURCE CHARGE. An account-level adjustment
+                                 * is a legitimate economic act and this button refused to let the
+                                 * operator even preview one.
+                                 */
+                                disabled={running || !adjustReason.trim() || !adjustAgreementId || adjustMagnitudeCents() === null}
                                 onClick={() => void previewAdjustment()}
                             >
                                 Preview
@@ -4584,6 +4684,36 @@ export default function FinancialsCard({
                     >
                         <FinancialsChargeDetail chargeId={surface.chargeId} />
                         <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
+                            {/*
+                              * ── CORRECT THIS, FROM THE RECORD OF THIS ──────────────────────
+                              *
+                              * §5. The operator is looking at the charge. Sending them back to
+                              * Add, then to the Adjustment mode, then to a charge select to find
+                              * the SAME row again is asking them to re-enter a context they never
+                              * left — and every one of those steps is a chance to bind the
+                              * correction to the wrong obligation.
+                              *
+                              * This is not a second surface and not a second writer: it opens the
+                              * one unified Adjustment command with the source already bound, the
+                              * same `openAdjustForCharge` the ledger row action uses.
+                              *
+                              * OFFERED ONLY WHERE IT CAN SUCCEED. `adjustableCharges` is the
+                              * ledger's own answer to "which obligations still have something to
+                              * reduce" — it already subtracts what has been reduced, because the
+                              * service refuses a reduction larger than the charge holds. Offering
+                              * this on a charge that answer excludes would be offering a control
+                              * that can only be refused, and asking a second authority whether it
+                              * is correctable would be a second opinion.
+                              */}
+                            {adjustableCharges.some((r) => r.chargeId === surface.chargeId) ? (
+                                <button
+                                    type="button"
+                                    data-financials-charge-detail-correct="true"
+                                    onClick={() => openAdjustForCharge({ chargeId: surface.chargeId })}
+                                >
+                                    Correct this charge
+                                </button>
+                            ) : null}
                             <button
                                 type="button"
                                 className="alloy-os-depthcard__close"
@@ -4634,23 +4764,41 @@ export default function FinancialsCard({
                      * band under the ledger. `billing.adjust_account` is unchanged and is still the
                      * only writer; `openAddAdjustment` still chooses the enrolment.
                      */
-                    <UniversalCard
-                        title="Add"
-                        insight=""
-                        iconName="Receipt"
-                        tier="work"
-                        archetype="status"
-                        modalClass="command"
-                        density="expanded"
-                        gridSpan="row"
-                        data-universal-card-key="add_adjustment"
-                        footerAction={null}
+                    /*
+                     * ── THE SAME SHELL BOTH OTHER COMMANDS USE ──────────────────────────────
+                     *
+                     * `adjust_charge` below and `AddChargeCommand` both wrap their card in a host
+                     * div; this one returned the `UniversalCard` bare, so Add → Adjustment was the
+                     * only command in this card whose layer was not observable in the DOM —
+                     * `data-financials-overlay` was absent, and a responsive measurement had
+                     * nothing to anchor on. The elevated-host rules are descendant selectors, so
+                     * the wrapper changes no geometry; it makes the layer nameable, which is what
+                     * the stacking measurement needs.
+                     */
+                    <div
+                        className="alloy-os-financials"
+                        data-financials-card="true"
+                        data-financials-overlay="add_adjustment"
+                        data-financials-command-shell="adjust"
                     >
-                        <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
-                            {entryModes}
-                            {adjustmentBand}
-                        </div>
-                    </UniversalCard>
+                        <UniversalCard
+                            title="Add"
+                            insight=""
+                            iconName="Receipt"
+                            tier="work"
+                            archetype="status"
+                            modalClass="command"
+                            density="expanded"
+                            gridSpan="row"
+                            data-universal-card-key="add_adjustment"
+                            footerAction={null}
+                        >
+                            <div className="alloy-os-financials__entrybody" data-financials-entry="adjustment">
+                                {entryModes}
+                                {adjustmentBand}
+                            </div>
+                        </UniversalCard>
+                    </div>
                 ) : selected ? (
                     <AddChargeCommand
                         modeSlot={entryModes}

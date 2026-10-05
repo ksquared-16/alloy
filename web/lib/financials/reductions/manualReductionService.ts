@@ -186,6 +186,8 @@ export async function applyManualReduction(
         amountCents: input.amountCents,
         effectiveDate: input.effectiveDate,
         periodStartsOn: resolvedPeriod.startsOn,
+        /* The account dimension, so an account-scoped rule resolves — see `resolveDueDate`. */
+        customerId: resolvedPeriod.customerId,
     });
 
     try {
@@ -345,8 +347,9 @@ export async function reverseManualReduction(
 async function resolveManualReductionPeriod(
     supabase: SupabaseClient,
     input: ManualReductionInput,
-): Promise<{ key: string; startsOn: string | null }> {
+): Promise<{ key: string; startsOn: string | null; customerId: string | null }> {
     const legacyMonth = legacyMonthlyPeriodKey(input.effectiveDate);
+    let resolvedCustomerId: string | null = null;
     try {
         const customerId =
             input.customerId
@@ -355,13 +358,14 @@ async function resolveManualReductionPeriod(
                 billableSourceType: "enrollment_agreement",
                 billableSourceId: input.enrollmentAgreementId,
             }));
-        if (!customerId) return { key: legacyMonth, startsOn: null };
+        resolvedCustomerId = customerId ?? null;
+        if (!customerId) return { key: legacyMonth, startsOn: null, customerId: null };
         const calendar = await resolveCustomerCalendar(supabase, {
             orgId: input.orgId,
             customerId,
             onDate: input.effectiveDate,
         });
-        if (calendar.kind !== "resolved") return { key: legacyMonth, startsOn: null };
+        if (calendar.kind !== "resolved") return { key: legacyMonth, startsOn: null, customerId: resolvedCustomerId };
         const { current } = currentAndNextPeriods(calendar, input.effectiveDate);
         /*
          * THE PERIOD'S START IS RETURNED ALONGSIDE ITS KEY because the due-date policy's two
@@ -373,9 +377,9 @@ async function resolveManualReductionPeriod(
          * evidence of a commercial period, so it supplies no anchor. A period-anchored due-date
          * rule then resolves to no date rather than to a date cut off a fallback.
          */
-        return { key: current.key, startsOn: current.start };
+        return { key: current.key, startsOn: current.start, customerId: resolvedCustomerId };
     } catch {
         /* A reduction must not fail because a calendar lookup did; history's reading still applies. */
-        return { key: legacyMonth, startsOn: null };
+        return { key: legacyMonth, startsOn: null, customerId: resolvedCustomerId };
     }
 }

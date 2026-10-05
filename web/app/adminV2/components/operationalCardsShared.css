@@ -3133,6 +3133,92 @@
 .alloy-os-financials__entrybody { min-width: 0; }
 
 /*
+ * ══ THE ADJUSTMENT BAND, WHEN IT IS A COMMAND'S BODY RATHER THAN A BAND ═══════════════════════
+ *
+ * ── THE DEFECT ───────────────────────────────────────────────────────────────────────────────
+ *
+ * Add → Charge presented correctly and Add → Adjustment left the Financials card protruding
+ * behind the command. Both open the SAME elevated command host; what differed was what each put
+ * inside it.
+ *
+ * `.alloy-os-fdetail__movepanel` was written as a BAND INSIDE THE DETAILS CARD — under the ledger,
+ * on the card's own surface — and it carries everything that role needs: its own border,
+ * background, 12px radius, padding, bottom margin, a `z-index: 61` lift above the Details floor,
+ * and — the part that makes this a layout defect rather than a styling one — `max-height:
+ * min(70svh, 520px)` with `overflow-y: auto`, so it bounds itself and owns its own scrolling.
+ *
+ * Convergence made that band the BODY of a command card. The elevated command host already
+ * supplies every one of those things: `.alloy-os-ucard[data-universal-card-modal="command"]` is
+ * the perimeter, the scrim, the shadow and the viewport cap, and its `__body` is the scroll
+ * container, capped at `min(76vh, 100dvh - 64px) - 104px`. So the band drew a second bordered,
+ * independently-scrolling card inside the first, lifted one layer above its own host, and capped
+ * itself SHORTER than the room the host had given it — leaving the command content floating in a
+ * box smaller than the card around it while the surface behind showed past both edges.
+ *
+ * ── WHY THIS IS THE CONTRACT AND NOT A PIXEL ─────────────────────────────────────────────────
+ *
+ * `.alloy-os-addcharge` learned exactly this lesson first, and its own comment records it: it
+ * "carried its own border, radius, white background and 480px cap from when it was a lab specimen
+ * standing on a page. Inside the elevated host that produced a bordered card floating in a
+ * bordered card, which is the one thing every other centered surface does not do." Add Charge was
+ * stripped to a plain flex column and has presented correctly ever since. The Adjustment band was
+ * never given the same treatment, so this is the shared contract being applied consistently rather
+ * than a height being special-cased — and it is why no second modal primitive is introduced here.
+ *
+ * ── THE SELECTOR IS THE HOST, NOT THE PANEL ──────────────────────────────────────────────────
+ *
+ * `.alloy-os-financials__entrybody` wraps the band ONLY where a command hosts it — both the
+ * unified Add command and Adjust-from-a-row — so the panel keeps its full band presentation
+ * everywhere it is genuinely a band (Move payment, Reverse, Responsibility) and loses it exactly
+ * where the host already provides it. One rule, both Accounts and Focus Panel, because both mount
+ * the same card.
+ */
+.alloy-os-financials__entrybody > .alloy-os-fdetail__movepanel {
+  /* The host is the perimeter. A second one is the bordered-card-in-a-bordered-card. */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  margin-bottom: 0;
+
+  /*
+   * THE HOST OWNS THE SCROLLING. `max-height: none` and `overflow: visible` hand the overflow back
+   * to `.alloy-os-ucard__body`, which is already capped against the viewport and already scrolls —
+   * so the command has ONE scroll container instead of a nested pair, and the card sizes to its
+   * content up to the host's cap rather than to a 520px box inside it.
+   */
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+
+  /*
+   * NO SELF-LIFT. The 61 existed to clear the Details floor the band sat on; inside the command
+   * card the host is already the raised layer at 60, and a descendant one layer above its own host
+   * paints over the card's rounded edge.
+   */
+  position: static;
+  z-index: auto;
+
+  /* The field rhythm is the band's own and is the only thing it keeps. */
+  display: grid;
+  gap: 8px;
+}
+
+/*
+ * THE CONFIRM ROW STAYS REACHABLE, against the HOST's scroll container now.
+ *
+ * `position: sticky` resolves against the nearest scrolling ancestor, which is `.alloy-os-ucard__body`
+ * once the panel stops scrolling itself — so the action row keeps working. What has to change are
+ * the offsets: `bottom: -10px` and `margin-bottom: -10px` were cancelling the band's own `padding:
+ * 10px 12px`, and with that padding gone they pulled the row 10px off the bottom of the card and
+ * let the last field slide under it.
+ */
+.alloy-os-financials__entrybody > .alloy-os-fdetail__movepanel > .alloy-os-fdetail__moveactions {
+  bottom: 0;
+  margin-bottom: 0;
+}
+
+/*
  * ── THE COMPACT CARD'S POSITION ZONE ───────────────────────────────────────────────────────────
  *
  * The right column states the position and carries the commands, so the card spends no row on a
