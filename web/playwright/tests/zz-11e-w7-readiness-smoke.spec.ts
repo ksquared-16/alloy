@@ -85,7 +85,16 @@ test("the Financials surfaces and the controls the packet names", async ({ page 
     const adjustment = await page.evaluate(() => {
         const band = document.querySelector('[data-testid="adjustment-panel"]');
         const el = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLInputElement | null;
-        const date = el("adjustment-effective-date");
+        /*
+         * THE VALUE IS ON THE INPUT INSIDE THE CONTROL, NOT ON ITS WRAPPER.
+         *
+         * `AlloyDateInput` renders a wrapper div carrying the testId, with the input inside it. A
+         * first version of this probe read `.value` and `innerText` off the wrapper and recorded a
+         * null for a control that was displaying "Oct 5, 2026" perfectly well — a measurement
+         * error that would have been read as a missing default.
+         */
+        const dateHost = document.querySelector('[data-testid="adjustment-effective-date"]');
+        const date = (dateHost?.querySelector("input") ?? null) as HTMLInputElement | null;
         return {
             bandPresent: Boolean(band),
             direction: Boolean(el("adjustment-direction")),
@@ -93,10 +102,9 @@ test("the Financials surfaces and the controls the packet names", async ({ page 
             source: Boolean(el("adjustment-source-charge")),
             amount: Boolean(el("adjustment-amount")),
             reason: Boolean(el("adjustment-reason")),
-            dateControl: Boolean(date),
+            dateControl: Boolean(dateHost),
             /* The date the command defaulted to — compared against the org's business date below. */
-            dateValue: date?.value ?? (date?.getAttribute("value") ?? null),
-            dateText: date ? (date as unknown as HTMLElement).innerText ?? null : null,
+            dateValue: date?.value ?? null,
             bandText: band ? (band as HTMLElement).innerText.replace(/\s+/g, " ").slice(0, 320) : null,
             nativeDateInputs: document.querySelectorAll('input[type="date"]').length,
         };
