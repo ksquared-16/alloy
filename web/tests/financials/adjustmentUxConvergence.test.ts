@@ -119,7 +119,18 @@ describe("both hosts reach the same adjustment authority", () => {
          * components rather than a `movepanel`, which is why the repair's `>` child selector
          * reaches only the two Adjustment bodies and leaves those three untouched.
          */
-        expect((card.match(/data-financials-entry="adjustment"/g) ?? []).length).toBe(2);
+        /*
+         * BOTH BY THE CLASS THE REPAIR IS SCOPED TO, not merely by the data attribute.
+         *
+         * A plant that renamed the class on only the Add host left this lock GREEN while the
+         * stacking repair silently stopped applying there — the two hosts would then draw the same
+         * band differently, which is the precise failure §19 is about. The class and the attribute
+         * are asserted together, on the same element, so neither can drift alone.
+         */
+        expect(
+            (card.match(/className="alloy-os-financials__entrybody" data-financials-entry="adjustment"/g) ?? []).length,
+            "both Adjustment hosts carry the class the CSS repair is scoped to",
+        ).toBe(2);
         expect((card.match(/data-financials-entry="(responsibility_admin|discount_admin|payments_admin)"/g) ?? []).length).toBe(3);
     });
 
