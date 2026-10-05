@@ -25,7 +25,7 @@
  * never checks them against an obligation, and never reports success from anything but committed
  * persistence re-read.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AlloyDateInput } from "@/components/workspace/AlloyDateInput";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
@@ -58,7 +58,15 @@ type ScopeArrangement = {
         customerMemberId: string | null;
         effectiveStart: string | null;
         effectiveEnd: string | null;
-        shares: { id: string; name: string; amountCents: number | null; method: string | null }[];
+        shares: {
+            id: string;
+            /* The PERSON, which is what a share is held BY — the `id` above is the share's own. */
+            responsiblePartyId: string | null;
+            name: string;
+            amountCents: number | null;
+            percentBasisPoints: number | null;
+            method: string | null;
+        }[];
     } | null;
     /** False when the household's arrangement is merely REACHING this child. */
     authoredAtRequestedScope: boolean;
@@ -329,8 +337,23 @@ export default function FinancialsResponsibilityPanel({
     );
     const [effectiveStart, setEffectiveStart] = useState(() => new Date().toISOString().slice(0, 10));
     const [shares, setShares] = useState<ShareDraft[]>([]);
+    /*
+     * The people who COULD hold responsibility on this account. Kept separate from `shares`, which
+     * is who currently does — see the seeding effect below.
+     */
+    const [candidates, setCandidates] = useState<ShareDraft[]>([]);
+    /*
+     * Seeding happens once per opening. Without a latch the effect would re-seed and discard
+     * whatever the operator had typed every time the arrangement read settled again.
+     */
+    const seededRef = useRef(false);
     /* The same rules the service enforces, stated early enough for the operator to act on. */
     const reconciliation = reconcileResponsibilityShares(shares);
+    /* Eligible, and not already holding a share. The additive half of W7-F003A. */
+    const addable = candidates.filter(
+        (c) => !shares.some((sh) => sh.responsiblePartyId === c.responsiblePartyId),
+    );
+
     /*
      * ── WHICH SCOPE THIS ARRANGEMENT GOVERNS ──────────────────────────────────────────────────
      *
@@ -364,22 +387,126 @@ export default function FinancialsResponsibilityPanel({
     const [done, setDone] = useState<string | null>(null);
 
     /*
+     * ── A DISABLED PRIMARY ACTION MUST NAME ITS UNMET REQUIREMENT ─────────────────────────────
+     *
+     * Confirm was `disabled={busy !== null || !preview || !reconciliation.ok}`, and only the
+     * reconciliation half ever produced a sentence — and that sentence is `null` whenever the
+     * shares DO reconcile. So an operator with a valid split saw a dead Confirm and nothing at all
+     * telling them why.
+     *
+     * Reproduced on the deployed build: with a valid allocation the surface reported
+     * `confirmDisabled: true`, `reconciliationMessage: null`, and no visible requirement anywhere.
+     * The blocker was simply that Preview had not been run, which the UI never said.
+     *
+     * So the reason is computed ONCE, here, and the button derives its disabled state FROM it.
+     * They cannot drift: a new blocking condition must be given a sentence to be added at all, and
+     * `confirmBlocker === null` is the only state in which Confirm is live.
+     */
+    const confirmBlocker: string | null =
+        busy !== null
+            ? null /* transient: the button already says "Saving…" and explains itself. */
+            : !reconciliation.ok
+              ? (reconciliation.message ?? "This split cannot be reconciled yet.")
+              : !preview
+                ? "Preview this change first — Confirm becomes available once you have seen what it will do."
+                : null;
+
+    /*
+     * ── FOCUS THE PANEL ONCE, ON OPEN — NOT ON EVERY RENDER ───────────────────────────────────
+     *
+     * This was `ref={(el) => el?.focus({ preventScroll: true })}`. An inline ref callback is a new
+     * function identity on every render, so React detaches and re-attaches it each time — calling
+     * `.focus()` again. The panel re-renders on every keystroke, because the amount being typed is
+     * its own state, so the section stole focus back after each character.
+     *
+     * Measured on the deployed build: typing `1` left `document.activeElement` as the SECTION, and
+     * the following `3` went nowhere — the field still read `1`. That is the Director's report
+     * exactly ("entering 13 requires re-entering after the first digit").
+     *
+     * The intent was right and is preserved: the panel takes focus when it opens, so Escape reaches
+     * it rather than the workspace behind, and a keyboard operator who opened it with Enter is
+     * already inside. A mount effect does that once, which is what "on open" always meant — this
+     * section is only rendered while the panel is open.
+     */
+    const panelFocusRef = useRef<HTMLElement | null>(null);
+    useEffect(() => {
+        panelFocusRef.current?.focus({ preventScroll: true });
+    }, []);
+
+
+    /*
      * A HOSTED OPEN STILL HAS TO LOAD. `start()` is the self-hosted button's path; when the gear
      * opens the card there is no click here to run it, and a card with no candidates would invite
      * the operator to arrange responsibility between nobody.
      */
     useEffect(() => {
-        if (!hosted || !open || shares.length > 0) return;
+        if (!hosted || !open || candidates.length > 0) return;
         let cancelled = false;
         void loadCandidates(customerId, chargeId ?? null, parties).then((loaded) => {
             if (cancelled) return;
-            setShares(loaded.candidates);
+            setCandidates(loaded.candidates);
             if (loaded.error) setError(loaded.error);
         });
         return () => {
             cancelled = true;
         };
-    }, [hosted, open, shares.length, customerId, chargeId, parties]);
+    }, [hosted, open, candidates.length, customerId, chargeId, parties]);
+
+    /*
+     * ── ELIGIBLE IS NOT RESPONSIBLE ───────────────────────────────────────────────────────────
+     *
+     * Every eligible person used to become an editable row with a blank amount, so a charge split
+     * 50/50 between two people opened showing THREE editable parties — and the third, who holds no
+     * responsibility at all, was indistinguishable from the two who do. The Director's words: do
+     * not visually imply every account contact is already responsible.
+     *
+     * Four different things were being collapsed into one list, and they are not the same:
+     * an account CONTACT, an ELIGIBLE responsible party, the CURRENT arrangement, and a PAYER.
+     * This separates the middle two: the rows are what the arrangement says TODAY, and eligibility
+     * becomes an explicit additive act through "Add responsible member".
+     *
+     * WHERE THERE IS NO ARRANGEMENT the old behaviour is exactly right and is kept — creating one
+     * is the point, there is no current split to show, and opening on the people who could bear it
+     * is how an operator builds the first arrangement. The distinction only has to be drawn when a
+     * current answer exists to be shown.
+     */
+    useEffect(() => {
+        if (!open || seededRef.current || candidates.length === 0) return;
+        const current = scopeArrangement?.arrangement?.shares ?? [];
+        if (!scopeLoading && current.length > 0) {
+            seededRef.current = true;
+            setShares(
+                current
+                    .filter((sh) => (sh.responsiblePartyId ?? "").trim() !== "")
+                    .map((sh) => {
+                        const method = (sh.method === "percentage" || sh.method === "remainder"
+                            ? sh.method
+                            : "fixed") as ShareMethod;
+                        /* The arrangement's own figures, in the units the field is typed in. */
+                        const amount =
+                            method === "remainder"
+                                ? ""
+                                : method === "percentage"
+                                  ? sh.percentBasisPoints != null ? String(sh.percentBasisPoints / 100) : ""
+                                  : sh.amountCents != null ? (sh.amountCents / 100).toFixed(2) : "";
+                        const match = candidates.find((c) => c.responsiblePartyId === sh.responsiblePartyId);
+                        return {
+                            responsiblePartyId: sh.responsiblePartyId as string,
+                            name: sh.name || match?.name || "Responsible party",
+                            roleLabel: match?.roleLabel ?? null,
+                            method,
+                            amount,
+                        };
+                    }),
+            );
+            return;
+        }
+        /* No arrangement to show: creating one is the point, so open on who could bear it. */
+        if (!scopeLoading && current.length === 0) {
+            seededRef.current = true;
+            setShares(candidates);
+        }
+    }, [open, candidates, scopeArrangement, scopeLoading]);
 
     /*
      * CHANGING THE SCOPE IS CHANGING THE SUBJECT. The arrangement shown must be the one governing
@@ -387,7 +514,16 @@ export default function FinancialsResponsibilityPanel({
      * under "Household" would supersede the wrong arrangement.
      */
     useEffect(() => {
-        if (!administering || !open) return;
+        /*
+         * READ WHENEVER THE PANEL IS OPEN, not only when administering a scope.
+         *
+         * This was gated on `administering`, which is true only where a member selector is offered.
+         * That was fine while the arrangement was merely DISPLAYED, and became wrong the moment it
+         * decides which rows are editable: a mount without member options would silently fall back
+         * to "show everyone eligible" and reintroduce exactly the confusion W7-F003A reports. The
+         * current arrangement is what the rows must be, on every mount that can edit them.
+         */
+        if (!open) return;
         let cancelled = false;
         setScopeLoading(true);
         setScopeArrangement(null);
@@ -399,7 +535,7 @@ export default function FinancialsResponsibilityPanel({
         return () => {
             cancelled = true;
         };
-    }, [administering, open, customerId, effectiveMemberId]);
+    }, [open, customerId, effectiveMemberId]);
 
     const start = useCallback(async () => {
         setPreview(null);
@@ -407,12 +543,15 @@ export default function FinancialsResponsibilityPanel({
         setDone(null);
         setOpen(true);
         /*
-         * CREATING IS THE POINT. This command is how an arrangement comes to exist, so an account
-         * with none is the case that needs it most — the panel opens on the people who could bear
-         * it, not only on the people who already do.
+         * CREATING IS STILL THE POINT, and an account with no arrangement is the case that needs
+         * this command most. What changed is only WHEN the eligible people become editable rows:
+         * they are loaded here as candidates, and the seeding effect shows the current arrangement
+         * where there is one, or all of them where there is not. A fresh open re-seeds.
          */
+        seededRef.current = false;
+        setShares([]);
         const loaded = await loadCandidates(customerId, chargeId ?? null, parties);
-        setShares(loaded.candidates);
+        setCandidates(loaded.candidates);
         if (loaded.error) setError(loaded.error);
     }, [chargeId, customerId, parties]);
 
@@ -526,7 +665,7 @@ export default function FinancialsResponsibilityPanel({
             className="mb-3 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
             data-financials-manage-responsibility="open-panel"
             tabIndex={-1}
-            ref={(el) => el?.focus({ preventScroll: true })}
+            ref={panelFocusRef}
         >
             {/*
               * THE TITLE BELONGS TO THE OUTERMOST SURFACE. Hosted as a depth card, the card's own
@@ -789,6 +928,32 @@ export default function FinancialsResponsibilityPanel({
                 </label>
             ))}
 
+            {/*
+              * ── BECOMING RESPONSIBLE IS AN ACT, NOT A DEFAULT ────────────────────────────────
+              *
+              * The people on the account who are NOT in the arrangement are offered here, one
+              * click each, instead of appearing pre-listed as though they already held a share.
+              * That is the whole of W7-F003A: eligibility as a potential responsible party is not
+              * the same as currently holding responsibility, and the surface must not say it is.
+              *
+              * Nothing is hidden — everyone eligible is still reachable, and the list says who.
+              */}
+            {addable.length > 0 ? (
+                <div className="mt-2" data-financials-responsibility-addable={String(addable.length)}>
+                    {addable.map((c) => (
+                        <button
+                            key={c.responsiblePartyId}
+                            type="button"
+                            className="mr-1.5 mt-1 rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] text-alloy-midnight/75"
+                            data-financials-responsibility-add={c.responsiblePartyId}
+                            onClick={() => setShares((prev) => [...prev, c])}
+                        >
+                            + Add {c.name}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+
             {/* Whether it reconciles, before Confirm rather than after it. */}
             {reconciliation.message ? (
                 <p
@@ -844,11 +1009,12 @@ export default function FinancialsResponsibilityPanel({
                     className={WS_ACTION_PRIMARY}
                     onClick={() => void run("execute")}
                     /*
-                     * AN ARRANGEMENT THAT CANNOT RECONCILE CANNOT BE CONFIRMED. The service would
-                     * refuse it anyway; refusing here means the operator learns it while they can
-                     * still see what they typed.
+                     * DERIVED FROM THE STATED REASON, never computed separately — see
+                     * `confirmBlocker`. An arrangement that cannot reconcile still cannot be
+                     * confirmed; the difference is that the operator is now told which requirement
+                     * is unmet while they can still see what they typed.
                      */
-                    disabled={busy !== null || !preview || !reconciliation.ok}
+                    disabled={busy !== null || confirmBlocker !== null}
                     data-financials-responsibility-confirm="true"
                 >
                     {busy === "execute" ? "Saving…" : "Confirm"}
@@ -863,6 +1029,15 @@ export default function FinancialsResponsibilityPanel({
                     Cancel
                 </button>
             </div>
+            {/* The unmet requirement, beside the control it blocks rather than discovered by guessing. */}
+            {confirmBlocker ? (
+                <p
+                    className="mt-1.5 text-[11px] text-alloy-midnight/65"
+                    data-financials-responsibility-confirm-blocker="true"
+                >
+                    {confirmBlocker}
+                </p>
+            ) : null}
         </section>
     );
 }

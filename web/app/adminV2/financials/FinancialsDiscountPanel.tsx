@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
@@ -157,6 +157,17 @@ export default function FinancialsDiscountPanel({
     onCommitted: () => Promise<void> | void;
 }) {
     const [position, setPosition] = useState<FamilyPosition | null>(initialPosition ?? null);
+
+    /*
+     * FOCUS ONCE, ON OPEN. The same defect the Responsibility panel carried, in the same shape: an
+     * inline ref callback is a new identity every render, so React re-attached it and re-focused
+     * this section after every keystroke — stealing focus from any field being typed into. Found
+     * while repairing W7-F003C next door; fixed here too rather than left as a known identical bug.
+     */
+    const panelFocusRef = useRef<HTMLElement | null>(null);
+    useEffect(() => {
+        panelFocusRef.current?.focus({ preventScroll: true });
+    }, []);
     /* Seeded, there is nothing to wait for on the first paint — only something to confirm. */
     const [loading, setLoading] = useState(!initialPosition);
     const [error, setError] = useState<string | null>(null);
@@ -529,7 +540,7 @@ export default function FinancialsDiscountPanel({
                         className="mb-3 mt-2 rounded-md border border-alloy-stone/15 bg-white/60 p-3"
                         data-financials-manage-discounts="open-panel"
                         tabIndex={-1}
-                        ref={(el) => el?.focus({ preventScroll: true })}
+                        ref={panelFocusRef}
                     >
                         {/*
                           * THE TITLE BELONGS TO WHICHEVER SURFACE IS THE OUTERMOST ONE. Hosted,
