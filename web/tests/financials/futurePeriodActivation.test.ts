@@ -277,3 +277,40 @@ describe("evaluateFuturePeriodActivationOccurrence", () => {
         expect(db.tables.charges[0].status).toBe("draft");
     });
 });
+
+describe("the handler is registered, so the schedule resolves to code", () => {
+    /**
+     * A `scheduled_work` row naming an UNREGISTERED key fails terminally and stays visible. That is
+     * the property that makes the migration's insert safe rather than a way to run arbitrary work —
+     * configuration cannot introduce behaviour. It is also the property that makes a typo in either
+     * place invisible until the first occurrence fires, which is why both ends are asserted here
+     * against the literal the migration writes.
+     */
+    it("binds financials.future_period_charge.activate at the registration boundary", async () => {
+        const registry = await import("@/lib/scheduledWork/scheduledWorkRegistry");
+        registry.__resetScheduledWorkRegistryForTests();
+        const consumers = await import("@/lib/scheduledWork/scheduledWorkConsumers");
+        consumers.registerScheduledWorkConsumers();
+
+        expect(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY).toBe("financials.future_period_charge.activate");
+        expect(registry.registeredScheduledWorkHandlerKeys()).toContain(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY);
+        expect(registry.resolveScheduledWorkHandler(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY)).toBeTypeOf("function");
+        /* And the close handler is still its own key: two calendar edges, two occurrences. */
+        expect(registry.registeredScheduledWorkHandlerKeys()).toContain("financials.billing_period_close.evaluate");
+        registry.__resetScheduledWorkRegistryForTests();
+    });
+
+    it("the migration registers the same literal the code binds", async () => {
+        /* Read as text rather than executed: the migration is SQL, and a mismatch between these two
+         * strings is a schedule that wakes and resolves to nothing. */
+        const { readFileSync } = await import("node:fs");
+        const sql = readFileSync(
+            new URL("../../../supabase/migrations/20261120120000_future_period_charge_activation_schedule.sql", import.meta.url),
+            "utf8",
+        );
+        expect(sql).toContain(`'${FUTURE_PERIOD_ACTIVATION_HANDLER_KEY}'`);
+        /* Daily, tenant-scoped, and at the time the self-test pins. */
+        expect(sql).toContain("'daily'");
+        expect(sql).toContain("interval '11 hours 30 minutes'");
+    });
+});
