@@ -55,6 +55,21 @@ export type DueDateInputs = {
      * caller that has no account in hand is unaffected and nothing that resolves today changes.
      */
     customerId?: string | null;
+    /**
+     * ── THE SITE DIMENSION, WHICH THIS RESOLVER COULD NOT EXPRESS AT ALL ──────────────────────
+     *
+     * `customerId` was added when an account-scoped rule was found unresolvable. The same census
+     * then showed a wider instance of the identical defect: `DueDateInputs` had no `locationId`
+     * either, so a `scope_type: "location"` due-date policy could never resolve for ANY caller —
+     * generated, manual or correction. Not one caller's omission; the resolver's.
+     *
+     * Null for a household-source charge, which attends no site. See `resolveFinancialPolicyScope`.
+     *
+     * `rate_plan` is deliberately still absent: no Financials writer holds a rate-plan id at the
+     * moment a due date is resolved, and a dimension nothing can supply is an argument that only
+     * looks like coverage.
+     */
+    locationId?: string | null;
 };
 
 export type DueDateResolution = {
@@ -95,7 +110,11 @@ export function resolveDueDate(
     const resolved = resolveFinancialPolicy(
         policies,
         "due_date",
-        { serviceId: inputs.serviceId ?? undefined, customerId: inputs.customerId ?? undefined },
+        {
+            serviceId: inputs.serviceId ?? undefined,
+            customerId: inputs.customerId ?? undefined,
+            locationId: inputs.locationId ?? undefined,
+        },
         asOf,
     );
     if (!resolved.resolved) return { dueDate: null, strategy: null, reason: "no_policy" };

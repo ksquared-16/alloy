@@ -1078,7 +1078,13 @@ export default function FinancialsCard({
     const [adjustDirection, setAdjustDirection] = useState<AdjustmentDirection>("reduce");
     const [adjustAmount, setAdjustAmount] = useState("");
     const [adjustReason, setAdjustReason] = useState("");
-    const [adjustEffectiveDate, setAdjustEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+    /*
+     * Seeded empty and set to the organisation's business date by whichever opener runs — see
+     * `openAddAdjustment` and `openAdjustForCharge`. It cannot be seeded here because the VM that
+     * carries the date has not loaded when this state is created, and seeding it from the browser
+     * would be the UTC default this slice removes.
+     */
+    const [adjustEffectiveDate, setAdjustEffectiveDate] = useState("");
     const [adjustPreview, setAdjustPreview] = useState<{ summary: string; changes: string[] } | null>(null);
     const [adjustError, setAdjustError] = useState<string | null>(null);
     const [reversePending, setReversePending] = useState<{ applicationId: string } | null>(null);
@@ -1395,6 +1401,24 @@ export default function FinancialsCard({
      * most specific wins — so a preview that omits the child tells an operator correcting one
      * child's charge that the household bears it while a child-scoped arrangement governs.
      */
+    /*
+     * ── THE ORGANISATION'S TODAY, RESOLVED SERVER-SIDE ────────────────────────────────────────
+     *
+     * Every economic date this card defaults means "today for the organisation whose money this
+     * is". It cannot be computed here: `new Date().toISOString().slice(0, 10)` is the UTC day,
+     * which rolls over during the local working afternoon for any organisation west of UTC, and
+     * the browser's own zone is the OPERATOR's — an operator may sit in a different zone from the
+     * site whose money they are recording.
+     *
+     * So the value comes from the VM, where the server resolved it through the same operational
+     * timezone authority commercial close uses, and it is the same day the server reconciled this
+     * account against. No timezone arithmetic is done in React.
+     *
+     * The UTC day remains only as a last resort for a VM that has not loaded, which degrades to
+     * exactly the behaviour this card had before rather than to a blank date.
+     */
+    const businessToday = vm?.businessDateYmd || new Date().toISOString().slice(0, 10);
+
     const adjustMemberId = useMemo(
         () => adjustableSubjects.find((sub) => sub.agreementId === adjustAgreementId)?.customerMemberId ?? "",
         [adjustAgreementId, adjustableSubjects],
@@ -1454,8 +1478,14 @@ export default function FinancialsCard({
         const scoped = adjustableSubjects.find((sub) => sub.customerMemberId === subjectFilter);
         setAdjustAgreementId(scoped?.agreementId ?? adjustableSubjects[0]?.agreementId ?? "");
         setAdjustSourceChargeId("");
+        /*
+         * THE ORGANISATION'S BUSINESS DATE, shown and editable — never the source charge's date and
+         * never the UTC day. Set on open rather than seeded in state, because the VM that carries it
+         * is loaded by the time an operator can reach this command.
+         */
+        setAdjustEffectiveDate(businessToday);
         setAdjustOpen(true);
-    }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, subjectFilter]);
+    }, [adjustableSubjects, businessToday, closeAdjustPanels, closeMovePanels, subjectFilter]);
 
     /**
      * ── ADJUST, FROM THE ROW IT IS ABOUT ────────────────────────────────────────────────────────
@@ -1483,10 +1513,16 @@ export default function FinancialsCard({
             ?? "";
         setAdjustAgreementId(agreementId);
         setAdjustSourceChargeId(args.chargeId);
+        /*
+         * STILL TODAY, even though a source charge is bound. §7 of the Adjustment doctrine: a
+         * correction must not silently inherit the source's historical date — that is how a
+         * correction lands in a period it was not decided in, and how it reaches a closed one.
+         */
+        setAdjustEffectiveDate(businessToday);
         setAdjustOpen(true);
         setEntryMode("adjustment");
         push({ kind: "adjust_charge", chargeId: args.chargeId });
-    }, [adjustableSubjects, closeAdjustPanels, closeMovePanels, vm]);
+    }, [adjustableSubjects, businessToday, closeAdjustPanels, closeMovePanels, vm]);
 
     const openReverseAdjustment = useCallback((args: { applicationId: string }) => {
         closeMovePanels();
@@ -2468,7 +2504,8 @@ export default function FinancialsCard({
             return;
         }
         const amountCents = Math.round(Number(chargeAmount || "0") * 100) || template?.amountCents || 0;
-        const serviceDate = chargeEventDate || new Date().toISOString().slice(0, 10);
+        /* The organisation's today, not the browser's UTC day. An authored event date still wins. */
+        const serviceDate = chargeEventDate || businessToday;
         let cancelled = false;
         const query = new URLSearchParams({
             customer_id: customerId,
@@ -2616,8 +2653,11 @@ export default function FinancialsCard({
                     const error = await run("billing.configure_responsibility", {
                         customer_id: customerId,
                         charge_id: chargeId,
-                        /* Today: the arrangement governs this charge from the moment it is made. */
-                        effective_start: new Date().toISOString().slice(0, 10),
+                        /*
+                         * Today: the arrangement governs this charge from the moment it is made —
+                         * and "today" is the organisation's business date, not the UTC day.
+                         */
+                        effective_start: businessToday,
                         shares,
                     });
                     if (error) {

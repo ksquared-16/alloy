@@ -46,6 +46,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { listFinancialPolicies } from "@/lib/financials/policies/financialPolicyService";
+import { fetchOrgBusinessDate } from "@/lib/financials/businessDate";
 /*
  * THE REVIEW BOUNDARY'S OTHER HALF. `listFinancialPolicies` reads the org's policies; this resolves
  * the one that governs a given service. The pair is what makes `posting_review` a configured fact
@@ -366,6 +367,19 @@ export type FinancialsUnavailable = { fact: string; reason: string };
 export type FinancialsCardVM = {
     /** Null when the subject has no enrollment agreement at all — nothing financial to say. */
     account: { customerId: string | null; label: string | null } | null;
+    /**
+     * ── THE ORGANISATION'S BUSINESS DATE, RESOLVED SERVER-SIDE ────────────────────────────────
+     *
+     * The operating day this whole model was built against — the same value that chose `period`,
+     * reconciled the rows and decided what is past due.
+     *
+     * It reaches the surface because a command that needs to default an economic date must use the
+     * ORGANISATION's today, and React cannot compute that: the browser's zone is the OPERATOR's,
+     * and an operator may sit in a different zone from the site whose money they are recording.
+     * Carrying the resolved value is also what keeps the surface's default and the server's
+     * reconciliation talking about the same day.
+     */
+    businessDateYmd: string;
     period: BillingPeriod;
     subjects: FinancialsSubject[];
     /**
@@ -565,7 +579,28 @@ function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
 
-function ymdToday(): string {
+/**
+ * THE ORGANISATION'S BUSINESS DATE, with the one honest fallback.
+ *
+ * `fetchOrgBusinessDate` already resolves a usable zone for a tenant that has configured none, so
+ * the catch here is for an unreachable read rather than an unconfigured org. A card that cannot
+ * reach the timezone authority still has to render, and the UTC day is the same answer this code
+ * gave before — so the fallback degrades to the old behaviour rather than to no behaviour.
+ */
+async function resolveOperatingDay(supabase: SupabaseClient, orgId: string): Promise<string> {
+    try {
+        return await fetchOrgBusinessDate(supabase, orgId);
+    } catch {
+        return ymdTodayUtcFallback();
+    }
+}
+
+/**
+ * LAST-RESORT UTC DAY. Retained only for the path that has no organisation to ask — see the
+ * resolution in `buildFinancialsCardVMInner`, which prefers the org's business date and falls back
+ * here only if the timezone authority itself fails.
+ */
+function ymdTodayUtcFallback(): string {
     return new Date().toISOString().slice(0, 10);
 }
 
@@ -583,9 +618,10 @@ function emptyReconciliation(): FinancialsReconciliation {
     };
 }
 
-function baseVm(period: BillingPeriod): FinancialsCardVM {
+function baseVm(period: BillingPeriod, businessDateYmd: string): FinancialsCardVM {
     return {
         account: null,
+        businessDateYmd,
         period,
         payers: [],
         responsibility: { parties: [], unassignedCents: 0, allocatedCents: 0, hasUnresolvedCharges: false },
@@ -1163,9 +1199,20 @@ async function buildFinancialsCardVMInner(
     clock: FinancialsBuildClock,
 ): Promise<FinancialsCardVM> {
     const mark = args.mark ?? (() => {});
-    const today = t(args.today) || ymdToday();
+    /*
+     * ── THE OPERATING DAY IS THE ORGANISATION'S, NOT UTC'S ────────────────────────────────────
+     *
+     * This was `new Date().toISOString().slice(0, 10)`, and `today` is not a label here: it chooses
+     * `period` through `billingPeriodForDate`, it reconciles the rows, and it decides what reads as
+     * past due and how many days overdue. For an organisation west of UTC the UTC date rolls over
+     * during the local working afternoon — so from about 5pm in Los Angeles the card would show the
+     * NEXT commercial period as current and age receivables a day early, every day.
+     *
+     * `args.today` still wins; certification pins it, and that is the whole reason it exists.
+     */
+    const today = t(args.today) || (await resolveOperatingDay(supabase, args.orgId));
     const period = billingPeriodForDate(today);
-    const vm = baseVm(period);
+    const vm = baseVm(period, today);
     vm.unavailable = platformUnavailabilities();
 
     const customerId = t(args.customerId) || null;
