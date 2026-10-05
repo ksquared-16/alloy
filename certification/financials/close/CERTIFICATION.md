@@ -1,6 +1,15 @@
 # Financials V1 — billing-period commercial finalization
 
-**Classification: `IMPLEMENTED_AWAITING_REAL_CLOCK_CERTIFICATION`.**
+**Classification: `FINANCIALS_V1_BILLING_PERIOD_COMMERCIAL_FINALIZATION_COMPLETE_CERTIFIED`.**
+
+> **The real-clock debt is CLOSED.** On `2026-10-05T04:00:01.043Z` the deployed scheduled-work clock
+> closed daily period `59f50689-030f-4c91-a38e-57a3a62b6279` (`2026-10-03~2026-10-03`) unattended —
+> occurrence `623122f4…`, worker `worker-df98e6ad`, attempt `6ab19722…`, `closed_count: 1`,
+> `close_actor = system`, `closed_by` NULL, bounds untouched, exactly one transition across two
+> wakes. Full evidence in `TERMINAL-REAL-CLOCK-CERTIFIED.md`. Everything below was written while that
+> proof was still owed and is preserved as the implementation record.
+
+**Superseded classification (kept for provenance): `IMPLEMENTED_AWAITING_REAL_CLOCK_CERTIFICATION`.**
 
 Everything is implemented, bound, falsified, merged (`95dc556fe`) and its migration applied. One
 obligation remains and it is a *waiting* obligation, not a missing one: Phase 22 requires a real

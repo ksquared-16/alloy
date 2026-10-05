@@ -78,6 +78,18 @@ export type ReductionCoreInput = {
         description: string;
         /** The date the reduction BELONGS to, so it lands in the period it reduces. */
         serviceDate: string;
+        /**
+         * WHEN THE CONTRA CHARGE IS DUE — supplied by the caller, resolved by nobody here.
+         *
+         * Only a reduction that INCREASES what a family owes can have one, and only the manual
+         * correction authority knows that, because it is the only caller whose amount can be
+         * positive. The policy path omits it and keeps exactly the behaviour it has: a vacation
+         * credit is not collected, so it is not dated.
+         *
+         * Undefined and null are the same thing to the charge writer — leave it alone — so this
+         * adds no default and overrides nothing.
+         */
+        dueDate?: string | null;
         currencyCode: string;
         metadata?: Record<string, unknown>;
     };
@@ -243,6 +255,7 @@ export async function applyReductionCore(
         amountCents: total,
         currencyCode: input.charge.currencyCode,
         serviceDate: input.charge.serviceDate,
+        dueDate: input.charge.dueDate ?? null,
         description: input.charge.description,
         actorUserId: input.actorUserId,
         metadata: input.charge.metadata ?? {},

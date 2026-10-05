@@ -42,7 +42,18 @@ describe("no native select survives in the transaction surfaces", () => {
         for (const testId of [
             "adjustment-agreement",
             "adjustment-source-charge",
-            "adjustment-category",
+            /*
+             * `adjustment-category` WAS HERE AND IS DELIBERATELY GONE. The Adjustment panel asked
+             * for a "Type" (credit / adjustment) and then a direction, which is one decision
+             * encoded twice — and they disagreed: the sign was computed as
+             * `category === "adjustment" && direction === "increase"`, so credit + increase
+             * produced a REDUCTION and discarded the direction the operator had just stated.
+             *
+             * The category is derived by the canonical conversion now, so the control it was
+             * collected through no longer exists. This lock is about canonical primitives, not
+             * about keeping a control alive: the assertion below replaces it with the stronger
+             * one — that the category select is unreachable and the direction is unconditional.
+             */
             "adjustment-direction",
             "financials-payment-method",
             "financials-payment-payer",
@@ -54,6 +65,25 @@ describe("no native select survives in the transaction surfaces", () => {
             const before = card.slice(Math.max(0, at - 400), at);
             expect(before.lastIndexOf("<AlloySelect"), `${testId} uses AlloySelect`).toBeGreaterThan(-1);
         }
+    });
+
+    it("the operator is no longer asked for a storage category, and direction is unconditional", () => {
+        const card = code(CARD);
+        /* The control is gone, not merely hidden behind a condition. */
+        expect(card).not.toContain('testId="adjustment-category"');
+        expect(card).not.toContain("adjustCategory");
+        /*
+         * AND THE DIRECTION IS NOT CONDITIONAL ON ANYTHING. The old panel rendered it only when
+         * the category was `adjustment`, which is how an operator could state a direction that
+         * was then ignored. A bare `adjustDirection ===` comparison guarding the control would
+         * reintroduce that, so the direction select must sit in the band unguarded.
+         */
+        const at = card.indexOf('testId="adjustment-direction"');
+        expect(at).toBeGreaterThan(-1);
+        expect(card.slice(Math.max(0, at - 400), at)).not.toMatch(/\?\s*\($/);
+        /* The sign is never computed in the component — the canonical module owns it. */
+        expect(card).toContain("parseAdjustmentMagnitudeCents");
+        expect(card).not.toMatch(/raises \? cents : -cents/);
     });
 
     it("the payment method keeps its server-decided disabled option rather than hiding it", () => {

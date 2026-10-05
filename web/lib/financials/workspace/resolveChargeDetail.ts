@@ -52,6 +52,10 @@ import {
     type ChargeOrigin,
 } from "@/lib/financials/workspace/chargeOrigin";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
+import {
+    directionFromSignedCents,
+    type AdjustmentDirection,
+} from "@/lib/financials/corrections/correctionIntent";
 /** One payment that satisfied part of this charge, as the operator needs to read it. */
 export type ChargeDetailApplication = {
     paymentId: string;
@@ -188,6 +192,56 @@ export type ChargeDetail = {
      * arrangement that there isn't one.
      */
     accountArrangement: AccountArrangement | null;
+
+    /**
+     * ── WHEN THIS CHARGE IS SOMEBODY'S CORRECTION ────────────────────────────────────────────
+     *
+     * Null for an ordinary charge, which is almost all of them. Present when this charge IS the
+     * contra charge of a manual adjustment or correction, and then it answers §15's questions from
+     * the record rather than from inference:
+     *
+     *   what changed, and which way   `direction` — stated, not read off a sign
+     *   how much                      the charge's own amount, above
+     *   effective date                the charge's service date, above
+     *   commercial period             `billingPeriodLabel`, above
+     *   the source fact               `sourceChargeId` and its own historical period
+     *   who and when                  `createdByName` / `createdAt`, above
+     *   why                           `reason` — the durable one, see below
+     *
+     * ── THE REASON IS THE EXISTING CANONICAL FIELD ───────────────────────────────────────────
+     *
+     * §16 asks whether a durable reason exists before anything invents one. It does, in two places
+     * that agree because one writer populates both: `financial_reduction_applications.reason` is
+     * NOT NULL for a manual reduction — the table's own CHECK refuses one without it — and
+     * `applyManualReduction` also stores it in the contra charge's metadata. The application row is
+     * read here because it is the constrained one; no parallel notes store is created.
+     */
+    adjustment: ChargeDetailAdjustment | null;
+};
+
+/** The provenance of one manual adjustment, as the operator needs to read it. */
+export type ChargeDetailAdjustment = {
+    applicationId: string;
+    /** `reduce` or `increase`. The sign is never the operator's to interpret. */
+    direction: AdjustmentDirection;
+    /** Always positive — the magnitude a person reads. */
+    magnitudeCents: number;
+    /** Why the account changed. Durable, constrained NOT NULL for a manual reduction. */
+    reason: string | null;
+    /** Any further human note. Separate from the reason, and ordinarily absent. */
+    note: string | null;
+    /** The historical fact this corrects, when it corrects one. Account-level ones name none. */
+    sourceChargeId: string | null;
+    sourceDescription: string | null;
+    sourceServiceDate: string | null;
+    /** The source's OWN period label, whichever generation it belongs to. */
+    sourcePeriodLabel: string | null;
+    /** `closed` where the source's period is finalized. Null for a legacy source — it has none. */
+    sourcePeriodStatus: string | null;
+    /** True when this adjustment is itself the reversal of another. */
+    reversesApplicationId: string | null;
+    /** True when this adjustment has been reversed by a later one. */
+    reversedByApplicationId: string | null;
 };
 
 function t(v: unknown): string {
@@ -525,6 +579,121 @@ export async function resolveChargeDetail(
         }
     }
 
+    /*
+     * ── IS THIS CHARGE SOMEBODY'S CORRECTION? ────────────────────────────────────────────────
+     *
+     * One read, keyed on `charge_id`, because the contra charge IS the join: `reductionCore` writes
+     * the application rows pointing at the charge it created. A charge with no application is an
+     * ordinary charge and this stays null — which is the common case and costs one indexed miss.
+     *
+     * MANUAL ONLY. A policy reduction's contra charge is also a reduction, and it is not an
+     * operator's adjustment: its reason is the policy, it is not reversible through this surface,
+     * and presenting it with a "why did somebody decide this" block would invite an answer that
+     * does not exist. `reduction_kind` is what tells them apart.
+     *
+     * A FAILED READ IS NOT "NOT AN ADJUSTMENT". Swallowing the error would make a correction look
+     * like a plain charge — stripping the operator of the source fact, the reason and the reversal
+     * lineage with no sign that anything was missing — so it propagates like every other read here.
+     */
+    let adjustment: ChargeDetailAdjustment | null = null;
+    {
+        const { data: appRow, error: appError } = await supabase
+            .from("financial_reduction_applications")
+            .select(
+                "id, reduction_kind, amount_cents, reason, explanation, source_charge_id, reverses_id, reversed_by_id",
+            )
+            .eq("org_id", args.orgId)
+            .eq("charge_id", charge.id)
+            .eq("reduction_kind", "manual")
+            .maybeSingle();
+        if (appError) {
+            throw new Error(`charge detail: the adjustment record could not be read (${appError.message.trim()})`);
+        }
+        const app = appRow as unknown as {
+            id: string;
+            amount_cents: number;
+            reason: string | null;
+            explanation: string | null;
+            source_charge_id: string | null;
+            reverses_id: string | null;
+            reversed_by_id: string | null;
+        } | null;
+        if (app) {
+            /*
+             * THE SOURCE'S OWN PERIOD, read from the source rather than assumed from this charge.
+             * §12: a legacy source carries a key and no period row, so its label comes from the key
+             * and its status is genuinely null — there is no row to have a status. That absence is
+             * reported as absence; no fake historical canonical period is materialized to fill it.
+             */
+            let sourceDescription: string | null = null;
+            let sourceServiceDate: string | null = null;
+            let sourcePeriodLabel: string | null = null;
+            let sourcePeriodStatus: string | null = null;
+            if (app.source_charge_id) {
+                const { data: srcRow, error: srcError } = await supabase
+                    .from("charges")
+                    .select("description, service_date, billing_period_id, legacy_billing_period_key")
+                    .eq("org_id", args.orgId)
+                    .eq("id", app.source_charge_id)
+                    .maybeSingle();
+                if (srcError) {
+                    throw new Error(`charge detail: the corrected charge could not be read (${srcError.message.trim()})`);
+                }
+                const src = srcRow as unknown as {
+                    description: string | null;
+                    service_date: string | null;
+                    billing_period_id: string | null;
+                    legacy_billing_period_key: string | null;
+                } | null;
+                if (src) {
+                    sourceDescription = t(src.description) || null;
+                    sourceServiceDate = src.service_date;
+                    sourcePeriodLabel = src.legacy_billing_period_key
+                        ? billingPeriodLabel(src.legacy_billing_period_key)
+                        : null;
+                    if (src.billing_period_id) {
+                        const { data: periodRow, error: periodError } = await supabase
+                            .from("financial_billing_periods")
+                            .select("period_key, status")
+                            .eq("org_id", args.orgId)
+                            .eq("id", src.billing_period_id)
+                            .maybeSingle();
+                        if (periodError) {
+                            throw new Error(
+                                `charge detail: the corrected charge's period could not be read (${periodError.message.trim()})`,
+                            );
+                        }
+                        const period = periodRow as unknown as { period_key: string; status: string } | null;
+                        if (period) {
+                            sourcePeriodLabel = billingPeriodLabel(period.period_key);
+                            sourcePeriodStatus = period.status;
+                        }
+                    }
+                }
+            }
+            const metadata = (charge.metadata ?? {}) as Record<string, unknown>;
+            adjustment = {
+                applicationId: app.id,
+                direction: directionFromSignedCents(app.amount_cents),
+                magnitudeCents: Math.abs(app.amount_cents),
+                /*
+                 * The application row's reason is the constrained one and wins. The charge
+                 * metadata copy is the fallback for a row written before the column was populated,
+                 * not a second authority.
+                 */
+                reason: t(app.reason) || t(metadata.reason) || null,
+                note: t(app.explanation) || t(metadata.note) || null,
+                sourceChargeId: app.source_charge_id,
+                sourceDescription,
+                sourceServiceDate,
+                sourcePeriodLabel,
+                sourcePeriodStatus,
+                reversesApplicationId: app.reverses_id,
+                reversedByApplicationId: app.reversed_by_id,
+            };
+        }
+    }
+
     const origin = classifyChargeOrigin({
         createdBy: charge.created_by ?? null,
         jobId: charge.job_id ?? null,
@@ -603,6 +772,7 @@ export async function resolveChargeDetail(
             })),
         },
         accountArrangement,
+        adjustment,
         expectedFunding: responsibilityRead.expectedFunding.map((f) => ({
             label: f.label,
             sourceType: f.sourceType,

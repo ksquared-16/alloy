@@ -107,6 +107,24 @@ type ChargeDetail = {
             }[];
         }[];
     } | null;
+    /*
+     * Present only when this charge IS somebody's correction. The projection's own block — every
+     * field is a stored fact, and the direction is STATED rather than read off a sign here.
+     */
+    adjustment?: {
+        applicationId: string;
+        direction: "reduce" | "increase";
+        magnitudeCents: number;
+        reason: string | null;
+        note: string | null;
+        sourceChargeId: string | null;
+        sourceDescription: string | null;
+        sourceServiceDate: string | null;
+        sourcePeriodLabel: string | null;
+        sourcePeriodStatus: string | null;
+        reversesApplicationId: string | null;
+        reversedByApplicationId: string | null;
+    } | null;
 };
 
 function money(cents: number, currency: string): string {
@@ -285,6 +303,107 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
              * A charge that has not posted has no accounting period, and that is said rather than
              * left blank. An unmapped GL is a configuration fact and is toned as attention.
              */}
+            {/*
+              * ── WHEN THIS CHARGE IS A CORRECTION, SAY SO FIRST ──────────────────────────────
+              *
+              * §15: the resulting adjustment must be openable through the SHARED Details
+              * experience and explain itself without engineering vocabulary. So it is a block in
+              * this card rather than a second detail surface — one presentation over one
+              * projection, which is the rule the charge detail already follows.
+              *
+              * It sits ABOVE Posting because it is the charge's identity: an operator opening this
+              * row wants to know what was corrected and why before they want to know which period
+              * it posted in. No ids are rendered; the source is named by its description and date.
+              */}
+            {detail.adjustment ? (
+                <>
+                    <Group>Correction</Group>
+                    <Row
+                        label="What changed"
+                        value={
+                            detail.adjustment.direction === "reduce"
+                                ? `Reduced what the family owes by ${money(detail.adjustment.magnitudeCents, detail.currencyCode)}`
+                                : `Increased what the family owes by ${money(detail.adjustment.magnitudeCents, detail.currencyCode)}`
+                        }
+                        strong
+                        testId="correction-direction"
+                    />
+                    {/*
+                      * THE SOURCE FACT, OR THE TRUTH THAT THERE ISN'T ONE. An account-level
+                      * adjustment legitimately corrects no single historical charge, and saying
+                      * so is better than an empty row that reads as a lookup that failed.
+                      */}
+                    <Row
+                        label="Corrects"
+                        value={
+                            detail.adjustment.sourceChargeId
+                                ? [
+                                      detail.adjustment.sourceDescription || "a charge",
+                                      detail.adjustment.sourceServiceDate
+                                          ? formatDisplayDate(detail.adjustment.sourceServiceDate)
+                                          : null,
+                                  ]
+                                      .filter(Boolean)
+                                      .join(" · ")
+                                : "The account as a whole — not one charge"
+                        }
+                        muted={!detail.adjustment.sourceChargeId}
+                        testId="correction-source"
+                    />
+                    {/*
+                      * ── THE SOURCE'S PERIOD, AND WHETHER IT IS FINISHED ─────────────────────
+                      *
+                      * The sentence an operator needs for a closed source is that the historical
+                      * period DID NOT CHANGE. Showing the label alone leaves them to wonder
+                      * whether correcting a November charge moved November, which is the one
+                      * question commercial finality exists to answer.
+                      *
+                      * A legacy source has a label and no status, because it has no period row —
+                      * §12's case. It is presented as history rather than as a missing field.
+                      */}
+                    {detail.adjustment.sourceChargeId ? (
+                        <Row
+                            label="Corrected period"
+                            value={
+                                detail.adjustment.sourcePeriodStatus === "closed"
+                                    ? `${detail.adjustment.sourcePeriodLabel ?? "The original period"} · finalized, unchanged`
+                                    : detail.adjustment.sourcePeriodLabel
+                                      ?? "Before the account's commercial periods"
+                            }
+                            muted={!detail.adjustment.sourcePeriodLabel}
+                            testId="correction-source-period"
+                        />
+                    ) : null}
+                    <Row
+                        label="Why"
+                        value={detail.adjustment.reason ?? "No reason recorded"}
+                        muted={!detail.adjustment.reason}
+                        testId="correction-reason"
+                    />
+                    {detail.adjustment.note ? (
+                        <Row label="Note" value={detail.adjustment.note} testId="correction-note" />
+                    ) : null}
+                    {/*
+                      * REVERSAL LINEAGE, IN WORDS. `reverses_id` and `reversed_by_id` are the
+                      * canonical record; an operator needs the consequence, not the pointer.
+                      */}
+                    {detail.adjustment.reversesApplicationId ? (
+                        <Row
+                            label="This is a reversal"
+                            value="It undoes an earlier correction on this account."
+                            testId="correction-is-reversal"
+                        />
+                    ) : null}
+                    {detail.adjustment.reversedByApplicationId ? (
+                        <Row
+                            label="Reversed"
+                            value="A later correction has undone this one."
+                            testId="correction-reversed"
+                        />
+                    ) : null}
+                </>
+            ) : null}
+
             <Group>Posting</Group>
             <Row
                 label="Billing period"

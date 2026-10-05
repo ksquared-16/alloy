@@ -42,6 +42,19 @@ export type DueDateInputs = {
     periodStart: string | null;
     /** Narrowing, so a service-scoped rule can beat the organisation's. */
     serviceId?: string | null;
+    /**
+     * ── THE ACCOUNT DIMENSION, WHICH THIS RESOLVER COULD NOT PREVIOUSLY EXPRESS ───────────────
+     *
+     * `PolicyResolutionContext` carries five narrowing dimensions and ranks `customer` as the MOST
+     * specific — its own comment says why: "an explicit account answer must beat an inherited
+     * default". This resolver passed only `serviceId`, so `matchesContext` could never match a
+     * `scope_type: "customer"` policy and an account-scoped due-date rule resolved to `no_policy`
+     * no matter how it was configured.
+     *
+     * Found by a test that seeded exactly such a policy and got `no_policy` back. Optional, so a
+     * caller that has no account in hand is unaffected and nothing that resolves today changes.
+     */
+    customerId?: string | null;
 };
 
 export type DueDateResolution = {
@@ -82,7 +95,7 @@ export function resolveDueDate(
     const resolved = resolveFinancialPolicy(
         policies,
         "due_date",
-        { serviceId: inputs.serviceId ?? undefined },
+        { serviceId: inputs.serviceId ?? undefined, customerId: inputs.customerId ?? undefined },
         asOf,
     );
     if (!resolved.resolved) return { dueDate: null, strategy: null, reason: "no_policy" };
