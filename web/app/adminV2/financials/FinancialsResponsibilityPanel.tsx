@@ -387,29 +387,60 @@ export default function FinancialsResponsibilityPanel({
     const [done, setDone] = useState<string | null>(null);
 
     /*
-     * ── A DISABLED PRIMARY ACTION MUST NAME ITS UNMET REQUIREMENT ─────────────────────────────
+     * ── THE PRIMARY CONTROL IS ONE CONTROL, IN TWO STAGES (W7-F003D) ──────────────────────────
      *
-     * Confirm was `disabled={busy !== null || !preview || !reconciliation.ok}`, and only the
-     * reconciliation half ever produced a sentence — and that sentence is `null` whenever the
-     * shares DO reconcile. So an operator with a valid split saw a dead Confirm and nothing at all
-     * telling them why.
+     * What the Director found: Confirm was `disabled={busy !== null || !preview || !reconciliation.ok}`
+     * and only the reconciliation half ever produced a sentence — and that sentence is `null`
+     * whenever the split is valid. So the common case was a dead primary action with no stated
+     * requirement anywhere on screen: measured on deployed as `confirmDisabled: true`,
+     * `reconciliationMessage: null`, no visible requirement. The blocker was that Preview had not
+     * been pressed, which the UI never said.
      *
-     * Reproduced on the deployed build: with a valid allocation the surface reported
-     * `confirmDisabled: true`, `reconciliationMessage: null`, and no visible requirement anywhere.
-     * The blocker was simply that Preview had not been run, which the UI never said.
+     * The first repair stated the requirement. The Director then asked the better question: does
+     * Preview need to be a separate mandatory click at all? It does not. What a financial change
+     * genuinely needs is for the operator to SEE what it will do before it is committed — not for
+     * them to find and press an extra button to earn that right. A separate Preview control that is
+     * mandatory is ceremony; the review step itself is not.
      *
-     * So the reason is computed ONCE, here, and the button derives its disabled state FROM it.
-     * They cannot drift: a new blocking condition must be given a sentence to be added at all, and
-     * `confirmBlocker === null` is the only state in which Confirm is live.
+     * So there is now ONE primary control with two stages:
+     *
+     *   review  → "Review this change"        runs the command in preview mode; writes nothing
+     *   commit  → "Confirm — apply this"      runs it for real, on exactly what is displayed
+     *
+     * The dependency is no longer a hidden precondition on a disabled button; it IS the button, and
+     * it says which half of the sequence it is about to perform. Nothing can be committed unseen,
+     * and nothing is blocked without a reason.
+     *
+     * `confirmBlocker` therefore narrows to the one requirement that genuinely blocks: a split that
+     * does not reconcile. That is the only state in which the primary is disabled, and its sentence
+     * is rendered beside it.
      */
+    /*
+     * ── A PREVIEW DESCRIBES ONE SPLIT, AND STOPS BEING TRUE THE MOMENT THE SPLIT CHANGES ──────
+     *
+     * Found while making the primary control staged, and it was a defect under the old two-button
+     * flow as well: pressing Preview, then editing an amount, then pressing Confirm committed a
+     * split the operator had never reviewed. The preview panel above went on describing the old
+     * numbers, which is worse than showing nothing — it is a confident statement about a change
+     * that is no longer the one being made.
+     *
+     * So any edit to the shares OR to the effective date invalidates it, which also returns the
+     * primary control to its `review` stage. Both are state, so identity changes only when
+     * something was actually edited; the mount pass clears a preview that is already null. The
+     * scope selectors clear it directly at their own handlers, because changing scope loads a
+     * different arrangement entirely.
+     */
+    useEffect(() => {
+        setPreview(null);
+    }, [shares, effectiveStart]);
+
+    const stage: "review" | "commit" = preview ? "commit" : "review";
     const confirmBlocker: string | null =
         busy !== null
-            ? null /* transient: the button already says "Saving…" and explains itself. */
+            ? null
             : !reconciliation.ok
               ? (reconciliation.message ?? "This split cannot be reconciled yet.")
-              : !preview
-                ? "Preview this change first — Confirm becomes available once you have seen what it will do."
-                : null;
+              : null;
 
     /*
      * ── FOCUS THE PANEL ONCE, ON OPEN — NOT ON EVERY RENDER ───────────────────────────────────
@@ -995,29 +1026,34 @@ export default function FinancialsResponsibilityPanel({
               * "how do I finish, and how do I get out" and it is the same place on all of them.
               */}
             <div className="alloy-os-depthcard__actions" data-financials-card-actions="true">
-                <button
-                    type="button"
-                    className="rounded border border-alloy-stone/20 px-2 py-1 text-xs text-alloy-midnight/70"
-                    onClick={() => void run("preview")}
-                    disabled={busy !== null || !reconciliation.ok}
-                    data-financials-responsibility-preview-btn="true"
-                >
-                    {busy === "preview" ? "Checking…" : "Preview"}
-                </button>
+                {/*
+                  * ONE PRIMARY, TWO STAGES — see `stage` above. In `review` it runs the command in
+                  * preview mode and writes nothing; once a preview is on screen it commits exactly
+                  * what is displayed. The selector follows the stage rather than the element, so
+                  * "the preview control" and "the confirm control" each still name the thing that
+                  * does that job.
+                  *
+                  * DISABLED ONLY FOR A STATED REASON — see `confirmBlocker`. A split that cannot
+                  * reconcile cannot be reviewed or committed, and the sentence saying so is
+                  * rendered below while the operator can still see what they typed.
+                  */}
                 <button
                     type="button"
                     className={WS_ACTION_PRIMARY}
-                    onClick={() => void run("execute")}
-                    /*
-                     * DERIVED FROM THE STATED REASON, never computed separately — see
-                     * `confirmBlocker`. An arrangement that cannot reconcile still cannot be
-                     * confirmed; the difference is that the operator is now told which requirement
-                     * is unmet while they can still see what they typed.
-                     */
+                    onClick={() => void run(stage === "commit" ? "execute" : "preview")}
                     disabled={busy !== null || confirmBlocker !== null}
-                    data-financials-responsibility-confirm="true"
+                    data-financials-responsibility-stage={stage}
+                    {...(stage === "commit"
+                        ? { "data-financials-responsibility-confirm": "true" }
+                        : { "data-financials-responsibility-preview-btn": "true" })}
                 >
-                    {busy === "execute" ? "Saving…" : "Confirm"}
+                    {busy === "preview"
+                        ? "Checking…"
+                        : busy === "execute"
+                          ? "Saving…"
+                          : stage === "commit"
+                            ? "Confirm — apply this change"
+                            : "Review this change"}
                 </button>
                 <button
                     type="button"
@@ -1029,7 +1065,12 @@ export default function FinancialsResponsibilityPanel({
                     Cancel
                 </button>
             </div>
-            {/* The unmet requirement, beside the control it blocks rather than discovered by guessing. */}
+            {/*
+              * The unmet requirement, beside the control it blocks rather than discovered by
+              * guessing — and when nothing is unmet, what the control is about to do. An operator
+              * should never have to press a financial control to find out which half of the
+              * sequence it performs.
+              */}
             {confirmBlocker ? (
                 <p
                     className="mt-1.5 text-[11px] text-alloy-midnight/65"
@@ -1037,7 +1078,16 @@ export default function FinancialsResponsibilityPanel({
                 >
                     {confirmBlocker}
                 </p>
-            ) : null}
+            ) : (
+                <p
+                    className="mt-1.5 text-[11px] text-alloy-midnight/50"
+                    data-financials-responsibility-stage-hint={stage}
+                >
+                    {stage === "commit"
+                        ? "This applies the change shown above. Nothing else is altered."
+                        : "Nothing is saved yet. This shows what the change would do, and Confirm then applies it."}
+                </p>
+            )}
         </section>
     );
 }

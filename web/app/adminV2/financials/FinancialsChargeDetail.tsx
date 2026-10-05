@@ -65,6 +65,17 @@ type ChargeDetail = {
     createdByName?: string | null;
     postedByName?: string | null;
     originDescription?: string | null;
+    /**
+     * The unmet identity requirement for the creating operator, in one sentence (W7-F002).
+     *
+     * Null when there is nothing to say — a named operator, or a charge with no human actor. When
+     * it is present, the audit line still shows whatever name it has and this says, beside it, that
+     * the attribution does not rest on a recorded identity and where that is fixed.
+     */
+    createdByIdentityGap?: string | null;
+    createdByIdentityStatus?: string | null;
+    /** Why this charge is still a draft, when it is one (W7-F001). */
+    awaiting?: { key: string; label: string; explanation: string; operatorActionable: boolean } | null;
     correctionOfChargeId?: string | null;
     customerId: string | null;
     customerMemberId: string | null;
@@ -422,6 +433,33 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                 </>
             ) : null}
 
+            {/*
+              * ── WHY THIS IS STILL A DRAFT, BEFORE ANY OF THE DATES ───────────────────────────
+              *
+              * An operator who opens a draft is asking one question, and it is this one. Four
+              * unrelated situations share `status = 'draft'` and only some of them are anybody's
+              * work — a charge for next month is waiting for the first of the month, not for a
+              * person. Saying which, in a full sentence, is what stops the Charges tab reading as a
+              * list of tasks.
+              *
+              * Only a failure is toned as a problem. The rest are statements of fact.
+              */}
+            {detail.awaiting ? (
+                <>
+                    <Group>Not posted yet</Group>
+                    <p
+                        className={`px-3 pb-2 text-[11px] leading-snug ${
+                            detail.awaiting.key === "post_failed"
+                                ? "text-alloy-ember"
+                                : "text-alloy-midnight/60"
+                        }`}
+                        data-financials-charge-awaiting={detail.awaiting.key}
+                    >
+                        {detail.awaiting.explanation}
+                    </p>
+                </>
+            ) : null}
+
             <Group>Posting</Group>
             {/* The periods, the dates and the GL account read as one block — see `Pair`. */}
             <Pair>
@@ -707,6 +745,24 @@ export default function FinancialsChargeDetail({ chargeId }: { chargeId: string 
                     ) : null}
                     {detail.correctionOfChargeId ? (
                         <Row label="Corrects" value="another charge on this account" muted testId="corrects" />
+                    ) : null}
+                    {/*
+                      * ── THE ATTRIBUTION IS INCOMPLETE, AND SAYS SO (W7-F002) ─────────────────
+                      *
+                      * Not an error, and deliberately not styled as one: nothing failed and the
+                      * charge is correct. What is missing is the recorded link between the account
+                      * that acted and the human it belongs to, and the sentence names where that is
+                      * closed. It renders even when a name IS shown from the weaker source, because
+                      * the requirement is about the data and not about whether the screen managed
+                      * to find something to print.
+                      */}
+                    {detail.createdByIdentityGap ? (
+                        <p
+                            className="px-3 pb-2 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-financials-charge-actor-identity-gap={detail.createdByIdentityStatus ?? "unmet"}
+                        >
+                            {detail.createdByIdentityGap}
+                        </p>
                     ) : null}
                 </>
             ) : null}

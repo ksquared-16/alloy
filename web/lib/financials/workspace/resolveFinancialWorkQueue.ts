@@ -32,6 +32,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { CHILDCARE_BILLABLE_SOURCE_TYPES } from "@/lib/financials/billableSource";
 import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import {
+    awaitingPostingReason,
+    type AwaitingPostingReason,
+} from "@/lib/financials/posting/awaitingPostingReason";
+import {
     isFinancialWorkVisible,
     resolveFinancialWorkLocation,
     type FinancialWorkLocationScope,
@@ -60,12 +64,39 @@ export type FinancialWorkRow = {
     siteLocationId: string | null;
     siteName: string | null;
     locationProvenance: string;
+
+    /**
+     * WHY this draft is waiting, classified once on the server.
+     *
+     * `status = 'draft'` is the eligibility for this queue and says nothing about whether a person
+     * is needed. Four unrelated situations share that status, and three of them are not work. The
+     * classification travels with the row so a list, a count and a detail panel cannot describe the
+     * same draft differently.
+     */
+    awaiting: AwaitingPostingReason;
 };
 
 export type FinancialWorkQueue = {
     rows: FinancialWorkRow[];
     /** From the SAME cohort the rows came from — never a second count query that could disagree. */
-    counts: { actionable: number; siteScoped: number; orgScoped: number; households: number };
+    counts: {
+        actionable: number;
+        siteScoped: number;
+        orgScoped: number;
+        households: number;
+        /**
+         * Of the drafts returned, how many a PERSON has to act on — a failure that will not retry,
+         * a review boundary, or a draft whose reason was never recorded. A charge waiting for its
+         * billing period is excluded: the clock owns it.
+         */
+        needsAPerson: number;
+        /**
+         * And how many are waiting on the CALENDAR — a billing period that has not begun. Reported
+         * separately so a band can say "nothing for you to do, three charges post next month"
+         * instead of one number that means both things at once.
+         */
+        waitingOnADate: number;
+    };
     scope: { siteLocationId: string | null; siteScope: "all" | "restricted" };
 };
 
@@ -92,7 +123,7 @@ export async function resolveFinancialWorkQueue(
         .from("charges")
         .select(
             "id, billable_source_type, billable_source_id, charge_category, charge_type, description, "
-            + "amount_cents, currency_code, service_date, billable_on, status",
+            + "amount_cents, currency_code, service_date, billable_on, status, metadata",
         )
         .eq("org_id", args.orgId)
         .eq("status", "draft")
@@ -111,6 +142,7 @@ export async function resolveFinancialWorkQueue(
         currency_code: string;
         service_date: string | null;
         billable_on: string | null;
+        metadata: Record<string, unknown> | null;
     }>;
 
     // ── PROVENANCE: each charge's OWN agreement, never the household's ──────────────────────
@@ -210,6 +242,7 @@ export async function resolveFinancialWorkQueue(
             siteLocationId: location.siteLocationId,
             siteName: location.siteLocationId ? siteNames.get(location.siteLocationId) ?? null : null,
             locationProvenance: location.provenance,
+            awaiting: awaitingPostingReason(charge.metadata),
         });
     }
 
@@ -225,6 +258,13 @@ export async function resolveFinancialWorkQueue(
             siteScoped: rows.filter((r) => r.locationScope === "site").length,
             orgScoped: rows.filter((r) => r.locationScope === "org").length,
             households: new Set(rows.map((r) => r.customerId).filter(Boolean)).size,
+            /*
+             * `actionable` has always been the number of DRAFTS, which is not the number of things
+             * anyone does. It is kept because callers read it, and this is the honest companion:
+             * drafts whose recorded reason says a person is needed.
+             */
+            needsAPerson: rows.filter((r) => r.awaiting.operatorActionable).length,
+            waitingOnADate: rows.filter((r) => r.awaiting.key === "period_not_started").length,
         },
         scope: { siteLocationId: activeSiteLocationId, siteScope: args.siteScope },
     };

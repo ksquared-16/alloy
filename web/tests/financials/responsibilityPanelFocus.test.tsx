@@ -189,3 +189,169 @@ describe("W7-F003A — eligible is not the same as responsible", () => {
         expect((add as HTMLElement).innerText || (add as HTMLElement).textContent).toContain("Corinne Vasquez");
     });
 });
+
+describe("W7-F003D — the primary control states what it will do, and nothing commits unseen", () => {
+    /**
+     * The Director's finding was a dead primary action with no visible unmet requirement. The first
+     * repair stated the requirement; the Director then asked whether a separate mandatory Preview
+     * click was needed at all. It is not — so the panel now has ONE primary control in two stages,
+     * and these cases drive it the way an operator does.
+     */
+    function primary(): HTMLButtonElement {
+        return document.querySelector("[data-financials-responsibility-stage]") as HTMLButtonElement;
+    }
+    function label(el: HTMLElement): string {
+        return (el.textContent ?? "").trim();
+    }
+
+    /** A 50/50 arrangement, so the shares seed to a split that reconciles. */
+    function arrangementResponse(): Response {
+        return new Response(JSON.stringify({
+            requestedScope: { grain: "household" },
+            authoredAtRequestedScope: true,
+            arrangement: {
+                id: "arr-1",
+                customerMemberId: null,
+                effectiveStart: "2026-01-01",
+                effectiveEnd: null,
+                shares: [
+                    { id: "s1", responsiblePartyId: PARTY_A, name: "Dana Alvarez", amountCents: 900, percentBasisPoints: null, method: "fixed" },
+                    { id: "s2", responsiblePartyId: PARTY_B, name: "Rosa Alvarez", amountCents: 900, percentBasisPoints: null, method: "fixed" },
+                ],
+            },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+
+    /** Whatever the command is asked, it answers with a preview. */
+    function commandPreview(summary: string): Response {
+        return new Response(JSON.stringify({
+            ok: true,
+            data: { execution_result: { preview: { summary, changes: ["Dana 9.00", "Rosa 9.00"] } } },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+
+    async function mount() {
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("responsibility-candidates")) {
+                return new Response(JSON.stringify({
+                    ok: true,
+                    candidates: [
+                        { personId: PARTY_A, name: "Dana Alvarez", roleLabel: null },
+                        { personId: PARTY_B, name: "Rosa Alvarez", roleLabel: null },
+                    ],
+                }), { status: 200, headers: { "content-type": "application/json" } });
+            }
+            if (url.includes("responsibility-arrangement")) return arrangementResponse();
+            return commandPreview("Two parties, 50/50.");
+        }));
+        await act(async () => {
+            root.render(
+                <FinancialsResponsibilityPanel
+                    customerId={CUSTOMER}
+                    customerMemberId={null}
+                    parties={[{ personId: PARTY_A, name: "Dana Alvarez" }]}
+                    hostedOpen
+                    onCommitted={() => {}}
+                />,
+            );
+        });
+        for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
+    }
+
+    it("opens live, named for the review it is about to perform — not disabled and silent", async () => {
+        await mount();
+        const button = primary();
+        expect(button, "there is one primary control").not.toBeNull();
+        expect(button.getAttribute("data-financials-responsibility-stage")).toBe("review");
+        expect(label(button)).toBe("Review this change");
+        /*
+         * THE ASSERTION THE DEFECT FAILED. Before the repair the primary was Confirm, disabled,
+         * with no sentence anywhere saying why — measured on deployed as `confirmDisabled: true`,
+         * `reconciliationMessage: null`, `anyVisibleRequirement: false`. A reconcilable split now
+         * opens with a live primary and no hidden precondition at all.
+         */
+        expect(button.disabled, "the primary is live when nothing is unmet").toBe(false);
+        /* And it says which half of the sequence it performs, before being pressed. */
+        const hint = document.querySelector("[data-financials-responsibility-stage-hint]") as HTMLElement;
+        expect(hint, "the stage is stated").not.toBeNull();
+        expect(hint.textContent).toContain("Nothing is saved yet");
+    });
+
+    it("whenever the primary IS disabled, the unmet requirement is on screen", async () => {
+        /*
+         * The rule the Director set, asserted against the state that actually produces it: a split
+         * with no amounts cannot reconcile, so the control is refused — and the reason is rendered
+         * beside it rather than left for the operator to deduce.
+         */
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("responsibility-candidates")) {
+                return new Response(JSON.stringify({
+                    ok: true,
+                    candidates: [{ personId: PARTY_A, name: "Dana Alvarez", roleLabel: null }],
+                }), { status: 200, headers: { "content-type": "application/json" } });
+            }
+            /* No arrangement exists, so the rows seed blank and the split cannot reconcile. */
+            return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+        }));
+        await act(async () => {
+            root.render(
+                <FinancialsResponsibilityPanel
+                    customerId={CUSTOMER}
+                    customerMemberId={null}
+                    parties={[{ personId: PARTY_A, name: "Dana Alvarez" }]}
+                    hostedOpen
+                    onCommitted={() => {}}
+                />,
+            );
+        });
+        for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
+
+        const button = primary();
+        expect(button.disabled, "a split that cannot reconcile is refused").toBe(true);
+        const blocker = document.querySelector("[data-financials-responsibility-confirm-blocker]") as HTMLElement;
+        expect(blocker, "and the requirement is visible, not deduced").not.toBeNull();
+        expect((blocker.textContent ?? "").trim().length, "with an actual sentence in it").toBeGreaterThan(10);
+    });
+
+    it("becomes the commit control once the review has answered, and never before", async () => {
+        await mount();
+        expect(primary().getAttribute("data-financials-responsibility-stage")).toBe("review");
+
+        await act(async () => { primary().click(); });
+        for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
+
+        const button = primary();
+        expect(button.getAttribute("data-financials-responsibility-stage")).toBe("commit");
+        expect(label(button)).toContain("Confirm");
+        expect(button.disabled).toBe(false);
+        /* The operator can see what they are committing. */
+        expect(document.querySelector("[data-financials-responsibility-preview]")).not.toBeNull();
+    });
+
+    it("falls back to review when the split is edited after being reviewed", async () => {
+        /*
+         * A preview describes ONE split. Pressing Review, editing an amount, then pressing Confirm
+         * used to commit a split nobody had seen — the panel went on displaying the old numbers,
+         * which is worse than displaying nothing.
+         */
+        await mount();
+        await act(async () => { primary().click(); });
+        for (let i = 0; i < 8; i += 1) await act(async () => { await Promise.resolve(); });
+        expect(primary().getAttribute("data-financials-responsibility-stage")).toBe("commit");
+
+        const field = amountInputs()[0]!;
+        await act(async () => { typeChar(field, "5"); });
+        for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
+
+        expect(
+            primary().getAttribute("data-financials-responsibility-stage"),
+            "an edit returns the control to review",
+        ).toBe("review");
+        expect(
+            document.querySelector("[data-financials-responsibility-preview]"),
+            "and the stale preview is gone rather than describing a split that changed",
+        ).toBeNull();
+    });
+});

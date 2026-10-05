@@ -72,7 +72,22 @@ describe("the sentences never claim more than the evidence", () => {
     it("says the name is unknown rather than printing an id in a person's place", () => {
         const s = describeChargeOrigin({ kind: "person", actorUserId: "u1" }, null);
         expect(s).not.toContain("u1");
-        expect(s).toMatch(/not on file/);
+        /*
+         * ── THE WORDING CHANGED, THE RULE DID NOT (W7-F002) ──────────────────────────────────
+         *
+         * This asserted the literal "not on file". The Director's decision is that a product must
+         * not accept an unidentified actor as ordinary financial attribution, and "a person whose
+         * name is not on file" said something was absent without saying WHAT or whose job it was to
+         * supply it. The sentence now names the unmet requirement.
+         *
+         * What this lock exists for is unchanged and is asserted instead: a recorded actor is
+         * reported as recorded, no id or address is printed in a person's place, and the absence is
+         * stated rather than papered over.
+         */
+        expect(s).toMatch(/cannot name/);
+        expect(s).toMatch(/operator/);
+        expect(s).not.toMatch(/@/);
+        expect(s).not.toMatch(/created automatically/i);
     });
 
     it("stops at 'Created automatically' when nothing is recorded", () => {

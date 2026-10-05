@@ -70,46 +70,62 @@ describe("the Manage Responsibility panel", () => {
     });
 
     /*
-     * NOTHING IS COMMITTED THAT HAS NOT BEEN PREVIEWED. The disabled Confirm is the whole of that
-     * guarantee on this surface.
+     * NOTHING IS COMMITTED THAT HAS NOT BEEN PREVIEWED. The mechanism changed; the guarantee did
+     * not, and the guarantee is what this lock exists for.
      */
-    it("cannot confirm before the action has said what will change", () => {
+    it("cannot commit before the action has said what will change", () => {
         /*
-         * ASSERTED AS A REQUIREMENT, NOT AS A LITERAL. The first version pinned the exact
-         * expression `disabled={busy !== null || !preview}`, so ADDING a guard broke it — the
-         * panel now also refuses an arrangement whose shares cannot reconcile, which is strictly
-         * more careful than what the lock demanded. A lock that reddens when the code becomes
-         * safer is testing the spelling rather than the rule.
+         * ── THE RULE, TWICE REHOMED, AND STRICTLY STRONGER EACH TIME ─────────────────────────
          *
-         * What must remain true: Confirm is disabled while busy, and disabled until a preview
-         * exists. Further guards are welcome.
+         * V1 pinned the literal `disabled={busy !== null || !preview}`, so ADDING a reconciliation
+         * guard broke it — a lock that reddens when the code becomes safer is testing the spelling.
+         *
+         * V2 followed the named reason: `confirmBlocker !== null`, with `!preview ?` as one of its
+         * branches. W7-F003 then asked the better question — must Preview be a separate mandatory
+         * click at all? It must not. What a financial change needs is that the operator SEES the
+         * effect before it is committed, not that they find an extra button.
+         *
+         * V3 is the current rule and it is structural rather than a precondition: there is ONE
+         * primary control with a `stage`, the stage is `commit` only when a preview exists, and
+         * `execute` is reachable only from the commit stage. An unpreviewed commit is not guarded
+         * against — it is unreachable.
          */
-        const confirm = panel.slice(panel.indexOf('data-financials-responsibility-confirm') - 600,
-                                    panel.indexOf('data-financials-responsibility-confirm'));
-        expect(confirm, "Confirm is guarded at all").toMatch(/disabled=\{/);
+        expect(panel, "the stage is derived from whether a preview exists").toMatch(
+            /const stage:\s*"review"\s*\|\s*"commit"\s*=\s*preview\s*\?\s*"commit"\s*:\s*"review"/,
+        );
+        expect(panel, "and execute is reachable only from the commit stage").toMatch(
+            /run\(stage === "commit" \? "execute" : "preview"\)/,
+        );
 
         /*
-         * ── THE RULE MOVED ONE INDIRECTION AWAY, AND IS STRICTLY STRONGER FOR IT ─────────────
-         *
-         * This asserted the literal `!preview` beside the button. W7-F003D found that a disabled
-         * Confirm with no stated reason is unacceptable in a financial workflow — measured on
-         * deployed, the Director saw `confirmDisabled: true` with no reconciliation message and no
-         * visible requirement anywhere, because the only unmet condition was the unpreviewed one
-         * and nothing said so.
-         *
-         * So the conditions now resolve to a NAMED reason, and the button derives its disabled
-         * state from that reason. The guarantee this lock exists for is unchanged — nothing is
-         * committed that has not been previewed — and it is now impossible to add a blocking
-         * condition without also giving the operator a sentence for it.
-         *
-         * The lock follows the rule rather than the spelling, which is what its own note above
-         * already said it should do.
+         * A STALE PREVIEW IS NOT A PREVIEW. Found while making the control staged, and it was a
+         * defect under the two-button flow too: preview, then edit an amount, then confirm
+         * committed a split nobody had reviewed. Any edit invalidates it, which also returns the
+         * control to its review stage.
          */
-        expect(confirm, "the button derives from the stated reason").toContain("confirmBlocker !== null");
-        expect(panel, "nothing is committed that has not been previewed").toMatch(/!preview\s*\n?\s*\?/);
-        expect(panel, "and the unmet requirement is shown to the operator").toContain(
+        expect(panel, "an edit invalidates the preview it no longer describes").toMatch(
+            /setPreview\(null\);\s*\n\s*\},\s*\[shares, effectiveStart\]\)/,
+        );
+
+        /*
+         * AND A DISABLED PRIMARY ALWAYS STATES ITS UNMET REQUIREMENT (W7-F003D). Measured on
+         * deployed before the repair: `confirmDisabled: true`, `reconciliationMessage: null`, no
+         * visible requirement anywhere. The button now derives its disabled state from a named
+         * reason, so a blocking condition cannot be added without a sentence for it.
+         */
+        const primary = panel.slice(
+            panel.indexOf("data-financials-responsibility-stage=") - 900,
+            panel.indexOf("data-financials-responsibility-stage="),
+        );
+        expect(primary, "the primary is guarded at all").toMatch(/disabled=\{/);
+        expect(primary, "and derives from the stated reason").toContain("confirmBlocker !== null");
+        expect(primary, "and not while a call is in flight").toContain("busy !== null");
+        expect(panel, "the unmet requirement is shown to the operator").toContain(
             "data-financials-responsibility-confirm-blocker",
         );
-        expect(confirm, "and not while a call is in flight").toContain("busy !== null");
+        /* And when nothing is unmet, the control still says which half of the sequence it performs. */
+        expect(panel, "the stage is stated even when nothing blocks").toContain(
+            "data-financials-responsibility-stage-hint",
+        );
     });
 });

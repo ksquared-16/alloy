@@ -1,5 +1,6 @@
 import { evaluateAutopayOccurrence } from "@/lib/financials/payments/autopayHandler";
 import { evaluateBillingPeriodCloseOccurrence } from "@/lib/financials/billingPeriods/billingPeriodCloseHandler";
+import { evaluateFuturePeriodActivationOccurrence } from "@/lib/financials/posting/futurePeriodActivation";
 import { evaluatePeriodicBillingOccurrence } from "@/lib/financials/periodicBilling/periodicBillingHandler";
 import { registerScheduledWorkHandler } from "@/lib/scheduledWork/scheduledWorkRegistry";
 import type { ScheduledWorkContext, ScheduledWorkOutcome } from "@/lib/scheduledWork/scheduledWorkTypes";
@@ -8,6 +9,7 @@ import {
     BILLING_PERIOD_CLOSE_HANDLER_KEY,
     BILLING_PERIODIC_HANDLER_KEY,
     CHARGE_AGING_HANDLER_KEY,
+    FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -45,6 +47,7 @@ export {
     BILLING_PERIOD_CLOSE_HANDLER_KEY,
     CHARGE_AGING_HANDLER_KEY,
     AUTOPAY_HANDLER_KEY,
+    FUTURE_PERIOD_ACTIVATION_HANDLER_KEY,
 } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 
 /** Shared shape so the remaining stub reads like the real ones. */
@@ -113,6 +116,20 @@ export function registerScheduledWorkConsumers(): void {
      */
     registerScheduledWorkHandler(BILLING_PERIOD_CLOSE_HANDLER_KEY, async (ctx) =>
         evaluateBillingPeriodCloseOccurrence(ctx, { supabase: createAdminClient() }),
+    );
+
+    /*
+     * FUTURE-PERIOD ACTIVATION (W7-F001). The fourth productized domain across this boundary, and
+     * the counterpart to the one above: close finalizes periods that have ended, this posts the
+     * charges of periods that have begun.
+     *
+     * It calls `autoPostGeneratedCharge`, which calls `postChildcareCharge` — so the clock posts a
+     * charge through exactly the authority an operator's Post button uses, and the `posting_review`
+     * boundary is resolved again at activation time rather than frozen at creation time. No second
+     * posting implementation, and no way for the calendar to bypass a business control.
+     */
+    registerScheduledWorkHandler(FUTURE_PERIOD_ACTIVATION_HANDLER_KEY, async (ctx) =>
+        evaluateFuturePeriodActivationOccurrence(ctx, { supabase: createAdminClient() }),
     );
 }
 

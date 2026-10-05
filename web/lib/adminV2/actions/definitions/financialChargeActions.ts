@@ -44,6 +44,7 @@ import {
     type CorrectionKind,
 } from "@/lib/financials/childcareChargeService";
 import { isPostedStatus } from "@/lib/financials/billableSource";
+import { periodNotStartedFacts } from "@/lib/financials/posting/postingPeriodGate";
 import { listChargeTemplates } from "@/lib/financials/chargeTemplates/chargeTemplateAuthoringService";
 import { subjectGrainIsLegal } from "@/lib/financials/chargeCategorySemantics";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
@@ -358,6 +359,8 @@ async function executeMultiChildAdd(args: {
         resolution_key: string | null;
         review_required: boolean;
         posted: boolean;
+        /** When the charge is a draft because its billing period has not begun, the day it posts. */
+        posts_on?: string;
         error?: string;
     };
 
@@ -395,6 +398,7 @@ async function executeMultiChildAdd(args: {
 
             let posted = false;
             let postFailed: string | null = null;
+            let postsOn: string | null = null;
             if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
                 try {
                     const result = await postChildcareCharge(supabase, {
@@ -404,9 +408,16 @@ async function executeMultiChildAdd(args: {
                     });
                     posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
                 } catch (err) {
+                    /*
+                     * A FUTURE BILLING PERIOD IS NOT AN ERROR (W7-F001). The charge is written, it is
+                     * a draft, the authority has recorded WHY, and the clock posts it when the period
+                     * begins. Reporting that as `error` would put a fault on an ordinary act.
+                     */
+                    const waiting = periodNotStartedFacts(err);
+                    if (waiting) postsOn = waiting.periodStartsOn;
                     // A failed post does NOT unmake the charge. It is written, it is a draft, and
                     // the operator can post it from the row.
-                    postFailed = err instanceof Error ? err.message : String(err);
+                    else postFailed = err instanceof Error ? err.message : String(err);
                 }
             }
 
@@ -417,6 +428,7 @@ async function executeMultiChildAdd(args: {
                 resolution_key: written.resolutionKey,
                 review_required: written.reviewRequired,
                 posted,
+                ...(postsOn ? { posts_on: postsOn } : {}),
                 ...(postFailed ? { error: postFailed } : {}),
             });
         } catch (err) {
@@ -766,6 +778,7 @@ const addCharge: RegisteredAction = {
              */
             let posted = false;
             let postFailed: string | null = null;
+            let postsOn: string | null = null;
             if (!written.reviewRequired && (written.status === "created" || written.status === "recalculated")) {
                 try {
                     const result = await postChildcareCharge(supabase as SupabaseClient, {
@@ -775,7 +788,18 @@ const addCharge: RegisteredAction = {
                     });
                     posted = !result.alreadyPosted || isPostedStatus(result.charge.status);
                 } catch (err) {
-                    postFailed = err instanceof Error ? err.message : String(err);
+                    /*
+                     * ── A FUTURE BILLING PERIOD IS NOT A FAILED POST (W7-F001) ──
+                     *
+                     * The confirmed lifecycle: a charge in the CURRENT period posts in the same
+                     * gesture that created it; a charge in a FUTURE period stays a draft, is not
+                     * owed, and posts itself when that period begins. Both are successful outcomes
+                     * of Add Charge, and the operator needs to be told WHICH — not handed the
+                     * posting authority's refusal as an error string.
+                     */
+                    const waiting = periodNotStartedFacts(err);
+                    if (waiting) postsOn = waiting.periodStartsOn;
+                    else postFailed = err instanceof Error ? err.message : String(err);
                 }
             }
 
@@ -794,6 +818,7 @@ const addCharge: RegisteredAction = {
                         resolution_key: written.resolutionKey,
                         review_required: written.reviewRequired,
                         posted,
+                        ...(postsOn ? { posts_on: postsOn } : {}),
                         ...(postFailed ? { post_failed: postFailed } : {}),
                     },
                 },

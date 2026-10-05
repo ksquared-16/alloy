@@ -55,7 +55,30 @@
  * Previous answers remain readable and remain answers to the previous questions; they do not carry
  * over, which is the whole point of versioning them.
  */
-export const CATALOG_VERSION = "2026-10-05.1";
+/*
+ * 2026-10-05.2 — the Director's W7 slice-1 decisions.
+ *
+ * Bumped because scenario MEANINGS changed, which is what this version is for:
+ *
+ *   · `post_charge` NO LONGER asks the Director to manufacture an ordinary draft and post it by
+ *     hand. That instruction was the product teaching a habit it should not, and the Director's
+ *     F001 decision removed the behaviour it was testing. It now runs only against a draft that is
+ *     genuinely a person's move, and is correctly NOT RUNNABLE where no such draft exists.
+ *   · `future_period_charge` is new: a charge dated into a period that has not begun is a draft,
+ *     is not owed, is refused if posted by hand, and posts itself when the period starts.
+ *   · `awaiting_posting_says_why` is new: the Charges tab must distinguish work from waiting.
+ *   · `add_charge_honours_review_boundary` and `draft_moves_nothing` now name the four reasons a
+ *     draft exists, rather than implying a review boundary is the only one.
+ *   · `charge_detail_attribution` requires a NAMED human actor, or an honest statement of the
+ *     unmet identity requirement — never "a person whose name is not on file".
+ *   · `manage_responsibility` covers the repaired editor: the current arrangement leads, eligible
+ *     parties are additive, the amount field keeps focus, and the primary control states what it
+ *     will do instead of sitting disabled and silent.
+ *
+ * Previous answers remain readable and remain answers to the previous questions; they do not carry
+ * over, which is the whole point of versioning them.
+ */
+export const CATALOG_VERSION = "2026-10-05.2";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -221,6 +244,8 @@ export const MONEY_INVARIANTS = Object.freeze({
     REDUCTION_IS_A_SECOND_CONSEQUENCE: "A discount never rewrites the gross. Gross stays the accepted price, the reduction is written beside it with its own policy, basis and provenance, and the net is what falls out. Gross − Reduction = Net, and each of the three is stated by the surface that owns it.",
     BILLING_FREQUENCY_IS_OPERATOR_INTENT: "One account can hold a weekly term for one child and a monthly term for another, so a month alone is not an instruction. The operator names the billing frequency, and a run bills only the terms on that cadence.",
     PUBLISHED_LAYOUT_IS_THE_RENDERED_ONE: "A published Focus Panel document carries an authored card list and an explicit layout, and the runtime renders the explicit layout. A card authored visible and absent from that layout would be drawn by nothing, so the publication is refused rather than silently rendered short.",
+    FUTURE_PERIOD_IS_NOT_YET_OWED: "A charge whose billing period has not begun is not owed, and nobody has to do anything about it. It is a draft until the organization's own business date reaches the first day of that period, and then it posts by itself \u2014 through the same posting authority an operator's Post button uses, so a review boundary configured in the meantime still binds. An operator is never asked to post an ordinary charge by hand merely because they created it, and pressing Post early is refused with the date it will post on. The period's own status is a separate question: OPEN means not finalized, never \u0022has begun\u0022.",
+    FINANCIAL_ACTOR_IS_A_NAMED_HUMAN: "Money is moved by people, and the ledger must be able to say which one. A user permitted to create financial activity resolves to a named person through an explicit, recorded link between their login and their person record \u2014 never through their email address, which is mutable, shared in practice and unique by no constraint. Where that link is missing the surface says so and says where it is fixed; it never prints an address in a person's place, and it never presents an unidentified actor as ordinary financial attribution.",
     POSTED_IS_NOT_PERIOD_CLOSED: "Posting makes an obligation real. Closing an accounting period ends bookkeeping for a span of time. A posted charge is not a closed period, a closed period posts nothing, and neither word may be used for the other.",
 });
 
@@ -262,12 +287,13 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Click Add.",
             "Leave the mode on Charge.",
             "Choose a charge type from the menu.",
+            "Leave the date inside the CURRENT billing period \u2014 a future-dated charge is the next scenario, and it behaves differently on purpose.",
             "Read the preview.",
             "Confirm.",
             "Open the Charges tab and look at Awaiting posting.",
         ],
         expectChanges: [
-            "WITH a review boundary configured: the charge appears in Awaiting posting and what is owed does not move.",
+            "WITH a review boundary configured: the charge appears in Awaiting posting, says it is waiting for review, and what is owed does not move.",
             "WITHOUT one: the charge is posted, and what is owed rises by exactly the charge.",
         ],
         expectUnchanged: [
@@ -305,22 +331,94 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "post_charge",
         order: 4,
-        title: "Posting is what makes it owed",
+        title: "Posting is what makes it owed — where posting is still a person's act",
         disposition: "HUMAN_WALKTHROUGH",
-        purpose: "Commit the draft and watch the obligation appear, once and for the right amount.",
+        purpose: "Commit a draft that is legitimately waiting for a human, and watch the obligation appear once and for the right amount.",
         whyItMatters:
-            "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once. Posting is also the ONLY authoritative money write, whoever asks for it: the review boundary decides whether an operator is asked to press this a second time, never whether posting is what makes the obligation real.",
-        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft to post — the one YOU created under a configured review boundary, not a pre-existing one. Ordinary generated billing posts itself." }],
-        navigate: ["Charges tab → Awaiting posting → the draft you created."],
-        doThis: ["Post the draft.", "Return to the account."],
+            "Posting is the moment a family genuinely owes money. It must move the balance by exactly the charge and never by a penny more, and it must happen once.\n\nWhat changed in this version: this scenario NO LONGER asks you to manufacture an ordinary draft and post it by hand. It used to, and that was the product teaching a habit it should not — on an organization with no review boundary configured, an operator who chose the charge, the child, the amount and the date has already decided, and a second confirmation in another tab is ceremony. Where no review boundary exists there is no ordinary draft to post, the precondition is unmet, and this scenario is NOT RUNNABLE. That is the correct outcome, not a skipped test.\n\nRun it against a draft that is genuinely a person's move: one held by a configured review boundary, or one whose posting failed. A draft waiting for its billing period is NOT one of those — the next scenario covers it, and posting it by hand is refused.",
+        requires: [{ kind: "account_state", check: "has_draft", describe: "a draft whose reason says a PERSON is needed — 'Waiting for review' or 'Posting failed'. Open the draft and read its reason before starting; if it says it posts on a date, this scenario does not apply to it." }],
+        navigate: ["Charges tab → Awaiting posting → a draft whose reason names review or a failure."],
+        doThis: [
+            "Read the reason on the row, and again on the draft's own detail panel. They must say the same thing.",
+            "Post the draft.",
+            "Return to the account.",
+        ],
         expectChanges: ["The charge leaves Awaiting posting.", "It appears as posted.", "Gross and what is owed each rise by exactly the charge amount."],
         expectUnchanged: ["Payments received.", "The named responsible adult.", "Expected funding."],
         invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
-        failSymptoms: ["The balance moves by a different amount.", "The charge appears twice.", "The draft stays in Awaiting posting."],
+        failSymptoms: [
+            "The balance moves by a different amount.",
+            "The charge appears twice.",
+            "The draft stays in Awaiting posting.",
+            "Being asked to post an ordinary charge you just created, on an organization that configured no review boundary — the defect this scenario was rewritten to stop asking for.",
+        ],
+    }),
+    S({
+        key: "future_period_charge",
+        order: 5,
+        title: "A charge for next period waits for next period, by itself",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Raise a charge dated into a billing period that has not started, and confirm it is not owed, not your problem, and not posted early.",
+        whyItMatters:
+            "Billing ahead is ordinary. A family's November tuition is entered in October and it is not owed in October — it must not enter what is owed, must not age, and must not be collected by Autopay before the period it belongs to has begun.\n\nEqually, nobody should have to come back on the first of the month and post it. The organization's own business date reaching the first day of the period is what posts it, through the same authority an operator's Post button uses. So this scenario checks both halves: nothing happens early, and nothing waits on a person.",
+        requires: [{ kind: "account_state", check: "is_financially_addressable", describe: "the household can be billed" }],
+        navigate: ["Note what the account says is owed.", "From the account pane, find Add."],
+        doThis: [
+            "Click Add, leave the mode on Charge, and choose a charge type.",
+            "Set the date into the NEXT billing period — next month for a monthly account, next week for a weekly one.",
+            "Read the preview, then Confirm.",
+            "Open the Charges tab → Awaiting posting and find the charge.",
+            "Read what the row says about why it is waiting, and open it to read the same thing in full.",
+            "Try to post it from the detail panel.",
+        ],
+        expectChanges: [
+            "The charge appears in Awaiting posting carrying the DAY IT WILL POST, not a generic 'awaiting posting'.",
+            "Its detail panel says it is not owed yet, names the date its period begins, and says it posts on its own.",
+            "Posting it by hand is REFUSED, and the refusal names the date rather than reading like a fault.",
+        ],
+        expectUnchanged: [
+            "Outstanding.",
+            "Collectible now.",
+            "Gross charges posted.",
+            "The operational band's 'Needs a person' figure — this charge is nobody's work, and counting it there would be the defect.",
+        ],
+        invariant: MONEY_INVARIANTS.FUTURE_PERIOD_IS_NOT_YET_OWED,
+        failSymptoms: [
+            "What is owed rises as soon as you confirm — the defect this scenario exists to catch. The deployed estate already held four charges posted into a December period.",
+            "The row says only 'Awaiting posting', with no indication that a date is what it is waiting for.",
+            "Posting by hand succeeds, making the charge owed before its period begins.",
+            "The refusal reads as an error or an internal failure rather than as a statement of fact.",
+            "The charge is counted as work needing a person.",
+        ],
+    }),
+    S({
+        key: "awaiting_posting_says_why",
+        order: 6,
+        title: "Every draft says why it is waiting, and only some of them are yours",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Read the Charges tab as a triage surface and confirm it distinguishes work from waiting.",
+        whyItMatters:
+            "'Awaiting posting' used to be one bucket with a count of drafts in it, and four unrelated situations arrived in it looking identical: a charge for next month, a charge a review policy is holding, a charge whose posting failed, and a draft from before any of this was recorded. Three of the four are not anybody's work. Presenting them as one queue taught the operator that every draft is a task — which is how a product ends up asking for a manual posting step no business rule wanted.\n\nStaging also carries drafts from superseded runs. Those are residue, and the surface should say that their reason was never recorded rather than invent one for them.",
+        requires: [{ kind: "account_state", check: "has_draft", describe: "at least one draft exists somewhere in the Charges tab" }],
+        navigate: ["Charges tab → Awaiting posting.", "Then read the operational band above the workspace."],
+        doThis: [
+            "Read every row's reason line. Each must say something specific.",
+            "Open two drafts with different reasons and confirm the detail panel says the same thing the row did, in a full sentence.",
+            "Compare the band's 'Needs a person' figure with how many rows actually name a person's move.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["Nothing. This scenario changes no money and posts nothing."],
+        invariant: MONEY_INVARIANTS.DRAFT_IS_NOT_OWED,
+        failSymptoms: [
+            "A row that says only 'Awaiting posting' when the charge does carry a recorded reason.",
+            "A charge waiting for its billing period counted in 'Needs a person'.",
+            "A historical draft given a confident reason — it should say the reason was never recorded.",
+            "The row and the detail panel disagreeing about why one charge is waiting.",
+        ],
     }),
     S({
         key: "charge_detail_attribution",
-        order: 5,
+        order: 7,
         title: "The charge says whose it is",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Open the posted charge and confirm amount, date, lifecycle and who it belongs to.",
@@ -330,16 +428,19 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
         navigate: ["Open the posted charge from the account ledger or the Charges tab."],
         doThis: [
             "Read the amount, the service date, the lifecycle and the attribution.",
+            "Read the Origin block. It must name a HUMAN — not an address, not an id, and not 'a person whose name is not on file'. If this account's operators are not yet linked to their person records, the panel must say exactly that and say where it is fixed, which is an honest unmet requirement rather than an attribution.",
             "Read the Posting block: Billing period and Accounting period are two separate facts.",
             "Find 'Correct this charge' and click it. The Adjustment command should open with this charge already chosen — you should not have to go and find it again.",
             "Close that without confirming, then open a charge that IS a correction (one you recorded earlier). It should carry a Correction block saying what changed, which way, what it corrects, whether that period is finalized, and why.",
         ],
         expectChanges: [],
         expectUnchanged: ["Every figure matches what the account list showed for the same charge."],
-        invariant: MONEY_INVARIANTS.GRAIN_BEFORE_MISMATCH,
+        invariant: MONEY_INVARIANTS.FINANCIAL_ACTOR_IS_A_NAMED_HUMAN,
         failSymptoms: [
             "A different amount from the account list.",
             "A missing date.",
+            "'Created by a person whose name is not on file', or any sentence that reports an unidentified actor as ordinary financial attribution — the W7-F002 defect.",
+            "An email address standing in for a person's name.",
             "Attribution to another child or another household.",
             "'Correct this charge' opening an empty Adjustment that has not chosen this charge.",
             "A correction's detail showing identifiers instead of what changed and why.",
@@ -347,7 +448,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "manage_responsibility",
-        order: 6,
+        order: 8,
         title: "Naming who owes it changes no money",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Make Dana Alvarez responsible for the obligation and confirm nothing financial moved.",
@@ -355,15 +456,33 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
             "Who owes and how much is owed are separate questions. Deciding a parent carries a bill must never quietly change the bill.",
         requires: [{ kind: "account_state", check: "has_posted_obligation", describe: "an obligation to divide" }],
         navigate: ["Open the charge detail.", "Find Responsibility arrangement.", "Use Manage responsibility."],
-        doThis: ["Choose Responsible party → Dana Alvarez.", "Enter the Amount.", "Click Preview, read it, then Confirm."],
-        expectChanges: ["Dana Alvarez is named as carrying the amount.", "Nothing is left unassigned."],
+        doThis: [
+            "Before touching anything, read the rows the editor opened with. They must be the arrangement that stands TODAY \u2014 the people who actually carry this obligation, with their current amounts in the fields. Anyone else merely eligible appears as an explicit '+ Add', not as a row implying they are already responsible.",
+            "Type a two-digit amount into one field without stopping. Both characters must land; you must not have to click back in after the first.",
+            "Read the primary control. It says 'Review this change' and it is LIVE \u2014 not a disabled Confirm with nothing on screen explaining why.",
+            "Press it, read what it says will happen, then press Confirm.",
+            "Then reopen the editor, press Review again, and change an amount afterwards. The control must fall back to Review and the stale preview must disappear.",
+        ],
+        expectChanges: [
+            "The people who carry the obligation are named, with their amounts.",
+            "Nothing is left unassigned.",
+            "An added party arrives only because you added them.",
+        ],
         expectUnchanged: ["What is owed.", "Gross.", "Payments received."],
         invariant: MONEY_INVARIANTS.RESPONSIBILITY_MOVES_NO_CASH,
-        failSymptoms: ["The balance changes.", "The whole amount sits in unassigned.", "A child is offered as a responsible party."],
+        failSymptoms: [
+            "The balance changes.",
+            "The whole amount sits in unassigned.",
+            "A child is offered as a responsible party.",
+            "Everyone eligible is shown as an editable row, so the editor implies a split that does not exist \u2014 W7-F003A.",
+            "The amount field loses focus after one character \u2014 W7-F003C.",
+            "A disabled primary action with nothing on screen saying what is unmet \u2014 W7-F003D.",
+            "Confirming commits a split different from the one that was shown, because the preview was not invalidated by the edit.",
+        ],
     }),
     S({
         key: "responsibility_supersession",
-        order: 7,
+        order: 9,
         title: "A later arrangement replaces the earlier one",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a second arrangement and confirm the family is not made responsible twice.",
@@ -379,7 +498,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "expected_funding",
-        order: 8,
+        order: 10,
         title: "Expected Funding is an expectation, not a payment",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record that an employer is expected to cover part of Dana's share.",
@@ -395,7 +514,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "expected_funding_correction",
-        order: 9,
+        order: 11,
         title: "Correcting the expectation replaces it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Change the expected amount and confirm the new figure replaces the old one.",
@@ -411,7 +530,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "adjustment_draft",
-        order: 10,
+        order: 12,
         title: "Lowering what a family owes, and saying why",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a correction that reduces what a family owes, and confirm it moves nothing yet.",
@@ -441,7 +560,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "adjustment_post",
-        order: 11,
+        order: 13,
         title: "Posting the credit is what reduces the obligation",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Post the credit and confirm the account and Collections agree afterwards.",
@@ -461,7 +580,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reduction_zero_bound",
-        order: 12,
+        order: 14,
         title: "A credit stops at zero",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to reduce an obligation below nothing and confirm the product refuses.",
@@ -488,7 +607,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reverse_adjustment",
-        order: 13,
+        order: 15,
         title: "Reversing a correction restores the obligation, without rewriting history",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Undo the correction and confirm the original stays visible while the money comes back.",
@@ -518,7 +637,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "payment_receipt",
-        order: 14,
+        order: 16,
         title: "A receipt records what actually arrived, and from whom",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a payment larger than the obligation and read the receipt back.",
@@ -534,7 +653,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "actual_payer_is_not_responsibility",
-        order: 15,
+        order: 17,
         title: "The person who paid is not necessarily the person who owes",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a payment from a household adult who carries no responsibility, and read both facts back.",
@@ -566,7 +685,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "apply_payment",
-        order: 16,
+        order: 18,
         title: "What is owed falls by what was applied",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the obligation is settled and the balance fell by the applied amount, not the receipt.",
@@ -582,7 +701,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "partial_unapplied",
-        order: 17,
+        order: 19,
         title: "Received, applied and unapplied are three different numbers",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Place some of the leftover money on another obligation without creating a new receipt.",
@@ -598,7 +717,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "move_payment",
-        order: 18,
+        order: 20,
         title: "Moving a payment changes where it sits, not what it is",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Move an application from one obligation to another and confirm the receipt is untouched.",
@@ -614,7 +733,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "failed_reapply_recovery",
-        order: 19,
+        order: 21,
         title: "A half-finished move leaves the money visible, not lost",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Force the second half of a move to fail and confirm the product tells the truth about it.",
@@ -630,7 +749,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "refund",
-        order: 20,
+        order: 22,
         title: "A refund is money going back, recorded separately",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Refund part of a receipt and confirm the original receipt survives untouched.",
@@ -646,7 +765,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reverse_charge",
-        order: 21,
+        order: 23,
         title: "Reversing a charge appends, it does not erase",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Reverse a posted charge and confirm the original remains readable.",
@@ -662,7 +781,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "cross_surface_consistency",
-        order: 22,
+        order: 24,
         title: "Every surface tells the same story",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the account, the charge detail and Collections at the same scope and period.",
@@ -697,7 +816,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reload_switch_viewport",
-        order: 23,
+        order: 25,
         title: "Reload, switch household, and shrink the window",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm no stale financial state survives navigation, and the account is usable on a phone.",
@@ -730,7 +849,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "overview_smoke",
-        order: 24,
+        order: 26,
         title: "Overview agrees with the Charges list",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the Overview drafts figure with the Awaiting posting list.",
@@ -746,7 +865,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "tuition_chain",
-        order: 25,
+        order: 27,
         title: "Recommendation, acceptance, then a charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Follow a tuition price from what the catalog suggests, through what was agreed, to the charge that results.",
@@ -764,7 +883,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "discount_vs_adjustment",
-        order: 26,
+        order: 28,
         title: "An authored discount is not a manual correction",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Tell the two kinds of reduction apart and be able to explain the difference afterwards.",
@@ -789,7 +908,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "multi_child_attribution",
-        order: 27,
+        order: 29,
         title: "Which child, and what belongs to the household",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Use the second child to tell child-level money apart from household-level responsibility.",
@@ -807,7 +926,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_exclusion",
-        order: 28,
+        order: 30,
         title: "Where Core Financials stops",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the boundary: Expected Funding is Core, subsidy processing is not.",
@@ -825,7 +944,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     // ── NOT WALKED THROUGH, AND WHY ─────────────────────────────────────────────────────────────
     S({
         key: "card_collection",
-        order: 29,
+        order: 31,
         title: "Collecting a card payment",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Take a card payment through the product and recognise the provider's result.",
@@ -862,7 +981,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "ach_processing",
-        order: 30,
+        order: 32,
         title: "ACH initiation, processing and recognition",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Distinguish an ACH collection that has started from one that has actually settled.",
@@ -896,7 +1015,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "provider_return",
-        order: 31,
+        order: 33,
         title: "A provider return is not an operator refund",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Tell money the rail took back apart from money somebody decided to give back.",
@@ -933,7 +1052,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "payment_method_on_file",
-        order: 52,
+        order: 54,
         title: "Putting a payment method on file, and taking it off",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Save a card or bank account for a family, choose the default, and remove one without losing payment history.",
@@ -983,7 +1102,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_processing",
-        order: 32,
+        order: 34,
         title: "Subsidy claims, submission, remittance and variance",
         disposition: "OUT_OF_SCOPE_THREAD_11A",
         purpose: "Claim agency money, submit it, reconcile what arrives and resolve the difference.",
@@ -1009,7 +1128,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "billing_period",
-        order: 33,
+        order: 35,
         title: "The billing period is derived, and every surface agrees which one a charge is in",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1051,7 +1170,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "accounting_period",
-        order: 34,
+        order: 36,
         title: "The accounting period a journal entry is attributed to, and who may close it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1101,7 +1220,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "billing_preview_reachable",
-        order: 40,
+        order: 42,
         title: "Recurring tuition terms are reachable from the child the operator is working in",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1131,7 +1250,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "accept_recurring_terms",
-        order: 41,
+        order: 43,
         title: "Accepting the authored price, and reading it back",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1165,7 +1284,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_preview_is_the_run",
-        order: 42,
+        order: 44,
         title: "The generation preview is the run that follows it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1196,7 +1315,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_generation_bills_the_accepted_price",
-        order: 43,
+        order: 45,
         title: "What is generated is what was accepted",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1229,7 +1348,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_rerun_is_honest",
-        order: 44,
+        order: 46,
         title: "Running the period again bills nothing again, and says so",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1259,7 +1378,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_term_lifecycle",
-        order: 45,
+        order: 47,
         title: "A term that has not begun bills nothing",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1287,7 +1406,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_discount_reduces_net",
-        order: 46,
+        order: 48,
         title: "A discount reduces the net and never the accepted price",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1328,7 +1447,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "discount_rerun_and_veto",
-        order: 47,
+        order: 49,
         title: "Discounts do not stack on rerun, and a category that refuses one is refused",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1365,7 +1484,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "discount_exception",
         /* After the payments-era scenarios; the discount chain it belongs to sits at 45-47. */
-        order: 53,
+        order: 55,
         title: "A discount policy that does not apply to one family, from a date, for a reason",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1412,7 +1531,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_due_date",
-        order: 48,
+        order: 50,
         title: "A generated obligation carries the organisation's own payment terms",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1442,7 +1561,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "prepaid_available_and_applied",
-        order: 49,
+        order: 51,
         title: "Money held for a family, and what happens when it is applied",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1476,7 +1595,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "child_responsibility_and_partial",
-        order: 50,
+        order: 52,
         title: "A child-grain arrangement, and an obligation only partly divided",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1508,7 +1627,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "organization_financial_configuration",
-        order: 51,
+        order: 53,
         title: "The configuration an operator can actually reach, and the policies deliberately withheld",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1536,7 +1655,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_enrollment",
-        order: 61,
+        order: 63,
         title: "Setting up Autopay is an explicit authorization, and a saved card alone is not one",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1574,7 +1693,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_card_collection",
-        order: 62,
+        order: 64,
         title: "Autopay collects what is currently owed on a card, exactly once",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1613,7 +1732,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_bank_processing",
-        order: 63,
+        order: 65,
         title: "A bank debit in flight is not money yet",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1651,7 +1770,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_failure",
-        order: 64,
+        order: 66,
         title: "A declined Autopay collection is visible, and is not retried as an infrastructure fault",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1689,7 +1808,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_retry",
-        order: 65,
+        order: 67,
         title: "Autopay retries are bounded, and bank retries are spaced",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1728,7 +1847,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_pause",
-        order: 66,
+        order: 68,
         title: "Pausing stops the next collection and does not reach into money already in flight",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1767,7 +1886,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_resume",
-        order: 67,
+        order: 69,
         title: "Resuming restores future collection and invents no catch-up",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1805,7 +1924,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_revoke",
-        order: 68,
+        order: 70,
         title: "Turning Autopay off is permanent for that authorization",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1844,7 +1963,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_method_invalidated",
-        order: 69,
+        order: 71,
         title: "A dead payment method ends the Autopay that stood on it, with no silent fallback",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1890,7 +2009,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "bank_setup_request",
-        order: 80,
+        order: 82,
         title: "An operator asks for a bank account, and that is all they do",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Send the payer a setup link and confirm nothing at all was written on the account.",
@@ -1923,7 +2042,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_setup_payer_authorization",
-        order: 81,
+        order: 83,
         title: "The payer authorizes their own bank account",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Open the setup link as the parent would and put a bank account on file yourself.",
@@ -1958,7 +2077,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_method_operator_projection",
-        order: 82,
+        order: 84,
         title: "What the operator may see about a family's bank account",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read the saved bank account from the operator's side and confirm it says only safe things.",
@@ -1984,7 +2103,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_setup_visual_review",
-        order: 83,
+        order: 85,
         title: "Does the payer's page feel like Alloy?",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Judge the participant surface as a parent would, and say whether it is acceptable.",
@@ -2013,7 +2132,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "held_deposit_take_and_hold",
-        order: 70,
+        order: 72,
         title: "Money received and restricted is not available prepaid",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Hold part of a receipt as a deposit and confirm it stops behaving like ordinary money.",
@@ -2044,7 +2163,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_apply",
-        order: 71,
+        order: 73,
         title: "Applying a held deposit to what is owed",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Spend a held deposit against an obligation and watch it stop being held.",
@@ -2071,7 +2190,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_release",
-        order: 72,
+        order: 74,
         title: "Releasing a deposit moves no money",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "End the restriction on a deposit and confirm nothing left the organisation.",
@@ -2090,7 +2209,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_refund",
-        order: 73,
+        order: 75,
         title: "Refunding a deposit sends it back without touching what was settled",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Give a refundable deposit back and confirm nothing the family already paid was disturbed.",
@@ -2116,7 +2235,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_non_refundable",
-        order: 74,
+        order: 76,
         title: "A non-refundable deposit refuses, and says the same thing twice",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to refund a deposit taken as non-refundable and read what the product says.",
@@ -2145,7 +2264,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_card_rail_refund",
-        order: 75,
+        order: 77,
         title: "Refunding a deposit that arrived on a card",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Refund a held deposit whose money came in through the provider rather than as cash.",
@@ -2168,7 +2287,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     /* ── THE REST OF THE PAYMENTS SURFACE ────────────────────────────────────────────────────── */
     S({
         key: "duplicate_charge_notice",
-        order: 76,
+        order: 78,
         title: "Adding the same charge twice creates one charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Ask for the same charge twice and confirm the operator is told nothing new was created.",
@@ -2198,7 +2317,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "ach_uncovered_obligation",
-        order: 77,
+        order: 79,
         title: "A bank debit is refused when the family has already paid",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to collect by bank against an obligation the family's own prepaid money already covers.",
@@ -2225,7 +2344,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "financial_activity_language",
-        order: 78,
+        order: 80,
         title: "Financial Activity in the operator's words",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read the activity feed end to end and confirm every line is about money, not machinery.",
@@ -2253,7 +2372,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "provider_readiness",
-        order: 79,
+        order: 81,
         title: "Whether this organization can take money, said plainly",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read provider configuration and readiness as an administrator, not as an engineer.",
@@ -2303,6 +2422,8 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
     add_charge_honours_review_boundary: "CORE_RUNNABLE",
     draft_moves_nothing: "CORE_RUNNABLE",
     post_charge: "CORE_RUNNABLE",
+    future_period_charge: "CORE_RUNNABLE",
+    awaiting_posting_says_why: "CORE_RUNNABLE",
     charge_detail_attribution: "CORE_RUNNABLE",
     manage_responsibility: "CORE_RUNNABLE",
     responsibility_supersession: "CORE_RUNNABLE",
@@ -2422,6 +2543,9 @@ export const SCENARIO_EVIDENCE: Readonly<Record<string, readonly EvidenceClass[]
     add_charge_honours_review_boundary: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
     draft_moves_nothing: ["HUMAN_WALKTHROUGH"],
     post_charge: ["HUMAN_WALKTHROUGH"],
+    /* The gate, the activation handler and the classifier are all unit-certified beside this. */
+    future_period_charge: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    awaiting_posting_says_why: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
     charge_detail_attribution: ["HUMAN_WALKTHROUGH"],
     manage_responsibility: ["HUMAN_WALKTHROUGH"],
     responsibility_supersession: ["HUMAN_WALKTHROUGH"],

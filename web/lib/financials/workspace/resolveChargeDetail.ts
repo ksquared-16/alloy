@@ -52,7 +52,15 @@ import {
     type ChargeOrigin,
 } from "@/lib/financials/workspace/chargeOrigin";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
-import { resolveLinkedPersonId } from "@/lib/access/linkedPersonIdentity";
+import {
+    awaitingPostingReason,
+    type AwaitingPostingReason,
+} from "@/lib/financials/posting/awaitingPostingReason";
+import {
+    financialActorIdentityGap,
+    resolveFinancialActorIdentity,
+    type FinancialActorIdentity,
+} from "@/lib/financials/identity/financialActorIdentity";
 import {
     directionFromSignedCents,
     type AdjustmentDirection,
@@ -113,6 +121,23 @@ export type ChargeDetail = {
     updatedAt: string | null;
     postedBy: string | null;
     postedByName: string | null;
+    /**
+     * WHETHER THE AUDIT TRAIL CAN NAME WHO CREATED THIS, and if not, why.
+     *
+     * Separate from `createdByName` on purpose. A name may be present from the weaker source (the
+     * auth account's own display name) while the identity requirement is unmet, and a financial
+     * surface must be able to say both things at once.
+     */
+    createdByIdentityStatus: FinancialActorIdentity["status"];
+    /** The unmet requirement in one sentence, naming where it is closed. Null when there is none. */
+    createdByIdentityGap: string | null;
+    /**
+     * WHY this charge is still a draft, when it is one (W7-F001).
+     *
+     * Null for anything that is not a draft. The same classifier the work queue uses, so a row and
+     * the panel it opens cannot describe one charge differently.
+     */
+    awaiting: AwaitingPostingReason | null;
     correctionOfChargeId: string | null;
     chargeTemplateId: string | null;
     origin: ChargeOrigin;
@@ -563,54 +588,37 @@ export async function resolveChargeDetail(
      * At most two ids, looked up once each, on a surface that is already one charge.
      */
     const actorNames = new Map<string, string>();
+    /*
+     * ── AND WHETHER THE LEDGER IS ENTITLED TO A NAME AT ALL (W7-F002) ─────────────────────────
+     *
+     * The name and the REQUIREMENT are two different answers and the panel needs both. An operator
+     * whose auth account happens to carry a `full_name` renders with a name, and the tenant still
+     * has not met the requirement — the attribution rests on whatever the account was created with
+     * rather than on a recorded decision about who this login is. Reporting only the name would
+     * close the gap on screen while leaving it open in the data, which is the shape of defect that
+     * produced F002 in the first place.
+     */
+    const actorIdentities = new Map<string, FinancialActorIdentity>();
     for (const actorId of new Set([charge.created_by, charge.posted_by].filter((v): v is string => Boolean(v)))) {
-        let name: string | null = null;
         /*
          * ── THE PERSON THIS OPERATOR IS, BEFORE THE ACCOUNT THEY SIGN IN WITH ─────────────────
          *
-         * `user_person_links` is the canonical bridge from an authenticated user to the human they
-         * are, created explicitly by an operator — it is not an email guess, and the module that
-         * owns it is emphatic that identity is never inferred. `persons` is where that human's real
-         * first and last name live.
-         *
-         * This was never consulted. The only source read was the auth account's `user_metadata`,
-         * so an operator whose account carries no `full_name` rendered as "Created by a person
-         * whose name is not on file" — on a FINANCIAL AUDIT LINE — while their actual name sat one
-         * join away. W7-F002: the identity was available and we were reading the wrong place.
-         *
-         * The link is preferred over the account's own display name because it is the stronger
-         * claim: a person record is canonical human identity that an operator deliberately bound to
-         * this login, whereas `user_metadata` is whatever the account happened to be created with.
+         * `resolveFinancialActorIdentity` is the one statement of the requirement: the canonical
+         * bridge `user_person_links` → `persons` → a human name, with no email anywhere in it. This
+         * surface used to read the auth account's `user_metadata` and nothing else, so an operator
+         * whose account carried no `full_name` rendered as "Created by a person whose name is not
+         * on file" on a FINANCIAL AUDIT LINE while their actual name sat one join away.
          */
-        try {
-            const linked = await resolveLinkedPersonId(supabase, args.orgId, actorId);
-            if (linked.personId) {
-                const { data: personRow } = await supabase
-                    .from("persons")
-                    .select("full_name, first_name, last_name")
-                    .eq("org_id", args.orgId)
-                    .eq("id", linked.personId)
-                    .maybeSingle();
-                const person = personRow as
-                    | { full_name: string | null; first_name: string | null; last_name: string | null }
-                    | null;
-                if (person) {
-                    name =
-                        operatorIdentity({ display_name: person.full_name, email: null }).name
-                        ?? operatorIdentity({
-                            display_name: [person.first_name, person.last_name].filter(Boolean).join(" "),
-                            email: null,
-                        }).name;
-                }
-            }
-        } catch {
-            /* An unreadable link is not a named person; fall through to the account below. */
-        }
+        const identity = await resolveFinancialActorIdentity(supabase, { orgId: args.orgId, actorUserId: actorId });
+        actorIdentities.set(actorId, identity);
+        let name: string | null = identity.name;
 
         /*
-         * The account's own display name, which is what this read before and remains correct for an
-         * operator who has no person link yet. Still no email fallback: an unknown name stays
-         * unknown rather than printing an address in a person's place.
+         * The account's own display name, for DISPLAY only. A weak name beats no name on a screen,
+         * and it is what this read did before. It does NOT satisfy the requirement and deliberately
+         * does not touch `identity.requirementMet`, so the gap stays visible beside it. Still no
+         * email fallback: an unknown name stays unknown rather than printing an address in a
+         * person's place.
          */
         if (!name) {
             try {
@@ -779,6 +787,13 @@ export async function resolveChargeDetail(
         createdAt: charge.created_at ?? null,
         createdBy: charge.created_by ?? null,
         createdByName: actorNames.get(charge.created_by ?? "") ?? null,
+        awaiting: charge.status === "draft" ? awaitingPostingReason(charge.metadata) : null,
+        createdByIdentityStatus:
+            actorIdentities.get(charge.created_by ?? "")?.status ?? "no_actor",
+        createdByIdentityGap: financialActorIdentityGap(
+            actorIdentities.get(charge.created_by ?? "")
+            ?? { status: "no_actor", name: null, personId: null, requirementMet: false },
+        ),
         updatedAt: charge.updated_at ?? null,
         postedBy: charge.posted_by ?? null,
         postedByName: actorNames.get(charge.posted_by ?? "") ?? null,

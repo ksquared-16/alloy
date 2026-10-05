@@ -304,7 +304,7 @@ export default function FinancialsCharges({
                     ) : rows.length === 0 ? (
                         <WorkspaceEmptyState
                             title="Nothing waiting to post"
-                            body={`No draft charges for ${scopeLabel.toLowerCase()}.`}
+                            body={`No draft charges for ${scopeLabel.toLowerCase()}. Charges in the current billing period post as they are created.`}
                         />
                     ) : (
                         rows.map((row) => (
@@ -334,6 +334,27 @@ export default function FinancialsCharges({
                                     {" · "}
                                     {/* Location is stated per row, including when it belongs to no site. */}
                                     {row.locationScope === "site" ? (row.siteName ?? "Site") : "Account-wide"}
+                                </span>
+                                {/*
+                                 * WHY THIS ONE IS WAITING, on the row itself (W7-F001).
+                                 *
+                                 * The list is the only place an operator triages, so the reason has
+                                 * to be here rather than one click away. The tone carries the same
+                                 * information as the words: a charge the clock will post is quiet,
+                                 * and anything needing a person is not.
+                                 */}
+                                <span
+                                    className={`mt-0.5 block truncate text-[11px] ${
+                                        row.awaiting.key === "post_failed"
+                                            ? "text-alloy-ember"
+                                            : row.awaiting.operatorActionable
+                                              ? "text-alloy-midnight/70"
+                                              : "text-alloy-midnight/45"
+                                    }`}
+                                    data-financials-awaiting-reason={row.awaiting.key}
+                                    title={row.awaiting.explanation}
+                                >
+                                    {row.awaiting.label}
                                 </span>
                             </button>
                         ))
