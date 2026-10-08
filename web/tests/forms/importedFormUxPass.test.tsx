@@ -273,8 +273,8 @@ describe("the attention filters speak the same colour language as the form", () 
 describe("plumbing already on a persisted draft", () => {
     it("is found on the draft, not hidden on the canvas", () => {
         const found = plumbingFieldsOnDraft([
-            { id: "field_1", label: "subject_line", confidence: "low", evidence: "hosted_form:form:subject_line" },
-            { id: "field_2", label: "Parent email", confidence: "high", evidence: "hosted_form:form:parent_email" },
+            { id: "field_1", label: "subject_line", evidence: "hosted_form:form:subject_line" },
+            { id: "field_2", label: "Parent email", evidence: "hosted_form:form:parent_email" },
         ]);
         expect(found).toEqual([{ id: "field_1", label: "subject_line" }]);
     });

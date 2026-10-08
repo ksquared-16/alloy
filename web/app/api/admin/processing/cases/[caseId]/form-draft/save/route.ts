@@ -100,7 +100,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                  */
                 ...(() => {
                     const c = (f as { confidence?: unknown }).confidence;
-                    return c === "high" || c === "medium" || c === "low" ? { confidence: c } : {};
+                    const confidence: ManualFieldInput["confidence"] =
+                        c === "high" || c === "medium" || c === "low" ? c : undefined;
+                    return confidence ? { confidence } : {};
                 })(),
                 ...(() => {
                     const raw = (f as { layout_width?: unknown }).layout_width;
