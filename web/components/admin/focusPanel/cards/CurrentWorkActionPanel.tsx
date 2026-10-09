@@ -351,6 +351,7 @@ export default function CurrentWorkActionPanel({
                     <CurrentWorkAddChildPanel
                         action={action}
                         opportunityId={opportunityId}
+                        householdId={typeof context.truth?.customer_id === "string" ? context.truth.customer_id : null}
                         defaultLocationId={
                             typeof context.truth?.location_id === "string"
                                 ? context.truth.location_id

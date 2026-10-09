@@ -28,6 +28,8 @@ import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/curre
 type Props = {
     action: CurrentWorkActionVM;
     opportunityId: string;
+    /** The family's household (`truth.customer_id`). */
+    householdId?: string | null;
     defaultLocationId?: string | null;
     onClose: () => void;
     onComplete: () => void;
@@ -65,6 +67,7 @@ function buildInitialValues(
 export default function CurrentWorkAddChildPanel({
     action,
     opportunityId,
+    householdId = null,
     defaultLocationId = null,
     onClose,
     onComplete,
@@ -76,7 +79,15 @@ export default function CurrentWorkAddChildPanel({
     const [participationFields, setParticipationFields] = useState<EntityCreateFormField[]>([]);
     const [fieldsLoading, setFieldsLoading] = useState(true);
     const [values, setValues] = useState<Record<string, string>>({});
-    const [customerId, setCustomerId] = useState<string | null>(null);
+    /*
+     * The family's household, from the record the Focus Panel already holds — the same
+     * `truth.customer_id` the Household card and the panel's mutations read.
+     *
+     * This used to be fetched from `GET /api/admin/opportunities/{id}`. That route has never had a GET
+     * handler (it answers 405), so the household was never found and every Add Child from the process
+     * card ended in "This family has no household yet. Refresh and try again." — on every lead.
+     */
+    const customerId = (householdId ?? "").trim() || null;
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const submitLock = useRef(false);
@@ -92,22 +103,11 @@ export default function CurrentWorkAddChildPanel({
         setFieldsLoading(true);
         void (async () => {
             try {
-                const [memberFields, inquiryFields, oppRes] = await Promise.all([
+                const [memberFields, inquiryFields] = await Promise.all([
                     fetchEntityCreateFormFields("customer_member").catch(() => []),
                     fetchEntityCreateFormFields("inquiry_child").catch(() => []),
-                    fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}`, {
-                        credentials: "include",
-                    }).catch(() => null),
                 ]);
                 if (cancelled) return;
-                if (oppRes?.ok) {
-                    const json = (await oppRes.json().catch(() => ({}))) as {
-                        data?: { customer_id?: string | null; location_id?: string | null };
-                        customer_id?: string | null;
-                    };
-                    const cid = String(json.data?.customer_id ?? json.customer_id ?? "").trim();
-                    if (cid) setCustomerId(cid);
-                }
                 const identity =
                     memberFields.filter((f) =>
                         ["first_name", "last_name", "date_of_birth", "dob"].includes(f.field_key),
