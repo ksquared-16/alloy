@@ -378,11 +378,13 @@ experiment to do nothing but stamp a timestamp: posting a childcare payment move
 `ledger_transactions`, `gl_journal_entries` and `gl_journal_lines` from 0 rows to 0 rows while
 setting `posted_to_ledger_at`. Its own comment had said so since March.
 
-- **Billing period — the customer's cycle. Derived, unchanged.** `web/lib/financials/billingPeriod.ts`
-  places a row by `billable_on` (falling back through `occurs_on`, `service_date`, `created_at`, and
-  reporting which). There is no billing-period table and none is wanted: the cycle is a grouping of
-  charges, and a second stored answer would drift from `billable_on` the first time a template
-  changed its strategy.
+- **Billing period — the customer's cycle.** *(Superseded twice.)* Originally derived by slicing
+  `billable_on`. Billing Period S1/S2 made it a persisted, customer-grain interval
+  (`financial_billing_periods`, bound as `charges.billing_period_id`). W7 billing configuration
+  convergence (Director decision) made membership the interval **containing the service date** —
+  invoice timing no longer moves an obligation into another period. See
+  `financials-canonical-authorities.md` §3.0. `placeInBillingPeriod` remains for legacy, unbound
+  rows only.
 - **Accounting period — reporting attribution. Configured, because a boundary nobody wrote down is a
   boundary nobody can close.** `financial_accounting_calendars` + `financial_accounting_periods`.
   Boundaries are inclusive; periods within one calendar cannot overlap
@@ -397,9 +399,9 @@ setting `posted_to_ledger_at`. Its own comment had said so since March.
   `posted_at`, the payment's `received_at`, the application's `allocated_at` and the reversal date are
   distinct columns and are never derived from one another. The accounting period is resolved from the
   consequence's **effective date** — `service_date` first for a charge, because revenue belongs to the
-  period the service was delivered in — while the billing period leads with `billable_on`. A September
-  service billed in October reports in September and bills in October, and that difference is the
-  whole reason both exist.
+  period the service was delivered in. The billing period is the interval containing the service
+  date (W7); the INVOICE date is what moves with invoice timing. A September service invoiced in
+  October belongs to September's billing period and is invoiced in October.
 - **The journal is an append-only SUBLEDGER, not double-entry accounting.**
   `financial_journal_entries` records one row per posted consequence: `charge_posted`,
   `charge_corrected`, `payment_received`, `payment_applied`, `payment_application_reversed`,
@@ -942,7 +944,7 @@ balances by summing `gl_journal_entries`; nothing in this workspace reaches it.
 - Do not drop a reversed original from a total; it nets against its reversal, and skipping it drives responsibility negative.
 - Do not write a charge without an actor; `created_by` / `updated_by` / `posted_by` are the audit trail money requires.
 - Do not derive the accounting period from the billing month or the due date — they are separate identities, and a 4/4/5 calendar exists precisely so they can disagree.
-- Do not add a billing-period column; the cycle is `billable_on` and a second stored answer drifts from it.
+- Do not bind a billing period from `billable_on` (or any invoice date); membership is the interval containing the service date, and invoice timing is a separate rule (W7-F004).
 - Do not let a closed period refuse an operational act; a consequence effective in one defers to the next open period and says that it did.
 - Do not re-date a period that has already reported, and do not expect a posted entry's period to move when a calendar is edited — the key is frozen on the row.
 - Do not compute a balance from `financial_journal_entries`; charges and active allocations of posted payments are the balance authority and the journal is history.

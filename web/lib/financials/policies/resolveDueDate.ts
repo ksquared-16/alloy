@@ -7,7 +7,7 @@
  * answer differently:
  *
  *   SERVICE DATE     when the chargeable event happened          (`occurs_on`)
- *   BILLING PERIOD   which commercial cycle owns the obligation  (derived from `billable_on`)
+ *   BILLING PERIOD   which commercial cycle owns the obligation  (the interval containing the service date)
  *   INVOICE DATE     when the obligation is issued               (`billable_on`)
  *   DUE DATE         when payment is expected                    (`due_date`)
  *   PAYMENT DATE     when money actually arrived                 (`payments.received_at`)

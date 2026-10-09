@@ -10,6 +10,14 @@
  *   due_date     the date payment is due
  *   posted_at    the moment posting happened
  *
+ * ── SUPERSEDED FOR BOUND CHARGES (W7) ──
+ *
+ * A charge on the childcare spine now carries `billing_period_id`, bound from its SERVICE date
+ * (`resolveChargeDateChain`, Director decision): invoice timing decides when a charge is billed,
+ * never which interval it belongs to. What follows describes `placeInBillingPeriod`, which still
+ * places LEGACY rows that carry no binding, by the historical rule below — kept so history is not
+ * restated.
+ *
  * The period is `billable_on`. That is the column whose own comment defines the lifecycle — "a draft
  * with billable_on in the future is scheduled" — so it is already the platform's answer to "when does
  * this charge belong to the operator's billing work". Adding a `billing_period` column would be a

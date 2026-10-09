@@ -188,10 +188,10 @@ Not interchangeable. `charges` carries four dates and each answers a different q
 
 | Identity | Owner | Notes |
 |---|---|---|
-| **Service / effective date** | `charges.occurs_on` (template `occurs_on_strategy`) | when the chargeable event happens |
-| **Billing period** | derived from `charges.billable_on` | `lib/financials/billingPeriod.ts` — see the gap in §9 |
-| **Invoice / bill date** | `charges.billable_on` (template `billable_on_strategy`) | `immediate` \| `offset_days` \| `next_billing_cycle` |
-| **Due date** | `charges.due_date` | **no template strategy** — see the gap in §9 |
+| **Service / effective date** | `charges.service_date` = `occurs_on` (template `occurs_on_strategy`) | when the chargeable thing occurred / applies |
+| **Billing period** | `charges.billing_period_id` — the interval **containing the service date** | bound by `bindChargeBillingPeriodWithBounds`; see §3.0 |
+| **Invoice / bill date** | `charges.billable_on` | `invoice_timing` policy (org default, location override) or a template exception; never before the charge was created — §3.2 |
+| **Due date** | `charges.due_date` | `due_date` policy; never before the invoice — §3.2 |
 | **Payment date** | `payments.received_at` | when money actually arrived |
 | **Accounting period** | `financial_accounting_periods` | via `financial_accounting_calendars`, ≤1 active per org |
 | **Accounting period close** | `financial_accounting_periods.status` | `open` \| `closed` — *not* a synonym for posted |
@@ -204,10 +204,43 @@ Journal attribution follows the accounting calendar, never the billing period bo
 within one calendar cannot overlap (GiST exclusion constraint); different calendars may freely cover
 the same days, which is how monthly parent billing coexists with a 4/4/5 reporting calendar.
 
-Why `billable_on` and not `posted_at`: `posted_at` records when someone pressed post, so a September
-charge posted late in October would move to October and silently change a closed period's totals.
-Why not `occurs_on`: a field trip occurring in September but billing next cycle belongs to the cycle
-that bills it.
+### 3.0 Billing-period membership comes from the service date (W7, Director decision)
+
+**The billing period is the commercial interval that CONTAINS the service date.** Invoice timing
+decides *when we bill*; it has no authority over *which interval the obligation belongs to*.
+
+This reverses the earlier rule ("the period is `billable_on`", with the rationale that a field trip
+billed next cycle belongs to the cycle that bills it). Human QA showed what that rule does: a Nov 5
+service on a template invoicing "next billing cycle" became a **December** obligation and posted
+immediately (W7-F004). The Director decided the identities are independent:
+
+| Identity | Decides |
+|---|---|
+| service / effective date | when the chargeable thing occurred |
+| billing period | the interval containing that date |
+| invoice date | when we bill / present it |
+| due date | when payment is due |
+| accounting period | attributed separately, from the journal's `effective_on` |
+
+**Forward only.** Charges already bound keep their recorded `billing_period_id`; nothing is
+re-bound in bulk. A mismatch census (service date outside the bound period) is reported, not
+normalised.
+
+**One resolver, one direction** — `lib/financials/chargeDates/resolveChargeDateChain.ts`:
+
+```
+billing calendar (cadence + anchor)          → billing-period boundaries   (from the service date)
+boundaries + invoice-timing rule             → intended invoice date
+intended + business date at creation         → actual invoice date         (never before the charge existed)
+boundaries + actual invoice + due-date rule  → due date                    (never before the invoice)
+period start + organisation business date    → posting gate                (posting review is separate)
+```
+
+Preview and commit run the same resolver: the preview reads the period without writing
+(`previewChargeBillingPeriod`), the write re-runs it against the period the binder bound. Each
+written charge carries `metadata.charge_dates` (rule, scope, intended date, clamps).
+
+`posted_at` is still never the period: it records when someone pressed post.
 
 ---
 
@@ -381,8 +414,19 @@ accounting period yet and says so rather than displaying one it has not reached.
 
 | Date | Owner | Configured by |
 |---|---|---|
-| Invoice / bill date | `charges.billable_on` | template `billable_on_strategy` (`immediate` / `offset_days` / `next_billing_cycle`) |
+| Invoice / bill date | `charges.billable_on` | **`financial_policies` type `invoice_timing`** (org default → location → account), or a template exception (`billable_on_strategy` ≠ `billing_policy`) |
 | Due date | `charges.due_date` | **`financial_policies` type `due_date`** |
+
+**Invoice timing** strategies: `days_before_period_start` (N ≥ 0; 0 = the first day of the period)
+and `on_service_date`. Template exceptions: `immediate` (service date), `offset_days` (service date +
+N), `next_billing_cycle` (the NEXT billing period's first day — no longer "the 1st of the next
+calendar month"). New templates default to `billing_policy`. Nothing configured → invoiced on the
+service date (platform default, stated as such in the UI).
+
+**Two clamps, one principle — the system never claims a family was billed or obliged before the
+charge existed:** actual invoice = max(rule, business date at creation); due = max(terms, actual
+invoice). A Nov 5 charge created Nov 5 under "7 days before / due on period start" is invoiced
+Nov 5 and due Nov 5, and both clamps are recorded and shown.
 
 Four due strategies, each computable from a date the charge already carries: `on_invoice`,
 `days_after_invoice`, `on_period_start`, `days_after_period_start`.
