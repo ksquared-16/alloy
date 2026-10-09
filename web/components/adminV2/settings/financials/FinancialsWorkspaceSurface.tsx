@@ -189,7 +189,7 @@ export default function FinancialsWorkspaceSurface({
                     </div>
                 : chapter === "policies" ?
                     <div data-testid="financials-chapter-policies">
-                        <PoliciesConfigurationPage programs={programs} locations={locations} />
+                        <PoliciesConfigurationPage programs={programs} locations={locations} locationsLoading={loading} />
                     </div>
                 : chapter === "catalog" ?
                     <div data-testid="financials-chapter-catalog">

@@ -23,7 +23,7 @@ import {
     invoiceRuleSentence,
 } from "@/lib/financials/chargeDates/describeChargeDateChain";
 import type { FinancialPolicyRow, FinancialPolicyType } from "@/lib/financials/policies/financialPolicyTypes";
-import { resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
+import { isWithdrawnPolicy, resolveFinancialPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 
 export const BILLING_TIMING_RULES = ["billing_calendar", "invoice_timing", "due_date", "posting_review"] as const;
 export type BillingTimingRule = (typeof BILLING_TIMING_RULES)[number];
@@ -120,7 +120,7 @@ function readAt(
     );
     const current = resolved.resolved ? resolved.policy : null;
     const future = history
-        .filter((p) => p.is_active !== false && p.effective_start > todayYmd)
+        .filter((p) => !isWithdrawnPolicy(p) && p.effective_start > todayYmd)
         .sort((a, b) => (a.effective_start < b.effective_start ? -1 : 1))[0] ?? null;
     return {
         rule,
@@ -140,7 +140,11 @@ function dayBefore(ymd: string): string {
 
 export type LocationOverride = {
     locationId: string;
-    locationName: string;
+    /**
+     * Null while the location list is still loading. "No longer listed" is a claim about the
+     * registry, so it is only made once the registry has answered.
+     */
+    locationName: string | null;
     /** One entry per rule: overridden here (with its reading), or inherited from the org default. */
     rules: Array<
         | { rule: BillingTimingRule; overridden: true; reading: RuleReading }
@@ -161,6 +165,8 @@ export type BillingTimingModel = {
 export function buildBillingTimingModel(args: {
     policies: readonly FinancialPolicyRow[];
     locations: ReadonlyArray<{ id: string; name: string }>;
+    /** False while `locations` has not loaded yet; defaults to true. */
+    locationsLoaded?: boolean;
     todayYmd: string;
 }): BillingTimingModel {
     const orgDefault = BILLING_TIMING_RULES.map((rule) => readAt(args.policies, rule, { type: "org" }, args.todayYmd));
@@ -169,7 +175,7 @@ export function buildBillingTimingModel(args: {
     const overridingLocationIds = new Set(
         args.policies
             .filter((p) => (BILLING_TIMING_RULES as readonly string[]).includes(p.policy_type))
-            .filter((p) => p.scope_type === "location" && p.location_id && p.is_active !== false)
+            .filter((p) => p.scope_type === "location" && p.location_id && !isWithdrawnPolicy(p))
             .filter((p) => p.effective_end == null || p.effective_end >= args.todayYmd)
             .map((p) => p.location_id as string),
     );
@@ -177,7 +183,7 @@ export function buildBillingTimingModel(args: {
     const overrides: LocationOverride[] = [...overridingLocationIds]
         .map((locationId) => ({
             locationId,
-            locationName: nameOf.get(locationId) ?? "A location no longer listed",
+            locationName: nameOf.get(locationId) ?? (args.locationsLoaded === false ? null : "A location no longer listed"),
             rules: BILLING_TIMING_RULES.map((rule) => {
                 const reading = readAt(args.policies, rule, { type: "location", locationId }, args.todayYmd);
                 return reading.current || reading.scheduled
@@ -185,11 +191,11 @@ export function buildBillingTimingModel(args: {
                     : ({ rule, overridden: false, inheritedSentence: byRule.get(rule)!.sentence } as const);
             }),
         }))
-        .sort((a, b) => a.locationName.localeCompare(b.locationName));
+        .sort((a, b) => (a.locationName ?? "").localeCompare(b.locationName ?? ""));
 
     const accountCalendarCount = new Set(
         args.policies
-            .filter((p) => p.policy_type === "billing_calendar" && p.scope_type === "customer" && p.is_active !== false)
+            .filter((p) => p.policy_type === "billing_calendar" && p.scope_type === "customer" && !isWithdrawnPolicy(p))
             .filter((p) => p.effective_end == null || p.effective_end >= args.todayYmd)
             .map((p) => p.customer_id),
     ).size;

@@ -63,9 +63,11 @@ function policyCategoryLabel(type: string): string {
 export default function PoliciesConfigurationPage({
     programs,
     locations,
+    locationsLoading = false,
 }: {
     programs: { key: string; label: string }[];
     locations: { id: string; name: string }[];
+    locationsLoading?: boolean;
 }) {
     const searchParams = useSearchParams();
     const initialPolicyId = searchParams.get("policyId");
@@ -268,7 +270,7 @@ export default function PoliciesConfigurationPage({
              * locations that override it, then history on request.
              */}
             <div className="mb-8">
-                <BillingTimingConfigurationPanel locations={locations} />
+                <BillingTimingConfigurationPanel locations={locations} locationsLoading={locationsLoading} />
             </div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-alloy-midnight/55 max-w-xl">
