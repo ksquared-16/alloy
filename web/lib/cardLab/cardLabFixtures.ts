@@ -681,7 +681,13 @@ export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
     previewGrossCents: 4000,
     serviceDate: "Sep 18, 2026",
     period: "September 2026",
-    due: "Sep 30, 2026",
+    invoiceDate: "Aug 25, 2026",
+    due: "Sep 1, 2026",
+    dateRules: {
+        invoice: "7 days before the billing period begins (organization default)",
+        due: "On the first day of the billing period (organization default)",
+    },
+    posting: "Posts on confirm — the billing period has begun",
     overridden: "Service date set by operator",
     chargeTo: "All responsible payers (default split)",
     allocation: [

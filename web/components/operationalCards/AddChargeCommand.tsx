@@ -47,17 +47,21 @@ const SHARE_METHODS: ReadonlyArray<{ value: ShareMethod; label: string }> = [
  *
  *   amount_strategy   fixed → amount locked · manual → operator sets it · rate_derived → resolved
  *   occurs_on         now | event_date | service_period_start   → the SERVICE date
- *   billable_on       immediate | offset_days | next_billing_cycle → the BILLING PERIOD
+ *   billable_on       follows the organisation's invoice timing (or a template exception) → the INVOICE date
  *   responsibility    household | employer | third_party | agency → who is billed
  *
  * Nothing about a charge type is hardcoded, and no fee definition is duplicated into the card.
  *
- * ── FOUR DATES, FOUR COLUMNS, NO INVENTION ──
+ * ── THE DATE CHAIN, RESOLVED BY THE SERVER, PLACED HERE ──
  *
  *   service date    `charges.service_date`  when the thing happened
- *   billing period  derived from `billable_on`; the period the charge lands in
- *   due date        `charges.due_date`
- *   posting date    `charges.posted_at`, set by the mutation, never by the operator
+ *   billing period  the interval CONTAINING the service date (never moved by invoice timing)
+ *   invoice date    `charges.billable_on`   from invoice timing; never before the charge exists
+ *   due date        `charges.due_date`      from payment terms; never before the invoice
+ *   posting         now, or draft until the billing period begins, or held for review
+ *
+ * Every value and every "why" line is the server's (`resolveChargeDateChain` via the preview, the
+ * same resolver the write runs). The card does no date arithmetic.
  *
  * A future-dated charge is therefore ordinary: a September service date on a charge created in
  * August, billable next cycle. Whether the operator may override any of them is
@@ -477,9 +481,33 @@ export default function AddChargeCommand({
             <Field label="Billing period">
                 <Value>{specimen.period}</Value>
             </Field>
-            <Field label="Due">
-                <Value>{specimen.due}</Value>
+            <Field label="Invoice date">
+                <span data-addcharge-invoice-date>
+                    <Value>{specimen.invoiceDate}</Value>
+                </span>
+                {specimen.dateRules.invoice ? (
+                    <span data-addcharge-invoice-rule className="alloy-os-addcharge__date-rule">
+                        {specimen.dateRules.invoice}
+                    </span>
+                ) : null}
             </Field>
+            <Field label="Due">
+                <span data-addcharge-due-date>
+                    <Value>{specimen.due}</Value>
+                </span>
+                {specimen.dateRules.due ? (
+                    <span data-addcharge-due-rule className="alloy-os-addcharge__date-rule">
+                        {specimen.dateRules.due}
+                    </span>
+                ) : null}
+            </Field>
+            {specimen.posting ? (
+                <Field label="Posting">
+                    <span data-addcharge-posting>
+                        <Value locked>{specimen.posting}</Value>
+                    </span>
+                </Field>
+            ) : null}
             {/*
                 ── WHAT CONFIRMING ACTUALLY DOES, ON THIS TENANT ────────────────────────────────
                 This read "Creates a draft — not yet owed" unconditionally. That was true of every
@@ -498,10 +526,16 @@ export default function AddChargeCommand({
               * because it changes what happens when they press Confirm. The posting semantics
               * themselves are unchanged — `reviewRequired` still governs.
               */}
+            {/*
+              * When the server resolved the chain, its Posting line above already states the review
+              * hold (and the period wait), so this older sentence is only the unresolved fallback.
+              */}
             {t.reviewRequired ? (
-                <Field label="Posting">
-                    <Value locked>Creates a draft — not yet owed</Value>
-                </Field>
+                !specimen.posting ? (
+                    <Field label="Posting">
+                        <Value locked>Creates a draft — not yet owed</Value>
+                    </Field>
+                ) : null
             ) : null}
 
             {/*
