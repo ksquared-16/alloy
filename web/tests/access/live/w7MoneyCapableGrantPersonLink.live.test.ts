@@ -32,7 +32,6 @@ function certEnv(): { url: string; serviceKey: string } | null {
 }
 
 const env = certEnv();
-const env = certEnv();
 const describeLive = env ? describe : describe.skip;
 
 const ORG = "00000000-0000-4000-8000-000000000001";
