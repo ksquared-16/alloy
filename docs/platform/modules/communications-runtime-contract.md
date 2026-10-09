@@ -1,7 +1,7 @@
 ---
 owner: modules
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-10-09
 supersedes: []
 ---
 
@@ -22,7 +22,9 @@ All Communications operator surfaces consume one runtime. Activity is the compac
 
 ### Workspace-only ownership
 
-The Workspace surface — and only the Workspace surface — owns: the operational queue, queue selection, triage, assignment context, notes/tasks context, and (when later added) search, filters, templates, announcements, and operational context panels. None of these belong to the runtime.
+The Workspace surface — and only the Workspace surface — owns: the operational queue, queue selection, triage, assignment context, notes/tasks context, and (when later added) search, filters, announcements, and operational context panels. None of these belong to the runtime.
+
+Applying a template is not Workspace-only: **Template ▾** is a composer presentation affordance in `FamilyCommunicationWorkspaceView`'s editor toolbar (every variant). It copies the Template Library's current version into the draft through `setSubjectDraft` / `setBodyDraft` and sends nothing; it is not runtime state.
 
 ### Non-fork rule
 
@@ -39,7 +41,26 @@ No surface may independently implement any of the following — they belong to t
 
 Presentation may differ (e.g. Activity exposes an in-panel topic rail and New Message button, while the Workspace switches conversations via the queue and composes new messages via the shell Compose action). Those are layout affordances that still drive the *same* runtime actions — they are not lifecycle forks.
 
-**Temporary legacy exceptions:** none. Any future exception must be documented here explicitly with a removal path.
+**Temporary legacy exceptions:**
+
+- `QuickMessageModal` (shell **Compose New** with person search and no record; and record-scoped launches when `comms_v2_command_center`, `comms_v2_record_tab` or `comms_v2_live_workspace` is off) keeps its own per-recipient `/api/admin/communications/send` (`quick_message`) lifecycle. Record-scoped launches against an opportunity no longer reach it while those flags are on (see *Record New Message composer*). Removal path: `ComposeNewCommunicationModal` already runs person-search compose on this runtime (`InboxModal`); retire `QuickMessageModal` once TopNav and the legacy `InboxPanel` use it.
+
+## Record New Message composer (one composer, two entry points)
+
+`FamilyNewMessageComposer` (`components/admin/communications/`) is the ONE record-scoped New Message composer. It is rendered by:
+
+| Entry point | Host | `entryContext` | `workConsequence` | On Done |
+|---|---|---|---|---|
+| Current Work → Contact Family / Send Message / Tour Invitation | `CurrentWorkActionPanel` | `current_work` | `contact_family_work` | returns to the Focus Panel |
+| Manage → Send Message / Email / SMS / Tour Invitation (any record-scoped `launchContextualQuickMessage` with an opportunity) | `RecordMessageComposerModal` (opened by the shell `TopNavBar`) | — | — | `onSendAcknowledged` closes the modal |
+
+Both use this runtime and `family-send` (preview → confirm → send). What differs is passed in, never inferred:
+
+- **`workConsequence`** — sent as `work_consequence`; `family-send` attempts the Contact Family association only when it is `contact_family_work`.
+- **Tour invitation** — a prepared invitation id (`draftSeed.tourInvitationId`, or Insert ▾ Tour Invitation Link) is activated with `send_tour_invitation` `mode: "mark_sent"` after a confirmed send with at least one accepted recipient, from any host.
+- **`onSendAcknowledged`** — a host that owns the acknowledgement keeps the success dialog and is called on Done instead of the runtime navigating into the created thread.
+
+Presentation rules for this composer key on `[data-family-new-message-composer]` (never on a host), and its popovers/dialogs are registered in `escapeLayerOwnership.ts` (`COMPOSER_LAYER_SELECTOR`) so one Escape closes one layer.
 
 ## Inputs
 
@@ -50,6 +71,10 @@ Presentation may differ (e.g. Activity exposes an in-panel topic rail and New Me
 | `initialThreadId` | Optional thread to open immediately, used by Workspace queue selection |
 | `initialPreviewVm` | Capped truthful first-paint VM |
 | `surfaceVariant` | Presentation mode (`default`, `activity_embed`, `workspace_inbox`) |
+| `composeIntent` / `draftSeed` | Command-driven New Message and its prefill (recipients, channel, subject/body, Tour invitation id) |
+| `entryContext` | `current_work`: Done returns to the Focus Panel |
+| `workConsequence` | Business Process consequence of a confirmed send, declared by the caller (`contact_family_work`); absent = none |
+| `onSendAcknowledged` | Host callback on Done; the runtime then does not navigate into the created thread |
 
 ## State
 
@@ -97,7 +122,7 @@ The runtime exposes:
 2. Hydrate the full VM in the background without clearing valid displayed state.
 3. On thread switch, increment the request sequence and apply only the latest response for the current selection.
 4. On reply send confirmation, invalidate the shared runtime cache, reload the selected or created thread, clear the body draft, collapse reply mode, and scroll to the latest message.
-5. On New Message confirmation, open the created thread when available, refresh the conversation, clear subject/body, and keep the selection deterministic.
+5. On New Message confirmation, open the created thread when available (unless a host owns the acknowledgement), refresh the conversation, clear subject/body, and keep the selection deterministic.
 
 ## Events
 

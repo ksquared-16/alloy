@@ -125,7 +125,9 @@ describe("familyWorkspace activity_embed contract", () => {
         const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(workspace).toMatch(/sendCompleteToken/);
-        expect(runtime).toMatch(/threadToOpen = priorThreadId \?\? createdThreadId/);
+        // Default: stay in (or open) the thread. A host that owns the acknowledgement (Manage →
+        // Send Message modal) keeps the composer + success dialog and closes on Done instead.
+        expect(runtime).toMatch(/threadToOpen = hostOwnsAcknowledgement \? null : \(priorThreadId \?\? createdThreadId\)/);
         expect(runtime).toMatch(/setSendCompleteToken/);
         expect(runtime).toContain('entryContext === "current_work"');
         expect(runtime).toContain("dispatchContactFamilySendComplete");

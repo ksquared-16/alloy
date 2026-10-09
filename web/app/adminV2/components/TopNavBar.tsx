@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { usePathname } from "next/navigation";
@@ -23,6 +23,9 @@ import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/commun
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
+import RecordMessageComposerModal, {
+  canHostRecordMessageInFamilyComposer,
+} from "@/app/adminV2/communications/RecordMessageComposerModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
     type QuickMessageLaunchSeed,
@@ -218,6 +221,11 @@ export default function TopNavBar() {
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
+  const closeQuickMessage = useCallback(() => {
+    closeWorkspaceModal("quick_message");
+    setQuickMessageSeed(null);
+  }, []);
+
   return (
     <header
       className="adminv2-shell-header flex h-[3.75rem] flex-shrink-0 items-center gap-3 border-b px-4"
@@ -237,14 +245,30 @@ export default function TopNavBar() {
         <AdminV2ProfileMenu />
       </div>
 
-      <QuickMessageModal
-        open={quickMessageOpen}
-        seed={quickMessageSeed}
-        onClose={() => {
-          closeWorkspaceModal("quick_message");
-          setQuickMessageSeed(null);
-        }}
-      />
+      {/* A record-scoped launch (Manage → Send Message, Email, SMS, Tour Invitation) opens the
+          SAME composer and family-send lifecycle as Current Work. Compose New without a record
+          (person search) is a different surface and keeps QuickMessageModal. */}
+      {canHostRecordMessageInFamilyComposer(quickMessageSeed) && quickMessageSeed?.opportunityId ? (
+        <RecordMessageComposerModal
+          open={quickMessageOpen}
+          seed={{
+            opportunityId: quickMessageSeed.opportunityId,
+            personId: quickMessageSeed.personId ?? null,
+            recordDisplayName: quickMessageSeed.recordDisplayName ?? null,
+            defaultChannel: quickMessageSeed.defaultChannel,
+            draftSubject: quickMessageSeed.draftSubject ?? null,
+            draftBody: quickMessageSeed.draftBody ?? null,
+            tourInvitationId: quickMessageSeed.tourInvitationId ?? null,
+          }}
+          onClose={closeQuickMessage}
+        />
+      ) : (
+        <QuickMessageModal
+          open={quickMessageOpen}
+          seed={quickMessageSeed}
+          onClose={closeQuickMessage}
+        />
+      )}
       <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
       <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
       <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />

@@ -6957,6 +6957,10 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex: 1 1 auto;
   min-height: 0;
   max-height: min(70vh, 640px);
+  /* A definite height, not only a cap. Sized to its content, the card simply got SHORTER when the
+     composer shed chrome rows (New Message title, Preferences, Add another email / CC/BCC); with a
+     height, the message body (flex: 1) takes the reclaimed space instead. */
+  height: min(70vh, 640px);
 }
 
 /* What's Next → Contact Family / Send Message / Tour Invitation: New Message focused.
@@ -6975,12 +6979,19 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-height: 0;
   overflow-y: auto;
 }
-.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] {
+/* The record New Message composer is ONE presentation (FamilyNewMessageComposer), hosted by Current
+ * Work and by Manage → Send Message. Its rules key on the shared component, never on the host, so
+ * the two entry points cannot drift apart: the composer column takes the space under the header and
+ * the message body grows into it. */
+[data-family-new-message-composer="true"] [data-cc-compose-intent="new_message"] [data-cc-topic-rail] {
+  display: none !important;
+}
+[data-family-new-message-composer="true"] [data-cc-ws-column="composer"] {
   flex: 1 1 auto;
   min-height: 12rem;
 }
-.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] [contenteditable="true"],
-.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] textarea {
+[data-family-new-message-composer="true"] [data-cc-ws-column="composer"] [contenteditable="true"],
+[data-family-new-message-composer="true"] [data-cc-ws-column="composer"] textarea {
   min-height: 8.5rem;
 }
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="threadlist"],
@@ -6992,13 +7003,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(70vh, 640px);
 }
 
-/* Bend Pine primary Send on Current Work New Message footer */
-.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] button:not([disabled]):has(svg.lucide-send) {
+/* Bend Pine primary Send on the record New Message composer footer (both entry points) */
+[data-family-new-message-composer="true"] button:not([disabled]):has(svg.lucide-send) {
   background-color: rgba(46, 125, 92, 0.12);
   border-color: rgba(46, 125, 92, 0.35);
   color: #1f5c42;
 }
-.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] button:not([disabled]):has(svg.lucide-send):hover {
+[data-family-new-message-composer="true"] button:not([disabled]):has(svg.lucide-send):hover {
   background-color: rgba(46, 125, 92, 0.18);
   border-color: rgba(46, 125, 92, 0.5);
 }

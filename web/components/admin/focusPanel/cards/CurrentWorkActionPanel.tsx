@@ -10,8 +10,8 @@ import CurrentWorkSubjectSelectorPanel from "@/components/admin/focusPanel/cards
 
 // Heavy surfaces render ONLY inside a specific Current Work action branch — never at first paint.
 // Load them dynamically so their subtrees leave the Work Unit initial-path graph.
-const CommunicationsDrawerSection = dynamic(
-    () => import("@/components/admin/communications/CommunicationsDrawerSection"),
+const FamilyNewMessageComposer = dynamic(
+    () => import("@/components/admin/communications/FamilyNewMessageComposer"),
     {
         ssr: false,
         loading: () => (
@@ -101,20 +101,14 @@ function CurrentWorkNewMessageComposerHost({
             data-work-compose-intent="new_message"
             aria-label={`${actionLabel} composer`}
         >
-            <div className="alloy-os-activity-cockpit__comms">
-                <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
-                    <CommunicationsDrawerSection
-                        apiEntityType="opportunities"
-                        entityId={opportunityId}
-                        embedded
-                        embeddedHeaderMode="description_only"
-                        surfaceVariant="activity_embed"
-                        entryContext="current_work"
-                        composeIntent="new_message"
-                        draftSeed={draftSeed ?? null}
-                    />
-                </div>
-            </div>
+            {/* The same composer Manage → Send Message opens. Current Work is the one entry point
+                that is PERFORMING the open work, so it — and only it — declares the consequence. */}
+            <FamilyNewMessageComposer
+                opportunityId={opportunityId}
+                entryContext="current_work"
+                workConsequence="contact_family_work"
+                draftSeed={draftSeed ?? null}
+            />
         </div>
     );
 }

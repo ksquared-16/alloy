@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-09-29
+last_reviewed: 2026-10-09
 supersedes: []
 ---
 
@@ -197,6 +197,17 @@ Canonical presentation: `buildWhatsNextCardPresentation` /
 
 When an integrated capability publishes an objective result (for example a successful
 communication send), Current Work may auto-complete **only** under this precedence:
+
+0. **The send must be the work.** A family send (`POST /api/admin/communications/family-send`)
+   attempts the contact-attempt association only when its caller declares
+   `work_consequence: "contact_family_work"` (`familySendWorkConsequence.ts`). Only Current Work's
+   communication commands (Contact Family / Send Message / Tour Invitation) declare it. A message
+   composed from Manage → Send Message, Activity or any other composer against the same opportunity
+   is a send, not a completion, even while a Contact Family item is open. The consequence is never
+   inferred from `opportunity_id`, the route, the action label, the recipient or the existence of
+   open work. (Known residual: the legacy `POST /api/admin/communications/send` route still attempts
+   the association for any opportunity-anchored send — legacy drawer composer with Comms V2 off,
+   inbox reply, `ComposerV2`.)
 
 1. **Explicit** work-template `completion_policy.sufficient_command_results` wins — including
    overrides such as reply-required.
