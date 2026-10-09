@@ -59,6 +59,28 @@ export const FINANCIALS_DEPTH_CARD_SELECTOR =
     '[data-financials-manage-responsibility="open-panel"], [data-financials-manage-discounts="open-panel"]';
 
 /**
+ * The record New Message composer's own layers — each closes itself on Escape.
+ *
+ * The composer is hosted INSIDE the Current Work workspace, so the grid's capture-phase Escape used
+ * to win against all of them: closing a recipient's preference popover (which is how preferences
+ * are now reached — on the name in To), the Template ▾ / Insert ▾ menus, Send later, BOS, or the
+ * send review dialog also closed the whole composer and discarded the draft. Like the financials
+ * depth cards, they are registered here rather than given another Escape listener.
+ *
+ * Only layers that act on Escape belong here: yielding to one that does not would leave the key
+ * doing nothing at all.
+ */
+export const COMPOSER_LAYER_SELECTOR = [
+    "[data-cc-recipient-preference-panel]",
+    "[data-cc-recipient-popover]",
+    '[data-cc-template-menu-panel="true"]',
+    '[data-cc-insert-menu-panel="true"]',
+    '[data-adminv2-composer-schedule-modal="true"]',
+    '[data-adminv2-composer-bos-modal="true"]',
+    '[data-cc-send-confirm-dialog="true"]',
+].join(", ");
+
+/**
  * True when a transient popup is open anywhere.
  *
  * Also the inline editor's own deferral test. React attaches its listeners to the app root, which
@@ -75,6 +97,7 @@ export function hasOpenTransientPopup(doc: Document | null | undefined): boolean
 export function hasInnerDismissibleLayer(doc: Document | null | undefined): boolean {
     if (!doc) return false;
     if (hasOpenTransientPopup(doc)) return true;
+    if (doc.querySelector(COMPOSER_LAYER_SELECTOR)) return true;
     const active = doc.activeElement;
     if (!active || typeof active.closest !== "function") return false;
     return Boolean(active.closest(INLINE_EDIT_SELECTOR) || active.closest(FINANCIALS_DEPTH_CARD_SELECTOR));

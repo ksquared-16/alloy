@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import type { FamilyComposeDraftSeed } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 
 // Shell chrome mounts this modal on every page; the composer subtree loads only when it opens.
@@ -81,10 +82,15 @@ export default function RecordMessageComposerModal({
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
+            if (e.key !== "Escape") return;
+            // One Escape closes one layer: a preference popover, menu, Send later or the review
+            // dialog closes itself first; only then does Escape close the composer.
+            if (hasInnerDismissibleLayer(document)) return;
+            onClose();
         };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        // Capture, like the Focus Panel grid: the check must see inner layers before they close.
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
     }, [open, onClose]);
 
     const draftSeed = useMemo<FamilyComposeDraftSeed | null>(() => {

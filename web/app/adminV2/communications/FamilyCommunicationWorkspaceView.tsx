@@ -320,6 +320,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         el.innerHTML = plainComposerTextToEditableHtml(bodyDraft);
     }, [bodyDraft, emailComposer]);
 
+    // + Add picker closes on Escape (it is a registered composer layer — see escapeLayerOwnership).
+    useEffect(() => {
+        if (!recipientPickerOpen) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setRecipientPickerOpen(false);
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [recipientPickerOpen]);
+
     useEffect(() => {
         if (!insertMenuOpen) return;
         const onDoc = (event: MouseEvent) => {
