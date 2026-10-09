@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { ENROLLMENT_RECORD_MANAGE, requireEnrollmentCapability } from "@/lib/access/enrollmentAuthority";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 
 /** POST: link a household child member to an opportunity (creates OCM join row). */
 export async function POST(request: NextRequest) {
@@ -73,27 +74,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Member must be an active child" }, { status: 400 });
     }
 
-    const { data: existing } = await supabase
-        .from("opportunity_customer_members")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .eq("opportunity_id", opportunityId)
-        .eq("customer_member_id", customerMemberId)
-        .maybeSingle();
-    if (existing?.id) {
-        return NextResponse.json(existing);
+    /*
+     * ONE WRITER FOR A CHILD'S PARTICIPATION IN THIS LEAD.
+     *
+     * Every other Add Child path (the Manage wizard, link existing, Create Lead, Forms → Processing,
+     * Start Enrollment) records the lead↔child participation through
+     * `ensureOpportunityCustomerMemberParticipation`. This route — the one the Focus Panel's Add Child
+     * uses — inserted its own row and left the child's initial state empty, so the same act produced a
+     * different participation shape depending on which button the operator pressed. It now uses the
+     * same writer, with the same find-or-create semantics and the same initial state.
+     */
+    let participation: { ocmId: string; created: boolean };
+    try {
+        participation = await ensureOpportunityCustomerMemberParticipation({
+            supabase,
+            orgId: ctx.orgId,
+            opportunityId,
+            customerMemberId,
+            source: "add_inquiry_child",
+        });
+    } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Could not link the child" }, { status: 400 });
     }
 
     const { data, error } = await supabase
         .from("opportunity_customer_members")
-        .insert({
-            org_id: ctx.orgId,
-            opportunity_id: opportunityId,
-            customer_member_id: customerMemberId,
-        })
         .select(
             "id, org_id, opportunity_id, customer_member_id, program_category_id, schedule_type, start_date, outcome_status_key, notes, updated_at"
         )
+        .eq("org_id", ctx.orgId)
+        .eq("id", participation.ocmId)
         .single();
 
     if (error) {

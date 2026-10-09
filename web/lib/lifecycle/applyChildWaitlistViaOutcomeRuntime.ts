@@ -70,8 +70,8 @@ export async function resolveChildWaitlistSubjectFromOcm(params: {
 
 /**
  * Apply the canonical Waitlist outcome targets for one child:
- *   1. update_child_enrollment_status → waitlisted (process_instances + placement)
- *   2. move_to_stage → waitlist (stage membership + work reconciliation)
+ *   1. move_to_stage → waitlist (crosses the child-grain boundary: track + stage + work reconciliation)
+ *   2. update_child_enrollment_status → waitlisted (on that track; OCM + placement candidate)
  *
  * Never falls back to family/case grain. Sibling process instances are untouched.
  */
@@ -152,22 +152,24 @@ export async function applyChildWaitlistViaOutcomeRuntime(params: {
         }
     }
 
-    const statusResult = await applyStageOutcomeRuleTarget(params.supabase, {
-        orgId: params.orgId,
-        userId: params.userId,
-        departmentId: params.departmentId,
-        stageKey: plan.stage_key,
-        plan,
-        subject,
-        target: {
-            kind: "update_child_enrollment_status",
-            disposition_key: CHILD_WAITLIST_DISPOSITION_KEY,
-        },
-    });
-    if (statusResult.error) {
-        return { ok: false, error: statusResult.error };
-    }
-
+    /*
+     * THE STAGE MOVE FIRST, THEN THE DISPOSITION.
+     *
+     * A child at a family-grain stage (Lead, Tour, Decision) has no Enrollment track of their own:
+     * by doctrine the track begins at their FIRST move into a child-grain stage, and the canonical
+     * place that boundary is crossed is the executor's child `move_to_stage` branch, after its
+     * referential-integrity and grain guards (the one track bootstrap lives there and only there).
+     *
+     * This command used to write the `waitlisted` disposition FIRST. The disposition is written onto
+     * the child's track, so for every child still in the family segment it found no track, wrote
+     * nothing, and refused with "Could not record the enrollment path for this child — no enrollment
+     * track was found for them on this lead" before the boundary was ever reached. The manual
+     * transition, which skips the status step, never hit it; this command always did (E2E-06).
+     *
+     * So the move runs first and crosses the boundary exactly once, through the one owner; the
+     * disposition is then recorded on the track that crossing established. No track is created
+     * here, and nothing is created for a destination the guards refuse.
+     */
     const moveResult = await applyStageOutcomeRuleTarget(params.supabase, {
         orgId: params.orgId,
         userId: params.userId,
@@ -181,20 +183,46 @@ export async function applyChildWaitlistViaOutcomeRuntime(params: {
         },
     });
     if (moveResult.error) {
-        // Compensate status if stage move fails — keep progression atomic from the operator's view.
-        if (statusResult.undo) {
+        return { ok: false, error: moveResult.error };
+    }
+
+    const statusResult = await applyStageOutcomeRuleTarget(params.supabase, {
+        orgId: params.orgId,
+        userId: params.userId,
+        departmentId: params.departmentId,
+        stageKey: plan.stage_key,
+        plan,
+        subject,
+        target: {
+            kind: "update_child_enrollment_status",
+            disposition_key: CHILD_WAITLIST_DISPOSITION_KEY,
+        },
+    });
+    if (statusResult.error) {
+        // Keep the progression atomic from the operator's view: put the child back where they were.
+        if (moveResult.undo) {
             try {
-                await statusResult.undo();
+                await moveResult.undo();
             } catch (e) {
                 return {
                     ok: false,
-                    error: `Waitlist stage move failed (${moveResult.error}); status rollback also failed: ${
+                    error: `Waitlist status failed (${statusResult.error}); stage rollback also failed: ${
                         e instanceof Error ? e.message : String(e)
                     }`,
                 };
             }
+            return { ok: false, error: statusResult.error };
         }
-        return { ok: false, error: moveResult.error };
+        /*
+         * A FIRST crossing has no prior child stage to restore (the track began with this move), so
+         * the child stays at Waitlist without the disposition. Said plainly rather than hidden: the
+         * command is safe to repeat — the move is a no-op onto the same stage and the disposition is
+         * written on the existing track.
+         */
+        return {
+            ok: false,
+            error: `${statusResult.error} The child was moved to Waitlist but the waitlist status was not recorded — run Move to Waitlist again to complete it.`,
+        };
     }
 
     const degraded = [statusResult.degraded, moveResult.degraded].filter(Boolean).join("; ") || undefined;
