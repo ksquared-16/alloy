@@ -191,6 +191,17 @@ describeLive("W7 — the Nov 5 date chain, live", () => {
 
         await postChildcareCharge(db, { orgId: ORG, chargeId: row.id, actorUserId: ACTOR, businessDateYmd: "2026-11-01" });
         expect((await reread(row.id)).status).toBe("posted");
+
+        /* The journal STORES the billing period — it must be November, not the invoice's October. */
+        const { data: entries } = await db
+            .from("financial_journal_entries")
+            .select("billing_period_key, effective_on")
+            .eq("org_id", ORG)
+            .eq("source_type", "charge")
+            .eq("source_id", row.id);
+        const keys = ((entries ?? []) as Array<{ billing_period_key: string | null }>).map((e) => e.billing_period_key);
+        expect(keys.length, "the posting journalled").toBeGreaterThan(0);
+        expect(new Set(keys)).toEqual(new Set(["2026-11"]));
     });
 
     it("B — created late on Nov 5: November, invoiced Nov 5, due Nov 5, posts now", async () => {

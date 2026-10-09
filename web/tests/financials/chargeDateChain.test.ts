@@ -249,3 +249,27 @@ describe("a recalculated draft keeps the invoice date it was created with", () =
         expect(c.invoice.late).toBe(false);
     });
 });
+
+describe("every reader places a chain-written charge in its BOUND period, not its invoice month", async () => {
+    const { placeInBillingPeriod } = await import("@/lib/financials/billingPeriod");
+    const written = {
+        service_date: "2026-11-05",
+        occurs_on: "2026-11-05",
+        billable_on: "2026-10-25",
+        metadata: { charge_dates: { period_key: "2026-11" } },
+    };
+
+    it("the ledger, the card and the journal group a Nov 5 charge invoiced Oct 25 under November", () => {
+        expect(placeInBillingPeriod(written)).toEqual({ key: "2026-11", basis: "bound" });
+    });
+
+    it("a weekly grain places it by its service date, never by its invoice date", () => {
+        const key = placeInBillingPeriod(written, { cadence: "weekly", anchor: "2026-11-02" }).key;
+        expect(key).toBe("2026-11-02~2026-11-08");
+    });
+
+    it("a legacy charge with no recorded period is placed exactly as before — history is not restated", () => {
+        const legacy = { service_date: "2026-11-05", occurs_on: "2026-11-05", billable_on: "2026-12-01", metadata: {} };
+        expect(placeInBillingPeriod(legacy)).toEqual({ key: "2026-12", basis: "billable_on" });
+    });
+});

@@ -310,10 +310,16 @@ describe("the two periods are derived independently", () => {
     });
 
     it("and never from the accounting period", () => {
-        const at = detail.indexOf("const billing = ");
-        expect(at, "the billing period is derived").toBeGreaterThan(-1);
-        const line = detail.slice(at, detail.indexOf("\n", at));
-        expect(line, "not borrowed from accounting").not.toMatch(/accountingPeriod|accounting_period/);
+        /*
+         * W7: the bound commercial period (`financial_billing_periods`, via `billing_period_id`) is
+         * read first and the historical derivation is the legacy fallback. Neither may borrow the
+         * accounting period.
+         */
+        const at = detail.indexOf("let billing: ");
+        expect(at, "the billing period is resolved").toBeGreaterThan(-1);
+        const block = detail.slice(at, detail.indexOf("Configuration owns the word", at));
+        expect(block).toContain('.from("financial_billing_periods")');
+        expect(block, "not borrowed from accounting").not.toMatch(/accountingPeriod|accounting_period|financial_accounting/);
     });
 
     it("the accounting period is never derived from the charge's own dates", () => {

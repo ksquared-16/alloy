@@ -182,8 +182,9 @@ export type ChargeDetail = {
      * billing period because that is the customer-facing month, and a second permanent period
      * column would cost scan density to answer a question asked occasionally.
      *
-     *   billingPeriod     DERIVED from the charge's own dates — `billable_on`, then `occurs_on`,
-     *                     `service_date`, `created_at`. No table and no configuration, by design.
+     *   billingPeriod     the charge's BOUND commercial period (`billing_period_id`, bound from the
+     *                     service date). A legacy charge with no binding is placed by the
+     *                     historical derivation (`billable_on`, then `occurs_on`, …).
      *
      *   accountingPeriod  CONFIGURED, and decided by the database when the journal entry was
      *                     written: `attribute_financial_journal_entry` resolves it at INSERT
@@ -296,7 +297,9 @@ export async function resolveChargeDetail(
             /* PROVENANCE. Read because Details must answer "where did this come from" from stored
                evidence alone; the census that bounds what may be SAID from them is recorded in
                `chargeOrigin`. */
-            + "created_by, updated_at, updated_by, posted_by, job_id, source_charge_id",
+            + "created_by, updated_at, updated_by, posted_by, job_id, source_charge_id, "
+            /* The BOUND commercial period — the answer, when the charge carries one (W7). */
+            + "billing_period_id",
         )
         .eq("org_id", args.orgId)
         .eq("id", chargeId)
@@ -328,6 +331,7 @@ export async function resolveChargeDetail(
         updated_at: string | null;
         updated_by: string | null;
         posted_by: string | null;
+        billing_period_id?: string | null;
         job_id: string | null;
         source_charge_id: string | null;
     };
@@ -410,7 +414,26 @@ export async function resolveChargeDetail(
      * Each is independently tolerant: a charge whose journal entry or GL mapping cannot be read is
      * still a charge an operator must be able to open.
      */
-    const billing = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
+    /*
+     * ── THE BOUND PERIOD IS THE ANSWER (W7) ──────────────────────────────────────────────────
+     *
+     * A charge on the childcare spine carries `billing_period_id`, bound from its SERVICE date.
+     * Re-deriving the period here from `billable_on` gave a second answer that followed invoice
+     * timing: a Nov 5 charge invoiced Oct 25 would read "October" on the detail while it is a
+     * November obligation everywhere that matters. The bound row is read; only a legacy charge with
+     * no binding is placed by the historical derivation.
+     */
+    let billing: { key: string | null } = placeInBillingPeriod(charge as unknown as Record<string, unknown>);
+    if (t(charge.billing_period_id)) {
+        const { data: bound } = await supabase
+            .from("financial_billing_periods")
+            .select("period_key")
+            .eq("org_id", args.orgId)
+            .eq("id", t(charge.billing_period_id))
+            .maybeSingle();
+        const key = t((bound as { period_key?: unknown } | null)?.period_key);
+        if (key) billing = { key };
+    }
 
     /* Configuration owns the word an operator reads. See the note on `label` below. */
     let templateLabel = "";
