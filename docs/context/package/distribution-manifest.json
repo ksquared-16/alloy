@@ -119,7 +119,7 @@
     {
       "path": "docs/platform/modules/communications-platform.md",
       "tier": 2,
-      "blob_sha": "121d86b3f67145cff4531a7975ce57b890a716f0",
+      "blob_sha": "225e5896c2e3663dd899a8d2e3ee04f65b91dc85",
       "exists": true
     },
     {
@@ -191,7 +191,7 @@
     {
       "path": "docs/platform/core/stage-membership-and-outcomes.md",
       "tier": 3,
-      "blob_sha": "cdcec2f973740d6f52819746da078523b6c27b1a",
+      "blob_sha": "5b3a268132da58e57e8e08c0f2b7998870207654",
       "exists": true
     },
     {
