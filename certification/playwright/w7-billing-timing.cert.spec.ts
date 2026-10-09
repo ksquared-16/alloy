@@ -83,6 +83,11 @@ test("Policies: the operator configures the W7 baseline through Billing & paymen
     await expect(page.getByTestId("billing-timing-history-invoice_timing")).toBeVisible();
     await page.screenshot({ path: `${SHOTS}/policies-after.png`, fullPage: false });
     log(`AFTER ${(await panel.innerText()).replace(/\s+/g, " ").slice(0, 900)}`);
+
+    /* And the scheduled change can be cancelled, leaving today's rule with no end date. */
+    await page.getByTestId("billing-timing-cancel-scheduled-org-invoice_timing").click();
+    await expect(page.getByTestId("billing-timing-scheduled-org-invoice_timing")).toHaveCount(0, { timeout: 60_000 });
+    await expect(value("invoice_timing")).toHaveText("7 days before the billing period begins");
 });
 
 test("Add Charge previews the Nov 5 chain from the server, and nothing is committed", async ({ page }) => {

@@ -250,8 +250,14 @@ describe("scenario readiness", () => {
          * because the Director's F001 decision made a charge's billing period part of its lifecycle.
          * Neither replaces anything — `post_charge` stayed, rewritten so it no longer asks for an
          * ordinary draft to be manufactured and posted by hand.
+         *
+         * 71 after W7 billing configuration convergence (catalog 2026-10-08.1): ten scenarios added
+         * at the front — configuration read resolved, override inheritance, a scheduled change,
+         * billing-period membership, invoice and due derivation, a late current-period charge,
+         * preview/commit parity, generated-billing parity, accounting independence. None replaces
+         * anything.
          */
-        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(61);
+        expect(SCENARIOS.filter((s) => s.disposition === "HUMAN_WALKTHROUGH").length).toBe(71);
         expect(scenarioByKey("accounting_period")!.disposition).toBe("HUMAN_WALKTHROUGH");
     });
 });

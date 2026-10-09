@@ -130,6 +130,7 @@ export default function BillingTimingConfigurationPanel({
                                         setHistoryOpen((h) => (h === `org:${reading.rule}` ? null : `org:${reading.rule}`))
                                     }
                                     onEdit={(mode) => setEditor({ rule: reading.rule, scope: { type: "org" }, mode, reading })}
+                                    onCancelScheduled={(id) => void run(() => voidPolicy(id))}
                                 />
                             ))}
                         </ul>
@@ -184,6 +185,7 @@ export default function BillingTimingConfigurationPanel({
                                                             })
                                                         }
                                                         onReturnToDefault={() => void returnToDefault(r.reading)}
+                                                        onCancelScheduled={(id) => void run(() => voidPolicy(id))}
                                                     />
                                                 ) : (
                                                     <li
@@ -279,6 +281,7 @@ function RuleRow({
     onToggleHistory,
     onEdit,
     onReturnToDefault,
+    onCancelScheduled,
 }: {
     reading: RuleReading;
     scope: Scope;
@@ -289,6 +292,7 @@ function RuleRow({
     onToggleHistory: () => void;
     onEdit: (mode: "now" | "schedule") => void;
     onReturnToDefault?: () => void;
+    onCancelScheduled?: (rowId: string) => void;
 }) {
     const scopeKey = scope.type === "org" ? "org" : scope.locationId;
     const fallback = reading.isFallback && scope.type === "org";
@@ -322,6 +326,15 @@ function RuleRow({
                             <ConfigurationInlineButton onClick={() => onEdit("schedule")} disabled={busy}>
                                 Schedule change
                             </ConfigurationInlineButton>
+                            {reading.scheduled && onCancelScheduled ? (
+                                <ConfigurationInlineButton
+                                    onClick={() => onCancelScheduled(reading.scheduled!.row.id)}
+                                    disabled={busy}
+                                    data-testid={`billing-timing-cancel-scheduled-${scopeKey}-${reading.rule}`}
+                                >
+                                    Cancel scheduled change
+                                </ConfigurationInlineButton>
+                            ) : null}
                             {onReturnToDefault ? (
                                 <ConfigurationInlineButton onClick={onReturnToDefault} disabled={busy}>
                                     Return to organization default

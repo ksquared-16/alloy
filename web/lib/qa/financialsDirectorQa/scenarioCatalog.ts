@@ -78,7 +78,27 @@
  * Previous answers remain readable and remain answers to the previous questions; they do not carry
  * over, which is the whole point of versioning them.
  */
-export const CATALOG_VERSION = "2026-10-05.2";
+/*
+ * 2026-10-08.1 — W7 billing configuration convergence (Director decisions, 2026-10-08).
+ *
+ * Bumped because scenario MEANINGS changed:
+ *
+ *   · Ten scenarios are NEW and come FIRST, because every later charge scenario depends on the
+ *     answers they establish: how the organization bills, read resolved; where an override applies
+ *     and what it inherits; a scheduled change; billing-period membership from the SERVICE date;
+ *     invoice-date and due-date derivation; a late current-period charge; Add Charge preview/commit
+ *     parity; generated-billing parity; and accounting-period independence.
+ *   · Every existing scenario moved ten places later. Results are keyed, not positioned, so no
+ *     answer moves with it — but the restart begins at the new first scenario.
+ *   · `BILLING_PERIOD_IS_DERIVED` now says a charge lands in the period its SERVICE date falls in,
+ *     and that invoice timing never moves it (W7-F004). Under the previous wording a Nov 5 service
+ *     invoiced "next cycle" was a December obligation.
+ *   · `future_period_charge` is unchanged in meaning; its preview now also names the invoice date,
+ *     the due date and the day it posts.
+ *
+ * W7-F001, W7-F004 and W7-F005 are carried OPEN. Nothing here marks them accepted.
+ */
+export const CATALOG_VERSION = "2026-10-08.1";
 
 /** The acceptance program these scenarios belong to. Results are namespaced by it. */
 export const SUITE_KEY = "core_financials_director_qa";
@@ -235,7 +255,7 @@ export const MONEY_INVARIANTS = Object.freeze({
     PROVIDER_RETURN_IS_NOT_A_REFUND: "A provider return is the rail giving money back. An operator refund is a decision someone made. They are different events and must not be shown as one.",
     GRAIN_BEFORE_MISMATCH: "Cross-surface comparisons only mean something at equivalent scope and period. A legitimate grain difference is explained, not filed as a defect.",
     FAILED_READ_IS_NOT_ZERO: "A read that failed must never render as a valid zero balance. Not knowing and owing nothing are different answers.",
-    BILLING_PERIOD_IS_DERIVED: "A billing period is the customer-facing commercial interval a charge belongs to. It comes from the account's billing calendar — monthly, weekly or biweekly — so two families on different calendars can have different periods covering the same day, and a charge lands in the period its own date falls in. While a period is OPEN its economics can still change. Once it is CLOSED the period is finished: nothing new is added to it and nothing in it is rewritten, and a later correction is recorded in the next open period while still pointing back at what it corrects. A row with no usable date is reported as unplaced rather than swept into the current month.",
+    BILLING_PERIOD_IS_DERIVED: "A billing period is the customer-facing commercial interval a charge belongs to. It comes from the account's billing calendar — monthly, weekly or biweekly — so two families on different calendars can have different periods covering the same day, and a charge lands in the period its SERVICE date falls in. When it is invoiced has no say in which period it belongs to. While a period is OPEN its economics can still change. Once it is CLOSED the period is finished: nothing new is added to it and nothing in it is rewritten, and a later correction is recorded in the next open period while still pointing back at what it corrects. A row with no usable date is reported as unplaced rather than swept into the current month.",
     ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE: "The accounting period is the bookkeeping interval, and it is a DIFFERENT fact from the billing period — a different calendar, a different authority, and it closes on its own schedule. A journal entry's accounting period is decided by the database when the entry is written, against the configured accounting calendar. Nothing downstream may re-decide it, and no screen may imply the period can be changed after the fact. A CLOSED period does not refuse the entry: it DEFERS it to the earliest later open period and records the date it was deferred from, so the work is never lost and the closed books are never reopened. The write is refused only when there is no later open period to carry it \u2014 a calendar that has run out, not a closed month.",
     REVIEW_IS_CONFIGURED_NOT_ASSUMED: "Whether a new charge waits for review is the tenant's configured answer \u2014 the posting_review Financial Policy, OR a charge template that marks itself review_required \u2014 not a property of having used a manual command. An organization that has configured no review boundary must not be made to confirm the same intent twice.",
     ACCEPTED_PRICE_IS_GROSS: "The amount a family accepted is the gross obligation. A charge template describes HOW tuition posts — its category, its GL account, when it occurs and when it is billable — and has no second opinion about WHAT THIS CHILD AGREED TO PAY. A generated obligation carrying the template's configured figure instead of the accepted one is billing a number nobody agreed to.",
@@ -246,15 +266,214 @@ export const MONEY_INVARIANTS = Object.freeze({
     PUBLISHED_LAYOUT_IS_THE_RENDERED_ONE: "A published Focus Panel document carries an authored card list and an explicit layout, and the runtime renders the explicit layout. A card authored visible and absent from that layout would be drawn by nothing, so the publication is refused rather than silently rendered short.",
     FUTURE_PERIOD_IS_NOT_YET_OWED: "A charge whose billing period has not begun is not owed, and nobody has to do anything about it. It is a draft until the organization's own business date reaches the first day of that period, and then it posts by itself \u2014 through the same posting authority an operator's Post button uses, so a review boundary configured in the meantime still binds. An operator is never asked to post an ordinary charge by hand merely because they created it, and pressing Post early is refused with the date it will post on. The period's own status is a separate question: OPEN means not finalized, never \u0022has begun\u0022.",
     FINANCIAL_ACTOR_IS_A_NAMED_HUMAN: "Money is moved by people, and the ledger must be able to say which one. A user permitted to create financial activity resolves to a named person through an explicit, recorded link between their login and their person record \u2014 never through their email address, which is mutable, shared in practice and unique by no constraint. Where that link is missing the surface says so and says where it is fixed; it never prints an address in a person's place, and it never presents an unidentified actor as ordinary financial attribution.",
+    INVOICE_TIMING_NEVER_MOVES_THE_PERIOD: "Four dates, four questions. The SERVICE date is when the chargeable thing happened; the BILLING PERIOD is the interval containing it; the INVOICE date is when the family is billed; the DUE date is when payment is expected. Invoice timing decides only the third. A Nov 5 service belongs to November whether it is invoiced Oct 25, Nov 5 or Dec 1.",
+    NEVER_BILLED_BEFORE_IT_EXISTED: "The product never claims a family was billed, or obliged to pay, before the charge existed. A charge added after its period's normal invoice date is invoiced the day it is created, and a due date the rule would have placed before that invoice is moved to the invoice date. Both say so, and say what the rule would have produced.",
+    CONFIGURATION_READS_RESOLVED: "How the organization bills is read as rules in force today, in words: the organization default, then only the scopes that override it, each saying what it overrides and what it inherits. An unconfigured rule says what happens instead. A scheduled change reads as scheduled, and history is available without being the first thing read.",
     POSTED_IS_NOT_PERIOD_CLOSED: "Posting makes an obligation real. Closing an accounting period ends bookkeeping for a span of time. A posted charge is not a closed period, a closed period posts nothing, and neither word may be used for the other.",
 });
 
 const S = (s: Scenario) => s;
 
 export const SCENARIOS: readonly Scenario[] = Object.freeze([
+    /* ── W7 BILLING CONFIGURATION — the restart point. Every charge scenario below depends on these. ── */
+    S({
+        key: "billing_configuration_reads_resolved",
+        order: 1,
+        title: "You can say how this organization bills, from one screen",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Open the billing configuration and confirm you can answer “How does this organization bill?” without reading raw records.",
+        whyItMatters:
+            "Every date on every charge comes from four rules: which billing period a charge belongs to, when it is invoiced, when it is due, and whether a person reviews it. If an operator cannot read those four rules as they stand today, they cannot predict a single charge — and that is exactly where W7 stopped. This screen used to show six unlabeled “Billing calendar · Location: —” blocks across five cadences with current, scheduled and superseded versions interleaved.",
+        requires: [],
+        navigate: ["Organization → Financials → Policies.", "Read the first section, Billing & payment timing."],
+        doThis: [
+            "Read Organization default. Say aloud the billing period, the invoice timing, when payment is due and whether review is required.",
+            "Read Overrides. Note which locations override something, and for each overridden rule, what the location inherits.",
+            "Open View history on one rule, then close it.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["Nothing. Reading configuration changes no money."],
+        invariant: MONEY_INVARIANTS.CONFIGURATION_READS_RESOLVED,
+        failSymptoms: [
+            "Any block titled “Location: —”, or any rule shown as “no policy — fallback”.",
+            "More than one current rule for the same thing at the same scope.",
+            "A location listed under Overrides that overrides nothing.",
+            "History shown before, or instead of, the rule in force today.",
+            "A rule you cannot restate in a sentence.",
+        ],
+    }),
+    S({
+        key: "billing_override_inheritance",
+        order: 2,
+        title: "An override changes one thing at one location, and everything else inherits",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Add a location override for one rule and confirm only that rule changes there, then return the location to the organization default.",
+        whyItMatters:
+            "Two locations may legitimately bill on different calendars. An override must be narrow: it says what is different at that place and inherits the rest, so an operator never has to restate the organization’s standard terms to change one of them.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "billing_configuration_reads_resolved" }],
+        navigate: ["Organization → Financials → Policies → Billing & payment timing → Overrides."],
+        doThis: [
+            "Click Add override, choose a location and Invoice timing, set it to 3 days before the billing period begins, and Save.",
+            "Read that location under Overrides: Invoice timing shows the override; Billing period, Payment due and Posting review say Inherits organization default.",
+            "Click Return to organization default on the override.",
+        ],
+        expectChanges: [
+            "While it stands, the location appears under Overrides with exactly one overridden rule.",
+            "After returning it, the location disappears from Overrides.",
+        ],
+        expectUnchanged: ["The Organization default rows.", "Every other location."],
+        invariant: MONEY_INVARIANTS.CONFIGURATION_READS_RESOLVED,
+        failSymptoms: [
+            "The override shows the other three rules as blank or as a separate configuration.",
+            "The organization default changes when the location is edited.",
+            "Returning to the default leaves an empty location block behind.",
+        ],
+    }),
+    S({
+        key: "billing_scheduled_change",
+        order: 3,
+        title: "A future change reads as scheduled, beside today’s rule",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Schedule a change to a billing rule and confirm today’s rule is unchanged and the change is shown with its date.",
+        whyItMatters:
+            "Billing terms change on a date, not the moment someone clicks. An operator must be able to read “Current … through Feb 28, 2027 / Scheduled … effective Mar 1, 2027” rather than infer precedence from two records.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "billing_configuration_reads_resolved" }],
+        navigate: ["Organization → Financials → Policies → Billing & payment timing → Organization default."],
+        doThis: [
+            "On Invoice timing click Schedule change, set a different lead and an effective date in the future, and Save.",
+            "Read the Invoice timing row.",
+            "Click Cancel scheduled change.",
+        ],
+        expectChanges: [
+            "The row keeps today’s rule, adds “through” the day before the change, and shows “Scheduled · … · effective <date>”.",
+            "After cancelling, the scheduled line is gone and today’s rule has no end date.",
+        ],
+        expectUnchanged: ["Today’s rule.", "Any charge already created."],
+        invariant: MONEY_INVARIANTS.CONFIGURATION_READS_RESOLVED,
+        failSymptoms: ["The new rule takes effect immediately.", "Two rules both labelled current.", "The scheduled change can only be seen in history."],
+    }),
+    S({
+        key: "billing_period_membership",
+        order: 4,
+        title: "A Nov 5 charge belongs to November, whenever it is invoiced",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Preview a charge with a service date of Nov 5, 2026 and confirm its billing period is November 2026.",
+        whyItMatters:
+            "W7-F004. A Nov 5 service previewed as a December obligation because the charge’s invoice timing moved it into the next cycle. The period is the interval CONTAINING the service date; invoice timing decides only when the family is billed.",
+        requires: [
+            { kind: "scenario_passed", scenarioKey: "billing_configuration_reads_resolved" },
+            { kind: "account_state", check: "is_financially_addressable", describe: "the household can be billed" },
+        ],
+        navigate: ["Open the household’s Financials card.", "Click Add, leave the mode on Charge."],
+        doThis: [
+            "Choose a charge type whose service date you set (for example a field trip).",
+            "Set the service date to Nov 5, 2026.",
+            "Read Billing period. Do not confirm yet.",
+        ],
+        expectChanges: [],
+        expectUnchanged: ["Nothing is written by previewing."],
+        invariant: MONEY_INVARIANTS.INVOICE_TIMING_NEVER_MOVES_THE_PERIOD,
+        failSymptoms: ["Billing period reads December 2026.", "The billing period changes when only the charge type’s invoice timing differs."],
+    }),
+    S({
+        key: "invoice_date_derivation",
+        order: 5,
+        title: "The invoice date follows the organization’s invoice timing, and says so",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "With the W7 baseline (7 days before the billing period begins), confirm a Nov 5 charge is invoiced Oct 25 and the card names the rule.",
+        whyItMatters:
+            "Invoice timing is how the organization bills, not a property each charge type re-states. The card must show the date and the rule that produced it, including when a charge type keeps its own exception.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "billing_period_membership" }],
+        navigate: ["The same Add Charge preview."],
+        doThis: ["Read Invoice date and the line beneath it.", "Switch to a charge type that keeps its own timing, if the tenant has one, and read the line again."],
+        expectChanges: [],
+        expectUnchanged: ["The billing period: still November 2026."],
+        invariant: MONEY_INVARIANTS.INVOICE_TIMING_NEVER_MOVES_THE_PERIOD,
+        failSymptoms: ["Invoice date Oct 25 with no explanation.", "An exception template shown as if it were the organization default.", "The invoice date changing the billing period."],
+    }),
+    S({
+        key: "due_date_derivation",
+        order: 6,
+        title: "Payment is due on the first day of the billing period",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Confirm the same Nov 5 charge is due Nov 1, 2026, and the card names the payment terms that decided it.",
+        whyItMatters: "The due date is its own fact — neither the invoice date nor the service date. The Director’s terms for W7 are “due on the first day of the billing period”.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "invoice_date_derivation" }],
+        navigate: ["The same Add Charge preview."],
+        doThis: ["Read Due and the line beneath it.", "Read Posting and On confirm."],
+        expectChanges: [],
+        expectUnchanged: ["Nothing is written by previewing."],
+        invariant: MONEY_INVARIANTS.FUTURE_PERIOD_IS_NOT_YET_OWED,
+        failSymptoms: ["Due reads Dec 11, 2026 (the W7 observation).", "No payment-terms explanation.", "On confirm says the charge posts while Posting says it waits for Nov 1."],
+    }),
+    S({
+        key: "late_current_period_charge",
+        order: 7,
+        title: "A charge added late is invoiced and due the day it exists",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Add a charge dated inside the CURRENT billing period and confirm it is invoiced today, due today, posts now, and says why.",
+        whyItMatters:
+            "A charge added after its period’s normal invoice date must not pretend it was on that invoice, and must not be due on a day before it was billed. The card states what the rule would have produced and what it did instead.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "due_date_derivation" }],
+        navigate: ["The household’s Financials card → Add → Charge."],
+        doThis: ["Set the service date to today.", "Read Billing period, Invoice date, Due and Posting with their explanations.", "Confirm."],
+        expectChanges: ["The charge posts: what is owed rises by exactly its amount."],
+        expectUnchanged: ["Every other charge."],
+        invariant: MONEY_INVARIANTS.NEVER_BILLED_BEFORE_IT_EXISTED,
+        failSymptoms: ["An invoice date before today.", "A due date before the invoice date.", "No explanation of why the rule’s dates were not used."],
+    }),
+    S({
+        key: "add_charge_preview_commit_parity",
+        order: 8,
+        title: "What Add Charge previewed is what the charge carries",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Confirm the Nov 5 charge from billing_period_membership, then open it and compare every date with the preview.",
+        whyItMatters: "A preview is a promise about the act that follows it. The billing period, invoice date, due date and posting state the preview showed must be the ones stored.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "due_date_derivation" }],
+        navigate: ["The household’s Financials card → Add → Charge (service date Nov 5, 2026).", "After confirming: Charges tab → Awaiting posting → open the charge."],
+        doThis: ["Note the preview’s four dates, then Confirm.", "Open the charge’s detail and read its dates."],
+        expectChanges: ["The charge appears in Awaiting posting carrying the day it will post (Nov 1, 2026)."],
+        expectUnchanged: ["What is owed: the charge is not owed until November begins."],
+        invariant: MONEY_INVARIANTS.PREVIEW_IS_THE_OPERATION,
+        failSymptoms: ["The detail shows October 2026 or December 2026 as the billing period.", "Any date differs from the preview.", "What is owed rises on confirm."],
+    }),
+    S({
+        key: "generated_billing_parity",
+        order: 9,
+        title: "Generated tuition is dated by the same rules as a charge you add",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Generate next month’s tuition for an account and confirm its billing period, invoice date and due date follow the same rules as Add Charge.",
+        whyItMatters: "One writer must not treat invoice timing as the billing period while another uses the service date. Generated billing and manual entry resolve the same chain.",
+        requires: [
+            { kind: "scenario_passed", scenarioKey: "add_charge_preview_commit_parity" },
+            { kind: "account_state", check: "has_billable_enrollment", describe: "a child with an accepted price to generate from" },
+        ],
+        navigate: ["Financials → Billing work for next month."],
+        doThis: ["Generate next month’s tuition for one account.", "Open the generated charge."],
+        expectChanges: ["One obligation for next month, in Awaiting posting with the day it posts."],
+        expectUnchanged: ["What is owed until next month begins."],
+        invariant: MONEY_INVARIANTS.INVOICE_TIMING_NEVER_MOVES_THE_PERIOD,
+        failSymptoms: ["Generated tuition lands in the month after its service period.", "Its invoice or due date contradicts the rule shown on Policies."],
+    }),
+    S({
+        key: "accounting_period_independence",
+        order: 10,
+        title: "The accounting period is its own fact",
+        disposition: "HUMAN_WALKTHROUGH",
+        purpose: "Read the accounting calendar and a posted charge’s accounting period, and confirm neither is derived from the billing period.",
+        whyItMatters: "Billing periods are what a family is billed for; accounting periods are what the business closes its books on. They may agree for a monthly organization and must never be the same setting.",
+        requires: [{ kind: "scenario_passed", scenarioKey: "late_current_period_charge" }],
+        navigate: ["Organization → Financials → Accounting → Accounting Calendar.", "Then the posted charge from late_current_period_charge → detail."],
+        doThis: ["Read the active calendar, its style and the current open period.", "On the charge detail, read Billing period and Accounting period."],
+        expectChanges: [],
+        expectUnchanged: ["Nothing. This scenario reads."],
+        invariant: MONEY_INVARIANTS.ACCOUNTING_PERIOD_IS_ATTRIBUTED_AT_WRITE,
+        failSymptoms: ["Accounting configuration appears inside Billing & payment timing.", "A charge’s accounting period shown as its billing period, or vice versa."],
+    }),
+
     S({
         key: "financial_subject",
-        order: 1,
+        order: 11,
         title: "A household with no money is still a financial subject",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Open the household and confirm the product can talk about its money at all.",
@@ -275,7 +494,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
          * not evidence for the new one, so the earlier result does not carry over.
          */
         key: "add_charge_honours_review_boundary",
-        order: 2,
+        order: 12,
         title: "Add puts the charge where the configured review boundary says",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Raise a new obligation and watch it land where this organization's configuration says it should.",
@@ -311,7 +530,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "draft_moves_nothing",
-        order: 3,
+        order: 13,
         title: "The draft has not changed what is owed",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm from the totals, not from the wording, that drafting moved no money.",
@@ -330,7 +549,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "post_charge",
-        order: 4,
+        order: 14,
         title: "Posting is what makes it owed — where posting is still a person's act",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Commit a draft that is legitimately waiting for a human, and watch the obligation appear once and for the right amount.",
@@ -355,7 +574,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "future_period_charge",
-        order: 5,
+        order: 15,
         title: "A charge for next period waits for next period, by itself",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Raise a charge dated into a billing period that has not started, and confirm it is not owed, not your problem, and not posted early.",
@@ -393,7 +612,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "awaiting_posting_says_why",
-        order: 6,
+        order: 16,
         title: "Every draft says why it is waiting, and only some of them are yours",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read the Charges tab as a triage surface and confirm it distinguishes work from waiting.",
@@ -418,7 +637,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "charge_detail_attribution",
-        order: 7,
+        order: 17,
         title: "The charge says whose it is",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Open the posted charge and confirm amount, date, lifecycle and who it belongs to.",
@@ -448,7 +667,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "manage_responsibility",
-        order: 8,
+        order: 18,
         title: "Naming who owes it changes no money",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Make Dana Alvarez responsible for the obligation and confirm nothing financial moved.",
@@ -482,7 +701,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "responsibility_supersession",
-        order: 9,
+        order: 19,
         title: "A later arrangement replaces the earlier one",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a second arrangement and confirm the family is not made responsible twice.",
@@ -498,7 +717,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "expected_funding",
-        order: 10,
+        order: 20,
         title: "Expected Funding is an expectation, not a payment",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record that an employer is expected to cover part of Dana's share.",
@@ -514,7 +733,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "expected_funding_correction",
-        order: 11,
+        order: 21,
         title: "Correcting the expectation replaces it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Change the expected amount and confirm the new figure replaces the old one.",
@@ -530,7 +749,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "adjustment_draft",
-        order: 12,
+        order: 22,
         title: "Lowering what a family owes, and saying why",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a correction that reduces what a family owes, and confirm it moves nothing yet.",
@@ -560,7 +779,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "adjustment_post",
-        order: 13,
+        order: 23,
         title: "Posting the credit is what reduces the obligation",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Post the credit and confirm the account and Collections agree afterwards.",
@@ -580,7 +799,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reduction_zero_bound",
-        order: 14,
+        order: 24,
         title: "A credit stops at zero",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to reduce an obligation below nothing and confirm the product refuses.",
@@ -607,7 +826,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reverse_adjustment",
-        order: 15,
+        order: 25,
         title: "Reversing a correction restores the obligation, without rewriting history",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Undo the correction and confirm the original stays visible while the money comes back.",
@@ -637,7 +856,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "payment_receipt",
-        order: 16,
+        order: 26,
         title: "A receipt records what actually arrived, and from whom",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a payment larger than the obligation and read the receipt back.",
@@ -653,7 +872,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "actual_payer_is_not_responsibility",
-        order: 17,
+        order: 27,
         title: "The person who paid is not necessarily the person who owes",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Record a payment from a household adult who carries no responsibility, and read both facts back.",
@@ -685,7 +904,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "apply_payment",
-        order: 18,
+        order: 28,
         title: "What is owed falls by what was applied",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the obligation is settled and the balance fell by the applied amount, not the receipt.",
@@ -701,7 +920,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "partial_unapplied",
-        order: 19,
+        order: 29,
         title: "Received, applied and unapplied are three different numbers",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Place some of the leftover money on another obligation without creating a new receipt.",
@@ -717,7 +936,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "move_payment",
-        order: 20,
+        order: 30,
         title: "Moving a payment changes where it sits, not what it is",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Move an application from one obligation to another and confirm the receipt is untouched.",
@@ -733,7 +952,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "failed_reapply_recovery",
-        order: 21,
+        order: 31,
         title: "A half-finished move leaves the money visible, not lost",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Force the second half of a move to fail and confirm the product tells the truth about it.",
@@ -749,7 +968,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "refund",
-        order: 22,
+        order: 32,
         title: "A refund is money going back, recorded separately",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Refund part of a receipt and confirm the original receipt survives untouched.",
@@ -765,7 +984,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reverse_charge",
-        order: 23,
+        order: 33,
         title: "Reversing a charge appends, it does not erase",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Reverse a posted charge and confirm the original remains readable.",
@@ -781,7 +1000,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "cross_surface_consistency",
-        order: 24,
+        order: 34,
         title: "Every surface tells the same story",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the account, the charge detail and Collections at the same scope and period.",
@@ -816,7 +1035,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "reload_switch_viewport",
-        order: 25,
+        order: 35,
         title: "Reload, switch household, and shrink the window",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm no stale financial state survives navigation, and the account is usable on a phone.",
@@ -849,7 +1068,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "overview_smoke",
-        order: 26,
+        order: 36,
         title: "Overview agrees with the Charges list",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Compare the Overview drafts figure with the Awaiting posting list.",
@@ -865,7 +1084,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "tuition_chain",
-        order: 27,
+        order: 37,
         title: "Recommendation, acceptance, then a charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Follow a tuition price from what the catalog suggests, through what was agreed, to the charge that results.",
@@ -883,7 +1102,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "discount_vs_adjustment",
-        order: 28,
+        order: 38,
         title: "An authored discount is not a manual correction",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Tell the two kinds of reduction apart and be able to explain the difference afterwards.",
@@ -908,7 +1127,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "multi_child_attribution",
-        order: 29,
+        order: 39,
         title: "Which child, and what belongs to the household",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Use the second child to tell child-level money apart from household-level responsibility.",
@@ -926,7 +1145,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_exclusion",
-        order: 30,
+        order: 40,
         title: "Where Core Financials stops",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Confirm the boundary: Expected Funding is Core, subsidy processing is not.",
@@ -944,7 +1163,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     // ── NOT WALKED THROUGH, AND WHY ─────────────────────────────────────────────────────────────
     S({
         key: "card_collection",
-        order: 31,
+        order: 41,
         title: "Collecting a card payment",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Take a card payment through the product and recognise the provider's result.",
@@ -981,7 +1200,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "ach_processing",
-        order: 32,
+        order: 42,
         title: "ACH initiation, processing and recognition",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Distinguish an ACH collection that has started from one that has actually settled.",
@@ -1015,7 +1234,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "provider_return",
-        order: 33,
+        order: 43,
         title: "A provider return is not an operator refund",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Tell money the rail took back apart from money somebody decided to give back.",
@@ -1052,7 +1271,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "payment_method_on_file",
-        order: 54,
+        order: 64,
         title: "Putting a payment method on file, and taking it off",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Save a card or bank account for a family, choose the default, and remove one without losing payment history.",
@@ -1102,7 +1321,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "subsidy_processing",
-        order: 34,
+        order: 44,
         title: "Subsidy claims, submission, remittance and variance",
         disposition: "OUT_OF_SCOPE_THREAD_11A",
         purpose: "Claim agency money, submit it, reconcile what arrives and resolve the difference.",
@@ -1128,7 +1347,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "billing_period",
-        order: 35,
+        order: 45,
         title: "The billing period is derived, and every surface agrees which one a charge is in",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1170,7 +1389,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "accounting_period",
-        order: 36,
+        order: 46,
         title: "The accounting period a journal entry is attributed to, and who may close it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1220,7 +1439,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "billing_preview_reachable",
-        order: 42,
+        order: 52,
         title: "Recurring tuition terms are reachable from the child the operator is working in",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1250,7 +1469,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "accept_recurring_terms",
-        order: 43,
+        order: 53,
         title: "Accepting the authored price, and reading it back",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1284,7 +1503,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_preview_is_the_run",
-        order: 44,
+        order: 54,
         title: "The generation preview is the run that follows it",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1315,7 +1534,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_generation_bills_the_accepted_price",
-        order: 45,
+        order: 55,
         title: "What is generated is what was accepted",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1348,7 +1567,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_rerun_is_honest",
-        order: 46,
+        order: 56,
         title: "Running the period again bills nothing again, and says so",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1378,7 +1597,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_term_lifecycle",
-        order: 47,
+        order: 57,
         title: "A term that has not begun bills nothing",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1406,7 +1625,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_discount_reduces_net",
-        order: 48,
+        order: 58,
         title: "A discount reduces the net and never the accepted price",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1447,7 +1666,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "discount_rerun_and_veto",
-        order: 49,
+        order: 59,
         title: "Discounts do not stack on rerun, and a category that refuses one is refused",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1484,7 +1703,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     S({
         key: "discount_exception",
         /* After the payments-era scenarios; the discount chain it belongs to sits at 45-47. */
-        order: 55,
+        order: 65,
         title: "A discount policy that does not apply to one family, from a date, for a reason",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1531,7 +1750,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "recurring_due_date",
-        order: 50,
+        order: 60,
         title: "A generated obligation carries the organisation's own payment terms",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1561,7 +1780,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "prepaid_available_and_applied",
-        order: 51,
+        order: 61,
         title: "Money held for a family, and what happens when it is applied",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1595,7 +1814,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "child_responsibility_and_partial",
-        order: 52,
+        order: 62,
         title: "A child-grain arrangement, and an obligation only partly divided",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1627,7 +1846,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "organization_financial_configuration",
-        order: 53,
+        order: 63,
         title: "The configuration an operator can actually reach, and the policies deliberately withheld",
         disposition: "HUMAN_WALKTHROUGH",
         purpose:
@@ -1655,7 +1874,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_enrollment",
-        order: 63,
+        order: 73,
         title: "Setting up Autopay is an explicit authorization, and a saved card alone is not one",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1693,7 +1912,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_card_collection",
-        order: 64,
+        order: 74,
         title: "Autopay collects what is currently owed on a card, exactly once",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1732,7 +1951,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_bank_processing",
-        order: 65,
+        order: 75,
         title: "A bank debit in flight is not money yet",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1770,7 +1989,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_failure",
-        order: 66,
+        order: 76,
         title: "A declined Autopay collection is visible, and is not retried as an infrastructure fault",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1808,7 +2027,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_retry",
-        order: 67,
+        order: 77,
         title: "Autopay retries are bounded, and bank retries are spaced",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1847,7 +2066,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_pause",
-        order: 68,
+        order: 78,
         title: "Pausing stops the next collection and does not reach into money already in flight",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1886,7 +2105,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_resume",
-        order: 69,
+        order: 79,
         title: "Resuming restores future collection and invents no catch-up",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1924,7 +2143,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_revoke",
-        order: 70,
+        order: 80,
         title: "Turning Autopay off is permanent for that authorization",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -1963,7 +2182,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "autopay_method_invalidated",
-        order: 71,
+        order: 81,
         title: "A dead payment method ends the Autopay that stood on it, with no silent fallback",
         disposition: "AUTOMATED_CERTIFIED_HUMAN_PENDING",
         purpose:
@@ -2009,7 +2228,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "bank_setup_request",
-        order: 82,
+        order: 92,
         title: "An operator asks for a bank account, and that is all they do",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Send the payer a setup link and confirm nothing at all was written on the account.",
@@ -2042,7 +2261,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_setup_payer_authorization",
-        order: 83,
+        order: 93,
         title: "The payer authorizes their own bank account",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Open the setup link as the parent would and put a bank account on file yourself.",
@@ -2077,7 +2296,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_method_operator_projection",
-        order: 84,
+        order: 94,
         title: "What the operator may see about a family's bank account",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read the saved bank account from the operator's side and confirm it says only safe things.",
@@ -2103,7 +2322,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "bank_setup_visual_review",
-        order: 85,
+        order: 95,
         title: "Does the payer's page feel like Alloy?",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Judge the participant surface as a parent would, and say whether it is acceptable.",
@@ -2132,7 +2351,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
      */
     S({
         key: "held_deposit_take_and_hold",
-        order: 72,
+        order: 82,
         title: "Money received and restricted is not available prepaid",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Hold part of a receipt as a deposit and confirm it stops behaving like ordinary money.",
@@ -2163,7 +2382,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_apply",
-        order: 73,
+        order: 83,
         title: "Applying a held deposit to what is owed",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Spend a held deposit against an obligation and watch it stop being held.",
@@ -2190,7 +2409,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_release",
-        order: 74,
+        order: 84,
         title: "Releasing a deposit moves no money",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "End the restriction on a deposit and confirm nothing left the organisation.",
@@ -2209,7 +2428,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_refund",
-        order: 75,
+        order: 85,
         title: "Refunding a deposit sends it back without touching what was settled",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Give a refundable deposit back and confirm nothing the family already paid was disturbed.",
@@ -2235,7 +2454,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_non_refundable",
-        order: 76,
+        order: 86,
         title: "A non-refundable deposit refuses, and says the same thing twice",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to refund a deposit taken as non-refundable and read what the product says.",
@@ -2264,7 +2483,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "held_deposit_card_rail_refund",
-        order: 77,
+        order: 87,
         title: "Refunding a deposit that arrived on a card",
         disposition: "EXPLICITLY_DEFERRED",
         purpose: "Refund a held deposit whose money came in through the provider rather than as cash.",
@@ -2287,7 +2506,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     /* ── THE REST OF THE PAYMENTS SURFACE ────────────────────────────────────────────────────── */
     S({
         key: "duplicate_charge_notice",
-        order: 78,
+        order: 88,
         title: "Adding the same charge twice creates one charge",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Ask for the same charge twice and confirm the operator is told nothing new was created.",
@@ -2317,7 +2536,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "ach_uncovered_obligation",
-        order: 79,
+        order: 89,
         title: "A bank debit is refused when the family has already paid",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Try to collect by bank against an obligation the family's own prepaid money already covers.",
@@ -2344,7 +2563,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "financial_activity_language",
-        order: 80,
+        order: 90,
         title: "Financial Activity in the operator's words",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read the activity feed end to end and confirm every line is about money, not machinery.",
@@ -2372,7 +2591,7 @@ export const SCENARIOS: readonly Scenario[] = Object.freeze([
     }),
     S({
         key: "provider_readiness",
-        order: 81,
+        order: 91,
         title: "Whether this organization can take money, said plainly",
         disposition: "HUMAN_WALKTHROUGH",
         purpose: "Read provider configuration and readiness as an administrator, not as an engineer.",
@@ -2417,6 +2636,17 @@ export function scenarioByKey(key: string): Scenario | undefined {
  * them.
  */
 export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Object.freeze({
+    // ── W7 billing configuration: the restart point ─────────────────────────────────────────
+    billing_configuration_reads_resolved: "CORE_RUNNABLE",
+    billing_override_inheritance: "CORE_RUNNABLE",
+    billing_scheduled_change: "CORE_RUNNABLE",
+    billing_period_membership: "CORE_RUNNABLE",
+    invoice_date_derivation: "CORE_RUNNABLE",
+    due_date_derivation: "CORE_RUNNABLE",
+    late_current_period_charge: "CORE_RUNNABLE",
+    add_charge_preview_commit_parity: "CORE_RUNNABLE",
+    generated_billing_parity: "CORE_RUNNABLE",
+    accounting_period_independence: "CORE_RUNNABLE",
     // ── Foundation, charges, corrections: the Core product, drivable today ──────────────────
     financial_subject: "CORE_RUNNABLE",
     add_charge_honours_review_boundary: "CORE_RUNNABLE",
@@ -2538,6 +2768,17 @@ export const SCENARIO_PROGRAM: Readonly<Record<string, ScenarioProgram>> = Objec
  * SUPPORTING evidence. They never turn a human result green — see `NO_AUTOMATIC_PASS`.
  */
 export const SCENARIO_EVIDENCE: Readonly<Record<string, readonly EvidenceClass[]>> = Object.freeze({
+    /* W7: the chain is certified by resolveChargeDateChain unit tests, the live Nov 5 suite and the mounted spec. */
+    billing_configuration_reads_resolved: ["HUMAN_WALKTHROUGH", "MOUNTED_CERTIFIED"],
+    billing_override_inheritance: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    billing_scheduled_change: ["HUMAN_WALKTHROUGH", "MOUNTED_CERTIFIED"],
+    billing_period_membership: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
+    invoice_date_derivation: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
+    due_date_derivation: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED", "MOUNTED_CERTIFIED"],
+    late_current_period_charge: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    add_charge_preview_commit_parity: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    generated_billing_parity: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
+    accounting_period_independence: ["HUMAN_WALKTHROUGH", "READ_ONLY_EVIDENCE"],
     /* Core: reading and driving the product against a live account. */
     financial_subject: ["HUMAN_WALKTHROUGH"],
     add_charge_honours_review_boundary: ["HUMAN_WALKTHROUGH", "AUTOMATED_CERTIFIED"],
