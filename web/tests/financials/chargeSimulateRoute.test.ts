@@ -35,7 +35,7 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
     vi.clearAllMocks();
     mockRequireAdminOrOps.mockResolvedValue(null);
-    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.read"] });
+    mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.read", "fin.write"] });
     mockCreateAdminClient.mockReturnValue({ from: vi.fn() });
     mockToday.mockResolvedValue("2026-06-29");
     svc.previewTemplateCharge.mockResolvedValue({ intent: { eligible: true }, wouldWrite: "create", existing: null });
@@ -59,5 +59,13 @@ describe("charge template simulate route", () => {
         expect(svc.previewTemplateCharge).toHaveBeenCalled();
         expect((await route.POST(post({ action: "draft", template_id: "t1", agreement_id: "a1" }))).status).toBe(200);
         expect(svc.writeTemplateDraftCharge).toHaveBeenCalledWith(expect.anything(), orgId, expect.objectContaining({ actorUserId: userId }));
+    });
+
+    /* W7-F010: reading Financials admits a preview; writing a draft charge takes fin.write. */
+    it("lets a read-only principal preview but not draft", async () => {
+        mockGetAdminContextCached.mockResolvedValue({ ok: true, orgId, userId, role: "admin", permissionKeys: ["fin.read"] });
+        expect((await route.POST(post({ action: "preview", template_id: "t1" }))).status).toBe(200);
+        expect((await route.POST(post({ action: "draft", template_id: "t1", agreement_id: "a1" }))).status).toBe(403);
+        expect(svc.writeTemplateDraftCharge).not.toHaveBeenCalled();
     });
 });

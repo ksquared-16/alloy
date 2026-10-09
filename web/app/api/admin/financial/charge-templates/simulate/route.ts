@@ -11,7 +11,11 @@ import {
     operationalEnrollmentErrorResponse,
     resolveOperationalEnrollmentTodayYmd,
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
-import { FINANCIALS_READ_PERMISSION_KEY, requireFinancialsCapability } from "@/lib/financials/financialsPermissions";
+import {
+    FINANCIALS_READ_PERMISSION_KEY,
+    FINANCIALS_WRITE_PERMISSION_KEY,
+    requireFinancialsCapability,
+} from "@/lib/financials/financialsPermissions";
 
 /**
  * Charge Template Simulator (Commercial Model, Slice D). Resolves a configured
@@ -63,6 +67,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(result, { status: 200 });
         }
         if (action === "draft") {
+            /*
+             * W7-F010: a draft is a write. Reading Financials admits this route for a preview; WRITING a
+             * charge takes the write capability, the same one every canonical charge action requires.
+             */
+            const writeDenied = requireFinancialsCapability(ctx, FINANCIALS_WRITE_PERMISSION_KEY);
+            if (writeDenied) return writeDenied;
             const result = await writeTemplateDraftCharge(supabase, ctx.orgId, { ...args, actorUserId: ctx.userId });
             return NextResponse.json(result, { status: 200 });
         }
