@@ -132,6 +132,12 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         ...(Array.isArray(d.collections)
             ? { collections: d.collections as StoredFormDraftPreview["collections"] }
             : {}),
+        // Forms Studio's own schema for this form (see `StoredFormDraftPreview.studio_schema`). Passed
+        // through as stored; it is validated on write and again by every reader that renders it.
+        ...(d.studio_schema && typeof d.studio_schema === "object" && !Array.isArray(d.studio_schema)
+            ? { studio_schema: d.studio_schema as StoredFormDraftPreview["studio_schema"] }
+            : {}),
+        ...(typeof d.studio_schema_saved_at === "string" ? { studio_schema_saved_at: d.studio_schema_saved_at } : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

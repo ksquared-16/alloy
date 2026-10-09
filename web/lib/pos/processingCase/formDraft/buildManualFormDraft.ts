@@ -15,7 +15,9 @@ import type { SectionDisposition } from "./sectionDisposition";
 
 export const MANUAL_FORM_DRAFT_VERSION = "manual-1";
 
-const ALLOWED_TYPES: DraftFormFieldType[] = ["text", "number", "date", "boolean", "file_ref", "signature"];
+// Choice questions keep their type: leaving `select` / `multiselect` out of this list turned every
+// dropdown into free text on each rebuild, and the choices it still carried stopped rendering.
+const ALLOWED_TYPES: DraftFormFieldType[] = ["text", "number", "date", "boolean", "file_ref", "signature", "select", "multiselect"];
 
 export interface ManualFieldInput {
     label: string;

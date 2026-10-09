@@ -12,7 +12,6 @@
  * Pure orchestration over injected deps so it is unit-testable without Supabase.
  */
 
-import { safeParseFormSchema } from "@/lib/forms/schema";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -22,7 +21,7 @@ import {
     dbMaxVersionNumber,
 } from "@/lib/admin/forms/formsAdminDb";
 import { parseStoredFormDraftPreview } from "./formDraftPreviewDb";
-import { draftFormToFormSchemaV1 } from "./draftFormToFormSchemaV1";
+import { studioSchemaForDraft } from "./studioSchemaForDraft";
 
 export interface FormDraftCreatedLink {
     form_id: string;
@@ -91,11 +90,12 @@ export async function createFormFromCaseDraft(
         return { ok: false, code: "no_preview", message: "No form draft preview — run “Create form from document” first." };
     }
 
-    const schema = draftFormToFormSchemaV1(preview);
-    const parsed = safeParseFormSchema(schema);
-    if (!parsed.success) {
+    // The form exactly as Forms Studio has it — the operator's authored schema once they have edited it.
+    const resolved = studioSchemaForDraft(preview);
+    if (!resolved.ok) {
         return { ok: false, code: "invalid_schema", message: "The generated draft did not validate as a form schema." };
     }
+    const parsed = { data: resolved.schema };
 
     const name = preview.generated_form_name?.trim() || preview.title?.trim();
     if (!name || name === "Untitled document" || name === "Untitled form") {

@@ -284,8 +284,9 @@ describe("plumbing already on a persisted draft", () => {
         expect(studio).toContain("data-qa-plumbing-notice");
         expect(studio).toContain("data-qa-plumbing-remove");
         expect(studio).toContain("Remove");
-        // Removal happens only through the operator's own click.
-        expect(studio).toContain("onRemoveFields");
+        // Removal happens only through the operator's own click, and through the Studio's own save.
+        expect(studio).toMatch(/data-qa-plumbing-remove="true"[\s\S]{0,40}|onClick=\{\(\) =>\s*\/\/ An explicit removal/);
+        expect(studio).toContain("mutate((s) => plumbing.reduce((acc, f) => removeField(acc, f.id), s))");
     });
 
     it("omits fields from the whole-draft save only when explicitly asked", () => {

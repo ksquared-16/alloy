@@ -255,5 +255,20 @@ export interface StoredFormDraftPreview {
      */
     collections?: DraftCollectionGroup[];
     generated_at: string;
+    /**
+     * THE FORM AS FORMS STUDIO HAS IT — authoritative for structure once an operator has edited it.
+     *
+     * The draft's `fields` / `sections` are what the importer found: provenance, page and region,
+     * extraction confidence, mapping evidence. They are flat, and the save that rebuilt them could not
+     * carry what Studio authors — answer types, choices, groups and their minimums, text blocks, help
+     * text, order. So a document-originated form now keeps the Studio's own `FormSchemaV1` here, written
+     * whole on every Studio save and never rebuilt from the importer's view. Absent until the first
+     * Studio edit; the initial form is derived from the draft (`draftFormToFormSchemaV1`).
+     *
+     * Field ids in this schema are the draft's ids wherever a question came from the document, so the
+     * imported metadata still joins to it by id. Imported metadata never writes into it.
+     */
+    studio_schema?: import("@/lib/forms/schema").FormSchemaV1;
+    studio_schema_saved_at?: string;
     generator_version: string;
 }

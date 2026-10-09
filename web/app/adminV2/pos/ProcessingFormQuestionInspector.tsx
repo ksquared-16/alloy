@@ -35,6 +35,21 @@ import {
 } from "@/lib/forms/formBuilderSchema";
 import { useState } from "react";
 import {
+    addFieldOption,
+    ANSWER_KIND_OPTIONS,
+    answerKindOf,
+    canStructureAddressAt,
+    changeAnswerKind,
+    removeFieldOption,
+    renameFieldOption,
+    setGroupRepeat,
+    structureAddressAt,
+    ungroupAddress,
+    type AnswerKind,
+} from "@/lib/forms/formBuilderSchema";
+import { relationshipLabelForGroup } from "@/lib/forms/relationshipCollectionGroup";
+import ProcessingCreateFieldPanel from "./ProcessingCreateFieldPanel";
+import {
     AlloyCheckbox,
     AlloyFieldLabel,
     AlloyInspectorDivider,
@@ -428,6 +443,160 @@ function ConditionEditor({
     );
 }
 
+/**
+ * A dropdown's own choices. `updateField` always accepted options; nothing in either Studio let an
+ * operator see or change them, so a choice question kept whatever the importer or the default gave it.
+ * A choice's stored value survives a rename, and removing one releases any follow-up waiting for it.
+ */
+function ChoicesEditor({
+    field,
+    editable,
+    mutate,
+}: {
+    field: FormField;
+    editable: boolean;
+    mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
+}) {
+    const options = (field as { static_options?: Array<{ value: string; label: string }> }).static_options ?? [];
+    return (
+        <div data-inspector-choices>
+            <AlloyFieldLabel>Choices</AlloyFieldLabel>
+            <ul className="space-y-1">
+                {options.map((o, i) => (
+                    <li key={o.value} className="flex items-center gap-1.5">
+                        {editable ? (
+                            <AlloyTextInput
+                                value={o.label}
+                                onChange={(label) => mutate((s) => renameFieldOption(s, field.id, i, label))}
+                                testId={`form-builder-option-${i}`}
+                            />
+                        ) : (
+                            <span className="text-[12px] text-alloy-midnight/75">{o.label}</span>
+                        )}
+                        {editable && options.length > 1 ? (
+                            <button
+                                type="button"
+                                aria-label={`Remove ${o.label}`}
+                                onClick={() => mutate((s) => removeFieldOption(s, field.id, i))}
+                                data-testid={`form-builder-option-remove-${i}`}
+                                className="shrink-0 px-1 text-[12px] text-alloy-midnight/40 hover:text-rose-600"
+                            >
+                                ✕
+                            </button>
+                        ) : null}
+                    </li>
+                ))}
+            </ul>
+            {editable ? (
+                <button
+                    type="button"
+                    onClick={() => mutate((s) => addFieldOption(s, field.id))}
+                    data-testid="form-builder-option-add"
+                    className="mt-1 text-[11px] font-medium text-alloy-bend-pine underline underline-offset-2"
+                >
+                    + Add choice
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+/**
+ * A GROUP: repeatable people, an address, or a plain repeating set.
+ *
+ * Which relationship a people group collects is named from the canonical relationship definitions —
+ * never a key typed here. The minimum and maximum are the schema's own `repeat` rules, which the
+ * participant runtime enforces on submit, so "at least two emergency contacts" is a rule, not prose.
+ */
+function GroupPanel({
+    field,
+    schema,
+    editable,
+    mutate,
+}: {
+    field: FormField;
+    schema: FormSchemaV1;
+    editable: boolean;
+    mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
+}) {
+    const group = field as FormField & {
+        fields: FormField[];
+        repeat?: { min?: number; max?: number };
+        address_binding?: { subject: string; role: string };
+        collection_binding?: { collection_provider_ref: string };
+    };
+    const relationship = relationshipLabelForGroup(field);
+    const isAddress = Boolean(group.address_binding);
+    const repeats = Boolean(group.repeat) && !isAddress;
+    const min = group.repeat?.min ?? 0;
+    const max = group.repeat?.max ?? null;
+    const [minDraft, setMinDraft] = useState(String(min));
+    const [maxDraft, setMaxDraft] = useState(max == null ? "" : String(max));
+    const commit = (nextMin: string, nextMax: string) => {
+        const m = Number(nextMin);
+        const x = nextMax.trim() === "" ? null : Number(nextMax);
+        if (!Number.isInteger(m) || (x != null && !Number.isInteger(x))) return;
+        mutate((s) => setGroupRepeat(s, field.id, { min: m, max: x }));
+    };
+    void schema;
+    return (
+        <AlloyInspectorGroup title={isAddress ? "Address" : relationship ? "People" : "Group"}>
+            <div data-inspector-group>
+                {relationship ? (
+                    <p className="text-[12px] font-medium text-alloy-midnight" data-inspector-group-relationship>
+                        Collects: {relationship}
+                    </p>
+                ) : isAddress ? (
+                    <p className="text-[12px] font-medium text-alloy-midnight">One address, each line stored on its own.</p>
+                ) : null}
+                <p className="mt-1 text-[11px] text-alloy-midnight/55">
+                    Asks: {group.fields.map((f) => f.label).join(" · ") || "—"}
+                </p>
+            </div>
+            {repeats ? (
+                <div className="grid grid-cols-2 gap-2" data-inspector-group-repeat>
+                    <div>
+                        <AlloyFieldLabel>Minimum</AlloyFieldLabel>
+                        <AlloyTextInput
+                            type="number"
+                            value={minDraft}
+                            disabled={!editable}
+                            onChange={(v) => {
+                                setMinDraft(v);
+                                commit(v, maxDraft);
+                            }}
+                            testId="form-builder-group-min"
+                        />
+                    </div>
+                    <div>
+                        <AlloyFieldLabel>Maximum</AlloyFieldLabel>
+                        <AlloyTextInput
+                            type="number"
+                            value={maxDraft}
+                            disabled={!editable}
+                            placeholder="No limit"
+                            onChange={(v) => {
+                                setMaxDraft(v);
+                                commit(minDraft, v);
+                            }}
+                            testId="form-builder-group-max"
+                        />
+                    </div>
+                    <p className="col-span-2 text-[10px] leading-snug text-alloy-midnight/45" data-inspector-group-repeat-summary>
+                        {min > 0 ? `Families must add at least ${min}.` : "Families may add none."}
+                        {max != null ? ` At most ${max}.` : " Families can keep adding more."}
+                    </p>
+                </div>
+            ) : null}
+            {editable && isAddress ? (
+                <AlloySecondaryButton onClick={() => mutate((s) => ungroupAddress(s, field.id))} testId="form-builder-ungroup-address">
+                    Separate into individual questions
+                </AlloySecondaryButton>
+            ) : null}
+        </AlloyInspectorGroup>
+    );
+}
+
 type Props = {
     field: FormField;
     schema: FormSchemaV1;
@@ -543,14 +712,45 @@ export default function ProcessingFormQuestionInspector({
                 </>
             ) : null}
 
-            {field.type !== "text_block" ? (
+            {field.type === "group" ? (
+                <>
+                    <AlloyInspectorDivider />
+                    <GroupPanel key={field.id} field={field} schema={schema} editable={editable} mutate={mutate} />
+                </>
+            ) : field.type !== "text_block" ? (
                 <>
                     <AlloyInspectorDivider />
                     <AlloyInspectorGroup title="Answer">
-                        <div>
+                        <div data-inspector-answer-type>
                             <AlloyFieldLabel>Answer type</AlloyFieldLabel>
-                            <p className="text-[12px] font-medium text-alloy-midnight/75">{answerTypeLabel(field)}</p>
+                            {editable && answerKindOf(field) ? (
+                                <AlloySelect
+                                    value={answerKindOf(field) ?? ""}
+                                    onChange={(kind) => mutate((s) => changeAnswerKind(s, field.id, kind as AnswerKind))}
+                                    options={ANSWER_KIND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                                    allowEmpty={false}
+                                    testId="form-builder-answer-type"
+                                />
+                            ) : (
+                                <p className="text-[12px] font-medium text-alloy-midnight/75">{answerTypeLabel(field)}</p>
+                            )}
                         </div>
+                        {field.type === "select" || field.type === "multiselect" ? (
+                            <ChoicesEditor field={field} editable={editable} mutate={mutate} />
+                        ) : null}
+                        {editable && canStructureAddressAt(schema, field.id) ? (
+                            <div data-inspector-address-structure>
+                                <AlloySecondaryButton
+                                    onClick={() => mutate((s) => structureAddressAt(s, field.id))}
+                                    testId="form-builder-structure-address"
+                                >
+                                    Group these lines as one address
+                                </AlloySecondaryButton>
+                                <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/45">
+                                    The address lines around this one become one address — each line still stored on its own.
+                                </p>
+                            </div>
+                        ) : null}
                         {needsDestination ? (
                             <p
                                 className="rounded-lg border border-alloy-ember/25 bg-alloy-ember/[0.06] px-2.5 py-2 text-[11px] text-alloy-ember"
@@ -618,6 +818,12 @@ export default function ProcessingFormQuestionInspector({
                                     {field.field_source.entity_type}.{field.field_source.field_key}
                                 </p>
                             </details>
+                        ) : null}
+                        {editable && !selectedCanonicalId ? (
+                            <ProcessingCreateFieldPanel
+                                field={field}
+                                onCreated={(destination) => mutate((s) => updateField(s, field.id, { field_source: destination }))}
+                            />
                         ) : null}
                     </AlloyInspectorGroup>
                 </>

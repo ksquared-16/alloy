@@ -3,27 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import { safeParseFormSchema } from "@/lib/forms/schema";
-import { describeCondition, updateField } from "@/lib/forms/formBuilderSchema";
-import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
+import { describeCondition, removeField, updateField } from "@/lib/forms/formBuilderSchema";
+import { studioSchemaForDraft } from "@/lib/pos/processingCase/formDraft/studioSchemaForDraft";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
-import type { SchemaFieldEdit } from "@/lib/pos/formDraft/importedFormMappingView";
 import {
     canvasMappingStates,
-    changedFieldEdits,
     filterSchemaForAttention,
     MAPPING_ATTENTION_FILTERS,
     mappingCounts,
     resolveImportedFormMappings,
     type MappingAttention,
 } from "@/lib/pos/formDraft/importedFormMappingView";
-import { suggestedFieldTypeForFormField } from "@/lib/pos/formDraft/createFieldFromSource";
 import { absenceTextFor, suggestedConditionsFor } from "@/lib/pos/formDraft/importedFormAnnotations";
 import { tableReviewNoticesFor } from "@/lib/pos/formDraft/tabularSourceSections";
 import { plumbingFieldsOnDraft } from "@/lib/pos/formDraft/documentPlumbingFields";
 import ProcessingFormCanvas, { MAPPING_STATE_CHIP, type CanvasMappingState } from "./ProcessingFormCanvas";
 import ProcessingFormQuestionInspector from "./ProcessingFormQuestionInspector";
+import { useFormStudioAuthoring } from "./useFormStudioAuthoring";
 
 /**
  * AN IMPORTED DOCUMENT, OPEN IN FORMS STUDIO.
@@ -52,68 +49,57 @@ export default function ProcessingImportedFormStudio({
     draft,
     sourceDocumentName,
     sourcePreviewUrl,
-    onSaveFieldEdits,
-    onSaveSchema,
-    onCreateFieldAndMap,
-    onRemoveFields,
+    onSaveStudioSchema,
 }: {
     draft: StoredFormDraftPreview;
     sourceDocumentName?: string | null;
     /** The uploaded file, served sandboxed. Absent for a source with no safe text preview. */
     sourcePreviewUrl?: string | null;
     /**
-     * Persist through the WHOLE-DRAFT contract. The surface hands over every edited field, because the
-     * save route rebuilds the draft from what it is given and a partial post deletes the rest.
+     * Persist the form exactly as Forms Studio has it — the whole `FormSchemaV1`, the same save a
+     * hand-built form makes. The draft's imported metadata (provenance, confidence, evidence) is never
+     * rebuilt from it and never written into it.
      */
-    onSaveFieldEdits?: (edits: ReadonlyMap<string, SchemaFieldEdit>) => Promise<void> | void;
-    /**
-     * Save when the operator changed the form's SHAPE — split a question, or anything else that leaves a
-     * field the draft has never seen. The schema becomes the authority for what the form contains.
-     */
-    onSaveSchema?: (schema: FormSchemaV1) => Promise<void> | void;
-    onCreateFieldAndMap?: (fieldId: string, name: string, entity: string, fieldType: string) => Promise<void> | void;
-    /** Explicit operator removal. Never called on its own — only from the notice the operator sees. */
-    onRemoveFields?: (fieldIds: readonly string[]) => Promise<void> | void;
+    onSaveStudioSchema?: (schema: FormSchemaV1) => Promise<void>;
 }) {
     /*
-     * The draft is the stored truth; the schema is what Studio edits. Re-deriving on every draft change
-     * is what makes a saved mapping come back from the server rather than from an optimistic guess.
+     * The form as Forms Studio has it: its own saved schema once the operator has edited it, otherwise the
+     * importer's initial form derived from the draft. @see studioSchemaForDraft
      */
     const derived = useMemo(() => {
-        const parsed = safeParseFormSchema(draftFormToFormSchemaV1(draft));
-        return parsed.success ? parsed.data : null;
+        const resolved = studioSchemaForDraft(draft);
+        return resolved.ok ? resolved.schema : null;
     }, [draft]);
     const [schema, setSchema] = useState<FormSchemaV1 | null>(derived);
 
     /*
-     * THE FORM-ONLY REVERT BUG LIVED HERE.
+     * Seeded once per GENERATION of the draft, never from a save's echo.
      *
-     * Re-seeding the editor from the draft on every draft change looks harmless and is not. Saving is a
-     * round trip: the surface posts the whole draft, the server REBUILDS it and hands it back, the draft
-     * prop changes, and this re-seed then replaced whatever the operator had just chosen with the
-     * server's version of it. For a destination that was still half-chosen — the Studio inspector writes
-     * `field_key: "custom"` the moment you pick the record and before you pick the field — the server had
-     * nothing to store, so it answered "form field only", and the operator watched their choice snap back.
-     *
-     * So the editor is re-seeded only when the draft's SHAPE changes: a different set of fields or
-     * sections, which is the one case where keeping local state would show a form that no longer exists.
-     * A rebuild that returns the same shape leaves the operator's in-progress work alone.
+     * A Studio save returns the stored draft, and its schema is the one this editor sent — but saves are
+     * asynchronous, so the echo of save N can arrive after the operator has already made edit N+1.
+     * Re-seeding from it would quietly undo N+1. The editor's own state is the authority while it is open;
+     * only a new generation (a re-import) replaces it.
      */
-    const seededShape = useRef<string | null>(null);
+    const seededGeneration = useRef<string | null>(null);
     useEffect(() => {
         if (!derived) return;
-        const shape = `${derived.fields.map((f) => f.id).join(",")}|${derived.sections.map((x) => x.id).join(",")}`;
-        if (seededShape.current === shape) return;
-        seededShape.current = shape;
+        const generation = `${draft.source_document_id ?? ""}|${draft.generated_at}`;
+        if (seededGeneration.current === generation) return;
+        seededGeneration.current = generation;
         setSchema(derived);
-    }, [derived]);
+    }, [derived, draft.source_document_id, draft.generated_at]);
+
+    /*
+     * Saves are serialized: each waits for the one before, so the server always ends on the operator's
+     * latest form, never on an earlier request that happened to land last.
+     */
+    const saveChain = useRef<Promise<void>>(Promise.resolve());
 
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [showMapping, setShowMapping] = useState(true);
     const [attention, setAttention] = useState<MappingAttention>("all");
     const [originalOpen, setOriginalOpen] = useState(false);
-    const [createOpen, setCreateOpen] = useState(false);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     /*
      * The canonical destination catalog. The shared inspector falls back to a 17-entry curated list when
@@ -138,7 +124,6 @@ export default function ProcessingImportedFormStudio({
             cancelled = true;
         };
     }, []);
-    const [busy, setBusy] = useState(false);
 
     const mappings = useMemo(() => (schema ? resolveImportedFormMappings(schema, draft) : new Map()), [schema, draft]);
     const counts = useMemo(() => (schema ? mappingCounts(schema, mappings) : null), [schema, mappings]);
@@ -163,7 +148,18 @@ export default function ProcessingImportedFormStudio({
      * reach a draft that already exists — so the surface names what it found and offers removal rather
      * than hiding it on the canvas or rewriting the draft without being asked.
      */
-    const plumbing = useMemo(() => plumbingFieldsOnDraft(draft.fields ?? []), [draft.fields]);
+    const plumbing = useMemo(() => {
+        const present = new Set<string>();
+        const walk = (fields: readonly FormField[]) => {
+            for (const f of fields) {
+                present.add(f.id);
+                if (f.type === "group") walk((f as { fields: FormField[] }).fields);
+            }
+        };
+        if (schema) walk(schema.fields);
+        // Only what is still on the form: once removed, it is gone from the Studio schema for good.
+        return plumbingFieldsOnDraft(draft.fields ?? []).filter((f) => present.has(f.id));
+    }, [draft.fields, schema]);
 
     const selectedField: FormField | null = useMemo(
         () => schema?.fields.find((f) => f.id === selectedFieldId) ?? null,
@@ -180,6 +176,19 @@ export default function ProcessingImportedFormStudio({
      */
     const suggestedConditions = useMemo(() => suggestedConditionsFor(draft.fields ?? []), [draft.fields]);
 
+    // `mutate` closes over the current schema and is defined below the early return; the hook reaches
+    // it through this ref so every add/remove/arrange goes through the same save.
+    const mutateRef = useRef<(fn: (s: FormSchemaV1) => FormSchemaV1) => void>(() => {});
+    // The SAME Forms Studio authoring a hand-built form uses. @see useFormStudioAuthoring
+    const authoring = useFormStudioAuthoring({
+        schema,
+        mutate: (fn) => mutateRef.current(fn),
+        editable: true,
+        fieldLibrary,
+        onSelectField: setSelectedFieldId,
+        onSelectSection: setSelectedSectionId,
+    });
+
     if (!schema) {
         return (
             <div data-qa-imported-form-studio="unavailable" className="p-4 text-[13px] text-alloy-midnight/60">
@@ -189,46 +198,26 @@ export default function ProcessingImportedFormStudio({
     }
 
     /**
-     * Every inspector edit goes through here.
+     * Every Studio edit goes through here — inspector, canvas, library, sections, drag and drop.
      *
-     * The schema moves first so the canvas responds immediately, then the WHOLE field set is persisted.
-     * Posting only the changed field would delete the others — sections, conditions, choices and all.
+     * The schema moves first so the canvas responds immediately, then the whole form is saved, exactly
+     * as Forms Studio has it.
      */
     const mutate = (fn: (s: FormSchemaV1) => FormSchemaV1): void => {
         const next = fn(schema);
+        if (next === schema) return;
         setSchema(next);
-
-        /*
-         * A structural change cannot be expressed as per-field edits: a split leaves parts the draft has
-         * never seen, so the per-field path would skip them and the operator's work would vanish on the
-         * next read. When the field set moves, the whole schema is posted instead.
-         */
-        const before = new Set(schema.fields.map((f) => f.id));
-        const after = next.fields.map((f) => f.id);
-        const structural = after.length !== before.size || after.some((id) => !before.has(id));
-        if (structural && onSaveSchema) {
-            setSaveErr(null);
-            void Promise.resolve(onSaveSchema(next)).catch((e: unknown) =>
-                setSaveErr(e instanceof Error ? e.message : "Couldn't save that change."),
-            );
-            return;
-        }
-
-        if (!onSaveFieldEdits) return;
-        /*
-         * A field whose destination is half-chosen is left out of the payload entirely — not posted as
-         * "no destination", which is what used to throw the operator's choice away on the readback. Its
-         * previously saved state stays on the server until the choice is finished.
-         */
-        // Only the questions the operator actually changed. @see changedFieldEdits
-        const edits = changedFieldEdits(schema, next, draft);
-        if (edits.size === 0) return;
+        if (!onSaveStudioSchema) return;
         setSaveErr(null);
-        void Promise.resolve(onSaveFieldEdits(edits)).catch((e: unknown) =>
-            setSaveErr(e instanceof Error ? e.message : "Couldn't save that change."),
-        );
+        saveChain.current = saveChain.current
+            .catch(() => undefined)
+            .then(() => onSaveStudioSchema(next))
+            .catch((e: unknown) => setSaveErr(e instanceof Error ? e.message : "Couldn't save that change."));
     };
 
+    mutateRef.current = mutate;
+
+    const selectedSection = selectedSectionId ? schema.sections.find((x) => x.id === selectedSectionId) ?? null : null;
     const needsMapping = selectedMapping?.state === "needs_mapping";
 
     return (
@@ -311,7 +300,7 @@ export default function ProcessingImportedFormStudio({
                         </button>
                     </p>
                 ) : null}
-                {plumbing.length && onRemoveFields ? (
+                {plumbing.length ? (
                     <p
                         className="mt-1.5 rounded-md bg-alloy-gold/[0.12] px-2.5 py-1.5 text-[11.5px] text-alloy-midnight/75"
                         data-qa-plumbing-notice="true"
@@ -322,7 +311,10 @@ export default function ProcessingImportedFormStudio({
                         Alloy learned to leave {plumbing.length === 1 ? "it" : "them"} out.{" "}
                         <button
                             type="button"
-                            onClick={() => void onRemoveFields(plumbing.map((f) => f.id))}
+                            onClick={() =>
+                                // An explicit removal the operator asked for, through the same Studio save.
+                                mutate((s) => plumbing.reduce((acc, f) => removeField(acc, f.id), s))
+                            }
                             data-qa-plumbing-remove="true"
                             className="font-medium text-alloy-bend-pine underline underline-offset-2"
                         >
@@ -343,11 +335,13 @@ export default function ProcessingImportedFormStudio({
                         editable
                         onSelectField={(id) => {
                             setSelectedFieldId(id);
-                            setCreateOpen(false);
+                            setSelectedSectionId(null);
                         }}
-                        onSelectSection={setSelectedSectionId}
-                        onAddQuestion={() => {}}
-                        onAddSection={() => {}}
+                        onSelectSection={(id) => {
+                            setSelectedSectionId(id);
+                            setSelectedFieldId(null);
+                        }}
+                        {...authoring.canvasProps}
                         mapping={{ byFieldId: states, show: showMapping }}
                         sectionNotices={sectionNotices}
                     />
@@ -439,25 +433,6 @@ export default function ProcessingImportedFormStudio({
                                             </div>
                                         );
                                     })()}
-                                    {onCreateFieldAndMap && selectedMapping.state !== "mapped" ? (
-                                        <CreateFieldPanel
-                                            open={createOpen}
-                                            onOpen={() => setCreateOpen(true)}
-                                            onCancel={() => setCreateOpen(false)}
-                                            defaultName={selectedField.label}
-                                            field={selectedField}
-                                            busy={busy}
-                                            onSubmit={async (name, entity, fieldType) => {
-                                                setBusy(true);
-                                                try {
-                                                    await onCreateFieldAndMap(selectedField.id, name, entity, fieldType);
-                                                    setCreateOpen(false);
-                                                } finally {
-                                                    setBusy(false);
-                                                }
-                                            }}
-                                        />
-                                    ) : null}
                                 </section>
                             ) : null}
 
@@ -467,10 +442,12 @@ export default function ProcessingImportedFormStudio({
                                 schema={schema}
                                 editable
                                 mutate={mutate}
-                                onRemove={() => setSelectedFieldId(null)}
+                                onRemove={() => authoring.removeQuestion(selectedField.id)}
                                 fieldLibrary={fieldLibrary}
                             />
                         </>
+                    ) : selectedSection ? (
+                        authoring.renderSectionInspector(selectedSection)
                     ) : (
                         <p className="text-[12px] text-alloy-midnight/55">
                             Select a question on the form to review or change it.
@@ -478,6 +455,8 @@ export default function ProcessingImportedFormStudio({
                     )}
                 </aside>
             </div>
+
+            {authoring.overlays}
 
             {originalOpen && sourcePreviewUrl ? (
                 /*
@@ -536,87 +515,6 @@ export default function ProcessingImportedFormStudio({
                     />
                 </div>
             ) : null}
-        </div>
-    );
-}
-
-/** Making a destination that does not exist yet, without leaving the field. */
-function CreateFieldPanel({
-    open,
-    onOpen,
-    onCancel,
-    onSubmit,
-    defaultName,
-    field,
-    busy,
-}: {
-    open: boolean;
-    onOpen: () => void;
-    onCancel: () => void;
-    onSubmit: (name: string, entity: string, fieldType: string) => Promise<void> | void;
-    defaultName: string;
-    field: FormField;
-    busy: boolean;
-}) {
-    const [name, setName] = useState(defaultName);
-    const [entity, setEntity] = useState("customer_member");
-    useEffect(() => setName(defaultName), [defaultName]);
-    const fieldType = suggestedFieldTypeForFormField(field);
-
-    if (!open) {
-        return (
-            <button
-                type="button"
-                onClick={onOpen}
-                data-qa-create-field="open"
-                className="mt-2 text-[11.5px] font-medium text-alloy-bend-pine underline underline-offset-2"
-            >
-                + Create field
-            </button>
-        );
-    }
-    return (
-        <div className="mt-2 space-y-2 rounded-md border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.03] p-2">
-            <label className="block text-[11px] text-alloy-midnight/70">
-                Call it
-                <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    data-qa-create-field-name="true"
-                    className="mt-0.5 w-full rounded-md border border-alloy-midnight/15 px-2 py-1 text-[12px]"
-                />
-            </label>
-            <label className="block text-[11px] text-alloy-midnight/70">
-                Keep it on
-                <select
-                    value={entity}
-                    onChange={(e) => setEntity(e.target.value)}
-                    data-qa-create-field-entity="true"
-                    className="mt-0.5 w-full rounded-md border border-alloy-midnight/15 px-2 py-1 text-[12px]"
-                >
-                    <option value="customer_member">The child</option>
-                    <option value="person">A parent or guardian</option>
-                    <option value="customer">The household</option>
-                </select>
-            </label>
-            <div className="flex gap-2">
-                <button
-                    type="button"
-                    disabled={busy || !name.trim()}
-                    onClick={() => void onSubmit(name.trim(), entity, fieldType)}
-                    data-qa-create-field="submit"
-                    className="min-h-[30px] rounded-md bg-alloy-bend-pine px-2.5 text-[12px] font-medium text-white disabled:opacity-50"
-                >
-                    {busy ? "Creating…" : "Create and map"}
-                </button>
-                <button
-                    type="button"
-                    onClick={onCancel}
-                    className="min-h-[30px] rounded-md border border-alloy-midnight/15 px-2.5 text-[12px] text-alloy-midnight/70"
-                >
-                    Cancel
-                </button>
-            </div>
         </div>
     );
 }
