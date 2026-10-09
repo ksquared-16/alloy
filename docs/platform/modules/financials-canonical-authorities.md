@@ -244,6 +244,21 @@ written charge carries `metadata.charge_dates` (rule, scope, intended date, clam
 
 ---
 
+### 3.0.1 Two invariants the database now holds (W7-F008, W7-F009)
+
+**A posted charge always has its journal entry.** Posting (`post_charge_with_journal`) and correction
+(`insert_posted_charge_with_journal`) write the charge and its `charge_posted` / `charge_corrected` entry
+in ONE transaction. An entry the accounting calendar cannot attribute (no period covers the effective date)
+refuses the post — the draft stays a draft and the refusal is said aloud — instead of leaving a posted
+charge with no consequence. A closed accounting period still defers to the next open one. A zero-amount
+charge has no consequence and carries no entry. Two staging charges posted 2026-08-26, before the journal
+existed, are the only posted charges without an entry; they are history and are not backfilled.
+
+**A bound charge's dates stay inside its own billing period.** `trg_enforce_charge_dates_inside_bound_period`
+refuses any insert, or any re-dating of a bound draft, that leaves its service or occurrence date outside
+the period it is bound to (binding itself is immutable). The four staging charges bound outside their
+service date's period were written 2026-10-02 by the retired invoice-date binding and are not rewritten.
+
 ## 3.1 Billing period identity — the interval, not the month
 
 **Owner:** `lib/financials/billingPeriod.ts`.
