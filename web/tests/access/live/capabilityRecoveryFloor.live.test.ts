@@ -39,7 +39,14 @@ const describeLive = env ? describe : describe.skip;
 
 const ORG = "fee10000-0000-4000-8000-0000000fee10";
 const OTHER_ORG = "fee20000-0000-4000-8000-0000000fee20";
-const CAP = "fin.post";
+/*
+ * The capability being recovered. This suite measures LOCKOUT MECHANICS — restoring C once its last
+ * effective holder is gone — so C is any active key. It was `fin.post` until that key was retired
+ * (20261106120000) and the suite started failing before reaching its assertions. `reports.write` is
+ * active, genuinely lockable, and not money-capable, so the W7-F002 person-link rule (which judges
+ * money grants on roles with unlinked holders) does not decide these cases instead of the floor.
+ */
+const CAP = "reports.write";
 const RETIRED = "settings.users_roles";
 
 describeLive("Governed capability recovery floor — live", () => {
