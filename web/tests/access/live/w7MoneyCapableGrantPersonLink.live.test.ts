@@ -87,4 +87,35 @@ describeLive("W7-F002 — money-capable grants require a named person, live", ()
             .insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, permission_key: "fin.write", allowed: true });
         expect(fresh.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:fin\.write/);
     });
+
+    /* 20261122150000 — the invariant lives where a user acquires a role. */
+    describe("user_roles invariant (20261122150000)", () => {
+        const UNLINKED_ADMIN = "72f10cc6-fbd2-4b3c-a107-8a5c196da384"; // an existing unlinked admin: must never be stranded
+
+        it("refuses a direct money-role write for an unlinked user, and allows a non-money one", async () => {
+            await db.from("user_person_links").delete().eq("org_id", ORG).eq("user_id", TARGET);
+            await db.from("user_roles").delete().eq("org_id", ORG).eq("user_id", TARGET).eq("role", "admin");
+            const money = await db.from("user_roles").insert({ org_id: ORG, user_id: TARGET, role: "admin" });
+            expect(money.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:/);
+            const plain = await db.from("user_roles").upsert({ org_id: ORG, user_id: TARGET, role: UNLINKED_HOLDER_ROLE });
+            expect(plain.error).toBeNull();
+        });
+
+        it("refuses an UNATTRIBUTED assignment of a money role (formerly a bypass)", async () => {
+            const r = await db.rpc("assign_member_role_audited", {
+                p_org_id: ORG, p_user_id: TARGET, p_role_key: "admin", p_actor_user_id: null, p_origin: "operator", p_correlation_id: `w7-f002-${Date.now()}`,
+            });
+            expect(r.error?.message ?? "").toMatch(/money_capable_grant_requires_person_link:/);
+        });
+
+        it("does not strand an existing unlinked holder when the governed replace re-saves the same role", async () => {
+            const r = await db.rpc("replace_membership_with_access_profile", {
+                p_user_id: UNLINKED_ADMIN, p_org_id: ORG, p_role: "admin", p_actor_user_id: ACTOR, p_origin: "operator", p_correlation_id: `w7-f002-replace-${Date.now()}`,
+            });
+            expect(r.error).toBeNull();
+            const { data } = await db.from("user_roles").select("role").eq("org_id", ORG).eq("user_id", UNLINKED_ADMIN);
+            expect(((data ?? []) as Array<{ role: string }>).map((x) => x.role)).toContain("admin");
+        });
+    });
 });
+
