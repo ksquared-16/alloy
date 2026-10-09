@@ -65,8 +65,23 @@ export function useDismissSignal(
     const dismissed = coordination?.dismissed;
     const nonce = dismissed?.card === card ? dismissed.nonce : null;
 
+    /*
+     * A DISMISSAL IS AN EVENT, NOT A STATE.
+     *
+     * The host keeps the last `dismissed` signal for as long as it lives — nothing clears it. Reacting
+     * to whatever nonce is present on MOUNT therefore replays a dismissal that has already been
+     * answered. That is exactly how a backdrop/Esc close killed the Focus Panel until refresh (E2E-10):
+     * the command workspace is hosted by mounting a fresh `CurrentWorkCard`, which saw the old
+     * dismissal and closed itself in the same commit, so no later command ever appeared.
+     *
+     * The nonce present at mount is history; only a nonce that changes while this card is mounted is
+     * a dismissal addressed to it.
+     */
+    const answeredRef = useRef(nonce);
+
     useEffect(() => {
-        if (nonce == null) return;
+        if (nonce == null || nonce === answeredRef.current) return;
+        answeredRef.current = nonce;
         resetRef.current();
     }, [nonce]);
 }
