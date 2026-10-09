@@ -146,4 +146,18 @@ describeLive("W7-F008 — posting and its journal entry are one fact, live", () 
         expect(corrected![0]).toMatchObject({ entry_type: "charge_corrected", obligation_delta_cents: -4000 });
         expect(corrected![0].reverses_entry_id).not.toBeNull();
     });
+
+    /* W7-F009: binding is immutable, so re-dating a bound draft out of its period is refused. */
+    it("a bound draft cannot be re-dated outside its own billing period", async () => {
+        const written = await writeTemplateDraftCharge(db, ORG, {
+            templateId: TEMPLATE, agreementId: AGREEMENT, eventDate: "2026-12-10", today: "2026-10-09", actorUserId: ACTOR,
+        });
+        const id = (written as { chargeId: string }).chargeId;
+        const inside = await db.from("charges").update({ service_date: "2026-12-20", occurs_on: "2026-12-20" }).eq("id", id);
+        expect(inside.error).toBeNull();
+        const outside = await db.from("charges").update({ service_date: "2027-01-05", occurs_on: "2027-01-05" }).eq("id", id);
+        expect(outside.error?.message ?? "").toMatch(/charge_service_date_outside_period/);
+        const { data } = await db.from("charges").select("service_date").eq("id", id).single();
+        expect((data as { service_date: string }).service_date).toBe("2026-12-20");
+    });
 });
