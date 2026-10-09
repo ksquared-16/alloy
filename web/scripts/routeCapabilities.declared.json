@@ -200,6 +200,12 @@
         "capability": "admin.users.write",
         "helper": "requireAccessAdministration",
         "note": "Records one explicit link between a login and the person that human IS - the write half of the identity bridge, which had a reader and no writer since September 2026. It decides whose assignments a login inherits and whose name the financial audit trail carries, so it takes the user WRITE authority; user_person_links RLS narrows it further to owner and admin, because ops runs the day rather than deciding identity. Both ids are required from the caller and nothing here infers one from email."
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "admin.users.write",
+        "helper": "requireAccessAdministration",
+        "note": "W7-F002: revoke or replace a link. Both are noted and atomic in the database (revoke_user_person_link / replace_user_person_link); a revoke is refused while the user still holds a money-capable capability. Same user WRITE authority as recording a link."
       }
     },
     "app/api/admin/action-definitions/[id]/route.ts": {

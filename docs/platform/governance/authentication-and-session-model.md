@@ -146,6 +146,16 @@ constrained to `active | revoked`.
 **Unresolved is not unprivileged.** A failed read returns `personId: null` with `resolved: false`, so
 callers deny rather than treating a broken query as "this user is nobody".
 
+**Money-capable access requires a named person (W7-F002, grant time).** A membership change that newly
+confers a money-capable capability (`fin.write`, `fin.adjust`, `fin.responsibility`, `fin.subsidy`,
+`fin.provider`; `fin.post` retired but judged) on a user with no active link to a named, unarchived Person
+is refused by `assert_assignment_delegation_ceiling` (`money_capable_grant_requires_person_link`), and so
+is newly allowing one on a role that has unlinked holders. Re-saving an already-allowed grant is not a new
+grant, so no holder is stranded and no financial act is refused mid-flight. Money capability is a
+capability (`money_capable_capability_keys()`), never a role-name list. Links are made, replaced and
+revoked under Users › Account › Linked person (`/api/admin/access/person-links`, POST and PATCH);
+replace is atomic, and revoke is refused while the user can still move money.
+
 ---
 
 ## How the three gates compose

@@ -49,14 +49,11 @@ import { resolveLinkedPersonId } from "@/lib/access/linkedPersonIdentity";
 import { operatorIdentity } from "@/lib/access/operatorAccountName";
 
 /**
- * The org roles that can create financial activity today.
- *
- * Measured rather than assumed: the deployed census found `admin` and `ops` in use, and
- * `financial_policies`/`charges` RLS gates childcare money on `has_org_role(org_id, ...)` with
- * owner/admin/ops. Named here so the identity requirement and the capability it attaches to are
- * stated in the same place.
+ * What makes an actor money-capable is a CAPABILITY, not a role name (W7-F002). The set lives with
+ * Access, which enforces the named-person requirement at grant time; re-exported here so the
+ * identity requirement and the capability it attaches to are still read in one place.
  */
-export const MONEY_CAPABLE_ORG_ROLES = ["owner", "admin", "ops"] as const;
+export { MONEY_CAPABLE_CAPABILITY_KEYS } from "@/lib/access/personLinkRequirement";
 
 export type FinancialActorIdentityStatus =
     /** Resolved through the canonical bridge to a person with a usable human name. Requirement met. */

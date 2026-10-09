@@ -25,6 +25,11 @@ import {
 import { FUTURE_PERIOD_ACTIVATION_HANDLER_KEY } from "@/lib/scheduledWork/scheduledWorkHandlerKeys";
 import type { ScheduledWorkContext } from "@/lib/scheduledWork/scheduledWorkTypes";
 
+/** The chained query surface the W7-F008 emulation drives. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a chainable fake, typed loosely on purpose
+type FakeChain = any;
+
+
 const ORG = "org-1";
 
 function ctx(overrides: Partial<ScheduledWorkContext> = {}): ScheduledWorkContext {
@@ -118,7 +123,21 @@ function makeDb(seed: { charges: Row[]; periods: Row[]; policies?: Row[]; obliga
         return api;
     }
 
-    return { client: { from: (t: string) => builder(t) } as never, tables };
+
+    /* W7-F008: `post_charge_with_journal`, emulated as the guarded draft → posted update it performs. */
+    const rpc = async (fn: string, p: Record<string, unknown>) => {
+        if (fn !== "post_charge_with_journal") return { data: null, error: { message: `unknown rpc: ${fn}` } };
+        const r = (await (builder("charges") as unknown as FakeChain)
+            .update({ status: "posted", posted_at: p.p_posted_at, posted_by: p.p_actor_user_id ?? null, updated_at: p.p_posted_at, updated_by: p.p_actor_user_id ?? null })
+            .eq("org_id", p.p_org_id)
+            .eq("id", p.p_charge_id)
+            .eq("status", "draft")
+            .select("*")
+            .maybeSingle()) as { data: unknown };
+        return { data: r.data ? [r.data] : [], error: null };
+    };
+
+    return { client: { from: (t: string) => builder(t), rpc } as never, tables };
 }
 
 function waitingDraft(id: string, postsOn: string, periodId: string): Row {

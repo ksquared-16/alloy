@@ -132,7 +132,7 @@ export function journalIdempotencyKey(entryType: JournalEntryType, sourceId: str
  * period", "post the correction into the current one"), so they surface as `invalid_state` carrying
  * a machine-readable reason.
  */
-function translateJournalError(message: string): OperationalEnrollmentServiceError {
+export function translateJournalError(message: string): OperationalEnrollmentServiceError {
     if (message.includes("accounting_period_unavailable")) {
         return new OperationalEnrollmentServiceError(
             "invalid_state",
@@ -157,7 +157,7 @@ function translateJournalError(message: string): OperationalEnrollmentServiceErr
     return new OperationalEnrollmentServiceError("db_error", message);
 }
 
-async function readByIdempotencyKey(
+export async function readByIdempotencyKey(
     supabase: SupabaseClient,
     orgId: string,
     key: string
@@ -173,17 +173,11 @@ async function readByIdempotencyKey(
 }
 
 /**
- * Record one posted financial consequence.
- *
- * The period is NOT resolved here. `attribute_financial_journal_entry` stamps it BEFORE INSERT, so
- * a row written by any other client — a backfill, a future service, psql — is attributed by the same
- * rule. This function's job is to compute the key, hand over the facts, and read back the row that
- * already existed when the key collides.
+ * The row one journal entry is written as — the single authority for its shape, used by the direct
+ * insert below and by the transactional posting functions (`post_charge_with_journal`,
+ * `insert_posted_charge_with_journal`), which receive it as JSON. Validates the amounts first.
  */
-export async function recordFinancialJournalEntry(
-    supabase: SupabaseClient,
-    input: RecordJournalEntryInput
-): Promise<RecordJournalEntryResult> {
+export function journalEntryRow(input: RecordJournalEntryInput) {
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
         throw new OperationalEnrollmentServiceError(
             "invalid_input",
@@ -193,9 +187,7 @@ export async function recordFinancialJournalEntry(
     if (!Number.isInteger(input.obligationDeltaCents)) {
         throw new OperationalEnrollmentServiceError("invalid_input", "obligationDeltaCents must be an integer.");
     }
-
-    const idempotencyKey = journalIdempotencyKey(input.entryType, input.sourceId);
-    const row = {
+    return {
         org_id: input.orgId,
         customer_id: input.customerId ?? null,
         billable_source_type: input.billableSourceType ?? null,
@@ -209,10 +201,35 @@ export async function recordFinancialJournalEntry(
         effective_on: input.effectiveOn.slice(0, 10),
         billing_period_key: input.billingPeriodKey ?? null,
         reverses_entry_id: input.reversesEntryId ?? null,
-        idempotency_key: idempotencyKey,
+        idempotency_key: journalIdempotencyKey(input.entryType, input.sourceId),
         actor_user_id: input.actorUserId ?? null,
         metadata: input.metadata ?? {},
     };
+}
+
+/**
+ * True when PostgREST reports that a database function does not exist (PGRST202), i.e. the build is
+ * deployed ahead of its migration. Only that answer selects a fallback; every other error is real.
+ */
+export function isMissingDatabaseFunction(error: { code?: string; message?: string } | null | undefined): boolean {
+    if (!error) return false;
+    return error.code === "PGRST202" || /Could not find the function/i.test(error.message ?? "");
+}
+
+/**
+ * Record one posted financial consequence.
+ *
+ * The period is NOT resolved here. `attribute_financial_journal_entry` stamps it BEFORE INSERT, so
+ * a row written by any other client — a backfill, a future service, psql — is attributed by the same
+ * rule. This function's job is to compute the key, hand over the facts, and read back the row that
+ * already existed when the key collides.
+ */
+export async function recordFinancialJournalEntry(
+    supabase: SupabaseClient,
+    input: RecordJournalEntryInput
+): Promise<RecordJournalEntryResult> {
+    const row = journalEntryRow(input);
+    const idempotencyKey = row.idempotency_key;
 
     const { data, error } = await supabase.from(TABLE).insert(row).select("*").maybeSingle();
     if (error) {
@@ -234,16 +251,17 @@ export async function recordFinancialJournalEntry(
 /**
  * The outcome of a journal write, as a VALUE rather than an exception.
  *
- * ── WHY THE JOURNAL NEVER BLOCKS THE MONEY ──
+ * ── A POSTED CHARGE NEVER LACKS ITS ENTRY (W7-F008) ──
  *
- * Recording history is downstream of making it. If a reporting calendar has not been authored far
- * enough forward, or an entry cannot be attributed for any other reason, the correct answer is that
- * the charge still posts and the payment is still received — a REPORTING boundary must not be able
- * to stop an OPERATIONAL act, or closing the books would stop a family being charged.
- *
- * What must not happen is silence. So the outcome is returned to the caller and rendered in the
- * service result: `skipped` always carries the reason, and certification asserts `recorded` rather
- * than merely asserting the charge posted.
+ * This value-not-exception form survives for PAYMENT consequences and for the repair-on-retry of an
+ * already-posted charge. It no longer decides whether a CHARGE posts: the outcome was returned and
+ * read by no caller, so a refused entry left a posted charge with no consequence in the journal and
+ * nothing said so. Charge posting and correction now write the charge and its entry in ONE
+ * transaction (`post_charge_with_journal`, `insert_posted_charge_with_journal`): an entry the
+ * accounting calendar cannot attribute refuses the post, and the draft stays a draft — the same
+ * fail-closed answer a closed billing period gives. A closed accounting period still DEFERS to the
+ * next open one (the trigger), so closing the books does not stop a family being charged; only a
+ * calendar not authored for the date does, and that refusal is now said aloud.
  */
 export type JournalOutcome =
     | { status: "recorded"; entry: FinancialJournalEntryRow }

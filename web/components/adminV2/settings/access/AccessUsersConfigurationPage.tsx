@@ -46,6 +46,7 @@ import {
     type ConfiguredCaptureScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import UserPersonLinkControl from "@/components/adminV2/settings/access/UserPersonLinkControl";
 import {
     identityHeadline,
     identitySubtitle,
@@ -1061,6 +1062,16 @@ export default function AccessUsersConfigurationPage({
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Email</dt>
                                                         <dd className="mt-0.5">{selected.email ?? "No email on file"}</dd>
+                                                    </div>
+                                                    {/*
+                                                      * W7-F002. Which human this login IS — chosen by an
+                                                      * operator, never matched from the email above.
+                                                      */}
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">Linked person</dt>
+                                                        <dd className="mt-0.5">
+                                                            <UserPersonLinkControl userId={selected.user_id} canManage={canManageUsers} />
+                                                        </dd>
                                                     </div>
                                                     {/*
                                                       * W-51 / IA-7. The label follows the record: a membership

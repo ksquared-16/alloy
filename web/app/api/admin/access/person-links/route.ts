@@ -9,6 +9,8 @@ import {
 import {
     createUserPersonLink,
     listUserPersonLinkState,
+    replaceUserPersonLink,
+    revokeUserPersonLink,
     UserPersonLinkError,
 } from "@/lib/access/userPersonLinkService";
 
@@ -101,6 +103,47 @@ export async function POST(request: NextRequest) {
         const status = error instanceof UserPersonLinkError ? error.status : 500;
         return NextResponse.json(
             { ok: false, error: error instanceof Error ? error.message : "Could not record the link." },
+            { status },
+        );
+    }
+}
+
+/**
+ * Revoke or replace a link (W7-F002). Both are explicit, noted and atomic in the database: a replace
+ * never leaves the user unlinked in between, and a revoke is refused while the user can still move
+ * money — the ledger must always be able to name them. The revoked row is kept as evidence.
+ */
+export async function PATCH(request: NextRequest) {
+    const auth = await requireAccessAdministration(ADMIN_USERS_WRITE);
+    if (!auth.ok) return auth.response;
+    const { orgId, userId } = auth.access;
+
+    let body: Record<string, unknown>;
+    try {
+        body = (await request.json()) as Record<string, unknown>;
+    } catch {
+        return NextResponse.json({ ok: false, error: "A JSON body is required." }, { status: 400 });
+    }
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+    try {
+        if (body.action === "revoke") {
+            const link = await revokeUserPersonLink(createAdminClient(), {
+                orgId, userId: str(body.user_id), note: str(body.note), revokedBy: userId ?? null,
+            });
+            return NextResponse.json({ ok: true, link });
+        }
+        if (body.action === "replace") {
+            const link = await replaceUserPersonLink(createAdminClient(), {
+                orgId, userId: str(body.user_id), personId: str(body.person_id), note: str(body.note), linkedBy: userId ?? null,
+            });
+            return NextResponse.json({ ok: true, link });
+        }
+        return NextResponse.json({ ok: false, error: "action must be revoke or replace." }, { status: 400 });
+    } catch (error) {
+        const status = error instanceof UserPersonLinkError ? error.status : 500;
+        return NextResponse.json(
+            { ok: false, error: error instanceof Error ? error.message : "Could not change the link." },
             { status },
         );
     }

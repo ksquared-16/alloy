@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Childcare charge service (P3.1) — server-side financial write posture.
  *
@@ -55,6 +56,10 @@ import {
     chargeEffectiveOn,
     chargePostedEntry,
     findEntryForSource,
+    isMissingDatabaseFunction,
+    journalEntryRow,
+    readByIdempotencyKey,
+    translateJournalError,
     tryRecordFinancialJournalEntry,
     type JournalOutcome,
 } from "@/lib/financials/financialJournalService";
@@ -566,24 +571,32 @@ export async function postChildcareCharge(
         }
     }
 
+    /*
+     * ── THE POST AND ITS JOURNAL ENTRY ARE ONE TRANSACTION (W7-F008) ──
+     *
+     * `post_charge_with_journal` flips draft → posted AND inserts the `charge_posted` entry, or does
+     * neither. Written as two calls, an entry the accounting calendar refused left the charge posted
+     * with no consequence in the journal, silently. The refusal now reaches the caller in words and
+     * the draft stays a draft. A zero-amount charge carries no entry: it has no consequence to record.
+     */
     const now = new Date().toISOString();
-    const { data, error } = await supabase
-        .from("charges")
-        .update({
-            status: "posted",
-            posted_at: now,
-            posted_by: input.actorUserId ?? null,
-            updated_at: now,
-            updated_by: input.actorUserId ?? null,
-        })
-        .eq("org_id", input.orgId)
-        .eq("id", input.chargeId)
-        // The transition guard. Without it, two concurrent posts both pass the read above.
-        .eq("status", "draft")
-        .select("*")
-        .maybeSingle();
-    if (error) {
-        throw new OperationalEnrollmentServiceError("db_error", error.message);
+    /* `posted_at` is part of the effective-date fallback, so the entry sees the row as it will be. */
+    const entry = postedEntryRow({ ...charge, posted_at: now } as ChargeRow, input.actorUserId ?? null);
+    const rpc = await supabase.rpc("post_charge_with_journal", {
+        p_org_id: input.orgId,
+        p_charge_id: input.chargeId,
+        p_posted_at: now,
+        p_actor_user_id: input.actorUserId ?? null,
+        p_entry: entry,
+    });
+    let data: unknown;
+    if (rpc.error && isMissingDatabaseFunction(rpc.error)) {
+        /* The build is deployed ahead of its migration: the two-call path until the function exists. */
+        data = await legacyFlipToPosted(supabase, input, now);
+    } else if (rpc.error) {
+        throw translateJournalError(rpc.error.message);
+    } else {
+        data = ((rpc.data ?? []) as ChargeRow[])[0] ?? null;
     }
     if (!data) {
         // Someone else won the race. Their posting is the one that stands.
@@ -602,6 +615,39 @@ export async function postChildcareCharge(
     };
 }
 
+/** The `charge_posted` row for a charge about to post, or null for a zero amount. */
+function postedEntryRow(charge: ChargeRow, actorUserId: string | null) {
+    if (Number(charge.amount_cents) === 0) return null;
+    return journalEntryRow(chargePostedEntryInput(charge, actorUserId));
+}
+
+/** The pre-F008 flip, kept only for a database that does not have `post_charge_with_journal` yet. */
+async function legacyFlipToPosted(
+    supabase: SupabaseClient,
+    input: { orgId: string; chargeId: string; actorUserId?: string | null },
+    now: string,
+): Promise<ChargeRow | null> {
+    const { data, error } = await supabase
+        .from("charges")
+        .update({
+            status: "posted",
+            posted_at: now,
+            posted_by: input.actorUserId ?? null,
+            updated_at: now,
+            updated_by: input.actorUserId ?? null,
+        })
+        .eq("org_id", input.orgId)
+        .eq("id", input.chargeId)
+        // The transition guard. Without it, two concurrent posts both pass the read above.
+        .eq("status", "draft")
+        .select("*")
+        .maybeSingle();
+    if (error) {
+        throw new OperationalEnrollmentServiceError("db_error", error.message);
+    }
+    return (data as ChargeRow | null) ?? null;
+}
+
 /**
  * The posted-charge consequence, recorded once per charge.
  *
@@ -615,21 +661,29 @@ async function recordChargePostedEntry(
     charge: ChargeRow,
     actorUserId: string | null
 ): Promise<JournalOutcome> {
-    return tryRecordFinancialJournalEntry(
-        supabase,
-        chargePostedEntry({
-            orgId: charge.org_id,
-            chargeId: charge.id,
-            amountCents: charge.amount_cents,
-            currency: charge.currency_code,
-            billableSourceType: charge.billable_source_type,
-            billableSourceId: charge.billable_source_id,
-            effectiveOn: chargeEffectiveOn(charge),
-            billingPeriodKey: placeInBillingPeriod(charge).key,
-            actorUserId,
-            metadata: { charge_category: charge.charge_category },
-        })
-    );
+    if (Number(charge.amount_cents) === 0) {
+        return { status: "skipped", reason: "zero_amount: a zero-amount charge has no consequence to record" };
+    }
+    /* Written in the posting transaction: read it back rather than inserting again. A failed read
+     * is not a failed post — the insert below converges on the same key either way. */
+    const recorded = await readByIdempotencyKey(supabase, charge.org_id, `charge_posted:${charge.id}`).catch(() => null);
+    if (recorded) return { status: "already_recorded", entry: recorded };
+    return tryRecordFinancialJournalEntry(supabase, chargePostedEntryInput(charge, actorUserId));
+}
+
+function chargePostedEntryInput(charge: ChargeRow, actorUserId: string | null) {
+    return chargePostedEntry({
+        orgId: charge.org_id,
+        chargeId: charge.id,
+        amountCents: charge.amount_cents,
+        currency: charge.currency_code,
+        billableSourceType: charge.billable_source_type,
+        billableSourceId: charge.billable_source_id,
+        effectiveOn: chargeEffectiveOn(charge),
+        billingPeriodKey: placeInBillingPeriod(charge).key,
+        actorUserId,
+        metadata: { charge_category: charge.charge_category },
+    });
 }
 
 /**
@@ -729,53 +783,53 @@ export async function createChildcareCorrection(
     assertChargeCategory(category);
 
     const now = new Date().toISOString();
-    const { data, error } = await supabase
-        .from("charges")
-        .insert({
-            org_id: input.orgId,
-            job_id: null,
-            // The SOURCE's own attribution, not a hardcoded one: a household charge is corrected on
-            // the household, never re-pinned onto an agreement it never belonged to.
-            billable_source_type: source.billable_source_type,
-            billable_source_id: source.billable_source_id,
-            /*
-             * Resolved from the correction's own declared date, not inherited from the source. In S2
-             * that lands it in the source's period because it copies the source's dates; nothing
-             * CONSTRAINS it to, which is deliberate — a prospective correction must later be able to
-             * sit in an open December while pointing at a closed November.
-             */
-            ...(await resolveChargeBillingPeriodBinding(supabase, {
-                orgId: input.orgId,
-                billableSourceType: source.billable_source_type,
-                billableSourceId: source.billable_source_id,
-                placementDate: source.service_date ?? new Date().toISOString().slice(0, 10),
-            })),
-            source_charge_id: source.id,
-            charge_type: source.charge_type,
-            charge_category: category,
-            status: "posted",
-            currency_code: source.currency_code,
-            amount_cents: amountCents,
-            service_date: source.service_date,
-            due_date: source.due_date,
-            posted_at: now,
-            voided_at: null,
-            description:
-                trimOrNull(input.description) ??
-                `${input.kind} of charge ${source.id}`,
-            metadata: { ...(input.metadata ?? {}), correction_kind: input.kind, source_charge_id: source.id },
-            updated_at: now,
-            // A correction is posted money the moment it is written, so its author is its poster.
-            created_by: input.actorUserId ?? null,
-            updated_by: input.actorUserId ?? null,
-            posted_by: input.actorUserId ?? null,
-        })
-        .select("*")
-        .single();
-    if (error) {
-        throw new OperationalEnrollmentServiceError("db_error", error.message);
-    }
-    const correction = data as ChargeRow;
+    /*
+     * ── THE CORRECTION AND ITS JOURNAL ENTRY ARE ONE TRANSACTION (W7-F008) ──
+     *
+     * A correction is posted money the moment it is written. Its id is chosen here so the
+     * `charge_corrected` entry can name it, and `insert_posted_charge_with_journal` writes both or
+     * neither: an entry the accounting calendar refuses refuses the correction, in words.
+     */
+    const correctionRow = {
+        id: randomUUID(),
+        org_id: input.orgId,
+        job_id: null,
+        // The SOURCE's own attribution, not a hardcoded one: a household charge is corrected on
+        // the household, never re-pinned onto an agreement it never belonged to.
+        billable_source_type: source.billable_source_type,
+        billable_source_id: source.billable_source_id,
+        /*
+         * Resolved from the correction's own declared date, not inherited from the source. In S2
+         * that lands it in the source's period because it copies the source's dates; nothing
+         * CONSTRAINS it to, which is deliberate — a prospective correction must later be able to
+         * sit in an open December while pointing at a closed November.
+         */
+        ...(await resolveChargeBillingPeriodBinding(supabase, {
+            orgId: input.orgId,
+            billableSourceType: source.billable_source_type,
+            billableSourceId: source.billable_source_id,
+            placementDate: source.service_date ?? new Date().toISOString().slice(0, 10),
+        })),
+        source_charge_id: source.id,
+        charge_type: source.charge_type,
+        charge_category: category,
+        status: "posted",
+        currency_code: source.currency_code,
+        amount_cents: amountCents,
+        service_date: source.service_date,
+        due_date: source.due_date,
+        posted_at: now,
+        voided_at: null,
+        description:
+            trimOrNull(input.description) ??
+            `${input.kind} of charge ${source.id}`,
+        metadata: { ...(input.metadata ?? {}), correction_kind: input.kind, source_charge_id: source.id },
+        updated_at: now,
+        // A correction is posted money the moment it is written, so its author is its poster.
+        created_by: input.actorUserId ?? null,
+        updated_by: input.actorUserId ?? null,
+        posted_by: input.actorUserId ?? null,
+    };
 
     // The corrective consequence, linked to the entry it corrects. `reverses_entry_id` points at the
     // ORIGINAL charge's posted entry — the journal repeats the lineage `source_charge_id` already
@@ -785,24 +839,41 @@ export async function createChildcareCorrection(
         entryType: "charge_posted",
         sourceId: source.id,
     });
-    await tryRecordFinancialJournalEntry(
-        supabase,
-        chargeCorrectedEntry({
-            orgId: correction.org_id,
-            correctionChargeId: correction.id,
-            signedAmountCents: correction.amount_cents,
-            currency: correction.currency_code,
-            billableSourceType: correction.billable_source_type,
-            billableSourceId: correction.billable_source_id,
-            // A correction is effective WHEN IT IS MADE, not when the original was serviced. That is
-            // what puts it in the corrective period instead of reopening one that has reported.
-            effectiveOn: now.slice(0, 10),
-            billingPeriodKey: placeInBillingPeriod(correction).key,
-            reversesEntryId: originalEntry?.id ?? null,
-            actorUserId: input.actorUserId ?? null,
-            metadata: { correction_kind: input.kind, source_charge_id: source.id },
-        })
-    );
+    const correctedEntry = chargeCorrectedEntry({
+        orgId: input.orgId,
+        correctionChargeId: correctionRow.id,
+        signedAmountCents: amountCents,
+        currency: source.currency_code,
+        billableSourceType: source.billable_source_type,
+        billableSourceId: source.billable_source_id,
+        // A correction is effective WHEN IT IS MADE, not when the original was serviced. That is
+        // what puts it in the corrective period instead of reopening one that has reported.
+        effectiveOn: now.slice(0, 10),
+        billingPeriodKey: placeInBillingPeriod({ ...correctionRow, created_at: now }).key,
+        reversesEntryId: originalEntry?.id ?? null,
+        actorUserId: input.actorUserId ?? null,
+        metadata: { correction_kind: input.kind, source_charge_id: source.id },
+    });
 
+    const rpc = await supabase.rpc("insert_posted_charge_with_journal", {
+        p_charge: correctionRow,
+        p_entry: journalEntryRow(correctedEntry),
+    });
+    if (rpc.error && !isMissingDatabaseFunction(rpc.error)) {
+        throw translateJournalError(rpc.error.message);
+    }
+    if (!rpc.error) {
+        const written = ((rpc.data ?? []) as ChargeRow[])[0];
+        if (!written) throw new OperationalEnrollmentServiceError("db_error", "correction insert returned no row");
+        return written;
+    }
+
+    /* The build is deployed ahead of its migration: the two-call path until the function exists. */
+    const { data, error } = await supabase.from("charges").insert(correctionRow).select("*").single();
+    if (error) {
+        throw new OperationalEnrollmentServiceError("db_error", error.message);
+    }
+    const correction = data as ChargeRow;
+    await tryRecordFinancialJournalEntry(supabase, correctedEntry);
     return correction;
 }
