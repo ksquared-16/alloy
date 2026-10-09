@@ -20,14 +20,20 @@ import {
 } from "@/lib/forms/processingFormBuilderLibrary";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import {
+    conditionComparisonOf,
     conditionTriggerOf,
+    conditionTriggerOptions,
     conditionValueOf,
-    eligibleConditionTriggers,
+    describeCondition,
     nameCompositionParts,
+    parseConditionAnswer,
     setFieldVisibility,
     splitFieldIntoParts,
     suggestsNameComposition,
+    type ConditionComparison,
+    type ConditionTrigger,
 } from "@/lib/forms/formBuilderSchema";
+import { useState } from "react";
 import {
     AlloyCheckbox,
     AlloyFieldLabel,
@@ -188,6 +194,238 @@ function fieldSourceForSubjectAndDestination(
         return { entity_type, field_key: "custom" };
     }
     return options.find((o) => o.id === destinationId)?.source;
+}
+
+const COMPARISON_OPTIONS: Array<{ value: ConditionComparison; label: string }> = [
+    { value: "eq", label: "is" },
+    { value: "neq", label: "is not" },
+];
+
+const TYPED_ANSWER_PLACEHOLDER: Record<"text" | "number" | "date", string> = {
+    text: "Type the exact answer",
+    number: "Type a number",
+    date: "",
+};
+
+const TYPED_ANSWER_HINT: Record<"text" | "number" | "date", string> = {
+    text: "Enter the exact answer that reveals this question.",
+    number: "Enter a number.",
+    date: "Enter a full date.",
+};
+
+function answerKey(value: string | number | boolean | null | undefined): string {
+    return value === true ? "true" : value === false ? "false" : value === null || value === undefined ? "" : String(value);
+}
+
+/**
+ * THE CONDITION, in business language: Question · Comparison · Answer.
+ *
+ * "Does your child have siblings?" · is · Yes — then this question is asked. An operator never sees
+ * `visibility`, a field id or a clause. The comparisons are the runtime's own `eq` / `neq`, and the
+ * answer is entered the way the controlling question is answered: picked for a yes/no or a dropdown,
+ * typed for text, a number or a date. Nothing is written until the rule is complete — choosing a
+ * question that needs a typed answer waits for that answer rather than saving a half-rule that would
+ * hide the question from everyone.
+ */
+function ConditionEditor({
+    field,
+    schema,
+    editable,
+    mutate,
+}: {
+    field: FormField;
+    schema: FormSchemaV1;
+    editable: boolean;
+    mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
+}) {
+    const { eligible, unavailable } = conditionTriggerOptions(schema, field.id);
+    const savedTrigger = conditionTriggerOf(field);
+    const savedComparison = conditionComparisonOf(field);
+    const savedValue = conditionValueOf(field);
+
+    // A rule still being written: question (and comparison) chosen, typed answer not yet entered.
+    const [pending, setPending] = useState<{ triggerId: string; comparison: ConditionComparison } | null>(null);
+    const [typed, setTyped] = useState<string>(
+        savedTrigger && typeof savedValue !== "boolean" ? answerKey(savedValue) : "",
+    );
+
+    const triggerId = pending?.triggerId ?? savedTrigger;
+    const comparison = pending?.comparison ?? savedComparison;
+    const trigger: ConditionTrigger | null = eligible.find((t) => t.id === triggerId) ?? null;
+    const sentence = pending ? null : describeCondition(schema, field);
+    const controllingCondition = trigger
+        ? describeCondition(schema, schema.fields.find((f) => f.id === trigger.id) ?? field)
+        : null;
+
+    const write = (next: { triggerId: string; comparison: ConditionComparison; value: string | number | boolean }) =>
+        mutate((sch) => setFieldVisibility(sch, field.id, { triggerFieldId: next.triggerId, comparison: next.comparison, value: next.value }));
+
+    const chooseQuestion = (id: string) => {
+        if (!id) {
+            setPending(null);
+            setTyped("");
+            mutate((sch) => setFieldVisibility(sch, field.id, null));
+            return;
+        }
+        const t = eligible.find((x) => x.id === id);
+        if (!t) return;
+        if (t.kind === "boolean" || t.kind === "choice") {
+            setPending(null);
+            const first = t.answers[0]?.value;
+            if (first !== undefined) write({ triggerId: id, comparison, value: first });
+            return;
+        }
+        setTyped("");
+        setPending({ triggerId: id, comparison });
+    };
+
+    const chooseComparison = (next: ConditionComparison) => {
+        if (pending) {
+            setPending({ ...pending, comparison: next });
+            return;
+        }
+        if (savedTrigger && savedValue !== undefined && savedValue !== null) {
+            write({ triggerId: savedTrigger, comparison: next, value: savedValue });
+        }
+    };
+
+    const typeAnswer = (raw: string) => {
+        setTyped(raw);
+        if (!trigger || trigger.kind === "boolean" || trigger.kind === "choice") return;
+        const value = parseConditionAnswer(trigger.kind, raw);
+        if (value === null) return;
+        setPending(null);
+        write({ triggerId: trigger.id, comparison, value });
+    };
+
+    const typedKind = trigger && (trigger.kind === "text" || trigger.kind === "number" || trigger.kind === "date") ? trigger.kind : null;
+    const typedValid = typedKind ? parseConditionAnswer(typedKind, typed) !== null : true;
+
+    const unavailableNote = unavailable.length ? (
+        <details className="text-[10.5px] text-alloy-midnight/50" data-inspector-condition-unavailable>
+            <summary className="cursor-pointer underline underline-offset-2">
+                Why can’t I choose {unavailable.length === 1 ? "one question" : `${unavailable.length} questions`}?
+            </summary>
+            <ul className="mt-1 space-y-1">
+                {unavailable.map((u) => (
+                    <li key={u.id} data-inspector-condition-unavailable-item={u.id}>
+                        <span className="font-medium text-alloy-midnight/65">{u.label}</span> — {u.reason}
+                    </li>
+                ))}
+            </ul>
+        </details>
+    ) : null;
+
+    if (eligible.length === 0 && !savedTrigger) {
+        return (
+            <>
+                <p className="text-[11px] leading-relaxed text-alloy-midnight/50" data-inspector-condition-none>
+                    No question on this form can control this one yet. A controlling question needs a single
+                    answer: Yes / No, a dropdown with choices, short text, a number or a date.
+                </p>
+                {unavailableNote}
+            </>
+        );
+    }
+
+    const questionOptions = eligible.map((t) => ({ value: t.id, label: t.label }));
+    if (savedTrigger && !eligible.some((t) => t.id === savedTrigger)) {
+        questionOptions.push({
+            value: savedTrigger,
+            label: schema.fields.find((f) => f.id === savedTrigger)?.label ?? "A question that is no longer on this form",
+        });
+    }
+
+    return (
+        <>
+            <div data-inspector-condition-question>
+                <AlloyFieldLabel>Question</AlloyFieldLabel>
+                <AlloySelect
+                    value={triggerId ?? ""}
+                    onChange={chooseQuestion}
+                    placeholder="Always ask this question"
+                    options={questionOptions}
+                    disabled={!editable}
+                    testId="form-builder-condition-question"
+                />
+            </div>
+            {triggerId && trigger ? (
+                <>
+                    <div data-inspector-condition-comparison>
+                        <AlloyFieldLabel>Comparison</AlloyFieldLabel>
+                        <AlloySegmentControl
+                            value={comparison}
+                            onChange={chooseComparison}
+                            options={COMPARISON_OPTIONS}
+                            disabled={!editable}
+                            testId="form-builder-condition-comparison"
+                        />
+                    </div>
+                    <div data-inspector-condition-answer>
+                        <AlloyFieldLabel>Answer</AlloyFieldLabel>
+                        {typedKind ? (
+                            <>
+                                <AlloyTextInput
+                                    type={typedKind}
+                                    value={typed}
+                                    onChange={typeAnswer}
+                                    placeholder={TYPED_ANSWER_PLACEHOLDER[typedKind]}
+                                    disabled={!editable}
+                                    testId="form-builder-condition-answer-input"
+                                />
+                                {!typedValid || pending ? (
+                                    <p className="mt-1 text-[10.5px] text-alloy-midnight/50" data-inspector-condition-pending>
+                                        {TYPED_ANSWER_HINT[typedKind]} Nothing changes for families until you do.
+                                    </p>
+                                ) : null}
+                            </>
+                        ) : (
+                            <AlloySelect
+                                value={answerKey(savedValue)}
+                                onChange={(raw) => {
+                                    const answer = trigger.answers.find((a) => answerKey(a.value) === raw);
+                                    if (answer) write({ triggerId: trigger.id, comparison, value: answer.value });
+                                }}
+                                options={trigger.answers.map((a) => ({ value: answerKey(a.value), label: a.label }))}
+                                disabled={!editable}
+                                testId="form-builder-condition-answer"
+                            />
+                        )}
+                    </div>
+                </>
+            ) : null}
+            {sentence ? (
+                <>
+                    <p
+                        className="rounded-md bg-alloy-bend-pine/[0.08] px-2.5 py-1.5 text-[11.5px] font-medium text-alloy-bend-pine"
+                        data-inspector-condition-sentence
+                    >
+                        {sentence}
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
+                        Families whose answer doesn’t match are never shown this question, and it is never required of them.
+                    </p>
+                    {controllingCondition ? (
+                        <p className="text-[11px] leading-relaxed text-alloy-midnight/55" data-inspector-condition-chain>
+                            “{trigger?.label}” is itself conditional ({controllingCondition.replace(/^Only asked when /, "asked when ")}), so
+                            this question is only asked when both are true.
+                        </p>
+                    ) : null}
+                </>
+            ) : null}
+            {triggerId && editable ? (
+                <button
+                    type="button"
+                    onClick={() => chooseQuestion("")}
+                    data-inspector-condition-clear
+                    className="text-[11px] font-medium text-alloy-midnight/55 underline underline-offset-2"
+                >
+                    Always ask this question
+                </button>
+            ) : null}
+            {unavailableNote}
+        </>
+    );
 }
 
 type Props = {
@@ -397,99 +635,7 @@ export default function ProcessingFormQuestionInspector({
                       * conditional at all — and none of them is `visibility`, a field id or a clause.
                       */}
                     <AlloyInspectorGroup title="Show this question when…">
-                        {(() => {
-                            const triggers = eligibleConditionTriggers(schema, field.id);
-                            const currentTrigger = conditionTriggerOf(field);
-                            const currentValue = conditionValueOf(field);
-                            const selected = triggers.find((t) => t.id === currentTrigger) ?? null;
-
-                            if (triggers.length === 0 && !currentTrigger) {
-                                return (
-                                    <p className="text-[11px] leading-relaxed text-alloy-midnight/50">
-                                        Add a Yes / No or a multiple-choice question to this form and you can make this
-                                        one depend on the answer.
-                                    </p>
-                                );
-                            }
-                            return (
-                                <>
-                                    <div data-inspector-condition-question>
-                                        <AlloyFieldLabel>Question</AlloyFieldLabel>
-                                        <AlloySelect
-                                            value={currentTrigger ?? ""}
-                                            onChange={(triggerFieldId) =>
-                                                mutate((sch) => {
-                                                    if (!triggerFieldId) return setFieldVisibility(sch, field.id, null);
-                                                    const t = eligibleConditionTriggers(sch, field.id).find((x) => x.id === triggerFieldId);
-                                                    const first = t?.answers[0]?.value ?? true;
-                                                    return setFieldVisibility(sch, field.id, { triggerFieldId, value: first });
-                                                })
-                                            }
-                                            placeholder="Always ask this question"
-                                            options={triggers.map((t) => ({ value: t.id, label: t.label }))}
-                                            disabled={!editable}
-                                            testId="form-builder-condition-question"
-                                        />
-                                    </div>
-                                    {currentTrigger && selected ? (
-                                        <div data-inspector-condition-answer>
-                                            <AlloyFieldLabel>Answer</AlloyFieldLabel>
-                                            <AlloySelect
-                                                value={
-                                                    currentValue === true
-                                                        ? "true"
-                                                        : currentValue === false
-                                                          ? "false"
-                                                          : String(currentValue ?? "")
-                                                }
-                                                onChange={(raw) =>
-                                                    mutate((sch) =>
-                                                        setFieldVisibility(sch, field.id, {
-                                                            triggerFieldId: currentTrigger,
-                                                            value: raw === "true" ? true : raw === "false" ? false : raw,
-                                                        })
-                                                    )
-                                                }
-                                                options={selected.answers.map((a) => ({
-                                                    value: typeof a.value === "boolean" ? String(a.value) : a.value,
-                                                    label: a.label,
-                                                }))}
-                                                disabled={!editable}
-                                                testId="form-builder-condition-answer"
-                                            />
-                                        </div>
-                                    ) : null}
-                                    {currentTrigger ? (
-                                        <>
-                                            <p
-                                                className="rounded-md bg-alloy-bend-pine/[0.08] px-2.5 py-1.5 text-[11.5px] font-medium text-alloy-bend-pine"
-                                                data-inspector-condition-sentence
-                                            >
-                                                Only asked when “{selected?.label ?? "that question"}” is{" "}
-                                                {selected?.answers.find(
-                                                    (a) =>
-                                                        (typeof a.value === "boolean" ? String(a.value) : a.value) ===
-                                                        (currentValue === true ? "true" : currentValue === false ? "false" : String(currentValue ?? "")),
-                                                )?.label ?? String(currentValue)}
-                                            </p>
-                                            <p className="text-[11px] leading-relaxed text-alloy-midnight/55">
-                                                Families who answer differently are never shown this question.
-                                            </p>
-                                            {editable ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => mutate((sch) => setFieldVisibility(sch, field.id, null))}
-                                                    data-inspector-condition-clear
-                                                    className="text-[11px] font-medium text-alloy-midnight/55 underline underline-offset-2"
-                                                >
-                                                    Always ask this question
-                                                </button>
-                                            ) : null}
-                                        </>
-                                    ) : null}
-                                </>
-                            );
-                        })()}
+                        <ConditionEditor key={field.id} field={field} schema={schema} editable={editable} mutate={mutate} />
                     </AlloyInspectorGroup>
                 </>
             ) : null}

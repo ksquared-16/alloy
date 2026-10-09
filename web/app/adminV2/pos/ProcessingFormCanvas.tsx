@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
 import { groupFieldsIntoRows, rowCapacityRemaining, fieldLayoutFlexClass, layoutWidthFromField } from "@/lib/forms/formRowComposition";
 import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
-import { conditionTriggerOf, conditionValueOf } from "@/lib/forms/formBuilderSchema";
+import { describeCondition } from "@/lib/forms/formBuilderSchema";
 
 /**
  * "Only asked when …" — the condition, said on the form.
@@ -15,14 +15,6 @@ import { conditionTriggerOf, conditionValueOf } from "@/lib/forms/formBuilderSch
  * was conditional, which question controlled it, or which answer revealed it — and had no way to notice
  * a condition that was wrong.
  */
-function conditionSentence(field: FormField, labelOf: (id: string) => string | null): string | null {
-    const trigger = conditionTriggerOf(field);
-    if (!trigger) return null;
-    const value = conditionValueOf(field);
-    const answer = value === true ? "Yes" : value === false ? "No" : value === null ? "nothing" : String(value);
-    const label = labelOf(trigger);
-    return label ? `Only asked when “${label}” is ${answer}` : `Only asked when an earlier answer is ${answer}`;
-}
 
 /**
  * The mapping overlay.
@@ -636,7 +628,7 @@ export default function ProcessingFormCanvas({
                                                         ) : (
                                                         <QuestionBlock
                                                             field={field}
-                                                            conditionText={conditionSentence(field, (id) => fieldById.get(id)?.label ?? null)}
+                                                            conditionText={describeCondition(schema, field)}
                                                             mappingState={mapping?.byFieldId.get(fid)}
                                                             showMapping={mapping?.show ?? false}
                                                             dimmed={mapping?.dimFieldIds?.has(fid) ?? false}
