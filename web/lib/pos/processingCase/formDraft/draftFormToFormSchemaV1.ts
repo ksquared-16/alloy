@@ -9,7 +9,6 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
-import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import type { DraftCollectionGroup, DraftFormField, StoredFormDraftPreview } from "./types";
 import {
     PROCESSING_NEEDS_DESTINATION_DESCRIPTION,
@@ -21,11 +20,17 @@ import { addressComponentOf, collapseAddressRun } from "./importedAddressGroups"
 /** Map one detected draft field to a valid FormSchemaV1 field, preserving canonical binding. */
 function mapDraftField(f: DraftFormField): FormField {
     const unresolvedAtGenerate = f.evidence === UNRESOLVED_AT_GENERATE_EVIDENCE;
-    // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
-    // from the label/type so generated forms prefill + drive guided intake by default.
-    const field_source = unresolvedAtGenerate
-        ? undefined
-        : f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
+    /*
+     * The destination is exactly what the draft STORES — never a guess made here.
+     *
+     * This used to fall back to `suggestFieldBinding(label, type)`, so every question without a
+     * destination arrived in the Studio already carrying one. The mapping view then read that guess as
+     * the operator's own destination ("Mapped"), and the next unrelated save — a width, a requiredness —
+     * posted the whole field list and persisted it: an answer nobody mapped quietly started writing to
+     * `customer_member.dob`. A destination is applied at import only where the safe-import law allows
+     * (`safeImportMappings`), or by an operator; a suggestion stays a suggestion until someone accepts it.
+     */
+    const field_source = unresolvedAtGenerate ? undefined : f.field_source;
     const description = f.description ?? (unresolvedAtGenerate ? PROCESSING_NEEDS_DESTINATION_DESCRIPTION : undefined);
     const base = {
         id: f.id,

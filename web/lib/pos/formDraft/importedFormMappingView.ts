@@ -39,6 +39,33 @@ function sectionTitleFor(schema: FormSchemaV1, fieldId: string): string {
     return "";
 }
 
+/** True when the field itself stores a real canonical destination — not a placeholder, not nothing. */
+export function hasStoredDestination(field: Pick<FormField, "field_source">): boolean {
+    const source = field.field_source;
+    return Boolean(source?.entity_type) && !PLACEHOLDER_KEYS.has(source?.field_key ?? "");
+}
+
+/**
+ * "Mapped" is a statement about what the form STORES.
+ *
+ * `resolveFieldMapping` answers a different question — what the import is allowed to apply — and for a
+ * field with no destination it can still conclude "mapped" from its own confident proposal. At import
+ * that conclusion is written (`safeImportMappings`), so the two agree. In the Studio they need not: a
+ * draft saved before that law, or a question whose destination the operator cleared, has nothing
+ * stored, and calling it Mapped would claim answers are written somewhere they are not. That is a
+ * suggestion until the operator accepts it, so it is reported as one, with nothing to apply.
+ */
+function studioMapping(field: FormField, mapping: FieldMapping): FieldMapping {
+    if (mapping.state !== "mapped" || hasStoredDestination(field)) return mapping;
+    const label = mapping.destinationLabel ?? "a destination";
+    return {
+        ...mapping,
+        state: "suggested",
+        explanation: `Alloy thinks this is ${label}. Nothing is stored there until you choose it.`,
+        apply: null,
+    };
+}
+
 /**
  * Resolve every schema field against the draft it came from.
  *
@@ -59,9 +86,12 @@ export function resolveImportedFormMappings(
         if (!source) continue;
         out.set(
             field.id,
-            resolveFieldMapping(
-                { ...source, label: field.label, required: field.required, ...(field.field_source ? { field_source: field.field_source } : { field_source: undefined }) },
-                sectionTitleFor(schema, field.id),
+            studioMapping(
+                field,
+                resolveFieldMapping(
+                    { ...source, label: field.label, required: field.required, ...(field.field_source ? { field_source: field.field_source } : { field_source: undefined }) },
+                    sectionTitleFor(schema, field.id),
+                ),
             ),
         );
     }
@@ -168,7 +198,7 @@ export function canvasMappingStates(mappings: ReadonlyMap<string, FieldMapping>)
 export type SchemaFieldEdit = {
     readonly label: string;
     readonly required: boolean;
-    readonly field_source: { readonly entity_type: string; readonly field_key: string } | null;
+    readonly field_source: { readonly entity_type: string; readonly field_key: string; readonly shared_value_key?: string } | null;
     /**
      * The condition as the operator has it now — `null` meaning "always ask this question".
      *
@@ -191,7 +221,17 @@ export function editFromSchemaField(field: FormField): SchemaFieldEdit {
     return {
         label: field.label,
         required: Boolean(field.required),
-        field_source: settled ? { entity_type: source!.entity_type, field_key: key } : null,
+        field_source: settled
+            ? {
+                  entity_type: source!.entity_type,
+                  field_key: key,
+                  // The shared value key is part of the destination's identity; dropping it here quietly
+                  // changed a valid canonical mapping on every unrelated save.
+                  ...(typeof source!.shared_value_key === "string" && source!.shared_value_key
+                      ? { shared_value_key: source!.shared_value_key }
+                      : {}),
+              }
+            : null,
         visible_when: clause ? { field_id: clause.field_id, op: clause.op, value: clause.value } : null,
         layout_width: field.layout_width ?? "full",
     };
@@ -202,4 +242,33 @@ export function isDestinationStillBeingChosen(field: FormField): boolean {
     const source = field.field_source;
     if (!source?.entity_type) return false;
     return PLACEHOLDER_KEYS.has(source.field_key ?? "");
+}
+
+/**
+ * The per-field edits an operator's change actually makes: one entry per question whose round-trippable
+ * properties differ between `before` and `next`.
+ *
+ * Only these are sent. Every other question keeps exactly what the draft stores, so an unrelated edit —
+ * a width, a requiredness — can never turn something the Studio is merely showing into a saved
+ * destination. A destination still being chosen (record picked, field not yet) is held back, and a
+ * question the draft has never seen belongs to the structural save, not this one.
+ */
+export function changedFieldEdits(
+    before: FormSchemaV1,
+    next: FormSchemaV1,
+    draft: Pick<StoredFormDraftPreview, "fields">,
+): Map<string, SchemaFieldEdit> {
+    const draftIds = new Set((draft.fields ?? []).map((f) => f.id));
+    const beforeById = new Map(before.fields.map((f) => [f.id, f] as const));
+    const edits = new Map<string, SchemaFieldEdit>();
+    for (const field of next.fields) {
+        if (field.type === "group" || field.type === "text_block") continue;
+        if (!draftIds.has(field.id)) continue;
+        if (isDestinationStillBeingChosen(field)) continue;
+        const edit = editFromSchemaField(field);
+        const prior = beforeById.get(field.id);
+        if (prior && JSON.stringify(editFromSchemaField(prior)) === JSON.stringify(edit)) continue;
+        edits.set(field.id, edit);
+    }
+    return edits;
 }

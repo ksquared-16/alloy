@@ -67,7 +67,9 @@ describe("changing one field does not delete the rest of the draft", () => {
 
     it("keeps an accepted condition, which would otherwise silently un-accept itself", () => {
         if (!built.ok) return;
-        expect(built.payload.fields[2]!.visible_when).toEqual({ field_id: "allergies", op: "eq", value: "Yes" });
+        // Named by the id "Allergies?" WILL have once the server rebuilds ids by position (`field_2`) —
+        // the pre-save id would point at whichever question lands in its slot.
+        expect(built.payload.fields[2]!.visible_when).toEqual({ field_id: "field_2", op: "eq", value: "Yes" });
     });
 
     it("keeps a question's own choices, so a select does not become free text", () => {

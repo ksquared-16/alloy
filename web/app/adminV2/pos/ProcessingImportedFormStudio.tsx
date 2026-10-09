@@ -4,15 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { safeParseFormSchema } from "@/lib/forms/schema";
+import { describeCondition, updateField } from "@/lib/forms/formBuilderSchema";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import type { ProcessingLibraryGroupOffer } from "@/lib/forms/processingFormFieldLibrary";
 import type { SchemaFieldEdit } from "@/lib/pos/formDraft/importedFormMappingView";
 import {
     canvasMappingStates,
-    editFromSchemaField,
+    changedFieldEdits,
     filterSchemaForAttention,
-    isDestinationStillBeingChosen,
     MAPPING_ATTENTION_FILTERS,
     mappingCounts,
     resolveImportedFormMappings,
@@ -220,13 +220,9 @@ export default function ProcessingImportedFormStudio({
          * "no destination", which is what used to throw the operator's choice away on the readback. Its
          * previously saved state stays on the server until the choice is finished.
          */
-        const edits = new Map<string, ReturnType<typeof editFromSchemaField>>();
-        for (const field of next.fields) {
-            if (field.type === "group" || field.type === "text_block") continue;
-            if (!(draft.fields ?? []).some((f) => f.id === field.id)) continue;
-            if (isDestinationStillBeingChosen(field)) continue;
-            edits.set(field.id, editFromSchemaField(field));
-        }
+        // Only the questions the operator actually changed. @see changedFieldEdits
+        const edits = changedFieldEdits(schema, next, draft);
+        if (edits.size === 0) return;
         setSaveErr(null);
         void Promise.resolve(onSaveFieldEdits(edits)).catch((e: unknown) =>
             setSaveErr(e instanceof Error ? e.message : "Couldn't save that change."),
@@ -386,6 +382,25 @@ export default function ProcessingImportedFormStudio({
                                             ? "Choose where to store it under “Store answer in” below."
                                             : "Change it under “Store answer in” below."}
                                     </p>
+                                    {selectedMapping.state === "suggested" && selectedMapping.proposed ? (
+                                        /*
+                                         * Accepting a suggestion is a deliberate act, and this is the only way the
+                                         * Studio turns one into a stored destination. Nothing else — no unrelated
+                                         * edit, no save of another question — promotes it.
+                                         */
+                                        <button
+                                            type="button"
+                                            className="mt-1.5 rounded-md border border-alloy-bend-pine/35 px-2 py-1 text-[11px] font-semibold text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.06]"
+                                            data-qa-accept-suggestion="true"
+                                            onClick={() => {
+                                                const proposed = selectedMapping.proposed;
+                                                if (!proposed) return;
+                                                mutate((s) => updateField(s, selectedField.id, { field_source: proposed }));
+                                            }}
+                                        >
+                                            Use {selectedMapping.destinationLabel ?? "this destination"}
+                                        </button>
+                                    ) : null}
                                     {selectedDraftField?.evidence || typeof selectedDraftField?.page === "number" ? (
                                         <details className="mt-1.5">
                                             <summary className="cursor-pointer text-[11px] text-alloy-midnight/45 underline underline-offset-2">
@@ -407,9 +422,7 @@ export default function ProcessingImportedFormStudio({
                                             <div className="mt-1.5 space-y-1 border-t border-alloy-midnight/[0.07] pt-1.5">
                                                 {accepted ? (
                                                     <p className="text-[11.5px] text-alloy-bend-pine" data-qa-condition="accepted">
-                                                        ✓ Only asked when “
-                                                        {schema.fields.find((f) => f.id === accepted.field_id)?.label ?? "another question"}
-                                                        ” is {accepted.value === true ? "Yes" : accepted.value === false ? "No" : String(accepted.value)}
+                                                        ✓ {describeCondition(schema, selectedField)}
                                                     </p>
                                                 ) : null}
                                                 {suggestion ? (

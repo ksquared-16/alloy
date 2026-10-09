@@ -52,7 +52,7 @@ export type DraftFieldEdit = {
     readonly label?: string;
     readonly required?: boolean;
     /** `null` means "keep it with the form" — no canonical destination, expressed by omission. */
-    readonly field_source?: { readonly entity_type: string; readonly field_key: string } | null;
+    readonly field_source?: { readonly entity_type: string; readonly field_key: string; readonly shared_value_key?: string } | null;
     readonly options?: readonly string[];
     readonly visible_when?: FormVisibilityCondition | null;
     readonly layout_width?: "full" | "half" | "third" | "quarter";
@@ -73,8 +73,27 @@ function sectionTitleByFieldId(draft: DraftShape): Map<string, string> {
     return map;
 }
 
+/**
+ * The destination a field saves with.
+ *
+ * An edit naming the SAME destination the field already stores is not a change, so the stored one is
+ * kept exactly — including its `shared_value_key`, which an edit built from the Studio schema may not
+ * carry. Only a different destination, or an explicit `null` ("Form field only"), replaces it.
+ */
+function destinationAfterEdit(
+    stored: DraftFormField["field_source"],
+    edited: DraftFieldEdit["field_source"],
+): DraftFormField["field_source"] | DraftFieldEdit["field_source"] {
+    if (edited === undefined) return stored;
+    if (edited === null) return null;
+    if (stored && stored.entity_type === edited.entity_type && stored.field_key === edited.field_key) {
+        return edited.shared_value_key && !stored.shared_value_key ? { ...stored, shared_value_key: edited.shared_value_key } : stored;
+    }
+    return edited;
+}
+
 function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit: DraftFieldEdit | undefined): DraftSaveField {
-    const source = edit?.field_source === undefined ? field.field_source : edit.field_source;
+    const source = destinationAfterEdit(field.field_source, edit?.field_source);
     const condition = edit?.visible_when === undefined ? field.visible_when : edit.visible_when;
     const options = edit?.options ?? field.options;
     const width = edit?.layout_width ?? field.layout_width;
@@ -109,6 +128,36 @@ function carryOver(field: DraftFormField, sectionTitle: string | undefined, edit
 }
 
 /**
+ * The save route REBUILDS ids by position (`field_1`, `field_2`, … over the fields that have a label),
+ * while a condition names its controlling question by id. So whenever a question is removed, split or
+ * moved, every later id shifts and a condition that was right before the save points at a different
+ * question after it — or at nothing.
+ *
+ * This rewrites each condition to the id its controlling question WILL have once rebuilt, and drops a
+ * condition whose controlling question is not being saved (the question is then always asked, which
+ * is what removing its trigger means — the same rule `removeField` applies in the Studio).
+ */
+function renumberConditions(entries: ReadonlyArray<{ readonly priorId: string; readonly field: DraftSaveField }>): DraftSaveField[] {
+    const nextIdByPrior = new Map<string, string>();
+    let counter = 0;
+    for (const { priorId, field } of entries) {
+        if (!(field.label ?? "").trim()) continue;
+        counter += 1;
+        nextIdByPrior.set(priorId, `field_${counter}`);
+    }
+    return entries.map(({ field }) => {
+        if (!field.visible_when) return field;
+        const target = nextIdByPrior.get(field.visible_when.field_id);
+        if (!target) {
+            const { visible_when: _dropped, ...rest } = field;
+            void _dropped;
+            return rest;
+        }
+        return target === field.visible_when.field_id ? field : { ...field, visible_when: { ...field.visible_when, field_id: target } };
+    });
+}
+
+/**
  * The whole draft, with the named edits applied.
  *
  * Field order is preserved exactly, which matters beyond appearances: the rebuild renumbers ids
@@ -139,7 +188,7 @@ export function buildDraftSavePayload(
         payload: {
             title: draft.title,
             form_name: (draft.generated_form_name ?? "").trim() || null,
-            fields: fields.map((f) => carryOver(f, titles.get(f.id), edits.get(f.id))),
+            fields: renumberConditions(fields.map((f) => ({ priorId: f.id, field: carryOver(f, titles.get(f.id), edits.get(f.id)) }))),
             // Section fate is an earlier operator decision; no field edit changes it.
             section_dispositions: (draft.sections ?? [])
                 .filter((s) => typeof s.disposition === "string")
@@ -197,7 +246,7 @@ export function buildDraftSavePayloadFromSchema(
     }
     const byId = new Map(schema.fields.map((f) => [f.id, f]));
 
-    const out: DraftSaveField[] = [];
+    const out: Array<{ priorId: string; field: DraftSaveField }> = [];
     const emit = (field: (typeof schema.fields)[number], sectionTitle: string): void => {
         // Prose the family reads is not a question; the draft keeps it as section text, not a field.
         if (field.type === "text_block") return;
@@ -210,7 +259,7 @@ export function buildDraftSavePayloadFromSchema(
         const options = field.static_options?.length
             ? field.static_options.map((o) => o.label)
             : source?.options;
-        out.push({
+        out.push({ priorId: field.id, field: {
             label: field.label,
             type: field.type,
             required: Boolean(field.required),
@@ -233,7 +282,7 @@ export function buildDraftSavePayloadFromSchema(
             ...(clause ? { visible_when: clause } : {}),
             ...(field.layout_width && field.layout_width !== "full" ? { layout_width: field.layout_width } : {}),
             ...(source?.confidence ? { confidence: source.confidence } : {}),
-        });
+        } });
     };
 
     for (const section of schema.sections) {
@@ -249,7 +298,7 @@ export function buildDraftSavePayloadFromSchema(
         payload: {
             title: draft.title,
             form_name: (draft.generated_form_name ?? "").trim() || null,
-            fields: out,
+            fields: renumberConditions(out),
             section_dispositions: (draft.sections ?? [])
                 .filter((s) => typeof s.disposition === "string")
                 .map((s) => ({ id: s.id, disposition: String(s.disposition) })),

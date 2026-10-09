@@ -155,7 +155,12 @@ export function updateField(schema: FormSchemaV1, fieldId: string, patch: Partia
         if (patch.options !== undefined && (next.type === "select" || next.type === "multiselect")) {
             (next as { static_options?: Array<{ value: string; label: string }> }).static_options = patch.options.filter((o) => o.value && o.label);
         }
-        if (patch.field_source !== undefined) {
+        /*
+         * PRESENCE of the key is the instruction, not its value. "Form field only" in the inspector
+         * passes `field_source: undefined`, and testing `!== undefined` skipped it — so choosing it never
+         * cleared anything, and a destination could not be removed from either Studio path.
+         */
+        if ("field_source" in patch) {
             const fs = patch.field_source;
             if (fs && fs.entity_type && fs.field_key) (next as { field_source?: unknown }).field_source = { entity_type: fs.entity_type, field_key: fs.field_key, ...(fs.shared_value_key ? { shared_value_key: fs.shared_value_key } : {}) };
             else delete (next as { field_source?: unknown }).field_source;
@@ -249,10 +254,42 @@ export function conditionTriggerOf(field: FormField): string | null {
     return clause?.field_id ?? null;
 }
 
-/** The answer that reveals it: `true`/`false` for a yes/no, otherwise the literal choice. */
+/** The answer that reveals it: `true`/`false` for a yes/no, otherwise the literal choice or value. */
 export function conditionValueOf(field: FormField): string | number | boolean | null | undefined {
     return field.visibility?.all?.[0]?.value;
 }
+
+/** The runtime's two comparisons, in the operator's words: `eq` is "is", `neq` is "is not". */
+export type ConditionComparison = "eq" | "neq";
+
+export function conditionComparisonOf(field: FormField): ConditionComparison {
+    return field.visibility?.all?.[0]?.op === "neq" ? "neq" : "eq";
+}
+
+/**
+ * How a controlling question's answer is compared, which decides how the operator states it.
+ *
+ * Every kind here is a scalar the runtime already compares exactly (`valuesEqual`): a yes/no is a
+ * boolean, a choice is the stored option value, text is the string as typed, a number is a number and
+ * a date is the `YYYY-MM-DD` string the date input stores. Nothing is offered that the runtime would
+ * have to learn — no "contains", no range, no membership in a multi-select, no OR.
+ */
+export type ConditionAnswerKind = "boolean" | "choice" | "text" | "number" | "date";
+
+export type ConditionTrigger = {
+    readonly id: string;
+    readonly label: string;
+    readonly kind: ConditionAnswerKind;
+    /** The answers to pick from, for a yes/no or a choice. Empty for a typed answer. */
+    readonly answers: ReadonlyArray<{ value: string | boolean; label: string }>;
+};
+
+export type UnavailableConditionTrigger = {
+    readonly id: string;
+    readonly label: string;
+    /** Why this question cannot control another, in the operator's words. */
+    readonly reason: string;
+};
 
 function withoutVisibility(field: FormField): FormField {
     const next = { ...field } as FormField & { visibility?: unknown };
@@ -260,58 +297,222 @@ function withoutVisibility(field: FormField): FormField {
     return next;
 }
 
+type StaticOption = { value: string; label: string };
+
+function staticOptionsOf(field: FormField): StaticOption[] {
+    return (field as { static_options?: StaticOption[] }).static_options ?? [];
+}
+
+/** The answer kind a question can be compared by, or the reason it cannot control another question. */
+function conditionKindOf(field: FormField): { kind: ConditionAnswerKind } | { reason: string } {
+    switch (field.type) {
+        case "boolean":
+            return { kind: "boolean" };
+        case "select":
+            return staticOptionsOf(field).length
+                ? { kind: "choice" }
+                : { reason: "This dropdown has no choices written on the form, so there is no answer to pick." };
+        case "text":
+            return (field as { multiline?: boolean }).multiline
+                ? { reason: "Long answers are written freely, so they can't be matched to one exact answer." }
+                : { kind: "text" };
+        case "number":
+            return { kind: "number" };
+        case "date":
+            return { kind: "date" };
+        case "multiselect":
+            return { reason: "Families can pick several answers here, and a condition compares a single answer." };
+        case "signature":
+            return { reason: "A signature has no answer to compare." };
+        case "file_ref":
+            return { reason: "An upload has no answer to compare." };
+        case "group":
+            return { reason: "A repeating group holds several answers, not one." };
+        default:
+            return { reason: "This kind of question has no single answer to compare." };
+    }
+}
+
 /**
- * Questions that can govern another: a yes/no, or a choice with options to pick from.
+ * True when `fromId` is only asked because of `targetId` — directly, or through a chain of conditions.
  *
- * A question cannot be its own trigger, and a question that is ITSELF conditional is not offered —
- * nesting a condition on a condition is a rule the runtime evaluates one level deep, so offering it
- * would promise behaviour the form does not have.
+ * This is the cycle test. The runtime would not loop on a cycle (it treats one as hidden), but a cycle
+ * is a form in which neither question can ever be shown, which is never what an operator meant.
  */
-export function eligibleConditionTriggers(
-    schema: FormSchemaV1,
-    fieldId: string,
-): Array<{ readonly id: string; readonly label: string; readonly answers: ReadonlyArray<{ value: string | boolean; label: string }> }> {
-    const out: Array<{ id: string; label: string; answers: Array<{ value: string | boolean; label: string }> }> = [];
-    for (const f of schema.fields) {
-        if (f.id === fieldId) continue;
-        if (conditionTriggerOf(f)) continue;
-        if (f.type === "boolean") {
-            out.push({ id: f.id, label: f.label, answers: [{ value: true, label: "Yes" }, { value: false, label: "No" }] });
-            continue;
-        }
-        if (f.type === "select") {
-            const options = (f as { static_options?: Array<{ value: string; label: string }> }).static_options ?? [];
-            if (options.length) {
-                out.push({ id: f.id, label: f.label, answers: options.map((o) => ({ value: o.value, label: o.label })) });
-            }
+export function conditionDependsOn(schema: FormSchemaV1, fromId: string, targetId: string): boolean {
+    const byId = new Map(schema.fields.map((f) => [f.id, f] as const));
+    const seen = new Set<string>();
+    const stack = [fromId];
+    while (stack.length) {
+        const id = stack.pop()!;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        for (const clause of byId.get(id)?.visibility?.all ?? []) {
+            if (clause.field_id === targetId) return true;
+            stack.push(clause.field_id);
         }
     }
-    return out;
+    return false;
+}
+
+/** True when making `fieldId` depend on `triggerFieldId` would be self-reference or a cycle. */
+export function conditionWouldCycle(schema: FormSchemaV1, fieldId: string, triggerFieldId: string): boolean {
+    return triggerFieldId === fieldId || conditionDependsOn(schema, triggerFieldId, fieldId);
+}
+
+/**
+ * Every question on the form, sorted into the ones that can control `fieldId` and the ones that cannot
+ * — with the reason, so the list never looks like an arbitrary subset.
+ *
+ * A question that is itself conditional IS offered: the runtime evaluates visibility recursively, so a
+ * question hidden by its own condition also hides everything that depends on it. Only a choice that
+ * would close a loop back to `fieldId` is withheld.
+ */
+export function conditionTriggerOptions(
+    schema: FormSchemaV1,
+    fieldId: string,
+): { readonly eligible: ConditionTrigger[]; readonly unavailable: UnavailableConditionTrigger[] } {
+    const eligible: ConditionTrigger[] = [];
+    const unavailable: UnavailableConditionTrigger[] = [];
+    for (const f of schema.fields) {
+        if (f.id === fieldId) continue;
+        if (f.type === "text_block") continue;
+        const kind = conditionKindOf(f);
+        if ("reason" in kind) {
+            unavailable.push({ id: f.id, label: f.label, reason: kind.reason });
+            continue;
+        }
+        if (conditionDependsOn(schema, f.id, fieldId)) {
+            unavailable.push({
+                id: f.id,
+                label: f.label,
+                reason: "It is only asked because of this question, so it can't control this question in return.",
+            });
+            continue;
+        }
+        const answers =
+            kind.kind === "boolean"
+                ? [
+                      { value: true, label: "Yes" },
+                      { value: false, label: "No" },
+                  ]
+                : kind.kind === "choice"
+                  ? staticOptionsOf(f).map((o) => ({ value: o.value, label: o.label }))
+                  : [];
+        eligible.push({ id: f.id, label: f.label, kind: kind.kind, answers });
+    }
+    return { eligible, unavailable };
+}
+
+/** The questions that can control `fieldId`. @see conditionTriggerOptions for the ones that cannot. */
+export function eligibleConditionTriggers(schema: FormSchemaV1, fieldId: string): ConditionTrigger[] {
+    return conditionTriggerOptions(schema, fieldId).eligible;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isRealIsoDate(raw: string): boolean {
+    if (!ISO_DATE.test(raw)) return false;
+    const d = new Date(`${raw}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === raw;
+}
+
+/**
+ * The value an operator typed, as the runtime will compare it — or `null` when it is not a usable
+ * answer yet (empty text, not a number, not a real date).
+ */
+export function parseConditionAnswer(kind: ConditionAnswerKind, raw: string): string | number | null {
+    const text = raw.trim();
+    if (!text) return null;
+    if (kind === "number") {
+        const n = Number(text);
+        return Number.isFinite(n) ? n : null;
+    }
+    if (kind === "date") return isRealIsoDate(text) ? text : null;
+    return text;
+}
+
+/** Whether `value` is an answer the trigger can actually give, in the type the runtime compares. */
+function answerFitsTrigger(trigger: ConditionTrigger, value: string | number | boolean | null): boolean {
+    switch (trigger.kind) {
+        case "boolean":
+            return typeof value === "boolean";
+        case "choice":
+            return typeof value === "string" && trigger.answers.some((a) => a.value === value);
+        case "text":
+            return typeof value === "string" && value.trim().length > 0;
+        case "number":
+            return typeof value === "number" && Number.isFinite(value);
+        case "date":
+            return typeof value === "string" && isRealIsoDate(value);
+    }
 }
 
 /**
  * Set or clear a question's condition.
  *
- * Passing `null` clears it, which makes the question always asked. A trigger that is not a field on
- * this form is refused rather than written: the schema validator rejects a visibility clause naming an
- * unknown field, so writing one would make the whole form unsaveable — it fails closed here instead.
+ * Passing `null` clears it, which makes the question always asked. Anything the form could not honour
+ * is refused rather than written — the schema is returned unchanged:
+ *   • a trigger that is not a field on this form (the validator would reject the whole form);
+ *   • the question itself, or a trigger that is only asked because of this question (a cycle);
+ *   • a trigger that has no single comparable answer;
+ *   • an answer the trigger cannot give, or one in the wrong type (the runtime compares exactly, so a
+ *     "3" would never equal a 3).
  */
 export function setFieldVisibility(
     schema: FormSchemaV1,
     fieldId: string,
-    condition: { readonly triggerFieldId: string; readonly value: string | number | boolean | null } | null,
+    condition: {
+        readonly triggerFieldId: string;
+        readonly value: string | number | boolean | null;
+        readonly comparison?: ConditionComparison;
+    } | null,
 ): FormSchemaV1 {
+    if (!schema.fields.some((f) => f.id === fieldId)) return schema;
+    if (condition) {
+        if (conditionWouldCycle(schema, fieldId, condition.triggerFieldId)) return schema;
+        const trigger = eligibleConditionTriggers(schema, fieldId).find((t) => t.id === condition.triggerFieldId);
+        if (!trigger) return schema;
+        if (!answerFitsTrigger(trigger, condition.value)) return schema;
+    }
+    const value = condition && typeof condition.value === "string" ? condition.value.trim() : condition?.value ?? null;
     const fields = schema.fields.map((f) => {
         if (f.id !== fieldId) return f;
         if (!condition) return withoutVisibility(f);
-        if (!schema.fields.some((other) => other.id === condition.triggerFieldId)) return f;
-        if (condition.triggerFieldId === fieldId) return f;
         return {
             ...f,
-            visibility: { all: [{ field_id: condition.triggerFieldId, op: "eq" as const, value: condition.value }] },
+            visibility: { all: [{ field_id: condition.triggerFieldId, op: condition.comparison ?? "eq", value }] },
         } as FormField;
     });
     return { ...schema, fields };
+}
+
+/**
+ * The condition as one sentence an operator can read on the canvas and in the inspector, with the
+ * answer in its own words — a choice's label rather than its stored value, Yes / No for a boolean.
+ */
+export function describeCondition(schema: FormSchemaV1, field: FormField): string | null {
+    const triggerId = conditionTriggerOf(field);
+    if (!triggerId) return null;
+    const value = conditionValueOf(field);
+    const trigger = schema.fields.find((f) => f.id === triggerId);
+    const choice = trigger && typeof value === "string" ? staticOptionsOf(trigger).find((o) => o.value === value) : undefined;
+    const answer =
+        value === true
+            ? "Yes"
+            : value === false
+              ? "No"
+              : value === null || value === undefined
+                ? "blank"
+                : choice
+                  ? choice.label
+                  : trigger?.type === "text"
+                    ? `“${String(value)}”`
+                    : String(value);
+    const verb = conditionComparisonOf(field) === "neq" ? "is not" : "is";
+    return trigger
+        ? `Only asked when “${trigger.label}” ${verb} ${answer}`
+        : `Only asked when an earlier answer ${verb} ${answer}`;
 }
 
 

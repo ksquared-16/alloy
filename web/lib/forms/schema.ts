@@ -440,6 +440,40 @@ export const formSchemaV1Schema = z
         };
         walkVisibilityRefs(data.fields);
 
+        /*
+         * A question may not depend on itself, directly or through a chain. The runtime would not loop —
+         * it treats a cycle as hidden — but that is a form where none of those questions can ever be
+         * asked, which no author means. Refused here so neither Studio path can save or publish one.
+         */
+        const visibilityRefsById = new Map<string, string[]>();
+        const collectVisibilityRefs = (fields: FormField[]) => {
+            for (const f of fields) {
+                if (f.visibility) visibilityRefsById.set(f.id, f.visibility.all.map((c) => c.field_id));
+                if (f.type === "group") collectVisibilityRefs(f.fields);
+            }
+        };
+        collectVisibilityRefs(data.fields);
+        for (const start of visibilityRefsById.keys()) {
+            const seen = new Set<string>();
+            const stack = [...(visibilityRefsById.get(start) ?? [])];
+            let cyclic = false;
+            while (stack.length && !cyclic) {
+                const id = stack.pop()!;
+                if (id === start) cyclic = true;
+                else if (!seen.has(id)) {
+                    seen.add(id);
+                    stack.push(...(visibilityRefsById.get(id) ?? []));
+                }
+            }
+            if (cyclic) {
+                ctx.addIssue({
+                    code: "custom",
+                    message: `visibility of ${start} depends on itself`,
+                    path: ["fields"],
+                });
+            }
+        }
+
         const walkSelectFieldSources = (fields: FormField[], basePath: (string | number)[]) => {
             for (let fi = 0; fi < fields.length; fi++) {
                 const f = fields[fi];
