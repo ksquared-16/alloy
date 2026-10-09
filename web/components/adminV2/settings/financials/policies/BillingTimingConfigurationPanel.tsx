@@ -27,6 +27,7 @@ import {
     type BillingTimingRule,
     type RuleReading,
 } from "@/lib/financials/policies/billingTimingViewModel";
+import { isWithdrawnPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 import {
     DUE_DATE_STRATEGIES,
     INVOICE_TIMING_STRATEGIES,
@@ -55,16 +56,27 @@ function dayAfter(ymd: string): string {
     return new Date(t + 86_400_000).toISOString().slice(0, 10);
 }
 
+function dayBefore(ymd: string): string {
+    const t = Date.parse(`${ymd}T00:00:00Z`);
+    return new Date(t - 86_400_000).toISOString().slice(0, 10);
+}
+
 export default function BillingTimingConfigurationPanel({
     locations,
+    locationsLoading = false,
     canMutate = true,
 }: {
     locations: { id: string; name: string }[];
+    /** True until the location list has loaded; overrides then name a pending location neutrally. */
+    locationsLoading?: boolean;
     canMutate?: boolean;
 }) {
     const todayYmd = localToday();
     const { policies, loading, error, busy, createPolicy, versionPolicy, retirePolicy, voidPolicy } = useFinancialPolicies();
-    const model = useMemo(() => buildBillingTimingModel({ policies, locations, todayYmd }), [policies, locations, todayYmd]);
+    const model = useMemo(
+        () => buildBillingTimingModel({ policies, locations, locationsLoaded: !locationsLoading, todayYmd }),
+        [policies, locations, locationsLoading, todayYmd],
+    );
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [historyOpen, setHistoryOpen] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
@@ -82,10 +94,18 @@ export default function BillingTimingConfigurationPanel({
     const returnToDefault = (reading: RuleReading) =>
         run(async () => {
             for (const row of reading.history) {
-                if (row.is_active === false) continue;
+                if (isWithdrawnPolicy(row)) continue;
                 if (row.effective_start > todayYmd) await voidPolicy(row.id);
             }
-            if (reading.current) await retirePolicy({ id: reading.current.id, effective_end: todayYmd });
+            /*
+             * The override's last day is YESTERDAY, so the organization default governs from today and
+             * the override keeps answering for the dates it covered. One that began today can end no
+             * earlier than today.
+             */
+            if (reading.current) {
+                const end = dayBefore(todayYmd) < reading.current.effective_start ? todayYmd : dayBefore(todayYmd);
+                await retirePolicy({ id: reading.current.id, effective_end: end });
+            }
         });
 
     return (
@@ -159,14 +179,23 @@ export default function BillingTimingConfigurationPanel({
                             <ul className="space-y-4">
                                 {model.overrides.map((o) => (
                                     <li key={o.locationId} data-testid={`billing-timing-override-${o.locationId}`}>
-                                        <p className="text-sm font-semibold text-alloy-midnight">{o.locationName}</p>
+                                        {o.locationName != null ? (
+                                            <p className="text-sm font-semibold text-alloy-midnight">{o.locationName}</p>
+                                        ) : (
+                                            <p
+                                                className="h-5 w-40 animate-pulse rounded bg-alloy-stone/25"
+                                                aria-busy="true"
+                                                aria-label="Loading location"
+                                                data-testid="billing-timing-override-name-pending"
+                                            />
+                                        )}
                                         <ul className="mt-1 divide-y divide-alloy-stone/20">
                                             {o.rules.map((r) =>
                                                 r.overridden ? (
                                                     <RuleRow
                                                         key={r.rule}
                                                         reading={r.reading}
-                                                        scope={{ type: "location", locationId: o.locationId, locationName: o.locationName }}
+                                                        scope={{ type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" }}
                                                         todayYmd={todayYmd}
                                                         canMutate={canMutate}
                                                         busy={busy}
@@ -179,7 +208,7 @@ export default function BillingTimingConfigurationPanel({
                                                         onEdit={(mode) =>
                                                             setEditor({
                                                                 rule: r.rule,
-                                                                scope: { type: "location", locationId: o.locationId, locationName: o.locationName },
+                                                                scope: { type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" },
                                                                 mode,
                                                                 reading: r.reading,
                                                             })
@@ -202,7 +231,7 @@ export default function BillingTimingConfigurationPanel({
                                                                 onClick={() =>
                                                                     setEditor({
                                                                         rule: r.rule,
-                                                                        scope: { type: "location", locationId: o.locationId, locationName: o.locationName },
+                                                                        scope: { type: "location", locationId: o.locationId, locationName: o.locationName ?? "Location" },
                                                                         mode: "now",
                                                                         reading: null,
                                                                     })

@@ -30,6 +30,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveChargeCustomerId } from "@/lib/financials/billingPeriods/bindChargeBillingPeriod";
 import type { FinancialPolicyRow, FinancialPolicyType } from "@/lib/financials/policies/financialPolicyTypes";
+import { isWithdrawnPolicy } from "@/lib/financials/policies/resolveFinancialPolicy";
 
 export type FinancialPolicyScope = {
     /** The account this charge belongs to. Null when it cannot be reached. */
@@ -59,8 +60,8 @@ export const EMPTY_FINANCIAL_POLICY_SCOPE: FinancialPolicyScope = { customerId: 
  * change and the read is skipped entirely. Correctness is not traded for the saving: the read
  * happens exactly when it can matter.
  *
- * `is_active === false` is excluded here the same way `isEffectiveOn` excludes it in the resolver,
- * so a retired account-scoped rule does not keep buying reads forever.
+ * A withdrawn rule is excluded here the same way the resolver excludes it. A retired one is not: it
+ * still resolves for the dates its window covered, so a charge dated then needs the read.
  */
 export function policyScopeNarrowingNeeded(
     policies: readonly FinancialPolicyRow[],
@@ -69,7 +70,7 @@ export function policyScopeNarrowingNeeded(
     return policies.some(
         (p) =>
             p.policy_type === policyType
-            && p.is_active !== false
+            && !isWithdrawnPolicy(p)
             && (p.scope_type === "customer" || p.scope_type === "location"),
     );
 }
