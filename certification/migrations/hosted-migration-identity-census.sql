@@ -1,3 +1,6 @@
+-- RE-MEASURED 2026-10-09 for W7 billing configuration (candidate c5514e910, run
+-- erun2_741a7834d56680f5): is 20261121120000 present on the hosted ledger, per version, before
+-- any apply? Bytes changed so the reading is fresh, not a replay of 2026-10-05T22:21.
 -- RE-MEASURED 2026-10-05T22 for W7 slice 1. The merge of PR #1404 was refused
 -- `hosted_migration_behind` naming 20261119120000, while the apply of that same
 -- version was refused `production_precondition_refused` because hosted parity
