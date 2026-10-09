@@ -5,6 +5,11 @@
 import { vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/** The chained query surface the W7-F008 emulation drives. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a chainable fake, typed loosely on purpose
+type FakeChain = any;
+
+
 type Row = Record<string, unknown>;
 
 function clone<T>(v: T): T {
@@ -807,7 +812,45 @@ export function createOperationalEnrollmentMockSupabase(
 
     const from = vi.fn((table: string) => buildChain(table));
 
+    /*
+     * W7-F008: the posting functions, emulated through this mock's own table semantics. No
+     * transaction exists here; the live suite (`w7PostedChargeJournal.live.test.ts`) proves the
+     * all-or-nothing behaviour against Postgres. The journal insert is idempotent on its key, as the
+     * function's ON CONFLICT is.
+     */
+    const insertJournalOnce = async (entry: Record<string, unknown> | null | undefined) => {
+        if (!entry) return;
+        const journal = ((store as Record<string, Row[] | undefined>).financial_journal_entries ?? []) as Row[];
+        const exists = journal.some((j) => j.org_id === entry.org_id && j.idempotency_key === entry.idempotency_key);
+        if (!exists) await (from("financial_journal_entries") as unknown as FakeChain).insert(entry);
+    };
+
     const rpc = vi.fn(async (fnName: string, params: Record<string, unknown>) => {
+        if (fnName === "post_charge_with_journal") {
+            const posted = await (from("charges") as unknown as FakeChain)
+                .update({
+                    status: "posted",
+                    posted_at: params.p_posted_at,
+                    posted_by: params.p_actor_user_id ?? null,
+                    updated_at: params.p_posted_at,
+                    updated_by: params.p_actor_user_id ?? null,
+                })
+                .eq("org_id", params.p_org_id)
+                .eq("id", params.p_charge_id)
+                .eq("status", "draft")
+                .select("*")
+                .maybeSingle();
+            if (posted.error) return { data: null, error: posted.error };
+            if (!posted.data) return { data: [], error: null };
+            await insertJournalOnce(params.p_entry as Record<string, unknown> | null);
+            return { data: [posted.data], error: null };
+        }
+        if (fnName === "insert_posted_charge_with_journal") {
+            const written = await (from("charges") as unknown as FakeChain).insert(params.p_charge).select("*").single();
+            if (written.error) return { data: null, error: written.error };
+            await insertJournalOnce(params.p_entry as Record<string, unknown>);
+            return { data: [written.data], error: null };
+        }
         if (fnName === "reconcile_consumption_correction") {
             return emulateReconcileConsumptionCorrection(
                 store,
