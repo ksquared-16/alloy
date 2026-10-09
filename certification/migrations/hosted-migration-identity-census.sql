@@ -1,3 +1,6 @@
+-- Filed again 2026-10-09 with inputs.queryArtifactPath set: the merge gate selects evidence by that
+-- input, and the 02:42 reading (gar_e1f78908743eca) carried the path only in artifact_refs, so the
+-- gate fell back to the 2026-10-05 reading and refused it as 77h stale.
 -- RE-MEASURED 2026-10-09 for W7 billing configuration (candidate c5514e910, run
 -- erun2_741a7834d56680f5): is 20261121120000 present on the hosted ledger, per version, before
 -- any apply? Bytes changed so the reading is fresh, not a replay of 2026-10-05T22:21.
