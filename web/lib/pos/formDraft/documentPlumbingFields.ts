@@ -15,16 +15,22 @@
  * built, and it reuses the existing predicate rather than restating it.
  *
  * The test is deliberately narrow, because dropping a real question would be far worse than keeping a
- * technical one. All three must hold: the reader found no label, the label is a bare snake_case token,
- * and that token is the control's own name. A question a human wrote keeps its wording and survives.
+ * technical one. Two things must hold: the label is a bare snake_case token, and that token IS the
+ * control's own machine name. A question a human wrote keeps its wording and survives.
+ *
+ * WHAT THIS NO LONGER CHECKS, and why. It used to require the reader's `confidence` to be "low" — the
+ * reader's way of saying it found no label element. That was the wrong signal twice over. A page that
+ * labels an input with its own machine name (`<label>subject_line</label>`) reports HIGH confidence,
+ * so the control the Director was looking at sailed straight through the filter. And confidence was
+ * being destroyed by the draft rebuild, so the test could not fire on any saved draft even when the
+ * reader had got it right. The honest signal is the one in the name itself: a control whose entire
+ * human-facing prompt is its own identifier is plumbing, however that label came to exist.
  */
 
 import { looksLikeStructuralIdentifier } from "@/lib/pos/processingCase/formDraft/participantQuestionEligibility";
 
 export type PlumbingCandidate = {
     readonly label: string;
-    /** "high" when the reader found a real label; "low" when it fell back to the control's name. */
-    readonly confidence?: string;
     /** The reader's provenance string, e.g. `hosted_form:container:subject_line`. */
     readonly evidence?: string;
 };
@@ -38,13 +44,21 @@ export type PlumbingCandidate = {
 export function isDocumentPlumbingField(field: PlumbingCandidate): boolean {
     const label = field.label.trim();
     if (!label) return false;
-    // A label the reader actually found is a prompt somebody wrote. Never dropped.
-    if (field.confidence !== "low") return false;
+    // A prompt a person wrote — anything with a space, a capital or a question mark — survives.
     if (!looksLikeStructuralIdentifier(label)) return false;
-    // ...and the bare token has to be the control's own name, which is what the fallback copied.
+    /*
+     * Only a hosted form exposes a control's `name`, and only that provenance tells us what the name
+     * actually was. A PDF widget name is title-cased into a label by its own reader, so it can never
+     * reach this test, and nothing outside the hosted path is ever dropped.
+     */
     const evidence = field.evidence ?? "";
     if (!evidence.startsWith("hosted_form:")) return false;
     const controlName = evidence.slice(evidence.lastIndexOf(":") + 1);
+    /*
+     * The whole rule: the label the family would read IS the control's machine identifier. A label of
+     * "subject_line" on a control named `internal_subject` is a (badly named) prompt about something
+     * else and is kept — the identity has to match, not merely look technical.
+     */
     return controlName.length > 0 && controlName === label;
 }
 

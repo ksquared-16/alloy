@@ -94,6 +94,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                  * The width the operator chose. Dropped before, so First name / Last name snapped back
                  * to their own rows on the next save and side-by-side read as a feature that did not work.
                  */
+                /*
+                 * The importer's own conclusion about this field. Dropped before, which broke plumbing
+                 * detection and let a Suggested mapping read as settled after any save.
+                 */
+                ...(() => {
+                    const c = (f as { confidence?: unknown }).confidence;
+                    const confidence: ManualFieldInput["confidence"] =
+                        c === "high" || c === "medium" || c === "low" ? c : undefined;
+                    return confidence ? { confidence } : {};
+                })(),
                 ...(() => {
                     const raw = (f as { layout_width?: unknown }).layout_width;
                     const w: ManualFieldInput["layout_width"] =

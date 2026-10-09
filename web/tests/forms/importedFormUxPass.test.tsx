@@ -146,14 +146,21 @@ describe("View original is centred and uncropped", () => {
 });
 
 describe("a control the document never asked anyone about", () => {
-    const plumbing = { label: "subject_line", confidence: "low", evidence: "hosted_form:contact:subject_line" };
+    const plumbing = { label: "subject_line", evidence: "hosted_form:contact:subject_line" };
 
-    it("recognises an unlabelled control whose whole prompt is its own machine name", () => {
+    it("recognises a control whose whole prompt is its own machine name", () => {
         expect(isDocumentPlumbingField(plumbing)).toBe(true);
     });
 
-    it("keeps a control the reader found a real label for", () => {
-        expect(isDocumentPlumbingField({ ...plumbing, confidence: "high" })).toBe(false);
+    it("recognises it however the label got there — a labelled control too", () => {
+        /*
+         * This assertion replaces one that asserted the opposite, and that assertion WAS the bug: it
+         * exempted anything the reader had found a label for, so a page labelling an input with its own
+         * identifier (`<label>subject_line</label>`, reported as high confidence) passed straight
+         * through the filter. What protects a real question is that its label is not its own machine
+         * name — not the reader's confidence, which the draft rebuild was also destroying.
+         */
+        expect(isDocumentPlumbingField({ label: "subject_line", evidence: "hosted_form:form:subject_line" })).toBe(true);
     });
 
     it("keeps any prompt a person actually wrote", () => {
@@ -266,8 +273,8 @@ describe("the attention filters speak the same colour language as the form", () 
 describe("plumbing already on a persisted draft", () => {
     it("is found on the draft, not hidden on the canvas", () => {
         const found = plumbingFieldsOnDraft([
-            { id: "field_1", label: "subject_line", confidence: "low", evidence: "hosted_form:form:subject_line" },
-            { id: "field_2", label: "Parent email", confidence: "high", evidence: "hosted_form:form:parent_email" },
+            { id: "field_1", label: "subject_line", evidence: "hosted_form:form:subject_line" },
+            { id: "field_2", label: "Parent email", evidence: "hosted_form:form:parent_email" },
         ]);
         expect(found).toEqual([{ id: "field_1", label: "subject_line" }]);
     });

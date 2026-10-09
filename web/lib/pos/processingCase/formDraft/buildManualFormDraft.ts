@@ -56,6 +56,19 @@ export interface ManualFieldInput {
      * fields back to full width, and made side-by-side look unavailable rather than unsaved.
      */
     layout_width?: "full" | "half" | "third" | "quarter";
+    /**
+     * What the importer concluded about this field, carried THROUGH the rebuild.
+     *
+     * This was hardcoded to "high" here, which quietly made two features impossible. Document-plumbing
+     * detection keyed on low confidence, so it stopped recognising anything after the first save and the
+     * operator's "Remove it from the form" action went permanently dark. And `deriveResolutionStatus`
+     * reads confidence, so a destination the importer had only SUGGESTED read as settled the moment any
+     * unrelated field was saved — the draft silently gained certainty nobody had agreed to.
+     *
+     * An operator-authored field has no importer opinion; the caller says "high" for those, which is
+     * what the hardcode was accidentally right about and wrong to apply to everything.
+     */
+    confidence?: import("./types").DraftFieldConfidence;
 }
 
 /** Operator-set intent for a section (by title), carried into the draft + emitted schema. */
@@ -103,7 +116,7 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             label,
             type: coerceType(f.type),
             required: Boolean(f.required),
-            confidence: "high",
+            confidence: f.confidence ?? "high",
             evidence,
             ...(f.pdf_field_name ? { pdf_field_name: f.pdf_field_name } : {}),
             ...(typeof f.page === "number" ? { page: f.page } : {}),
