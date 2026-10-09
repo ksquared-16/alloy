@@ -218,6 +218,9 @@ describeLive("Access & Identity V2 personas — live", () => {
             await createPrincipal(id, `cert.${name.toLowerCase()}@access-identity.invalid`);
         }
 
+        /* Named humans first: a money-capable role is conferred only on a linked login (W7-F002). */
+        await linkPrincipals(ORG, ALL_USERS.filter((u) => u !== P.otherOrgAdmin), "AccessPersonaCert");
+        await linkPrincipals(OTHER_ORG, [P.otherOrgAdmin], "AccessPersonaCertOther");
         const { error: memberErr } = await supabase.from("user_roles").insert([
             { user_id: P.admin, org_id: ORG, role: "admin" },
             { user_id: P.regionalLead, org_id: ORG, role: "regional_lead" },
@@ -228,11 +231,11 @@ describeLive("Access & Identity V2 personas — live", () => {
             { user_id: P.otherOrgAdmin, org_id: OTHER_ORG, role: "admin" },
         ]);
         expect(memberErr, memberErr?.message).toBeNull();
-        await linkPrincipals(ORG, ALL_USERS.filter((u) => u !== P.otherOrgAdmin), "AccessPersonaCert");
     }, 120_000);
 
     afterAll(async () => {
         await unlinkPrincipals(ORG, ALL_USERS, "AccessPersonaCert");
+        await unlinkPrincipals(OTHER_ORG, [P.otherOrgAdmin], "AccessPersonaCertOther");
         await supabase.from("user_site_access").delete().in("user_id", ALL_USERS);
         await supabase.from("user_access_profiles").delete().in("user_id", ALL_USERS);
         await supabase.from("user_roles").delete().in("user_id", ALL_USERS);

@@ -813,6 +813,13 @@ export async function setup() {
     });
     if (udaErr) throw new Error(`user_department_access: ${udaErr.message}`);
     /*
+     * W7-F002: a role that can move money is conferred only on a login linked to a named person, so
+     * every persona is a named human first — Person → explicit link → role. The person is a keyed
+     * fixture (external_source/external_id), never matched from the persona's email.
+     */
+    await linkPersonas();
+
+    /*
      * One row per role a persona holds, not one per persona. Multi-role is not an edge case here:
      * effective authority is the UNION of a person's roles, and a matrix that only ever gives
      * someone one role cannot tell a union from a single grant.
@@ -826,7 +833,34 @@ export async function setup() {
     return sb;
 }
 
+
+const PERSONA_PERSON_SOURCE = "alloy_access_persona_fixture";
+
+async function linkPersonas() {
+    for (const [key, p] of Object.entries(P)) {
+        const org = p.org ?? ORG;
+        await sb.from("user_person_links").delete().eq("user_id", p.id);
+        await sb.from("persons").delete().eq("org_id", org).eq("external_source", PERSONA_PERSON_SOURCE).eq("external_id", key);
+        const { data: person, error: personErr } = await sb.from("persons").insert({
+            org_id: org, first_name: "Cert", last_name: key, full_name: `Cert ${key}`,
+            external_source: PERSONA_PERSON_SOURCE, external_id: key,
+        }).select("id").single();
+        if (personErr) throw new Error(`persona person ${key}: ${personErr.message}`);
+        const { error: linkErr } = await sb.from("user_person_links").insert({
+            org_id: org, user_id: p.id, person_id: person.id, status: "active", note: `access persona fixture: ${key}`,
+        });
+        if (linkErr) throw new Error(`persona link ${key}: ${linkErr.message}`);
+    }
+}
+
+async function unlinkPersonas() {
+    const ids = Object.values(P).map((p) => p.id);
+    await sb.from("user_person_links").delete().in("user_id", ids);
+    await sb.from("persons").delete().eq("external_source", PERSONA_PERSON_SOURCE);
+}
+
 export async function teardown() {
+    await unlinkPersonas();
     const ids = Object.values(P).map((p) => p.id);
     await sb.from("user_department_access").delete().in("user_id", ids);
     await sb.from("user_site_access").delete().in("user_id", ids);

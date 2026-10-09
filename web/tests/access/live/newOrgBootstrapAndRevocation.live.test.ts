@@ -132,6 +132,8 @@ describeLive("a new organization is born able to administer itself — live", ()
 
     afterAll(async () => {
         await supabase.from("user_roles").delete().eq("user_id", NEW_ORG_ADMIN);
+        await supabase.from("user_person_links").delete().eq("user_id", NEW_ORG_ADMIN);
+        await supabase.from("persons").delete().eq("org_id", NEW_ORG);
         await supabase.auth.admin.deleteUser(NEW_ORG_ADMIN).catch(() => undefined);
         await supabase.from("role_permission_grants").delete().eq("org_id", NEW_ORG);
         await supabase.from("role_definitions").delete().eq("org_id", NEW_ORG);
@@ -208,6 +210,18 @@ describeLive("a new organization is born able to administer itself — live", ()
         } as never);
         if (userErr && !/already/i.test(userErr.message)) throw new Error(userErr.message);
 
+        /*
+         * W7-F002: a new organization's first administrator is a named human before it holds admin —
+         * Person → explicit link → role, exactly as provisioning must do it.
+         */
+        const { data: founder, error: founderErr } = await supabase.from("persons")
+            .insert({ org_id: NEW_ORG, first_name: "Founding", last_name: "Administrator", full_name: "Founding Administrator" })
+            .select("id").single();
+        expect(founderErr, founderErr?.message).toBeNull();
+        const { error: founderLinkErr } = await supabase.from("user_person_links").insert({
+            org_id: NEW_ORG, user_id: NEW_ORG_ADMIN, person_id: (founder as { id: string }).id, status: "active", note: "new-org bootstrap fixture",
+        });
+        expect(founderLinkErr, founderLinkErr?.message).toBeNull();
         const { error: memberErr } = await supabase
             .from("user_roles")
             .insert({ user_id: NEW_ORG_ADMIN, org_id: NEW_ORG, role: "admin" });

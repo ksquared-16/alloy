@@ -87,6 +87,18 @@ BEGIN
             now(), now())
     ON CONFLICT (provider, provider_id) DO NOTHING;
 
+    -- W7-F002: 'ops' can move money on this tenant, so the operator is a named human first —
+    -- a keyed fixture person (never matched by email), explicitly linked, then the role.
+    INSERT INTO public.persons (org_id, first_name, last_name, full_name, external_source, external_id)
+    SELECT v_org, 'QA', 'Restricted Operator', 'QA Restricted Operator', 'alloy_search_cert_fixture', 'qa.restricted'
+     WHERE NOT EXISTS (SELECT 1 FROM public.persons
+                        WHERE org_id = v_org AND external_source = 'alloy_search_cert_fixture' AND external_id = 'qa.restricted');
+    INSERT INTO public.user_person_links (org_id, user_id, person_id, status, note)
+    SELECT v_org, v_user, p.id, 'active', 'search platform cert fixture: restricted operator'
+      FROM public.persons p
+     WHERE p.org_id = v_org AND p.external_source = 'alloy_search_cert_fixture' AND p.external_id = 'qa.restricted'
+       AND NOT EXISTS (SELECT 1 FROM public.user_person_links l WHERE l.org_id = v_org AND l.user_id = v_user AND l.status = 'active');
+
     -- Capability: an ordinary operator role, not owner/admin.
     INSERT INTO public.user_roles (user_id, org_id, role)
     VALUES (v_user, v_org, 'ops')
