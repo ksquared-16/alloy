@@ -633,7 +633,12 @@ export async function setup() {
 
         [CUSTOM.sjScheduler, ["portal.access", "scheduling.write"]],
         [CUSTOM.sjJobber, ["portal.access", "ops.jobs.write"]],
-        [CUSTOM.sjPoster, ["portal.access", "fin.post"]],
+        /*
+         * The financial poster. `fin.post` was retired (20261106120000) with the four routes it gated;
+         * money is posted only through canonical Payments, gated by `fin.write`. So the poster now holds
+         * that key and nothing operational — its denials (no schedule edit, no job edit) still bind.
+         */
+        [CUSTOM.sjPoster, ["portal.access", "fin.write"]],
         /* fin.adjust alone — the reduction family, deliberately without fin.write. */
         [CUSTOM.finAdjuster, ["portal.access", "fin.adjust"]],
         /*

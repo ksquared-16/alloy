@@ -192,7 +192,7 @@ test.describe("Access administration split — four authorities, not one", () =>
         const beforeKeys = before.ok() ? (((await before.json()) as { permission_keys?: string[] }).permission_keys ?? []) : [];
 
         const res = await s.request.put(`/api/admin/rbac/grants?role_key=${target}`, {
-            data: { permission_keys: [...beforeKeys, "fin.post"] }, failOnStatusCode: false,
+            data: { permission_keys: [...beforeKeys, "fin.write"] }, failOnStatusCode: false, // a financial authority the role admin does not hold (fin.post is retired)
         });
         const after = await s.request.get(`/api/admin/rbac/grants?role_key=${target}`, { failOnStatusCode: false });
         const afterKeys = after.ok() ? (((await after.json()) as { permission_keys?: string[] }).permission_keys ?? []) : [];
@@ -200,7 +200,7 @@ test.describe("Access administration split — four authorities, not one", () =>
 
         record("roleAdmin", "w18UnheldGrant", res.status());
         expect(res.status(), "a role administrator must not delegate authority it does not hold").toBe(403);
-        expect(afterKeys, "the refusal must not have written").not.toContain("fin.post");
+        expect(afterKeys, "the refusal must not have written").not.toContain("fin.write");
         expect(afterKeys.sort()).toEqual(beforeKeys.sort());
     });
 });
