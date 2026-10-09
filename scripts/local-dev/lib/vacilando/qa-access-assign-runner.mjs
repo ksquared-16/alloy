@@ -50,6 +50,9 @@ export function runQaAccessAssignSync(validated, {
         memberships_for_user: Number.isFinite(parsed.memberships_for_user) ? parsed.memberships_for_user : null,
         candidate_orgs_seen: Number.isFinite(parsed.candidate_orgs_seen) ? parsed.candidate_orgs_seen : null,
         org_source: typeof parsed.org_source === "string" ? parsed.org_source : null,
+        /* W7-F002: which named QA person this login resolves to, and whether the link was made now. */
+        person_id: typeof parsed.person_id === "string" ? parsed.person_id : null,
+        person_link: typeof parsed.person_link === "string" ? parsed.person_link : null,
     };
 }
 

@@ -92,6 +92,54 @@ for (let page = 1; page <= MAX_PAGES && !user; page++) {
 }
 if (!user) fail("identity_not_registered", "provision the identity before assigning access");
 
+
+/*
+ * ── A MONEY-CAPABLE QA LOGIN IS A NAMED HUMAN FIRST (W7-F002, Director 2026-10-09) ──────────────
+ *
+ * QA provisioning follows the production rule: Person → explicit link → role. The QA Person is a
+ * dedicated, reproducible FIXTURE keyed by (org, external_source, external_id = the managed identity) —
+ * it is created for this login, never found by matching an email to an existing person. An existing
+ * active link is respected and never re-pointed: that identity decision was already made by someone.
+ * Without this, `user_roles` refuses the admin row (trg_enforce_user_roles_money_capable_person_link).
+ */
+const QA_PERSON_SOURCE = "alloy_qa_fixture";
+
+function qaPersonName(managedIdentity) {
+    const local = String(managedIdentity).split("@")[0].replace(/^qa-/, "");
+    const words = local.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1));
+    return { first_name: "QA", last_name: words.join(" ") || "Managed Identity" };
+}
+
+async function ensureQaPersonLink(orgId, userId, managedIdentity) {
+    const existing = await admin.from("user_person_links").select("person_id").eq("org_id", orgId).eq("user_id", userId).eq("status", "active").maybeSingle();
+    if (existing.error) fail("person_link_read_failed", existing.error.message);
+    if (existing.data?.person_id) return { person_id: existing.data.person_id, link: "existing" };
+
+    let person = await admin.from("persons").select("id, archived_at").eq("org_id", orgId)
+        .eq("external_source", QA_PERSON_SOURCE).eq("external_id", managedIdentity).maybeSingle();
+    if (person.error) fail("qa_person_read_failed", person.error.message);
+    let personId = person.data?.id ?? null;
+    let personResult = "existing_fixture";
+    if (person.data?.archived_at) fail("qa_person_archived", "the QA person fixture for this identity is archived");
+    if (!personId) {
+        const name = qaPersonName(managedIdentity);
+        const created = await admin.from("persons").insert({
+            org_id: orgId, ...name, full_name: `${name.first_name} ${name.last_name}`,
+            external_source: QA_PERSON_SOURCE, external_id: managedIdentity,
+            metadata: { qa_fixture: true, managed_identity: managedIdentity },
+        }).select("id").single();
+        if (created.error) fail("qa_person_create_failed", created.error.message);
+        personId = created.data.id;
+        personResult = "created_fixture";
+    }
+    const linked = await admin.from("user_person_links").insert({
+        org_id: orgId, user_id: userId, person_id: personId, status: "active", linked_by: null,
+        note: `Managed QA identity fixture (${managedIdentity}): an explicit QA person, not inferred from email.`,
+    }).select("person_id").single();
+    if (linked.error) fail("person_link_create_failed", linked.error.message);
+    return { person_id: personId, link: "created", person: personResult };
+}
+
 /* Existing memberships, used for the idempotent path and as the derivation fallback below. */
 const roles = await admin.from("user_roles").select("user_id, org_id, role").eq("role", role);
 if (roles.error) fail("user_roles_read_failed", roles.error.message);
@@ -105,8 +153,11 @@ if (existingForUser.length > 0) {
     if (existingForUser.length > 1) {
         fail("duplicate_membership", `expected at most one ${role} row, found ${existingForUser.length}`);
     }
+    // An existing QA admin that predates the rule converges here: named, then reported.
+    const identityLink = await ensureQaPersonLink(existingForUser[0].org_id, user.id, identity);
     process.stdout.write(`${JSON.stringify({
-        ok: true, result: "already_exists", mutated: false,
+        ok: true, result: "already_exists", mutated: identityLink.link === "created",
+        person_id: identityLink.person_id, person_link: identityLink.link,
         user_id: user.id, org_id: existingForUser[0].org_id, role,
         memberships_for_user: existingForUser.length,
         candidate_orgs_seen: candidateOrgs.length,
@@ -157,6 +208,8 @@ if (configuredOrg) {
     orgSource = "derived";
 }
 
+// Person → link → role, in that order.
+const identityLink = await ensureQaPersonLink(orgId, user.id, identity);
 const inserted = await admin.from("user_roles").insert({ user_id: user.id, org_id: orgId, role }).select("user_id, org_id, role");
 if (inserted.error) fail("assignment_failed", inserted.error.message);
 
@@ -170,6 +223,7 @@ if (mine[0].org_id !== orgId || mine[0].role !== role) fail("post_condition_fail
 process.stdout.write(`${JSON.stringify({
     ok: true, result: "assigned", mutated: true,
     user_id: user.id, org_id: orgId, role,
+    person_id: identityLink.person_id, person_link: identityLink.link,
     memberships_for_user: mine.length,
     candidate_orgs_seen: candidateOrgs.length,
     org_source: orgSource,
