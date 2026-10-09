@@ -36,8 +36,15 @@ const describeLive = env ? describe : describe.skip;
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const ACTOR = "00000000-0000-4000-8000-000000000002"; // admin: holds every capability it might confer
-const TARGET = "c0000000-0000-4000-8000-00000000d0c4"; // holds no money capability
-const UNLINKED_HOLDER_ROLE = "mcert_ax_auditor"; // held by an unlinked user, allows no fin.* key
+/*
+ * Self-contained: the suite owns its principals, its probe role and its person, so no other fixture's
+ * state (the access personas are linked, and may hold roles) can decide its outcome, and it never
+ * edits a shared principal. TARGET holds nothing; HOLDER is an unlinked holder of PROBE_ROLE.
+ */
+const RUN = Math.random().toString(36).slice(2, 10);
+let TARGET = "";
+let HOLDER = "";
+const UNLINKED_HOLDER_ROLE = `w7_f002_probe_${RUN}`; // allows no fin.* key; held by an unlinked user
 
 describeLive("W7-F002 — money-capable grants require a named person, live", () => {
     let db: SupabaseClient;
@@ -45,17 +52,29 @@ describeLive("W7-F002 — money-capable grants require a named person, live", ()
 
     beforeAll(async () => {
         db = createClient(env!.url, env!.serviceKey, { auth: { persistSession: false } });
-        const { data } = await db.from("persons").select("id, full_name, first_name").eq("org_id", ORG).is("archived_at", null).limit(50);
-        const linked = new Set(((await db.from("user_person_links").select("person_id").eq("org_id", ORG).eq("status", "active")).data ?? []).map((r: { person_id: string }) => r.person_id));
-        personId = ((data ?? []) as Array<{ id: string; full_name: string | null; first_name: string | null }>)
-            .find((p) => (p.full_name || p.first_name) && !linked.has(p.id))!.id;
-        await db.from("user_person_links").delete().eq("org_id", ORG).eq("user_id", TARGET);
-    });
+        const mk = async (tag: string) => {
+            const r = await db.auth.admin.createUser({ email: `w7-f002-${tag}-${RUN}@cert.invalid`, password: `w7-${RUN}-Aa1!`, email_confirm: true });
+            expect(r.error, r.error?.message).toBeNull();
+            return r.data.user!.id;
+        };
+        TARGET = await mk("target");
+        HOLDER = await mk("holder");
+        const person = await db.from("persons").insert({ org_id: ORG, first_name: "F002", last_name: `Probe ${RUN}`, full_name: `F002 Probe ${RUN}` }).select("id").single();
+        expect(person.error, person.error?.message).toBeNull();
+        personId = (person.data as { id: string }).id;
+        expect((await db.from("role_definitions").insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, role_label: "F002 probe", is_system: false, is_active: true })).error).toBeNull();
+        expect((await db.from("role_permission_grants").insert({ org_id: ORG, role_key: UNLINKED_HOLDER_ROLE, permission_key: "reports.read", allowed: true })).error).toBeNull();
+        expect((await db.from("user_roles").insert({ org_id: ORG, user_id: HOLDER, role: UNLINKED_HOLDER_ROLE })).error).toBeNull();
+    }, 120_000);
 
     afterAll(async () => {
-        await db.from("user_roles").delete().eq("org_id", ORG).eq("user_id", TARGET).eq("role", "ops");
-        await db.from("user_person_links").delete().eq("org_id", ORG).eq("user_id", TARGET);
-    });
+        await db.from("user_roles").delete().in("user_id", [TARGET, HOLDER].filter(Boolean));
+        await db.from("user_person_links").delete().in("user_id", [TARGET, HOLDER].filter(Boolean));
+        await db.from("role_permission_grants").delete().eq("org_id", ORG).eq("role_key", UNLINKED_HOLDER_ROLE);
+        await db.from("role_definitions").delete().eq("org_id", ORG).eq("role_key", UNLINKED_HOLDER_ROLE);
+        if (personId) await db.from("persons").delete().eq("id", personId);
+        for (const id of [TARGET, HOLDER].filter(Boolean)) await db.auth.admin.deleteUser(id).catch(() => undefined);
+    }, 120_000);
 
     it("refuses to confer money capability on an unlinked login, and confers it once linked", async () => {
         const refused = await db.rpc("assert_assignment_delegation_ceiling", {

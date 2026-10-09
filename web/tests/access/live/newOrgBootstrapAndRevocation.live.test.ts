@@ -99,6 +99,24 @@ const OPS_WITHHELD = [
 ] as const;
 
 /**
+ * Active keys a new administrator does NOT receive, by decision: a restriction flag granted to nobody
+ * (20260911140000). Classified in the W7 admin-package comparison (20261122170000).
+ */
+const ADMIN_WITHHELD = ["attendance.record.assigned_only"] as const;
+
+/**
+ * Admin-only by their own migrations ("deliberately not ops"): 20260920120000 (fin.provider),
+ * 20260912000000 (integrations.*), 20260928120000 (staff.compensation.*). ops never receives them.
+ */
+const ADMIN_ONLY = [
+    "fin.provider",
+    "integrations.manage",
+    "integrations.read",
+    "staff.compensation.read",
+    "staff.compensation.write",
+] as const;
+
+/**
  * The nine keys catalogued after the seed enumeration froze — the only keys §3b of the repair can
  * touch. Named here so the blast-radius assertion below is checkable rather than asserted.
  */
@@ -170,13 +188,25 @@ describeLive("a new organization is born able to administer itself — live", ()
          * assertion would pass on the day the next key was added and the new org did not receive it,
          * which is precisely the defect being regressed.
          */
+        /*
+         * The catalogue is the ACTIVE `permission_definitions`, read from the database the org lives
+         * in. The migration scrape names every key ever seeded — retired ones too (`fin.post`,
+         * `settings.users_roles*`) — so it stays only as the non-vacuity guard and as a superset check.
+         */
         const tree = [...discoverCatalog().keys()].sort();
         expect(tree.length, "non-vacuity: the migration scrape must have found the catalog").toBeGreaterThan(60);
+        const { data: activeRows, error: activeErr } = await supabase.from("permission_definitions").select("key").eq("is_active", true);
+        expect(activeErr, activeErr?.message).toBeNull();
+        const active = ((activeRows ?? []) as Array<{ key: string }>).map((r) => r.key).sort();
+        const adminExpected = active.filter((k) => !(ADMIN_WITHHELD as readonly string[]).includes(k));
+        expect(adminExpected.filter((k) => !tree.includes(k)), "every key an administrator receives is one a migration seeded").toEqual([]);
         const admin = await grantsFor(NEW_ORG, "admin");
-        expect([...admin].sort(), "a new organization's administrator holds every catalogued capability").toEqual(tree);
+        expect([...admin].sort(), "a new organization's administrator holds every active capability it is meant to").toEqual(adminExpected);
 
         const ops = await grantsFor(NEW_ORG, "ops");
-        expect([...ops].sort()).toEqual(tree.filter((k) => !(OPS_WITHHELD as readonly string[]).includes(k)));
+        expect([...ops].sort()).toEqual(adminExpected.filter(
+            (k) => !(OPS_WITHHELD as readonly string[]).includes(k) && !(ADMIN_ONLY as readonly string[]).includes(k),
+        ));
         for (const withheld of OPS_WITHHELD) {
             expect(ops, `${withheld} must not arrive at ops by default`).not.toContain(withheld);
         }
