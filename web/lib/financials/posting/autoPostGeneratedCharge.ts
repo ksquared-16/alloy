@@ -51,6 +51,12 @@
  * well as the first attempt — a retry that posted into a closed period would be the same breach
  * arriving later. Recorded now so the guard is not bolted onto one caller.
  */
+import {
+    EMPTY_FINANCIAL_POLICY_SCOPE,
+    policyScopeNarrowingNeeded,
+    resolveFinancialPolicyScope,
+    type FinancialPolicyScope,
+} from "@/lib/financials/policies/resolveFinancialPolicyScope";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
@@ -156,8 +162,24 @@ function reviewPolicyFor(
     policies: readonly FinancialPolicyRow[],
     serviceId: string | null,
     today: string,
+    scope: FinancialPolicyScope = EMPTY_FINANCIAL_POLICY_SCOPE,
 ): { required: boolean; policyId: string | null } {
-    const r = resolveFinancialPolicy(policies, "posting_review", { serviceId: serviceId ?? undefined }, today);
+    /*
+     * Narrowed by the charge's own site and account, exactly as the write path narrows it
+     * (`chargeLifecycleService.reviewRequiredByPolicy`). With `serviceId` alone a location- or
+     * account-scoped review rule could never match here, so the write path and the auto-post path
+     * gave two answers to "does this generated charge need a person?".
+     */
+    const r = resolveFinancialPolicy(
+        policies,
+        "posting_review",
+        {
+            serviceId: serviceId ?? undefined,
+            locationId: scope.locationId ?? undefined,
+            customerId: scope.customerId ?? undefined,
+        },
+        today,
+    );
     /*
      * NO POLICY MEANS NO REVIEW. This mirrors `resolveChargePolicies` exactly rather than restating
      * the rule: `r.resolved ? value.required === true : false`. An absent policy has never meant
@@ -212,14 +234,25 @@ async function recordAttempt(
 async function loadPostingContext(
     supabase: SupabaseClient,
     args: { orgId: string; chargeId: string },
-): Promise<{ metadata: Record<string, unknown>; serviceId: string | null; status: string | null }> {
+): Promise<{
+    metadata: Record<string, unknown>;
+    serviceId: string | null;
+    status: string | null;
+    billableSourceType: string | null;
+    billableSourceId: string | null;
+}> {
     const { data } = await supabase
         .from("charges")
-        .select("metadata, status")
+        .select("metadata, status, billable_source_type, billable_source_id")
         .eq("org_id", args.orgId)
         .eq("id", args.chargeId)
         .maybeSingle();
-    const row = (data ?? null) as { metadata: Record<string, unknown> | null; status: string | null } | null;
+    const row = (data ?? null) as {
+        metadata: Record<string, unknown> | null;
+        status: string | null;
+        billable_source_type?: string | null;
+        billable_source_id?: string | null;
+    } | null;
 
     const { data: ob } = await supabase
         .from("resolved_obligations")
@@ -229,7 +262,13 @@ async function loadPostingContext(
         .maybeSingle();
     const serviceId = ((ob ?? null) as { service_id: string | null } | null)?.service_id ?? null;
 
-    return { metadata: { ...(row?.metadata ?? {}) }, serviceId, status: row?.status ?? null };
+    return {
+        metadata: { ...(row?.metadata ?? {}) },
+        serviceId,
+        status: row?.status ?? null,
+        billableSourceType: row?.billable_source_type ?? null,
+        billableSourceId: row?.billable_source_id ?? null,
+    };
 }
 
 /**
@@ -274,7 +313,16 @@ export async function autoPostGeneratedCharge(
         return { kind: "posted", chargeId: args.chargeId };
     }
     const metadata = args.metadata ? { ...args.metadata } : loaded.metadata;
-    const review = reviewPolicyFor(args.policies, args.serviceId ?? loaded.serviceId, args.today);
+    /* The subject's scope, read only when some review rule is scoped to a site or an account. */
+    const scope =
+        policyScopeNarrowingNeeded(args.policies, "posting_review") && loaded.billableSourceType && loaded.billableSourceId
+            ? await resolveFinancialPolicyScope(supabase, {
+                  orgId: args.orgId,
+                  billableSourceType: loaded.billableSourceType,
+                  billableSourceId: loaded.billableSourceId,
+              })
+            : EMPTY_FINANCIAL_POLICY_SCOPE;
+    const review = reviewPolicyFor(args.policies, args.serviceId ?? loaded.serviceId, args.today, scope);
 
     if (review.required) {
         /*
