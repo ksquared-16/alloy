@@ -256,8 +256,10 @@ export default function BillingTimingConfigurationPanel({
 
                         {model.accountCalendarCount > 0 ? (
                             <p className="mt-3 text-xs text-alloy-midnight/60" data-testid="billing-timing-account-calendars">
-                                {model.accountCalendarCount} account{model.accountCalendarCount === 1 ? " has" : "s have"} its own billing
-                                period — a household attending more than one location needs one.
+                                {model.accountCalendarCount === 1
+                                    ? "1 account has its own billing period"
+                                    : `${model.accountCalendarCount} accounts have their own billing period`}{" "}
+                                — a household attending more than one location needs one.
                             </p>
                         ) : null}
                     </ConfigurationDetailCard>

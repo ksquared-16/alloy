@@ -728,6 +728,11 @@ export function adaptAddChargeSpecimen(input: {
     const rawLine = (prefix: string): string | null =>
         input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim() ?? null;
 
+    const sentence = (prefix: string): string | null => {
+        const raw = rawLine(prefix)?.replace(/^·\s*/, "");
+        return raw ? raw.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (iso) => displayDate(iso) ?? iso) : null;
+    };
+
     const line = (prefix: string): string | null => {
         const raw =
             input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim()
@@ -823,11 +828,17 @@ export function adaptAddChargeSpecimen(input: {
         invoiceDate:
             input.previewSummary == null ? "\u2014"
             : (line("invoice date") ?? "On the service date"),
+        /* The server's sentences, with its ISO dates rendered as dates an operator reads. */
         dateRules: {
-            invoice: rawLine("invoice timing")?.replace(/^·\s*/, "") ?? null,
-            due: rawLine("payment terms")?.replace(/^·\s*/, "") ?? null,
+            invoice: sentence("invoice timing"),
+            due: sentence("payment terms"),
         },
-        posting: rawLine("posting")?.replace(/^·\s*/, "") ?? null,
+        posting: sentence("posting"),
+        /* The day a future-period charge posts itself, when the chain says it waits for its period. */
+        awaitsPeriodUntil: (() => {
+            const iso = rawLine("posting")?.match(/Draft until (\d{4}-\d{2}-\d{2})/)?.[1];
+            return iso ? (displayDate(iso) ?? iso) : null;
+        })(),
         /*
          * ── DUE: A DATE, AN HONEST ABSENCE, OR NOT YET KNOWN — NEVER A MECHANISM ────────────
          *

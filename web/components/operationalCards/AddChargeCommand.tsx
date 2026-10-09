@@ -503,7 +503,7 @@ export default function AddChargeCommand({
             </Field>
             {specimen.posting ? (
                 <Field label="Posting">
-                    <span data-addcharge-posting>
+                    <span data-addcharge-posting-rule>
                         <Value locked>{specimen.posting}</Value>
                     </span>
                 </Field>
@@ -875,6 +875,16 @@ export default function AddChargeCommand({
                 {t.reviewRequired ? (
                     <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="draft">
                         Creates a draft charge for review. The balance does not change until it is posted.
+                    </p>
+                ) : specimen.awaitsPeriodUntil ? (
+                    /*
+                     * A FUTURE-PERIOD CHARGE IS WRITTEN AND NOT OWED. The posting authority keeps it a
+                     * draft until its billing period begins and posts it then; saying "posts it" here
+                     * with a moved balance contradicted the Posting line above (seen mounted, W7).
+                     */
+                    <p className="alloy-os-addcharge__draftnote" data-addcharge-posting="awaits_period">
+                        Saves this charge. It is not owed until its billing period begins on{" "}
+                        {specimen.awaitsPeriodUntil}, when it posts automatically — the balance does not change now.
                     </p>
                 ) : (
                     <>

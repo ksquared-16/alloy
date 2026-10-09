@@ -671,6 +671,8 @@ export type AddChargeSpecimen = {
     dateRules: { invoice: string | null; due: string | null };
     /** What confirming does to posting: posts now, waits for the period, or waits for review. */
     posting: string | null;
+    /** Set when the charge's billing period has not begun: the day it posts itself. Null otherwise. */
+    awaitsPeriodUntil: string | null;
     /** Which date the operator changed, if any. */
     overridden: string | null;
     chargeTo: string;
