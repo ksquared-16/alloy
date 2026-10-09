@@ -216,6 +216,21 @@ async function main() {
                 ($3, 'authenticated', 'authenticated', $4, now(), now(), now())`,
         [userA, `cert-a-${userA.slice(0, 8)}@test.local`, userB, `cert-b-${userB.slice(0, 8)}@test.local`],
     );
+    /*
+     * W7-F002: admin can move money, so each admin login is a named human first — its OWN fixture
+     * person (not Alice or Bob, who are this test's data subjects), explicitly linked, then the role.
+     */
+    const adminPersonA = randomUUID();
+    const adminPersonB = randomUUID();
+    await client.query(
+        `INSERT INTO persons (id, org_id, first_name, last_name) VALUES ($1, $2, 'Cert', 'Admin A'), ($3, $4, 'Cert', 'Admin B')`,
+        [adminPersonA, orgA, adminPersonB, orgB],
+    );
+    await client.query(
+        `INSERT INTO user_person_links (org_id, user_id, person_id, status, note)
+         VALUES ($1, $2, $3, 'active', 'processing identity cert fixture'), ($4, $5, $6, 'active', 'processing identity cert fixture')`,
+        [orgA, userA, adminPersonA, orgB, userB, adminPersonB],
+    );
     await client.query(
         `INSERT INTO user_roles (user_id, org_id, role) VALUES ($1, $2, 'admin'), ($3, $4, 'admin')`,
         [userA, orgA, userB, orgB],
@@ -294,6 +309,7 @@ async function main() {
     await client.query(`DELETE FROM customer_members WHERE org_id = $1`, [orgA]);
     await client.query(`DELETE FROM customer_persons WHERE org_id = $1`, [orgA]);
     await client.query(`DELETE FROM customers WHERE org_id = $1`, [orgA]);
+    await client.query(`DELETE FROM user_person_links WHERE org_id IN ($1, $2)`, [orgA, orgB]);
     await client.query(`DELETE FROM persons WHERE org_id IN ($1, $2)`, [orgA, orgB]);
     await client.query(`DELETE FROM user_roles WHERE user_id IN ($1, $2)`, [userA, userB]);
     await client.query(`DELETE FROM auth.users WHERE id IN ($1, $2)`, [userA, userB]);
