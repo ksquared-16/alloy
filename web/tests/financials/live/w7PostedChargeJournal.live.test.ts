@@ -6,7 +6,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { writeTemplateDraftCharge } from "@/lib/financials/chargeLifecycle/chargeLifecycleService";
-import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
+import { createChildcareCorrection, postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { ensureAccountingPeriodCovers } from "./certEnvironment";
 
 function certEnv(): { url: string; serviceKey: string } | null {
@@ -134,5 +134,16 @@ describeLive("W7-F008 — posting and its journal entry are one fact, live", () 
         const again = await postChildcareCharge(db, { orgId: ORG, chargeId: id, actorUserId: ACTOR, businessDateYmd: "2026-10-09" });
         expect(again.alreadyPosted).toBe(true);
         expect(await journalOf(id)).toHaveLength(1);
+
+        /* A correction is written with its own entry, in the same transaction, linked to the original. */
+        const reversal = await createChildcareCorrection(db, { orgId: ORG, sourceChargeId: id, kind: "reversal", actorUserId: ACTOR });
+        expect(reversal.status).toBe("posted");
+        const { data: corrected } = await db
+            .from("financial_journal_entries")
+            .select("entry_type, source_id, reverses_entry_id, obligation_delta_cents")
+            .eq("org_id", ORG).eq("source_type", "charge").eq("source_id", reversal.id);
+        expect(corrected).toHaveLength(1);
+        expect(corrected![0]).toMatchObject({ entry_type: "charge_corrected", obligation_delta_cents: -4000 });
+        expect(corrected![0].reverses_entry_id).not.toBeNull();
     });
 });
